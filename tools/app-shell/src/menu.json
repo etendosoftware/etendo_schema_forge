@@ -1,0 +1,58 @@
+{
+  "menu": [
+    {
+      "group": "Sales",
+      "icon": "ShoppingCart",
+      "items": [
+        { "name": "sales-order", "label": "Sales Order" }
+      ]
+    },
+    {
+      "group": "Procurement",
+      "icon": "Truck",
+      "items": [
+        { "name": "purchase-order", "label": "Purchase Order" },
+        { "name": "requisition", "label": "Requisition" },
+        { "name": "manage-requisitions", "label": "Manage Requisitions" },
+        { "name": "requisition-to-order", "label": "Requisition to Order" },
+        { "name": "goods-receipt", "label": "Goods Receipt" },
+        { "name": "pending-goods-receipts", "label": "Pending Goods Receipts" },
+        { "name": "inbound-receipt", "label": "Inbound Receipt" },
+        { "name": "purchase-invoice", "label": "Purchase Invoice" },
+        { "name": "matched-purchase-invoices", "label": "Matched Purchase Invoices" },
+        { "name": "return-to-vendor", "label": "Return to Vendor" },
+        { "name": "return-to-vendor-shipment", "label": "Return to Vendor Shipment" },
+        { "name": "landed-cost", "label": "Landed Cost" }
+      ]
+    },
+    {
+      "group": "Master Data",
+      "icon": "Database",
+      "items": [
+        { "name": "business-partner", "label": "Business Partner" },
+        { "name": "bp-location", "label": "BP Location" },
+        { "name": "product", "label": "Product" },
+        { "name": "product-category", "label": "Product Category" },
+        { "name": "warehouse", "label": "Warehouse" }
+      ]
+    },
+    {
+      "group": "Finance",
+      "icon": "DollarSign",
+      "items": [
+        { "name": "price-list", "label": "Price List" },
+        { "name": "payment-term", "label": "Payment Term" },
+        { "name": "payment-method", "label": "Payment Method" },
+        { "name": "tax", "label": "Tax" }
+      ]
+    },
+    {
+      "group": "System",
+      "icon": "Settings",
+      "items": [
+        { "name": "uom", "label": "UOM" },
+        { "name": "user", "label": "User" }
+      ]
+    }
+  ]
+}
