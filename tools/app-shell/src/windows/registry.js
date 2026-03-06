@@ -1,13 +1,11 @@
-/**
- * Convert a window name to a URL-safe slug.
- * 'Sales Order' -> 'sales-order'
- */
-function toSlug(name) {
-  return name.toLowerCase().replace(/\s+/g, '-');
-}
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const menuConfig = require('../menu.json');
 
 /**
  * Known window loaders -- maps slug to dynamic import.
+ * Windows not listed here fall back to PlaceholderWindow.
  */
 const windowLoaders = {
   'sales-order': () => import('@generated/sales-order/generated/web/sales-order/index.jsx'),
@@ -24,69 +22,33 @@ const windowLoaders = {
 };
 
 /**
- * Reference windows -- simple CRUD entities used as FK targets by Sales Order.
+ * Return the 2-level menu groups from menu.json.
  */
-const REFERENCE_WINDOWS = [
-  { name: 'business-partner', label: 'Business Partner' },
-  { name: 'warehouse', label: 'Warehouse' },
-  { name: 'price-list', label: 'Price List' },
-  { name: 'payment-term', label: 'Payment Term' },
-  { name: 'payment-method', label: 'Payment Method' },
-  { name: 'product', label: 'Product' },
-  { name: 'product-category', label: 'Product Category' },
-  { name: 'tax', label: 'Tax' },
-  { name: 'uom', label: 'UOM' },
-  { name: 'user', label: 'User' },
-];
-
-/**
- * Build menu items from a contract.json -- includes the primary window plus all reference windows.
- */
-export function buildMenuFromContract(contract) {
-  const items = [];
-
-  const window = contract?.frontendContract?.window;
-  if (window) {
-    items.push({
-      name: toSlug(window.name),
-      label: window.name,
-    });
-  }
-
-  for (const ref of REFERENCE_WINDOWS) {
-    items.push(ref);
-  }
-
-  return items;
+export function buildMenuGroups() {
+  return menuConfig.menu;
 }
 
 /**
- * Build window map with loaders for all windows.
+ * Flat list of all window slugs from menu.json.
  */
-export function buildWindowMap(contract) {
+export function getAllWindowNames() {
+  return menuConfig.menu.flatMap(g => g.items.map(i => i.name));
+}
+
+/**
+ * Build window map with loaders for all windows in menu.json.
+ */
+export function buildWindowMap() {
   const map = {};
-
-  const fc = contract?.frontendContract;
-  if (fc?.window) {
-    const slug = toSlug(fc.window.name);
-    map[slug] = {
-      name: slug,
-      label: fc.window.name,
-      contract: fc,
-      loader: windowLoaders[slug] || (() => import('./PlaceholderWindow.jsx')),
-    };
-  }
-
-  for (const ref of REFERENCE_WINDOWS) {
-    if (!map[ref.name]) {
-      map[ref.name] = {
-        name: ref.name,
-        label: ref.label,
+  for (const group of menuConfig.menu) {
+    for (const item of group.items) {
+      map[item.name] = {
+        name: item.name,
+        label: item.label,
         contract: null,
-        loader: windowLoaders[ref.name] || (() => import('./PlaceholderWindow.jsx')),
+        loader: windowLoaders[item.name] || (() => import('./PlaceholderWindow.jsx')),
       };
     }
   }
-
   return map;
 }
