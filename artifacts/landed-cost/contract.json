@@ -1,0 +1,1480 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-03-06T17:46:26.649Z",
+  "checksum": "09372a0330b43d10",
+  "frontendContract": {
+    "window": {
+      "id": "800214",
+      "name": "Landed Cost",
+      "primaryEntity": "landedCost",
+      "category": "procurement"
+    },
+    "entities": {
+      "landedCost": {
+        "fields": [
+          {
+            "name": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Organization",
+            "inputMode": "selector"
+          },
+          {
+            "name": "dateAcct",
+            "column": "DateAcct",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "docStatus",
+            "column": "DocStatus",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          }
+        ],
+        "searchableFields": [
+          "organization",
+          "dateAcct",
+          "description",
+          "documentNo",
+          "docStatus"
+        ],
+        "computedFields": []
+      },
+      "landedCostCost": {
+        "fields": [
+          {
+            "name": "landedCostType",
+            "column": "M_LandedCostType_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "LandedCostType",
+            "inputMode": "selector"
+          },
+          {
+            "name": "amount",
+            "column": "Amt",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "landedCostDistribution",
+            "column": "LandedCostDistribution",
+            "type": "list",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "goodsReceipt",
+            "column": "M_InOut_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "GoodsReceipt",
+            "inputMode": "search"
+          },
+          {
+            "name": "goodsReceiptLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "GoodsReceiptLine",
+            "inputMode": "dependent",
+            "dependsOn": {
+              "field": "goodsReceipt",
+              "filterKey": "goodsReceiptId"
+            }
+          },
+          {
+            "name": "invoiceLine",
+            "column": "C_InvoiceLine_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "InvoiceLine",
+            "inputMode": "search"
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "accountingDate",
+            "column": "DateAcct",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          }
+        ],
+        "searchableFields": [
+          "landedCostType",
+          "goodsReceipt"
+        ],
+        "computedFields": []
+      },
+      "landedCostReceipt": {
+        "fields": [
+          {
+            "name": "goodsReceipt",
+            "column": "M_InOut_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "GoodsReceipt",
+            "inputMode": "search"
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "documentNo",
+            "column": "M_InOut_ID$DocumentNo",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          }
+        ],
+        "searchableFields": [
+          "goodsReceipt",
+          "documentNo"
+        ],
+        "computedFields": []
+      },
+      "landedCostAllocation": {
+        "fields": [
+          {
+            "name": "goodsReceiptLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "GoodsReceiptLine",
+            "inputMode": "search"
+          },
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "search"
+          },
+          {
+            "name": "amount",
+            "column": "Amt",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "quantity",
+            "column": "Qty",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "baseAmount",
+            "column": "Base",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true
+          }
+        ],
+        "searchableFields": [
+          "goodsReceiptLine",
+          "product"
+        ],
+        "computedFields": []
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "800214",
+      "name": "Landed Cost",
+      "primaryEntity": "landedCost",
+      "category": "procurement"
+    },
+    "entities": {
+      "landedCost": {
+        "fields": [
+          {
+            "name": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "dateAcct",
+            "column": "DateAcct",
+            "type": "date",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "docStatus",
+            "column": "DocStatus",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adOrgId",
+            "column": "AD_Org_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "cDocTypeId",
+            "column": "C_DocType_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "created",
+            "column": "Created",
+            "type": "datetime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "column": "Updated",
+            "type": "datetime",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "landedCostCost": {
+        "fields": [
+          {
+            "name": "landedCostType",
+            "column": "M_LandedCostType_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "column": "Amt",
+            "type": "amount",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "landedCostDistribution",
+            "column": "LandedCostDistribution",
+            "type": "list",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "goodsReceipt",
+            "column": "M_InOut_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "goodsReceiptLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "invoiceLine",
+            "column": "C_InvoiceLine_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "accountingDate",
+            "column": "DateAcct",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adOrgId",
+            "column": "AD_Org_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "mLandedCostId",
+            "column": "M_LandedCost_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "landedCostReceipt": {
+        "fields": [
+          {
+            "name": "goodsReceipt",
+            "column": "M_InOut_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "documentNo",
+            "column": "M_InOut_ID$DocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adOrgId",
+            "column": "AD_Org_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "mLandedCostId",
+            "column": "M_LandedCost_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "landedCostAllocation": {
+        "fields": [
+          {
+            "name": "goodsReceiptLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "amount",
+            "column": "Amt",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "quantity",
+            "column": "Qty",
+            "type": "number",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "baseAmount",
+            "column": "Base",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adOrgId",
+            "column": "AD_Org_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "mLandedCostId",
+            "column": "M_LandedCost_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "mLandedCostCostId",
+            "column": "M_LandedCostCost_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/landedCost",
+        "entity": "landedCost",
+        "supportedFilters": [
+          "organization",
+          "dateAcct",
+          "description",
+          "documentNo",
+          "docStatus"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/landedCost/:id",
+        "entity": "landedCost",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/landedCost",
+        "entity": "landedCost",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/landedCost/:id",
+        "entity": "landedCost",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/landedCost/:id",
+        "entity": "landedCost",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/landedCostCost",
+        "entity": "landedCostCost",
+        "supportedFilters": [
+          "landedCostType",
+          "goodsReceipt"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/landedCostCost/:id",
+        "entity": "landedCostCost",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/landedCostCost",
+        "entity": "landedCostCost",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/landedCostCost/:id",
+        "entity": "landedCostCost",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/landedCostCost/:id",
+        "entity": "landedCostCost",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/landedCostReceipt",
+        "entity": "landedCostReceipt",
+        "supportedFilters": [
+          "goodsReceipt",
+          "documentNo"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/landedCostReceipt/:id",
+        "entity": "landedCostReceipt",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/landedCostReceipt",
+        "entity": "landedCostReceipt",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/landedCostReceipt/:id",
+        "entity": "landedCostReceipt",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/landedCostReceipt/:id",
+        "entity": "landedCostReceipt",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/landedCostAllocation",
+        "entity": "landedCostAllocation",
+        "supportedFilters": [
+          "goodsReceiptLine",
+          "product"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/landedCostAllocation/:id",
+        "entity": "landedCostAllocation",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/landedCostAllocation",
+        "entity": "landedCostAllocation",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/landedCostAllocation/:id",
+        "entity": "landedCostAllocation",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/landedCostAllocation/:id",
+        "entity": "landedCostAllocation",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-1",
+        "category": "field-presence",
+        "entity": "landedCost",
+        "field": "organization",
+        "runner": "node",
+        "description": "Field 'organization' should be present in landedCost"
+      },
+      {
+        "id": "t-2",
+        "category": "field-presence",
+        "entity": "landedCost",
+        "field": "dateAcct",
+        "runner": "node",
+        "description": "Field 'dateAcct' should be present in landedCost"
+      },
+      {
+        "id": "t-3",
+        "category": "field-presence",
+        "entity": "landedCost",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in landedCost"
+      },
+      {
+        "id": "t-4",
+        "category": "field-presence",
+        "entity": "landedCost",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should be present in landedCost"
+      },
+      {
+        "id": "t-5",
+        "category": "field-presence",
+        "entity": "landedCost",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be present in landedCost"
+      },
+      {
+        "id": "t-6",
+        "category": "field-presence",
+        "entity": "landedCost",
+        "field": "docStatus",
+        "runner": "node",
+        "description": "Field 'docStatus' should be present in landedCost"
+      },
+      {
+        "id": "t-7",
+        "category": "field-type",
+        "entity": "landedCost",
+        "field": "organization",
+        "runner": "node",
+        "description": "Field 'organization' should have type 'string' in landedCost"
+      },
+      {
+        "id": "t-8",
+        "category": "field-type",
+        "entity": "landedCost",
+        "field": "dateAcct",
+        "runner": "node",
+        "description": "Field 'dateAcct' should have type 'string' in landedCost"
+      },
+      {
+        "id": "t-9",
+        "category": "field-type",
+        "entity": "landedCost",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in landedCost"
+      },
+      {
+        "id": "t-10",
+        "category": "field-type",
+        "entity": "landedCost",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should have type 'boolean' in landedCost"
+      },
+      {
+        "id": "t-11",
+        "category": "field-type",
+        "entity": "landedCost",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should have type 'string' in landedCost"
+      },
+      {
+        "id": "t-12",
+        "category": "field-type",
+        "entity": "landedCost",
+        "field": "docStatus",
+        "runner": "node",
+        "description": "Field 'docStatus' should have type 'string' in landedCost"
+      },
+      {
+        "id": "t-13",
+        "category": "searchable-filters",
+        "entity": "landedCost",
+        "field": "organization",
+        "runner": "node",
+        "description": "Field 'organization' should be a supported filter for landedCost"
+      },
+      {
+        "id": "t-14",
+        "category": "searchable-filters",
+        "entity": "landedCost",
+        "field": "dateAcct",
+        "runner": "node",
+        "description": "Field 'dateAcct' should be a supported filter for landedCost"
+      },
+      {
+        "id": "t-15",
+        "category": "searchable-filters",
+        "entity": "landedCost",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be a supported filter for landedCost"
+      },
+      {
+        "id": "t-16",
+        "category": "searchable-filters",
+        "entity": "landedCost",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be a supported filter for landedCost"
+      },
+      {
+        "id": "t-17",
+        "category": "searchable-filters",
+        "entity": "landedCost",
+        "field": "docStatus",
+        "runner": "node",
+        "description": "Field 'docStatus' should be a supported filter for landedCost"
+      },
+      {
+        "id": "t-18",
+        "category": "visibility",
+        "entity": "landedCost",
+        "runner": "node",
+        "description": "Entity 'landedCost' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-19",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "landedCostType",
+        "runner": "node",
+        "description": "Field 'landedCostType' should be present in landedCostCost"
+      },
+      {
+        "id": "t-20",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "amount",
+        "runner": "node",
+        "description": "Field 'amount' should be present in landedCostCost"
+      },
+      {
+        "id": "t-21",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "landedCostDistribution",
+        "runner": "node",
+        "description": "Field 'landedCostDistribution' should be present in landedCostCost"
+      },
+      {
+        "id": "t-22",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "goodsReceipt",
+        "runner": "node",
+        "description": "Field 'goodsReceipt' should be present in landedCostCost"
+      },
+      {
+        "id": "t-23",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "goodsReceiptLine",
+        "runner": "node",
+        "description": "Field 'goodsReceiptLine' should be present in landedCostCost"
+      },
+      {
+        "id": "t-24",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "invoiceLine",
+        "runner": "node",
+        "description": "Field 'invoiceLine' should be present in landedCostCost"
+      },
+      {
+        "id": "t-25",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in landedCostCost"
+      },
+      {
+        "id": "t-26",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should be present in landedCostCost"
+      },
+      {
+        "id": "t-27",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should be present in landedCostCost"
+      },
+      {
+        "id": "t-28",
+        "category": "field-presence",
+        "entity": "landedCostCost",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should be present in landedCostCost"
+      },
+      {
+        "id": "t-29",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "landedCostType",
+        "runner": "node",
+        "description": "Field 'landedCostType' should have type 'string' in landedCostCost"
+      },
+      {
+        "id": "t-30",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "amount",
+        "runner": "node",
+        "description": "Field 'amount' should have type 'number' in landedCostCost"
+      },
+      {
+        "id": "t-31",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "landedCostDistribution",
+        "runner": "node",
+        "description": "Field 'landedCostDistribution' should have type 'string' in landedCostCost"
+      },
+      {
+        "id": "t-32",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "goodsReceipt",
+        "runner": "node",
+        "description": "Field 'goodsReceipt' should have type 'string' in landedCostCost"
+      },
+      {
+        "id": "t-33",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "goodsReceiptLine",
+        "runner": "node",
+        "description": "Field 'goodsReceiptLine' should have type 'string' in landedCostCost"
+      },
+      {
+        "id": "t-34",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "invoiceLine",
+        "runner": "node",
+        "description": "Field 'invoiceLine' should have type 'string' in landedCostCost"
+      },
+      {
+        "id": "t-35",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in landedCostCost"
+      },
+      {
+        "id": "t-36",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should have type 'number' in landedCostCost"
+      },
+      {
+        "id": "t-37",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should have type 'boolean' in landedCostCost"
+      },
+      {
+        "id": "t-38",
+        "category": "field-type",
+        "entity": "landedCostCost",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should have type 'string' in landedCostCost"
+      },
+      {
+        "id": "t-39",
+        "category": "searchable-filters",
+        "entity": "landedCostCost",
+        "field": "landedCostType",
+        "runner": "node",
+        "description": "Field 'landedCostType' should be a supported filter for landedCostCost"
+      },
+      {
+        "id": "t-40",
+        "category": "searchable-filters",
+        "entity": "landedCostCost",
+        "field": "goodsReceipt",
+        "runner": "node",
+        "description": "Field 'goodsReceipt' should be a supported filter for landedCostCost"
+      },
+      {
+        "id": "t-41",
+        "category": "visibility",
+        "entity": "landedCostCost",
+        "runner": "node",
+        "description": "Entity 'landedCostCost' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-42",
+        "category": "field-presence",
+        "entity": "landedCostReceipt",
+        "field": "goodsReceipt",
+        "runner": "node",
+        "description": "Field 'goodsReceipt' should be present in landedCostReceipt"
+      },
+      {
+        "id": "t-43",
+        "category": "field-presence",
+        "entity": "landedCostReceipt",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should be present in landedCostReceipt"
+      },
+      {
+        "id": "t-44",
+        "category": "field-presence",
+        "entity": "landedCostReceipt",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be present in landedCostReceipt"
+      },
+      {
+        "id": "t-45",
+        "category": "field-type",
+        "entity": "landedCostReceipt",
+        "field": "goodsReceipt",
+        "runner": "node",
+        "description": "Field 'goodsReceipt' should have type 'string' in landedCostReceipt"
+      },
+      {
+        "id": "t-46",
+        "category": "field-type",
+        "entity": "landedCostReceipt",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should have type 'boolean' in landedCostReceipt"
+      },
+      {
+        "id": "t-47",
+        "category": "field-type",
+        "entity": "landedCostReceipt",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should have type 'string' in landedCostReceipt"
+      },
+      {
+        "id": "t-48",
+        "category": "searchable-filters",
+        "entity": "landedCostReceipt",
+        "field": "goodsReceipt",
+        "runner": "node",
+        "description": "Field 'goodsReceipt' should be a supported filter for landedCostReceipt"
+      },
+      {
+        "id": "t-49",
+        "category": "searchable-filters",
+        "entity": "landedCostReceipt",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be a supported filter for landedCostReceipt"
+      },
+      {
+        "id": "t-50",
+        "category": "visibility",
+        "entity": "landedCostReceipt",
+        "runner": "node",
+        "description": "Entity 'landedCostReceipt' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-51",
+        "category": "field-presence",
+        "entity": "landedCostAllocation",
+        "field": "goodsReceiptLine",
+        "runner": "node",
+        "description": "Field 'goodsReceiptLine' should be present in landedCostAllocation"
+      },
+      {
+        "id": "t-52",
+        "category": "field-presence",
+        "entity": "landedCostAllocation",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in landedCostAllocation"
+      },
+      {
+        "id": "t-53",
+        "category": "field-presence",
+        "entity": "landedCostAllocation",
+        "field": "amount",
+        "runner": "node",
+        "description": "Field 'amount' should be present in landedCostAllocation"
+      },
+      {
+        "id": "t-54",
+        "category": "field-presence",
+        "entity": "landedCostAllocation",
+        "field": "quantity",
+        "runner": "node",
+        "description": "Field 'quantity' should be present in landedCostAllocation"
+      },
+      {
+        "id": "t-55",
+        "category": "field-presence",
+        "entity": "landedCostAllocation",
+        "field": "baseAmount",
+        "runner": "node",
+        "description": "Field 'baseAmount' should be present in landedCostAllocation"
+      },
+      {
+        "id": "t-56",
+        "category": "field-presence",
+        "entity": "landedCostAllocation",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should be present in landedCostAllocation"
+      },
+      {
+        "id": "t-57",
+        "category": "field-type",
+        "entity": "landedCostAllocation",
+        "field": "goodsReceiptLine",
+        "runner": "node",
+        "description": "Field 'goodsReceiptLine' should have type 'string' in landedCostAllocation"
+      },
+      {
+        "id": "t-58",
+        "category": "field-type",
+        "entity": "landedCostAllocation",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in landedCostAllocation"
+      },
+      {
+        "id": "t-59",
+        "category": "field-type",
+        "entity": "landedCostAllocation",
+        "field": "amount",
+        "runner": "node",
+        "description": "Field 'amount' should have type 'number' in landedCostAllocation"
+      },
+      {
+        "id": "t-60",
+        "category": "field-type",
+        "entity": "landedCostAllocation",
+        "field": "quantity",
+        "runner": "node",
+        "description": "Field 'quantity' should have type 'number' in landedCostAllocation"
+      },
+      {
+        "id": "t-61",
+        "category": "field-type",
+        "entity": "landedCostAllocation",
+        "field": "baseAmount",
+        "runner": "node",
+        "description": "Field 'baseAmount' should have type 'number' in landedCostAllocation"
+      },
+      {
+        "id": "t-62",
+        "category": "field-type",
+        "entity": "landedCostAllocation",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should have type 'boolean' in landedCostAllocation"
+      },
+      {
+        "id": "t-63",
+        "category": "searchable-filters",
+        "entity": "landedCostAllocation",
+        "field": "goodsReceiptLine",
+        "runner": "node",
+        "description": "Field 'goodsReceiptLine' should be a supported filter for landedCostAllocation"
+      },
+      {
+        "id": "t-64",
+        "category": "searchable-filters",
+        "entity": "landedCostAllocation",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be a supported filter for landedCostAllocation"
+      },
+      {
+        "id": "t-65",
+        "category": "visibility",
+        "entity": "landedCostAllocation",
+        "runner": "node",
+        "description": "Entity 'landedCostAllocation' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-66",
+        "category": "system-field",
+        "entity": "landedCost",
+        "field": "adClientId",
+        "runner": "node",
+        "description": "System field 'adClientId' should exist in backend but not frontend for landedCost"
+      },
+      {
+        "id": "t-67",
+        "category": "system-field",
+        "entity": "landedCost",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "System field 'adOrgId' should exist in backend but not frontend for landedCost"
+      },
+      {
+        "id": "t-68",
+        "category": "system-field",
+        "entity": "landedCost",
+        "field": "cDocTypeId",
+        "runner": "node",
+        "description": "System field 'cDocTypeId' should exist in backend but not frontend for landedCost"
+      },
+      {
+        "id": "t-69",
+        "category": "system-field",
+        "entity": "landedCost",
+        "field": "processed",
+        "runner": "node",
+        "description": "System field 'processed' should exist in backend but not frontend for landedCost"
+      },
+      {
+        "id": "t-70",
+        "category": "system-field",
+        "entity": "landedCost",
+        "field": "created",
+        "runner": "node",
+        "description": "System field 'created' should exist in backend but not frontend for landedCost"
+      },
+      {
+        "id": "t-71",
+        "category": "system-field",
+        "entity": "landedCost",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for landedCost"
+      },
+      {
+        "id": "t-72",
+        "category": "system-field",
+        "entity": "landedCostCost",
+        "field": "adClientId",
+        "runner": "node",
+        "description": "System field 'adClientId' should exist in backend but not frontend for landedCostCost"
+      },
+      {
+        "id": "t-73",
+        "category": "system-field",
+        "entity": "landedCostCost",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "System field 'adOrgId' should exist in backend but not frontend for landedCostCost"
+      },
+      {
+        "id": "t-74",
+        "category": "system-field",
+        "entity": "landedCostCost",
+        "field": "mLandedCostId",
+        "runner": "node",
+        "description": "System field 'mLandedCostId' should exist in backend but not frontend for landedCostCost"
+      },
+      {
+        "id": "t-75",
+        "category": "system-field",
+        "entity": "landedCostReceipt",
+        "field": "adClientId",
+        "runner": "node",
+        "description": "System field 'adClientId' should exist in backend but not frontend for landedCostReceipt"
+      },
+      {
+        "id": "t-76",
+        "category": "system-field",
+        "entity": "landedCostReceipt",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "System field 'adOrgId' should exist in backend but not frontend for landedCostReceipt"
+      },
+      {
+        "id": "t-77",
+        "category": "system-field",
+        "entity": "landedCostReceipt",
+        "field": "mLandedCostId",
+        "runner": "node",
+        "description": "System field 'mLandedCostId' should exist in backend but not frontend for landedCostReceipt"
+      },
+      {
+        "id": "t-78",
+        "category": "system-field",
+        "entity": "landedCostAllocation",
+        "field": "adClientId",
+        "runner": "node",
+        "description": "System field 'adClientId' should exist in backend but not frontend for landedCostAllocation"
+      },
+      {
+        "id": "t-79",
+        "category": "system-field",
+        "entity": "landedCostAllocation",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "System field 'adOrgId' should exist in backend but not frontend for landedCostAllocation"
+      },
+      {
+        "id": "t-80",
+        "category": "system-field",
+        "entity": "landedCostAllocation",
+        "field": "mLandedCostId",
+        "runner": "node",
+        "description": "System field 'mLandedCostId' should exist in backend but not frontend for landedCostAllocation"
+      },
+      {
+        "id": "t-81",
+        "category": "system-field",
+        "entity": "landedCostAllocation",
+        "field": "mLandedCostCostId",
+        "runner": "node",
+        "description": "System field 'mLandedCostCostId' should exist in backend but not frontend for landedCostAllocation"
+      },
+      {
+        "id": "t-82",
+        "category": "rule-declared",
+        "rule": "LC_Process_Distribute",
+        "runner": "node",
+        "description": "Rule 'LC_Process_Distribute' (process) should be declared"
+      },
+      {
+        "id": "t-83",
+        "category": "rule-declared",
+        "rule": "LC_Distribution_Calc_Amount",
+        "runner": "node",
+        "description": "Rule 'LC_Distribution_Calc_Amount' (eventHandler) should be declared"
+      },
+      {
+        "id": "t-84",
+        "category": "rule-declared",
+        "rule": "LC_Update_Product_Cost",
+        "runner": "node",
+        "description": "Rule 'LC_Update_Product_Cost' (eventHandler) should be declared"
+      },
+      {
+        "id": "t-85",
+        "category": "rule-declared",
+        "rule": "ReadOnly_When_Processed",
+        "runner": "node",
+        "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-86",
+        "category": "rule-declared",
+        "rule": "LC_Cost_Validate_Receipt_Scope",
+        "runner": "node",
+        "description": "Rule 'LC_Cost_Validate_Receipt_Scope' (validation) should be declared"
+      },
+      {
+        "id": "t-87",
+        "category": "rule-declared",
+        "rule": "LC_Void_Reverse_Allocations",
+        "runner": "node",
+        "description": "Rule 'LC_Void_Reverse_Allocations' (process) should be declared"
+      }
+    ],
+    "summary": {
+      "total": 87,
+      "byCategory": {
+        "field-presence": 25,
+        "field-type": 25,
+        "searchable-filters": 11,
+        "visibility": 4,
+        "system-field": 16,
+        "rule-declared": 6
+      },
+      "byRunner": {
+        "node": 87,
+        "junit": 0
+      }
+    }
+  }
+}

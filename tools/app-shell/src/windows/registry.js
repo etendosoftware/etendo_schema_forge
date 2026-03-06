@@ -16,6 +16,14 @@ const windowLoaders = {
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
   'uom': () => import('@generated/uom/generated/web/uom/index.jsx'),
   'user': () => import('@generated/user/generated/web/user/index.jsx'),
+  'requisition': () => import('@generated/requisition/generated/web/requisition/index.jsx'),
+  'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
+  'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
+  'purchase-invoice': () => import('@generated/purchase-invoice/generated/web/purchase-invoice/index.jsx'),
+  'manage-requisitions': () => import('@generated/manage-requisitions/generated/web/manage-requisitions/index.jsx'),
+  'return-to-vendor': () => import('@generated/return-to-vendor/generated/web/return-to-vendor/index.jsx'),
+  'return-to-vendor-shipment': () => import('@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/index.jsx'),
+  'landed-cost': () => import('@generated/landed-cost/generated/web/landed-cost/index.jsx'),
 };
 
 /**

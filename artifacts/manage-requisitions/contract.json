@@ -1,0 +1,1318 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-03-06T17:46:21.527Z",
+  "checksum": "8c5063b4edd20b3a",
+  "frontendContract": {
+    "window": {
+      "id": "800161",
+      "name": "Manage Requisitions",
+      "primaryEntity": "requisition",
+      "category": "procurement",
+      "notes": "Management/approval view over the same M_Requisition table. Distinguished from the Requisition window by: (1) broader org-level visibility via tab WHERE clause, (2) approval/rejection workflow actions, (3) Create PO from Requisition process, (4) most header fields are readOnly since managers review rather than create."
+    },
+    "entities": {
+      "requisition": {
+        "fields": [
+          {
+            "name": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "docStatus",
+            "column": "DocStatus",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "BusinessPartner",
+            "inputMode": "search"
+          },
+          {
+            "name": "dateRequired",
+            "column": "DateRequired",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "dateDoc",
+            "column": "DateDoc",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "warehouse",
+            "column": "M_Warehouse_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Warehouse",
+            "inputMode": "selector"
+          },
+          {
+            "name": "priceList",
+            "column": "M_PriceList_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "reference": "PriceList",
+            "inputMode": "selector"
+          },
+          {
+            "name": "totalLines",
+            "column": "TotalLines",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "grandTotal",
+            "column": "GrandTotal",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "user",
+            "column": "AD_User_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "User",
+            "inputMode": "search"
+          },
+          {
+            "name": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Organization",
+            "inputMode": "selector"
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "cCurrencyId",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Currency"
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true
+          }
+        ],
+        "searchableFields": [
+          "documentNo",
+          "docStatus",
+          "businessPartner",
+          "dateRequired",
+          "dateDoc",
+          "warehouse",
+          "user",
+          "organization",
+          "description"
+        ],
+        "computedFields": []
+      },
+      "requisitionLine": {
+        "fields": [
+          {
+            "name": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "search"
+          },
+          {
+            "name": "quantity",
+            "column": "Qty",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "unitPrice",
+            "column": "PriceActual",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "lineNetAmount",
+            "column": "LineNetAmt",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "needByDate",
+            "column": "NeedByDate",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "BusinessPartner",
+            "inputMode": "search"
+          },
+          {
+            "name": "uom",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "UOM",
+            "inputMode": "selector"
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "matchedPOQty",
+            "column": "Orderedqty",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "requisitionOrder",
+            "column": "M_Requisitionorder_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "RequisitionOrder"
+          }
+        ],
+        "searchableFields": [
+          "product"
+        ],
+        "computedFields": []
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "800161",
+      "name": "Manage Requisitions",
+      "primaryEntity": "requisition",
+      "category": "procurement",
+      "notes": "Management/approval view over the same M_Requisition table. Distinguished from the Requisition window by: (1) broader org-level visibility via tab WHERE clause, (2) approval/rejection workflow actions, (3) Create PO from Requisition process, (4) most header fields are readOnly since managers review rather than create."
+    },
+    "entities": {
+      "requisition": {
+        "fields": [
+          {
+            "name": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "docStatus",
+            "column": "DocStatus",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "dateRequired",
+            "column": "DateRequired",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "dateDoc",
+            "column": "DateDoc",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "warehouse",
+            "column": "M_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "priceList",
+            "column": "M_PriceList_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "totalLines",
+            "column": "TotalLines",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "grandTotal",
+            "column": "GrandTotal",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "user",
+            "column": "AD_User_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "cCurrencyId",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "cDocTypeId",
+            "column": "C_DocType_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "created",
+            "column": "Created",
+            "type": "datetime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "column": "Updated",
+            "type": "datetime",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "requisitionLine": {
+        "fields": [
+          {
+            "name": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "quantity",
+            "column": "Qty",
+            "type": "number",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "unitPrice",
+            "column": "PriceActual",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "lineNetAmount",
+            "column": "LineNetAmt",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "needByDate",
+            "column": "NeedByDate",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "uom",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "matchedPOQty",
+            "column": "Orderedqty",
+            "type": "number",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "requisitionOrder",
+            "column": "M_Requisitionorder_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adOrgId",
+            "column": "AD_Org_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "mRequisitionId",
+            "column": "M_Requisition_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "cCurrencyId",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/requisition",
+        "entity": "requisition",
+        "supportedFilters": [
+          "documentNo",
+          "docStatus",
+          "businessPartner",
+          "dateRequired",
+          "dateDoc",
+          "warehouse",
+          "user",
+          "organization",
+          "description"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/requisition/:id",
+        "entity": "requisition",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/requisition",
+        "entity": "requisition",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/requisition/:id",
+        "entity": "requisition",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/requisition/:id",
+        "entity": "requisition",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/requisitionLine",
+        "entity": "requisitionLine",
+        "supportedFilters": [
+          "product"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/requisitionLine/:id",
+        "entity": "requisitionLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/requisitionLine",
+        "entity": "requisitionLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/requisitionLine/:id",
+        "entity": "requisitionLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/requisitionLine/:id",
+        "entity": "requisitionLine",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": [
+      {
+        "name": "DocAction",
+        "method": "POST",
+        "path": "/process/DocAction",
+        "entity": "requisition",
+        "preconditions": [],
+        "steps": 0
+      },
+      {
+        "name": "CreatePOFromRequisition",
+        "method": "POST",
+        "path": "/process/CreatePOFromRequisition",
+        "entity": "requisition",
+        "preconditions": [],
+        "steps": 0
+      }
+    ]
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-1",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be present in requisition"
+      },
+      {
+        "id": "t-2",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "docStatus",
+        "runner": "node",
+        "description": "Field 'docStatus' should be present in requisition"
+      },
+      {
+        "id": "t-3",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in requisition"
+      },
+      {
+        "id": "t-4",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "dateRequired",
+        "runner": "node",
+        "description": "Field 'dateRequired' should be present in requisition"
+      },
+      {
+        "id": "t-5",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "dateDoc",
+        "runner": "node",
+        "description": "Field 'dateDoc' should be present in requisition"
+      },
+      {
+        "id": "t-6",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "Field 'warehouse' should be present in requisition"
+      },
+      {
+        "id": "t-7",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "priceList",
+        "runner": "node",
+        "description": "Field 'priceList' should be present in requisition"
+      },
+      {
+        "id": "t-8",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "totalLines",
+        "runner": "node",
+        "description": "Field 'totalLines' should be present in requisition"
+      },
+      {
+        "id": "t-9",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "grandTotal",
+        "runner": "node",
+        "description": "Field 'grandTotal' should be present in requisition"
+      },
+      {
+        "id": "t-10",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "user",
+        "runner": "node",
+        "description": "Field 'user' should be present in requisition"
+      },
+      {
+        "id": "t-11",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "organization",
+        "runner": "node",
+        "description": "Field 'organization' should be present in requisition"
+      },
+      {
+        "id": "t-12",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in requisition"
+      },
+      {
+        "id": "t-13",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "cCurrencyId",
+        "runner": "node",
+        "description": "Field 'cCurrencyId' should be present in requisition"
+      },
+      {
+        "id": "t-14",
+        "category": "field-presence",
+        "entity": "requisition",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should be present in requisition"
+      },
+      {
+        "id": "t-15",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-16",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "docStatus",
+        "runner": "node",
+        "description": "Field 'docStatus' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-17",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-18",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "dateRequired",
+        "runner": "node",
+        "description": "Field 'dateRequired' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-19",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "dateDoc",
+        "runner": "node",
+        "description": "Field 'dateDoc' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-20",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "Field 'warehouse' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-21",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "priceList",
+        "runner": "node",
+        "description": "Field 'priceList' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-22",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "totalLines",
+        "runner": "node",
+        "description": "Field 'totalLines' should have type 'number' in requisition"
+      },
+      {
+        "id": "t-23",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "grandTotal",
+        "runner": "node",
+        "description": "Field 'grandTotal' should have type 'number' in requisition"
+      },
+      {
+        "id": "t-24",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "user",
+        "runner": "node",
+        "description": "Field 'user' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-25",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "organization",
+        "runner": "node",
+        "description": "Field 'organization' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-26",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-27",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "cCurrencyId",
+        "runner": "node",
+        "description": "Field 'cCurrencyId' should have type 'string' in requisition"
+      },
+      {
+        "id": "t-28",
+        "category": "field-type",
+        "entity": "requisition",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should have type 'boolean' in requisition"
+      },
+      {
+        "id": "t-29",
+        "category": "searchable-filters",
+        "entity": "requisition",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be a supported filter for requisition"
+      },
+      {
+        "id": "t-30",
+        "category": "searchable-filters",
+        "entity": "requisition",
+        "field": "docStatus",
+        "runner": "node",
+        "description": "Field 'docStatus' should be a supported filter for requisition"
+      },
+      {
+        "id": "t-31",
+        "category": "searchable-filters",
+        "entity": "requisition",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be a supported filter for requisition"
+      },
+      {
+        "id": "t-32",
+        "category": "searchable-filters",
+        "entity": "requisition",
+        "field": "dateRequired",
+        "runner": "node",
+        "description": "Field 'dateRequired' should be a supported filter for requisition"
+      },
+      {
+        "id": "t-33",
+        "category": "searchable-filters",
+        "entity": "requisition",
+        "field": "dateDoc",
+        "runner": "node",
+        "description": "Field 'dateDoc' should be a supported filter for requisition"
+      },
+      {
+        "id": "t-34",
+        "category": "searchable-filters",
+        "entity": "requisition",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "Field 'warehouse' should be a supported filter for requisition"
+      },
+      {
+        "id": "t-35",
+        "category": "searchable-filters",
+        "entity": "requisition",
+        "field": "user",
+        "runner": "node",
+        "description": "Field 'user' should be a supported filter for requisition"
+      },
+      {
+        "id": "t-36",
+        "category": "searchable-filters",
+        "entity": "requisition",
+        "field": "organization",
+        "runner": "node",
+        "description": "Field 'organization' should be a supported filter for requisition"
+      },
+      {
+        "id": "t-37",
+        "category": "searchable-filters",
+        "entity": "requisition",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be a supported filter for requisition"
+      },
+      {
+        "id": "t-38",
+        "category": "visibility",
+        "entity": "requisition",
+        "runner": "node",
+        "description": "Entity 'requisition' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-39",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should be present in requisitionLine"
+      },
+      {
+        "id": "t-40",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in requisitionLine"
+      },
+      {
+        "id": "t-41",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "quantity",
+        "runner": "node",
+        "description": "Field 'quantity' should be present in requisitionLine"
+      },
+      {
+        "id": "t-42",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "unitPrice",
+        "runner": "node",
+        "description": "Field 'unitPrice' should be present in requisitionLine"
+      },
+      {
+        "id": "t-43",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "lineNetAmount",
+        "runner": "node",
+        "description": "Field 'lineNetAmount' should be present in requisitionLine"
+      },
+      {
+        "id": "t-44",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "needByDate",
+        "runner": "node",
+        "description": "Field 'needByDate' should be present in requisitionLine"
+      },
+      {
+        "id": "t-45",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in requisitionLine"
+      },
+      {
+        "id": "t-46",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "uom",
+        "runner": "node",
+        "description": "Field 'uom' should be present in requisitionLine"
+      },
+      {
+        "id": "t-47",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in requisitionLine"
+      },
+      {
+        "id": "t-48",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "matchedPOQty",
+        "runner": "node",
+        "description": "Field 'matchedPOQty' should be present in requisitionLine"
+      },
+      {
+        "id": "t-49",
+        "category": "field-presence",
+        "entity": "requisitionLine",
+        "field": "requisitionOrder",
+        "runner": "node",
+        "description": "Field 'requisitionOrder' should be present in requisitionLine"
+      },
+      {
+        "id": "t-50",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should have type 'number' in requisitionLine"
+      },
+      {
+        "id": "t-51",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in requisitionLine"
+      },
+      {
+        "id": "t-52",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "quantity",
+        "runner": "node",
+        "description": "Field 'quantity' should have type 'number' in requisitionLine"
+      },
+      {
+        "id": "t-53",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "unitPrice",
+        "runner": "node",
+        "description": "Field 'unitPrice' should have type 'number' in requisitionLine"
+      },
+      {
+        "id": "t-54",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "lineNetAmount",
+        "runner": "node",
+        "description": "Field 'lineNetAmount' should have type 'number' in requisitionLine"
+      },
+      {
+        "id": "t-55",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "needByDate",
+        "runner": "node",
+        "description": "Field 'needByDate' should have type 'string' in requisitionLine"
+      },
+      {
+        "id": "t-56",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should have type 'string' in requisitionLine"
+      },
+      {
+        "id": "t-57",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "uom",
+        "runner": "node",
+        "description": "Field 'uom' should have type 'string' in requisitionLine"
+      },
+      {
+        "id": "t-58",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in requisitionLine"
+      },
+      {
+        "id": "t-59",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "matchedPOQty",
+        "runner": "node",
+        "description": "Field 'matchedPOQty' should have type 'number' in requisitionLine"
+      },
+      {
+        "id": "t-60",
+        "category": "field-type",
+        "entity": "requisitionLine",
+        "field": "requisitionOrder",
+        "runner": "node",
+        "description": "Field 'requisitionOrder' should have type 'string' in requisitionLine"
+      },
+      {
+        "id": "t-61",
+        "category": "searchable-filters",
+        "entity": "requisitionLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be a supported filter for requisitionLine"
+      },
+      {
+        "id": "t-62",
+        "category": "visibility",
+        "entity": "requisitionLine",
+        "runner": "node",
+        "description": "Entity 'requisitionLine' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-63",
+        "category": "system-field",
+        "entity": "requisition",
+        "field": "adClientId",
+        "runner": "node",
+        "description": "System field 'adClientId' should exist in backend but not frontend for requisition"
+      },
+      {
+        "id": "t-64",
+        "category": "system-field",
+        "entity": "requisition",
+        "field": "cDocTypeId",
+        "runner": "node",
+        "description": "System field 'cDocTypeId' should exist in backend but not frontend for requisition"
+      },
+      {
+        "id": "t-65",
+        "category": "system-field",
+        "entity": "requisition",
+        "field": "processed",
+        "runner": "node",
+        "description": "System field 'processed' should exist in backend but not frontend for requisition"
+      },
+      {
+        "id": "t-66",
+        "category": "system-field",
+        "entity": "requisition",
+        "field": "created",
+        "runner": "node",
+        "description": "System field 'created' should exist in backend but not frontend for requisition"
+      },
+      {
+        "id": "t-67",
+        "category": "system-field",
+        "entity": "requisition",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for requisition"
+      },
+      {
+        "id": "t-68",
+        "category": "system-field",
+        "entity": "requisitionLine",
+        "field": "adClientId",
+        "runner": "node",
+        "description": "System field 'adClientId' should exist in backend but not frontend for requisitionLine"
+      },
+      {
+        "id": "t-69",
+        "category": "system-field",
+        "entity": "requisitionLine",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "System field 'adOrgId' should exist in backend but not frontend for requisitionLine"
+      },
+      {
+        "id": "t-70",
+        "category": "system-field",
+        "entity": "requisitionLine",
+        "field": "mRequisitionId",
+        "runner": "node",
+        "description": "System field 'mRequisitionId' should exist in backend but not frontend for requisitionLine"
+      },
+      {
+        "id": "t-71",
+        "category": "system-field",
+        "entity": "requisitionLine",
+        "field": "cCurrencyId",
+        "runner": "node",
+        "description": "System field 'cCurrencyId' should exist in backend but not frontend for requisitionLine"
+      },
+      {
+        "id": "t-72",
+        "category": "rule-declared",
+        "rule": "ReadOnly_All_Fields",
+        "runner": "node",
+        "description": "Rule 'ReadOnly_All_Fields' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-73",
+        "category": "rule-declared",
+        "rule": "ReadOnly_All_Lines",
+        "runner": "node",
+        "description": "Rule 'ReadOnly_All_Lines' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-74",
+        "category": "rule-declared",
+        "rule": "DocAction_Approve_Reject",
+        "runner": "node",
+        "description": "Rule 'DocAction_Approve_Reject' (eventHandler) should be declared"
+      },
+      {
+        "id": "t-75",
+        "category": "rule-declared",
+        "rule": "CreatePO_From_Requisition",
+        "runner": "node",
+        "description": "Rule 'CreatePO_From_Requisition' (process) should be declared"
+      },
+      {
+        "id": "t-76",
+        "category": "rule-declared",
+        "rule": "Filter_By_DocStatus",
+        "runner": "node",
+        "description": "Rule 'Filter_By_DocStatus' (tabWhereClause) should be declared"
+      },
+      {
+        "id": "t-77",
+        "category": "rule-declared",
+        "rule": "MatchedPO_Display",
+        "runner": "node",
+        "description": "Rule 'MatchedPO_Display' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-78",
+        "category": "process-happy",
+        "process": "DocAction",
+        "entity": "requisition",
+        "runner": "junit",
+        "description": "Process 'DocAction' should complete successfully with valid preconditions"
+      },
+      {
+        "id": "t-79",
+        "category": "process-failure",
+        "process": "DocAction",
+        "entity": "requisition",
+        "runner": "junit",
+        "description": "Process 'DocAction' should fail when preconditions are not met"
+      },
+      {
+        "id": "t-80",
+        "category": "process-happy",
+        "process": "CreatePOFromRequisition",
+        "entity": "requisition",
+        "runner": "junit",
+        "description": "Process 'CreatePOFromRequisition' should complete successfully with valid preconditions"
+      },
+      {
+        "id": "t-81",
+        "category": "process-failure",
+        "process": "CreatePOFromRequisition",
+        "entity": "requisition",
+        "runner": "junit",
+        "description": "Process 'CreatePOFromRequisition' should fail when preconditions are not met"
+      }
+    ],
+    "summary": {
+      "total": 81,
+      "byCategory": {
+        "field-presence": 25,
+        "field-type": 25,
+        "searchable-filters": 10,
+        "visibility": 2,
+        "system-field": 9,
+        "rule-declared": 6,
+        "process-happy": 2,
+        "process-failure": 2
+      },
+      "byRunner": {
+        "node": 77,
+        "junit": 4
+      }
+    }
+  }
+}

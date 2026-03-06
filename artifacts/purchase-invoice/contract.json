@@ -1,0 +1,1429 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-03-06T17:46:26.227Z",
+  "checksum": "786a1fa36f23b2b8",
+  "frontendContract": {
+    "window": {
+      "id": "183",
+      "name": "Purchase Invoice",
+      "primaryEntity": "invoice",
+      "category": "procurement"
+    },
+    "entities": {
+      "invoice": {
+        "fields": [
+          {
+            "name": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "BusinessPartner",
+            "inputMode": "search"
+          },
+          {
+            "name": "partnerAddress",
+            "column": "C_BPartner_Location_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "reference": "BusinessPartnerLocation",
+            "inputMode": "dependent",
+            "dependsOn": {
+              "field": "businessPartner",
+              "filterKey": "businessPartnerId"
+            }
+          },
+          {
+            "name": "dateInvoiced",
+            "column": "DateInvoiced",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "dateAcct",
+            "column": "DateAcct",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "paymentTerms",
+            "column": "C_PaymentTerm_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "reference": "PaymentTerm",
+            "inputMode": "selector"
+          },
+          {
+            "name": "paymentMethod",
+            "column": "FIN_Paymentmethod_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "PaymentMethod",
+            "inputMode": "selector"
+          },
+          {
+            "name": "priceList",
+            "column": "M_PriceList_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "reference": "PriceList",
+            "inputMode": "selector"
+          },
+          {
+            "name": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Currency",
+            "inputMode": "selector"
+          },
+          {
+            "name": "poReference",
+            "column": "POReference",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "docStatus",
+            "column": "DocStatus",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "grandTotal",
+            "column": "GrandTotal",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "totalLines",
+            "column": "TotalLines",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "isPaid",
+            "column": "IsPaid",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          }
+        ],
+        "searchableFields": [
+          "businessPartner",
+          "dateInvoiced",
+          "poReference",
+          "documentNo",
+          "docStatus"
+        ],
+        "computedFields": []
+      },
+      "invoiceLine": {
+        "fields": [
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "search"
+          },
+          {
+            "name": "quantity",
+            "column": "QtyInvoiced",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "unitPrice",
+            "column": "PriceActual",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "priceList",
+            "column": "PriceList",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "tax",
+            "column": "C_Tax_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Tax",
+            "inputMode": "selector"
+          },
+          {
+            "name": "discount",
+            "column": "Discount",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "lineNetAmount",
+            "column": "LineNetAmt",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "uom",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "UOM",
+            "inputMode": "selector"
+          },
+          {
+            "name": "taxAmount",
+            "column": "TaxAmt",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          }
+        ],
+        "searchableFields": [
+          "product"
+        ],
+        "computedFields": []
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "183",
+      "name": "Purchase Invoice",
+      "primaryEntity": "invoice",
+      "category": "procurement"
+    },
+    "entities": {
+      "invoice": {
+        "fields": [
+          {
+            "name": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "partnerAddress",
+            "column": "C_BPartner_Location_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "dateInvoiced",
+            "column": "DateInvoiced",
+            "type": "date",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "dateAcct",
+            "column": "DateAcct",
+            "type": "date",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "paymentTerms",
+            "column": "C_PaymentTerm_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "paymentMethod",
+            "column": "FIN_Paymentmethod_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "priceList",
+            "column": "M_PriceList_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "poReference",
+            "column": "POReference",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "docStatus",
+            "column": "DocStatus",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "grandTotal",
+            "column": "GrandTotal",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "totalLines",
+            "column": "TotalLines",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "isPaid",
+            "column": "IsPaid",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adOrgId",
+            "column": "AD_Org_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "cDocTypeTargetId",
+            "column": "C_DocTypeTarget_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "cDocTypeId",
+            "column": "C_DocType_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "isSotrx",
+            "column": "IsSOTrx",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "paymentRule",
+            "column": "PaymentRule",
+            "type": "string",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "created",
+            "column": "Created",
+            "type": "datetime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "column": "Updated",
+            "type": "datetime",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "invoiceLine": {
+        "fields": [
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "quantity",
+            "column": "QtyInvoiced",
+            "type": "number",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "unitPrice",
+            "column": "PriceActual",
+            "type": "amount",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "priceList",
+            "column": "PriceList",
+            "type": "amount",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "tax",
+            "column": "C_Tax_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "discount",
+            "column": "Discount",
+            "type": "number",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "lineNetAmount",
+            "column": "LineNetAmt",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "uom",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "taxAmount",
+            "column": "TaxAmt",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adOrgId",
+            "column": "AD_Org_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "cInvoiceId",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "dateInvoiced",
+            "column": "DateInvoiced",
+            "type": "date",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "cCurrencyId",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "cBpartnerId",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "mInoutlineId",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "cOrderlineId",
+            "column": "C_OrderLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/invoice",
+        "entity": "invoice",
+        "supportedFilters": [
+          "businessPartner",
+          "dateInvoiced",
+          "poReference",
+          "documentNo",
+          "docStatus"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/invoice/:id",
+        "entity": "invoice",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/invoice",
+        "entity": "invoice",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/invoice/:id",
+        "entity": "invoice",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/invoice/:id",
+        "entity": "invoice",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/invoiceLine",
+        "entity": "invoiceLine",
+        "supportedFilters": [
+          "product"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/invoiceLine/:id",
+        "entity": "invoiceLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/invoiceLine",
+        "entity": "invoiceLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/invoiceLine/:id",
+        "entity": "invoiceLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/invoiceLine/:id",
+        "entity": "invoiceLine",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-1",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in invoice"
+      },
+      {
+        "id": "t-2",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "partnerAddress",
+        "runner": "node",
+        "description": "Field 'partnerAddress' should be present in invoice"
+      },
+      {
+        "id": "t-3",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "dateInvoiced",
+        "runner": "node",
+        "description": "Field 'dateInvoiced' should be present in invoice"
+      },
+      {
+        "id": "t-4",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "dateAcct",
+        "runner": "node",
+        "description": "Field 'dateAcct' should be present in invoice"
+      },
+      {
+        "id": "t-5",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "paymentTerms",
+        "runner": "node",
+        "description": "Field 'paymentTerms' should be present in invoice"
+      },
+      {
+        "id": "t-6",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "paymentMethod",
+        "runner": "node",
+        "description": "Field 'paymentMethod' should be present in invoice"
+      },
+      {
+        "id": "t-7",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "priceList",
+        "runner": "node",
+        "description": "Field 'priceList' should be present in invoice"
+      },
+      {
+        "id": "t-8",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should be present in invoice"
+      },
+      {
+        "id": "t-9",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "poReference",
+        "runner": "node",
+        "description": "Field 'poReference' should be present in invoice"
+      },
+      {
+        "id": "t-10",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in invoice"
+      },
+      {
+        "id": "t-11",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should be present in invoice"
+      },
+      {
+        "id": "t-12",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be present in invoice"
+      },
+      {
+        "id": "t-13",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "docStatus",
+        "runner": "node",
+        "description": "Field 'docStatus' should be present in invoice"
+      },
+      {
+        "id": "t-14",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "grandTotal",
+        "runner": "node",
+        "description": "Field 'grandTotal' should be present in invoice"
+      },
+      {
+        "id": "t-15",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "totalLines",
+        "runner": "node",
+        "description": "Field 'totalLines' should be present in invoice"
+      },
+      {
+        "id": "t-16",
+        "category": "field-presence",
+        "entity": "invoice",
+        "field": "isPaid",
+        "runner": "node",
+        "description": "Field 'isPaid' should be present in invoice"
+      },
+      {
+        "id": "t-17",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-18",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "partnerAddress",
+        "runner": "node",
+        "description": "Field 'partnerAddress' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-19",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "dateInvoiced",
+        "runner": "node",
+        "description": "Field 'dateInvoiced' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-20",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "dateAcct",
+        "runner": "node",
+        "description": "Field 'dateAcct' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-21",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "paymentTerms",
+        "runner": "node",
+        "description": "Field 'paymentTerms' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-22",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "paymentMethod",
+        "runner": "node",
+        "description": "Field 'paymentMethod' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-23",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "priceList",
+        "runner": "node",
+        "description": "Field 'priceList' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-24",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-25",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "poReference",
+        "runner": "node",
+        "description": "Field 'poReference' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-26",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-27",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should have type 'boolean' in invoice"
+      },
+      {
+        "id": "t-28",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-29",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "docStatus",
+        "runner": "node",
+        "description": "Field 'docStatus' should have type 'string' in invoice"
+      },
+      {
+        "id": "t-30",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "grandTotal",
+        "runner": "node",
+        "description": "Field 'grandTotal' should have type 'number' in invoice"
+      },
+      {
+        "id": "t-31",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "totalLines",
+        "runner": "node",
+        "description": "Field 'totalLines' should have type 'number' in invoice"
+      },
+      {
+        "id": "t-32",
+        "category": "field-type",
+        "entity": "invoice",
+        "field": "isPaid",
+        "runner": "node",
+        "description": "Field 'isPaid' should have type 'boolean' in invoice"
+      },
+      {
+        "id": "t-33",
+        "category": "searchable-filters",
+        "entity": "invoice",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be a supported filter for invoice"
+      },
+      {
+        "id": "t-34",
+        "category": "searchable-filters",
+        "entity": "invoice",
+        "field": "dateInvoiced",
+        "runner": "node",
+        "description": "Field 'dateInvoiced' should be a supported filter for invoice"
+      },
+      {
+        "id": "t-35",
+        "category": "searchable-filters",
+        "entity": "invoice",
+        "field": "poReference",
+        "runner": "node",
+        "description": "Field 'poReference' should be a supported filter for invoice"
+      },
+      {
+        "id": "t-36",
+        "category": "searchable-filters",
+        "entity": "invoice",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be a supported filter for invoice"
+      },
+      {
+        "id": "t-37",
+        "category": "searchable-filters",
+        "entity": "invoice",
+        "field": "docStatus",
+        "runner": "node",
+        "description": "Field 'docStatus' should be a supported filter for invoice"
+      },
+      {
+        "id": "t-38",
+        "category": "visibility",
+        "entity": "invoice",
+        "runner": "node",
+        "description": "Entity 'invoice' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-39",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in invoiceLine"
+      },
+      {
+        "id": "t-40",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "quantity",
+        "runner": "node",
+        "description": "Field 'quantity' should be present in invoiceLine"
+      },
+      {
+        "id": "t-41",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "unitPrice",
+        "runner": "node",
+        "description": "Field 'unitPrice' should be present in invoiceLine"
+      },
+      {
+        "id": "t-42",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "priceList",
+        "runner": "node",
+        "description": "Field 'priceList' should be present in invoiceLine"
+      },
+      {
+        "id": "t-43",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "tax",
+        "runner": "node",
+        "description": "Field 'tax' should be present in invoiceLine"
+      },
+      {
+        "id": "t-44",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "discount",
+        "runner": "node",
+        "description": "Field 'discount' should be present in invoiceLine"
+      },
+      {
+        "id": "t-45",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should be present in invoiceLine"
+      },
+      {
+        "id": "t-46",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in invoiceLine"
+      },
+      {
+        "id": "t-47",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "lineNetAmount",
+        "runner": "node",
+        "description": "Field 'lineNetAmount' should be present in invoiceLine"
+      },
+      {
+        "id": "t-48",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "uom",
+        "runner": "node",
+        "description": "Field 'uom' should be present in invoiceLine"
+      },
+      {
+        "id": "t-49",
+        "category": "field-presence",
+        "entity": "invoiceLine",
+        "field": "taxAmount",
+        "runner": "node",
+        "description": "Field 'taxAmount' should be present in invoiceLine"
+      },
+      {
+        "id": "t-50",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in invoiceLine"
+      },
+      {
+        "id": "t-51",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "quantity",
+        "runner": "node",
+        "description": "Field 'quantity' should have type 'number' in invoiceLine"
+      },
+      {
+        "id": "t-52",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "unitPrice",
+        "runner": "node",
+        "description": "Field 'unitPrice' should have type 'number' in invoiceLine"
+      },
+      {
+        "id": "t-53",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "priceList",
+        "runner": "node",
+        "description": "Field 'priceList' should have type 'number' in invoiceLine"
+      },
+      {
+        "id": "t-54",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "tax",
+        "runner": "node",
+        "description": "Field 'tax' should have type 'string' in invoiceLine"
+      },
+      {
+        "id": "t-55",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "discount",
+        "runner": "node",
+        "description": "Field 'discount' should have type 'number' in invoiceLine"
+      },
+      {
+        "id": "t-56",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should have type 'number' in invoiceLine"
+      },
+      {
+        "id": "t-57",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in invoiceLine"
+      },
+      {
+        "id": "t-58",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "lineNetAmount",
+        "runner": "node",
+        "description": "Field 'lineNetAmount' should have type 'number' in invoiceLine"
+      },
+      {
+        "id": "t-59",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "uom",
+        "runner": "node",
+        "description": "Field 'uom' should have type 'string' in invoiceLine"
+      },
+      {
+        "id": "t-60",
+        "category": "field-type",
+        "entity": "invoiceLine",
+        "field": "taxAmount",
+        "runner": "node",
+        "description": "Field 'taxAmount' should have type 'number' in invoiceLine"
+      },
+      {
+        "id": "t-61",
+        "category": "searchable-filters",
+        "entity": "invoiceLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be a supported filter for invoiceLine"
+      },
+      {
+        "id": "t-62",
+        "category": "visibility",
+        "entity": "invoiceLine",
+        "runner": "node",
+        "description": "Entity 'invoiceLine' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-63",
+        "category": "system-field",
+        "entity": "invoice",
+        "field": "adClientId",
+        "runner": "node",
+        "description": "System field 'adClientId' should exist in backend but not frontend for invoice"
+      },
+      {
+        "id": "t-64",
+        "category": "system-field",
+        "entity": "invoice",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "System field 'adOrgId' should exist in backend but not frontend for invoice"
+      },
+      {
+        "id": "t-65",
+        "category": "system-field",
+        "entity": "invoice",
+        "field": "cDocTypeTargetId",
+        "runner": "node",
+        "description": "System field 'cDocTypeTargetId' should exist in backend but not frontend for invoice"
+      },
+      {
+        "id": "t-66",
+        "category": "system-field",
+        "entity": "invoice",
+        "field": "cDocTypeId",
+        "runner": "node",
+        "description": "System field 'cDocTypeId' should exist in backend but not frontend for invoice"
+      },
+      {
+        "id": "t-67",
+        "category": "system-field",
+        "entity": "invoice",
+        "field": "isSotrx",
+        "runner": "node",
+        "description": "System field 'isSotrx' should exist in backend but not frontend for invoice"
+      },
+      {
+        "id": "t-68",
+        "category": "system-field",
+        "entity": "invoice",
+        "field": "processed",
+        "runner": "node",
+        "description": "System field 'processed' should exist in backend but not frontend for invoice"
+      },
+      {
+        "id": "t-69",
+        "category": "system-field",
+        "entity": "invoice",
+        "field": "paymentRule",
+        "runner": "node",
+        "description": "System field 'paymentRule' should exist in backend but not frontend for invoice"
+      },
+      {
+        "id": "t-70",
+        "category": "system-field",
+        "entity": "invoice",
+        "field": "created",
+        "runner": "node",
+        "description": "System field 'created' should exist in backend but not frontend for invoice"
+      },
+      {
+        "id": "t-71",
+        "category": "system-field",
+        "entity": "invoice",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for invoice"
+      },
+      {
+        "id": "t-72",
+        "category": "system-field",
+        "entity": "invoiceLine",
+        "field": "adClientId",
+        "runner": "node",
+        "description": "System field 'adClientId' should exist in backend but not frontend for invoiceLine"
+      },
+      {
+        "id": "t-73",
+        "category": "system-field",
+        "entity": "invoiceLine",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "System field 'adOrgId' should exist in backend but not frontend for invoiceLine"
+      },
+      {
+        "id": "t-74",
+        "category": "system-field",
+        "entity": "invoiceLine",
+        "field": "cInvoiceId",
+        "runner": "node",
+        "description": "System field 'cInvoiceId' should exist in backend but not frontend for invoiceLine"
+      },
+      {
+        "id": "t-75",
+        "category": "system-field",
+        "entity": "invoiceLine",
+        "field": "dateInvoiced",
+        "runner": "node",
+        "description": "System field 'dateInvoiced' should exist in backend but not frontend for invoiceLine"
+      },
+      {
+        "id": "t-76",
+        "category": "system-field",
+        "entity": "invoiceLine",
+        "field": "cCurrencyId",
+        "runner": "node",
+        "description": "System field 'cCurrencyId' should exist in backend but not frontend for invoiceLine"
+      },
+      {
+        "id": "t-77",
+        "category": "system-field",
+        "entity": "invoiceLine",
+        "field": "cBpartnerId",
+        "runner": "node",
+        "description": "System field 'cBpartnerId' should exist in backend but not frontend for invoiceLine"
+      },
+      {
+        "id": "t-78",
+        "category": "system-field",
+        "entity": "invoiceLine",
+        "field": "mInoutlineId",
+        "runner": "node",
+        "description": "System field 'mInoutlineId' should exist in backend but not frontend for invoiceLine"
+      },
+      {
+        "id": "t-79",
+        "category": "system-field",
+        "entity": "invoiceLine",
+        "field": "cOrderlineId",
+        "runner": "node",
+        "description": "System field 'cOrderlineId' should exist in backend but not frontend for invoiceLine"
+      },
+      {
+        "id": "t-80",
+        "category": "rule-declared",
+        "rule": "BP_AutoFill_Address",
+        "runner": "node",
+        "description": "Rule 'BP_AutoFill_Address' (callout) should be declared"
+      },
+      {
+        "id": "t-81",
+        "category": "rule-declared",
+        "rule": "Line_Recalc_Totals",
+        "runner": "node",
+        "description": "Rule 'Line_Recalc_Totals' (eventHandler) should be declared"
+      },
+      {
+        "id": "t-82",
+        "category": "rule-declared",
+        "rule": "Product_AutoFill_Price",
+        "runner": "node",
+        "description": "Rule 'Product_AutoFill_Price' (callout) should be declared"
+      },
+      {
+        "id": "t-83",
+        "category": "rule-declared",
+        "rule": "Line_Calc_NetAmount",
+        "runner": "node",
+        "description": "Rule 'Line_Calc_NetAmount' (callout) should be declared"
+      },
+      {
+        "id": "t-84",
+        "category": "rule-declared",
+        "rule": "ReadOnly_When_Processed",
+        "runner": "node",
+        "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-85",
+        "category": "rule-declared",
+        "rule": "Match_PO_Receipt",
+        "runner": "node",
+        "description": "Rule 'Match_PO_Receipt' (eventHandler) should be declared"
+      },
+      {
+        "id": "t-86",
+        "category": "rule-declared",
+        "rule": "DateAcct_Default",
+        "runner": "node",
+        "description": "Rule 'DateAcct_Default' (callout) should be declared"
+      },
+      {
+        "id": "t-87",
+        "category": "rule-declared",
+        "rule": "Currency_From_PriceList",
+        "runner": "node",
+        "description": "Rule 'Currency_From_PriceList' (callout) should be declared"
+      }
+    ],
+    "summary": {
+      "total": 87,
+      "byCategory": {
+        "field-presence": 27,
+        "field-type": 27,
+        "searchable-filters": 6,
+        "visibility": 2,
+        "system-field": 17,
+        "rule-declared": 8
+      },
+      "byRunner": {
+        "node": 87,
+        "junit": 0
+      }
+    }
+  }
+}

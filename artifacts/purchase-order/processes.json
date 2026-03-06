@@ -1,0 +1,230 @@
+{
+  "version": "1.0.0",
+  "processes": [
+    {
+      "name": "completePurchaseOrder",
+      "displayName": "Complete Purchase Order",
+      "entity": "Order",
+      "trigger": {
+        "type": "documentAction",
+        "action": "CO"
+      },
+      "preconditions": [
+        "Order must have at least one line",
+        "Order status must be DR (Draft) or IP (In Progress)",
+        "All order lines must have a product assigned",
+        "All order lines must have a positive quantity"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "name": "validatePreconditions",
+          "description": "Check that the purchase order meets all preconditions before completing",
+          "type": "validate",
+          "target": "Order",
+          "operation": {
+            "type": "validate",
+            "assertion": "order.lines.length > 0 && ['DR','IP'].includes(order.docStatus) && order.lines.every(l => l.product != null && l.qtyOrdered > 0)",
+            "errorMessage": "Purchase order does not meet completion preconditions",
+            "errorCode": "PO_COMPLETE_PRECONDITION_FAILED"
+          },
+          "ruleDecision": null,
+          "existingClass": null,
+          "behavioral": {
+            "testId": "po-complete-validate-preconditions",
+            "expectedBehavior": "Reject orders missing lines, wrong status, lines without product, or zero/negative qty"
+          }
+        },
+        {
+          "order": 2,
+          "name": "assignDocumentNumber",
+          "description": "Assign the next document number from the sequence to the purchase order",
+          "type": "mutation",
+          "target": "Order",
+          "operation": {
+            "type": "mutation",
+            "entity": "Order",
+            "field": "documentNo",
+            "value": "nextSequenceValue(order.documentType.documentSequence)"
+          },
+          "ruleDecision": null,
+          "existingClass": null,
+          "behavioral": {
+            "testId": "po-complete-assign-doc-number",
+            "expectedBehavior": "Purchase order receives the next available document number from the configured sequence"
+          }
+        },
+        {
+          "order": 3,
+          "name": "calculateTax",
+          "description": "Calculate tax amounts for the purchase order",
+          "type": "mutation",
+          "target": "Order",
+          "operation": {
+            "type": "mutation",
+            "entity": "Order",
+            "field": "grandTotal",
+            "value": "order.totalLines + calculateTax(order)"
+          },
+          "ruleDecision": null,
+          "existingClass": null,
+          "behavioral": {
+            "testId": "po-complete-calculate-tax",
+            "expectedBehavior": "Grand total is updated with the calculated tax amount"
+          }
+        },
+        {
+          "order": 4,
+          "name": "postAccounting",
+          "description": "Post accounting entries for the completed purchase order",
+          "type": "mutation",
+          "target": "Order",
+          "operation": {
+            "type": "mutation",
+            "entity": "Order",
+            "field": "posted",
+            "value": "Y"
+          },
+          "ruleDecision": null,
+          "existingClass": null,
+          "behavioral": {
+            "testId": "po-complete-post-accounting",
+            "expectedBehavior": "Accounting entries are created and the order is marked as posted"
+          }
+        },
+        {
+          "order": 5,
+          "name": "updateStatusComplete",
+          "description": "Set purchase order status to CO, mark as processed",
+          "type": "mutation",
+          "target": "Order",
+          "operation": {
+            "type": "mutation",
+            "entity": "Order",
+            "field": "docStatus",
+            "value": "CO"
+          },
+          "ruleDecision": null,
+          "existingClass": null,
+          "behavioral": {
+            "testId": "po-complete-update-status",
+            "expectedBehavior": "Order status becomes CO, processed=true, documentAction='--'"
+          }
+        }
+      ],
+      "edgeCases": [
+        {
+          "id": "po-complete-no-lines",
+          "description": "Purchase order has no lines - must reject with clear error",
+          "expectedBehavior": "Validation fails with PO_COMPLETE_PRECONDITION_FAILED"
+        },
+        {
+          "id": "po-complete-zero-qty-line",
+          "description": "One or more lines have zero or negative quantity",
+          "expectedBehavior": "Validation fails indicating invalid line quantities"
+        },
+        {
+          "id": "po-complete-no-product-on-line",
+          "description": "A line exists without a product assigned",
+          "expectedBehavior": "Validation fails indicating missing product on line"
+        },
+        {
+          "id": "po-complete-accounting-fails-rollback",
+          "description": "Accounting posting fails mid-process",
+          "expectedBehavior": "Entire transaction rolls back - status remains unchanged"
+        }
+      ],
+      "transactional": true
+    },
+    {
+      "name": "voidPurchaseOrder",
+      "displayName": "Void Purchase Order",
+      "entity": "Order",
+      "trigger": {
+        "type": "documentAction",
+        "action": "VO"
+      },
+      "preconditions": [
+        "Order status must be CO (Completed)",
+        "No goods receipts must exist for this order"
+      ],
+      "steps": [
+        {
+          "order": 1,
+          "name": "validateStatusCompleted",
+          "description": "Verify the purchase order is in Completed status before allowing void",
+          "type": "validate",
+          "target": "Order",
+          "operation": {
+            "type": "validate",
+            "assertion": "order.docStatus === 'CO'",
+            "errorMessage": "Only completed purchase orders can be voided",
+            "errorCode": "PO_VOID_INVALID_STATUS"
+          },
+          "ruleDecision": null,
+          "existingClass": null,
+          "behavioral": {
+            "testId": "po-void-validate-status",
+            "expectedBehavior": "Reject void action if order is not in CO status"
+          }
+        },
+        {
+          "order": 2,
+          "name": "reverseAccounting",
+          "description": "Reverse accounting entries created during completion",
+          "type": "mutation",
+          "target": "Order",
+          "operation": {
+            "type": "mutation",
+            "entity": "Order",
+            "field": "posted",
+            "value": "N"
+          },
+          "ruleDecision": null,
+          "existingClass": null,
+          "behavioral": {
+            "testId": "po-void-reverse-accounting",
+            "expectedBehavior": "All accounting entries from completion are reversed"
+          }
+        },
+        {
+          "order": 3,
+          "name": "updateStatusVoid",
+          "description": "Set purchase order status to VO and clear the document action",
+          "type": "mutation",
+          "target": "Order",
+          "operation": {
+            "type": "mutation",
+            "entity": "Order",
+            "field": "docStatus",
+            "value": "VO"
+          },
+          "ruleDecision": null,
+          "existingClass": null,
+          "behavioral": {
+            "testId": "po-void-update-status",
+            "expectedBehavior": "Order status becomes VO, documentAction='--'"
+          }
+        }
+      ],
+      "edgeCases": [
+        {
+          "id": "po-void-draft-order",
+          "description": "Attempt to void a draft purchase order (status DR)",
+          "expectedBehavior": "Validation fails with PO_VOID_INVALID_STATUS"
+        },
+        {
+          "id": "po-void-already-voided",
+          "description": "Attempt to void an order that is already voided (status VO)",
+          "expectedBehavior": "Validation fails - cannot void an already voided order"
+        },
+        {
+          "id": "po-void-with-receipts",
+          "description": "Attempt to void a purchase order that has goods receipts",
+          "expectedBehavior": "Validation fails - cannot void order with existing receipts"
+        }
+      ],
+      "transactional": true
+    }
+  ]
+}
