@@ -1,7 +1,4 @@
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const menuConfig = require('../menu.json');
+import menuConfig from '../menu.json' with { type: 'json' };
 
 /**
  * Known window loaders -- maps slug to dynamic import.
