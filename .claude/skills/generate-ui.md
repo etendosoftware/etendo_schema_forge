@@ -54,9 +54,41 @@ After F8 generates `mockData.js`, replace the placeholder with realistic sample 
 FK fields must use IDs that match the referenced catalog.
 
 ### Registration
-Add the new window to:
-1. `tools/app-shell/src/windows/registry.js` -- windowLoaders + REFERENCE_WINDOWS
-2. `tools/app-shell/src/App.jsx` -- mockData import in `loadAllMockData()`
+
+Add the new window to these files:
+
+1. **`tools/app-shell/src/menu.json`** -- Add the window to the correct menu group.
+
+   **AI Menu Placement Rules:**
+   - Read `tools/app-shell/src/menu.json` to see current groups and items.
+   - Classify the window into the best-fit group based on its domain:
+
+     | Domain pattern | Group |
+     |----------------|-------|
+     | Sales documents (orders, invoices, shipments) | Sales |
+     | Purchasing, requisitions, goods receipts, vendor returns | Procurement |
+     | Entities referenced by FK (partners, products, warehouses) | Master Data |
+     | Pricing, payments, taxes, currencies | Finance |
+     | Configuration, units, users, roles | System |
+
+   - If no existing group fits, create a new group with an appropriate `icon` from lucide-react.
+   - Place the item at a logical position within the group (transactional docs first, supporting entities after).
+   - Use the window slug as `name` and a human-readable title as `label`.
+
+   Example -- adding "Credit Note" to Sales:
+   ```json
+   { "name": "credit-note", "label": "Credit Note" }
+   ```
+
+2. **`tools/app-shell/src/windows/registry.js`** -- Add a loader entry in `windowLoaders`:
+   ```js
+   '<window-slug>': () => import('@generated/<window-slug>/generated/web/<window-slug>/index.jsx'),
+   ```
+
+3. **`tools/app-shell/src/App.jsx`** -- Add a mockData import in `loadAllMockData()`:
+   ```js
+   import('@generated/<window-slug>/generated/web/<window-slug>/mockData.js'),
+   ```
 
 ## Step 1: Worktree Isolation (MANDATORY)
 
@@ -185,17 +217,26 @@ Dependent fields need `dependsOn: { field: "parentKey", filterKey: "parentIdColu
 ## Multi-Window Registration
 
 When adding a window, update:
-1. `tools/app-shell/src/windows/registry.js` -- windowLoaders + REFERENCE_WINDOWS
-2. `tools/app-shell/src/App.jsx` -- mockData import
-3. Verify `@generated` alias in vite.config.js
+1. `tools/app-shell/src/menu.json` -- add item to correct group (see AI Menu Placement Rules above)
+2. `tools/app-shell/src/windows/registry.js` -- add loader entry in `windowLoaders`
+3. `tools/app-shell/src/App.jsx` -- add mockData import in `loadAllMockData()`
+4. Verify `@generated` alias in vite.config.js
 
 ## Regenerate All Entities
 
-After generator changes:
+After generator changes, regenerate all windows listed in `tools/app-shell/src/menu.json`:
 
 ```bash
-for dir in sales-order business-partner warehouse price-list payment-term \
-           payment-method product product-category tax uom user; do
+# Extract all window slugs from menu.json
+WINDOWS=$(node -e "
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const m = require('./tools/app-shell/src/menu.json');
+console.log(m.menu.flatMap(g => g.items.map(i => i.name)).join(' '));
+")
+
+for dir in $WINDOWS; do
+  [ -f "artifacts/$dir/schema-curated.json" ] || continue
   node cli/src/generate-contract.js "artifacts/$dir/schema-curated.json" \
     "artifacts/$dir/rules-curated.json"
   node cli/src/generate-frontend.js "artifacts/$dir/contract.json"
