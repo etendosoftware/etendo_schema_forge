@@ -5,29 +5,11 @@ import LoginPage from './auth/LoginPage.jsx';
 import AppLayout from './layout/AppLayout.jsx';
 import WindowLoader from './windows/WindowLoader.jsx';
 import PreviewPage from './preview/PreviewPage.jsx';
-import { buildMenuFromContract, buildWindowMap } from './windows/registry.js';
+import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { createMockFetch } from './lib/mockFetch.js';
 
 const API_BASE_URL = '/etendo_sf/api';
 
-async function loadContract() {
-  try {
-    const res = await fetch('/contract.json');
-    if (res.ok) return res.json();
-  } catch { /* fall through */ }
-  return {
-    frontendContract: {
-      window: { name: 'Sales Order' },
-      entities: {
-        order: { fields: [], searchableFields: [] },
-      },
-    },
-  };
-}
-
-/**
- * Load mock data for all entity windows and merge into a single store.
- */
 async function loadAllMockData() {
   const modules = await Promise.all([
     import('@generated/sales-order/generated/web/sales-order/mockData.js'),
@@ -60,12 +42,14 @@ function AuthGuard({ children }) {
   return children;
 }
 
-function AppRoutes({ menuItems, windowMap }) {
+function AppRoutes({ menuGroups, windowMap }) {
   const { isAuthenticated } = useAuth();
 
-  if (menuItems.length === 0) {
-    return <div className="p-8 text-muted-foreground">Loading contract...</div>;
+  if (menuGroups.length === 0) {
+    return <div className="p-8 text-muted-foreground">Loading...</div>;
   }
+
+  const firstWindow = menuGroups[0].items[0].name;
 
   return (
     <Routes>
@@ -76,11 +60,11 @@ function AppRoutes({ menuItems, windowMap }) {
       <Route
         element={
           <AuthGuard>
-            <AppLayout menuItems={menuItems} />
+            <AppLayout menuGroups={menuGroups} />
           </AuthGuard>
         }
       >
-        <Route index element={<Navigate to={`/${menuItems[0].name}`} replace />} />
+        <Route index element={<Navigate to={`/${firstWindow}`} replace />} />
         <Route path="preview" element={<PreviewPage />} />
         <Route
           path=":windowName"
@@ -92,13 +76,12 @@ function AppRoutes({ menuItems, windowMap }) {
 }
 
 export default function App() {
-  const [menuItems, setMenuItems] = useState([]);
-  const [windowMap, setWindowMap] = useState({});
+  const [menuGroups] = useState(() => buildMenuGroups());
+  const [windowMap] = useState(() => buildWindowMap());
 
   useEffect(() => {
-    loadContract().then(async contract => {
-      if (import.meta.env.VITE_MOCK === 'true') {
-        const mockData = await loadAllMockData();
+    if (import.meta.env.VITE_MOCK === 'true') {
+      loadAllMockData().then(mockData => {
         const mockFetch = createMockFetch(mockData, API_BASE_URL);
         const originalFetch = window.fetch;
         window.fetch = async (url, opts) => {
@@ -106,16 +89,14 @@ export default function App() {
           if (mockResult !== undefined) return mockResult;
           return originalFetch(url, opts);
         };
-      }
-      setMenuItems(buildMenuFromContract(contract));
-      setWindowMap(buildWindowMap(contract));
-    });
+      });
+    }
   }, []);
 
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes menuItems={menuItems} windowMap={windowMap} />
+        <AppRoutes menuGroups={menuGroups} windowMap={windowMap} />
       </AuthProvider>
     </BrowserRouter>
   );
