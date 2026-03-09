@@ -10,14 +10,14 @@ import { Star, GripVertical } from 'lucide-react';
  * Maps color name strings to Tailwind border/bg classes.
  */
 const COLOR_MAP = {
-  blue: 'border-t-blue-500 bg-blue-50/50',
-  green: 'border-t-emerald-500 bg-emerald-50/50',
-  red: 'border-t-red-500 bg-red-50/50',
-  yellow: 'border-t-amber-500 bg-amber-50/50',
-  purple: 'border-t-purple-500 bg-purple-50/50',
-  orange: 'border-t-orange-500 bg-orange-50/50',
-  pink: 'border-t-pink-500 bg-pink-50/50',
-  gray: 'border-t-gray-400 bg-gray-50/50',
+  blue: 'border-t-blue-500 bg-blue-500/10',
+  green: 'border-t-emerald-500 bg-emerald-500/10',
+  red: 'border-t-red-500 bg-red-500/10',
+  yellow: 'border-t-amber-500 bg-amber-500/10',
+  purple: 'border-t-purple-500 bg-purple-500/10',
+  orange: 'border-t-orange-500 bg-orange-500/10',
+  pink: 'border-t-pink-500 bg-pink-500/10',
+  gray: 'border-t-gray-400 bg-gray-500/10',
 };
 
 const COLOR_DOT_MAP = {
@@ -57,7 +57,7 @@ function PriorityStars({ priority }) {
           key={i}
           className={cn(
             'h-3 w-3',
-            i < count ? 'fill-amber-400 text-amber-400' : 'text-gray-300'
+            i < count ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'
           )}
         />
       ))}
