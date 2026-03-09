@@ -2,45 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 210 20% 98%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 47% 11%;
-  --primary: 221 83% 53%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 210 40% 96%;
-  --accent-foreground: 222 47% 11%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --ring: 221 83% 53%;
-  --radius: 0.5rem;
-
-  --sidebar-bg: 222 47% 11%;
-  --sidebar-text: 213 31% 91%;
-  --sidebar-active: 221 83% 53%;
-}
-
-body {
-  margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-}
-
-
-
 @layer base {
   :root {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+    --radius: 0.5rem;
+
+    --sidebar-bg: 222 47% 11%;
+    --sidebar-text: 213 31% 91%;
+    --sidebar-active: 221 83% 53%;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -50,6 +37,7 @@ body {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
   .dark {
     --background: 222 47% 11%;
     --foreground: 210 20% 98%;
@@ -80,4 +68,12 @@ body {
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
