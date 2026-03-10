@@ -1,0 +1,163 @@
+name: PR Architecture Alert
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  architecture-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for architecture violations
+        id: check
+        run: |
+          VIOLATIONS=""
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || git diff --name-only HEAD~1)
+
+          # 1. New dependencies added to any package.json
+          PKG_CHANGES=$(echo "$CHANGED_FILES" | grep 'package\.json$' || true)
+          if [ -n "$PKG_CHANGES" ]; then
+            for pkg in $PKG_CHANGES; do
+              NEW_DEPS=$(git diff "$BASE_SHA" "$HEAD_SHA" -- "$pkg" | grep '^\+' | grep -E '"[^"]+"\s*:\s*"[\^~]?[0-9]' | grep -v '"version"' || true)
+              if [ -n "$NEW_DEPS" ]; then
+                VIOLATIONS="${VIOLATIONS}### New Dependencies Detected\n\nFile: \`${pkg}\`\n\`\`\`\n${NEW_DEPS}\n\`\`\`\nNew dependencies require justification in the PR description.\n\n"
+              fi
+            done
+          fi
+
+          # 2. Secrets detection in changed files
+          SECRETS_FOUND=""
+          for f in $CHANGED_FILES; do
+            if [ -f "$f" ]; then
+              MATCHES=$(grep -inE '(API_KEY|SECRET_KEY|PRIVATE_KEY|PASSWORD|ACCESS_TOKEN|CLIENT_SECRET)\s*[=:]' "$f" 2>/dev/null | head -5 || true)
+              if [ -n "$MATCHES" ]; then
+                SECRETS_FOUND="${SECRETS_FOUND}\n- \`${f}\`:\n\`\`\`\n${MATCHES}\n\`\`\`\n"
+              fi
+            fi
+          done
+
+          # Check for .env files in the diff
+          ENV_FILES=$(echo "$CHANGED_FILES" | grep -E '\.env($|\.)' | grep -v '\.example$' || true)
+          if [ -n "$ENV_FILES" ]; then
+            SECRETS_FOUND="${SECRETS_FOUND}\n- Environment files should not be committed: \`${ENV_FILES}\`\n"
+          fi
+
+          if [ -n "$SECRETS_FOUND" ]; then
+            VIOLATIONS="${VIOLATIONS}### Potential Secrets Detected\n${SECRETS_FOUND}\n\n"
+          fi
+
+          # 3. Files in wrong directories
+          WRONG_DIR=""
+          for f in $CHANGED_FILES; do
+            # Test files outside test directories
+            if echo "$f" | grep -qE '\.test\.(js|ts|jsx|tsx)$'; then
+              if ! echo "$f" | grep -qE '(test/|tests/|__tests__/)'; then
+                WRONG_DIR="${WRONG_DIR}\n- Test file outside test directory: \`${f}\`"
+              fi
+            fi
+            # Window-specific artifacts outside artifacts/
+            if echo "$f" | grep -qE '(schema-raw|schema-curated|rules-raw|rules-curated)\.json$'; then
+              if ! echo "$f" | grep -qE '^artifacts/'; then
+                WRONG_DIR="${WRONG_DIR}\n- Artifact file outside artifacts/ directory: \`${f}\`"
+              fi
+            fi
+          done
+
+          if [ -n "$WRONG_DIR" ]; then
+            VIOLATIONS="${VIOLATIONS}### Files in Wrong Directories\n${WRONG_DIR}\n\n"
+          fi
+
+          # 4. Missing tests for new source files
+          MISSING_TESTS=""
+          NEW_SRC_FILES=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" 2>/dev/null | grep -E '\.(js|jsx|ts|tsx)$' | grep -vE '\.(test|spec)\.' | grep -vE '(test/|tests/|__tests__/)' || true)
+          NEW_TEST_FILES=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" 2>/dev/null | grep -E '\.(test|spec)\.(js|jsx|ts|tsx)$' || true)
+
+          if [ -n "$NEW_SRC_FILES" ] && [ -z "$NEW_TEST_FILES" ]; then
+            FILE_COUNT=$(echo "$NEW_SRC_FILES" | wc -l | tr -d ' ')
+            MISSING_TESTS="New source files added (${FILE_COUNT}) without corresponding test files:\n"
+            MISSING_TESTS="${MISSING_TESTS}$(echo "$NEW_SRC_FILES" | head -10 | sed 's/^/- `/' | sed 's/$/`/')\n"
+            if [ "$FILE_COUNT" -gt 10 ]; then
+              MISSING_TESTS="${MISSING_TESTS}- ... and $((FILE_COUNT - 10)) more\n"
+            fi
+          fi
+
+          if [ -n "$MISSING_TESTS" ]; then
+            VIOLATIONS="${VIOLATIONS}### Missing Tests\n${MISSING_TESTS}\n\n"
+          fi
+
+          # 5. Large files (over 500KB)
+          LARGE_FILES=""
+          for f in $CHANGED_FILES; do
+            if [ -f "$f" ]; then
+              SIZE=$(wc -c < "$f" 2>/dev/null || echo 0)
+              if [ "$SIZE" -gt 512000 ]; then
+                SIZE_KB=$((SIZE / 1024))
+                LARGE_FILES="${LARGE_FILES}\n- \`${f}\` (${SIZE_KB}KB)"
+              fi
+            fi
+          done
+
+          if [ -n "$LARGE_FILES" ]; then
+            VIOLATIONS="${VIOLATIONS}### Large Files Detected\n${LARGE_FILES}\n\nFiles over 500KB should not be committed. Consider using Git LFS or .gitignore.\n\n"
+          fi
+
+          # Output violations (use delimiter for multiline)
+          if [ -n "$VIOLATIONS" ]; then
+            {
+              echo "violations<<VIOLATIONS_EOF"
+              echo -e "$VIOLATIONS"
+              echo "VIOLATIONS_EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on PR if violations found
+        if: steps.check.outputs.violations != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const violations = process.env.VIOLATIONS;
+            const body = `## Architecture Review Alert\n\n${violations}\nPlease review these issues before merging.\n\n---\n*Automated check by PR Architecture Alert workflow*`;
+
+            // Check for existing bot comment to update instead of creating duplicates
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            const botComment = comments.data.find(
+              c => c.user.type === 'Bot' && c.body.includes('Architecture Review Alert')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                comment_id: botComment.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body,
+              });
+            }
+        env:
+          VIOLATIONS: ${{ steps.check.outputs.violations }}
+
+      - name: Pass if no violations
+        if: steps.check.outputs.violations == ''
+        run: echo "No architecture violations detected."
