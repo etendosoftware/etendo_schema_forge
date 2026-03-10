@@ -19,6 +19,13 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(username, password);
+
+      // Clear all SW caches on login to guarantee fresh resources
+      if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map((n) => caches.delete(n)));
+      }
+
       navigate('/', { replace: true });
     } catch (err) {
       setError(err.message || 'Login failed');

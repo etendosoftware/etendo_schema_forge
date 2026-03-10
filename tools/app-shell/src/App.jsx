@@ -1,5 +1,5 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext.jsx';
 import LoginPage from './auth/LoginPage.jsx';
 import AppLayout from './layout/AppLayout.jsx';
@@ -17,6 +17,8 @@ import HrPage from './pages/HrPage.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { createMockFetch } from './lib/mockFetch.js';
+import { useServiceWorker } from './hooks/useServiceWorker.js';
+import { showUpdateToast } from './components/UpdateToast.jsx';
 
 import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
 
@@ -141,6 +143,33 @@ function AppRoutes({ menuGroups, windowMap }) {
   );
 }
 
+/** Registers the service worker and checks for updates on route changes */
+function ServiceWorkerManager() {
+  const location = useLocation();
+
+  const onUpdateAvailable = useCallback(() => {
+    showUpdateToast(() => {
+      // applyUpdate is called inside the toast action via closure below
+      window.__swApplyUpdate?.();
+    });
+  }, []);
+
+  const { applyUpdate, checkForUpdate } = useServiceWorker({ onUpdateAvailable });
+
+  // Expose applyUpdate so the toast action can call it
+  useEffect(() => {
+    window.__swApplyUpdate = applyUpdate;
+    return () => { delete window.__swApplyUpdate; };
+  }, [applyUpdate]);
+
+  // Check for updates on every route change
+  useEffect(() => {
+    checkForUpdate();
+  }, [location.pathname, checkForUpdate]);
+
+  return null;
+}
+
 export default function App() {
   const [menuGroups] = useState(() => buildMenuGroups());
   const [windowMap] = useState(() => buildWindowMap());
@@ -161,6 +190,7 @@ export default function App() {
 
   return (
     <BrowserRouter basename={routerBase}>
+      <ServiceWorkerManager />
       <AuthProvider>
         <AppRoutes menuGroups={menuGroups} windowMap={windowMap} />
       </AuthProvider>
