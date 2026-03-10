@@ -18,6 +18,8 @@ import ProjectsPage from './pages/ProjectsPage.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { createMockFetch } from './lib/mockFetch.js';
 
+import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
+
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage.jsx'));
 const SmartScanPage = lazy(() => import('./pages/SmartScanPage.jsx'));
 
@@ -128,6 +130,8 @@ function AppRoutes({ menuGroups, windowMap }) {
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="onboarding" element={<Suspense fallback={<div className="p-8 text-muted-foreground">Loading...</div>}><OnboardingPage /></Suspense>} />
         <Route path="smart-scan" element={<Suspense fallback={<div className="p-8 text-muted-foreground">Loading...</div>}><SmartScanPage /></Suspense>} />
+        <Route path="artifacts" element={<ArtifactViewerPage />} />
+        <Route path="artifacts/:windowName" element={<ArtifactViewerPage />} />
         <Route
           path=":windowName"
           element={<WindowLoader windowMap={windowMap} apiBaseUrl={API_BASE_URL} />}

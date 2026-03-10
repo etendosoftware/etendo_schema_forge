@@ -32,6 +32,7 @@ import {
   FolderKanban,
   Target,
   LogOut,
+  FileJson,
 } from 'lucide-react';
 
 const ICON_MAP = {
@@ -122,6 +123,14 @@ export default function AppSidebar({ menuGroups }) {
               <NavLink to="/preview">
                 <Eye className="h-4 w-4" />
                 <span>Preview</span>
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Artifacts">
+              <NavLink to="/artifacts">
+                <FileJson className="h-4 w-4" />
+                <span>Artifacts</span>
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
