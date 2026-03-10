@@ -1,0 +1,26 @@
+name: Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run all tests
+        run: node --test --test-reporter=spec 'cli/test/*.test.js'
+
+      - name: Build app-shell
+        run: npm run build --workspace=tools/app-shell
