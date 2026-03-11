@@ -15,7 +15,10 @@ export default function App({ windowName, recordId, ...props }) {
         entityLabel="Absence"
         windowName={windowName}
         recordId={recordId}
+<<<<<<< HEAD
         window={windowMeta}
+=======
+>>>>>>> origin/main
         {...props}
       />
     );
@@ -27,7 +30,10 @@ export default function App({ windowName, recordId, ...props }) {
       Table={AbsenceTable}
       entityLabel="Absence"
       windowName={windowName}
+<<<<<<< HEAD
       window={windowMeta}
+=======
+>>>>>>> origin/main
       {...props}
     />
   );

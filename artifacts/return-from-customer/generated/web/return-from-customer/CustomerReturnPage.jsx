@@ -54,7 +54,7 @@ export default function CustomerReturnPage({ windowName, recordId, ...props }) {
     <ListView
       entity="customerReturn"
       Table={CustomerReturnTable}
-      entityLabel="Customer Returns"
+      entityLabel="Customer Return"
       windowName={windowName}
       {...props}
     />

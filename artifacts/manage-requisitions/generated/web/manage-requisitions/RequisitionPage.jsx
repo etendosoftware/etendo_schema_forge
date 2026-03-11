@@ -62,7 +62,7 @@ export default function RequisitionPage({ windowName, recordId, ...props }) {
     <ListView
       entity="requisition"
       Table={RequisitionTable}
-      entityLabel="Requisitions"
+      entityLabel="Requisition"
       windowName={windowName}
       {...props}
     />

@@ -54,7 +54,7 @@ export default function CostAdjustmentPage({ windowName, recordId, ...props }) {
     <ListView
       entity="costAdjustment"
       Table={CostAdjustmentTable}
-      entityLabel="Cost Adjustments"
+      entityLabel="Cost Adjustment"
       windowName={windowName}
       {...props}
     />

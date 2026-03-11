@@ -54,7 +54,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
     <ListView
       entity="businessPartner"
       Table={BusinessPartnerTable}
-      entityLabel="Business Partners"
+      entityLabel="Business Partner"
       windowName={windowName}
       {...props}
     />

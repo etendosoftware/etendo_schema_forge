@@ -447,9 +447,9 @@ describe('generateFormComponent', () => {
 // ---------------------------------------------------------------------------
 
 describe('generatePageComponent', () => {
-  it('imports ListView and DetailView from contract-ui', () => {
+  it('imports MasterDetailPage from contract-ui', () => {
     const code = generatePageComponent('order', 'orderLine', masterDetailContract);
-    assert.ok(code.includes("import { ListView, DetailView } from '@/components/contract-ui'"));
+    assert.ok(code.includes("import { MasterDetailPage } from '@/components/contract-ui'"));
   });
 
   it('exports a named component with PascalCase header entity name + Page', () => {
@@ -635,14 +635,13 @@ describe('generateIndexComponent', () => {
     assert.ok(code.includes("name: 'Sales Order'"));
   });
 
-  it('generates ListView/DetailView pattern for single-entity (no detail)', () => {
+  it('generates SingleEntityPage pattern for single-entity (no detail)', () => {
     const code = generateIndexComponent('item', null, singleEntityContract);
-    assert.ok(code.includes("import { ListView, DetailView } from '@/components/contract-ui'"));
+    assert.ok(code.includes("import { SingleEntityPage } from '@/components/contract-ui'"));
     assert.ok(code.includes("import ItemTable from './ItemTable'"));
     assert.ok(code.includes("import ItemForm from './ItemForm'"));
     assert.ok(code.includes("import catalogs from './mockCatalogs'"));
-    assert.ok(code.includes('<ListView'));
-    assert.ok(code.includes('<DetailView'));
+    assert.ok(code.includes('<SingleEntityPage'));
   });
 
   it('passes correct props to SingleEntityPage', () => {

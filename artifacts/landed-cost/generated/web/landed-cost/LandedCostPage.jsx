@@ -56,7 +56,7 @@ export default function LandedCostPage({ windowName, recordId, ...props }) {
     <ListView
       entity="landedCost"
       Table={LandedCostTable}
-      entityLabel="Landed Costs"
+      entityLabel="Landed Cost"
       windowName={windowName}
       {...props}
     />

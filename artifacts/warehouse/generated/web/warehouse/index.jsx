@@ -15,7 +15,6 @@ export default function App({ windowName, recordId, ...props }) {
         entityLabel="Warehouse"
         windowName={windowName}
         recordId={recordId}
-        window={windowMeta}
         {...props}
       />
     );
@@ -27,7 +26,6 @@ export default function App({ windowName, recordId, ...props }) {
       Table={WarehouseTable}
       entityLabel="Warehouse"
       windowName={windowName}
-      window={windowMeta}
       {...props}
     />
   );

@@ -50,7 +50,7 @@ export default function CommissionRunPage({ windowName, recordId, ...props }) {
     <ListView
       entity="commissionRun"
       Table={CommissionRunTable}
-      entityLabel="Commission Runs"
+      entityLabel="Commission Run"
       windowName={windowName}
       {...props}
     />

@@ -52,7 +52,7 @@ export default function ProductionPage({ windowName, recordId, ...props }) {
     <ListView
       entity="production"
       Table={ProductionTable}
-      entityLabel="Productions"
+      entityLabel="Production"
       windowName={windowName}
       {...props}
     />

@@ -54,7 +54,7 @@ export default function ReturnMaterialPage({ windowName, recordId, ...props }) {
     <ListView
       entity="returnMaterial"
       Table={ReturnMaterialTable}
-      entityLabel="Return Materials"
+      entityLabel="Return Material"
       windowName={windowName}
       {...props}
     />

@@ -55,7 +55,7 @@ export default function ReturnReceiptPage({ windowName, recordId, ...props }) {
     <ListView
       entity="returnReceipt"
       Table={ReturnReceiptTable}
-      entityLabel="Return Receipts"
+      entityLabel="Return Receipt"
       windowName={windowName}
       {...props}
     />

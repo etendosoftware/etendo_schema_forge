@@ -58,7 +58,7 @@ export default function InvoicePage({ windowName, recordId, ...props }) {
     <ListView
       entity="invoice"
       Table={InvoiceTable}
-      entityLabel="Invoices"
+      entityLabel="Invoice"
       windowName={windowName}
       {...props}
     />
