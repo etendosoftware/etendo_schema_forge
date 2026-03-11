@@ -218,6 +218,11 @@ schema-forge/                             # THIS REPO — design + tooling
 │       └── pipeline.js                   # Full extraction-to-generation pipeline
 ├── tools/                                # React decision UIs
 │   ├── app-shell/                        # Main UI shell (Vite + React + Tailwind)
+│   │   └── src/
+│   │       ├── windows/registry.js       # Window slug → dynamic import loader map
+│   │       ├── windows/WindowLoader.jsx  # Loads window component by route param
+│   │       ├── menu.json                 # Sidebar menu structure (groups + items)
+│   │       └── App.jsx                   # loadAllMockData() for mock mode
 │   ├── decision-panel/                   # Field visibility + rule curation
 │   └── ui-preview/                       # Live preview with mock data
 ├── templates/etendo-module/              # Legacy templates (replaced by NEO Headless config via webhooks)
@@ -254,7 +259,16 @@ NEO Headless Runtime (NeoServlet at /sws/neo/*)
     │ Serves CRUD, selectors, processes — live, no compilation
     ▼
 React SPA (generated frontend)
-    Consumes NEO Headless API
+    │ Components land in artifacts/{window}/generated/web/
+    ▼
+UI Registration (3 files in tools/app-shell/src/)
+    │ registry.js (loader), menu.json (sidebar), App.jsx (mock data)
+    │ Existing windows: already registered, no action needed
+    │ New windows: must be added to all 3 files
+    ▼
+App Shell (tools/app-shell/)
+    WindowLoader.jsx loads component via registry.js dynamic import
+    Consumes NEO Headless API (or mock data in VITE_MOCK=true mode)
 ```
 
 ## Runtime Module: com.etendoerp.go
