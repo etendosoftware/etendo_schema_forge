@@ -29,7 +29,7 @@ export function ListView({
   const label = tMenu(entityLabel) || entityLabel || entity;
 
   return (
-    <div className="h-[calc(100vh-7.5rem)]  flex flex-col">
+    <div className="h-[calc(100vh-7.5rem)] flex flex-col">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-1 pb-4">
         <div className="flex items-center gap-2">

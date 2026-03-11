@@ -19,8 +19,8 @@ export function SummaryBar({ fields = [], data }) {
         const val = data[field.key];
         const display = val == null
           ? '\u2014'
-          : (field.type === 'amount' || field.type === 'number')
-            ? val.toLocaleString?.() ?? val
+          : (field.type === 'amount' || field.type === 'number') && typeof val === 'number'
+            ? val.toLocaleString()
             : val;
         return (
           <span key={field.key} className="flex items-center gap-1">

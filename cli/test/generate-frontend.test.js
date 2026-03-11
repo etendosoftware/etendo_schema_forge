@@ -447,9 +447,9 @@ describe('generateFormComponent', () => {
 // ---------------------------------------------------------------------------
 
 describe('generatePageComponent', () => {
-  it('imports MasterDetailPage from contract-ui', () => {
+  it('imports ListView and DetailView from contract-ui', () => {
     const code = generatePageComponent('order', 'orderLine', masterDetailContract);
-    assert.ok(code.includes("import { MasterDetailPage } from '@/components/contract-ui'"));
+    assert.ok(code.includes("import { ListView, DetailView } from '@/components/contract-ui'"));
   });
 
   it('exports a named component with PascalCase header entity name + Page', () => {
@@ -579,11 +579,11 @@ describe('generatePageComponent', () => {
     assert.ok(code.includes("inputMode: 'selector'"));
   });
 
-  it('passes all config props to MasterDetailPage', () => {
+  it('passes config props to DetailView and ListView branches', () => {
     const code = generatePageComponent('order', 'orderLine', masterDetailContract);
+    // DetailView branch
     assert.ok(code.includes('entity="order"'));
     assert.ok(code.includes('detailEntity="orderLine"'));
-    assert.ok(code.includes('Table={OrderTable}'));
     assert.ok(code.includes('Form={OrderForm}'));
     assert.ok(code.includes('DetailTable={OrderLineTable}'));
     assert.ok(code.includes('summary={summary}'));
@@ -592,6 +592,10 @@ describe('generatePageComponent', () => {
     assert.ok(code.includes('addLineFields={addLineFields}'));
     assert.ok(code.includes('catalogs={catalogs}'));
     assert.ok(code.includes('{...props}'));
+    // ListView branch
+    assert.ok(code.includes('Table={OrderTable}'));
+    assert.ok(code.includes('windowName={windowName}'));
+    assert.ok(code.includes('recordId={recordId}'));
   });
 
   it('passes entityLabel and detailLabel props', () => {
@@ -615,11 +619,13 @@ describe('generatePageComponent', () => {
 // ---------------------------------------------------------------------------
 
 describe('generateIndexComponent', () => {
-  it('generates entry point with token, apiBaseUrl, window props for master-detail', () => {
+  it('generates entry point with token, apiBaseUrl, window, windowName, recordId props for master-detail', () => {
     const code = generateIndexComponent('order', 'orderLine', masterDetailContract);
     assert.ok(code.includes('token'));
     assert.ok(code.includes('apiBaseUrl'));
     assert.ok(code.includes('window'));
+    assert.ok(code.includes('windowName'));
+    assert.ok(code.includes('recordId'));
     assert.ok(code.includes('export default'));
   });
 
@@ -635,16 +641,17 @@ describe('generateIndexComponent', () => {
     assert.ok(code.includes("name: 'Sales Order'"));
   });
 
-  it('generates SingleEntityPage for single-entity (no detail)', () => {
+  it('generates ListView/DetailView pattern for single-entity (no detail)', () => {
     const code = generateIndexComponent('item', null, singleEntityContract);
-    assert.ok(code.includes("import { SingleEntityPage } from '@/components/contract-ui'"));
+    assert.ok(code.includes("import { ListView, DetailView } from '@/components/contract-ui'"));
     assert.ok(code.includes("import ItemTable from './ItemTable'"));
     assert.ok(code.includes("import ItemForm from './ItemForm'"));
     assert.ok(code.includes("import catalogs from './mockCatalogs'"));
-    assert.ok(code.includes('<SingleEntityPage'));
+    assert.ok(code.includes('<ListView'));
+    assert.ok(code.includes('<DetailView'));
   });
 
-  it('passes correct props to SingleEntityPage', () => {
+  it('passes correct props to ListView and DetailView branches', () => {
     const code = generateIndexComponent('item', null, singleEntityContract);
     assert.ok(code.includes('entity="item"'));
     assert.ok(code.includes('Table={ItemTable}'));
@@ -652,6 +659,8 @@ describe('generateIndexComponent', () => {
     assert.ok(code.includes('catalogs={catalogs}'));
     assert.ok(code.includes('entityLabel="Item"'));
     assert.ok(code.includes('{...props}'));
+    assert.ok(code.includes('windowName={windowName}'));
+    assert.ok(code.includes('recordId={recordId}'));
   });
 
   it('includes windowMeta with category and name for single-entity', () => {

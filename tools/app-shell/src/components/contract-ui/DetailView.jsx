@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -67,16 +67,18 @@ export function DetailView({
   }, [hook.items, recordId, isNew]);
 
   // Auto-select when item is found (or create new)
-  useState(() => {
+  useEffect(() => {
     if (isNew && !hook.editing) {
       hook.handleNew();
     }
-  });
+  }, [isNew]);
 
   // Select item when loaded
-  if (currentItem && (!hook.selected || String(hook.selected.id) !== String(recordId))) {
-    hook.handleSelect(currentItem);
-  }
+  useEffect(() => {
+    if (currentItem && (!hook.selected || String(hook.selected.id) !== String(recordId))) {
+      hook.handleSelect(currentItem);
+    }
+  }, [currentItem, recordId]);
 
   // Prev/Next navigation
   const currentIdx = hook.items.findIndex(item => String(item.id) === String(recordId));

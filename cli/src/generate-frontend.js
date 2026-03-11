@@ -189,7 +189,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
     return `    { key: '${f.name}', column: '${f.column}', type: '${type}'${referencePart}${inputModePart} },`;
   }).join('\n');
 
-  return `import { MasterDetailPage } from '@/components/contract-ui';
+  return `import { ListView, DetailView } from '@/components/contract-ui';
 import ${headerName}Table from './${headerName}Table';
 import ${headerName}Form from './${headerName}Form';
 import ${detailName}Table from './${detailName}Table';
@@ -214,21 +214,33 @@ ${derivedArray}
   ],
 };
 
-export default function ${compName}(props) {
+export default function ${compName}({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="${headerEntity}"
+        detailEntity="${detailEntity}"
+        Form={${headerName}Form}
+        DetailTable={${detailName}Table}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="${toLabel(headerEntity)}"
+        detailLabel="${toLabel(detailEntity)}"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
   return (
-    <MasterDetailPage
+    <ListView
       entity="${headerEntity}"
-      detailEntity="${detailEntity}"
       Table={${headerName}Table}
-      Form={${headerName}Form}
-      DetailTable={${detailName}Table}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
       entityLabel="${toLabel(headerEntity)}"
-      detailLabel="${toLabel(detailEntity)}"
+      windowName={windowName}
       {...props}
     />
   );
@@ -250,28 +262,41 @@ export function generateIndexComponent(headerEntity, detailEntity, contract) {
 
 const windowMeta = { category: '${category}', name: '${windowName}' };
 
-export default function App({ token, apiBaseUrl, window }) {
-  return <${headerName}Page token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta} />;
+export default function App({ token, apiBaseUrl, window, windowName, recordId }) {
+  return <${headerName}Page token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta} windowName={windowName} recordId={recordId} />;
 }
 `;
   }
 
-  return `import { SingleEntityPage } from '@/components/contract-ui';
+  return `import { ListView, DetailView } from '@/components/contract-ui';
 import ${headerName}Table from './${headerName}Table';
 import ${headerName}Form from './${headerName}Form';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: '${category}', name: '${windowName}' };
 
-export default function App(props) {
+export default function App({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="${headerEntity}"
+        Form={${headerName}Form}
+        catalogs={catalogs}
+        entityLabel="${toLabel(headerEntity)}"
+        window={windowMeta}
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
   return (
-    <SingleEntityPage
+    <ListView
       entity="${headerEntity}"
       Table={${headerName}Table}
-      Form={${headerName}Form}
-      catalogs={catalogs}
       entityLabel="${toLabel(headerEntity)}"
       window={windowMeta}
+      windowName={windowName}
       {...props}
     />
   );
