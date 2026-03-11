@@ -146,7 +146,7 @@ function DependentSelect({ field, value, onChange, catalogs, formData, resolvedL
 export function EntityForm({ entity, fields = [], data, onChange, catalogs }) {
   const t = useLabel();
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
       {fields.map(f => {
         const label = t(f.column) ?? f.label ?? f.key;
         if (f.type === 'checkbox') {
