@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import BankReconciliationTable from './BankReconciliationTable';
 import BankReconciliationForm from './BankReconciliationForm';
 import BankReconciliationLineTable from './BankReconciliationLineTable';
@@ -27,21 +27,34 @@ const addLineFields = {
   ],
 };
 
-export default function BankReconciliationPage(props) {
+export default function BankReconciliationPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="bankReconciliation"
+        detailEntity="bankReconciliationLine"
+        Form={BankReconciliationForm}
+        DetailTable={BankReconciliationLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Bank Reconciliation"
+        detailLabel="Bank Reconciliation Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="bankReconciliation"
-      detailEntity="bankReconciliationLine"
       Table={BankReconciliationTable}
-      Form={BankReconciliationForm}
-      DetailTable={BankReconciliationLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Bank Reconciliation"
-      detailLabel="Bank Reconciliation Line"
+      entityLabel="Bank Reconciliations"
+      windowName={windowName}
       {...props}
     />
   );

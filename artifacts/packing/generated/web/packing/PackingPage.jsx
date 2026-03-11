@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import PackingTable from './PackingTable';
 import PackingForm from './PackingForm';
 import PackingLineTable from './PackingLineTable';
@@ -28,21 +28,34 @@ const addLineFields = {
   ],
 };
 
-export default function PackingPage(props) {
+export default function PackingPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="packing"
+        detailEntity="packingLine"
+        Form={PackingForm}
+        DetailTable={PackingLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Packing"
+        detailLabel="Packing Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="packing"
-      detailEntity="packingLine"
       Table={PackingTable}
-      Form={PackingForm}
-      DetailTable={PackingLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Packing"
-      detailLabel="Packing Line"
+      entityLabel="Packings"
+      windowName={windowName}
       {...props}
     />
   );

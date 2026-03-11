@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import WarehousePickingListTable from './WarehousePickingListTable';
 import WarehousePickingListForm from './WarehousePickingListForm';
 import WarehousePickingListLineTable from './WarehousePickingListLineTable';
@@ -29,21 +29,34 @@ const addLineFields = {
   ],
 };
 
-export default function WarehousePickingListPage(props) {
+export default function WarehousePickingListPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="warehousePickingList"
+        detailEntity="warehousePickingListLine"
+        Form={WarehousePickingListForm}
+        DetailTable={WarehousePickingListLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Warehouse Picking List"
+        detailLabel="Warehouse Picking List Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="warehousePickingList"
-      detailEntity="warehousePickingListLine"
       Table={WarehousePickingListTable}
-      Form={WarehousePickingListForm}
-      DetailTable={WarehousePickingListLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Warehouse Picking List"
-      detailLabel="Warehouse Picking List Line"
+      entityLabel="Warehouse Picking Lists"
+      windowName={windowName}
       {...props}
     />
   );

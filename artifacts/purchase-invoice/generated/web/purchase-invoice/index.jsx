@@ -2,6 +2,6 @@ import InvoicePage from './InvoicePage';
 
 const windowMeta = { category: 'procurement', name: 'Purchase Invoice' };
 
-export default function App({ token, apiBaseUrl, window }) {
-  return <InvoicePage token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta} />;
+export default function App({ token, apiBaseUrl, window, windowName, recordId }) {
+  return <InvoicePage token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta} windowName={windowName} recordId={recordId} />;
 }

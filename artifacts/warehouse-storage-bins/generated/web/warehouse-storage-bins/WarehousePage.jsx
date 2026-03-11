@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import WarehouseTable from './WarehouseTable';
 import WarehouseForm from './WarehouseForm';
 import LocatorTable from './LocatorTable';
@@ -28,21 +28,34 @@ const addLineFields = {
   ],
 };
 
-export default function WarehousePage(props) {
+export default function WarehousePage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="warehouse"
+        detailEntity="locator"
+        Form={WarehouseForm}
+        DetailTable={LocatorTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Warehouse"
+        detailLabel="Locator"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="warehouse"
-      detailEntity="locator"
       Table={WarehouseTable}
-      Form={WarehouseForm}
-      DetailTable={LocatorTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Warehouse"
-      detailLabel="Locator"
+      entityLabel="Warehouses"
+      windowName={windowName}
       {...props}
     />
   );

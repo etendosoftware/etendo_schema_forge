@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import ReturnShipmentTable from './ReturnShipmentTable';
 import ReturnShipmentForm from './ReturnShipmentForm';
 import ReturnShipmentLineTable from './ReturnShipmentLineTable';
@@ -29,21 +29,34 @@ const addLineFields = {
   ],
 };
 
-export default function ReturnShipmentPage(props) {
+export default function ReturnShipmentPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="returnShipment"
+        detailEntity="returnShipmentLine"
+        Form={ReturnShipmentForm}
+        DetailTable={ReturnShipmentLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Return Shipment"
+        detailLabel="Return Shipment Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="returnShipment"
-      detailEntity="returnShipmentLine"
       Table={ReturnShipmentTable}
-      Form={ReturnShipmentForm}
-      DetailTable={ReturnShipmentLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Return Shipment"
-      detailLabel="Return Shipment Line"
+      entityLabel="Return Shipments"
+      windowName={windowName}
       {...props}
     />
   );

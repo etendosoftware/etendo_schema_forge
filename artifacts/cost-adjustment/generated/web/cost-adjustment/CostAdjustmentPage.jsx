@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import CostAdjustmentTable from './CostAdjustmentTable';
 import CostAdjustmentForm from './CostAdjustmentForm';
 import CostAdjustmentLineTable from './CostAdjustmentLineTable';
@@ -28,21 +28,34 @@ const addLineFields = {
   ],
 };
 
-export default function CostAdjustmentPage(props) {
+export default function CostAdjustmentPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="costAdjustment"
+        detailEntity="costAdjustmentLine"
+        Form={CostAdjustmentForm}
+        DetailTable={CostAdjustmentLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Cost Adjustment"
+        detailLabel="Cost Adjustment Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="costAdjustment"
-      detailEntity="costAdjustmentLine"
       Table={CostAdjustmentTable}
-      Form={CostAdjustmentForm}
-      DetailTable={CostAdjustmentLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Cost Adjustment"
-      detailLabel="Cost Adjustment Line"
+      entityLabel="Cost Adjustments"
+      windowName={windowName}
       {...props}
     />
   );

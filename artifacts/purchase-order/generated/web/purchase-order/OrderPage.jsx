@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import OrderTable from './OrderTable';
 import OrderForm from './OrderForm';
 import OrderLineTable from './OrderLineTable';
@@ -31,21 +31,34 @@ const addLineFields = {
   ],
 };
 
-export default function OrderPage(props) {
+export default function OrderPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="order"
+        detailEntity="orderLine"
+        Form={OrderForm}
+        DetailTable={OrderLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Order"
+        detailLabel="Order Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="order"
-      detailEntity="orderLine"
       Table={OrderTable}
-      Form={OrderForm}
-      DetailTable={OrderLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Order"
-      detailLabel="Order Line"
+      entityLabel="Orders"
+      windowName={windowName}
       {...props}
     />
   );

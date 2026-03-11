@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import ReservationTable from './ReservationTable';
 import ReservationForm from './ReservationForm';
 import ReservationStockTable from './ReservationStockTable';
@@ -27,21 +27,34 @@ const addLineFields = {
   ],
 };
 
-export default function ReservationPage(props) {
+export default function ReservationPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="reservation"
+        detailEntity="reservationStock"
+        Form={ReservationForm}
+        DetailTable={ReservationStockTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Reservation"
+        detailLabel="Reservation Stock"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="reservation"
-      detailEntity="reservationStock"
       Table={ReservationTable}
-      Form={ReservationForm}
-      DetailTable={ReservationStockTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Reservation"
-      detailLabel="Reservation Stock"
+      entityLabel="Reservations"
+      windowName={windowName}
       {...props}
     />
   );

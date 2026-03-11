@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import PriceListTable from './PriceListTable';
 import PriceListForm from './PriceListForm';
 import PriceListLineTable from './PriceListLineTable';
@@ -26,21 +26,34 @@ const addLineFields = {
   ],
 };
 
-export default function PriceListPage(props) {
+export default function PriceListPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="priceList"
+        detailEntity="priceListLine"
+        Form={PriceListForm}
+        DetailTable={PriceListLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Price List"
+        detailLabel="Price List Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="priceList"
-      detailEntity="priceListLine"
       Table={PriceListTable}
-      Form={PriceListForm}
-      DetailTable={PriceListLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Price List"
-      detailLabel="Price List Line"
+      entityLabel="Price Lists"
+      windowName={windowName}
       {...props}
     />
   );

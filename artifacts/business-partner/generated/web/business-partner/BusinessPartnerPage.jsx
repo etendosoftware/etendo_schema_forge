@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import BusinessPartnerTable from './BusinessPartnerTable';
 import BusinessPartnerForm from './BusinessPartnerForm';
 import BpLocationTable from './BpLocationTable';
@@ -28,21 +28,34 @@ const addLineFields = {
   ],
 };
 
-export default function BusinessPartnerPage(props) {
+export default function BusinessPartnerPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="businessPartner"
+        detailEntity="bpLocation"
+        Form={BusinessPartnerForm}
+        DetailTable={BpLocationTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Business Partner"
+        detailLabel="Bp Location"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="businessPartner"
-      detailEntity="bpLocation"
       Table={BusinessPartnerTable}
-      Form={BusinessPartnerForm}
-      DetailTable={BpLocationTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Business Partner"
-      detailLabel="Bp Location"
+      entityLabel="Business Partners"
+      windowName={windowName}
       {...props}
     />
   );

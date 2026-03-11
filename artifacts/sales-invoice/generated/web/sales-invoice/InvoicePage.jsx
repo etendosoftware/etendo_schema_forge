@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import InvoiceTable from './InvoiceTable';
 import InvoiceForm from './InvoiceForm';
 import InvoiceLineTable from './InvoiceLineTable';
@@ -32,21 +32,34 @@ const addLineFields = {
   ],
 };
 
-export default function InvoicePage(props) {
+export default function InvoicePage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="invoice"
+        detailEntity="invoiceLine"
+        Form={InvoiceForm}
+        DetailTable={InvoiceLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Invoice"
+        detailLabel="Invoice Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="invoice"
-      detailEntity="invoiceLine"
       Table={InvoiceTable}
-      Form={InvoiceForm}
-      DetailTable={InvoiceLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Invoice"
-      detailLabel="Invoice Line"
+      entityLabel="Invoices"
+      windowName={windowName}
       {...props}
     />
   );

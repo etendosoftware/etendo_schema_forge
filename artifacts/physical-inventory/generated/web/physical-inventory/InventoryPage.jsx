@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import InventoryTable from './InventoryTable';
 import InventoryForm from './InventoryForm';
 import InventoryLineTable from './InventoryLineTable';
@@ -26,21 +26,34 @@ const addLineFields = {
   ],
 };
 
-export default function InventoryPage(props) {
+export default function InventoryPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="inventory"
+        detailEntity="inventoryLine"
+        Form={InventoryForm}
+        DetailTable={InventoryLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Inventory"
+        detailLabel="Inventory Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="inventory"
-      detailEntity="inventoryLine"
       Table={InventoryTable}
-      Form={InventoryForm}
-      DetailTable={InventoryLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Inventory"
-      detailLabel="Inventory Line"
+      entityLabel="Inventorys"
+      windowName={windowName}
       {...props}
     />
   );

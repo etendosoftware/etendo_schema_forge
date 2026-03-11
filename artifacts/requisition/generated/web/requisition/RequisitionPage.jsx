@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import RequisitionTable from './RequisitionTable';
 import RequisitionForm from './RequisitionForm';
 import RequisitionLineTable from './RequisitionLineTable';
@@ -31,21 +31,34 @@ const addLineFields = {
   ],
 };
 
-export default function RequisitionPage(props) {
+export default function RequisitionPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="requisition"
+        detailEntity="requisitionLine"
+        Form={RequisitionForm}
+        DetailTable={RequisitionLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Requisition"
+        detailLabel="Requisition Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="requisition"
-      detailEntity="requisitionLine"
       Table={RequisitionTable}
-      Form={RequisitionForm}
-      DetailTable={RequisitionLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Requisition"
-      detailLabel="Requisition Line"
+      entityLabel="Requisitions"
+      windowName={windowName}
       {...props}
     />
   );

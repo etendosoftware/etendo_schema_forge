@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import ProductionTable from './ProductionTable';
 import ProductionForm from './ProductionForm';
 import ProductionLineTable from './ProductionLineTable';
@@ -26,21 +26,34 @@ const addLineFields = {
   ],
 };
 
-export default function ProductionPage(props) {
+export default function ProductionPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="production"
+        detailEntity="productionLine"
+        Form={ProductionForm}
+        DetailTable={ProductionLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Production"
+        detailLabel="Production Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="production"
-      detailEntity="productionLine"
       Table={ProductionTable}
-      Form={ProductionForm}
-      DetailTable={ProductionLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Production"
-      detailLabel="Production Line"
+      entityLabel="Productions"
+      windowName={windowName}
       {...props}
     />
   );

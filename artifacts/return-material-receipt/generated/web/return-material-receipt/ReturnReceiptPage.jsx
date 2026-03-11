@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import ReturnReceiptTable from './ReturnReceiptTable';
 import ReturnReceiptForm from './ReturnReceiptForm';
 import ReturnReceiptLineTable from './ReturnReceiptLineTable';
@@ -29,21 +29,34 @@ const addLineFields = {
   ],
 };
 
-export default function ReturnReceiptPage(props) {
+export default function ReturnReceiptPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="returnReceipt"
+        detailEntity="returnReceiptLine"
+        Form={ReturnReceiptForm}
+        DetailTable={ReturnReceiptLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Return Receipt"
+        detailLabel="Return Receipt Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="returnReceipt"
-      detailEntity="returnReceiptLine"
       Table={ReturnReceiptTable}
-      Form={ReturnReceiptForm}
-      DetailTable={ReturnReceiptLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Return Receipt"
-      detailLabel="Return Receipt Line"
+      entityLabel="Return Receipts"
+      windowName={windowName}
       {...props}
     />
   );

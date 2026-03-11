@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import ReturnMaterialTable from './ReturnMaterialTable';
 import ReturnMaterialForm from './ReturnMaterialForm';
 import ReturnMaterialLineTable from './ReturnMaterialLineTable';
@@ -28,21 +28,34 @@ const addLineFields = {
   ],
 };
 
-export default function ReturnMaterialPage(props) {
+export default function ReturnMaterialPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="returnMaterial"
+        detailEntity="returnMaterialLine"
+        Form={ReturnMaterialForm}
+        DetailTable={ReturnMaterialLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Return Material"
+        detailLabel="Return Material Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="returnMaterial"
-      detailEntity="returnMaterialLine"
       Table={ReturnMaterialTable}
-      Form={ReturnMaterialForm}
-      DetailTable={ReturnMaterialLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Return Material"
-      detailLabel="Return Material Line"
+      entityLabel="Return Materials"
+      windowName={windowName}
       {...props}
     />
   );

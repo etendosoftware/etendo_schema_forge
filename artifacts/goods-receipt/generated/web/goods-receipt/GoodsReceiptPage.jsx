@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import GoodsReceiptTable from './GoodsReceiptTable';
 import GoodsReceiptForm from './GoodsReceiptForm';
 import GoodsReceiptLineTable from './GoodsReceiptLineTable';
@@ -27,21 +27,34 @@ const addLineFields = {
   ],
 };
 
-export default function GoodsReceiptPage(props) {
+export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="goodsReceipt"
+        detailEntity="goodsReceiptLine"
+        Form={GoodsReceiptForm}
+        DetailTable={GoodsReceiptLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Goods Receipt"
+        detailLabel="Goods Receipt Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="goodsReceipt"
-      detailEntity="goodsReceiptLine"
       Table={GoodsReceiptTable}
-      Form={GoodsReceiptForm}
-      DetailTable={GoodsReceiptLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Goods Receipt"
-      detailLabel="Goods Receipt Line"
+      entityLabel="Goods Receipts"
+      windowName={windowName}
       {...props}
     />
   );

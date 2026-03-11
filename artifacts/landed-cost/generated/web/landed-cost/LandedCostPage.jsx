@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import LandedCostTable from './LandedCostTable';
 import LandedCostForm from './LandedCostForm';
 import LandedCostCostTable from './LandedCostCostTable';
@@ -30,21 +30,34 @@ const addLineFields = {
   ],
 };
 
-export default function LandedCostPage(props) {
+export default function LandedCostPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="landedCost"
+        detailEntity="landedCostCost"
+        Form={LandedCostForm}
+        DetailTable={LandedCostCostTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Landed Cost"
+        detailLabel="Landed Cost Cost"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="landedCost"
-      detailEntity="landedCostCost"
       Table={LandedCostTable}
-      Form={LandedCostForm}
-      DetailTable={LandedCostCostTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Landed Cost"
-      detailLabel="Landed Cost Cost"
+      entityLabel="Landed Costs"
+      windowName={windowName}
       {...props}
     />
   );

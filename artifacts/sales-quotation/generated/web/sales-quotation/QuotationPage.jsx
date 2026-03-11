@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import QuotationTable from './QuotationTable';
 import QuotationForm from './QuotationForm';
 import QuotationLineTable from './QuotationLineTable';
@@ -31,21 +31,34 @@ const addLineFields = {
   ],
 };
 
-export default function QuotationPage(props) {
+export default function QuotationPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="quotation"
+        detailEntity="quotationLine"
+        Form={QuotationForm}
+        DetailTable={QuotationLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Quotation"
+        detailLabel="Quotation Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="quotation"
-      detailEntity="quotationLine"
       Table={QuotationTable}
-      Form={QuotationForm}
-      DetailTable={QuotationLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Quotation"
-      detailLabel="Quotation Line"
+      entityLabel="Quotations"
+      windowName={windowName}
       {...props}
     />
   );

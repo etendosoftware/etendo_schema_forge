@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import GoodsShipmentTable from './GoodsShipmentTable';
 import GoodsShipmentForm from './GoodsShipmentForm';
 import GoodsShipmentLineTable from './GoodsShipmentLineTable';
@@ -27,21 +27,34 @@ const addLineFields = {
   ],
 };
 
-export default function GoodsShipmentPage(props) {
+export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="goodsShipment"
+        detailEntity="goodsShipmentLine"
+        Form={GoodsShipmentForm}
+        DetailTable={GoodsShipmentLineTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Goods Shipment"
+        detailLabel="Goods Shipment Line"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="goodsShipment"
-      detailEntity="goodsShipmentLine"
       Table={GoodsShipmentTable}
-      Form={GoodsShipmentForm}
-      DetailTable={GoodsShipmentLineTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Goods Shipment"
-      detailLabel="Goods Shipment Line"
+      entityLabel="Goods Shipments"
+      windowName={windowName}
       {...props}
     />
   );

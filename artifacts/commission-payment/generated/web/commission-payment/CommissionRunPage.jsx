@@ -1,4 +1,4 @@
-import { MasterDetailPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import CommissionRunTable from './CommissionRunTable';
 import CommissionRunForm from './CommissionRunForm';
 import CommissionAmountTable from './CommissionAmountTable';
@@ -24,21 +24,34 @@ const addLineFields = {
   ],
 };
 
-export default function CommissionRunPage(props) {
+export default function CommissionRunPage({ windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="commissionRun"
+        detailEntity="commissionAmount"
+        Form={CommissionRunForm}
+        DetailTable={CommissionAmountTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Commission Run"
+        detailLabel="Commission Amount"
+        windowName={windowName}
+        recordId={recordId}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <MasterDetailPage
+    <ListView
       entity="commissionRun"
-      detailEntity="commissionAmount"
       Table={CommissionRunTable}
-      Form={CommissionRunForm}
-      DetailTable={CommissionAmountTable}
-      summary={summary}
-      statusField={statusField}
-      processes={processes}
-      addLineFields={addLineFields}
-      catalogs={catalogs}
-      entityLabel="Commission Run"
-      detailLabel="Commission Amount"
+      entityLabel="Commission Runs"
+      windowName={windowName}
       {...props}
     />
   );
