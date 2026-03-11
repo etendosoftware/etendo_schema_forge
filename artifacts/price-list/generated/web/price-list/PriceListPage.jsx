@@ -52,7 +52,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
     <ListView
       entity="priceList"
       Table={PriceListTable}
-      entityLabel="Price Lists"
+      entityLabel="Price List"
       windowName={windowName}
       {...props}
     />

@@ -5,7 +5,7 @@ import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'accounting', name: 'Chart of Accounts' };
 
-export default function App({ token, apiBaseUrl, window, windowName, recordId, ...props }) {
+export default function App({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
       <DetailView
@@ -15,8 +15,6 @@ export default function App({ token, apiBaseUrl, window, windowName, recordId, .
         entityLabel="Account"
         windowName={windowName}
         recordId={recordId}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
         {...props}
       />
     );
@@ -26,10 +24,8 @@ export default function App({ token, apiBaseUrl, window, windowName, recordId, .
     <ListView
       entity="account"
       Table={AccountTable}
-      entityLabel="Accounts"
+      entityLabel="Account"
       windowName={windowName}
-      token={token}
-      apiBaseUrl={apiBaseUrl}
       {...props}
     />
   );

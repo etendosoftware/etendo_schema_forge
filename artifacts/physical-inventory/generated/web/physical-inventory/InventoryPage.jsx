@@ -52,7 +52,7 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
     <ListView
       entity="inventory"
       Table={InventoryTable}
-      entityLabel="Inventorys"
+      entityLabel="Inventory"
       windowName={windowName}
       {...props}
     />

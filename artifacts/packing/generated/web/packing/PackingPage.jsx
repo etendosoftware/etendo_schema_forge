@@ -54,7 +54,7 @@ export default function PackingPage({ windowName, recordId, ...props }) {
     <ListView
       entity="packing"
       Table={PackingTable}
-      entityLabel="Packings"
+      entityLabel="Packing"
       windowName={windowName}
       {...props}
     />

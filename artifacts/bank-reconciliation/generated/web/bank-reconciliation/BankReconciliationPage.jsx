@@ -53,7 +53,7 @@ export default function BankReconciliationPage({ windowName, recordId, ...props 
     <ListView
       entity="bankReconciliation"
       Table={BankReconciliationTable}
-      entityLabel="Bank Reconciliations"
+      entityLabel="Bank Reconciliation"
       windowName={windowName}
       {...props}
     />

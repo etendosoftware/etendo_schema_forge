@@ -54,7 +54,7 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
     <ListView
       entity="warehouse"
       Table={WarehouseTable}
-      entityLabel="Warehouses"
+      entityLabel="Warehouse"
       windowName={windowName}
       {...props}
     />

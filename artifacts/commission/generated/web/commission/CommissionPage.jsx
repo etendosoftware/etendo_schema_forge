@@ -55,7 +55,7 @@ export default function CommissionPage({ windowName, recordId, ...props }) {
     <ListView
       entity="commission"
       Table={CommissionTable}
-      entityLabel="Commissions"
+      entityLabel="Commission"
       windowName={windowName}
       {...props}
     />

@@ -53,7 +53,7 @@ export default function ReservationPage({ windowName, recordId, ...props }) {
     <ListView
       entity="reservation"
       Table={ReservationTable}
-      entityLabel="Reservations"
+      entityLabel="Reservation"
       windowName={windowName}
       {...props}
     />

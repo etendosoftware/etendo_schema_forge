@@ -57,7 +57,7 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
     <ListView
       entity="quotation"
       Table={QuotationTable}
-      entityLabel="Quotations"
+      entityLabel="Quotation"
       windowName={windowName}
       {...props}
     />

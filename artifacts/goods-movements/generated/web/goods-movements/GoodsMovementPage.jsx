@@ -54,7 +54,7 @@ export default function GoodsMovementPage({ windowName, recordId, ...props }) {
     <ListView
       entity="goodsMovement"
       Table={GoodsMovementTable}
-      entityLabel="Goods Movements"
+      entityLabel="Goods Movement"
       windowName={windowName}
       {...props}
     />

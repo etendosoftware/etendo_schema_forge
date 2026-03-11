@@ -5,7 +5,7 @@ import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'warehouse', name: 'Inventory Quality Inspection' };
 
-export default function App({ token, apiBaseUrl, window, windowName, recordId, ...props }) {
+export default function App({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
       <DetailView
@@ -15,8 +15,6 @@ export default function App({ token, apiBaseUrl, window, windowName, recordId, .
         entityLabel="Quality Check"
         windowName={windowName}
         recordId={recordId}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
         {...props}
       />
     );
@@ -26,10 +24,8 @@ export default function App({ token, apiBaseUrl, window, windowName, recordId, .
     <ListView
       entity="qualityCheck"
       Table={QualityCheckTable}
-      entityLabel="Quality Checks"
+      entityLabel="Quality Check"
       windowName={windowName}
-      token={token}
-      apiBaseUrl={apiBaseUrl}
       {...props}
     />
   );

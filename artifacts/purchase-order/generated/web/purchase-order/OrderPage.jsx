@@ -57,7 +57,7 @@ export default function OrderPage({ windowName, recordId, ...props }) {
     <ListView
       entity="order"
       Table={OrderTable}
-      entityLabel="Orders"
+      entityLabel="Order"
       windowName={windowName}
       {...props}
     />
