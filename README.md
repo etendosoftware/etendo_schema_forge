@@ -89,15 +89,16 @@ cd tools/ui-preview && npm run dev       # http://localhost:5175
 The pipeline transforms a raw Etendo window into a working UI component. This is the core workflow.
 
 ```
-F1a. Extract from DB      -> artifacts/{window}/fields.csv + rules.csv
+F1a. Extract fields        -> artifacts/{window}/fields.csv + schema-raw.json
 F1b. Extract rules         -> artifacts/{window}/rules-raw.json
 F2.  Validate schema       -> validation report
 F3.  Pre-classify rules    -> artifacts/{window}/rules-classified.json
 F4.  [PAUSE] Human decisions via Decision Panel
-F5.  Generate contract     -> artifacts/{window}/contract.json
-F6.  Generate frontend     -> artifacts/{window}/generated/web/{window}/*.jsx
-F7.  Generate mock data    -> artifacts/{window}/generated/web/{window}/mockData.js
-F8.  Run contract tests    -> test results
+F6.  Generate contract     -> artifacts/{window}/contract.json
+F7.  Push to NEO           -> writes config to ETGO_SF_* tables
+F8.  Generate frontend     -> artifacts/{window}/generated/web/{window}/*.jsx
+F8b. [PAUSE] Translate TODOs (AI-assisted callout/onchange translation)
+F9.  Run contract tests    -> test results
 ```
 
 ### Run the full pipeline
@@ -115,7 +116,11 @@ npx sf-extract-db <windowId> <windowName>      # F1a: extract fields + rules fro
 npx sf-extract-rules <windowId> <windowName>    # F1b: extract business rules
 npx sf-validate                                  # F2: validate schema
 npx sf-classify                                  # F3: pre-classify rules
-npx sf-contract                                  # F5: generate contract
+npx sf-contract                                  # F6: generate contract
+npx sf-push-neo                                  # F7: write config to NEO Headless DB
+npx sf-test                                      # F9: run contract tests
+npx sf-gen-log                                   # View generation log
+npx sf-test-report                               # Generate HTML test report
 npx sf-pipeline <windowId> [windowName]          # All steps end-to-end
 ```
 
