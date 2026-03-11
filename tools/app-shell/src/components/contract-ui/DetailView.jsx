@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { useEntity } from '@/hooks/useEntity';
 import { useLabel } from '@/i18n';
 import { SummaryBar } from './SummaryBar.jsx';
+import { CompactHeader } from './CompactHeader.jsx';
 
 function getStatusBadgeProps(status) {
   if (!status) return { variant: 'outline' };
@@ -189,89 +190,105 @@ export function DetailView({
       {/* Scrollable content */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-5xl mx-auto px-1 py-5 space-y-6">
-          {/* Title + summary */}
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-foreground">{title}</h1>
-              {subtitle && (
-                <span className="text-base text-muted-foreground">&middot; {subtitle}</span>
-              )}
-            </div>
-            {summary.length > 0 && (
-              <div className="mt-1">
-                <SummaryBar fields={summary} data={data} />
+
+          {/* Master-detail: compact card + prominent lines */}
+          {DetailTable ? (
+            <>
+              <CompactHeader
+                title={title}
+                subtitle={subtitle}
+                summary={summary}
+                data={data}
+                Form={Form}
+                entity={entity}
+                onChange={hook.handleChange}
+                catalogs={catalogs}
+                defaultExpanded={isNew}
+              />
+
+              {/* Lines section — prominent, takes most space */}
+              <div>
+                <div className="flex items-center justify-between pb-3">
+                  <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                    {detailLabel || detailEntity || 'Lines'}
+                  </h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7"
+                    onClick={() => setShowAddLine(!showAddLine)}
+                  >
+                    {showAddLine ? 'Cancel' : '+ Add'}
+                  </Button>
+                </div>
+
+                <Sheet open={showAddLine} onOpenChange={setShowAddLine}>
+                  <SheetContent side="bottom" className="max-h-[50vh]">
+                    <SheetHeader>
+                      <SheetTitle>Add {detailLabel || detailEntity}</SheetTitle>
+                      <SheetDescription>
+                        Fill in the fields below and click Add to create a new entry.
+                      </SheetDescription>
+                    </SheetHeader>
+                    <div className="pt-4">
+                      <form onSubmit={(e) => { e.preventDefault(); handleAddLine(); }} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                          {allEntryFields.map(f => (
+                            <div key={f.key} className="min-w-0">
+                              <label className="text-xs text-muted-foreground mb-1 block">
+                                {t(f.column) ?? f.label ?? f.key}{f.required ? ' *' : ''}
+                              </label>
+                              <input
+                                name={f.key}
+                                type={f.type === 'number' ? 'number' : 'text'}
+                                placeholder={t(f.column) ?? f.label ?? f.key}
+                                value={newLine[f.key] ?? ''}
+                                onChange={(e) => setNewLine(prev => ({ ...prev, [f.key]: e.target.value }))}
+                                className="w-full h-8 text-sm rounded-md border border-input bg-background px-2 focus:ring-2 focus:ring-primary focus:outline-none"
+                                required={f.required}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-end pt-2">
+                          <Button type="submit" size="sm">Add Line</Button>
+                        </div>
+                      </form>
+                    </div>
+                  </SheetContent>
+                </Sheet>
+
+                <DetailTable data={hook.children} entity={detailEntity} />
               </div>
-            )}
-          </div>
-
-          {/* Form fields */}
-          <div>
-            <Form
-              entity={entity}
-              data={data}
-              onChange={hook.handleChange}
-              catalogs={catalogs}
-            />
-          </div>
-
-          {/* Detail lines (if master-detail) */}
-          {DetailTable && (
-            <div className="pt-2">
-              <Separator />
-              <div className="flex items-center justify-between pt-4 pb-3">
-                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                  {detailLabel || detailEntity || 'Lines'}
-                </h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-7"
-                  onClick={() => setShowAddLine(!showAddLine)}
-                >
-                  {showAddLine ? 'Cancel' : '+ Add'}
-                </Button>
-              </div>
-
-              <Sheet open={showAddLine} onOpenChange={setShowAddLine}>
-                <SheetContent side="bottom" className="max-h-[50vh]">
-                  <SheetHeader>
-                    <SheetTitle>Add {detailLabel || detailEntity}</SheetTitle>
-                    <SheetDescription>
-                      Fill in the fields below and click Add to create a new entry.
-                    </SheetDescription>
-                  </SheetHeader>
-                  <div className="pt-4">
-                    {/* Reuse add-line form pattern from MasterDetailPage */}
-                    <form onSubmit={(e) => { e.preventDefault(); handleAddLine(); }} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                        {allEntryFields.map(f => (
-                          <div key={f.key} className="min-w-0">
-                            <label className="text-xs text-muted-foreground mb-1 block">
-                              {t(f.column) ?? f.label ?? f.key}{f.required ? ' *' : ''}
-                            </label>
-                            <input
-                              name={f.key}
-                              type={f.type === 'number' ? 'number' : 'text'}
-                              placeholder={t(f.column) ?? f.label ?? f.key}
-                              value={newLine[f.key] ?? ''}
-                              onChange={(e) => setNewLine(prev => ({ ...prev, [f.key]: e.target.value }))}
-                              className="w-full h-8 text-sm rounded-md border border-input bg-background px-2 focus:ring-2 focus:ring-primary focus:outline-none"
-                              required={f.required}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex justify-end pt-2">
-                        <Button type="submit" size="sm">Add Line</Button>
-                      </div>
-                    </form>
+            </>
+          ) : (
+            /* Simple entity: current layout (title + summary + full form) */
+            <>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-xl font-bold text-foreground">{title}</h1>
+                  {subtitle && (
+                    <span className="text-base text-muted-foreground">&middot; {subtitle}</span>
+                  )}
+                </div>
+                {summary.length > 0 && (
+                  <div className="mt-1">
+                    <SummaryBar fields={summary} data={data} />
                   </div>
-                </SheetContent>
-              </Sheet>
+                )}
+              </div>
 
-              <DetailTable data={hook.children} entity={detailEntity} />
-            </div>
+              <div>
+                <Form
+                  entity={entity}
+                  data={data}
+                  onChange={hook.handleChange}
+                  catalogs={catalogs}
+                />
+              </div>
+            </>
           )}
+
         </div>
       </div>
     </div>
