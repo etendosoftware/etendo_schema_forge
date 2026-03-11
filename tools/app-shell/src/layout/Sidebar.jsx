@@ -21,6 +21,7 @@ import {
   FileJson,
 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
+import { getSectionColor } from '@/lib/sectionColors.js';
 
 const ICON_MAP = {
   LayoutDashboard,
@@ -49,6 +50,7 @@ export function findActiveGroup(menuGroups, pathname) {
 
 function SidebarIcon({ icon, label, to, isActive }) {
   const Icon = ICON_MAP[icon] || Package;
+  const color = getSectionColor(label);
 
   return (
     <Tooltip delayDuration={0}>
@@ -58,9 +60,13 @@ function SidebarIcon({ icon, label, to, isActive }) {
           className={cn(
             'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
             isActive
-              ? 'bg-white/15 text-white'
+              ? 'text-white'
               : 'text-white/60 hover:bg-white/10 hover:text-white'
           )}
+          style={isActive ? {
+            borderLeft: `3px solid ${color.accent}`,
+            backgroundColor: color.accent + '25',
+          } : undefined}
         >
           <Icon className="h-5 w-5" />
           <span className="sr-only">{label}</span>

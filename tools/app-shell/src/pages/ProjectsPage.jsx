@@ -1,11 +1,10 @@
 import React, { useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { KPIHeader, KanbanBoard, DataTable } from '@/components/contract-ui';
-import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { FolderKanban, Clock, PieChart, FileText } from 'lucide-react';
 
-import { sections, actions } from '@generated/projects/generated/config';
+import { sections } from '@generated/projects/generated/config';
 import * as mockData from '@generated/projects/generated/mockData';
 
 // -- Icon resolution (config stores string names) -----------------------------
@@ -53,18 +52,6 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header bar */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-        <div className="flex items-center gap-2">
-          {actions.map((action) => (
-            <Button key={action.route} variant={action.variant} asChild>
-              <Link to={action.route}>{action.label}</Link>
-            </Button>
-          ))}
-        </div>
-      </div>
-
       {/* KPIs */}
       <KPIHeader kpis={KPIS} />
 

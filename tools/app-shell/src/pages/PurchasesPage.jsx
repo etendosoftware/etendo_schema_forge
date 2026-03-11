@@ -1,12 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { KPIHeader, KanbanBoard } from '@/components/contract-ui';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Truck, FileText, Plus } from 'lucide-react';
+import { Truck, FileText } from 'lucide-react';
 
-import { kpisConfig, sections, actions } from '@generated/purchases/generated/config';
+import { kpisConfig, sections } from '@generated/purchases/generated/config';
 import * as mockData from '@generated/purchases/generated/mockData';
 
 // -- Icon map (string name -> component) --------------------------------------
@@ -64,17 +64,6 @@ export default function PurchasesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header bar */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Purchases</h1>
-        <Button asChild>
-          <Link to={actions[0].route}>
-            <Plus className="mr-2 h-4 w-4" />
-            {actions[0].label}
-          </Link>
-        </Button>
-      </div>
-
       {/* KPIs */}
       <KPIHeader kpis={KPIS} />
 

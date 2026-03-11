@@ -1,12 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { KPIHeader, KanbanBoard, DataTable } from '@/components/contract-ui';
-import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Users, Calendar, UserPlus, Clock, Bell, ArrowUp, ArrowDown } from 'lucide-react';
 
-import { sections, actions } from '@generated/hr/generated/config';
+import { sections } from '@generated/hr/generated/config';
 import * as mockData from '@generated/hr/generated/mockData';
 
 // -- Icon resolution (config stores string names) -----------------------------
@@ -52,18 +51,6 @@ export default function HrPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header bar */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">HR</h1>
-        <div className="flex items-center gap-2">
-          {actions.map((action) => (
-            <Button key={action.route} variant={action.variant} asChild>
-              <Link to={action.route}>{action.label}</Link>
-            </Button>
-          ))}
-        </div>
-      </div>
-
       {/* KPIs */}
       <KPIHeader kpis={KPIS} />
 

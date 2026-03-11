@@ -1,16 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { KPIHeader } from '@/components/contract-ui/KPIHeader';
 import { KanbanBoard } from '@/components/contract-ui/KanbanBoard';
 import { Chatter } from '@/components/contract-ui/Chatter';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Users, Search, Mail, Phone, MapPin, X, Plus } from 'lucide-react';
+import { Users, Mail, Phone, MapPin, X } from 'lucide-react';
 
-import { kpisConfig, sections, actions } from '@generated/contacts/generated/config';
+import { kpisConfig, sections } from '@generated/contacts/generated/config';
 import * as mockData from '@generated/contacts/generated/mockData';
 
 // -- Icon map (string name -> component) --------------------------------------
@@ -209,28 +207,6 @@ export default function ContactsPage() {
   return (
     <div className="flex h-full">
       <div className="flex-1 min-w-0 p-6 overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <h1 className="text-2xl font-bold tracking-tight">Contacts</h1>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search contacts..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 w-[240px]"
-              />
-            </div>
-            <Button asChild>
-              <Link to={actions[0].route}>
-                <Plus className="h-4 w-4 mr-1.5" />
-                {actions[0].label}
-              </Link>
-            </Button>
-          </div>
-        </div>
-
         {/* KPIs */}
         <KPIHeader kpis={KPIS} />
 

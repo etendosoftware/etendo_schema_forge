@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
 import LocaleSwitcher from '@/components/LocaleSwitcher.jsx';
 import { cn } from '@/lib/utils.js';
+import { getSectionColor } from '@/lib/sectionColors.js';
 import { findActiveGroup } from './Sidebar.jsx';
 
 export default function TopBar({ menuGroups }) {
@@ -21,6 +22,7 @@ export default function TopBar({ menuGroups }) {
   const location = useLocation();
   const activeGroup = findActiveGroup(menuGroups, location.pathname);
   const currentPath = location.pathname.replace(/^\//, '');
+  const sectionColor = getSectionColor(activeGroup?.group);
 
   // First item in the group is the "overview" page
   const overviewItem = activeGroup?.items[0];
@@ -29,7 +31,10 @@ export default function TopBar({ menuGroups }) {
   const tabItems = activeGroup?.items.slice(1) || [];
 
   return (
-    <header className="flex h-14 shrink-0 items-center border-b bg-background">
+    <header
+      className="flex h-14 shrink-0 items-center border-b-[3px] bg-background"
+      style={{ borderBottomColor: sectionColor.accent }}
+    >
       {/* Left: section name + overview + tabs */}
       <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
         {activeGroup && (

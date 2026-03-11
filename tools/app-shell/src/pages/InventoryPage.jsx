@@ -1,13 +1,11 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { KPIHeader, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Package, AlertTriangle, ArrowUp, ArrowDown, Search } from 'lucide-react';
 
-import { kpisConfig, sections, actions } from '@generated/inventory/generated/config';
+import { kpisConfig, sections } from '@generated/inventory/generated/config';
 import * as mockData from '@generated/inventory/generated/mockData';
 
 // -- Icon map for resolving string names from config to React components ------
@@ -34,18 +32,6 @@ const RECENT_MOVEMENTS = mockData.recentMovements;
 export default function InventoryPage() {
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
-        <div className="flex items-center gap-2">
-          {actions.map(action => (
-            <Button key={action.route} variant={action.variant} asChild>
-              <Link to={action.route}>{action.label}</Link>
-            </Button>
-          ))}
-        </div>
-      </div>
-
       {/* KPIs */}
       <KPIHeader kpis={KPIS} />
 
