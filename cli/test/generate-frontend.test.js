@@ -447,9 +447,9 @@ describe('generateFormComponent', () => {
 // ---------------------------------------------------------------------------
 
 describe('generatePageComponent', () => {
-  it('imports MasterDetailPage from contract-ui', () => {
+  it('imports ListView and DetailView from contract-ui', () => {
     const code = generatePageComponent('order', 'orderLine', masterDetailContract);
-    assert.ok(code.includes("import { MasterDetailPage } from '@/components/contract-ui'"));
+    assert.ok(code.includes("import { ListView, DetailView } from '@/components/contract-ui'"));
   });
 
   it('exports a named component with PascalCase header entity name + Page', () => {
@@ -579,8 +579,9 @@ describe('generatePageComponent', () => {
     assert.ok(code.includes("inputMode: 'selector'"));
   });
 
-  it('passes config props to MasterDetailPage', () => {
+  it('passes config props to DetailView and ListView', () => {
     const code = generatePageComponent('order', 'orderLine', masterDetailContract);
+    // DetailView props
     assert.ok(code.includes('entity="order"'));
     assert.ok(code.includes('detailEntity="orderLine"'));
     assert.ok(code.includes('Form={OrderForm}'));
@@ -591,7 +592,11 @@ describe('generatePageComponent', () => {
     assert.ok(code.includes('addLineFields={addLineFields}'));
     assert.ok(code.includes('catalogs={catalogs}'));
     assert.ok(code.includes('{...props}'));
+    // ListView props
     assert.ok(code.includes('Table={OrderTable}'));
+    // windowName and recordId routing
+    assert.ok(code.includes('windowName={windowName}'));
+    assert.ok(code.includes('recordId={recordId}'));
   });
 
   it('passes entityLabel and detailLabel props', () => {
@@ -635,16 +640,17 @@ describe('generateIndexComponent', () => {
     assert.ok(code.includes("name: 'Sales Order'"));
   });
 
-  it('generates SingleEntityPage pattern for single-entity (no detail)', () => {
+  it('generates ListView/DetailView pattern for single-entity (no detail)', () => {
     const code = generateIndexComponent('item', null, singleEntityContract);
-    assert.ok(code.includes("import { SingleEntityPage } from '@/components/contract-ui'"));
+    assert.ok(code.includes("import { ListView, DetailView } from '@/components/contract-ui'"));
     assert.ok(code.includes("import ItemTable from './ItemTable'"));
     assert.ok(code.includes("import ItemForm from './ItemForm'"));
     assert.ok(code.includes("import catalogs from './mockCatalogs'"));
-    assert.ok(code.includes('<SingleEntityPage'));
+    assert.ok(code.includes('<ListView'));
+    assert.ok(code.includes('<DetailView'));
   });
 
-  it('passes correct props to SingleEntityPage', () => {
+  it('passes correct props to ListView and DetailView', () => {
     const code = generateIndexComponent('item', null, singleEntityContract);
     assert.ok(code.includes('entity="item"'));
     assert.ok(code.includes('Table={ItemTable}'));
@@ -652,6 +658,8 @@ describe('generateIndexComponent', () => {
     assert.ok(code.includes('catalogs={catalogs}'));
     assert.ok(code.includes('entityLabel="Item"'));
     assert.ok(code.includes('{...props}'));
+    assert.ok(code.includes('windowName={windowName}'));
+    assert.ok(code.includes('recordId={recordId}'));
   });
 
   it('includes windowMeta with category and name for single-entity', () => {
@@ -1088,7 +1096,7 @@ describe('generatePageComponent - apiPrediction', () => {
     assert.ok(code.includes('"baseUrl": "/sws/neo/sales-order"'), 'should include baseUrl');
   });
 
-  it('passes api prop to MasterDetailPage', () => {
+  it('passes api prop to DetailView', () => {
     const code = generatePageComponent('order', 'orderLine', contractWithApi);
     assert.ok(code.includes('api={api}'), 'should pass api prop');
   });
@@ -1120,7 +1128,7 @@ describe('generateIndexComponent - apiPrediction', () => {
 
   it('passes api prop in single-entity index', () => {
     const code = generateIndexComponent('item', null, singleEntityContractWithApi);
-    assert.ok(code.includes('api={api}'), 'should pass api prop to SingleEntityPage');
+    assert.ok(code.includes('api={api}'), 'should pass api prop to DetailView');
   });
 
   it('does not emit api const when apiPrediction is absent', () => {
