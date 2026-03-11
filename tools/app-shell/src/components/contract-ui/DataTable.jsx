@@ -81,33 +81,30 @@ function EmptyState({ hasFilter, totalCount }) {
  *  - filters: string[] of column keys that are searchable
  *  - data: array of row objects
  *  - onRowSelect: (row) => void
+ *  - onNavigate: (row) => void — when provided, clicking a row calls onNavigate instead of onRowSelect
  *  - selectedId: string | number
  *  - compact: boolean (reserved for narrower layout)
  *  - loading: boolean (shows skeleton when true)
  */
-export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, selectedId, compact, loading }) {
+export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, onNavigate, selectedId, compact, loading }) {
   const t = useLabel();
-  const [filterValues, setFilterValues] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const setFilter = (key, value) => {
-    setFilterValues(prev => ({ ...prev, [key]: value }));
-  };
-
-  const hasActiveFilter = Object.values(filterValues).some(v => v && v.length > 0);
+  const hasActiveFilter = searchQuery.length > 0;
 
   const filteredData = useMemo(() => {
-    return data.filter(row => {
-      for (const key of filters) {
-        const filterVal = filterValues[key];
-        if (filterVal && !String(row[key] ?? '').toLowerCase().includes(filterVal.toLowerCase())) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [data, filters, filterValues]);
+    if (!searchQuery) return data;
+    const q = searchQuery.toLowerCase();
+    return data.filter(row =>
+      filters.some(key => String(row[key] ?? '').toLowerCase().includes(q))
+    );
+  }, [data, filters, searchQuery]);
 
   const renderCellValue = (row, col) => {
+    // Link styling on first string column
+    if (col === columns[0] && col.type === 'string') {
+      return <span className="font-medium text-primary">{row[col.key]}</span>;
+    }
     if (col.type === 'status') {
       const badgeProps = getStatusBadgeProps(row[col.key]);
       return <Badge {...badgeProps} />;
@@ -134,32 +131,27 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 flex-wrap">
-        {filters.map(key => {
-          const col = columns.find(c => c.key === key);
-          const label = t(col?.column) ?? col?.label ?? key;
-          return (
-            <div key={key} className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={`Filter ${label}...`}
-                value={filterValues[key] ?? ''}
-                onChange={(e) => setFilter(key, e.target.value)}
-                className="pl-8 max-w-xs focus:ring-2 focus:ring-primary focus:outline-none transition-colors duration-200"
-                aria-label={`Filter by ${label}`}
-              />
-            </div>
-          );
-        })}
-      </div>
+      {/* Global search input */}
+      {filters.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8 focus:ring-2 focus:ring-primary focus:outline-none transition-colors duration-200"
+            aria-label="Search records"
+          />
+        </div>
+      )}
       <div className="rounded-lg border overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-b-2 border-primary/20 bg-muted/40">
+            <TableRow className="border-b border-border/50">
               {columns.map(col => {
                 const colLabel = t(col.column) ?? col.label ?? col.key;
                 return (
-                  <TableHead key={col.key} className="text-xs font-medium text-blue-800 uppercase tracking-wider">
+                  <TableHead key={col.key} className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     <FieldHighlight entityName={entity} fieldName={col.key}>
                       {colLabel}
                     </FieldHighlight>
@@ -179,12 +171,11 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
               filteredData.map((row, idx) => (
                 <TableRow
                   key={row.id ?? idx}
-                  onClick={() => onRowSelect?.(row)}
+                  onClick={() => onNavigate ? onNavigate(row) : onRowSelect?.(row)}
                   className={[
                     'cursor-pointer transition-colors',
                     row.id === selectedId ? 'bg-primary/10 border-l-2 border-l-primary' : '',
-                    idx % 2 !== 0 && row.id !== selectedId ? 'bg-muted/30' : '',
-                    'hover:bg-primary/5',
+                    'hover:bg-muted/50',
                   ].filter(Boolean).join(' ')}
                 >
                   {columns.map(col => (
