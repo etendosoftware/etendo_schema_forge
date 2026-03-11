@@ -4,7 +4,7 @@ import { useAuth } from '@/auth/AuthContext.jsx';
 import { useInspector } from '@/components/inspector/InspectorProvider.jsx';
 
 export default function WindowLoader({ windowMap, apiBaseUrl }) {
-  const { windowName } = useParams();
+  const { windowName, recordId } = useParams();
   const { token } = useAuth();
   const inspector = useInspector();
   const [Component, setComponent] = useState(null);
@@ -64,6 +64,8 @@ export default function WindowLoader({ windowMap, apiBaseUrl }) {
       token={token}
       apiBaseUrl={apiBaseUrl}
       window={windowMap[windowName]}
+      windowName={windowName}
+      recordId={recordId}
     />
   );
 }

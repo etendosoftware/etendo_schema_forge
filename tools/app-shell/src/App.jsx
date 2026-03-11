@@ -137,6 +137,10 @@ function AppRoutes({ menuGroups, windowMap }) {
         <Route path="artifacts" element={<ArtifactViewerPage />} />
         <Route path="artifacts/:windowName" element={<ArtifactViewerPage />} />
         <Route
+          path=":windowName/:recordId"
+          element={<WindowLoader windowMap={windowMap} apiBaseUrl={API_BASE_URL} />}
+        />
+        <Route
           path=":windowName"
           element={<WindowLoader windowMap={windowMap} apiBaseUrl={API_BASE_URL} />}
         />
