@@ -1,19 +1,35 @@
-import { SingleEntityPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import LeadTable from './LeadTable';
 import LeadForm from './LeadForm';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'crm', name: 'Lead' };
 
-export default function App(props) {
+export default function App({ token, apiBaseUrl, window, windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="lead"
+        Form={LeadForm}
+        catalogs={catalogs}
+        entityLabel="Lead"
+        windowName={windowName}
+        recordId={recordId}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <SingleEntityPage
+    <ListView
       entity="lead"
       Table={LeadTable}
-      Form={LeadForm}
-      catalogs={catalogs}
-      entityLabel="Lead"
-      window={windowMeta}
+      entityLabel="Leads"
+      windowName={windowName}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
       {...props}
     />
   );

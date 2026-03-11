@@ -1,19 +1,35 @@
-import { SingleEntityPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import QualityCheckTable from './QualityCheckTable';
 import QualityCheckForm from './QualityCheckForm';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'warehouse', name: 'Inventory Quality Inspection' };
 
-export default function App(props) {
+export default function App({ token, apiBaseUrl, window, windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="qualityCheck"
+        Form={QualityCheckForm}
+        catalogs={catalogs}
+        entityLabel="Quality Check"
+        windowName={windowName}
+        recordId={recordId}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <SingleEntityPage
+    <ListView
       entity="qualityCheck"
       Table={QualityCheckTable}
-      Form={QualityCheckForm}
-      catalogs={catalogs}
-      entityLabel="Quality Check"
-      window={windowMeta}
+      entityLabel="Quality Checks"
+      windowName={windowName}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
       {...props}
     />
   );

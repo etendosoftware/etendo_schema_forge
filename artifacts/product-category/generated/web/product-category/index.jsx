@@ -1,19 +1,35 @@
-import { SingleEntityPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import ProductCategoryTable from './ProductCategoryTable';
 import ProductCategoryForm from './ProductCategoryForm';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'reference', name: 'Product Category' };
 
-export default function App(props) {
+export default function App({ token, apiBaseUrl, window, windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="productCategory"
+        Form={ProductCategoryForm}
+        catalogs={catalogs}
+        entityLabel="Product Category"
+        windowName={windowName}
+        recordId={recordId}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <SingleEntityPage
+    <ListView
       entity="productCategory"
       Table={ProductCategoryTable}
-      Form={ProductCategoryForm}
-      catalogs={catalogs}
-      entityLabel="Product Category"
-      window={windowMeta}
+      entityLabel="Product Categorys"
+      windowName={windowName}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
       {...props}
     />
   );

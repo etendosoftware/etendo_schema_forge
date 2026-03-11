@@ -1,19 +1,35 @@
-import { SingleEntityPage } from '@/components/contract-ui';
+import { ListView, DetailView } from '@/components/contract-ui';
 import ProjectTable from './ProjectTable';
 import ProjectForm from './ProjectForm';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'projects', name: 'Project' };
 
-export default function App(props) {
+export default function App({ token, apiBaseUrl, window, windowName, recordId, ...props }) {
+  if (recordId) {
+    return (
+      <DetailView
+        entity="project"
+        Form={ProjectForm}
+        catalogs={catalogs}
+        entityLabel="Project"
+        windowName={windowName}
+        recordId={recordId}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        {...props}
+      />
+    );
+  }
+
   return (
-    <SingleEntityPage
+    <ListView
       entity="project"
       Table={ProjectTable}
-      Form={ProjectForm}
-      catalogs={catalogs}
-      entityLabel="Project"
-      window={windowMeta}
+      entityLabel="Projects"
+      windowName={windowName}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
       {...props}
     />
   );
