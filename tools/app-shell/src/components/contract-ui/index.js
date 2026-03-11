@@ -8,5 +8,3 @@ export { KPIHeader } from './KPIHeader';
 export { ListView } from './ListView';
 export { DetailView } from './DetailView';
 export { SummaryBar } from './SummaryBar';
-export { MasterDetailPage } from './MasterDetailPage';
-export { SingleEntityPage } from './SingleEntityPage';
