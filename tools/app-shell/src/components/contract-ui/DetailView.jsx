@@ -1,12 +1,10 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet.jsx';
 import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { useEntity } from '@/hooks/useEntity';
-import { useLabel } from '@/i18n';
 import { SummaryBar } from './SummaryBar.jsx';
 import { CompactHeader } from './CompactHeader.jsx';
 
@@ -57,8 +55,7 @@ export function DetailView({
 }) {
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl });
   const navigate = useNavigate();
-  const t = useLabel();
-  const [showAddLine, setShowAddLine] = useState(false);
+  const [addingLine, setAddingLine] = useState(false);
 
   // Select the record once items are loaded
   const isNew = recordId === 'new';
@@ -97,16 +94,6 @@ export function DetailView({
 
   // Add-line support
   const allEntryFields = addLineFields.entry ?? [];
-  const allDerivedFields = addLineFields.derived ?? [];
-  const allDetailFields = [...allEntryFields, ...allDerivedFields];
-  const emptyLine = Object.fromEntries(allDetailFields.map(f => [f.key, '']));
-  const [newLine, setNewLine] = useState(emptyLine);
-
-  const handleAddLine = () => {
-    hook.handleAddChild?.(newLine);
-    setNewLine({ ...emptyLine });
-    setShowAddLine(false);
-  };
 
   if (hook.loading) {
     return (
@@ -216,49 +203,25 @@ export function DetailView({
                     variant="outline"
                     size="sm"
                     className="text-xs h-7"
-                    onClick={() => setShowAddLine(!showAddLine)}
+                    onClick={() => setAddingLine(!addingLine)}
                   >
-                    {showAddLine ? 'Cancel' : '+ Add'}
+                    {addingLine ? 'Cancel' : '+ Add'}
                   </Button>
                 </div>
 
-                <Sheet open={showAddLine} onOpenChange={setShowAddLine}>
-                  <SheetContent side="bottom" className="max-h-[50vh]">
-                    <SheetHeader>
-                      <SheetTitle>Add {detailLabel || detailEntity}</SheetTitle>
-                      <SheetDescription>
-                        Fill in the fields below and click Add to create a new entry.
-                      </SheetDescription>
-                    </SheetHeader>
-                    <div className="pt-4">
-                      <form onSubmit={(e) => { e.preventDefault(); handleAddLine(); }} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                          {allEntryFields.map(f => (
-                            <div key={f.key} className="min-w-0">
-                              <label className="text-xs text-muted-foreground mb-1 block">
-                                {t(f.column) ?? f.label ?? f.key}{f.required ? ' *' : ''}
-                              </label>
-                              <input
-                                name={f.key}
-                                type={f.type === 'number' ? 'number' : 'text'}
-                                placeholder={t(f.column) ?? f.label ?? f.key}
-                                value={newLine[f.key] ?? ''}
-                                onChange={(e) => setNewLine(prev => ({ ...prev, [f.key]: e.target.value }))}
-                                className="w-full h-8 text-sm rounded-md border border-input bg-background px-2 focus:ring-2 focus:ring-primary focus:outline-none"
-                                required={f.required}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex justify-end pt-2">
-                          <Button type="submit" size="sm">Add Line</Button>
-                        </div>
-                      </form>
-                    </div>
-                  </SheetContent>
-                </Sheet>
-
-                <DetailTable data={hook.children} entity={detailEntity} />
+                <DetailTable
+                  data={hook.children}
+                  entity={detailEntity}
+                  addRow={{
+                    active: addingLine,
+                    fields: allEntryFields,
+                    onAdd: (lineData) => {
+                      hook.handleAddChild?.(lineData);
+                    },
+                    onCancel: () => setAddingLine(false),
+                    catalogs,
+                  }}
+                />
               </div>
             </>
           ) : (

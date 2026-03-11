@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -74,6 +74,108 @@ function EmptyState({ hasFilter, totalCount }) {
 }
 
 /**
+ * Inline editable row rendered at the bottom of the table for rapid line entry.
+ * Controlled by the `addRow` prop on DataTable.
+ */
+function InlineAddRow({ columns, fields, onAdd, onCancel, data }) {
+  const t = useLabel();
+  const fieldMap = useMemo(() => {
+    const map = {};
+    for (const f of fields) map[f.key] = f;
+    return map;
+  }, [fields]);
+
+  // Auto-compute lineNo default
+  const defaultLineNo = useMemo(() => {
+    const nums = (data || []).map(r => Number(r.lineNo) || 0);
+    return (nums.length > 0 ? Math.max(...nums) : 0) + 10;
+  }, [data]);
+
+  const buildEmpty = useCallback(() => {
+    const empty = {};
+    for (const f of fields) {
+      empty[f.key] = f.key === 'lineNo' ? defaultLineNo : '';
+    }
+    return empty;
+  }, [fields, defaultLineNo]);
+
+  const [values, setValues] = useState(buildEmpty);
+  const firstInputRef = useRef(null);
+
+  // Reset values when fields or data change
+  useEffect(() => {
+    setValues(buildEmpty());
+  }, [buildEmpty]);
+
+  // Auto-focus first input when row appears
+  useEffect(() => {
+    firstInputRef.current?.focus();
+  }, []);
+
+  const handleChange = (key, val) => {
+    setValues(prev => ({ ...prev, [key]: val }));
+  };
+
+  const handleConfirm = () => {
+    onAdd(values);
+    // Reset for next rapid entry — recompute lineNo
+    const nums = [...(data || []).map(r => Number(r.lineNo) || 0), Number(values.lineNo) || 0];
+    const nextLineNo = Math.max(...nums) + 10;
+    const next = {};
+    for (const f of fields) {
+      next[f.key] = f.key === 'lineNo' ? nextLineNo : '';
+    }
+    setValues(next);
+    // Re-focus first input for rapid entry
+    setTimeout(() => firstInputRef.current?.focus(), 0);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleConfirm();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancel();
+    }
+  };
+
+  let firstInputAssigned = false;
+
+  return (
+    <TableRow className="bg-blue-50/50 border-t-2 border-primary/20">
+      {columns.map(col => {
+        const field = fieldMap[col.key];
+        if (!field) {
+          return (
+            <TableCell key={col.key} className="text-muted-foreground text-sm">
+              &mdash;
+            </TableCell>
+          );
+        }
+        const isFirst = !firstInputAssigned;
+        if (isFirst) firstInputAssigned = true;
+        return (
+          <TableCell key={col.key} className="py-1 px-2">
+            <input
+              ref={isFirst ? firstInputRef : undefined}
+              type={field.type === 'number' ? 'number' : 'text'}
+              inputMode={field.inputMode}
+              value={values[field.key] ?? ''}
+              onChange={(e) => handleChange(field.key, e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={t(field.column) ?? field.label ?? field.key}
+              required={field.required}
+              className="w-full h-8 text-sm rounded-md border border-input bg-background px-2 focus:ring-2 focus:ring-primary focus:outline-none"
+            />
+          </TableCell>
+        );
+      })}
+    </TableRow>
+  );
+}
+
+/**
  * Generic data table driven by column/filter declarations.
  *
  * Props:
@@ -85,8 +187,9 @@ function EmptyState({ hasFilter, totalCount }) {
  *  - selectedId: string | number
  *  - compact: boolean (reserved for narrower layout)
  *  - loading: boolean (shows skeleton when true)
+ *  - addRow: { active, fields, onAdd, onCancel, catalogs } — inline add row config
  */
-export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, onNavigate, selectedId, compact, loading }) {
+export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, onNavigate, selectedId, compact, loading, addRow }) {
   const t = useLabel();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -184,9 +287,23 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
                 </TableRow>
               ))
             )}
+            {addRow?.active && (
+              <InlineAddRow
+                columns={columns}
+                fields={addRow.fields}
+                onAdd={addRow.onAdd}
+                onCancel={addRow.onCancel}
+                data={data}
+              />
+            )}
           </TableBody>
         </Table>
       </div>
+      {addRow?.active && (
+        <p className="text-xs text-muted-foreground mt-1 text-center">
+          Enter to add &middot; Esc to cancel
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">{filteredData.length} of {data.length} records</p>
     </div>
   );
