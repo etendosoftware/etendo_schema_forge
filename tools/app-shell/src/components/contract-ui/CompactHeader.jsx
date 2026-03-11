@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button.jsx';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { SummaryBar } from './SummaryBar.jsx';
-import { useLabel } from '@/i18n';
 
 /**
  * Compact card header for master-detail entities.
@@ -33,7 +32,6 @@ export function CompactHeader({
   defaultExpanded = false,
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const t = useLabel();
 
   return (
     <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
