@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 export function validatePipelineInput(input) {
+  if (input.menuId) {
+    return { valid: true, mode: 'menu' };
+  }
   if (input.processId) {
     if (!input.processName) return { valid: false, error: 'processName is required for process mode' };
     return { valid: true, mode: 'process' };
@@ -39,12 +42,14 @@ export function buildProcessPipelineSteps() {
 /**
  * Parse CLI arguments for both window and process modes.
  */
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const args = argv.slice(2);
   const result = {};
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--process-id' && args[i + 1]) {
+    if (args[i] === '--menu-id' && args[i + 1]) {
+      result.menuId = args[++i];
+    } else if (args[i] === '--process-id' && args[i + 1]) {
       result.processId = args[++i];
     } else if (args[i] === '--process-name' && args[i + 1]) {
       result.processName = args[++i];
@@ -77,10 +82,21 @@ async function main() {
     console.error('Usage:');
     console.error('  sf-pipeline <windowId> [windowName]                    # Window mode');
     console.error('  sf-pipeline --process-id <id> --process-name <name>    # Process mode');
+    console.error('  sf-pipeline --menu-id <id>                             # Auto-detect from AD_Menu');
     process.exit(1);
   }
 
-  if (validation.mode === 'process') {
+  if (validation.mode === 'menu') {
+    const { resolveMenuEntry } = await import('./resolve-menu.js');
+    const resolved = await resolveMenuEntry(parsed.menuId);
+    console.log(`Menu entry '${resolved.menuName}' resolved as ${resolved.resolvedMode} (${resolved.resolvedName})`);
+
+    if (resolved.resolvedMode === 'window') {
+      await runWindowPipeline({ windowId: resolved.windowId, windowName: resolved.resolvedName, dryRun: parsed.dryRun });
+    } else if (resolved.resolvedMode === 'process') {
+      await runProcessPipeline({ processId: resolved.processId, processName: resolved.resolvedName, dryRun: parsed.dryRun });
+    }
+  } else if (validation.mode === 'process') {
     await runProcessPipeline(parsed);
   } else {
     await runWindowPipeline(parsed);

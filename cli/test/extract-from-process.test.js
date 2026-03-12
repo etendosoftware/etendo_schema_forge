@@ -152,6 +152,11 @@ describe('validatePipelineInput — process mode', () => {
     const result = validatePipelineInput({ processId: '123', processName: 'test', windowId: '143', windowName: 'so' });
     assert.equal(result.mode, 'process');
   });
+
+  it('menu mode takes priority over process mode', () => {
+    const result = validatePipelineInput({ menuId: '123', processId: '456', processName: 'test' });
+    assert.equal(result.mode, 'menu');
+  });
 });
 
 describe('buildProcessPipelineSteps', () => {
