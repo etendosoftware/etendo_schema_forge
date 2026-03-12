@@ -159,7 +159,8 @@ Branch naming also follows Git Police patterns:
 │  cli/        → extractors,      │  writes  │  NeoServlet (/sws/neo/*)         │
 │                validators,      │ ──────▶  │  NeoSelectorService              │
 │                generators       │  via     │  NeoProcessService               │
-│  tools/      → decision UIs     │  webhooks│  NeoHandler (CDI hooks)          │
+│                                 │  webhooks│  NeoReportService                │
+│  tools/      → decision UIs     │          │  NeoHandler (CDI hooks)          │
 │  templates/  → legacy (unused)  │          │  PopulateSpecHelper              │
 │  artifacts/  → per-window data  │          │  4 webhooks (upsert/populate)    │
 │  docs/       → PRD, TDD, AD ref │          │                                  │
@@ -217,7 +218,7 @@ schema-forge/                             # THIS REPO — design + tooling
 │       ├── pre-classify.js               # Auto-classify rules (deterministic + AI)
 │       ├── validate-schema.js            # 4-level validation
 │       ├── generate-contract.js          # Frontend/backend contracts
-│       ├── push-to-neo.js                # Direct DB writes → NEO Headless config (windows + processes)
+│       ├── push-to-neo.js                # Direct DB writes → NEO Headless config (windows, processes + reports)
 │       ├── neo-writer.js                # Low-level DB writer for ETGO_SF_* tables
 │       ├── custom-section-markers.js      # Delimiter constants for code preservation
 │       ├── preserve-custom-sections.js   # Extract/inject custom sections on regeneration
@@ -225,7 +226,7 @@ schema-forge/                             # THIS REPO — design + tooling
 │       ├── generate-mock-data.js         # Mock catalogs for UI preview
 │       ├── run-contract-tests.js         # Contract test runner
 │       ├── resolve-menu.js               # AD_Menu resolver (auto-detect type from menu ID or name)
-│       └── pipeline.js                   # Full pipeline (windows, processes, or auto-detect via menu ID/name)
+│       └── pipeline.js                   # Full pipeline (windows, processes, reports, or auto-detect via menu ID/name)
 ├── tools/                                # React decision UIs
 │   ├── app-shell/                        # Main UI shell (Vite + React + Tailwind)
 │   ├── decision-panel/                   # Field visibility + rule curation
@@ -262,7 +263,7 @@ Schema Forge Webhooks → Etendo Go DB tables
     │ ETGO_SF_SPEC, ETGO_SF_ENTITY, ETGO_SF_FIELD
     ▼
 NEO Headless Runtime (NeoServlet at /sws/neo/*)
-    │ Serves CRUD, selectors, processes — live, no compilation
+    │ Serves CRUD, selectors, processes, reports — live, no compilation
     ▼
 React SPA (generated frontend)
     Consumes NEO Headless API
@@ -279,6 +280,7 @@ The runtime module is at `/modules/com.etendoerp.go/`. Full reference documentat
 | `NeoServlet` | Main HTTP servlet at `/sws/neo/*`. JWT auth, path parsing, routing. |
 | `NeoSelectorService` | FK dropdown resolution (TableDir, Table, Search, OBUISEL). |
 | `NeoProcessService` | Process execution (OBUIAPP + Classic). |
+| `NeoReportService` | Report generation (Jasper via ReportingUtils). |
 | `NeoHandler` (interface) | CDI hook for custom logic. Return `NeoResponse` or `null` to fall through. |
 | `NeoContext` / `NeoResponse` | Request context (builder) and response wrapper. |
 | `PopulateSpecHelper` | Auto-populate entities/fields from AD metadata. |
@@ -288,7 +290,7 @@ The runtime module is at `/modules/com.etendoerp.go/`. Full reference documentat
 
 | Table | Purpose |
 |-------|---------|
-| `ETGO_SF_SPEC` | Top-level spec. Links to AD_Window (CRUD) or AD_Process (POST-only). |
+| `ETGO_SF_SPEC` | Top-level spec. Links to AD_Window (CRUD), AD_Process (POST-only), or AD_Process with IsReport (report generation). |
 | `ETGO_SF_ENTITY` | Tab/entity within a spec. HTTP method flags + optional CDI hook qualifier. |
 | `ETGO_SF_FIELD` | Column/parameter within an entity. Included/excluded, read-only flag. |
 
@@ -301,6 +303,7 @@ The runtime module is at `/modules/com.etendoerp.go/`. Full reference documentat
 /sws/neo/{specName}/{entityName}/selectors/{column}  # GET selector values
 /sws/neo/{specName}/{entityName}/{recordId}/action   # GET button actions / POST execute
 /sws/neo/{specName}                                  # Process specs (GET describe / POST execute)
+/sws/neo/{specName}                                  # Report specs (GET describe / POST generateReport)
 ```
 
 ## Core Domain Concepts
@@ -427,7 +430,7 @@ The `NeoOpenAPIEndpoint` class implements `com.etendoerp.openapi.model.OpenAPIEn
 See `docs/brainstorming-2026-03-10.md` for detailed notes on:
 - NeoHandler CDI hook mechanism (custom endpoint logic via `@Named` + `JAVA_QUALIFIER`)
 - Callouts NOT in NEO Headless (deferred to v2, only classic UI)
-- Pipeline → NEO: fully integrated via `push-to-neo.js` + `neo-writer.js` (direct DB writes, supports windows + processes)
+- Pipeline → NEO: fully integrated via `push-to-neo.js` + `neo-writer.js` (direct DB writes, supports windows, processes + reports)
 
 ### Discovery Webhooks (read-only, for tooling)
 

@@ -4,6 +4,10 @@ export function validatePipelineInput(input) {
   if (input.menuId || input.menuName) {
     return { valid: true, mode: 'menu' };
   }
+  if (input.reportId) {
+    if (!input.reportName) return { valid: false, error: 'reportName is required for report mode' };
+    return { valid: true, mode: 'report' };
+  }
   if (input.processId) {
     if (!input.processName) return { valid: false, error: 'processName is required for process mode' };
     return { valid: true, mode: 'process' };
@@ -40,7 +44,7 @@ export function buildProcessPipelineSteps() {
 }
 
 /**
- * Parse CLI arguments for both window and process modes.
+ * Parse CLI arguments for window, process, and report modes.
  */
 export function parseArgs(argv) {
   const args = argv.slice(2);
@@ -55,6 +59,10 @@ export function parseArgs(argv) {
       result.processId = args[++i];
     } else if (args[i] === '--process-name' && args[i + 1]) {
       result.processName = args[++i];
+    } else if (args[i] === '--report-id' && args[i + 1]) {
+      result.reportId = args[++i];
+    } else if (args[i] === '--report-name' && args[i + 1]) {
+      result.reportName = args[++i];
     } else if (args[i] === '--dry-run') {
       result.dryRun = true;
     } else if (args[i] === '--skip-to' && args[i + 1]) {
@@ -86,6 +94,7 @@ async function main() {
     console.error('  sf-pipeline --process-id <id> --process-name <name>    # Process mode');
     console.error('  sf-pipeline --menu-id <id>                             # Auto-detect from AD_Menu');
     console.error('  sf-pipeline --menu-name <name>                         # Auto-detect from AD_Menu by name');
+    console.error('  sf-pipeline --report-id <id> --report-name <name>      # Report mode');
     process.exit(1);
   }
 
@@ -100,7 +109,11 @@ async function main() {
       await runWindowPipeline({ windowId: resolved.windowId, windowName: resolved.resolvedName, dryRun: parsed.dryRun });
     } else if (resolved.resolvedMode === 'process') {
       await runProcessPipeline({ processId: resolved.processId, processName: resolved.resolvedName, dryRun: parsed.dryRun });
+    } else if (resolved.resolvedMode === 'report') {
+      await runReportPipeline({ reportId: resolved.processId, reportName: resolved.resolvedName, dryRun: parsed.dryRun });
     }
+  } else if (validation.mode === 'report') {
+    await runReportPipeline(parsed);
   } else if (validation.mode === 'process') {
     await runProcessPipeline(parsed);
   } else {
@@ -108,9 +121,10 @@ async function main() {
   }
 }
 
-async function runProcessPipeline({ processId, processName, dryRun }) {
+async function runProcessPipeline({ processId, processName, dryRun, isReport, specType }) {
   const steps = buildProcessPipelineSteps();
-  console.log(`\n=== Schema Forge Process Pipeline: ${processName} ===\n`);
+  const pipelineLabel = isReport ? 'Report' : 'Process';
+  console.log(`\n=== Schema Forge ${pipelineLabel} Pipeline: ${processName} ===\n`);
 
   for (const step of steps) {
     console.log(`[${step.phase}] ${step.description}...`);
@@ -133,7 +147,8 @@ async function runProcessPipeline({ processId, processName, dryRun }) {
         }
         case 'push-process-to-neo': {
           const { pushProcessToNeo } = await import('./push-to-neo.js');
-          const result = await pushProcessToNeo(processName, { dryRun });
+          const pushSpecType = specType || (isReport ? 'R' : 'P');
+          const result = await pushProcessToNeo(processName, { dryRun, specType: pushSpecType });
           if (dryRun) {
             console.log(`  ✓ Dry run: push plan logged`);
           } else {
@@ -173,7 +188,29 @@ async function runProcessPipeline({ processId, processName, dryRun }) {
     }
   }
 
-  console.log('\n=== Process Pipeline complete ===\n');
+  console.log(`\n=== ${pipelineLabel} Pipeline complete ===\n`);
+}
+
+/**
+ * Run the report pipeline.
+ * Reports reuse the process pipeline for extraction and NEO configuration,
+ * with specType set to 'R' instead of 'P'.
+ */
+async function runReportPipeline({ reportId, reportName, dryRun }) {
+  console.log(`\n=== Schema Forge Report Pipeline: ${reportName} ===\n`);
+
+  // Reports use the same extraction and NEO push as processes,
+  // but the spec type is 'R' instead of 'P'.
+  // Delegate to process pipeline with report flag.
+  await runProcessPipeline({
+    processId: reportId,
+    processName: reportName,
+    dryRun,
+    isReport: true,
+    specType: 'R',
+  });
+
+  console.log('\n=== Report Pipeline complete ===\n');
 }
 
 async function runWindowPipeline({ windowId, windowName }) {

@@ -57,7 +57,14 @@ export function resolveFromRow(row) {
   }
 
   if (action === 'R') {
-    throw new Error('Report pipelines are not yet supported (Phase 2)');
+    return {
+      action,
+      menuName,
+      windowId,
+      processId,
+      resolvedMode: 'report',
+      resolvedName: toKebabCase(menuName),
+    };
   }
 
   if (action === 'X') {

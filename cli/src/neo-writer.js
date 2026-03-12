@@ -61,7 +61,7 @@ export function auditDefaults(opts = {}) {
  * @param {string} params.moduleId - AD_Module_ID
  * @param {string} [params.windowId] - AD_Window_ID (required for type W)
  * @param {string} [params.processId] - AD_Process_ID (required for type P)
- * @param {string} [params.specType='W'] - 'W' (window) or 'P' (process)
+ * @param {string} [params.specType='W'] - 'W' (window), 'P' (process), or 'R' (report)
  * @param {string} [params.description]
  * @param {string} [params.specId] - If provided, UPDATE instead of INSERT
  * @param {object} [params.audit] - Override audit defaults
@@ -327,7 +327,8 @@ export async function populateSpec(client, params) {
 
   if (spec.spec_type === 'W') {
     return populateWindowSpec(client, { specId, windowId: spec.ad_window_id, moduleId, excludeSystemColumns, includeAllMethods, audit });
-  } else if (spec.spec_type === 'P') {
+  } else if (spec.spec_type === 'P' || spec.spec_type === 'R') {
+    // Reports use the same AD_Process_Para structure as processes
     return populateProcessSpec(client, { specId, processId: spec.ad_process_id, moduleId, audit });
   }
 

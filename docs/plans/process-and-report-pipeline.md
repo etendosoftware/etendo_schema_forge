@@ -1,8 +1,9 @@
 # Plan: Process & Report Pipeline Support
 
-**Status:** Phases 1, 3 & 4 COMPLETE — Process Pipeline + Forms Detection + Unified Entry Point
+**Status:** Phases 1, 2, 3 & 4 COMPLETE — Process Pipeline + Reports + Forms Detection + Unified Entry Point
 **Date:** 2026-03-10
 **Phase 1 completed:** 2026-03-11
+**Phase 2 completed:** 2026-03-12
 **Phase 3 completed:** 2026-03-12
 **Phase 4 completed:** 2026-03-12
 
@@ -11,7 +12,7 @@
 | Phase | Scope | Status | Date |
 |-------|-------|--------|------|
 | **Phase 1** | Standalone Processes | **Complete** | 2026-03-11 |
-| **Phase 2** | Reports | Deferred — requires NEO Headless changes | — |
+| **Phase 2** | Reports | **Complete** — NeoReportService + pipeline support | 2026-03-12 |
 | **Phase 3** | Forms | **Complete** — not automated, pipeline detects and shows source paths | 2026-03-12 |
 | **Phase 4** | Unified entry point | **Complete** | 2026-03-12 |
 
@@ -23,7 +24,7 @@ The Schema Forge pipeline originally supported **only AD_Window entries**. Phase
 |----------------|------|-----------------|------------------|---------------------|
 | `W` | Window | ~254 | Full | Full (CRUD + selectors + actions) |
 | `P` | Process | ~20 | None (standalone) | Full (GET describe + POST execute) |
-| `R` | Report | ~49 | None | None |
+| `R` | Report | ~49 | Full | Full (GET describe + POST generateReport) |
 | `X` | Form | ~13 | None | None |
 
 Additionally, folders (`issummary='Y'`, ~72) are grouping nodes — no pipeline needed.
@@ -296,11 +297,15 @@ WHERE p.AD_Process_ID = $1 AND p.IsReport = 'Y'
 | Frontend: report form | Low | Extend process form with format selector |
 | **Total** | **High** | Primarily NEO Headless changes |
 
-### Recommendation
+### Implementation (Completed 2026-03-12)
 
-**Defer Phase 2** until Phase 1 (processes) is proven. Reports require significant NEO Headless changes (Jasper integration, binary responses) that are outside Schema Forge's scope.
+Phase 2 was implemented with the following components:
 
-**Alternative approach:** Use Etendo's existing report endpoint (`/api/report`) and just generate the parameter form from the contract, linking to the existing report URL.
+- **NeoReportService.java** — New runtime service that generates reports via `ReportingUtils.exportJR`. Handles Jasper compilation, parameter injection, and binary file response (PDF, XLS, HTML, CSV).
+- **NeoServlet routing** — Updated to detect specType 'R' and route to `NeoReportService` for GET (describe) and POST (generateReport).
+- **NeoOpenAPIEndpoint** — Registers report spec paths in the OpenAPI schema.
+- **Pipeline support** — `pipeline.js` accepts `--report-id` and `--report-name` flags, and auto-detects reports via `--menu-id` when `AD_Menu.action = 'R'`.
+- **push-to-neo.js / neo-writer.js** — Support specType 'R' for writing report configuration to `ETGO_SF_SPEC`.
 
 ---
 
@@ -349,7 +354,7 @@ This could use the existing `SFListMenu` webhook or a direct SQL query.
 | Phase | Scope | Pipeline Impact | NEO Impact | Priority |
 |-------|-------|----------------|------------|----------|
 | **1** | Standalone Processes | New extraction + contract + frontend | None (already works) | **High — next** |
-| **2** | Reports | Reuse process extraction | Jasper handler + binary response | Medium — deferred |
+| **2** | Reports | Reuse process extraction + report flags | NeoReportService (Jasper + binary response) | **Complete** |
 | **3** | Forms | None | None | Low — not planned |
 | **4** | Unified entry point | CLI refactor | None | Medium — after Phase 1 |
 

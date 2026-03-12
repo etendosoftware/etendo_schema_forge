@@ -145,20 +145,17 @@ describe('resolveFromRow', () => {
     );
   });
 
-  it('action R throws report error', () => {
-    assert.throws(
-      () => resolveFromRow({
-        action: 'R',
-        name: 'Some Report',
-        ad_window_id: null,
-        ad_process_id: null,
-        issummary: 'N',
-        }),
-      (err) => {
-        assert.ok(err.message.includes('Report'));
-        return true;
-      }
-    );
+  it('action R resolves as report mode', () => {
+    const result = resolveFromRow({
+      action: 'R',
+      name: 'Some Report',
+      ad_window_id: null,
+      ad_process_id: 'PROC123',
+      issummary: 'N',
+    });
+    assert.equal(result.resolvedMode, 'report');
+    assert.equal(result.resolvedName, 'some-report');
+    assert.equal(result.processId, 'PROC123');
   });
 
   it('unsupported action throws error', () => {

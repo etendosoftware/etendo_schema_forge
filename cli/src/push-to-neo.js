@@ -357,6 +357,7 @@ export async function pushToNeo(windowName, options = {}) {
  * @param {string} [options.moduleId='0'] - AD_Module_ID for new rows
  * @param {object} [options.dbConfig] - Override DB pool config
  * @param {object} [options.audit] - Override audit defaults
+ * @param {string} [options.specType='P'] - Spec type: 'P' (process) or 'R' (report)
  * @returns {object} Result summary
  */
 export async function pushProcessToNeo(processName, options = {}) {
@@ -380,15 +381,18 @@ export async function pushProcessToNeo(processName, options = {}) {
   const processId = contract.process.id;
   const specName = contract.process.specName;
   const processDisplayName = contract.process.name;
+  const specType = options.specType || 'P';
 
   // Dry run mode
   if (options.dryRun === true) {
-    console.log(`[DRY RUN] Push to NEO for process: ${processDisplayName} (${processName})`);
+    const typeLabel = specType === 'R' ? 'report' : 'process';
+    console.log(`[DRY RUN] Push to NEO for ${typeLabel}: ${processDisplayName} (${processName})`);
     console.log(`  Spec name: ${specName}`);
     console.log(`  Process ID: ${processId}`);
+    console.log(`  Spec type: ${specType}`);
     console.log(`  Method: direct DB write`);
-    console.log(`\n  Step 1: upsertSpec (specType=P)`);
-    console.log(`    Params: { name: '${specName}', specType: 'P', processId: '${processId}' }`);
+    console.log(`\n  Step 1: upsertSpec (specType=${specType})`);
+    console.log(`    Params: { name: '${specName}', specType: '${specType}', processId: '${processId}' }`);
     console.log(`\n  Step 2: populateSpec (auto-creates entity + fields from AD_Process_Para)`);
     console.log(`    Params: { specId: <from step 1> }`);
 
@@ -397,7 +401,7 @@ export async function pushProcessToNeo(processName, options = {}) {
       specName,
       processId,
       plan: {
-        spec: { action: 'upsertSpec', params: { name: specName, specType: 'P', processId } },
+        spec: { action: 'upsertSpec', params: { name: specName, specType, processId } },
         populate: { action: 'populateSpec', params: { specId: '(from step 1)' } },
       },
     };
@@ -418,7 +422,7 @@ export async function pushProcessToNeo(processName, options = {}) {
       name: specName,
       moduleId,
       processId,
-      specType: 'P',
+      specType,
       audit: auditOpts,
     });
     const specId = specResult.specId;
