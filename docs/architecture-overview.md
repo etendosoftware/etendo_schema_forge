@@ -46,6 +46,7 @@ Schema Forge decides **what** to expose. Etendo Go decides **how** to serve it.
 │  CLI Tools (Node.js)          Decision UIs (React)                   │
 │  ├── extract-from-db.js       ├── app-shell (port 5173)             │
 │  ├── extract-from-process.js  ├── decision-panel (port 5174)        │
+│  ├── resolve-menu.js                                                │
 │  ├── extract-fields.js        └── ui-preview (port 5175)            │
 │  ├── extract-rules.js                                                │
 │  ├── pre-classify.js          DB Writers (direct PostgreSQL)         │
@@ -146,7 +147,8 @@ All tools are Node.js, zero-dependency. Located in `cli/src/`.
 | `translate-todos.js` | Generated React components | Components with translated callout/onchange logic (AI-assisted, interactive) |
 | `generate-mock-data.js` | Contract | `mockData.js`, `mockCatalogs.js` for UI preview |
 | `run-contract-tests.js` | Contract | Test results (Node.js assertions) |
-| `pipeline.js` | Window or process ID | Runs full pipeline: window mode or process mode |
+| `resolve-menu.js` | AD_Menu_ID | Resolves menu entry type (W/P/R/X) and linked ID |
+| `pipeline.js` | Window ID, process ID, or menu ID | Runs full pipeline: window, process, or auto-detect mode |
 
 ### Decision UIs
 

@@ -221,7 +221,8 @@ schema-forge/                             # THIS REPO — design + tooling
 │       ├── generate-frontend.js          # React SPA generation (emits section markers)
 │       ├── generate-mock-data.js         # Mock catalogs for UI preview
 │       ├── run-contract-tests.js         # Contract test runner
-│       └── pipeline.js                   # Full pipeline (windows + processes)
+│       ├── resolve-menu.js               # AD_Menu resolver (auto-detect type from menu ID)
+│       └── pipeline.js                   # Full pipeline (windows, processes, or auto-detect via menu ID)
 ├── tools/                                # React decision UIs
 │   ├── app-shell/                        # Main UI shell (Vite + React + Tailwind)
 │   ├── decision-panel/                   # Field visibility + rule curation
