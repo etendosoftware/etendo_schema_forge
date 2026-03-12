@@ -1,8 +1,9 @@
 # Plan: Process & Report Pipeline Support
 
-**Status:** Phases 1 & 4 COMPLETE — Process Pipeline + Unified Entry Point
+**Status:** Phases 1, 3 & 4 COMPLETE — Process Pipeline + Forms Detection + Unified Entry Point
 **Date:** 2026-03-10
 **Phase 1 completed:** 2026-03-11
+**Phase 3 completed:** 2026-03-12
 **Phase 4 completed:** 2026-03-12
 
 ### Implementation Status
@@ -11,7 +12,7 @@
 |-------|-------|--------|------|
 | **Phase 1** | Standalone Processes | **Complete** | 2026-03-11 |
 | **Phase 2** | Reports | Deferred — requires NEO Headless changes | — |
-| **Phase 3** | Forms | Not planned — inherently custom | — |
+| **Phase 3** | Forms | **Complete** — not automated, pipeline detects and shows source paths | 2026-03-12 |
 | **Phase 4** | Unified entry point | **Complete** | 2026-03-12 |
 
 ## Context
@@ -313,9 +314,9 @@ Forms (`AD_Menu.action = 'X'`) are **completely custom** UI components:
 - Implementation is pure Java + custom JSP/HTML
 - No metadata to extract (the form IS the implementation)
 
-### Recommendation
+### Resolution
 
-**Do not support forms in the pipeline.** They are inherently custom and don't benefit from metadata-driven extraction/generation. If a form needs to be exposed via NEO, it should be implemented as a custom `NeoHandler`.
+**Forms are not automated.** They are inherently custom and have no extractable metadata. When the pipeline detects a form (action='X' via `--menu-id` or `--menu-name`), it shows the source file paths (Java + HTML) and tells the developer it must be built manually. The developer creates a custom React component + NeoHandler, registers in app-shell and NEO Headless. See PR #105.
 
 ---
 
