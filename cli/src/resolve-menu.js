@@ -1,4 +1,4 @@
-import { createDbPool } from './db.js';
+import { createDbPool, closePool } from './db.js';
 
 /**
  * SQL query to resolve a menu entry from AD_Menu.
@@ -59,11 +59,13 @@ export async function resolveMenuEntry(menuId) {
       throw new Error('Form pipelines are not supported');
     }
 
-    let resolvedMode = null;
+    let resolvedMode;
     if (action === 'W') {
       resolvedMode = 'window';
     } else if (action === 'P') {
       resolvedMode = 'process';
+    } else {
+      throw new Error(`Unsupported menu action '${action}' for menu '${menuName}'`);
     }
 
     return {
@@ -75,6 +77,6 @@ export async function resolveMenuEntry(menuId) {
       resolvedName: toKebabCase(menuName),
     };
   } finally {
-    await pool.end();
+    await closePool(pool);
   }
 }
