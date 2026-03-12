@@ -645,6 +645,76 @@ export function generateAllProcess(contract) {
   return files;
 }
 
+// ---------------------------------------------------------------------------
+// Report form generation
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a report form component from a report contract.
+ * Similar to process form but uses ReportForm, adds format selector,
+ * and targets the generateReport endpoint.
+ */
+export function generateReportFormComponent(contract) {
+  const proc = contract.process;
+  const compName = toPascalCase(proc.specName) + 'Report';
+
+  const paramsArray = contract.parameters.map(p => {
+    const requiredPart = p.required ? ', required: true' : '';
+    const defaultPart = p.defaultValue ? `, defaultValue: '${p.defaultValue.replace(/'/g, "\\'")}'` : '';
+    const referencePart = p.referenceValueId ? `, reference: '${p.referenceValueId}'` : '';
+    return `  { key: '${p.name}', column: '${p.column}', type: '${p.inputMode}'${requiredPart}${defaultPart}${referencePart} },`;
+  }).join('\n');
+
+  const generateUrl = `/sws/neo/${proc.specName}/generateReport`;
+
+  return `import { ReportForm } from '@/components/contract-ui';
+
+const parameters = [
+${paramsArray}
+];
+
+const reportConfig = {
+  name: '${proc.name.replace(/'/g, "\\'")}',
+  specName: '${proc.specName}',
+  generateUrl: '${generateUrl}',
+  supportedFormats: ['PDF', 'XLS', 'XLSX', 'HTML', 'CSV'],
+};
+
+export default function ${compName}(props) {
+  return <ReportForm parameters={parameters} report={reportConfig} {...props} />;
+}
+`;
+}
+
+/**
+ * Generate the index/entry point for a report form.
+ */
+export function generateReportIndex(contract) {
+  const proc = contract.process;
+  const compName = toPascalCase(proc.specName) + 'Report';
+
+  return `import ${compName} from './${compName}';
+
+const reportMeta = { name: '${proc.name.replace(/'/g, "\\'")}', specName: '${proc.specName}' };
+
+export default function App({ token, apiBaseUrl }) {
+  return <${compName} token={token} apiBaseUrl={apiBaseUrl} report={reportMeta} />;
+}
+`;
+}
+
+/**
+ * Generate all frontend files for a report contract.
+ * Returns { filename: code } map.
+ */
+export function generateAllReport(contract) {
+  const compName = toPascalCase(contract.process.specName) + 'Report';
+  const files = {};
+  files[`${compName}.jsx`] = generateReportFormComponent(contract);
+  files['index.jsx'] = generateReportIndex(contract);
+  return files;
+}
+
 // CLI entry point -- only runs when executed directly
 const isDirectRun = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/.*\//, ''));
 if (isDirectRun) {

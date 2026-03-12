@@ -157,10 +157,11 @@ async function runProcessPipeline({ processId, processName, dryRun, isReport, sp
           break;
         }
         case 'generate-process-frontend': {
-          const { generateAllProcess } = await import('./generate-frontend.js');
+          const { generateAllProcess, generateAllReport } = await import('./generate-frontend.js');
           const { readFile, writeFile, mkdir } = await import('node:fs/promises');
           const contract = JSON.parse(await readFile(`artifacts/${processName}/contract.json`, 'utf8'));
-          const files = generateAllProcess(contract);
+          const generateFn = isReport ? generateAllReport : generateAllProcess;
+          const files = generateFn(contract);
           const outDir = `artifacts/${processName}/generated/web/${processName}`;
           await mkdir(outDir, { recursive: true });
           for (const [filename, code] of Object.entries(files)) {
