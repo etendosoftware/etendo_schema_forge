@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-03-13T19:42:05.228Z",
-  "checksum": "9afa88f571687b3c",
+  "generatedAt": "2026-03-14T05:39:50.831Z",
+  "checksum": "d8e8122bf4f33e33",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -12,6 +12,7 @@
     "entities": {
       "order": {
         "tableName": "C_Order",
+        "tabId": "294",
         "tabName": "Header",
         "fields": [
           {
@@ -275,6 +276,7 @@
       },
       "orderLine": {
         "tableName": "C_OrderLine",
+        "tabId": "293",
         "tabName": "Lines",
         "fields": [
           {
@@ -510,6 +512,7 @@
       },
       "orderLineTax": {
         "tableName": "C_OrderLineTax",
+        "tabId": "ADBD1719BFA14C97A32C7B6E8452D14F",
         "tabName": "Line Tax",
         "fields": [
           {
@@ -559,6 +562,7 @@
       },
       "reservedStock": {
         "tableName": "M_Reservation_Stock",
+        "tabId": "64B971D786A646DC9656534AABB13FA9",
         "tabName": "Prereserved Qty",
         "fields": [
           {
@@ -640,6 +644,7 @@
       },
       "basicDiscounts": {
         "tableName": "C_Order_Discount",
+        "tabId": "1011100001",
         "tabName": "Basic Discounts",
         "fields": [
           {
@@ -689,6 +694,7 @@
       },
       "orderTax": {
         "tableName": "C_OrderTax",
+        "tabId": "295",
         "tabName": "Tax",
         "fields": [
           {
@@ -738,6 +744,7 @@
       },
       "paymentPlan": {
         "tableName": "FIN_Payment_Sched_Ord_V",
+        "tabId": "FA57D75B1BBB4583B4A777008A29BF54",
         "tabName": "Payment Plan",
         "fields": [
           {
@@ -828,6 +835,7 @@
       },
       "paymentDetails": {
         "tableName": "FIN_Payment_Detail_V",
+        "tabId": "6707D7449A8D45DB851F608BA88329C8",
         "tabName": "Payment Details",
         "fields": [
           {
@@ -979,6 +987,7 @@
     "entities": {
       "order": {
         "tableName": "C_Order",
+        "tabId": "294",
         "tabName": "Header",
         "fields": [
           {
@@ -1468,6 +1477,7 @@
       },
       "orderLine": {
         "tableName": "C_OrderLine",
+        "tabId": "293",
         "tabName": "Lines",
         "fields": [
           {
@@ -1866,6 +1876,7 @@
       },
       "orderLineTax": {
         "tableName": "C_OrderLineTax",
+        "tabId": "ADBD1719BFA14C97A32C7B6E8452D14F",
         "tabName": "Line Tax",
         "fields": [
           {
@@ -1942,6 +1953,7 @@
       },
       "reservedStock": {
         "tableName": "M_Reservation_Stock",
+        "tabId": "64B971D786A646DC9656534AABB13FA9",
         "tabName": "Prereserved Qty",
         "fields": [
           {
@@ -2032,6 +2044,7 @@
       },
       "basicDiscounts": {
         "tableName": "C_Order_Discount",
+        "tabId": "1011100001",
         "tabName": "Basic Discounts",
         "fields": [
           {
@@ -2094,6 +2107,7 @@
       },
       "orderTax": {
         "tableName": "C_OrderTax",
+        "tabId": "295",
         "tabName": "Tax",
         "fields": [
           {
@@ -2163,6 +2177,7 @@
       },
       "paymentPlan": {
         "tableName": "FIN_Payment_Sched_Ord_V",
+        "tabId": "FA57D75B1BBB4583B4A777008A29BF54",
         "tabName": "Payment Plan",
         "fields": [
           {
@@ -2267,6 +2282,7 @@
       },
       "paymentDetails": {
         "tableName": "FIN_Payment_Detail_V",
+        "tabId": "6707D7449A8D45DB851F608BA88329C8",
         "tabName": "Payment Details",
         "fields": [
           {

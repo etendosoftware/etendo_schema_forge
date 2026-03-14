@@ -6,6 +6,7 @@ import { useEntity } from '@/hooks/useEntity';
 import { useMenuLabel } from '@/i18n';
 import { Search, ArrowUpDown, SlidersHorizontal, Eye, ChevronDown, MoreVertical, Plus, CalendarDays, Link2, Sparkles, Bell, Mic } from 'lucide-react';
 import LocaleSwitcher from '@/components/LocaleSwitcher.jsx';
+import { UserAvatarButton, UserContextSwitcher } from '@/components/UserContextSwitcher.jsx';
 
 /**
  * Full-width list view for an entity.
@@ -24,6 +25,7 @@ export function ListView({
   const tMenu = useMenuLabel();
   const label = tMenu(entityLabel) || entityLabel || entity;
   const [selectedRows, setSelectedRows] = useState([]);
+  const [showUserContext, setShowUserContext] = useState(false);
 
   return (
     <div className="h-full flex flex-col">
@@ -76,6 +78,8 @@ export function ListView({
               <Bell className="h-4 w-4" />
             </button>
             <LocaleSwitcher />
+            <UserAvatarButton isOpen={showUserContext} onClick={() => setShowUserContext(v => !v)} />
+            {showUserContext && <UserContextSwitcher onClose={() => setShowUserContext(false)} />}
           </div>
         </div>
       </div>

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import {
@@ -24,15 +23,11 @@ import {
   PanelLeftOpen,
   PanelLeftClose,
   ChevronRight,
-  Shield,
-  Building2,
-  RefreshCw,
-  Check,
-  KeyRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { getSectionColor } from '@/lib/sectionColors.js';
 import { useMenuLabel } from '@/i18n';
+import { UserContextSwitcher } from '@/components/UserContextSwitcher.jsx';
 
 const ICON_MAP = {
   LayoutDashboard,
@@ -58,160 +53,9 @@ export function findActiveGroup(menuGroups, pathname) {
 const COLLAPSED_W = 60;
 const EXPANDED_W = 240;
 
-function UserPopover({ onClose }) {
-  const { username, roleList, selectedRole, selectedOrg, switchContext, logout } = useAuth();
-
-  const [pendingRoleId, setPendingRoleId] = useState(selectedRole?.id || '');
-  const [pendingOrgId, setPendingOrgId] = useState(selectedOrg?.id || '');
-  const [password, setPassword] = useState('');
-  const [needsPassword, setNeedsPassword] = useState(false);
-  const [switching, setSwitching] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-
-  const pendingRole = roleList.find(r => r.id === pendingRoleId);
-  const orgOptions = pendingRole?.orgList || [];
-
-  const hasChanges = pendingRoleId !== (selectedRole?.id || '') ||
-                     pendingOrgId !== (selectedOrg?.id || '');
-
-  const handleRoleChange = (e) => {
-    const roleId = e.target.value;
-    setPendingRoleId(roleId);
-    const role = roleList.find(r => r.id === roleId);
-    setPendingOrgId(role?.orgList?.[0]?.id || '');
-    setSuccess(false);
-    setError(null);
-  };
-
-  const handleApply = async () => {
-    if (!pendingRoleId || !pendingOrgId) return;
-    setSwitching(true);
-    setError(null);
-    setSuccess(false);
-    try {
-      await switchContext(pendingRoleId, pendingOrgId, needsPassword ? password : undefined);
-      setSuccess(true);
-      setNeedsPassword(false);
-      setPassword('');
-    } catch (e) {
-      if (e.message === 'SESSION_EXPIRED') {
-        setNeedsPassword(true);
-        setError('Enter password to switch.');
-      } else {
-        setError(e.message || 'Failed to switch context.');
-      }
-    } finally {
-      setSwitching(false);
-    }
-  };
-
-  return createPortal(
-    <>
-    {/* Invisible backdrop — closes popover on click outside */}
-    <div className="fixed inset-0 z-[100]" onClick={onClose} />
-    <div
-      className="fixed bottom-3 left-[68px] z-[101] w-72 rounded-lg border bg-popover text-popover-foreground shadow-xl"
-    >
-      {/* Header */}
-      <div className="border-b px-4 py-3">
-        <p className="text-sm font-semibold">{username}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {selectedRole?.name || selectedRole?.id || 'No role'} &middot; {selectedOrg?.name || selectedOrg?.id || 'No org'}
-        </p>
-      </div>
-
-      {/* Context switcher */}
-      <div className="px-4 py-3 space-y-3">
-        <div>
-          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
-            <Shield className="h-3 w-3" /> Role
-          </label>
-          <select
-            value={pendingRoleId}
-            onChange={handleRoleChange}
-            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-          >
-            <option value="" disabled>Select role...</option>
-            {roleList.map(r => (
-              <option key={r.id} value={r.id}>{r.name || r.id}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
-            <Building2 className="h-3 w-3" /> Organization
-          </label>
-          <select
-            value={pendingOrgId}
-            onChange={(e) => { setPendingOrgId(e.target.value); setSuccess(false); setError(null); }}
-            disabled={orgOptions.length === 0}
-            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-          >
-            <option value="" disabled>Select org...</option>
-            {orgOptions.map(o => (
-              <option key={o.id} value={o.id}>{o.name || o.id}</option>
-            ))}
-          </select>
-        </div>
-
-        {needsPassword && (
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
-              <KeyRound className="h-3 w-3" /> Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleApply()}
-              placeholder="Your password..."
-              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-          </div>
-        )}
-
-        {hasChanges && (
-          <button
-            onClick={handleApply}
-            disabled={switching || !pendingRoleId || !pendingOrgId || (needsPassword && !password)}
-            className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-          >
-            {switching ? (
-              <><RefreshCw className="h-3 w-3 animate-spin" /> Switching...</>
-            ) : (
-              'Apply'
-            )}
-          </button>
-        )}
-
-        {success && (
-          <p className="flex items-center gap-1 text-xs text-green-600">
-            <Check className="h-3 w-3" /> Context updated
-          </p>
-        )}
-        {error && <p className="text-xs text-destructive">{error}</p>}
-      </div>
-
-      {/* Logout */}
-      <div className="border-t px-4 py-2">
-        <button
-          onClick={logout}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-        >
-          <LogOut className="h-3.5 w-3.5" />
-          Logout
-        </button>
-      </div>
-    </div>
-    </>,
-    document.body
-  );
-}
-
 export default function AppSidebar({ menuGroups, expanded, onToggle }) {
-  const { username, logout } = useAuth();
+  const { username, logout, selectedOrg } = useAuth();
+  const [showUserPopover, setShowUserPopover] = useState(false);
   const location = useLocation();
   const currentPath = location.pathname.replace(/^\//, '');
   const activeGroup = findActiveGroup(menuGroups, location.pathname);
@@ -222,8 +66,6 @@ export default function AppSidebar({ menuGroups, expanded, onToggle }) {
     if (activeGroup) initial[activeGroup.group] = true;
     return initial;
   });
-  const [showUserPopover, setShowUserPopover] = useState(false);
-
   const toggleGroup = (group) => {
     setOpenGroups(prev => ({ ...prev, [group]: !prev[group] }));
   };
@@ -241,18 +83,34 @@ export default function AppSidebar({ menuGroups, expanded, onToggle }) {
           'flex shrink-0 items-center h-14',
           expanded ? 'px-4 gap-3' : 'justify-center'
         )}>
-          <img
-            src="/favicon.png"
-            alt="Etendo"
-            className="h-9 w-9 shrink-0 rounded-lg"
-          />
+          {!expanded ? (
+            <button
+              onClick={() => setShowUserPopover(v => !v)}
+              className="h-9 w-9 shrink-0 rounded-lg overflow-hidden"
+            >
+              <img
+                src="/favicon.png"
+                alt="Etendo"
+                className="h-9 w-9"
+              />
+            </button>
+          ) : (
+            <img
+              src="/favicon.png"
+              alt="Etendo"
+              className="h-9 w-9 shrink-0 rounded-lg"
+            />
+          )}
           {expanded && (
-            <div className="flex flex-col leading-none min-w-0 flex-1">
+            <button
+              onClick={() => setShowUserPopover(v => !v)}
+              className="flex flex-col leading-none min-w-0 flex-1 text-left"
+            >
               <div className="flex items-center gap-1">
-                <span className="text-sm font-semibold text-foreground truncate">Your company</span>
-                <ChevronRight className="h-3 w-3 text-muted-foreground rotate-90" />
+                <span className="text-sm font-semibold text-foreground truncate">{selectedOrg?.name || 'Your company'}</span>
+                <ChevronRight className={cn('h-3 w-3 text-muted-foreground transition-transform', showUserPopover && 'rotate-90')} />
               </div>
-            </div>
+            </button>
           )}
           <button
             onClick={onToggle}
@@ -264,6 +122,14 @@ export default function AppSidebar({ menuGroups, expanded, onToggle }) {
             <PanelLeftClose className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Context switcher popover */}
+        {showUserPopover && (
+          <UserContextSwitcher
+            onClose={() => setShowUserPopover(false)}
+            positionClassName={expanded ? 'top-14 left-4' : 'top-14 left-[68px]'}
+          />
+        )}
 
         {/* Expand button (only when collapsed) */}
         {!expanded && (
@@ -407,28 +273,7 @@ export default function AppSidebar({ menuGroups, expanded, onToggle }) {
             </NavLink>
           )}
 
-          {/* User */}
-          {!expanded ? (
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
-                <div className="flex h-10 w-10 items-center justify-center">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-foreground">
-                    <span className="text-xs font-semibold">{username?.charAt(0).toUpperCase()}</span>
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">{username}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <div className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground">
-              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-foreground">
-                <span className="text-[10px] font-semibold">{username?.charAt(0).toUpperCase()}</span>
-              </div>
-              <span className="truncate">{username}</span>
-            </div>
-          )}
-
-          {/* Logout */}
+          {/* User + Logout */}
           {!expanded ? (
             <Tooltip delayDuration={0}>
               <TooltipTrigger asChild>
@@ -436,31 +281,25 @@ export default function AppSidebar({ menuGroups, expanded, onToggle }) {
                   onClick={logout}
                   className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
-                  <div className={cn(
-                    'flex h-7 w-7 items-center justify-center rounded-full text-white transition-colors',
-                    showUserPopover ? 'bg-white/30 ring-2 ring-white/40' : 'bg-white/20 hover:bg-white/30'
-                  )}>
-                    <span className="text-xs font-semibold">{username?.charAt(0).toUpperCase()}</span>
-                  </div>
+                  <LogOut className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
-              {!showUserPopover && <TooltipContent side="right">{username}</TooltipContent>}
+              <TooltipContent side="right">Logout ({username})</TooltipContent>
             </Tooltip>
           ) : (
-            <button
-              onClick={logout}
-              className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground rounded-md hover:text-foreground hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20 text-white">
+            <div className="flex items-center gap-2.5 px-3 py-2 text-sm text-muted-foreground">
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-foreground">
                 <span className="text-[10px] font-semibold">{username?.charAt(0).toUpperCase()}</span>
               </div>
-              <span className="truncate">{username}</span>
-            </button>
-          )}
-
-          {/* User popover */}
-          {showUserPopover && (
-            <UserPopover onClose={() => setShowUserPopover(false)} />
+              <span className="truncate flex-1">{username}</span>
+              <button
+                onClick={logout}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Logout"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
         </div>
       </nav>
