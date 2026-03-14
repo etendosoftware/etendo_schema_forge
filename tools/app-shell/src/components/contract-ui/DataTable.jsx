@@ -7,6 +7,7 @@ import { Search, Inbox, X } from 'lucide-react';
 import { FieldHighlight } from '@/components/inspector/FieldHighlight.jsx';
 import { useLabel } from '@/i18n';
 import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
+import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 
 /**
  * Format a number as currency with $ prefix and locale-aware separators.
@@ -231,7 +232,7 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
     const display = resolveIdentifier(row, col.key);
     // Link styling on first string column
     if (col === columns[0] && col.type === 'string') {
-      return <span className="font-medium text-blue-600">{row[col.key]}</span>;
+      return <span className="font-medium text-blue-600">{display}</span>;
     }
     if (col.type === 'status') {
       const badgeProps = getStatusBadgeProps(row[col.key]);
@@ -258,8 +259,8 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
     if (col.type === 'amount') {
       return <span className="tabular-nums">{formatCurrency(row[col.key])}</span>;
     }
-    // Truncate long text values
-    const val = row[col.key];
+    // Truncate long display values
+    const val = display;
     if (typeof val === 'string' && val.length > 30) {
       return <span className="block max-w-[200px] truncate" title={val}>{val}</span>;
     }
