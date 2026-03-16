@@ -1,10 +1,12 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { X, MoreVertical, Check, Save, List, Search, Sparkles, Plus, Bell, Mic } from 'lucide-react';
 import { useEntity } from '@/hooks/useEntity';
 import { useCatalogs } from '@/hooks/useCatalogs';
+import { useDisplayLogic } from '@/hooks/useDisplayLogic';
+import { useCallout } from '@/hooks/useCallout';
 import { useMenuLabel } from '@/i18n';
 import { SummaryBar } from './SummaryBar.jsx';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -38,11 +40,16 @@ export function DetailView({
 }) {
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl });
   const catalogs = useCatalogs(api, token, apiBaseUrl, staticCatalogs);
+  const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
+  const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const navigate = useNavigate();
   const tMenu = useMenuLabel();
   const [addingLine, setAddingLine] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [directFetched, setDirectFetched] = useState(false);
+
+  // Track fields whose values were set by a callout response to avoid re-triggering
+  const calloutAppliedRef = useRef(new Set());
 
   const isNew = recordId === 'new';
   const currentItem = useMemo(() => {
@@ -66,6 +73,54 @@ export function DetailView({
       hook.fetchById(recordId);
     }
   }, [currentItem, recordId, hook.selected, hook.handleSelect]);
+
+  // Apply callout results to the form when they arrive
+  useEffect(() => {
+    if (!calloutResult) return;
+    const { updates, combos } = calloutResult;
+    const appliedFields = new Set();
+
+    if (updates) {
+      for (const [key, entry] of Object.entries(updates)) {
+        appliedFields.add(key);
+        hook.handleChange(key, entry.value);
+        if (entry._identifier) {
+          hook.handleChange(key + '$_identifier', entry._identifier);
+        }
+      }
+    }
+    if (combos) {
+      for (const [key, combo] of Object.entries(combos)) {
+        if (combo.selected != null) {
+          appliedFields.add(key);
+          hook.handleChange(key, combo.selected);
+          if (combo._identifier) {
+            hook.handleChange(key + '$_identifier', combo._identifier);
+          }
+        }
+      }
+    }
+
+    // Mark these fields so the next onChange doesn't re-trigger callout
+    calloutAppliedRef.current = appliedFields;
+  }, [calloutResult]);
+
+  // Wrapped onChange that triggers callout for user-initiated FK changes
+  const handleChangeWithCallout = useCallback((field, value) => {
+    hook.handleChange(field, value);
+
+    // Skip identifier companion fields (e.g., "field$_identifier")
+    if (field.includes('$_identifier')) return;
+
+    // If this field was just set by a callout response, don't re-trigger
+    if (calloutAppliedRef.current.has(field)) {
+      calloutAppliedRef.current.delete(field);
+      return;
+    }
+
+    // Trigger callout — the backend returns empty if no callout is registered
+    executeCallout(field, value, hook.editing);
+  }, [hook.handleChange, hook.editing, executeCallout]);
 
   const data = hook.editing || currentItem || {};
   const title = isNew
@@ -208,10 +263,11 @@ export function DetailView({
               <Form
                 entity={entity}
                 data={data}
-                onChange={hook.handleChange}
+                onChange={handleChangeWithCallout}
                 catalogs={catalogs}
                 layout="horizontal"
                 section="principal"
+                displayLogic={displayLogic}
               />
             </div>
 
@@ -275,10 +331,11 @@ export function DetailView({
                     <Form
                       entity={entity}
                       data={data}
-                      onChange={hook.handleChange}
+                      onChange={handleChangeWithCallout}
                       catalogs={catalogs}
                       layout="horizontal"
                       section="other"
+                      displayLogic={displayLogic}
                     />
                   </div>
                 )}
