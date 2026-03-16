@@ -21,14 +21,14 @@ function SearchInput({ field, value, displayValue, onChange, catalogs, resolvedL
 
   const options = catalogs?.[field.reference] ?? [];
   const filtered = useMemo(() => {
-    if (!query || query.length === 0) return [];
+    if (!query || query.length === 0) return options.slice(0, 10);
     const q = query.toLowerCase();
     return options.filter(opt => opt.name.toLowerCase().includes(q)).slice(0, 10);
   }, [query, options]);
 
   const handleSelect = (opt) => {
     setQuery(opt.name);
-    onChange?.(opt.id, opt.name);
+    onChange?.(opt.id, opt.name, opt._aux);
     setOpen(false);
   };
 
@@ -96,7 +96,7 @@ function SelectorInput({ field, value, displayValue, onChange, catalogs, resolve
       value={value ?? ''}
       onValueChange={(val) => {
         const opt = options.find(o => o.id === val);
-        onChange?.(val, opt?.name);
+        onChange?.(val, opt?.name, opt?._aux);
       }}
       required={field.required}
     >
@@ -116,25 +116,42 @@ function SelectorInput({ field, value, displayValue, onChange, catalogs, resolve
  * Dependent dropdown that filters options by a parent field value (inputMode: dependent).
  * Uses shadcn Select (Radix) for consistent styling.
  */
-function DependentSelect({ field, value, displayValue, onChange, catalogs, formData, resolvedLabel }) {
+function DependentSelect({ field, value, displayValue, onChange, catalogs, formData, resolvedLabel, selectorUrl, token }) {
   const parentValue = formData?.[field.dependsOn?.field];
-  const allOptions = catalogs?.[field.reference] ?? [];
-  const filtered = parentValue
-    ? allOptions.filter(opt => opt[field.dependsOn?.filterKey] === parentValue)
-    : [];
-  // If the current value isn't in filtered options (real data), add it
-  const hasValue = value && filtered.some(opt => opt.id === value);
-  const options = (!hasValue && value && displayValue)
-    ? [{ id: value, name: displayValue }, ...filtered]
-    : filtered;
+  const [dynamicOptions, setDynamicOptions] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Auto-select first option when parent changes and current value is not in the filtered list
+  // Fetch options dynamically when parent value changes
   React.useEffect(() => {
-    if (parentValue && filtered.length > 0 && !hasValue) {
-      const first = filtered[0];
-      onChange?.(first.id, first.name);
+    if (!parentValue || !selectorUrl || !token) {
+      setDynamicOptions([]);
+      return;
     }
-  }, [parentValue, filtered.length]);
+    setLoading(true);
+    const url = `${selectorUrl}?${field.dependsOn?.filterKey}=${encodeURIComponent(parentValue)}`;
+    fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.items) {
+          const items = data.items.map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i }));
+          setDynamicOptions(items);
+          // Auto-select first option if no current value
+          if (items.length > 0 && !value) {
+            onChange?.(items[0].id, items[0].name);
+          }
+        }
+      })
+      .catch(() => setDynamicOptions([]))
+      .finally(() => setLoading(false));
+  }, [parentValue, selectorUrl, token]);
+
+  // If the current value isn't in options (real data from existing record), add it
+  const hasValue = value && dynamicOptions.some(opt => opt.id === value);
+  const options = (!hasValue && value && displayValue)
+    ? [{ id: value, name: displayValue }, ...dynamicOptions]
+    : dynamicOptions;
 
   return (
     <Select
@@ -144,11 +161,11 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
         onChange?.(val, opt?.name);
       }}
       required={field.required}
-      disabled={!parentValue && !value}
+      disabled={(!parentValue && !value) || loading}
     >
       <SelectTrigger id={field.key} className="focus:ring-2 focus:ring-primary">
         <SelectValue
-          placeholder={parentValue ? `Select ${resolvedLabel}...` : `Select ${field.dependsOn?.field} first`}
+          placeholder={loading ? 'Loading...' : (parentValue ? `Select ${resolvedLabel}...` : `Select ${field.dependsOn?.field} first`)}
         />
       </SelectTrigger>
       <SelectContent>
@@ -170,7 +187,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
  *  - catalogs: Record<string, Array<{ id, name, ... }>> for FK reference data
  *  - displayLogic: { readOnly: { fieldName: bool }, visibility: { fieldName: bool } }
  */
-export function EntityForm({ entity, fields = [], data, onChange, catalogs, layout, section, displayLogic }) {
+export function EntityForm({ entity, fields = [], data, onChange, catalogs, layout, section, displayLogic, api, token, apiBaseUrl }) {
   const t = useLabel();
   let displayFields;
   if (section) {
@@ -269,6 +286,8 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
                   catalogs={catalogs}
                   formData={data}
                   resolvedLabel={label}
+                  selectorUrl={apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${f.column}` : null}
+                  token={token}
                 />
               </div>
             </FieldHighlight>
@@ -297,9 +316,14 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
                   field={f}
                   value={data?.[f.key] ?? ''}
                   displayValue={resolveIdentifier(data, f.key)}
-                  onChange={(val, label) => {
+                  onChange={(val, label, auxData) => {
                     onChange?.(f.key, val);
                     if (label) onChange?.(f.key + '$_identifier', label);
+                    if (auxData) {
+                      for (const [suffix, auxVal] of Object.entries(auxData)) {
+                        onChange?.(f.key + suffix, auxVal);
+                      }
+                    }
                   }}
                   catalogs={catalogs}
                   resolvedLabel={label}
@@ -331,9 +355,14 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
                   field={f}
                   value={data?.[f.key] ?? ''}
                   displayValue={resolveIdentifier(data, f.key)}
-                  onChange={(val, label) => {
+                  onChange={(val, label, auxData) => {
                     onChange?.(f.key, val);
                     if (label) onChange?.(f.key + '$_identifier', label);
+                    if (auxData) {
+                      for (const [suffix, auxVal] of Object.entries(auxData)) {
+                        onChange?.(f.key + suffix, auxVal);
+                      }
+                    }
                   }}
                   catalogs={catalogs}
                   resolvedLabel={label}

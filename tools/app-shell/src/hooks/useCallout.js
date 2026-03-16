@@ -32,8 +32,21 @@ export function useCallout(entity, { token, apiBaseUrl }) {
 
       setCalloutLoading(true);
       try {
-        const payload = { field, value, formState: formState ?? {} };
-        console.log('[useCallout] POST callout:', JSON.stringify(payload, null, 2));
+        // Extract auxiliary values from formState (keys like "businessPartner_LOC")
+        const auxiliaryValues = {};
+        const state = formState ?? {};
+        for (const [key, val] of Object.entries(state)) {
+          if (/^[a-zA-Z]+_[A-Z]{2,4}$/.test(key) && val != null && val !== '') {
+            auxiliaryValues[key] = String(val);
+          }
+        }
+        const payload = {
+          field,
+          value,
+          formState: state,
+          ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
+        };
+        console.log('[useCallout] payload:', JSON.stringify({ field: payload.field, value: payload.value, formStateBP: state.businessPartner, aux: payload.auxiliaryValues }, null, 2));
         const res = await fetch(`${apiBaseUrl}/${entity}/callout`, {
           method: 'POST',
           headers: {

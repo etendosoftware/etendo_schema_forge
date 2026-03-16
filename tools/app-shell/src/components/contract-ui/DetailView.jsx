@@ -109,14 +109,17 @@ export function DetailView({
   const handleChangeWithCallout = useCallback((field, value) => {
     hook.handleChange(field, value);
 
-    // Skip identifier companion fields (e.g., "field$_identifier")
-    if (field.includes('$_identifier')) return;
+    // Skip companion/auxiliary fields — they don't have callouts
+    if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
     // If this field was just set by a callout response, don't re-trigger
     if (calloutAppliedRef.current.has(field)) {
       calloutAppliedRef.current.delete(field);
       return;
     }
+
+    // Only trigger callout for meaningful value changes (not empty/typing artifacts)
+    if (!value || value === '') return;
 
     // Trigger callout — the backend returns empty if no callout is registered
     executeCallout(field, value, hook.editing);
@@ -268,6 +271,9 @@ export function DetailView({
                 layout="horizontal"
                 section="principal"
                 displayLogic={displayLogic}
+                api={api}
+                token={token}
+                apiBaseUrl={apiBaseUrl}
               />
             </div>
 
@@ -336,6 +342,9 @@ export function DetailView({
                       layout="horizontal"
                       section="other"
                       displayLogic={displayLogic}
+                      api={api}
+                      token={token}
+                      apiBaseUrl={apiBaseUrl}
                     />
                   </div>
                 )}
