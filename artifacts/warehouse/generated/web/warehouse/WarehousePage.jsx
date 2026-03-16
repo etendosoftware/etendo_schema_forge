@@ -1,6 +1,42 @@
-import WarehousePage from './WarehousePage';
+import { ListView, DetailView } from '@/components/contract-ui';
+import WarehouseTable from './WarehouseTable';
+import WarehouseForm from './WarehouseForm';
+import StorageBinTable from './StorageBinTable';
+import catalogs from './mockCatalogs';
 
-const windowMeta = { category: 'inventory', name: 'Warehouse and Storage Bins' };
+const breadcrumb = 'Inventory / Warehouse and Storage Bins';
+
+// @sf-generated-start summary:warehouse
+const summary = [
+  { key: 'allocated', column: 'Isallocated', type: 'boolean' },
+];
+
+const statusField = null;
+// @sf-generated-end summary:warehouse
+
+// @sf-generated-start processes:warehouse
+const processes = [
+
+];
+// @sf-generated-end processes:warehouse
+
+// @sf-generated-start addLineFields:storageBin
+const addLineFields = {
+  entry: [
+    { key: 'searchKey', column: 'Value', type: 'text', required: true, lookup: true },
+    { key: 'row', column: 'X', type: 'text', required: true },
+    { key: 'stack', column: 'Y', type: 'text', required: true },
+    { key: 'level', column: 'Z', type: 'text', required: true },
+    { key: 'priority', column: 'PriorityNo', type: 'number', required: true },
+    { key: 'barcode', column: 'Barcode', type: 'text' },
+    { key: 'default', column: 'IsDefault', type: 'checkbox', required: true },
+    { key: 'changeStatus', column: 'Change_Status', type: 'text', required: true },
+  ],
+  derived: [
+
+  ],
+};
+// @sf-generated-end addLineFields:storageBin
 
 const api = {
   "specName": "warehouse-and-storage-bins",
@@ -179,11 +215,43 @@ const api = {
   }
 };
 
-// @sf-generated-start component:App
-export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {
-  // @sf-custom-slot hooks:App
-  return <WarehousePage windowName={windowName} recordId={recordId} token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta} api={api} {...rest} />;
-}
-// @sf-generated-end component:App
+// @sf-generated-start component:WarehousePage
+export default function WarehousePage({ windowName, recordId, ...props }) {
+  // @sf-custom-slot hooks:WarehousePage
+  if (recordId) {
+    return (
+      <DetailView
+        entity="warehouse"
+        detailEntity="storageBin"
+        Form={WarehouseForm}
+        DetailTable={StorageBinTable}
+        summary={summary}
+        statusField={statusField}
+        processes={processes}
+        addLineFields={addLineFields}
+        catalogs={catalogs}
+        entityLabel="Warehouse"
+        detailLabel="Storage Bin"
+        windowName={windowName}
+        recordId={recordId}
+        breadcrumb={breadcrumb}
+      api={api}
+        {...props}
+      />
+    );
+  }
 
-// @sf-custom-slot section:App-custom
+  return (
+    <ListView
+      entity="warehouse"
+      Table={WarehouseTable}
+      entityLabel="Warehouses"
+      windowName={windowName}
+      breadcrumb={breadcrumb}
+      {...props}
+    />
+  );
+}
+// @sf-generated-end component:WarehousePage
+
+// @sf-custom-slot section:WarehousePage-custom

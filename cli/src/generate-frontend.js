@@ -40,7 +40,7 @@ export function getReadOnlyFields(contract, entityName) {
  * Map a contract field type to a column/field type for the declarative config.
  */
 function mapFieldType(field) {
-  if (field.name.toLowerCase().includes('status')) return 'status';
+  if (field.type !== 'foreignKey' && field.name.toLowerCase().includes('status')) return 'status';
   if (field.type === 'boolean') return 'boolean';
   if (field.type === 'amount') return 'amount';
   if (field.type === 'number' || field.type === 'integer') return 'number';

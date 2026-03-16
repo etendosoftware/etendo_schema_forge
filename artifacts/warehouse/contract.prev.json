@@ -1,0 +1,307 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-03-06T17:20:28.413Z",
+  "checksum": "9b324e361b02ec73",
+  "frontendContract": {
+    "window": {
+      "id": "202",
+      "name": "Warehouse",
+      "primaryEntity": "warehouse",
+      "category": "reference"
+    },
+    "entities": {
+      "warehouse": {
+        "fields": [
+          {
+            "name": "name",
+            "column": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          }
+        ],
+        "searchableFields": [
+          "name",
+          "searchKey"
+        ],
+        "computedFields": []
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "202",
+      "name": "Warehouse",
+      "primaryEntity": "warehouse",
+      "category": "reference"
+    },
+    "entities": {
+      "warehouse": {
+        "fields": [
+          {
+            "name": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "isActive",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "adClientId",
+            "column": "AD_Client_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "adOrgId",
+            "column": "AD_Org_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "created",
+            "column": "Created",
+            "type": "datetime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "column": "Updated",
+            "type": "datetime",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/warehouse",
+        "entity": "warehouse",
+        "supportedFilters": [
+          "name",
+          "searchKey"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/warehouse/:id",
+        "entity": "warehouse",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/warehouse",
+        "entity": "warehouse",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/warehouse/:id",
+        "entity": "warehouse",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/warehouse/:id",
+        "entity": "warehouse",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-1",
+        "category": "field-presence",
+        "entity": "warehouse",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in warehouse"
+      },
+      {
+        "id": "t-2",
+        "category": "field-presence",
+        "entity": "warehouse",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be present in warehouse"
+      },
+      {
+        "id": "t-3",
+        "category": "field-presence",
+        "entity": "warehouse",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in warehouse"
+      },
+      {
+        "id": "t-4",
+        "category": "field-presence",
+        "entity": "warehouse",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should be present in warehouse"
+      },
+      {
+        "id": "t-5",
+        "category": "field-type",
+        "entity": "warehouse",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in warehouse"
+      },
+      {
+        "id": "t-6",
+        "category": "field-type",
+        "entity": "warehouse",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should have type 'string' in warehouse"
+      },
+      {
+        "id": "t-7",
+        "category": "field-type",
+        "entity": "warehouse",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in warehouse"
+      },
+      {
+        "id": "t-8",
+        "category": "field-type",
+        "entity": "warehouse",
+        "field": "isActive",
+        "runner": "node",
+        "description": "Field 'isActive' should have type 'boolean' in warehouse"
+      },
+      {
+        "id": "t-9",
+        "category": "searchable-filters",
+        "entity": "warehouse",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for warehouse"
+      },
+      {
+        "id": "t-10",
+        "category": "searchable-filters",
+        "entity": "warehouse",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be a supported filter for warehouse"
+      },
+      {
+        "id": "t-11",
+        "category": "visibility",
+        "entity": "warehouse",
+        "runner": "node",
+        "description": "Entity 'warehouse' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-12",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "adClientId",
+        "runner": "node",
+        "description": "System field 'adClientId' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-13",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "System field 'adOrgId' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-14",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "created",
+        "runner": "node",
+        "description": "System field 'created' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-15",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for warehouse"
+      }
+    ],
+    "summary": {
+      "total": 15,
+      "byCategory": {
+        "field-presence": 4,
+        "field-type": 4,
+        "searchable-filters": 2,
+        "visibility": 1,
+        "system-field": 4
+      },
+      "byRunner": {
+        "node": 15,
+        "junit": 0
+      }
+    }
+  }
+}

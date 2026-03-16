@@ -179,7 +179,8 @@ export async function pushToNeo(windowName, options = {}) {
 
   const windowId = schema.window.id;
   const windowDisplayName = schema.window.name;
-  const specName = toSpecName(windowDisplayName);
+  // Use the artifact slug (windowName) as spec name so it matches the frontend route
+  const specName = windowName;
 
   // Extract all fields from backend contract
   const allFields = extractFieldsFromContract(contract.backendContract);

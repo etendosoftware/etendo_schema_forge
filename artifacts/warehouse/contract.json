@@ -1,20 +1,22 @@
 {
-  "version": "0.1.0",
-  "generatedAt": "2026-03-06T17:20:28.413Z",
-  "checksum": "9b324e361b02ec73",
+  "version": "0.2.0",
+  "generatedAt": "2026-03-16T14:39:29.420Z",
+  "checksum": "862e5cbd56fd70ae",
   "frontendContract": {
     "window": {
-      "id": "202",
-      "name": "Warehouse",
+      "id": "139",
+      "name": "Warehouse and Storage Bins",
       "primaryEntity": "warehouse",
-      "category": "reference"
+      "category": "inventory"
     },
     "entities": {
       "warehouse": {
+        "tableName": "M_Warehouse",
+        "tabName": "Warehouse",
         "fields": [
           {
-            "name": "name",
-            "column": "Name",
+            "name": "searchKey",
+            "column": "Value",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
@@ -23,8 +25,8 @@
             "form": true
           },
           {
-            "name": "searchKey",
-            "column": "Value",
+            "name": "name",
+            "column": "Name",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
@@ -39,23 +41,404 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true
           },
           {
-            "name": "isActive",
-            "column": "IsActive",
+            "name": "location",
+            "column": "C_Location_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Location",
+            "inputMode": "search"
+          },
+          {
+            "name": "returnLocator",
+            "column": "M_Returnlocator_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Locator",
+            "inputMode": "search"
+          },
+          {
+            "name": "warehouseRule",
+            "column": "M_Warehouse_Rule_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "WarehouseRule",
+            "inputMode": "selector"
+          },
+          {
+            "name": "allocated",
+            "column": "Isallocated",
             "type": "boolean",
             "tsType": "boolean",
             "visibility": "readOnly",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true
           }
         ],
         "searchableFields": [
-          "name",
-          "searchKey"
+          "searchKey",
+          "name"
+        ],
+        "computedFields": []
+      },
+      "storageBin": {
+        "tableName": "M_Locator",
+        "tabName": "Storage Bin",
+        "fields": [
+          {
+            "name": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "row",
+            "column": "X",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "stack",
+            "column": "Y",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "level",
+            "column": "Z",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "priority",
+            "column": "PriorityNo",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "barcode",
+            "column": "Barcode",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "inventoryStatus",
+            "column": "M_InventoryStatus_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "InventoryStatus",
+            "inputMode": "selector"
+          },
+          {
+            "name": "default",
+            "column": "IsDefault",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "changeStatus",
+            "column": "Change_Status",
+            "type": "image",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true
+          }
+        ],
+        "searchableFields": [
+          "searchKey",
+          "barcode"
+        ],
+        "computedFields": []
+      },
+      "productTransaction": {
+        "tableName": "M_Transaction",
+        "tabName": "Product Transactions",
+        "fields": [
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "search"
+          },
+          {
+            "name": "attributeSetInstance",
+            "column": "M_AttributeSetInstance_ID",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "movementQuantity",
+            "column": "MovementQty",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "movementDate",
+            "column": "MovementDate",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "movementType",
+            "column": "MovementType",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "goodsShipmentLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "GoodsShipmentLine",
+            "inputMode": "search"
+          },
+          {
+            "name": "inventoryLine",
+            "column": "M_InventoryLine_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "InventoryLine",
+            "inputMode": "search"
+          },
+          {
+            "name": "movementLine",
+            "column": "M_MovementLine_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "MovementLine",
+            "inputMode": "search"
+          },
+          {
+            "name": "productionLine",
+            "column": "M_ProductionLine_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ProductionLine",
+            "inputMode": "search"
+          },
+          {
+            "name": "projectIssue",
+            "column": "C_ProjectIssue_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ProjectIssue",
+            "inputMode": "search"
+          }
+        ],
+        "searchableFields": [
+          "product",
+          "movementDate",
+          "movementType"
+        ],
+        "computedFields": []
+      },
+      "binContent": {
+        "tableName": "M_Storage_Detail",
+        "tabName": "Bin Contents",
+        "fields": [
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "search"
+          },
+          {
+            "name": "attributeSetInstance",
+            "column": "M_AttributeSetInstance_ID",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "uom",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "UOM",
+            "inputMode": "selector"
+          },
+          {
+            "name": "productUom",
+            "column": "M_Product_Uom_Id",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ProductUOM",
+            "inputMode": "selector"
+          },
+          {
+            "name": "quantityOnHand",
+            "column": "QtyOnHand",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "quantityOrderOnHand",
+            "column": "QtyOrderOnHand",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "preQuantityOnHand",
+            "column": "PreQtyOnHand",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "preQuantityOrderOnHand",
+            "column": "PreQtyOrderOnHand",
+            "type": "number",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "lastInventoryDate",
+            "column": "DateLastInventory",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "referenceInventory",
+            "column": "M_RefInventory_ID",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ReferenceInventory",
+            "inputMode": "selector"
+          }
+        ],
+        "searchableFields": [
+          "product"
         ],
         "computedFields": []
       }
@@ -63,24 +446,33 @@
   },
   "backendContract": {
     "window": {
-      "id": "202",
-      "name": "Warehouse",
+      "id": "139",
+      "name": "Warehouse and Storage Bins",
       "primaryEntity": "warehouse",
-      "category": "reference"
+      "category": "inventory"
     },
     "entities": {
       "warehouse": {
+        "tableName": "M_Warehouse",
+        "tabName": "Warehouse",
         "fields": [
           {
-            "name": "name",
-            "column": "Name",
-            "type": "string",
-            "visibility": "editable",
+            "name": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": true
           },
           {
             "name": "searchKey",
             "column": "Value",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "name",
+            "column": "Name",
             "type": "string",
             "visibility": "editable",
             "required": true
@@ -93,37 +485,433 @@
             "required": false
           },
           {
-            "name": "isActive",
-            "column": "IsActive",
+            "name": "location",
+            "column": "C_Location_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "returnLocator",
+            "column": "M_Returnlocator_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "warehouseRule",
+            "column": "M_Warehouse_Rule_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "allocated",
+            "column": "Isallocated",
             "type": "boolean",
             "visibility": "readOnly",
             "required": true
           },
           {
-            "name": "adClientId",
+            "name": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "separator",
+            "column": "Separator",
+            "type": "string",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "shipper",
+            "column": "IsShipper",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "shipperCode",
+            "column": "Shippercode",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "fromDocumentNo",
+            "column": "FromDocumentNo",
+            "type": "number",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "toDocumentNo",
+            "column": "ToDocumentNo",
+            "type": "number",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "column": "M_Warehouse_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
             "column": "AD_Client_ID",
-            "type": "id",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "storageBin": {
+        "tableName": "M_Locator",
+        "tabName": "Storage Bin",
+        "fields": [
+          {
+            "name": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "row",
+            "column": "X",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "stack",
+            "column": "Y",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "level",
+            "column": "Z",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "priority",
+            "column": "PriorityNo",
+            "type": "number",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "barcode",
+            "column": "Barcode",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "inventoryStatus",
+            "column": "M_InventoryStatus_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "default",
+            "column": "IsDefault",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "changeStatus",
+            "column": "Change_Status",
+            "type": "image",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "active",
+            "column": "IsActive",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "adOrgId",
+            "name": "virtual",
+            "column": "Isvirtual",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "parentLocator",
+            "column": "Parent_Locator_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "organization",
             "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "warehouse",
+            "column": "M_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "column": "M_Locator_ID",
             "type": "id",
             "visibility": "system",
             "required": true
+          }
+        ]
+      },
+      "productTransaction": {
+        "tableName": "M_Transaction",
+        "tabName": "Product Transactions",
+        "fields": [
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
           },
           {
-            "name": "created",
-            "column": "Created",
-            "type": "datetime",
+            "name": "attributeSetInstance",
+            "column": "M_AttributeSetInstance_ID",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "movementQuantity",
+            "column": "MovementQty",
+            "type": "number",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "movementDate",
+            "column": "MovementDate",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "movementType",
+            "column": "MovementType",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "goodsShipmentLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "inventoryLine",
+            "column": "M_InventoryLine_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "movementLine",
+            "column": "M_MovementLine_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "productionLine",
+            "column": "M_ProductionLine_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "projectIssue",
+            "column": "C_ProjectIssue_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "transactionCost",
+            "column": "TransactionCost",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "active",
+            "column": "IsActive",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "updated",
-            "column": "Updated",
-            "type": "datetime",
+            "name": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "locator",
+            "column": "M_Locator_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "column": "M_Transaction_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "binContent": {
+        "tableName": "M_Storage_Detail",
+        "tabName": "Bin Contents",
+        "fields": [
+          {
+            "name": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "attributeSetInstance",
+            "column": "M_AttributeSetInstance_ID",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "uom",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "productUom",
+            "column": "M_Product_Uom_Id",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "quantityOnHand",
+            "column": "QtyOnHand",
+            "type": "number",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "quantityOrderOnHand",
+            "column": "QtyOrderOnHand",
+            "type": "number",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "preQuantityOnHand",
+            "column": "PreQtyOnHand",
+            "type": "number",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "preQuantityOrderOnHand",
+            "column": "PreQtyOrderOnHand",
+            "type": "number",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "lastInventoryDate",
+            "column": "DateLastInventory",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "referenceInventory",
+            "column": "M_RefInventory_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "locator",
+            "column": "M_Locator_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "column": "M_Storage_Detail_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -136,8 +924,8 @@
         "path": "/warehouse",
         "entity": "warehouse",
         "supportedFilters": [
-          "name",
-          "searchKey"
+          "searchKey",
+          "name"
         ]
       },
       {
@@ -163,9 +951,284 @@
         "path": "/warehouse/:id",
         "entity": "warehouse",
         "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/storageBin",
+        "entity": "storageBin",
+        "supportedFilters": [
+          "searchKey",
+          "barcode"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/storageBin/:id",
+        "entity": "storageBin",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/storageBin",
+        "entity": "storageBin",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/storageBin/:id",
+        "entity": "storageBin",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/storageBin/:id",
+        "entity": "storageBin",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/productTransaction",
+        "entity": "productTransaction",
+        "supportedFilters": [
+          "product",
+          "movementDate",
+          "movementType"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/productTransaction/:id",
+        "entity": "productTransaction",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/productTransaction",
+        "entity": "productTransaction",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/productTransaction/:id",
+        "entity": "productTransaction",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/productTransaction/:id",
+        "entity": "productTransaction",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/binContent",
+        "entity": "binContent",
+        "supportedFilters": [
+          "product"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/binContent/:id",
+        "entity": "binContent",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/binContent",
+        "entity": "binContent",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/binContent/:id",
+        "entity": "binContent",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/binContent/:id",
+        "entity": "binContent",
+        "supportedFilters": []
       }
     ],
     "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "warehouse-and-storage-bins",
+    "baseUrl": "/sws/neo/warehouse-and-storage-bins",
+    "crud": {
+      "warehouse": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/warehouse-and-storage-bins/warehouse",
+        "detailUrl": "/sws/neo/warehouse-and-storage-bins/warehouse/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      },
+      "storageBin": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/warehouse-and-storage-bins/storageBin",
+        "detailUrl": "/sws/neo/warehouse-and-storage-bins/storageBin/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "barcode"
+        ]
+      },
+      "productTransaction": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/warehouse-and-storage-bins/productTransaction",
+        "detailUrl": "/sws/neo/warehouse-and-storage-bins/productTransaction/{id}",
+        "supportedFilters": [
+          "product",
+          "movementDate",
+          "movementType"
+        ]
+      },
+      "binContent": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/warehouse-and-storage-bins/binContent",
+        "detailUrl": "/sws/neo/warehouse-and-storage-bins/binContent/{id}",
+        "supportedFilters": [
+          "product"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "warehouse",
+        "field": "location",
+        "column": "C_Location_ID",
+        "reference": "Location",
+        "url": "/sws/neo/warehouse-and-storage-bins/warehouse/selectors/location"
+      },
+      {
+        "entity": "warehouse",
+        "field": "returnLocator",
+        "column": "M_Returnlocator_ID",
+        "reference": "Locator",
+        "url": "/sws/neo/warehouse-and-storage-bins/warehouse/selectors/returnLocator"
+      },
+      {
+        "entity": "warehouse",
+        "field": "warehouseRule",
+        "column": "M_Warehouse_Rule_ID",
+        "reference": "WarehouseRule",
+        "url": "/sws/neo/warehouse-and-storage-bins/warehouse/selectors/warehouseRule"
+      },
+      {
+        "entity": "storageBin",
+        "field": "inventoryStatus",
+        "column": "M_InventoryStatus_ID",
+        "reference": "InventoryStatus",
+        "url": "/sws/neo/warehouse-and-storage-bins/storageBin/selectors/inventoryStatus"
+      },
+      {
+        "entity": "productTransaction",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/product"
+      },
+      {
+        "entity": "productTransaction",
+        "field": "goodsShipmentLine",
+        "column": "M_InOutLine_ID",
+        "reference": "GoodsShipmentLine",
+        "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/goodsShipmentLine"
+      },
+      {
+        "entity": "productTransaction",
+        "field": "inventoryLine",
+        "column": "M_InventoryLine_ID",
+        "reference": "InventoryLine",
+        "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/inventoryLine"
+      },
+      {
+        "entity": "productTransaction",
+        "field": "movementLine",
+        "column": "M_MovementLine_ID",
+        "reference": "MovementLine",
+        "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/movementLine"
+      },
+      {
+        "entity": "productTransaction",
+        "field": "productionLine",
+        "column": "M_ProductionLine_ID",
+        "reference": "ProductionLine",
+        "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/productionLine"
+      },
+      {
+        "entity": "productTransaction",
+        "field": "projectIssue",
+        "column": "C_ProjectIssue_ID",
+        "reference": "ProjectIssue",
+        "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/projectIssue"
+      },
+      {
+        "entity": "binContent",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "url": "/sws/neo/warehouse-and-storage-bins/binContent/selectors/product"
+      },
+      {
+        "entity": "binContent",
+        "field": "uom",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "url": "/sws/neo/warehouse-and-storage-bins/binContent/selectors/uom"
+      },
+      {
+        "entity": "binContent",
+        "field": "productUom",
+        "column": "M_Product_Uom_Id",
+        "reference": "ProductUOM",
+        "url": "/sws/neo/warehouse-and-storage-bins/binContent/selectors/productUom"
+      },
+      {
+        "entity": "binContent",
+        "field": "referenceInventory",
+        "column": "M_RefInventory_ID",
+        "reference": "ReferenceInventory",
+        "url": "/sws/neo/warehouse-and-storage-bins/binContent/selectors/referenceInventory"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=warehouse-and-storage-binsDate"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    }
   },
   "testManifest": {
     "tests": [
@@ -173,17 +1236,17 @@
         "id": "t-1",
         "category": "field-presence",
         "entity": "warehouse",
-        "field": "name",
+        "field": "searchKey",
         "runner": "node",
-        "description": "Field 'name' should be present in warehouse"
+        "description": "Field 'searchKey' should be present in warehouse"
       },
       {
         "id": "t-2",
         "category": "field-presence",
         "entity": "warehouse",
-        "field": "searchKey",
+        "field": "name",
         "runner": "node",
-        "description": "Field 'searchKey' should be present in warehouse"
+        "description": "Field 'name' should be present in warehouse"
       },
       {
         "id": "t-3",
@@ -197,20 +1260,36 @@
         "id": "t-4",
         "category": "field-presence",
         "entity": "warehouse",
-        "field": "isActive",
+        "field": "location",
         "runner": "node",
-        "description": "Field 'isActive' should be present in warehouse"
+        "description": "Field 'location' should be present in warehouse"
       },
       {
         "id": "t-5",
-        "category": "field-type",
+        "category": "field-presence",
         "entity": "warehouse",
-        "field": "name",
+        "field": "returnLocator",
         "runner": "node",
-        "description": "Field 'name' should have type 'string' in warehouse"
+        "description": "Field 'returnLocator' should be present in warehouse"
       },
       {
         "id": "t-6",
+        "category": "field-presence",
+        "entity": "warehouse",
+        "field": "warehouseRule",
+        "runner": "node",
+        "description": "Field 'warehouseRule' should be present in warehouse"
+      },
+      {
+        "id": "t-7",
+        "category": "field-presence",
+        "entity": "warehouse",
+        "field": "allocated",
+        "runner": "node",
+        "description": "Field 'allocated' should be present in warehouse"
+      },
+      {
+        "id": "t-8",
         "category": "field-type",
         "entity": "warehouse",
         "field": "searchKey",
@@ -218,7 +1297,15 @@
         "description": "Field 'searchKey' should have type 'string' in warehouse"
       },
       {
-        "id": "t-7",
+        "id": "t-9",
+        "category": "field-type",
+        "entity": "warehouse",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in warehouse"
+      },
+      {
+        "id": "t-10",
         "category": "field-type",
         "entity": "warehouse",
         "field": "description",
@@ -226,23 +1313,39 @@
         "description": "Field 'description' should have type 'string' in warehouse"
       },
       {
-        "id": "t-8",
+        "id": "t-11",
         "category": "field-type",
         "entity": "warehouse",
-        "field": "isActive",
+        "field": "location",
         "runner": "node",
-        "description": "Field 'isActive' should have type 'boolean' in warehouse"
+        "description": "Field 'location' should have type 'string' in warehouse"
       },
       {
-        "id": "t-9",
-        "category": "searchable-filters",
+        "id": "t-12",
+        "category": "field-type",
         "entity": "warehouse",
-        "field": "name",
+        "field": "returnLocator",
         "runner": "node",
-        "description": "Field 'name' should be a supported filter for warehouse"
+        "description": "Field 'returnLocator' should have type 'string' in warehouse"
       },
       {
-        "id": "t-10",
+        "id": "t-13",
+        "category": "field-type",
+        "entity": "warehouse",
+        "field": "warehouseRule",
+        "runner": "node",
+        "description": "Field 'warehouseRule' should have type 'string' in warehouse"
+      },
+      {
+        "id": "t-14",
+        "category": "field-type",
+        "entity": "warehouse",
+        "field": "allocated",
+        "runner": "node",
+        "description": "Field 'allocated' should have type 'boolean' in warehouse"
+      },
+      {
+        "id": "t-15",
         "category": "searchable-filters",
         "entity": "warehouse",
         "field": "searchKey",
@@ -250,56 +1353,994 @@
         "description": "Field 'searchKey' should be a supported filter for warehouse"
       },
       {
-        "id": "t-11",
+        "id": "t-16",
+        "category": "searchable-filters",
+        "entity": "warehouse",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for warehouse"
+      },
+      {
+        "id": "t-17",
         "category": "visibility",
         "entity": "warehouse",
         "runner": "node",
         "description": "Entity 'warehouse' should only expose visible fields in frontend"
       },
       {
-        "id": "t-12",
-        "category": "system-field",
-        "entity": "warehouse",
-        "field": "adClientId",
+        "id": "t-18",
+        "category": "field-presence",
+        "entity": "storageBin",
+        "field": "searchKey",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for warehouse"
+        "description": "Field 'searchKey' should be present in storageBin"
       },
       {
-        "id": "t-13",
-        "category": "system-field",
-        "entity": "warehouse",
-        "field": "adOrgId",
+        "id": "t-19",
+        "category": "field-presence",
+        "entity": "storageBin",
+        "field": "row",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for warehouse"
+        "description": "Field 'row' should be present in storageBin"
       },
       {
-        "id": "t-14",
-        "category": "system-field",
-        "entity": "warehouse",
-        "field": "created",
+        "id": "t-20",
+        "category": "field-presence",
+        "entity": "storageBin",
+        "field": "stack",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for warehouse"
+        "description": "Field 'stack' should be present in storageBin"
       },
       {
-        "id": "t-15",
+        "id": "t-21",
+        "category": "field-presence",
+        "entity": "storageBin",
+        "field": "level",
+        "runner": "node",
+        "description": "Field 'level' should be present in storageBin"
+      },
+      {
+        "id": "t-22",
+        "category": "field-presence",
+        "entity": "storageBin",
+        "field": "priority",
+        "runner": "node",
+        "description": "Field 'priority' should be present in storageBin"
+      },
+      {
+        "id": "t-23",
+        "category": "field-presence",
+        "entity": "storageBin",
+        "field": "barcode",
+        "runner": "node",
+        "description": "Field 'barcode' should be present in storageBin"
+      },
+      {
+        "id": "t-24",
+        "category": "field-presence",
+        "entity": "storageBin",
+        "field": "inventoryStatus",
+        "runner": "node",
+        "description": "Field 'inventoryStatus' should be present in storageBin"
+      },
+      {
+        "id": "t-25",
+        "category": "field-presence",
+        "entity": "storageBin",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should be present in storageBin"
+      },
+      {
+        "id": "t-26",
+        "category": "field-presence",
+        "entity": "storageBin",
+        "field": "changeStatus",
+        "runner": "node",
+        "description": "Field 'changeStatus' should be present in storageBin"
+      },
+      {
+        "id": "t-27",
+        "category": "field-type",
+        "entity": "storageBin",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should have type 'string' in storageBin"
+      },
+      {
+        "id": "t-28",
+        "category": "field-type",
+        "entity": "storageBin",
+        "field": "row",
+        "runner": "node",
+        "description": "Field 'row' should have type 'string' in storageBin"
+      },
+      {
+        "id": "t-29",
+        "category": "field-type",
+        "entity": "storageBin",
+        "field": "stack",
+        "runner": "node",
+        "description": "Field 'stack' should have type 'string' in storageBin"
+      },
+      {
+        "id": "t-30",
+        "category": "field-type",
+        "entity": "storageBin",
+        "field": "level",
+        "runner": "node",
+        "description": "Field 'level' should have type 'string' in storageBin"
+      },
+      {
+        "id": "t-31",
+        "category": "field-type",
+        "entity": "storageBin",
+        "field": "priority",
+        "runner": "node",
+        "description": "Field 'priority' should have type 'number' in storageBin"
+      },
+      {
+        "id": "t-32",
+        "category": "field-type",
+        "entity": "storageBin",
+        "field": "barcode",
+        "runner": "node",
+        "description": "Field 'barcode' should have type 'string' in storageBin"
+      },
+      {
+        "id": "t-33",
+        "category": "field-type",
+        "entity": "storageBin",
+        "field": "inventoryStatus",
+        "runner": "node",
+        "description": "Field 'inventoryStatus' should have type 'string' in storageBin"
+      },
+      {
+        "id": "t-34",
+        "category": "field-type",
+        "entity": "storageBin",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should have type 'boolean' in storageBin"
+      },
+      {
+        "id": "t-35",
+        "category": "field-type",
+        "entity": "storageBin",
+        "field": "changeStatus",
+        "runner": "node",
+        "description": "Field 'changeStatus' should have type 'string' in storageBin"
+      },
+      {
+        "id": "t-36",
+        "category": "searchable-filters",
+        "entity": "storageBin",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be a supported filter for storageBin"
+      },
+      {
+        "id": "t-37",
+        "category": "searchable-filters",
+        "entity": "storageBin",
+        "field": "barcode",
+        "runner": "node",
+        "description": "Field 'barcode' should be a supported filter for storageBin"
+      },
+      {
+        "id": "t-38",
+        "category": "visibility",
+        "entity": "storageBin",
+        "runner": "node",
+        "description": "Entity 'storageBin' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-39",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in productTransaction"
+      },
+      {
+        "id": "t-40",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "attributeSetInstance",
+        "runner": "node",
+        "description": "Field 'attributeSetInstance' should be present in productTransaction"
+      },
+      {
+        "id": "t-41",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "movementQuantity",
+        "runner": "node",
+        "description": "Field 'movementQuantity' should be present in productTransaction"
+      },
+      {
+        "id": "t-42",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "movementDate",
+        "runner": "node",
+        "description": "Field 'movementDate' should be present in productTransaction"
+      },
+      {
+        "id": "t-43",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "movementType",
+        "runner": "node",
+        "description": "Field 'movementType' should be present in productTransaction"
+      },
+      {
+        "id": "t-44",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "goodsShipmentLine",
+        "runner": "node",
+        "description": "Field 'goodsShipmentLine' should be present in productTransaction"
+      },
+      {
+        "id": "t-45",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "inventoryLine",
+        "runner": "node",
+        "description": "Field 'inventoryLine' should be present in productTransaction"
+      },
+      {
+        "id": "t-46",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "movementLine",
+        "runner": "node",
+        "description": "Field 'movementLine' should be present in productTransaction"
+      },
+      {
+        "id": "t-47",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "productionLine",
+        "runner": "node",
+        "description": "Field 'productionLine' should be present in productTransaction"
+      },
+      {
+        "id": "t-48",
+        "category": "field-presence",
+        "entity": "productTransaction",
+        "field": "projectIssue",
+        "runner": "node",
+        "description": "Field 'projectIssue' should be present in productTransaction"
+      },
+      {
+        "id": "t-49",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in productTransaction"
+      },
+      {
+        "id": "t-50",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "attributeSetInstance",
+        "runner": "node",
+        "description": "Field 'attributeSetInstance' should have type 'string' in productTransaction"
+      },
+      {
+        "id": "t-51",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "movementQuantity",
+        "runner": "node",
+        "description": "Field 'movementQuantity' should have type 'number' in productTransaction"
+      },
+      {
+        "id": "t-52",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "movementDate",
+        "runner": "node",
+        "description": "Field 'movementDate' should have type 'string' in productTransaction"
+      },
+      {
+        "id": "t-53",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "movementType",
+        "runner": "node",
+        "description": "Field 'movementType' should have type 'string' in productTransaction"
+      },
+      {
+        "id": "t-54",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "goodsShipmentLine",
+        "runner": "node",
+        "description": "Field 'goodsShipmentLine' should have type 'string' in productTransaction"
+      },
+      {
+        "id": "t-55",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "inventoryLine",
+        "runner": "node",
+        "description": "Field 'inventoryLine' should have type 'string' in productTransaction"
+      },
+      {
+        "id": "t-56",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "movementLine",
+        "runner": "node",
+        "description": "Field 'movementLine' should have type 'string' in productTransaction"
+      },
+      {
+        "id": "t-57",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "productionLine",
+        "runner": "node",
+        "description": "Field 'productionLine' should have type 'string' in productTransaction"
+      },
+      {
+        "id": "t-58",
+        "category": "field-type",
+        "entity": "productTransaction",
+        "field": "projectIssue",
+        "runner": "node",
+        "description": "Field 'projectIssue' should have type 'string' in productTransaction"
+      },
+      {
+        "id": "t-59",
+        "category": "searchable-filters",
+        "entity": "productTransaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be a supported filter for productTransaction"
+      },
+      {
+        "id": "t-60",
+        "category": "searchable-filters",
+        "entity": "productTransaction",
+        "field": "movementDate",
+        "runner": "node",
+        "description": "Field 'movementDate' should be a supported filter for productTransaction"
+      },
+      {
+        "id": "t-61",
+        "category": "searchable-filters",
+        "entity": "productTransaction",
+        "field": "movementType",
+        "runner": "node",
+        "description": "Field 'movementType' should be a supported filter for productTransaction"
+      },
+      {
+        "id": "t-62",
+        "category": "visibility",
+        "entity": "productTransaction",
+        "runner": "node",
+        "description": "Entity 'productTransaction' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-63",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in binContent"
+      },
+      {
+        "id": "t-64",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "attributeSetInstance",
+        "runner": "node",
+        "description": "Field 'attributeSetInstance' should be present in binContent"
+      },
+      {
+        "id": "t-65",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "uom",
+        "runner": "node",
+        "description": "Field 'uom' should be present in binContent"
+      },
+      {
+        "id": "t-66",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "productUom",
+        "runner": "node",
+        "description": "Field 'productUom' should be present in binContent"
+      },
+      {
+        "id": "t-67",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "quantityOnHand",
+        "runner": "node",
+        "description": "Field 'quantityOnHand' should be present in binContent"
+      },
+      {
+        "id": "t-68",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "quantityOrderOnHand",
+        "runner": "node",
+        "description": "Field 'quantityOrderOnHand' should be present in binContent"
+      },
+      {
+        "id": "t-69",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "preQuantityOnHand",
+        "runner": "node",
+        "description": "Field 'preQuantityOnHand' should be present in binContent"
+      },
+      {
+        "id": "t-70",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "preQuantityOrderOnHand",
+        "runner": "node",
+        "description": "Field 'preQuantityOrderOnHand' should be present in binContent"
+      },
+      {
+        "id": "t-71",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "lastInventoryDate",
+        "runner": "node",
+        "description": "Field 'lastInventoryDate' should be present in binContent"
+      },
+      {
+        "id": "t-72",
+        "category": "field-presence",
+        "entity": "binContent",
+        "field": "referenceInventory",
+        "runner": "node",
+        "description": "Field 'referenceInventory' should be present in binContent"
+      },
+      {
+        "id": "t-73",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in binContent"
+      },
+      {
+        "id": "t-74",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "attributeSetInstance",
+        "runner": "node",
+        "description": "Field 'attributeSetInstance' should have type 'string' in binContent"
+      },
+      {
+        "id": "t-75",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "uom",
+        "runner": "node",
+        "description": "Field 'uom' should have type 'string' in binContent"
+      },
+      {
+        "id": "t-76",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "productUom",
+        "runner": "node",
+        "description": "Field 'productUom' should have type 'string' in binContent"
+      },
+      {
+        "id": "t-77",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "quantityOnHand",
+        "runner": "node",
+        "description": "Field 'quantityOnHand' should have type 'number' in binContent"
+      },
+      {
+        "id": "t-78",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "quantityOrderOnHand",
+        "runner": "node",
+        "description": "Field 'quantityOrderOnHand' should have type 'number' in binContent"
+      },
+      {
+        "id": "t-79",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "preQuantityOnHand",
+        "runner": "node",
+        "description": "Field 'preQuantityOnHand' should have type 'number' in binContent"
+      },
+      {
+        "id": "t-80",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "preQuantityOrderOnHand",
+        "runner": "node",
+        "description": "Field 'preQuantityOrderOnHand' should have type 'number' in binContent"
+      },
+      {
+        "id": "t-81",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "lastInventoryDate",
+        "runner": "node",
+        "description": "Field 'lastInventoryDate' should have type 'string' in binContent"
+      },
+      {
+        "id": "t-82",
+        "category": "field-type",
+        "entity": "binContent",
+        "field": "referenceInventory",
+        "runner": "node",
+        "description": "Field 'referenceInventory' should have type 'string' in binContent"
+      },
+      {
+        "id": "t-83",
+        "category": "searchable-filters",
+        "entity": "binContent",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be a supported filter for binContent"
+      },
+      {
+        "id": "t-84",
+        "category": "visibility",
+        "entity": "binContent",
+        "runner": "node",
+        "description": "Entity 'binContent' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-85",
         "category": "system-field",
         "entity": "warehouse",
-        "field": "updated",
+        "field": "organization",
         "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for warehouse"
+        "description": "System field 'organization' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-86",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-87",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "separator",
+        "runner": "node",
+        "description": "System field 'separator' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-88",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "shipper",
+        "runner": "node",
+        "description": "System field 'shipper' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-89",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "shipperCode",
+        "runner": "node",
+        "description": "System field 'shipperCode' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-90",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "fromDocumentNo",
+        "runner": "node",
+        "description": "System field 'fromDocumentNo' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-91",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "toDocumentNo",
+        "runner": "node",
+        "description": "System field 'toDocumentNo' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-92",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-93",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for warehouse"
+      },
+      {
+        "id": "t-94",
+        "category": "system-field",
+        "entity": "storageBin",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for storageBin"
+      },
+      {
+        "id": "t-95",
+        "category": "system-field",
+        "entity": "storageBin",
+        "field": "virtual",
+        "runner": "node",
+        "description": "System field 'virtual' should exist in backend but not frontend for storageBin"
+      },
+      {
+        "id": "t-96",
+        "category": "system-field",
+        "entity": "storageBin",
+        "field": "parentLocator",
+        "runner": "node",
+        "description": "System field 'parentLocator' should exist in backend but not frontend for storageBin"
+      },
+      {
+        "id": "t-97",
+        "category": "system-field",
+        "entity": "storageBin",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for storageBin"
+      },
+      {
+        "id": "t-98",
+        "category": "system-field",
+        "entity": "storageBin",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "System field 'warehouse' should exist in backend but not frontend for storageBin"
+      },
+      {
+        "id": "t-99",
+        "category": "system-field",
+        "entity": "storageBin",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for storageBin"
+      },
+      {
+        "id": "t-100",
+        "category": "system-field",
+        "entity": "storageBin",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for storageBin"
+      },
+      {
+        "id": "t-101",
+        "category": "system-field",
+        "entity": "productTransaction",
+        "field": "transactionCost",
+        "runner": "node",
+        "description": "System field 'transactionCost' should exist in backend but not frontend for productTransaction"
+      },
+      {
+        "id": "t-102",
+        "category": "system-field",
+        "entity": "productTransaction",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for productTransaction"
+      },
+      {
+        "id": "t-103",
+        "category": "system-field",
+        "entity": "productTransaction",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for productTransaction"
+      },
+      {
+        "id": "t-104",
+        "category": "system-field",
+        "entity": "productTransaction",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for productTransaction"
+      },
+      {
+        "id": "t-105",
+        "category": "system-field",
+        "entity": "productTransaction",
+        "field": "locator",
+        "runner": "node",
+        "description": "System field 'locator' should exist in backend but not frontend for productTransaction"
+      },
+      {
+        "id": "t-106",
+        "category": "system-field",
+        "entity": "productTransaction",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for productTransaction"
+      },
+      {
+        "id": "t-107",
+        "category": "system-field",
+        "entity": "binContent",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for binContent"
+      },
+      {
+        "id": "t-108",
+        "category": "system-field",
+        "entity": "binContent",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for binContent"
+      },
+      {
+        "id": "t-109",
+        "category": "system-field",
+        "entity": "binContent",
+        "field": "locator",
+        "runner": "node",
+        "description": "System field 'locator' should exist in backend but not frontend for binContent"
+      },
+      {
+        "id": "t-110",
+        "category": "system-field",
+        "entity": "binContent",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for binContent"
+      },
+      {
+        "id": "t-111",
+        "category": "system-field",
+        "entity": "binContent",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for binContent"
+      },
+      {
+        "id": "t-112",
+        "category": "rule-declared",
+        "rule": "SE_Locator_Activate",
+        "runner": "node",
+        "description": "Rule 'SE_Locator_Activate' (callout) should be declared"
+      },
+      {
+        "id": "t-113",
+        "category": "rule-declared",
+        "rule": "AD_Client_Security_Validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client_Security_Validation' (validation) should be declared"
+      },
+      {
+        "id": "t-114",
+        "category": "rule-declared",
+        "rule": "ShipperCode_DisplayLogic",
+        "runner": "node",
+        "description": "Rule 'ShipperCode_DisplayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-115",
+        "category": "rule-declared",
+        "rule": "ToDocumentNo_DisplayLogic",
+        "runner": "node",
+        "description": "Rule 'ToDocumentNo_DisplayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-116",
+        "category": "rule-declared",
+        "rule": "FromDocumentNo_DisplayLogic",
+        "runner": "node",
+        "description": "Rule 'FromDocumentNo_DisplayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-117",
+        "category": "rule-declared",
+        "rule": "Allocated_DisplayLogic",
+        "runner": "node",
+        "description": "Rule 'Allocated_DisplayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-118",
+        "category": "rule-declared",
+        "rule": "ChangeStatus_DisplayLogic",
+        "runner": "node",
+        "description": "Rule 'ChangeStatus_DisplayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-119",
+        "category": "rule-declared",
+        "rule": "AttributeSetInstance_DisplayLogic",
+        "runner": "node",
+        "description": "Rule 'AttributeSetInstance_DisplayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-120",
+        "category": "rule-declared",
+        "rule": "ChangeInventoryStatus",
+        "runner": "node",
+        "description": "Rule 'ChangeInventoryStatus' (process) should be declared"
+      },
+      {
+        "id": "t-121",
+        "category": "rule-declared",
+        "rule": "ManualCostAdjustment",
+        "runner": "node",
+        "description": "Rule 'ManualCostAdjustment' (process) should be declared"
+      },
+      {
+        "id": "t-122",
+        "category": "crud-flags",
+        "entity": "warehouse",
+        "runner": "node",
+        "description": "CRUD flags for 'warehouse' should all be booleans"
+      },
+      {
+        "id": "t-123",
+        "category": "crud-flags",
+        "entity": "storageBin",
+        "runner": "node",
+        "description": "CRUD flags for 'storageBin' should all be booleans"
+      },
+      {
+        "id": "t-124",
+        "category": "crud-flags",
+        "entity": "productTransaction",
+        "runner": "node",
+        "description": "CRUD flags for 'productTransaction' should all be booleans"
+      },
+      {
+        "id": "t-125",
+        "category": "crud-flags",
+        "entity": "binContent",
+        "runner": "node",
+        "description": "CRUD flags for 'binContent' should all be booleans"
+      },
+      {
+        "id": "t-126",
+        "category": "selector-endpoint",
+        "entity": "warehouse",
+        "field": "location",
+        "runner": "node",
+        "description": "Selector endpoint for 'location' in warehouse should exist"
+      },
+      {
+        "id": "t-127",
+        "category": "selector-endpoint",
+        "entity": "warehouse",
+        "field": "returnLocator",
+        "runner": "node",
+        "description": "Selector endpoint for 'returnLocator' in warehouse should exist"
+      },
+      {
+        "id": "t-128",
+        "category": "selector-endpoint",
+        "entity": "warehouse",
+        "field": "warehouseRule",
+        "runner": "node",
+        "description": "Selector endpoint for 'warehouseRule' in warehouse should exist"
+      },
+      {
+        "id": "t-129",
+        "category": "selector-endpoint",
+        "entity": "storageBin",
+        "field": "inventoryStatus",
+        "runner": "node",
+        "description": "Selector endpoint for 'inventoryStatus' in storageBin should exist"
+      },
+      {
+        "id": "t-130",
+        "category": "selector-endpoint",
+        "entity": "productTransaction",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in productTransaction should exist"
+      },
+      {
+        "id": "t-131",
+        "category": "selector-endpoint",
+        "entity": "productTransaction",
+        "field": "goodsShipmentLine",
+        "runner": "node",
+        "description": "Selector endpoint for 'goodsShipmentLine' in productTransaction should exist"
+      },
+      {
+        "id": "t-132",
+        "category": "selector-endpoint",
+        "entity": "productTransaction",
+        "field": "inventoryLine",
+        "runner": "node",
+        "description": "Selector endpoint for 'inventoryLine' in productTransaction should exist"
+      },
+      {
+        "id": "t-133",
+        "category": "selector-endpoint",
+        "entity": "productTransaction",
+        "field": "movementLine",
+        "runner": "node",
+        "description": "Selector endpoint for 'movementLine' in productTransaction should exist"
+      },
+      {
+        "id": "t-134",
+        "category": "selector-endpoint",
+        "entity": "productTransaction",
+        "field": "productionLine",
+        "runner": "node",
+        "description": "Selector endpoint for 'productionLine' in productTransaction should exist"
+      },
+      {
+        "id": "t-135",
+        "category": "selector-endpoint",
+        "entity": "productTransaction",
+        "field": "projectIssue",
+        "runner": "node",
+        "description": "Selector endpoint for 'projectIssue' in productTransaction should exist"
+      },
+      {
+        "id": "t-136",
+        "category": "selector-endpoint",
+        "entity": "binContent",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in binContent should exist"
+      },
+      {
+        "id": "t-137",
+        "category": "selector-endpoint",
+        "entity": "binContent",
+        "field": "uom",
+        "runner": "node",
+        "description": "Selector endpoint for 'uom' in binContent should exist"
+      },
+      {
+        "id": "t-138",
+        "category": "selector-endpoint",
+        "entity": "binContent",
+        "field": "productUom",
+        "runner": "node",
+        "description": "Selector endpoint for 'productUom' in binContent should exist"
+      },
+      {
+        "id": "t-139",
+        "category": "selector-endpoint",
+        "entity": "binContent",
+        "field": "referenceInventory",
+        "runner": "node",
+        "description": "Selector endpoint for 'referenceInventory' in binContent should exist"
       }
     ],
     "summary": {
-      "total": 15,
+      "total": 139,
       "byCategory": {
-        "field-presence": 4,
-        "field-type": 4,
-        "searchable-filters": 2,
-        "visibility": 1,
-        "system-field": 4
+        "field-presence": 36,
+        "field-type": 36,
+        "searchable-filters": 8,
+        "visibility": 4,
+        "system-field": 27,
+        "rule-declared": 10,
+        "crud-flags": 4,
+        "selector-endpoint": 14
       },
       "byRunner": {
-        "node": 15,
+        "node": 139,
         "junit": 0
       }
     }

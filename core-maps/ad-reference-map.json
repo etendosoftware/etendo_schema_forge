@@ -10,11 +10,13 @@
   "18": "foreignKey",
   "19": "foreignKey",
   "20": "boolean",
-  "30": "foreignKey",
-  "95E2A8B50A254B2AAE6774B8C2F28120": "foreignKey",
   "22": "decimal",
+  "23": "binary",
+  "28": "button",
   "29": "quantity",
-  "35": "price",
-  "28": "image",
-  "23": "binary"
+  "30": "foreignKey",
+  "32": "image",
+  "35": "productAttribute",
+  "800008": "price",
+  "95E2A8B50A254B2AAE6774B8C2F28120": "foreignKey"
 }

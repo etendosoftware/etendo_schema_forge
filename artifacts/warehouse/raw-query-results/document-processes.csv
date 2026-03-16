@@ -1,0 +1,3 @@
+mechanism,process_id,obuiapp_process_id,name,classname,column_name
+obuiapp_process,,3A4E13B0AB764F188CB062DDE2A9B685,Change Inventory Status,org.openbravo.common.actionhandler.ChangeInventoryStatusActionHandler,Change_Status
+obuiapp_process,,D395B727675C45C98320F8A40E0768E7,Manual Cost Adjustment,org.openbravo.costing.ManualCostAdjustmentProcessHandler,Manualcostadjustment

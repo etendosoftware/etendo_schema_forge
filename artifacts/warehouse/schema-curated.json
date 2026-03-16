@@ -1,19 +1,33 @@
 {
   "version": "0.1.0",
   "window": {
-    "id": "202",
-    "name": "Warehouse",
+    "id": "139",
+    "name": "Warehouse and Storage Bins",
     "primaryEntity": "warehouse",
-    "category": "reference"
+    "category": "inventory"
   },
   "entities": [
     {
       "name": "warehouse",
       "tableName": "M_Warehouse",
+      "tabName": "Warehouse",
       "fields": [
         {
-          "name": "name",
-          "column": "Name",
+          "name": "organization",
+          "column": "AD_Org_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromConfig", "source": "context.organization" },
+          "reference": "Organization",
+          "inputMode": "selector"
+        },
+        {
+          "name": "searchKey",
+          "column": "Value",
           "type": "string",
           "visibility": "editable",
           "required": true,
@@ -22,8 +36,8 @@
           "searchable": true
         },
         {
-          "name": "searchKey",
-          "column": "Value",
+          "name": "name",
+          "column": "Name",
           "type": "string",
           "visibility": "editable",
           "required": true,
@@ -37,14 +51,350 @@
           "type": "string",
           "visibility": "editable",
           "required": false,
+          "grid": true,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "location",
+          "column": "C_Location_ID",
+          "type": "foreignKey",
+          "visibility": "editable",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": false,
+          "reference": "Location",
+          "inputMode": "search"
+        },
+        {
+          "name": "returnLocator",
+          "column": "M_Returnlocator_ID",
+          "type": "foreignKey",
+          "visibility": "editable",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false,
+          "reference": "Locator",
+          "inputMode": "search"
+        },
+        {
+          "name": "warehouseRule",
+          "column": "M_Warehouse_Rule_ID",
+          "type": "foreignKey",
+          "visibility": "editable",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false,
+          "reference": "WarehouseRule",
+          "inputMode": "selector"
+        },
+        {
+          "name": "allocated",
+          "column": "Isallocated",
+          "type": "boolean",
+          "visibility": "readOnly",
+          "required": true,
           "grid": false,
           "form": true,
           "searchable": false
         },
         {
-          "name": "isActive",
+          "name": "active",
           "column": "IsActive",
           "type": "boolean",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "computed", "source": "true" }
+        },
+        {
+          "name": "separator",
+          "column": "Separator",
+          "type": "string",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "computed", "source": "'*'" }
+        },
+        {
+          "name": "shipper",
+          "column": "IsShipper",
+          "type": "boolean",
+          "visibility": "system",
+          "required": false,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "computed", "source": "false" }
+        },
+        {
+          "name": "shipperCode",
+          "column": "Shippercode",
+          "type": "string",
+          "visibility": "system",
+          "required": false,
+          "grid": false,
+          "form": false,
+          "searchable": false
+        },
+        {
+          "name": "fromDocumentNo",
+          "column": "FromDocumentNo",
+          "type": "number",
+          "visibility": "system",
+          "required": false,
+          "grid": false,
+          "form": false,
+          "searchable": false
+        },
+        {
+          "name": "toDocumentNo",
+          "column": "ToDocumentNo",
+          "type": "number",
+          "visibility": "system",
+          "required": false,
+          "grid": false,
+          "form": false,
+          "searchable": false
+        },
+        {
+          "name": "id",
+          "column": "M_Warehouse_ID",
+          "type": "id",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "computed", "source": "uuid()" }
+        },
+        {
+          "name": "client",
+          "column": "AD_Client_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromConfig", "source": "context.client" }
+        }
+      ]
+    },
+    {
+      "name": "storageBin",
+      "tableName": "M_Locator",
+      "tabName": "Storage Bin",
+      "fields": [
+        {
+          "name": "searchKey",
+          "column": "Value",
+          "type": "string",
+          "visibility": "editable",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": true
+        },
+        {
+          "name": "row",
+          "column": "X",
+          "type": "string",
+          "visibility": "editable",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "stack",
+          "column": "Y",
+          "type": "string",
+          "visibility": "editable",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "level",
+          "column": "Z",
+          "type": "string",
+          "visibility": "editable",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "priority",
+          "column": "PriorityNo",
+          "type": "number",
+          "visibility": "editable",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "barcode",
+          "column": "Barcode",
+          "type": "string",
+          "visibility": "editable",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": true
+        },
+        {
+          "name": "inventoryStatus",
+          "column": "M_InventoryStatus_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": false,
+          "reference": "InventoryStatus",
+          "inputMode": "selector"
+        },
+        {
+          "name": "default",
+          "column": "IsDefault",
+          "type": "boolean",
+          "visibility": "editable",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "changeStatus",
+          "column": "Change_Status",
+          "type": "image",
+          "visibility": "editable",
+          "required": true,
+          "grid": false,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "active",
+          "column": "IsActive",
+          "type": "boolean",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "computed", "source": "true" }
+        },
+        {
+          "name": "virtual",
+          "column": "Isvirtual",
+          "type": "boolean",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "computed", "source": "false" }
+        },
+        {
+          "name": "parentLocator",
+          "column": "Parent_Locator_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": false,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromParent", "source": "locator" }
+        },
+        {
+          "name": "organization",
+          "column": "AD_Org_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromConfig", "source": "context.organization" }
+        },
+        {
+          "name": "warehouse",
+          "column": "M_Warehouse_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromParent", "source": "warehouse" }
+        },
+        {
+          "name": "client",
+          "column": "AD_Client_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromConfig", "source": "context.client" }
+        },
+        {
+          "name": "id",
+          "column": "M_Locator_ID",
+          "type": "id",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "computed", "source": "uuid()" }
+        }
+      ]
+    },
+    {
+      "name": "productTransaction",
+      "tableName": "M_Transaction",
+      "tabName": "Product Transactions",
+      "fields": [
+        {
+          "name": "product",
+          "column": "M_Product_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": true,
+          "reference": "Product",
+          "inputMode": "search"
+        },
+        {
+          "name": "attributeSetInstance",
+          "column": "M_AttributeSetInstance_ID",
+          "type": "string",
+          "visibility": "readOnly",
+          "required": true,
+          "grid": false,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "movementQuantity",
+          "column": "MovementQty",
+          "type": "number",
           "visibility": "readOnly",
           "required": true,
           "grid": true,
@@ -52,60 +402,319 @@
           "searchable": false
         },
         {
-          "name": "adClientId",
+          "name": "movementDate",
+          "column": "MovementDate",
+          "type": "date",
+          "visibility": "readOnly",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": true
+        },
+        {
+          "name": "movementType",
+          "column": "MovementType",
+          "type": "string",
+          "visibility": "readOnly",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": true
+        },
+        {
+          "name": "goodsShipmentLine",
+          "column": "M_InOutLine_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": true,
+          "form": true,
+          "searchable": false,
+          "reference": "GoodsShipmentLine",
+          "inputMode": "search"
+        },
+        {
+          "name": "inventoryLine",
+          "column": "M_InventoryLine_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false,
+          "reference": "InventoryLine",
+          "inputMode": "search"
+        },
+        {
+          "name": "movementLine",
+          "column": "M_MovementLine_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false,
+          "reference": "MovementLine",
+          "inputMode": "search"
+        },
+        {
+          "name": "productionLine",
+          "column": "M_ProductionLine_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false,
+          "reference": "ProductionLine",
+          "inputMode": "search"
+        },
+        {
+          "name": "projectIssue",
+          "column": "C_ProjectIssue_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false,
+          "reference": "ProjectIssue",
+          "inputMode": "search"
+        },
+        {
+          "name": "transactionCost",
+          "column": "TransactionCost",
+          "type": "amount",
+          "visibility": "system",
+          "required": false,
+          "grid": false,
+          "form": false,
+          "searchable": false
+        },
+        {
+          "name": "active",
+          "column": "IsActive",
+          "type": "boolean",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "computed", "source": "true" }
+        },
+        {
+          "name": "client",
           "column": "AD_Client_ID",
-          "type": "id",
+          "type": "foreignKey",
           "visibility": "system",
           "required": true,
           "grid": false,
           "form": false,
           "searchable": false,
-          "derivation": {
-            "type": "fromConfig",
-            "source": "context.client"
-          }
+          "derivation": { "type": "fromConfig", "source": "context.client" }
         },
         {
-          "name": "adOrgId",
+          "name": "organization",
           "column": "AD_Org_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromConfig", "source": "context.organization" }
+        },
+        {
+          "name": "locator",
+          "column": "M_Locator_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromParent", "source": "storageBin" }
+        },
+        {
+          "name": "id",
+          "column": "M_Transaction_ID",
           "type": "id",
           "visibility": "system",
           "required": true,
           "grid": false,
           "form": false,
           "searchable": false,
-          "derivation": {
-            "type": "fromConfig",
-            "source": "context.organization"
-          }
+          "derivation": { "type": "computed", "source": "uuid()" }
+        }
+      ]
+    },
+    {
+      "name": "binContent",
+      "tableName": "M_Storage_Detail",
+      "tabName": "Bin Contents",
+      "fields": [
+        {
+          "name": "product",
+          "column": "M_Product_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": true,
+          "reference": "Product",
+          "inputMode": "search"
         },
         {
-          "name": "created",
-          "column": "Created",
-          "type": "datetime",
+          "name": "attributeSetInstance",
+          "column": "M_AttributeSetInstance_ID",
+          "type": "string",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "uom",
+          "column": "C_UOM_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": false,
+          "reference": "UOM",
+          "inputMode": "selector"
+        },
+        {
+          "name": "productUom",
+          "column": "M_Product_Uom_Id",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false,
+          "reference": "ProductUOM",
+          "inputMode": "selector"
+        },
+        {
+          "name": "quantityOnHand",
+          "column": "QtyOnHand",
+          "type": "number",
+          "visibility": "readOnly",
+          "required": true,
+          "grid": true,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "quantityOrderOnHand",
+          "column": "QtyOrderOnHand",
+          "type": "number",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": true,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "preQuantityOnHand",
+          "column": "PreQtyOnHand",
+          "type": "number",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "preQuantityOrderOnHand",
+          "column": "PreQtyOrderOnHand",
+          "type": "number",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "lastInventoryDate",
+          "column": "DateLastInventory",
+          "type": "date",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": true,
+          "form": true,
+          "searchable": false
+        },
+        {
+          "name": "referenceInventory",
+          "column": "M_RefInventory_ID",
+          "type": "foreignKey",
+          "visibility": "readOnly",
+          "required": false,
+          "grid": false,
+          "form": true,
+          "searchable": false,
+          "reference": "ReferenceInventory",
+          "inputMode": "selector"
+        },
+        {
+          "name": "active",
+          "column": "IsActive",
+          "type": "boolean",
           "visibility": "system",
           "required": true,
           "grid": false,
           "form": false,
           "searchable": false,
-          "derivation": {
-            "type": "computed",
-            "expression": "now()"
-          }
+          "derivation": { "type": "computed", "source": "true" }
         },
         {
-          "name": "updated",
-          "column": "Updated",
-          "type": "datetime",
+          "name": "organization",
+          "column": "AD_Org_ID",
+          "type": "foreignKey",
           "visibility": "system",
           "required": true,
           "grid": false,
           "form": false,
           "searchable": false,
-          "derivation": {
-            "type": "computed",
-            "expression": "now()"
-          }
+          "derivation": { "type": "fromConfig", "source": "context.organization" }
+        },
+        {
+          "name": "locator",
+          "column": "M_Locator_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromParent", "source": "storageBin" }
+        },
+        {
+          "name": "client",
+          "column": "AD_Client_ID",
+          "type": "foreignKey",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "fromConfig", "source": "context.client" }
+        },
+        {
+          "name": "id",
+          "column": "M_Storage_Detail_ID",
+          "type": "id",
+          "visibility": "system",
+          "required": true,
+          "grid": false,
+          "form": false,
+          "searchable": false,
+          "derivation": { "type": "computed", "source": "uuid()" }
         }
       ]
     }

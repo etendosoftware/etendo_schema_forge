@@ -1,0 +1,1247 @@
+{
+  "version": "0.1.0",
+  "window": {
+    "id": "139",
+    "name": "Warehouse and Storage Bins",
+    "primaryEntity": "mWarehouse",
+    "category": "inventory"
+  },
+  "entities": [
+    {
+      "name": "mWarehouse",
+      "tableName": "M_Warehouse",
+      "tabId": "177",
+      "entityClassname": "Warehouse",
+      "entityJavaPackage": "org.openbravo.model.common.enterprise",
+      "tabName": "Warehouse",
+      "level": "header",
+      "sequence": "10",
+      "fields": [
+        {
+          "name": "organization",
+          "columnName": "AD_Org_ID",
+          "label": "Organization",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.organization"
+          },
+          "maxLength": "22",
+          "defaultValue": "@AD_Org_ID@",
+          "isFilterable": true,
+          "help": "An organization is a unit of your client or legal entity - examples are store, department. You can share data between organizations.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Org",
+            "keyColumn": "AD_Org_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "searchKey",
+          "columnName": "Value",
+          "label": "Search Key",
+          "type": "string",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "40",
+          "isFilterable": true,
+          "help": "A search key allows for a fast method of finding a particular record. If you leave the search key empty, the system automatically creates a numeric number originating from a document sequence defined in the  \"Document Sequence\" window. The sequence naming convention follows a rule \"DocumentNo_TableName\", where TableName is the actual name of the database table (e.g. C_Order).\n\nUsually, company's internal identifiers for various records (products, customers, etc) are stored here."
+        },
+        {
+          "name": "name",
+          "columnName": "Name",
+          "label": "Name",
+          "type": "string",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "60",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "A more descriptive identifier (that does need to be unique) of a record/document that is used as a default search option along with the search key (that is unique and mostly shorter). It is up to 60 characters in length."
+        },
+        {
+          "name": "description",
+          "columnName": "Description",
+          "label": "Description",
+          "type": "string",
+          "mandatory": false,
+          "visibility": "editable",
+          "maxLength": "255",
+          "isFilterable": true,
+          "help": "A description is limited to 255 characters."
+        },
+        {
+          "name": "locationAddress",
+          "columnName": "C_Location_ID",
+          "label": "Location / Address",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "120",
+          "isFilterable": true,
+          "help": "The Location / Address field defines the location of an entity.",
+          "reference": {
+            "type": "Search",
+            "targetTable": "C_Location",
+            "keyColumn": "C_Location_ID",
+            "displayColumn": null,
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "mReturnlocatorID",
+          "columnName": "M_Returnlocator_ID",
+          "label": "Return Bin",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "editable",
+          "maxLength": "32",
+          "isFilterable": true,
+          "help": "Bin designated for returns.",
+          "reference": {
+            "type": "Search",
+            "targetTable": "M_Locator",
+            "keyColumn": "M_Locator_ID",
+            "displayColumn": null,
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "warehouseRule",
+          "columnName": "M_Warehouse_Rule_ID",
+          "label": "Warehouse Rule",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "editable",
+          "maxLength": "32",
+          "isFilterable": true,
+          "help": "Definition of a Warehouse Rule to be applied when getting stock from the warehouse.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "M_Warehouse_Rule",
+            "keyColumn": "M_Warehouse_Rule_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "storageBinSeparator",
+          "columnName": "Separator",
+          "label": "Element separator",
+          "type": "string",
+          "mandatory": true,
+          "visibility": "system",
+          "derivation": {
+            "type": "computed",
+            "source": "*"
+          },
+          "maxLength": "1",
+          "defaultValue": "*",
+          "isFilterable": true,
+          "help": "The Element Separator defines the delimiter printed between elements of the structure"
+        },
+        {
+          "name": "allocated",
+          "columnName": "Isallocated",
+          "label": "Allocated",
+          "type": "boolean",
+          "mandatory": true,
+          "visibility": "editable",
+          "derivation": {
+            "type": "computed",
+            "source": "N"
+          },
+          "maxLength": "1",
+          "displayLogic": "@StockReservations@!''",
+          "defaultValue": "N",
+          "isFilterable": true,
+          "help": "When the system automatically reserves stock of this warehouse it will be allocated or not based on this flag."
+        },
+        {
+          "name": "shipmentVehicle",
+          "columnName": "IsShipper",
+          "label": "Shipment Vehicle",
+          "type": "boolean",
+          "mandatory": false,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "computed",
+            "source": "N"
+          },
+          "maxLength": "1",
+          "defaultValue": "N",
+          "isFilterable": true,
+          "help": "This check indicates if the warehouse is a van that can receive and serve orders."
+        },
+        {
+          "name": "active",
+          "columnName": "IsActive",
+          "label": "Active",
+          "type": "boolean",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "computed",
+            "source": "true"
+          },
+          "maxLength": "1",
+          "callout": "org.openbravo.erpCommon.ad_callouts.SE_Locator_Activate",
+          "defaultValue": "Y",
+          "isFilterable": true,
+          "help": "There are two methods of making records unavailable in the system: One is to delete the record, the other is to de-activate the record. A de-activated record is not available for selection, but available for reporting. There are two reasons for de-activating and not deleting records: \n(1) The system requires the record for auditing purposes.\n(2) The record is referenced by other records. E.g., you cannot delete a Business Partner, if there are existing invoices for it. By de-activating the Business Partner you prevent it from being used in future transactions."
+        },
+        {
+          "name": "shipperCode",
+          "columnName": "Shippercode",
+          "label": "Shipper Code",
+          "type": "string",
+          "mandatory": false,
+          "visibility": "system",
+          "maxLength": "20",
+          "displayLogic": "@isShipper@='Y'",
+          "isFilterable": true,
+          "help": "If warehouse is shipper type this code identifies the terminal in the van."
+        },
+        {
+          "name": "fromDocumentNo",
+          "columnName": "FromDocumentNo",
+          "label": "From Document No.",
+          "type": "integer",
+          "mandatory": false,
+          "visibility": "system",
+          "maxLength": "10",
+          "displayLogic": "@isShipper@='Y'",
+          "isFilterable": true,
+          "help": "If warehouse is shipper type this field is the lowest range for the document numbers used by the terminal."
+        },
+        {
+          "name": "toDocumentNo",
+          "columnName": "ToDocumentNo",
+          "label": "To Document No.",
+          "type": "integer",
+          "mandatory": false,
+          "visibility": "system",
+          "maxLength": "10",
+          "displayLogic": "@isShipper@='Y'",
+          "isFilterable": true,
+          "help": "If warehouse is shipper type this field is the highest range for the document numbers used by the terminal."
+        },
+        {
+          "name": "warehouse",
+          "columnName": "M_Warehouse_ID",
+          "label": "Warehouse",
+          "type": "id",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "sequence"
+          },
+          "maxLength": "32",
+          "isFilterable": true,
+          "help": "The Warehouse identifies a unique Warehouse where products are stored or Services are provided."
+        },
+        {
+          "name": "client",
+          "columnName": "AD_Client_ID",
+          "label": "Client",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.client"
+          },
+          "maxLength": "22",
+          "defaultValue": "@AD_CLIENT_ID@",
+          "isFilterable": true,
+          "help": "A Client is a company or a legal entity. You cannot share data between Clients.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Client",
+            "keyColumn": "AD_Client_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        }
+      ],
+      "entityFullClass": "org.openbravo.model.common.enterprise.Warehouse"
+    },
+    {
+      "name": "mLocator",
+      "tableName": "M_Locator",
+      "tabId": "178",
+      "entityClassname": "Locator",
+      "entityJavaPackage": "org.openbravo.model.common.enterprise",
+      "tabName": "Storage Bin",
+      "level": "line",
+      "sequence": "40",
+      "fields": [
+        {
+          "name": "searchKey",
+          "columnName": "Value",
+          "label": "Search Key",
+          "type": "string",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "40",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "A search key allows for a fast method of finding a particular record. If you leave the search key empty, the system automatically creates a numeric number originating from a document sequence defined in the  \"Document Sequence\" window. The sequence naming convention follows a rule \"DocumentNo_TableName\", where TableName is the actual name of the database table (e.g. C_Order).\n\nUsually, company's internal identifiers for various records (products, customers, etc) are stored here."
+        },
+        {
+          "name": "rowX",
+          "columnName": "X",
+          "label": "Row (X)",
+          "type": "string",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "60",
+          "isFilterable": true,
+          "help": "The X dimension indicates the Aisle a product is located in."
+        },
+        {
+          "name": "stackY",
+          "columnName": "Y",
+          "label": "Stack (Y)",
+          "type": "string",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "60",
+          "isFilterable": true,
+          "help": "The Y dimension indicates the Bin a product is located in"
+        },
+        {
+          "name": "levelZ",
+          "columnName": "Z",
+          "label": "Level (Z)",
+          "type": "string",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "60",
+          "isFilterable": true,
+          "help": "The Z dimension indicates the Level a product is located in."
+        },
+        {
+          "name": "relativePriority",
+          "columnName": "PriorityNo",
+          "label": "Relative Priority",
+          "type": "integer",
+          "mandatory": true,
+          "visibility": "editable",
+          "derivation": {
+            "type": "computed",
+            "source": "50"
+          },
+          "maxLength": "10",
+          "defaultValue": "50",
+          "isFilterable": true,
+          "help": "The Relative Priority indicates the location to pick from first if an product is stored in more than one location.  (0 = highest priority)"
+        },
+        {
+          "name": "barcode",
+          "columnName": "Barcode",
+          "label": "Barcode",
+          "type": "string",
+          "mandatory": false,
+          "visibility": "editable",
+          "maxLength": "30",
+          "isFilterable": true,
+          "help": "Barcode to identify this item."
+        },
+        {
+          "name": "inventoryStatus",
+          "columnName": "M_InventoryStatus_ID",
+          "label": "Inventory Status",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "readOnly",
+          "derivation": {
+            "type": "computed",
+            "source": "7B3DC15A20234C418D26EECDC5D59003"
+          },
+          "maxLength": "32",
+          "defaultValue": "7B3DC15A20234C418D26EECDC5D59003",
+          "isFilterable": true,
+          "help": "The inventory status refers to the condition of a specific inventory (such as AVAILABLE, RETURN, DEFECT, TRANSIT) that is stored in a specific organization, warehouse and bin and for a product with a specific lot/serial and quantity. The inventory status can allow or disallow certain business processes.",
+          "reference": {
+            "type": "Selector",
+            "targetTable": "M_InventoryStatus",
+            "selectorName": "Inventory Status",
+            "filterExpression": null,
+            "hql": null,
+            "displayColumn": null
+          }
+        },
+        {
+          "name": "default",
+          "columnName": "IsDefault",
+          "label": "Default",
+          "type": "boolean",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "1",
+          "isFilterable": true,
+          "help": "The Default Checkbox indicates if this record will be used as a default value."
+        },
+        {
+          "name": "active",
+          "columnName": "IsActive",
+          "label": "Active",
+          "type": "boolean",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "computed",
+            "source": "true"
+          },
+          "maxLength": "1",
+          "callout": "org.openbravo.erpCommon.ad_callouts.SE_Locator_Activate",
+          "defaultValue": "Y",
+          "isFilterable": true,
+          "help": "There are two methods of making records unavailable in the system: One is to delete the record, the other is to de-activate the record. A de-activated record is not available for selection, but available for reporting. There are two reasons for de-activating and not deleting records: \n(1) The system requires the record for auditing purposes.\n(2) The record is referenced by other records. E.g., you cannot delete a Business Partner, if there are existing invoices for it. By de-activating the Business Partner you prevent it from being used in future transactions."
+        },
+        {
+          "name": "changeStatus",
+          "columnName": "Change_Status",
+          "label": "Change Status",
+          "type": "image",
+          "mandatory": true,
+          "visibility": "editable",
+          "derivation": {
+            "type": "computed",
+            "source": "N"
+          },
+          "maxLength": "1",
+          "displayLogic": "@Isvirtual@='N'",
+          "defaultValue": "N",
+          "isFilterable": true
+        },
+        {
+          "name": "isvirtual",
+          "columnName": "Isvirtual",
+          "label": "Isvirtual",
+          "type": "boolean",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "computed",
+            "source": "N"
+          },
+          "maxLength": "1",
+          "defaultValue": "N",
+          "isFilterable": true
+        },
+        {
+          "name": "parentLocatorID",
+          "columnName": "Parent_Locator_ID",
+          "label": "Parent Locator",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "maxLength": "32",
+          "isFilterable": true,
+          "reference": {
+            "type": "Search",
+            "targetTable": "M_Locator",
+            "keyColumn": "M_Locator_ID",
+            "displayColumn": null,
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "organization",
+          "columnName": "AD_Org_ID",
+          "label": "Organization",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.organization"
+          },
+          "maxLength": "22",
+          "defaultValue": "@AD_Org_ID@",
+          "isFilterable": true,
+          "help": "An organization is a unit of your client or legal entity - examples are store, department. You can share data between organizations.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Org",
+            "keyColumn": "AD_Org_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "warehouse",
+          "columnName": "M_Warehouse_ID",
+          "label": "Warehouse",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "maxLength": "22",
+          "isFilterable": true,
+          "help": "The Warehouse identifies a unique Warehouse where products are stored or Services are provided.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "M_Warehouse",
+            "keyColumn": "M_Warehouse_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "client",
+          "columnName": "AD_Client_ID",
+          "label": "Client",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.client"
+          },
+          "maxLength": "22",
+          "defaultValue": "@AD_CLIENT_ID@",
+          "isFilterable": true,
+          "help": "A Client is a company or a legal entity. You cannot share data between Clients.",
+          "validationRule": {
+            "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+            "contextParams": [
+              "User_Client"
+            ],
+            "cascadeParams": []
+          },
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Client",
+            "keyColumn": "AD_Client_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "storageBin",
+          "columnName": "M_Locator_ID",
+          "label": "Storage Bin",
+          "type": "id",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "sequence"
+          },
+          "maxLength": "32",
+          "isFilterable": true,
+          "help": "The Locator ID indicates where in a Warehouse a product is located."
+        }
+      ],
+      "entityFullClass": "org.openbravo.model.common.enterprise.Locator"
+    },
+    {
+      "name": "mTransaction",
+      "tableName": "M_Transaction",
+      "tabId": "262",
+      "entityClassname": "MaterialTransaction",
+      "entityJavaPackage": "org.openbravo.model.materialmgmt.transaction",
+      "tabName": "Product Transactions",
+      "level": "subline",
+      "sequence": "50",
+      "fields": [
+        {
+          "name": "active",
+          "columnName": "IsActive",
+          "label": "Active",
+          "type": "boolean",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "computed",
+            "source": "true"
+          },
+          "maxLength": "1",
+          "isFilterable": true,
+          "help": "There are two methods of making records unavailable in the system: One is to delete the record, the other is to de-activate the record. A de-activated record is not available for selection, but available for reporting. There are two reasons for de-activating and not deleting records: \n(1) The system requires the record for auditing purposes.\n(2) The record is referenced by other records. E.g., you cannot delete a Business Partner, if there are existing invoices for it. By de-activating the Business Partner you prevent it from being used in future transactions."
+        },
+        {
+          "name": "product",
+          "columnName": "M_Product_ID",
+          "label": "Product",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "readOnly",
+          "maxLength": "60",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "Identifies an item which is either purchased or sold in this organization.",
+          "reference": {
+            "type": "Search",
+            "targetTable": "M_Product",
+            "keyColumn": "M_Product_ID",
+            "displayColumn": null,
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "attributeSetValue",
+          "columnName": "M_AttributeSetInstance_ID",
+          "label": "Attribute Set Value",
+          "type": "price",
+          "mandatory": true,
+          "visibility": "readOnly",
+          "maxLength": "22",
+          "displayLogic": "(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0')",
+          "isFilterable": true,
+          "help": "The values of the actual Product Attributes"
+        },
+        {
+          "name": "movementQuantity",
+          "columnName": "MovementQty",
+          "label": "Movement Quantity",
+          "type": "quantity",
+          "mandatory": true,
+          "visibility": "readOnly",
+          "maxLength": "10",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "The Movement Quantity indicates the quantity of a product that has been moved."
+        },
+        {
+          "name": "movementDate",
+          "columnName": "MovementDate",
+          "label": "Movement Date",
+          "type": "date",
+          "mandatory": true,
+          "visibility": "readOnly",
+          "maxLength": "10",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "The Movement Date indicates the date that a product moved in or out of inventory.  This is the result of a shipment, receipt or inventory movement."
+        },
+        {
+          "name": "movementType",
+          "columnName": "MovementType",
+          "label": "Movement Type",
+          "type": "enum",
+          "mandatory": true,
+          "visibility": "readOnly",
+          "maxLength": "60",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "The Movement Type indicates the type of movement (in, out, to production, etc)"
+        },
+        {
+          "name": "goodsShipmentLine",
+          "columnName": "M_InOutLine_ID",
+          "label": "Goods Shipment Line",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "60",
+          "isFilterable": true,
+          "help": "The Goods Shipment Line indicates a unique line in a Shipment document",
+          "reference": {
+            "type": "Search",
+            "targetTable": "M_InOutLine",
+            "keyColumn": "M_InOutLine_ID",
+            "displayColumn": null,
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "physicalInventoryLine",
+          "columnName": "M_InventoryLine_ID",
+          "label": "Physical Inventory Line",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "60",
+          "isFilterable": true,
+          "help": "The Physical Inventory Line indicates the inventory document line (if applicable) for this transaction",
+          "reference": {
+            "type": "Search",
+            "targetTable": "M_InventoryLine",
+            "keyColumn": "M_InventoryLine_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "movementLine",
+          "columnName": "M_MovementLine_ID",
+          "label": "Movement Line",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "60",
+          "isFilterable": true,
+          "help": "The Movement Line indicates the inventory movement document line (if applicable) for this transaction",
+          "reference": {
+            "type": "Search",
+            "targetTable": "M_MovementLine",
+            "keyColumn": "M_MovementLine_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "productionLine",
+          "columnName": "M_ProductionLine_ID",
+          "label": "Production Line",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "60",
+          "isFilterable": true,
+          "help": "The Production Line indicates the production document line (if applicable) for this transaction",
+          "reference": {
+            "type": "Search",
+            "targetTable": "M_ProductionLine",
+            "keyColumn": "M_ProductionLine_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "projectIssue",
+          "columnName": "C_ProjectIssue_ID",
+          "label": "Project Issue",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "60",
+          "isFilterable": true,
+          "help": "Issues to the project initiated by the \"Issue to Project\" process. You can issue Receipts, Time and Expenses, or Stock.",
+          "reference": {
+            "type": "Search",
+            "targetTable": "C_ProjectIssue",
+            "keyColumn": "C_ProjectIssue_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "transactionCost",
+          "columnName": "TransactionCost",
+          "label": "Transaction Cost",
+          "type": "amount",
+          "mandatory": false,
+          "visibility": "system",
+          "maxLength": "12",
+          "isFilterable": true,
+          "help": "Total amount of the transaction based on product cost."
+        },
+        {
+          "name": "client",
+          "columnName": "AD_Client_ID",
+          "label": "Client",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.client"
+          },
+          "maxLength": "22",
+          "defaultValue": "@AD_CLIENT_ID@",
+          "isFilterable": true,
+          "help": "A Client is a company or a legal entity. You cannot share data between Clients.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Client",
+            "keyColumn": "AD_Client_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "organization",
+          "columnName": "AD_Org_ID",
+          "label": "Organization",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.organization"
+          },
+          "maxLength": "22",
+          "defaultValue": "@AD_Org_ID@",
+          "isFilterable": true,
+          "help": "An organization is a unit of your client or legal entity - examples are store, department. You can share data between organizations.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Org",
+            "keyColumn": "AD_Org_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "storageBin",
+          "columnName": "M_Locator_ID",
+          "label": "Storage Bin",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "maxLength": "60",
+          "isFilterable": true,
+          "help": "The Locator ID indicates where in a Warehouse a product is located.",
+          "reference": {
+            "type": "Search",
+            "targetTable": "M_Locator",
+            "keyColumn": "M_Locator_ID",
+            "displayColumn": null,
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "inventoryTransaction",
+          "columnName": "M_Transaction_ID",
+          "label": "Inventory Transaction",
+          "type": "id",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "sequence"
+          },
+          "maxLength": "32",
+          "isFilterable": true,
+          "help": "The ID identifies a unique record"
+        }
+      ],
+      "entityFullClass": "org.openbravo.model.materialmgmt.transaction.MaterialTransaction",
+      "whereClause": "M_Transaction.M_Locator_ID=@M_Locator_ID@",
+      "hqlWhereClause": "e.storageBin.id=@Locator.id@"
+    },
+    {
+      "name": "mStorageDetail",
+      "tableName": "M_Storage_Detail",
+      "tabId": "179",
+      "entityClassname": "StorageDetail",
+      "entityJavaPackage": "org.openbravo.model.materialmgmt.onhandquantity",
+      "tabName": "Bin Contents",
+      "level": "subline",
+      "sequence": "60",
+      "fields": [
+        {
+          "name": "product",
+          "columnName": "M_Product_ID",
+          "label": "Product",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "60",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "Identifies an item which is either purchased or sold in this organization.",
+          "reference": {
+            "type": "Search",
+            "targetTable": "M_Product",
+            "keyColumn": "M_Product_ID",
+            "displayColumn": null,
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "attributeSetValue",
+          "columnName": "M_AttributeSetInstance_ID",
+          "label": "Attribute Set Value",
+          "type": "price",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "12",
+          "displayLogic": "(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0')",
+          "isFilterable": true,
+          "help": "The values of the actual Product Attributes"
+        },
+        {
+          "name": "active",
+          "columnName": "IsActive",
+          "label": "Active",
+          "type": "boolean",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "computed",
+            "source": "true"
+          },
+          "maxLength": "1",
+          "defaultValue": "Y",
+          "isFilterable": true,
+          "help": "There are two methods of making records unavailable in the system: One is to delete the record, the other is to de-activate the record. A de-activated record is not available for selection, but available for reporting. There are two reasons for de-activating and not deleting records: \n(1) The system requires the record for auditing purposes.\n(2) The record is referenced by other records. E.g., you cannot delete a Business Partner, if there are existing invoices for it. By de-activating the Business Partner you prevent it from being used in future transactions."
+        },
+        {
+          "name": "lastInventoryCountDate",
+          "columnName": "DateLastInventory",
+          "label": "Last Inventory Count Date",
+          "type": "date",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "10",
+          "isFilterable": true,
+          "help": "The Date Last Inventory Count indicates the last time an Inventory count was done."
+        },
+        {
+          "name": "uOM",
+          "columnName": "C_UOM_ID",
+          "label": "UOM",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "12",
+          "isFilterable": true,
+          "help": "The UOM defines a unique non monetary unit of measure",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "C_UOM",
+            "keyColumn": "C_UOM_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "orderUOM",
+          "columnName": "M_Product_Uom_Id",
+          "label": "Order UOM",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "editable",
+          "maxLength": "12",
+          "isFilterable": true,
+          "help": "Alternative order UOM for the product.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "M_Product_Uom",
+            "keyColumn": "M_Product_Uom_Id",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "quantityOnHand",
+          "columnName": "QtyOnHand",
+          "label": "Quantity on Hand",
+          "type": "quantity",
+          "mandatory": true,
+          "visibility": "readOnly",
+          "maxLength": "10",
+          "isFilterable": true,
+          "help": "The On Hand Quantity indicates the quantity of a product that is on hand in a warehouse."
+        },
+        {
+          "name": "onHandOrderQuanity",
+          "columnName": "QtyOrderOnHand",
+          "label": "On Hand Order Quantity",
+          "type": "quantity",
+          "mandatory": false,
+          "visibility": "editable",
+          "maxLength": "10",
+          "isFilterable": true,
+          "help": "The On Hand Quantity indicates the quantity of a product that is on hand in a warehouse in the second uom"
+        },
+        {
+          "name": "quantityInDraftTransactions",
+          "columnName": "PreQtyOnHand",
+          "label": "Quantity in draft transactions",
+          "type": "quantity",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "10",
+          "isFilterable": true,
+          "help": "The quantity that we have already purchased but are not still in the warehouse"
+        },
+        {
+          "name": "quantityOrderInDraftTransactions",
+          "columnName": "PreQtyOrderOnHand",
+          "label": "Quantity Order in draft transactions",
+          "type": "quantity",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "10",
+          "isFilterable": true,
+          "help": "The quantity that we have already purchased but are not still in the warehouse in the second uom"
+        },
+        {
+          "name": "referencedInventory",
+          "columnName": "M_RefInventory_ID",
+          "label": "Referenced Inventory",
+          "type": "foreignKey",
+          "mandatory": false,
+          "visibility": "readOnly",
+          "maxLength": "32",
+          "isFilterable": true,
+          "help": "ID for a Referenced Inventory",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "M_RefInventory",
+            "keyColumn": "M_RefInventory_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "organization",
+          "columnName": "AD_Org_ID",
+          "label": "Organization",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.organization"
+          },
+          "maxLength": "12",
+          "defaultValue": "@AD_ORG_ID@",
+          "isFilterable": true,
+          "help": "An organization is a unit of your client or legal entity - examples are store, department. You can share data between organizations.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Org",
+            "keyColumn": "AD_Org_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "mStorageDetailID",
+          "columnName": "M_Storage_Detail_ID",
+          "label": "Storage Detail",
+          "type": "id",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "sequence"
+          },
+          "maxLength": "32",
+          "isFilterable": true,
+          "help": "The Storage Detail identifies a stock in the warehouse by quantity, attributes and storage bin."
+        },
+        {
+          "name": "storageBin",
+          "columnName": "M_Locator_ID",
+          "label": "Storage Bin",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "maxLength": "60",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "The Locator ID indicates where in a Warehouse a product is located.",
+          "reference": {
+            "type": "Selector",
+            "targetTable": "M_Locator",
+            "selectorName": "On Hand Locator",
+            "filterExpression": "e.warehouse.active = true",
+            "hql": null,
+            "displayColumn": null
+          }
+        },
+        {
+          "name": "client",
+          "columnName": "AD_Client_ID",
+          "label": "Client",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.client"
+          },
+          "maxLength": "12",
+          "defaultValue": "@AD_CLIENT_ID@",
+          "isFilterable": true,
+          "help": "A Client is a company or a legal entity. You cannot share data between Clients.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Client",
+            "keyColumn": "AD_Client_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        }
+      ],
+      "entityFullClass": "org.openbravo.model.materialmgmt.onhandquantity.StorageDetail",
+      "whereClause": "M_Storage_Detail.qtyonhand <>0 AND M_Storage_Detail.M_Locator_ID = @M_Locator_ID@",
+      "hqlWhereClause": "e.quantityOnHand<>0 AND e.storageBin.id=@Locator.id@"
+    },
+    {
+      "name": "mWarehouseAcct",
+      "tableName": "M_Warehouse_Acct",
+      "tabId": "209",
+      "entityClassname": "WarehouseAccounts",
+      "entityJavaPackage": "org.openbravo.model.common.enterprise",
+      "tabName": "Accounting",
+      "level": "line",
+      "sequence": "110",
+      "fields": [
+        {
+          "name": "accountingSchema",
+          "columnName": "C_AcctSchema_ID",
+          "label": "General Ledger",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "readOnly",
+          "maxLength": "22",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "The book containing all financial transactions recorded for the legal entity.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "C_AcctSchema",
+            "keyColumn": "C_AcctSchema_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "warehouseDifferences",
+          "columnName": "W_Differences_Acct",
+          "label": "Warehouse Differences",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "editable",
+          "maxLength": "32",
+          "isFilterable": true,
+          "help": "The Warehouse Differences Account indicates the account used recording differences identified during inventory counts.",
+          "reference": {
+            "type": "Selector",
+            "targetTable": "C_ValidCombination",
+            "selectorName": "Valid Combination",
+            "filterExpression": "e.active = true and e.accountingSchema.id=@inpcAcctschemaId@",
+            "hql": null,
+            "displayColumn": null
+          }
+        },
+        {
+          "name": "active",
+          "columnName": "IsActive",
+          "label": "Active",
+          "type": "boolean",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "computed",
+            "source": "true"
+          },
+          "maxLength": "1",
+          "isFilterable": true,
+          "help": "There are two methods of making records unavailable in the system: One is to delete the record, the other is to de-activate the record. A de-activated record is not available for selection, but available for reporting. There are two reasons for de-activating and not deleting records: \n(1) The system requires the record for auditing purposes.\n(2) The record is referenced by other records. E.g., you cannot delete a Business Partner, if there are existing invoices for it. By de-activating the Business Partner you prevent it from being used in future transactions."
+        },
+        {
+          "name": "mWarehouseAcctID",
+          "columnName": "M_Warehouse_Acct_ID",
+          "label": "Warehouse Accounting",
+          "type": "id",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "sequence"
+          },
+          "maxLength": "32",
+          "isFilterable": true
+        },
+        {
+          "name": "organization",
+          "columnName": "AD_Org_ID",
+          "label": "Organization",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.organization"
+          },
+          "maxLength": "22",
+          "defaultValue": "@AD_Org_ID@",
+          "isFilterable": true,
+          "help": "An organization is a unit of your client or legal entity - examples are store, department. You can share data between organizations.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Org",
+            "keyColumn": "AD_Org_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "client",
+          "columnName": "AD_Client_ID",
+          "label": "Client",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "derivation": {
+            "type": "fromConfig",
+            "source": "context.client"
+          },
+          "maxLength": "22",
+          "defaultValue": "@AD_CLIENT_ID@",
+          "isFilterable": true,
+          "help": "A Client is a company or a legal entity. You cannot share data between Clients.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "AD_Client",
+            "keyColumn": "AD_Client_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        },
+        {
+          "name": "warehouse",
+          "columnName": "M_Warehouse_ID",
+          "label": "Warehouse",
+          "type": "foreignKey",
+          "mandatory": true,
+          "visibility": "system",
+          "systemCategory": "internal",
+          "maxLength": "22",
+          "isIdentifier": true,
+          "isFilterable": true,
+          "help": "The Warehouse identifies a unique Warehouse where products are stored or Services are provided.",
+          "reference": {
+            "type": "TableDir",
+            "targetTable": "M_Warehouse",
+            "keyColumn": "M_Warehouse_ID",
+            "displayColumn": "Name",
+            "filterExpression": null
+          }
+        }
+      ],
+      "entityFullClass": "org.openbravo.model.common.enterprise.WarehouseAccounts"
+    }
+  ],
+  "meta": {
+    "version": "0.1.0",
+    "checksum": "53ea856e",
+    "extractedAt": "2026-03-16T14:35:08.511Z"
+  }
+}

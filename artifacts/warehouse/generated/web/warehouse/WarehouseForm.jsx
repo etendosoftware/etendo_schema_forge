@@ -2,10 +2,13 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:warehouse
 const fields = [
-  { key: 'name', column: 'Name', type: 'text', required: true, section: 'principal' },
   { key: 'searchKey', column: 'Value', type: 'text', required: true, section: 'principal' },
+  { key: 'name', column: 'Name', type: 'text', required: true, section: 'principal' },
   { key: 'description', column: 'Description', type: 'textarea', section: 'principal' },
-  { key: 'isActive', column: 'IsActive', type: 'checkbox', required: true, readOnly: true, section: 'other' },
+  { key: 'location', column: 'C_Location_ID', type: 'search', required: true, section: 'principal', reference: 'Location', inputMode: 'search' },
+  { key: 'returnLocator', column: 'M_Returnlocator_ID', type: 'search', section: 'other', reference: 'Locator', inputMode: 'search' },
+  { key: 'warehouseRule', column: 'M_Warehouse_Rule_ID', type: 'selector', section: 'other', reference: 'WarehouseRule', inputMode: 'selector' },
+  { key: 'allocated', column: 'Isallocated', type: 'checkbox', required: true, readOnly: true, section: 'other' },
 ];
 // @sf-generated-end fields:warehouse
 
