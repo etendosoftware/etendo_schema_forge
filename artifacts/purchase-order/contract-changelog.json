@@ -1,0 +1,13 @@
+[
+  {
+    "from": "0.1.0",
+    "to": "0.2.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"transactionDocument\" added to entity \"order\" in frontend",
+      "Field \"transactionDocument\" property \"visibility\" changed from \"system\" to \"editable\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-03-16"
+  }
+]

@@ -1,7 +1,7 @@
 {
   "windowId": "181",
   "windowName": "purchase-order",
-  "extractedAt": "2026-03-14T05:39:50.820Z",
+  "extractedAt": "2026-03-16T17:27:16.692Z",
   "rules": [
     {
       "type": "callout",

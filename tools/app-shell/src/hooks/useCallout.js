@@ -15,20 +15,21 @@ import { toast } from 'sonner';
 export function useCallout(entity, { token, apiBaseUrl }) {
   const [calloutResult, setCalloutResult] = useState(null);
   const [calloutLoading, setCalloutLoading] = useState(false);
-  const debounceRef = useRef(null);
-  const abortRef = useRef(null);
+  // Per-field debounce timers and abort controllers so concurrent callouts don't cancel each other
+  const debounceMapRef = useRef({});
+  const abortMapRef = useRef({});
 
   const executeCallout = useCallback((field, value, formState) => {
     if (!field || !token || !apiBaseUrl || !entity) return;
 
-    // Cancel any pending debounced call
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    // Cancel any pending debounced call for THIS field only
+    if (debounceMapRef.current[field]) clearTimeout(debounceMapRef.current[field]);
 
-    debounceRef.current = setTimeout(async () => {
-      // Abort previous in-flight request
-      if (abortRef.current) abortRef.current.abort();
+    debounceMapRef.current[field] = setTimeout(async () => {
+      // Abort previous in-flight request for THIS field only
+      if (abortMapRef.current[field]) abortMapRef.current[field].abort();
       const controller = new AbortController();
-      abortRef.current = controller;
+      abortMapRef.current[field] = controller;
 
       setCalloutLoading(true);
       try {
@@ -46,7 +47,6 @@ export function useCallout(entity, { token, apiBaseUrl }) {
           formState: state,
           ...(Object.keys(auxiliaryValues).length > 0 ? { auxiliaryValues } : {}),
         };
-        console.log('[useCallout] payload:', JSON.stringify({ field: payload.field, value: payload.value, formStateBP: state.businessPartner, aux: payload.auxiliaryValues }, null, 2));
         const res = await fetch(`${apiBaseUrl}/${entity}/callout`, {
           method: 'POST',
           headers: {

@@ -2,11 +2,12 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:order
 const fields = [
+  { key: 'transactionDocument', column: 'C_DocTypeTarget_ID', type: 'search', required: true, section: 'principal', reference: 'DocumentType' },
   { key: 'documentStatus', column: 'DocStatus', type: 'text', required: true, readOnly: true, section: 'other' },
   { key: 'orderDate', column: 'DateOrdered', type: 'date', required: true, section: 'principal' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', required: true, section: 'principal', reference: 'BusinessPartner', inputMode: 'search' },
   { key: 'partnerAddress', column: 'C_BPartner_Location_ID', type: 'dependent', required: true, section: 'principal', reference: 'BusinessPartnerLocation', inputMode: 'dependent', dependsOn: { field: 'businessPartner', filterKey: 'C_BPartner_ID' } },
-  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', required: true, section: 'principal', reference: 'Warehouse', inputMode: 'selector' },
+  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', required: true, section: 'other', reference: 'Warehouse', inputMode: 'selector' },
   { key: 'scheduledDeliveryDate', column: 'DatePromised', type: 'date', required: true, section: 'other' },
   { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', section: 'other', reference: 'PaymentMethod', inputMode: 'selector' },
   { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', required: true, section: 'other', reference: 'PaymentTerm', inputMode: 'selector' },

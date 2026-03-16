@@ -35,7 +35,7 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
 
   const refresh = useCallback(() => {
     setLoading(true);
-    fetch(`${apiBaseUrl}/${entity}`, { headers })
+    fetch(`${apiBaseUrl}/${entity}?_sortBy=creationDate desc`, { headers })
       .then(res => {
         if (!res.ok) throw new Error(`${res.status}`);
         return res.json();
@@ -144,15 +144,18 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
         setSaveError(null);
         toast.success(isNew ? 'Record created' : 'Record saved');
         refresh();
+        return saved;
       } else {
         const msg = await extractErrorMessage(res);
         setSaveError(msg);
         toast.error(msg);
+        return null;
       }
     } catch (err) {
       const msg = err?.message || 'Network error';
       setSaveError(msg);
       toast.error(msg);
+      return null;
     }
   }, [editing, selected, apiBaseUrl, entity, token, refresh]);
 

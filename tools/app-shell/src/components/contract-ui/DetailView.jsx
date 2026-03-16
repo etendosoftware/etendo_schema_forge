@@ -63,6 +63,26 @@ export function DetailView({
     }
   }, [isNew, hook.editing, hook.handleNew]);
 
+  // Resolve $_identifier for default FK values using already-loaded catalogs.
+  // If a default ID isn't in the selector options (e.g., generic preference doesn't match
+  // this window's filtered list), clear it — the callout will set the correct value later.
+  useEffect(() => {
+    if (!isNew || !hook.editing || !catalogs || !api?.selectors) return;
+    for (const sel of api.selectors) {
+      const val = hook.editing[sel.field];
+      if (!val || hook.editing[sel.field + '$_identifier']) continue;
+      const options = catalogs[sel.reference];
+      if (!Array.isArray(options) || options.length === 0) continue;
+      const match = options.find(o => o.id === val);
+      if (match) {
+        hook.handleChange(sel.field + '$_identifier', match.label || match.name || match._identifier);
+      } else {
+        // Default ID not in filtered options — clear it to avoid showing a raw UUID
+        hook.handleChange(sel.field, '');
+      }
+    }
+  }, [isNew, hook.editing, catalogs, api]);
+
   useEffect(() => {
     if (isNew) return;
     if (currentItem && (!hook.selected || String(hook.selected.id) !== String(recordId))) {
@@ -82,6 +102,12 @@ export function DetailView({
 
     if (updates) {
       for (const [key, entry] of Object.entries(updates)) {
+        // Skip empty callout values if the field already has a non-empty value
+        // (e.g., callout clears warehouse but defaults already set it)
+        const currentVal = data[key];
+        if ((entry.value === '' || entry.value == null) && currentVal && currentVal !== '') {
+          continue;
+        }
         appliedFields.add(key);
         hook.handleChange(key, entry.value);
         if (entry._identifier) {
@@ -247,11 +273,17 @@ export function DetailView({
               );
             })}
 
-            <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground" onClick={() => hook.handleSave(data)}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground" onClick={async () => {
+              const saved = await hook.handleSave(data);
+              if (saved?.id && isNew) navigate(`/${windowName}/${saved.id}`, { replace: true });
+            }}>
               <Save className="h-3.5 w-3.5" />
               Save draft
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={() => hook.handleSave(data)}>
+            <Button size="sm" className="gap-1.5" onClick={async () => {
+              const saved = await hook.handleSave(data);
+              if (saved?.id && isNew) navigate(`/${windowName}/${saved.id}`, { replace: true });
+            }}>
               <Check className="h-3.5 w-3.5" />
               Save
             </Button>

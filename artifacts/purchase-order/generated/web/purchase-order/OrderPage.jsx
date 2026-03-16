@@ -149,6 +149,13 @@ const api = {
   "selectors": [
     {
       "entity": "order",
+      "field": "transactionDocument",
+      "column": "C_DocTypeTarget_ID",
+      "reference": "DocumentType",
+      "url": "/sws/neo/purchase-order/order/selectors/transactionDocument"
+    },
+    {
+      "entity": "order",
       "field": "businessPartner",
       "column": "C_BPartner_ID",
       "reference": "BusinessPartner",
