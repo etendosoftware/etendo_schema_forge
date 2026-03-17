@@ -35,7 +35,15 @@ export async function login(baseUrl, username, password, roleId, orgId) {
     const text = await res.text().catch(() => '');
     throw new Error(text || `Login failed: ${res.status}`);
   }
-  return res.json();
+  // Etendo's /sws/login responds with charset=ISO-8859-1.
+  // res.json() always decodes as UTF-8, which corrupts ñ, á, etc.
+  // Read as ArrayBuffer and decode with the response's actual charset.
+  const ct = res.headers.get('content-type') || '';
+  const charsetMatch = ct.match(/charset=([^\s;]+)/i);
+  const charset = charsetMatch ? charsetMatch[1] : 'utf-8';
+  const buf = await res.arrayBuffer();
+  const text = new TextDecoder(charset).decode(buf);
+  return JSON.parse(text);
 }
 
 export function createApiFetch(baseUrl, getToken, onUnauthorized) {
