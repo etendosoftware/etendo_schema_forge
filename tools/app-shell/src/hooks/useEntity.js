@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 
 function buildHeaders(token) {
@@ -23,28 +23,60 @@ async function extractErrorMessage(res) {
   return `Error ${res.status}`;
 }
 
+const BATCH_SIZE = 75;
+
 export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
   const [items, setItems] = useState([]);
   const [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(null);
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [saveError, setSaveError] = useState(null);
   const [sortColumn, setSortColumn] = useState('creationDate');
   const [sortDirection, setSortDirection] = useState('desc');
+  const startRowRef = useRef(0);
 
   const headers = buildHeaders(token);
 
   const refresh = useCallback(() => {
+    startRowRef.current = 0;
+    setHasMore(true);
     setLoading(true);
-    fetch(`${apiBaseUrl}/${entity}?_sortBy=${sortColumn} ${sortDirection}`, { headers })
+    fetch(`${apiBaseUrl}/${entity}?_sortBy=${sortColumn} ${sortDirection}&_startRow=0&_endRow=${BATCH_SIZE - 1}`, { headers })
       .then(res => {
         if (!res.ok) throw new Error(`${res.status}`);
         return res.json();
       })
-      .then(data => { const rows = data?.response?.data ?? (Array.isArray(data) ? data : []); setItems(rows); setLoading(false); })
-      .catch(() => { setItems([]); setLoading(false); });
+      .then(data => {
+        const rows = data?.response?.data ?? (Array.isArray(data) ? data : []);
+        setItems(rows);
+        startRowRef.current = rows.length;
+        if (rows.length < BATCH_SIZE) setHasMore(false);
+        setLoading(false);
+      })
+      .catch(() => { setItems([]); setHasMore(false); setLoading(false); });
   }, [apiBaseUrl, entity, token, sortColumn, sortDirection]);
+
+  const loadMore = useCallback(() => {
+    if (!hasMore || loadingMore || loading) return;
+    setLoadingMore(true);
+    const start = startRowRef.current;
+    fetch(`${apiBaseUrl}/${entity}?_sortBy=${sortColumn} ${sortDirection}&_startRow=${start}&_endRow=${start + BATCH_SIZE - 1}`, { headers })
+      .then(res => {
+        if (!res.ok) throw new Error(`${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        const rows = data?.response?.data ?? (Array.isArray(data) ? data : []);
+        setItems(prev => [...prev, ...rows]);
+        startRowRef.current = start + rows.length;
+        if (rows.length < BATCH_SIZE) setHasMore(false);
+        setLoadingMore(false);
+      })
+      .catch(() => { setLoadingMore(false); setHasMore(false); });
+  }, [apiBaseUrl, entity, token, sortColumn, sortDirection, hasMore, loadingMore, loading]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -206,10 +238,10 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
   }, [selected, apiBaseUrl, token, refresh]);
 
   return {
-    items, selected, editing, children, loading, saveError,
+    items, selected, editing, children, loading, loadingMore, hasMore, saveError,
     handleSelect, handleNew, handleChange, handleSave, handleDelete, handleProcess,
     handleAddChild, handleUpdateChild, handleDeleteChild,
-    refresh, fetchById,
+    refresh, fetchById, loadMore,
     sortColumn, sortDirection, setSortColumn, setSortDirection,
   };
 }

@@ -30,6 +30,7 @@ export function ListView({
   const [showSortPopover, setShowSortPopover] = useState(false);
   const [tableColumns, setTableColumns] = useState([]);
   const sortBtnRef = useRef(null);
+  const scrollRef = useRef(null);
 
   const isDefaultSort = hook.sortColumn === 'creationDate' && hook.sortDirection === 'desc';
 
@@ -61,6 +62,14 @@ export function ListView({
     hook.setSortDirection('desc');
     setShowSortPopover(false);
   }, [hook.setSortColumn, hook.setSortDirection]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200 && hook.hasMore && !hook.loadingMore) {
+      hook.loadMore();
+    }
+  }, [hook.hasMore, hook.loadingMore, hook.loadMore]);
 
   return (
     <div className="h-full flex flex-col">
@@ -238,7 +247,7 @@ export function ListView({
         )}
 
         {/* Table */}
-        <div className="flex-1 overflow-auto px-6 pb-6">
+        <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-auto px-6 pb-6">
           {hook.loading ? (
             <div className="space-y-3">
               <Skeleton className="h-10 w-full" />
@@ -247,16 +256,27 @@ export function ListView({
               <Skeleton className="h-8 w-full" />
             </div>
           ) : (
-            <Table
-              entity={entity}
-              data={hook.items}
-              onNavigate={(row) => navigate(`/${windowName}/${row.id}`)}
-              onSelectionChange={setSelectedRows}
-              compact={false}
-              sortColumn={hook.sortColumn}
-              sortDirection={hook.sortDirection}
-              onColumnsReady={setTableColumns}
-            />
+            <>
+              <Table
+                entity={entity}
+                data={hook.items}
+                onNavigate={(row) => navigate(`/${windowName}/${row.id}`)}
+                onSelectionChange={setSelectedRows}
+                compact={false}
+                sortColumn={hook.sortColumn}
+                sortDirection={hook.sortDirection}
+                onColumnsReady={setTableColumns}
+              />
+              {hook.loadingMore && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading more...</span>
+                </div>
+              )}
+              {!hook.hasMore && hook.items.length > 0 && !hook.loadingMore && (
+                <p className="text-center text-xs text-muted-foreground/60 py-3">All records loaded</p>
+              )}
+            </>
           )}
         </div>
       </div>
