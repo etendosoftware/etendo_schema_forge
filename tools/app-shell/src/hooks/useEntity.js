@@ -30,19 +30,21 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
   const [children, setChildren] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [sortColumn, setSortColumn] = useState('creationDate');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   const headers = buildHeaders(token);
 
   const refresh = useCallback(() => {
     setLoading(true);
-    fetch(`${apiBaseUrl}/${entity}?_sortBy=creationDate desc`, { headers })
+    fetch(`${apiBaseUrl}/${entity}?_sortBy=${sortColumn} ${sortDirection}`, { headers })
       .then(res => {
         if (!res.ok) throw new Error(`${res.status}`);
         return res.json();
       })
       .then(data => { const rows = data?.response?.data ?? (Array.isArray(data) ? data : []); setItems(rows); setLoading(false); })
       .catch(() => { setItems([]); setLoading(false); });
-  }, [apiBaseUrl, entity, token]);
+  }, [apiBaseUrl, entity, token, sortColumn, sortDirection]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -208,5 +210,6 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
     handleSelect, handleNew, handleChange, handleSave, handleDelete, handleProcess,
     handleAddChild, handleUpdateChild, handleDeleteChild,
     refresh, fetchById,
+    sortColumn, sortDirection, setSortColumn, setSortDirection,
   };
 }

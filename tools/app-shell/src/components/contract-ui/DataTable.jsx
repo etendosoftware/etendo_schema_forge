@@ -196,10 +196,17 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data }) {
  *  - loading: boolean (shows skeleton when true)
  *  - addRow: { active, fields, onAdd, onCancel, catalogs } — inline add row config
  */
-export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, onNavigate, selectedId, compact, loading, addRow, selectable = true, onSelectionChange }) {
+export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, onNavigate, selectedId, compact, loading, addRow, selectable = true, onSelectionChange, sortColumn, sortDirection, onColumnsReady }) {
   const t = useLabel();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRows, setSelectedRows] = useState(new Set());
+
+  // Report columns to parent (e.g., ListView sort popover)
+  useEffect(() => {
+    if (onColumnsReady && columns.length > 0) {
+      onColumnsReady(columns);
+    }
+  }, [columns, onColumnsReady]);
 
   const hasActiveFilter = searchQuery.length > 0;
 
@@ -323,10 +330,14 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
               )}
               {columns.map(col => {
                 const colLabel = t(col.column) ?? col.label ?? col.key;
+                const isSorted = sortColumn === col.key;
                 return (
                   <TableHead key={col.key} className={`text-xs font-medium text-muted-foreground/70 tracking-wide ${col.type === 'amount' ? 'text-right' : ''}`}>
                     <FieldHighlight entityName={entity} fieldName={col.key}>
                       {colLabel}
+                      {isSorted && (
+                        <span className="ml-1 text-primary/70">{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
+                      )}
                     </FieldHighlight>
                   </TableHead>
                 );
