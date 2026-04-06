@@ -11,6 +11,7 @@ const fields = [
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'collapsed' },
   // @sf-custom-slot callout:SL_InOut_AccountingDate
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true, section: 'principal', defaultValue: '@#Date@', readOnlyLogic: (record) => record['processed'] === true },
+  { key: 'invoiced', column: 'Iscompletelyinvoiced', type: 'boolean', label: 'Completely Invoiced', readOnly: true, section: 'collapsed' },
 ];
 // @sf-generated-end fields:goodsShipment
 
