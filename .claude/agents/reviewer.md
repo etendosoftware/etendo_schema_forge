@@ -146,6 +146,31 @@ When `decisions.json` renames entities (e.g., `cOrder` → `header`), the genera
 ### Backup and Temporary Files (BLOCKER)
 Files with extensions like `.old`, `.bak`, `.backup`, `.tmp`, or `.orig` must NEVER be committed to `generated/` directories. Use git history for reference instead.
 
+### Generated File Changes — Verify Generator First (BLOCKER if wrong)
+Before flagging a change in `artifacts/*/generated/` as a manual edit, **always check if the PR also updates the generator to emit it**.
+
+The correct verification flow:
+1. Does the PR modify `generate-frontend.js`? Read its diff.
+2. Does the changed prop/import appear in the generator template? (`grep` for the field name)
+3. Does `decisions.json` declare the config that drives it?
+4. Does `resolve-curated.js` forward it to the in-memory schema?
+
+If all 4 are YES → the generated file is legitimate pipeline output, not a manual edit. Do NOT flag it.
+Only raise a regeneration concern if the generated file changes WITHOUT a corresponding generator update.
+
+**Common false positives:** new props in Page component (`formFooter`, `primaryTabs`, `newRecordComponent`, etc.) added in the same PR as generator support for them.
+
+### React Anti-Patterns (WARNING)
+- **Prop mutation:** `if (data) data.someField = value` — mutates the prop object directly. Bypasses React state, parent won't re-render. Flag as WARNING.
+- **Missing key props** in lists of JSX elements.
+- **useEffect with missing dependencies** — can cause stale closures.
+
+### Credentials and Secrets (BLOCKER)
+Flag any hardcoded passwords, API keys, or DB credentials. Common in:
+- `vite-plugins/report-api.js` — DB pool config
+- `cli/src/push-to-neo.js` / `db.js` — connection strings
+Credentials must come from `gradle.properties` or env vars, never hardcoded strings.
+
 ### Decisions as Source of Truth (WARNING)
 Window-specific configuration (tab layout, secondary tabs, field overrides, entityLabel, detailEntity, etc.) must be declared in `decisions.json`, not hardcoded in generated components. Every configurable field must be documented in `docs/decisions-reference.md`.
 
