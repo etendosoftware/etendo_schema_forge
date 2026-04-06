@@ -561,7 +561,7 @@ export function DetailView({
               <X className="h-3.5 w-3.5" />
               Cancel
             </Button>
-            {!topbarRight && statusField && data[statusField] && (() => {
+            {!topbarRight && statusField && data[statusField] != null && (() => {
               const _s = data[statusField];
               return (
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[13px] font-medium ${getStatusPillClass(_s)}`}>
@@ -882,6 +882,7 @@ export function DetailView({
                       recordId={data?.id || recordId}
                       token={token}
                       apiBaseUrl={apiBaseUrl}
+                      onRefresh={() => hook.refetch?.()}
                     />
                   ) : (
                   <div className={`pt-3 flex items-start gap-4${embedded ? ' pointer-events-none' : ''}`}>
@@ -988,20 +989,23 @@ export function DetailView({
                         </div>
                       )}
 
-                      {hook.editing && !isDocumentReadOnly && (allEntryFields.length > 0 || DetailExtraActions) && (
+                      {hook.editing && !isDocumentReadOnly && ((!isNew && allEntryFields.length > 0) || DetailExtraActions) && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)', padding: '10px 16px' }}>
-                          {allEntryFields.length > 0 && (
+                          {allEntryFields.length > 0 && !isNew && (
                             <button
                               onClick={() => { setAddingLine(!addingLine); setEditingChild(null); }}
                               style={{ all: 'unset', fontSize: 13, fontWeight: 500, color: 'var(--color-text-info, #2563eb)', cursor: 'pointer' }}
                             >
-                              + Add Lines
+                              + Add {detailLabel || 'Lines'}
                             </button>
                           )}
                           {DetailExtraActions && (
-                            <DetailExtraActions data={data} recordId={data?.id || recordId} token={token} apiBaseUrl={apiBaseUrl} />
+                            <DetailExtraActions data={data} recordId={data?.id || recordId} token={token} apiBaseUrl={apiBaseUrl} onRefresh={() => hook.refetch?.()} />
                           )}
                         </div>
+                      )}
+                      {allEntryFields.length > 0 && isNew && (
+                        <p className="text-xs text-muted-foreground mt-3">Save the header first to add lines.</p>
                       )}
                     </div>
 

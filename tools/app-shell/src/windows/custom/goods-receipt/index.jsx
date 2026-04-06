@@ -1,5 +1,6 @@
 import GoodsReceiptLineTable from '@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptLineTable';
 import GeneratedApp from '@generated/goods-receipt/generated/web/goods-receipt/index.jsx';
+import GoodsReceiptBottomPanel from './GoodsReceiptBottomPanel.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 
 // Lines table columns without lineNo
@@ -22,6 +23,7 @@ export default function GoodsReceiptWindow(props) {
       DetailTable={CustomLinesTable}
       secondaryTabs={[]}
       notesField="description"
+      bottomSection={GoodsReceiptBottomPanel}
       customTabs={[{ key: 'related', label: 'Related Documents', Component: RelatedDocuments }]}
     />
   );

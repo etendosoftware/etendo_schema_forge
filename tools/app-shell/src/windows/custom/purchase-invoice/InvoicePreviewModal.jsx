@@ -6,7 +6,7 @@ import { formatAmount } from '@/lib/formatAmount.js';
 import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
 import AddPaymentModal from './AddPaymentModal.jsx';
 
-const TOP_TABS = ['Estadísticas', 'Mensajes', 'Historial'];
+const TOP_TABS = ['Stats', 'Messages', 'History'];
 
 const ACCEPTED_TYPES = {
   'application/pdf': 'pdf',
@@ -23,18 +23,18 @@ const ACCEPT_ATTR = Object.keys(ACCEPTED_TYPES).join(',');
  * InvoicePreviewModal — Holded-style preview popup for a purchase invoice.
  *
  * Layout:
- *   Top bar: title, action buttons, tab switcher (Estadísticas | Mensajes | Historial)
+ *   Top bar: title, action buttons, tab switcher (Stats | Messages | History)
  *   Body: 50% document drop zone | 50% sidebar (content driven by active top tab)
  *
- * Estadísticas tab sidebar:
- *   General section  → invoice header fields
- *   Pagos section    → paymentPlan rows + Añadir pago
- *   Archivos section → placeholder
+ * Stats tab sidebar:
+ *   General section   → invoice header fields
+ *   Payments section  → paymentPlan rows + Add payment
+ *   Files section     → placeholder
  *
  * Animation: fade + slide-up on open, reverse on close.
  */
 export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, windowName, onClose, onEdit }) {
-  const [activeTab, setActiveTab] = useState('Estadísticas');
+  const [activeTab, setActiveTab] = useState('Stats');
   const [paymentPlan, setPaymentPlan] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
@@ -165,7 +165,7 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
   const grandTotal = Number(invoice.grandTotalAmount ?? 0);
   const totalOutstanding = Math.max(0, grandTotal - totalPaid);
 
-  // "Añadir pago" is only available when invoice is Completed (CO) with outstanding balance
+  // "Add payment" is only available when invoice is Completed (CO) with outstanding balance
   const isDraft = status === 'DR' || status === 'draft';
   const isFullyPaid = totalOutstanding <= 0 && allPayments.length > 0;
   const isCompleted = status === 'CO' || status === 'complete' || status === 'completed';
@@ -179,24 +179,24 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
       : 'opacity-100 transition-opacity duration-[280ms]';
 
   const cardClass = animState === 'opening'
-    ? 'opacity-0 translate-y-4 scale-[0.98]'
+    ? 'translate-x-full'
     : animState === 'closing'
-      ? 'opacity-0 translate-y-4 scale-[0.98] transition-all duration-[280ms]'
+      ? 'translate-x-full transition-transform duration-[280ms]'
       : animState === 'closingUp'
-        ? 'opacity-0 -translate-y-8 scale-[0.98] transition-all duration-[280ms]'
-        : 'opacity-100 translate-y-0 scale-100 transition-all duration-[280ms]';
+        ? 'opacity-0 translate-x-full transition-all duration-[280ms]'
+        : 'translate-x-0 transition-transform duration-[280ms]';
 
   return (
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4 ${backdropClass}`}
+        className={`fixed inset-0 z-50 bg-black/30 ${backdropClass}`}
         onClick={handleClose}
       >
-        {/* Modal card */}
+        {/* Side panel — slides in from the right, preserving all original content */}
         <div
-          className={`bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col ${cardClass}`}
-          style={{ width: '90vw', height: '88vh', maxWidth: '1200px' }}
+          className={`absolute right-0 top-0 bottom-0 bg-white shadow-2xl overflow-hidden flex flex-col ${cardClass}`}
+          style={{ width: '80vw', maxWidth: '1100px' }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* ── Top bar ── */}
@@ -227,11 +227,11 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
                 onClick={canAddPayment ? () => setShowAddPayment(true) : undefined}
               >
                 <Plus size={13} />
-                Añadir pago
+                Add payment
               </Button>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={handleEdit}>
                 <Edit2 size={13} />
-                Editar
+                Edit
               </Button>
               <button className="p-1.5 text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg transition-colors">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
@@ -331,15 +331,15 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
                       </div>
                     </div>
                     {isDragOver ? (
-                      <p className="text-sm font-medium text-blue-600">Suelta el archivo aquí</p>
+                      <p className="text-sm font-medium text-blue-600">Drop file here</p>
                     ) : (
                       <>
-                        <p className="text-sm font-medium text-gray-600 mt-1">Sube tu documento</p>
+                        <p className="text-sm font-medium text-gray-600 mt-1">Upload your document</p>
                         <button
                           className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                           onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
                         >
-                          Click aquí para importar tu archivo
+                          Click here to upload your file
                         </button>
                         <p className="text-xs text-gray-400">PDF, JPG, PNG, WebP, GIF</p>
                       </>
@@ -358,8 +358,8 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
 
             {/* Right panel: 50% — tab content */}
             <div className="w-1/2 overflow-y-auto">
-              {activeTab === 'Estadísticas' && (
-                <EstadisticasPanel
+              {activeTab === 'Stats' && (
+                <StatsPanel
                   invoice={invoice}
                   partnerName={partnerName}
                   badgeProps={badgeProps}
@@ -374,11 +374,11 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
                   onAddPayment={() => setShowAddPayment(true)}
                 />
               )}
-              {activeTab === 'Mensajes' && (
-                <EmptyPanel icon="💬" text="No hay mensajes aún" />
+              {activeTab === 'Messages' && (
+                <EmptyPanel icon="💬" text="No messages yet" />
               )}
-              {activeTab === 'Historial' && (
-                <EmptyPanel icon="🕐" text="Sin actividad registrada" />
+              {activeTab === 'History' && (
+                <EmptyPanel icon="🕐" text="No activity recorded" />
               )}
             </div>
           </div>
@@ -398,7 +398,7 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
   );
 }
 
-// ── Estadísticas panel: General + Pagos + Archivos sections ──
+// ── Stats panel: General + Payments + Files sections ──
 
 function SectionCard({ title, done, children }) {
   return (
@@ -424,13 +424,13 @@ function InfoRow({ label, value, link }) {
   );
 }
 
-function EstadisticasPanel({ invoice, partnerName, badgeProps, statusLabel: sl, allPayments, loadingPayments, totalPaid, totalOutstanding, canAddPayment, isDraft, isFullyPaid, onAddPayment }) {
+function StatsPanel({ invoice, partnerName, badgeProps, statusLabel: sl, allPayments, loadingPayments, totalPaid, totalOutstanding, canAddPayment, isDraft, isFullyPaid, onAddPayment }) {
   const invoiceDate = invoice.invoiceDate
-    ? new Date(invoice.invoiceDate).toLocaleDateString('es-ES')
+    ? new Date(invoice.invoiceDate).toLocaleDateString('en-GB')
     : '—';
 
   const dueDate = invoice.dueDate
-    ? new Date(invoice.dueDate).toLocaleDateString('es-ES')
+    ? new Date(invoice.dueDate).toLocaleDateString('en-GB')
     : '—';
 
   const isPaid = allPayments.length > 0 && totalOutstanding <= 0;
@@ -440,22 +440,22 @@ function EstadisticasPanel({ invoice, partnerName, badgeProps, statusLabel: sl, 
       {/* General */}
       <SectionCard title="General" done={true}>
         <InfoRow label="Total" value={formatAmount(invoice.grandTotalAmount)} />
-        <InfoRow label="Número de documento" value={invoice.documentNo} />
-        <InfoRow label="Contacto" value={partnerName} link />
-        <InfoRow label="Fecha" value={invoiceDate} />
-        <InfoRow label="Vencimiento" value={dueDate} />
+        <InfoRow label="Document number" value={invoice.documentNo} />
+        <InfoRow label="Contact" value={partnerName} link />
+        <InfoRow label="Date" value={invoiceDate} />
+        <InfoRow label="Due date" value={dueDate} />
         <div className="flex justify-between items-center py-1.5 text-sm">
-          <span className="text-gray-500">Estado</span>
+          <span className="text-gray-500">Status</span>
           <Badge {...badgeProps}>{sl}</Badge>
         </div>
       </SectionCard>
 
-      {/* Pagos */}
-      <SectionCard title="Pagos" done={isPaid}>
+      {/* Payments */}
+      <SectionCard title="Payments" done={isPaid}>
         {loadingPayments ? (
-          <p className="text-xs text-gray-400 py-2 text-center">Cargando...</p>
+          <p className="text-xs text-gray-400 py-2 text-center">Loading...</p>
         ) : allPayments.length === 0 ? (
-          <p className="text-xs text-gray-400 py-2 text-center">Sin pagos registrados</p>
+          <p className="text-xs text-gray-400 py-2 text-center">No payments recorded</p>
         ) : (
           <div className="space-y-2 mb-3">
             {allPayments.map((row, i) => {
@@ -470,7 +470,7 @@ function EstadisticasPanel({ invoice, partnerName, badgeProps, statusLabel: sl, 
 
               let ref = '—';
               if (row._local) {
-                ref = row.paymentMethod$_identifier || 'PAGOS';
+                ref = row.paymentMethod$_identifier || 'PAYMENT';
               } else {
                 ref = row.documentNo || '—';
               }
@@ -486,7 +486,7 @@ function EstadisticasPanel({ invoice, partnerName, badgeProps, statusLabel: sl, 
                     <div>
                       <span className="text-gray-700 font-medium truncate max-w-[80px] block">{ref}</span>
                       {row._local && (
-                        <span className="text-[10px] text-amber-600 font-medium">pendiente sincronizar</span>
+                        <span className="text-[10px] text-amber-600 font-medium">pending sync</span>
                       )}
                     </div>
                   </div>
@@ -505,10 +505,10 @@ function EstadisticasPanel({ invoice, partnerName, badgeProps, statusLabel: sl, 
           title={
             !canAddPayment
               ? isDraft
-                ? 'No se pueden añadir pagos a una factura en borrador'
+                ? 'Cannot add payments to a draft invoice'
                 : isFullyPaid
-                  ? 'La factura ya está completamente pagada'
-                  : 'La factura debe estar completada para añadir pagos'
+                  ? 'Invoice is fully paid'
+                  : 'Invoice must be completed to add payments'
               : undefined
           }
           className={`w-full py-2 text-sm font-medium border rounded-lg transition-colors ${
@@ -517,17 +517,17 @@ function EstadisticasPanel({ invoice, partnerName, badgeProps, statusLabel: sl, 
               : 'text-gray-400 border-gray-200 bg-gray-50 cursor-not-allowed'
           }`}
         >
-          Añadir pago
+          Add payment
         </button>
       </SectionCard>
 
-      {/* Archivos */}
-      <SectionCard title="Archivos">
+      {/* Files */}
+      <SectionCard title="Files">
         <button
           disabled
           className="w-full py-2 text-sm text-gray-400 border border-dashed border-gray-300 rounded-lg cursor-default"
         >
-          Añadir archivo adjunto
+          Add attachment
         </button>
       </SectionCard>
     </div>

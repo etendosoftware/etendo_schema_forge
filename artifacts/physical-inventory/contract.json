@@ -1,13 +1,14 @@
 {
-  "version": "0.12.0",
-  "generatedAt": "2026-04-01T13:12:57.403Z",
-  "checksum": "e800e07ccfa71327",
+  "version": "0.16.0",
+  "generatedAt": "2026-04-06T13:09:44.381Z",
+  "checksum": "c7ab77bb72a53e01",
   "frontendContract": {
     "window": {
       "id": "168",
       "name": "Physical Inventory",
       "primaryEntity": "inventory",
       "category": "warehouse",
+      "statusField": "processed",
       "layoutType": "default"
     },
     "entities": {
@@ -126,6 +127,7 @@
             "form": true,
             "reference": "Project",
             "inputMode": "search",
+            "section": "other",
             "displayLogic": {
               "raw": "@ACCT_DIMENSION_DISPLAY@",
               "evaluable": false,
@@ -142,13 +144,14 @@
             "name": "processed",
             "apiKey": "processed",
             "column": "Processed",
-            "label": "Processed",
+            "label": "Status",
             "type": "boolean",
             "tsType": "boolean",
             "visibility": "readOnly",
             "required": true,
-            "grid": false,
-            "form": false
+            "grid": true,
+            "form": false,
+            "columnType": "status"
           }
         ],
         "searchableFields": [
@@ -263,7 +266,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === 'Y'"
+              "js": "record['processed'] === true"
             }
           },
           {
@@ -335,7 +338,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === 'Y'"
+              "js": "record['processed'] === true"
             }
           }
         ],
@@ -371,7 +374,8 @@
       "id": "168",
       "name": "Physical Inventory",
       "primaryEntity": "inventory",
-      "category": "warehouse"
+      "category": "warehouse",
+      "statusField": "processed"
     },
     "entities": {
       "inventory": {

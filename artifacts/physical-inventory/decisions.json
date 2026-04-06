@@ -2,18 +2,13 @@
   "$schema": "decisions-v2",
   "window": {
     "category": "warehouse",
-    "name": "Physical Inventory"
+    "name": "Physical Inventory",
+    "statusField": "processed"
   },
   "entities": {
     "header": {
       "name": "inventory",
       "fields": {
-        "documentNo": {
-          "visibility": "readOnly",
-          "grid": true,
-          "searchable": true,
-          "readOnlyLogic": null
-        },
         "warehouse": {
           "grid": true,
           "searchable": true,
@@ -36,15 +31,15 @@
           "readOnlyLogic": null,
           "section": "other"
         },
-        "docStatus": {
-          "visibility": "readOnly",
-          "grid": true,
-          "searchable": true
-        },
         "processed": {
           "visibility": "readOnly",
-          "grid": false,
-          "form": false
+          "label": "Status",
+          "grid": true,
+          "form": false,
+          "columnType": "status"
+        },
+        "project": {
+          "section": "other"
         },
         "processNow": {
           "visibility": "editable"

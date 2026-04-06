@@ -13,6 +13,9 @@
     "headerExtra": {
       "customForm": "BillingPreferencesForm"
     },
+    "customComponents": {
+      "headerTable": "ContactsTable"
+    },
     "secondaryTabs": {
       "contact": {
         "tabMode": "table-form",

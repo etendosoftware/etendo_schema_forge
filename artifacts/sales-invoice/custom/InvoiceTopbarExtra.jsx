@@ -104,9 +104,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     }
   }, [isCompleted, recordId]);
 
-  if (!data?.documentStatus) return null;
-
-  // Derive badge status from installments
+  // Derive badge status from installments (must be before any early return)
   const badgeInfo = useMemo(() => {
     if (installmentsLoading || installments.length === 0) return null;
 
@@ -152,6 +150,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     installments.reduce((sum, i) => sum + (parseFloat(i.outstandingAmount) || 0), 0),
     [installments],
   );
+
+  if (!data?.documentStatus) return null;
 
   // Draft — only show Send button
   if (isDraft) {

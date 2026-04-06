@@ -14,7 +14,7 @@ const summary = [
   { key: 'inventoryType', column: 'Inventory_Type', type: 'enum' },
 ];
 
-const statusField = null;
+const statusField = 'processed';
 // @sf-generated-end summary:inventory
 
 // @sf-custom-slot extraBadges:inventory

@@ -345,6 +345,9 @@ export function ListView({
                     sortColumn={hook.sortColumn}
                     sortDirection={hook.sortDirection}
                     onColumnsReady={setTableColumns}
+                    api={api}
+                    token={token}
+                    apiBaseUrl={apiBaseUrl}
                   />
                 )
               }
