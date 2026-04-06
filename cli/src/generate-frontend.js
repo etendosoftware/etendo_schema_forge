@@ -388,7 +388,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const compName = `${headerName}Page`;
   const layoutType = contract?.frontendContract?.window?.layoutType ?? 'default';
   const isGallery = layoutType === 'gallery';
-  const isSidebar = isGallery && !!contract?.frontendContract?.window?.sidebarLayout;
+  const isSidebar = !!contract?.frontendContract?.window?.sidebarLayout;
   const processes = getProcessesForEntity(contract, headerEntity);
   const readOnlyFields = getReadOnlyFields(contract, headerEntity);
 
@@ -504,6 +504,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
     : '';
   const apiProp = apiPrediction ? '\n      api={api}' : '';
 
+  const windowBreadcrumbOverride = contract?.frontendContract?.window?.breadcrumb;
   const windowCategory = capitalize(contract?.frontendContract?.window?.category ?? 'general');
   const windowLabel = contract?.frontendContract?.window?.name ?? toLabel(headerEntity);
 
@@ -753,18 +754,39 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
     formFooterProp = `\n        formFooter={${compName}}`;
   }
 
+  // primaryTabs support
+  const primaryTabsConfig = windowConfig.primaryTabs ?? null;
+  let primaryTabsImports = '';
+  let primaryTabsProp = '';
+  if (primaryTabsConfig && specName) {
+    const imports = [];
+    const tabEntries = primaryTabsConfig.map(tab => {
+      if (tab.panel) {
+        imports.push(`import ${tab.panel} from '@/windows/custom/${specName}/${tab.panel}';`);
+        return `{ key: '${tab.key}', label: '${tab.label}', Panel: ${tab.panel} }`;
+      }
+      return `{ key: '${tab.key}', label: '${tab.label}' }`;
+    });
+    primaryTabsImports = imports.length > 0 ? imports.join('\n') + '\n' : '';
+    primaryTabsProp = `\n        primaryTabs={[\n          ${tabEntries.join(',\n          ')},\n        ]}`;
+  }
+
+  // othersLabel support
+  const othersLabelValue = windowConfig.othersLabel ?? null;
+  const othersLabelProp = othersLabelValue ? `\n        othersLabel="${othersLabelValue}"` : '';
+
   return `import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';${menuActionsConfig.length > 0 ? `\nimport { toast } from 'sonner';` : ''}
 ${headerTableImport}
 import ${headerName}Form from './${headerName}Form';${detailEntity ? `
 import ${detailName}Table from './${detailName}Table';
 import ${detailName}Form from './${detailName}Form';` : ''}
-${secondaryTabDefs.length > 0 ? `${secondaryTabsImports}\n` : ''}${formFooterImport}${listKpiCardsImport}${relatedDocsImport}${customCompImportBlock}import catalogs from './mockCatalogs';
+${secondaryTabDefs.length > 0 ? `${secondaryTabsImports}\n` : ''}${formFooterImport}${primaryTabsImports}${listKpiCardsImport}${relatedDocsImport}${customCompImportBlock}import catalogs from './mockCatalogs';
 ${isGallery ? `import ${headerName}Gallery from '@/windows/custom/${headerEntity}/${headerName}Gallery';` : ''}${isSidebar ? `
 import ${headerName}Sidebar from '@/windows/custom/${headerEntity}/${headerName}Sidebar';` : (isGallery ? `
 import ${headerName}DetailHeader from '@/windows/custom/${headerEntity}/${headerName}DetailHeader';` : '')}${statusBarImport}
 
-const breadcrumb = '${windowCategory} / ${windowLabel}';
+const breadcrumb = '${windowBreadcrumbOverride !== undefined ? windowBreadcrumbOverride : `${windowCategory} / ${windowLabel}`}';
 ${statusBarCode}
 
 ${MARKERS.GENERATED_START(`summary:${headerEntity}`)}
@@ -828,7 +850,7 @@ export default function ${compName}({ windowName, recordId, ...props }) {
         detailLabel="${entityDetailLabel}"` : ''}
         windowName={windowName}
         recordId={recordId}
-        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${documentPreviewProp}${hideDeleteProp}${hidePrintProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${headerContentProp}${detailSortByProp}${salesThemeProp}
+        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${primaryTabsProp}${othersLabelProp}${documentPreviewProp}${hideDeleteProp}${hidePrintProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${headerContentProp}${detailSortByProp}${salesThemeProp}
         {...props}${sidebarContentProp}
       />
     );

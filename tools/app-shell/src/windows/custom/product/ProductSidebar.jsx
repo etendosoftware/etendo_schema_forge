@@ -293,6 +293,7 @@ function StockChart({ transactions, currentStock, locationRows = [] }) {
   );
 }
 
+
 export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const [stockRows, setStockRows] = useState(null);
   const [transactions, setTransactions] = useState(null);

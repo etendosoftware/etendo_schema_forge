@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import BpartnerTable from './BpartnerTable';
 import BpartnerForm from './BpartnerForm';

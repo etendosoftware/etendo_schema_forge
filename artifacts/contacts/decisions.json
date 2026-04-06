@@ -1,12 +1,12 @@
 {
-  "$schema": "decisions-v1",
+  "$schema": "decisions-v2",
   "window": {
     "category": "people",
     "name": "Contacts",
     "entityLabel": "Contact",
-    "detailLabel": "Location/Address",
-    "detailTabIndex": 3,
-    "detailEntity": "bpartnerLocation",
+    "breadcrumb": "",
+    "sidebarLayout": true,
+    "detailEntity": null,
     "listKpiCards": {
       "customComponent": "ContactsKpiCards"
     },
@@ -14,28 +14,33 @@
       "customForm": "BillingPreferencesForm"
     },
     "secondaryTabs": {
-      "user": {
+      "contact": {
         "tabMode": "table-form",
         "tabOrder": 1,
-        "label": "Contact",
-        "addLineFields": ["firstName", "lastName", "email", "phone", "position"]
+        "label": "Contact Person",
+        "addLineFields": [
+          "firstName",
+          "lastName",
+          "email",
+          "phone",
+          "position"
+        ]
       },
-      "bpBankAccount": {
+      "bankAccount": {
         "tabMode": "table-form",
         "tabOrder": 2,
         "label": "Bank Account",
-        "addLineFields": ["bankName", "bankFormat", "accountNo", "iBAN"]
-      },
-      "bpartnerDiscount": {
-        "tabMode": "table-form",
-        "tabOrder": 3,
-        "label": "Basic Discount",
-        "addLineFields": ["lineNo", "discount"]
+        "addLineFields": [
+          "bankName",
+          "bankFormat",
+          "accountNo",
+          "iBAN"
+        ]
       }
     }
   },
   "entities": {
-    "cBpartner": {
+    "businessPartner": {
       "fields": {
         "employee": {
           "visibility": "editable",
@@ -93,6 +98,34 @@
           "label": "Credit Used",
           "grid": false,
           "section": "other"
+        },
+        "name2": {
+          "visibility": "editable",
+          "form": false
+        },
+        "uRL": {
+          "visibility": "editable",
+          "form": false
+        },
+        "consumptionDays": {
+          "visibility": "editable",
+          "form": false
+        },
+        "referenceNo": {
+          "visibility": "editable",
+          "form": false
+        },
+        "greeting": {
+          "visibility": "editable",
+          "form": false
+        },
+        "bPCurrencyID": {
+          "visibility": "editable",
+          "form": false
+        },
+        "isCustomerConsent": {
+          "visibility": "editable",
+          "form": false
         },
         "active": {
           "visibility": "readOnly",
@@ -189,7 +222,7 @@
         }
       }
     },
-    "cBpartnerLocation": {
+    "locationAddress": {
       "fields": {
         "name": {
           "visibility": "editable",
@@ -209,7 +242,7 @@
         }
       }
     },
-    "adUser": {
+    "contact": {
       "fields": {
         "name": {
           "visibility": "readOnly",
@@ -248,7 +281,7 @@
         }
       }
     },
-    "cBpartnerDiscount": {
+    "basicDiscount": {
       "fields": {
         "lineNo": {
           "visibility": "editable",
@@ -274,7 +307,7 @@
         }
       }
     },
-    "cBpBankAccount": {
+    "bankAccount": {
       "fields": {
         "bankName": {
           "visibility": "editable",
@@ -303,5 +336,6 @@
         }
       }
     }
-  }
+  },
+  "version": 2
 }

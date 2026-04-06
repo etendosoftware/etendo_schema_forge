@@ -1,14 +1,9 @@
+import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
-import PriceTable from './PriceTable';
-import PriceForm from './PriceForm';
-import CostingTable from './CostingTable';
-import CostingForm from './CostingForm';
-import TransactionsTable from './TransactionsTable';
-import TransactionsForm from './TransactionsForm';
-import StockTableGrouped from '@/windows/custom/product/StockTableGrouped';
-import StockForm from './StockForm';
+import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
+import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import catalogs from './mockCatalogs';
 import ProductGallery from '@/windows/custom/product/ProductGallery';
 import ProductSidebar from '@/windows/custom/product/ProductSidebar';
@@ -39,21 +34,7 @@ const processes = [
 const draftMode = null;
 // @sf-generated-end draftMode:product
 
-// @sf-generated-start addLineFields:price
-const addLineFields = {
-  entry: [
-    { key: 'priceListVersion', column: 'M_PriceList_Version_ID', type: 'selector', required: true, label: 'Price List Version', reference: 'PriceListVersion', inputMode: 'selector' },
-    { key: 'standardPrice', column: 'PriceStd', type: 'number', required: true, label: 'Unit Price' },
-    { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price' },
-  ],
-  derived: [
 
-  ],
-  hidden: [
-    { key: 'cost', value: '0' },
-  ],
-};
-// @sf-generated-end addLineFields:price
 
 const api = {
   "specName": "product",
@@ -469,26 +450,21 @@ export default function ProductPage({ windowName, recordId, ...props }) {
     return (
       <DetailView
         entity="product"
-        detailEntity="price"
         Form={ProductForm}
-        DetailTable={PriceTable}
-        DetailForm={PriceForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Product"
-        detailLabel="Price"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        secondaryTabs={[
-          { key: 'costing', label: 'Costing', Table: CostingTable, Form: CostingForm },
-          { key: 'transactions', label: 'Transactions', Table: TransactionsTable, Form: TransactionsForm },
-          { key: 'stock', label: 'Stock', Table: StockTableGrouped, Form: StockForm },
+        formFooter={ProductPriceBar}
+        primaryTabs={[
+          { key: 'general', label: 'General' },
+          { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
         ]}
         {...props}
         sidebarContent={(data) => (

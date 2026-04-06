@@ -5,21 +5,15 @@
     "name": "Product",
     "layoutType": "gallery",
     "sidebarLayout": true,
-    "secondaryTabs": {
-      "costing": {
-        "tabOrder": 1,
-        "label": "Costing"
-      },
-      "transactions": {
-        "tabOrder": 2,
-        "label": "Transactions"
-      },
-      "stock": {
-        "tabOrder": 3,
-        "label": "Stock",
-        "customTable": "StockTableGrouped"
-      }
-    }
+    "detailEntity": null,
+    "headerExtra": {
+      "customForm": "ProductPriceBar"
+    },
+    "primaryTabs": [
+      { "key": "general", "label": "General" },
+      { "key": "additionalInfo", "label": "Additional Info", "panel": "ProductAdditionalInfoPanel" }
+    ],
+    "secondaryTabs": {}
   },
   "entities": {
     "product": {

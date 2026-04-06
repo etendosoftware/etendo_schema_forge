@@ -368,7 +368,13 @@ function findEntityDecision(rawEntity, entitiesDecisions) {
   // 1. Exact match by current name (tabName-based)
   if (entitiesDecisions[rawEntity.name]) return entitiesDecisions[rawEntity.name];
 
-  // 2. Fallback: match by tableName derivation (handles unmigrated decisions)
+  // 2. Match by auto-simplified name (handles slash-named entities like "location/address" → "locationAddress")
+  const autoSimplified = autoSimplifyEntityName(rawEntity.name);
+  if (autoSimplified !== rawEntity.name && entitiesDecisions[autoSimplified]) {
+    return entitiesDecisions[autoSimplified];
+  }
+
+  // 3. Fallback: match by tableName derivation (handles unmigrated decisions)
   if (rawEntity.tableName) {
     const tableBasedKey = toCamelCase(rawEntity.tableName);
     if (entitiesDecisions[tableBasedKey]) return entitiesDecisions[tableBasedKey];
@@ -380,7 +386,7 @@ function findEntityDecision(rawEntity, entitiesDecisions) {
     }
   }
 
-  // 3. Match by name override in decision value
+  // 4. Match by name override in decision value
   for (const [, decVal] of Object.entries(entitiesDecisions)) {
     if (decVal.name === rawEntity.name) return decVal;
   }
@@ -531,6 +537,9 @@ export async function resolveCurated(schemaRaw, rulesRaw, decisions) {
   if (windowDecisions.hidePrint) {
     schema.window.hidePrint = true;
   }
+  if (windowDecisions.breadcrumb !== undefined) {
+    schema.window.breadcrumb = windowDecisions.breadcrumb;
+  }
   if (windowDecisions.customComponents) {
     schema.window.customComponents = windowDecisions.customComponents;
   }
@@ -573,6 +582,12 @@ export async function resolveCurated(schemaRaw, rulesRaw, decisions) {
   }
   if (windowDecisions.headerExtra) {
     schema.window.headerExtra = windowDecisions.headerExtra;
+  }
+  if (windowDecisions.primaryTabs) {
+    schema.window.primaryTabs = windowDecisions.primaryTabs;
+  }
+  if (windowDecisions.othersLabel) {
+    schema.window.othersLabel = windowDecisions.othersLabel;
   }
 
   const rules = resolveRules(rulesRaw, decisions);

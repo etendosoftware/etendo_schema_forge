@@ -118,6 +118,8 @@ export function DetailView({
   statusFieldLabel = null,
   salesTheme = false,
   sidebarContent = null,
+  othersLabel = null,
+  primaryTabs = null,
   onAfterSave,
 }) {
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl });
@@ -458,7 +460,9 @@ export function DetailView({
     tabs.unshift({ key: 'customLines', label: customLinesLabel });
   }
   // "Others" tab is added dynamically via othersRef after first render
-  const [showOthers, setShowOthers] = useState(null); // null = unknown, true/false after mount
+  // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
+  const [showOthers, setShowOthers] = useState(primaryTabs ? false : null);
+  const [activePrimaryTab, setActivePrimaryTab] = useState(primaryTabs?.[0]?.key ?? 'general');
   const [notesFocused, setNotesFocused] = useState(false);
   const othersRef = useRef(null);
 
@@ -470,7 +474,7 @@ export function DetailView({
   });
 
   if (showOthers === true) {
-    tabs.push({ key: 'others', label: 'Others' });
+    tabs.push({ key: 'others', label: othersLabel || 'Others' });
   }
 
   if (hook.loading) {
@@ -758,9 +762,39 @@ export function DetailView({
         </div>
         )}
 
+        {/* Primary tab bar (General / Additional Info / etc.) */}
+        {primaryTabs && (
+          <div className="flex border-b border-border/50 px-6 shrink-0">
+            {primaryTabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActivePrimaryTab(tab.key)}
+                className={[
+                  'flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors relative',
+                  activePrimaryTab === tab.key ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                ].join(' ')}
+              >
+                {tab.label}
+                {activePrimaryTab === tab.key && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
         <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 overflow-auto px-6 pb-6 min-w-0">
+        {/* Non-general primary tab: show Panel fullscreen */}
+        {primaryTabs && activePrimaryTab !== 'general' ? (() => {
+          const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
+          return activeTab?.Panel ? (
+            <div className="flex-1 overflow-auto px-6 pb-6 min-w-0">
+              <activeTab.Panel data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} />
+            </div>
+          ) : null;
+        })() : null}
+        <div className={`flex-1 overflow-auto px-6 pb-6 min-w-0${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`}>
           {typeof headerContent === 'function' ? headerContent(data) : headerContent}
           <div className={`${sidePanel ? 'flex items-start gap-0' : ''}`}>
           <div className={`${sidePanel ? 'flex-1 min-w-0' : 'max-w-full'} space-y-6`}>
@@ -1298,18 +1332,19 @@ export function DetailView({
                   </div>
                 )}
 
-                {/* Hidden probe: detect if Others form has content */}
-                {showOthers === null && (
-                  <div ref={othersRef} className="hidden">
-                    <Form
-                      entity={entity}
-                      data={data}
-                      onChange={() => {}}
-                      catalogs={catalogs}
-                      section="other"
-                    />
-                  </div>
-                )}
+              </div>
+            )}
+
+            {/* Hidden probe: detect if Others form has content (outside tabs block so it fires even when tabs is empty) */}
+            {showOthers === null && (
+              <div ref={othersRef} className="hidden">
+                <Form
+                  entity={entity}
+                  data={data}
+                  onChange={() => {}}
+                  catalogs={catalogs}
+                  section="other"
+                />
               </div>
             )}
 
