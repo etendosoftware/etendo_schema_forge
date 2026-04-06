@@ -540,7 +540,7 @@ export function DetailView({
               <X className="h-3.5 w-3.5" />
               Cancel
             </Button>
-            {!topbarRight && statusField && data[statusField] && (() => {
+            {!topbarRight && statusField && data[statusField] != null && (() => {
               const _s = data[statusField];
               return (
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[13px] font-medium ${getStatusPillClass(_s)}`}>
@@ -927,13 +927,16 @@ export function DetailView({
                         </div>
                       )}
 
-                      {allEntryFields.length > 0 && hook.editing && !isDocumentReadOnly && (
+                      {allEntryFields.length > 0 && hook.editing && !isDocumentReadOnly && !isNew && (
                         <button
                           onClick={() => { setAddingLine(!addingLine); setEditingChild(null); }}
                           className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 mt-3 font-medium"
                         >
                           + Add {detailLabel || 'line'}
                         </button>
+                      )}
+                      {allEntryFields.length > 0 && isNew && (
+                        <p className="text-xs text-muted-foreground mt-3">Save the header first to add lines.</p>
                       )}
                     </div>
 
