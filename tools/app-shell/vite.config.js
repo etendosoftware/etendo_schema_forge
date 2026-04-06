@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
   const ETENDO_URL = env.ETENDO_URL || process.env.ETENDO_URL || 'http://localhost:8080/etendo';
 
   return {
-  base: './',
+  base: '/',
   plugins: [
     react(),
     schemaApiPlugin(),
