@@ -157,9 +157,17 @@ export function generateMockValue(field, index, entityName) {
     return base.toISOString().split('T')[0];
   }
 
-  // Amount type
+  // Amount / quantity types
   if (type === 'amount') {
     return randomInt(500, 50000, index, 3);
+  }
+
+  if (type === 'quantity') {
+    return randomInt(1, 500, index, 6);
+  }
+
+  if (type === 'decimal') {
+    return parseFloat((randomInt(1, 9999, index, 7) / 100).toFixed(2));
   }
 
   // Integer type

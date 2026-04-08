@@ -33,7 +33,7 @@
             "form": true
           },
           {
-            "name": "taxId",
+            "name": "taxID",
             "column": "TaxID",
             "type": "string",
             "tsType": "string",
@@ -63,7 +63,17 @@
             "form": true
           },
           {
-            "name": "isActive",
+            "name": "creditUsed",
+            "column": "SO_CreditUsed",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "active",
             "column": "IsActive",
             "type": "boolean",
             "tsType": "boolean",
@@ -175,7 +185,7 @@
             "required": true
           },
           {
-            "name": "taxId",
+            "name": "taxID",
             "column": "TaxID",
             "type": "string",
             "visibility": "editable",
@@ -196,7 +206,14 @@
             "required": false
           },
           {
-            "name": "isActive",
+            "name": "creditUsed",
+            "column": "SO_CreditUsed",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "active",
             "column": "IsActive",
             "type": "boolean",
             "visibility": "readOnly",
@@ -406,9 +423,9 @@
         "id": "t-3",
         "category": "field-presence",
         "entity": "businessPartner",
-        "field": "taxId",
+        "field": "taxID",
         "runner": "node",
-        "description": "Field 'taxId' should be present in businessPartner"
+        "description": "Field 'taxID' should be present in businessPartner"
       },
       {
         "id": "t-4",
@@ -430,12 +447,20 @@
         "id": "t-6",
         "category": "field-presence",
         "entity": "businessPartner",
-        "field": "isActive",
+        "field": "creditUsed",
         "runner": "node",
-        "description": "Field 'isActive' should be present in businessPartner"
+        "description": "Field 'creditUsed' should be present in businessPartner"
       },
       {
         "id": "t-7",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in businessPartner"
+      },
+      {
+        "id": "t-8",
         "category": "field-type",
         "entity": "businessPartner",
         "field": "name",
@@ -443,7 +468,7 @@
         "description": "Field 'name' should have type 'string' in businessPartner"
       },
       {
-        "id": "t-8",
+        "id": "t-9",
         "category": "field-type",
         "entity": "businessPartner",
         "field": "searchKey",
@@ -451,15 +476,15 @@
         "description": "Field 'searchKey' should have type 'string' in businessPartner"
       },
       {
-        "id": "t-9",
+        "id": "t-10",
         "category": "field-type",
         "entity": "businessPartner",
-        "field": "taxId",
+        "field": "taxID",
         "runner": "node",
-        "description": "Field 'taxId' should have type 'string' in businessPartner"
+        "description": "Field 'taxID' should have type 'string' in businessPartner"
       },
       {
-        "id": "t-10",
+        "id": "t-11",
         "category": "field-type",
         "entity": "businessPartner",
         "field": "description",
@@ -467,7 +492,7 @@
         "description": "Field 'description' should have type 'string' in businessPartner"
       },
       {
-        "id": "t-11",
+        "id": "t-12",
         "category": "field-type",
         "entity": "businessPartner",
         "field": "creditLimit",
@@ -475,15 +500,23 @@
         "description": "Field 'creditLimit' should have type 'number' in businessPartner"
       },
       {
-        "id": "t-12",
+        "id": "t-13",
         "category": "field-type",
         "entity": "businessPartner",
-        "field": "isActive",
+        "field": "creditUsed",
         "runner": "node",
-        "description": "Field 'isActive' should have type 'boolean' in businessPartner"
+        "description": "Field 'creditUsed' should have type 'number' in businessPartner"
       },
       {
-        "id": "t-13",
+        "id": "t-14",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in businessPartner"
+      },
+      {
+        "id": "t-15",
         "category": "searchable-filters",
         "entity": "businessPartner",
         "field": "name",
@@ -491,7 +524,7 @@
         "description": "Field 'name' should be a supported filter for businessPartner"
       },
       {
-        "id": "t-14",
+        "id": "t-16",
         "category": "searchable-filters",
         "entity": "businessPartner",
         "field": "searchKey",
@@ -499,14 +532,14 @@
         "description": "Field 'searchKey' should be a supported filter for businessPartner"
       },
       {
-        "id": "t-15",
+        "id": "t-17",
         "category": "visibility",
         "entity": "businessPartner",
         "runner": "node",
         "description": "Entity 'businessPartner' should only expose visible fields in frontend"
       },
       {
-        "id": "t-16",
+        "id": "t-18",
         "category": "field-presence",
         "entity": "bpLocation",
         "field": "name",
@@ -514,7 +547,7 @@
         "description": "Field 'name' should be present in bpLocation"
       },
       {
-        "id": "t-17",
+        "id": "t-19",
         "category": "field-presence",
         "entity": "bpLocation",
         "field": "address",
@@ -522,7 +555,7 @@
         "description": "Field 'address' should be present in bpLocation"
       },
       {
-        "id": "t-18",
+        "id": "t-20",
         "category": "field-presence",
         "entity": "bpLocation",
         "field": "city",
@@ -530,7 +563,7 @@
         "description": "Field 'city' should be present in bpLocation"
       },
       {
-        "id": "t-19",
+        "id": "t-21",
         "category": "field-presence",
         "entity": "bpLocation",
         "field": "postalCode",
@@ -538,7 +571,7 @@
         "description": "Field 'postalCode' should be present in bpLocation"
       },
       {
-        "id": "t-20",
+        "id": "t-22",
         "category": "field-presence",
         "entity": "bpLocation",
         "field": "country",
@@ -546,7 +579,7 @@
         "description": "Field 'country' should be present in bpLocation"
       },
       {
-        "id": "t-21",
+        "id": "t-23",
         "category": "field-presence",
         "entity": "bpLocation",
         "field": "phone",
@@ -554,7 +587,7 @@
         "description": "Field 'phone' should be present in bpLocation"
       },
       {
-        "id": "t-22",
+        "id": "t-24",
         "category": "field-type",
         "entity": "bpLocation",
         "field": "name",
@@ -562,7 +595,7 @@
         "description": "Field 'name' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-23",
+        "id": "t-25",
         "category": "field-type",
         "entity": "bpLocation",
         "field": "address",
@@ -570,7 +603,7 @@
         "description": "Field 'address' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-24",
+        "id": "t-26",
         "category": "field-type",
         "entity": "bpLocation",
         "field": "city",
@@ -578,7 +611,7 @@
         "description": "Field 'city' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-25",
+        "id": "t-27",
         "category": "field-type",
         "entity": "bpLocation",
         "field": "postalCode",
@@ -586,7 +619,7 @@
         "description": "Field 'postalCode' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-26",
+        "id": "t-28",
         "category": "field-type",
         "entity": "bpLocation",
         "field": "country",
@@ -594,7 +627,7 @@
         "description": "Field 'country' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-27",
+        "id": "t-29",
         "category": "field-type",
         "entity": "bpLocation",
         "field": "phone",
@@ -602,7 +635,7 @@
         "description": "Field 'phone' should have type 'string' in bpLocation"
       },
       {
-        "id": "t-28",
+        "id": "t-30",
         "category": "searchable-filters",
         "entity": "bpLocation",
         "field": "name",
@@ -610,7 +643,7 @@
         "description": "Field 'name' should be a supported filter for bpLocation"
       },
       {
-        "id": "t-29",
+        "id": "t-31",
         "category": "searchable-filters",
         "entity": "bpLocation",
         "field": "city",
@@ -618,14 +651,14 @@
         "description": "Field 'city' should be a supported filter for bpLocation"
       },
       {
-        "id": "t-30",
+        "id": "t-32",
         "category": "visibility",
         "entity": "bpLocation",
         "runner": "node",
         "description": "Entity 'bpLocation' should only expose visible fields in frontend"
       },
       {
-        "id": "t-31",
+        "id": "t-33",
         "category": "system-field",
         "entity": "businessPartner",
         "field": "adClientId",
@@ -633,7 +666,7 @@
         "description": "System field 'adClientId' should exist in backend but not frontend for businessPartner"
       },
       {
-        "id": "t-32",
+        "id": "t-34",
         "category": "system-field",
         "entity": "businessPartner",
         "field": "adOrgId",
@@ -641,7 +674,7 @@
         "description": "System field 'adOrgId' should exist in backend but not frontend for businessPartner"
       },
       {
-        "id": "t-33",
+        "id": "t-35",
         "category": "system-field",
         "entity": "businessPartner",
         "field": "created",
@@ -649,7 +682,7 @@
         "description": "System field 'created' should exist in backend but not frontend for businessPartner"
       },
       {
-        "id": "t-34",
+        "id": "t-36",
         "category": "system-field",
         "entity": "businessPartner",
         "field": "updated",
@@ -657,7 +690,7 @@
         "description": "System field 'updated' should exist in backend but not frontend for businessPartner"
       },
       {
-        "id": "t-35",
+        "id": "t-37",
         "category": "system-field",
         "entity": "bpLocation",
         "field": "adClientId",
@@ -665,7 +698,7 @@
         "description": "System field 'adClientId' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-36",
+        "id": "t-38",
         "category": "system-field",
         "entity": "bpLocation",
         "field": "adOrgId",
@@ -673,7 +706,7 @@
         "description": "System field 'adOrgId' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-37",
+        "id": "t-39",
         "category": "system-field",
         "entity": "bpLocation",
         "field": "cBpartnerId",
@@ -681,7 +714,7 @@
         "description": "System field 'cBpartnerId' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-38",
+        "id": "t-40",
         "category": "system-field",
         "entity": "bpLocation",
         "field": "created",
@@ -689,7 +722,7 @@
         "description": "System field 'created' should exist in backend but not frontend for bpLocation"
       },
       {
-        "id": "t-39",
+        "id": "t-41",
         "category": "system-field",
         "entity": "bpLocation",
         "field": "updated",
@@ -698,16 +731,16 @@
       }
     ],
     "summary": {
-      "total": 39,
+      "total": 41,
       "byCategory": {
-        "field-presence": 12,
-        "field-type": 12,
+        "field-presence": 13,
+        "field-type": 13,
         "searchable-filters": 4,
         "visibility": 2,
         "system-field": 9
       },
       "byRunner": {
-        "node": 39,
+        "node": 41,
         "junit": 0
       }
     }

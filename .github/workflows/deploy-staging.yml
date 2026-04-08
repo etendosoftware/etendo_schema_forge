@@ -1,0 +1,62 @@
+name: Deploy SPA to staging
+
+on:
+  push:
+    branches:
+      - epic/ETP-3504
+
+env:
+  AWS_REGION:              eu-west-3
+  S3_BUCKET:               etendo-go-staging-ui
+  CLOUDFRONT_DISTRIBUTION: E2XAO6Y99940X9
+
+jobs:
+  deploy:
+    name: Build & deploy to S3 + CloudFront
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app-shell
+        run: npm run build --workspace=tools/app-shell
+        # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Sync dist to S3
+        run: |
+          aws s3 sync tools/app-shell/dist/ s3://${{ env.S3_BUCKET }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "index.html" \
+            --exclude "registerSW.js" \
+            --exclude "manifest.webmanifest" \
+            --exclude "sw.js"
+          # HTML, SW and manifest must not be cached long-term (no --cache-control override)
+          aws s3 sync tools/app-shell/dist/ s3://${{ env.S3_BUCKET }}/ \
+            --exclude "*" \
+            --include "index.html" \
+            --include "registerSW.js" \
+            --include "manifest.webmanifest" \
+            --include "sw.js" \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION }} \
+            --paths "/*"

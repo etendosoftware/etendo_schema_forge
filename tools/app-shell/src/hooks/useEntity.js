@@ -37,7 +37,7 @@ function resolveSortKey(sortColumn, sampleRow) {
   return sortColumn;
 }
 
-export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
+export function useEntity(entity, childEntity, { token, apiBaseUrl, childSortBy }) {
   const [items, setItems] = useState([]);
   const [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -99,7 +99,7 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
   const fetchChildren = useCallback((parentId) => {
     if (!childEntity || !parentId) { setChildren([]); return; }
     // NEO Headless uses ?parentId= to filter child entity records
-    fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}`, { headers })
+    fetch(`${apiBaseUrl}/${childEntity}?parentId=${parentId}${childSortBy ? `&_sortBy=${childSortBy}` : ''}`, { headers })
       .then(res => {
         if (!res.ok) throw new Error(`${res.status}`);
         return res.json();
@@ -180,7 +180,12 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
       }
       payload = changes;
     } else {
-      payload = editing;
+      // For POST (create), strip empty strings — let backend injectMandatoryDefaults
+      // resolve proper values for fields not explicitly set by the user or callouts.
+      payload = {};
+      for (const [key, value] of Object.entries(editing)) {
+        if (value !== '' && value != null) payload[key] = value;
+      }
     }
     // NEO Headless expects flat field values — NeoServlet handles wrapping for JsonDataService
     const body = JSON.stringify(payload);
@@ -232,8 +237,10 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
     if (!childEntity || !apiBaseUrl || !token || !selected?.id) return;
     try {
       const body = {};
-      // Only include fields that are valid for the entity (from addLineFields entry + derived keys)
-      // and convert numeric strings to numbers for BigDecimal compatibility
+      // Include all fields from childData, skipping internal/companion keys.
+      // Send values as-is — backend coerceTypes handles String→BigDecimal conversion.
+      // Do NOT convert numeric strings to Number here: legacy FK IDs like "100" (uOM)
+      // or "102" (currency) must remain strings, not integers.
       for (const [key, val] of Object.entries(childData)) {
         // Skip internal/companion keys
         if (key === 'id' || key.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(key)) continue;
@@ -241,17 +248,10 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
         if (key === 'CURSOR_FIELD' || key.startsWith('has')) continue;
         // Skip empty values — let backend defaults handle them
         if (val === '' || val == null) continue;
-        // Convert numeric strings to numbers for BigDecimal compatibility
-        if (typeof val === 'number') {
-          body[key] = val;
-        } else if (typeof val === 'string' && val.match(/^-?\d[\d,]*(\.\d+)?$/)) {
-          // Matches: "100", "0.89", "1,000.50", "-3.14"
-          body[key] = Number(val.replace(/,/g, ''));
-        } else {
-          body[key] = val;
-        }
+        body[key] = val;
       }
       // Include parentId in the body — the backend resolves it to the correct FK field name
+      // and uses it to load parent record values for @FieldName@ defaults (generic, no hardcoding).
       body.parentId = selected.id;
       const res = await fetch(`${apiBaseUrl}/${childEntity}`, {
         method: 'POST',
@@ -259,40 +259,81 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl }) {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.error('Failed to save line:', text);
-        return;
+        const msg = await extractErrorMessage(res);
+        setSaveError(msg);
+        toast.error(msg);
+        return null;
       }
+      const data = await res.json().catch(() => null);
       // Refresh children from backend
       fetchChildren(selected.id);
+      setSaveError(null);
+      toast.success('Line added');
+      return data?.response?.data?.[0] ?? data ?? true;
     } catch (err) {
-      console.error('Error adding child:', err);
+      const msg = err?.message || 'Network error';
+      setSaveError(msg);
+      toast.error(msg);
+      return null;
     }
   }, [childEntity, apiBaseUrl, token, selected, headers, fetchChildren]);
 
-  const handleUpdateChild = useCallback((childId, field, value) => {
-    setChildren(prev => prev.map(c =>
-      String(c.id) === String(childId) ? { ...c, [field]: value } : c
-    ));
+  const handleUpdateChild = useCallback((childId, fieldOrObject, value) => {
+    setChildren(prev => prev.map(c => {
+      if (String(c.id) !== String(childId)) return c;
+      if (typeof fieldOrObject === 'object') return { ...c, ...fieldOrObject };
+      return { ...c, [fieldOrObject]: value };
+    }));
   }, []);
 
   const handleDeleteChild = useCallback((childId) => {
     setChildren(prev => prev.filter(c => String(c.id) !== String(childId)));
   }, []);
 
-  const handleProcess = useCallback(async (processName) => {
-    if (!selected?.id) return;
-    await fetch(`${apiBaseUrl}/process/${processName}`, {
+  const handleSaveAndProcess = useCallback(async (draftModeConfig) => {
+    const saved = await handleSave();
+    if (!saved?.id) return null;
+
+    const { processField, processValue } = draftModeConfig;
+    const url = `${apiBaseUrl}/${entity}/${saved.id}/action`;
+    const res = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ id: selected.id }),
+      body: JSON.stringify({ fieldValues: { [processField]: processValue } }),
+    });
+    if (!res.ok) {
+      const msg = await extractErrorMessage(res);
+      toast.error(msg);
+      return saved;
+    }
+    toast.success('Record processed');
+    refresh();
+    return saved;
+  }, [handleSave, apiBaseUrl, entity, token, refresh]);
+
+  const handleProcess = useCallback(async (process, paramValues = {}) => {
+    if (!selected?.id) return;
+    // Build field values: start with hidden params from process definition, then merge user-supplied values
+    const fieldValues = {};
+    for (const p of (process.params ?? [])) {
+      if (p.hidden) fieldValues[p.key] = p.value;
+    }
+    Object.assign(fieldValues, paramValues);
+    const columnName = process.columnName;
+    const url = columnName
+      ? `${apiBaseUrl}/${entity}/${selected.id}/action/${columnName}`
+      : `${apiBaseUrl}/process/${process.name}`;
+    await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ fieldValues }),
     });
     refresh();
-  }, [selected, apiBaseUrl, token, refresh]);
+  }, [selected, entity, apiBaseUrl, token, refresh]);
 
   return {
     items, selected, editing, children, loading, loadingMore, hasMore, saveError,
-    handleSelect, handleNew, handleChange, handleSave, handleDelete, handleProcess,
+    handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
     handleAddChild, handleUpdateChild, handleDeleteChild,
     refresh, fetchById, loadMore,
     sortColumn, sortDirection, setSortColumn, setSortDirection,

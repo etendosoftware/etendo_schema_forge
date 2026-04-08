@@ -144,8 +144,39 @@ export default function AppSidebar({ menuGroups, expanded, onToggle }) {
             const isGroupActive = activeGroup?.group === g.group;
             const color = getSectionColor(tMenu(g.group));
             const isOpen = openGroups[g.group];
+            const visibleItems = g.items.filter(i => !i.hidden);
+            const isDirect = visibleItems.length === 1;
 
             if (!expanded) {
+              // Collapsed: direct icon link for single-item groups, popover for multi-item
+              if (isDirect) {
+                const singleItem = visibleItems[0];
+                const itemPath = singleItem.path || singleItem.name;
+                const isItemActive = singleItem.path?.includes('?')
+                  ? (currentPath + location.search) === itemPath
+                  : currentPath === singleItem.name;
+                return (
+                  <div key={g.group} className="flex justify-center py-0.5">
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <NavLink
+                          to={`/${itemPath}`}
+                          className={cn(
+                            'flex h-10 w-10 items-center justify-center rounded-xl transition-colors',
+                            isItemActive || isGroupActive
+                              ? 'bg-foreground text-white shadow-sm'
+                              : 'text-muted-foreground hover:bg-white hover:text-foreground'
+                          )}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </NavLink>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">{tMenu(singleItem.label)}</TooltipContent>
+                    </Tooltip>
+                  </div>
+                );
+              }
+
               // Collapsed: popover submenu
               return (
                 <div key={g.group} className="flex justify-center py-0.5">
@@ -188,6 +219,37 @@ export default function AppSidebar({ menuGroups, expanded, onToggle }) {
                       })}
                     </PopoverContent>
                   </Popover>
+                </div>
+              );
+            }
+
+            // Expanded: direct NavLink for single-item groups, collapsible for multi-item
+            if (isDirect) {
+              const singleItem = visibleItems[0];
+              const itemPath = singleItem.path || singleItem.name;
+              const isItemActive = singleItem.path?.includes('?')
+                ? (currentPath + location.search) === itemPath
+                : currentPath === singleItem.name;
+              return (
+                <div key={g.group}>
+                  {showSectionLabel && (
+                    <div className="px-4 pt-4 pb-1">
+                      <span className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">{g.section}</span>
+                    </div>
+                  )}
+                  <NavLink
+                    to={`/${itemPath}`}
+                    className={cn(
+                      'flex w-full items-center gap-2.5 px-4 py-2 text-sm transition-colors',
+                      isItemActive || isGroupActive
+                        ? 'text-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    )}
+                    style={isItemActive || isGroupActive ? { borderLeft: `3px solid ${color.accent}` } : undefined}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 text-left truncate">{tMenu(singleItem.label)}</span>
+                  </NavLink>
                 </div>
               );
             }

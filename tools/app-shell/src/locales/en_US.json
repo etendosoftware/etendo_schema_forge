@@ -709,7 +709,7 @@
       "description": ""
     },
     "IsInvoiced": {
-      "label": "Re-invoice",
+      "label": "Invoiced",
       "description": "An indication that a transaction may be invoiced to a business partner."
     },
     "IsPrinted": {

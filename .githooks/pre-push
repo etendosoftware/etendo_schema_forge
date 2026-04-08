@@ -1,55 +1,5 @@
 #!/usr/bin/env bash
 # .githooks/pre-push
-# Validates window locks (GitHub Issues) before push.
-# Skip with: git push --no-verify (CI is the final enforcer)
+# Add pre-push validations here as needed.
 
-set -euo pipefail
-
-ROOT="$(git rev-parse --show-toplevel)"
-
-# Get the GitHub username
-OWNER=$(gh api user --jq '.login' 2>/dev/null || git config user.name 2>/dev/null || echo "unknown")
-
-# Find which artifact windows are touched in commits being pushed
-CHANGED_WINDOWS=()
-while read -r local_ref local_oid remote_ref remote_oid; do
-  if [ "$remote_oid" = "0000000000000000000000000000000000000000" ]; then
-    BASE=$(git merge-base HEAD origin/main 2>/dev/null || echo "")
-    if [ -z "$BASE" ]; then continue; fi
-    RANGE="$BASE..HEAD"
-  else
-    RANGE="$remote_oid..$local_oid"
-  fi
-
-  for file in $(git diff --name-only "$RANGE" 2>/dev/null | grep '^artifacts/' || true); do
-    window=$(echo "$file" | cut -d'/' -f2)
-    if [ -n "$window" ]; then
-      CHANGED_WINDOWS+=("$window")
-    fi
-  done
-done
-
-# Deduplicate
-UNIQUE_WINDOWS=($(printf '%s\n' "${CHANGED_WINDOWS[@]}" 2>/dev/null | sort -u || true))
-
-if [ ${#UNIQUE_WINDOWS[@]} -eq 0 ]; then
-  exit 0
-fi
-
-# Check locks via lock-window.js (which uses GitHub Issues)
-ERRORS=0
-for window in "${UNIQUE_WINDOWS[@]}"; do
-  result=$(node "$ROOT/cli/src/lock-window.js" check --window "$window" --owner "$OWNER" 2>&1) || {
-    echo "LOCK ERROR: $result"
-    ERRORS=$((ERRORS + 1))
-  }
-done
-
-if [ $ERRORS -gt 0 ]; then
-  echo ""
-  echo "Push rejected: $ERRORS window(s) not locked by you ($OWNER)."
-  echo "Lock windows first: node cli/src/lock-window.js lock --window <name> --owner $OWNER"
-  exit 1
-fi
-
-echo "Lock check passed for ${#UNIQUE_WINDOWS[@]} window(s): ${UNIQUE_WINDOWS[*]}"
+exit 0

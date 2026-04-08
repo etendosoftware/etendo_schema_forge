@@ -29,8 +29,8 @@ describe('mapVisibility', () => {
     assert.deepStrictEqual(mapVisibility('readOnly'), { isIncluded: 'Y', isReadOnly: 'Y' });
   });
 
-  it('maps system to not included', () => {
-    assert.deepStrictEqual(mapVisibility('system'), { isIncluded: 'N', isReadOnly: 'N' });
+  it('maps system to included and read-only', () => {
+    assert.deepStrictEqual(mapVisibility('system'), { isIncluded: 'Y', isReadOnly: 'Y' });
   });
 
   it('maps discarded to not included', () => {
@@ -179,7 +179,7 @@ describe('pushToNeo dry run', () => {
       },
     };
 
-    await writeFile(join(artifactsDir, 'schema-curated.json'), JSON.stringify(schema));
+    await writeFile(join(artifactsDir, 'schema-raw.json'), JSON.stringify(schema));
     await writeFile(join(artifactsDir, 'contract.json'), JSON.stringify(contract));
   });
 
@@ -204,12 +204,12 @@ describe('pushToNeo dry run', () => {
       projectRoot: tmpDir,
     });
 
-    // editable(bp) + readOnly(docNo) = 2 included
-    assert.equal(result.summary.included, 2);
-    // system(client) + discarded(old) = 2 excluded
-    assert.equal(result.summary.excluded, 2);
-    // readOnly(docNo) = 1
-    assert.equal(result.summary.readOnly, 1);
+    // editable(bp) + readOnly(docNo) + system(client) = 3 included
+    assert.equal(result.summary.included, 3);
+    // discarded(old) = 1 excluded
+    assert.equal(result.summary.excluded, 1);
+    // readOnly(docNo) + system(client) = 2
+    assert.equal(result.summary.readOnly, 2);
     assert.equal(result.summary.totalFields, 4);
   });
 
@@ -255,7 +255,7 @@ describe('pushToNeo error handling', () => {
     );
   });
 
-  it('throws on missing schema-curated.json', async () => {
+  it('throws on missing schema-raw.json', async () => {
     const tmpDir = join(tmpdir(), `push-to-neo-err2-${Date.now()}`);
     const artifactsDir = join(tmpDir, 'artifacts', 'partial');
     await mkdir(artifactsDir, { recursive: true });
@@ -268,7 +268,7 @@ describe('pushToNeo error handling', () => {
         dryRun: true,
         projectRoot: tmpDir,
       }),
-      /Cannot read schema-curated\.json/,
+      /Cannot read schema-raw\.json/,
     );
   });
 });

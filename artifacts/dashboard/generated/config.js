@@ -94,7 +94,7 @@ export const actions = [
   },
   {
     "label": "+ Contact",
-    "route": "/business-partner",
+    "route": "/contacts",
     "icon": "Users"
   },
   {

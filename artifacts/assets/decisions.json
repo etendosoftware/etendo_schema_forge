@@ -1,0 +1,298 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "accounting",
+    "name": "Assets",
+    "detailSortBy": "sEQNoAsset asc",
+    "statusBar": {
+      "cards": [
+        { "field": "depreciatedValue", "label": "Depreciated Value", "color": "blue", "icon": "TrendingDown" },
+        { "field": "depreciatedPlan", "label": "Depreciated Plan", "color": "teal", "icon": "TrendingDown" }
+      ],
+      "progress": {
+        "numerator": "depreciatedValue",
+        "denominator": "assetValue",
+        "condition": "depreciate",
+        "label": "Depreciation",
+        "color": "orange",
+        "completedColor": "green",
+        "completedIcon": "CheckCircle2"
+      }
+    },
+    "secondaryTabs": {
+      "assetAcct": {
+        "label": "Accounting",
+        "tabOrder": 1
+      }
+    }
+  },
+  "entities": {
+    "assets": {
+      "fields": {
+        "searchKey": {
+          "searchable": true
+        },
+        "name": {
+          "grid": true,
+          "searchable": true
+        },
+        "assetCategory": {
+          "grid": true,
+          "searchable": true,
+          "inputMode": "selector",
+          "reference": "AssetGroup"
+        },
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "product": {
+          "inputMode": "search",
+          "reference": "Product"
+        },
+        "summaryLevel": {
+          "visibility": "discarded",
+          "reason": "Organization tree field not relevant in simplified UI"
+        },
+        "static": {
+          "visibility": "discarded",
+          "reason": "Tree positioning field not relevant in simplified UI"
+        },
+        "depreciate": {
+          "searchable": true
+        },
+        "depreciationType": {
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "calculateType": {
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "annualDepreciation": {
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType !== 'TI'"
+        },
+        "amortize": {
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
+        },
+        "usableLifeYears": {
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize === 'YE'"
+        },
+        "usableLifeMonths": {
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize !== 'YE'"
+        },
+        "everyMonthIs30Days": {
+          "visibility": "editable",
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'",
+          "reason": "Technical calculation detail — shown only when using Time-based depreciation"
+        },
+        "purchaseDate": {
+          "grid": true,
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "cancellationDate": {
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "depreciationStartDate": {
+          "grid": true,
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "depreciationEndDate": {
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "assetValue": {
+          "grid": true,
+          "summable": true,
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "residualAssetValue": {
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "depreciationAmt": {
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "previouslyDepreciatedAmt": {
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "depreciatedValue": {
+          "grid": true,
+          "summable": true,
+          "form": false
+        },
+        "depreciatedPlan": {
+          "form": false
+        },
+        "processed": {
+          "visibility": "editable",
+          "form": false,
+          "reason": "Create Amortization process button — rendered as process action, not a form field"
+        },
+        "processAsset": {
+          "form": false
+        },
+        "fullyDepreciated": {
+          "grid": true,
+          "searchable": true,
+          "badge": true,
+          "form": false
+        },
+        "project": {
+          "inputMode": "search",
+          "reference": "Project",
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        }
+      }
+    },
+    "assetAmortization": {
+      "name": "amortizationLine",
+      "fields": {
+        "sEQNoAsset": {
+          "visibility": "readOnly",
+          "grid": true,
+          "reason": "Auto-generated sequence number — users should not edit line numbering"
+        },
+        "amortization": {
+          "grid": true
+        },
+        "amortizationPercentage": {
+          "grid": true
+        },
+        "amortizationAmount": {
+          "grid": true
+        },
+        "currency": {
+          "grid": true,
+          "inputMode": "selector",
+          "reference": "Currency"
+        }
+      }
+    },
+    "accounting": {
+      "name": "assetAcct",
+      "fields": {
+        "accountingSchema": {
+          "grid": true
+        },
+        "accumulatedDepreciation": {
+          "grid": true
+        },
+        "depreciation": {
+          "grid": true
+        },
+        "disposalGain": {
+          "visibility": "discarded",
+          "reason": "Advanced asset management feature — not in scope for simplified UI"
+        },
+        "disposalLoss": {
+          "visibility": "discarded",
+          "reason": "Advanced asset management feature — not in scope for simplified UI"
+        }
+      }
+    }
+  },
+  "rules": {
+    "SL_Assets_Amortizationvalueamt": {
+      "type": "callout",
+      "entity": "asset",
+      "decision": "Omit",
+      "description": "Recalculates depreciation amount on asset value changes",
+      "impactIfOmitted": "No auto-recalculation when asset value is edited — users set amounts manually",
+      "reason": "Source not found — cannot analyze effects safely"
+    },
+    "SL_Assets_Residualassetvalueamt": {
+      "type": "callout",
+      "entity": "asset",
+      "decision": "Omit",
+      "description": "Recalculates fields when residual asset value changes",
+      "impactIfOmitted": "No auto-recalculation on residual value changes",
+      "reason": "Source not found — cannot analyze effects safely"
+    },
+    "SL_Assets_AssetValueAmt": {
+      "type": "callout",
+      "entity": "asset",
+      "decision": "Omit",
+      "description": "Recalculates fields when asset value changes",
+      "impactIfOmitted": "No auto-recalculation on asset value changes",
+      "reason": "Source not found — cannot analyze effects safely"
+    },
+    "SL_Asset_Product_M_Product_ID": {
+      "type": "callout",
+      "entity": "asset",
+      "decision": "Omit",
+      "description": "Auto-fills asset fields from selected product",
+      "impactIfOmitted": "Product selection does not auto-populate asset details",
+      "reason": "Source not found — cannot analyze effects safely"
+    },
+    "SL_Depreciate_A_Asset_Group_ID": {
+      "type": "callout",
+      "entity": "asset",
+      "decision": "Omit",
+      "description": "Auto-fills depreciation configuration from selected asset category",
+      "impactIfOmitted": "Selecting asset category does not auto-populate depreciation type, calculate type, and amortize schedule — users must set them manually",
+      "reason": "Source not found — key UX behavior but cannot safely implement without source"
+    },
+    "AD_User_C_BPartner_User_Contacts": {
+      "type": "validation",
+      "entity": "asset",
+      "decision": "Omit",
+      "description": "Filters user/contact selector by business partner",
+      "impactIfOmitted": "No impact — userContact field is system (not displayed)",
+      "reason": "Validation applies to a discarded/system field"
+    },
+    "C_BPartner_Location": {
+      "type": "validation",
+      "entity": "asset",
+      "decision": "Omit",
+      "description": "Filters partner address by business partner",
+      "impactIfOmitted": "No impact — partnerAddress field is system (not displayed)",
+      "reason": "Validation applies to a system field"
+    },
+    "AD_Org_show_child_organizations": {
+      "type": "validation",
+      "entity": "asset",
+      "decision": "Keep",
+      "description": "Filters organization selector to valid child orgs in the hierarchy",
+      "impactIfOmitted": "Organization selector shows all orgs instead of the valid subset",
+      "reason": "Simple SQL expression, standard Etendo org hierarchy pattern"
+    },
+    "readOnlyLogic_Currency_existAmortizationLines": {
+      "type": "readOnlyLogic",
+      "entity": "asset",
+      "decision": "Keep",
+      "description": "Currency becomes read-only once amortization lines exist",
+      "impactIfOmitted": "Users could change currency mid-process, corrupting amortization financial data",
+      "reason": "Critical data integrity rule — currency must be locked after depreciation schedule is created"
+    },
+    "readOnlyLogic_Processed_AmortizationLine": {
+      "type": "readOnlyLogic",
+      "entity": "amortizationLine",
+      "decision": "Keep",
+      "description": "Amortization line fields lock (read-only) once the line is processed",
+      "impactIfOmitted": "Users could edit amortization amounts after accounting entries are posted",
+      "reason": "Standard document locking — processed records must not be modified"
+    },
+    "process_CreateAmortization": {
+      "type": "process",
+      "entity": "asset",
+      "decision": "Keep",
+      "description": "Generates amortization schedule entries based on the asset depreciation configuration",
+      "impactIfOmitted": "No way to trigger depreciation schedule generation from the asset record",
+      "reason": "Core feature — primary action of this window"
+    },
+    "process_GenerateAmortizationPlan": {
+      "type": "process",
+      "entity": "asset",
+      "decision": "Keep",
+      "description": "Generates or recalculates the full amortization plan",
+      "impactIfOmitted": "Cannot regenerate the plan after changing depreciation parameters",
+      "reason": "Secondary action for plan recalculation when asset config changes"
+    },
+    "process_Processing": {
+      "type": "process",
+      "entity": "asset",
+      "decision": "Omit",
+      "description": "Hardcoded processing flag — internal status column",
+      "impactIfOmitted": "No user-facing impact",
+      "reason": "Internal mechanism, not a user-facing action"
+    }
+  },
+  "version": 2
+}

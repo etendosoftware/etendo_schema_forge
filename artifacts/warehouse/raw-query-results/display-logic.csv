@@ -1,8 +1,0 @@
-name,displaylogic,displaylogic_server,displaylogicgrid,readonlylogic,columnname
-Shipper Code,@isShipper@='Y',,,,Shippercode
-To Document No.,@isShipper@='Y',,,,ToDocumentNo
-Allocated,@StockReservations@!'',,,,Isallocated
-From Document No.,@isShipper@='Y',,,,FromDocumentNo
-Change Status,@Isvirtual@='N',,,,Change_Status
-Attribute Set Value,(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0'),,,,M_AttributeSetInstance_ID
-Attribute Set Value,(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0'),,,,M_AttributeSetInstance_ID

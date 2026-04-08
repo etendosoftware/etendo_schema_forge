@@ -6,31 +6,55 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Inbox, X, ChevronDown, Check } from 'lucide-react';
 import { FieldHighlight } from '@/components/inspector/FieldHighlight.jsx';
 import { useLabel } from '@/i18n';
-import { getStatusBadgeProps, statusLabel } from '@/lib/statusBadge.js';
+import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
+import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { getStatusBadgeProps, getStatusDotColor, statusLabel } from '@/lib/statusBadge.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
+import { formatAmount } from '@/lib/formatAmount.js';
+import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 
 /**
  * Compact inline combobox for search-type FK fields in rapid line entry.
  * Text input with filtered dropdown — lightweight alternative to full SearchInput.
  */
-function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeholder, inputRef }) {
+function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeholder, inputRef, selectorUrl, selectorContext, token }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [serverResults, setServerResults] = useState(null);
   const displayValue = options.find(o => o.id === value);
 
+  // Server-side search with debounce
+  const fetchTimer = useRef(null);
+  const fetchServerResults = useCallback((q) => {
+    if (!selectorUrl || !token || !q.trim()) { setServerResults(null); return; }
+    clearTimeout(fetchTimer.current);
+    fetchTimer.current = setTimeout(() => {
+      fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, q: q.trim() }), {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.items) setServerResults(data.items.map(it => ({ id: it.id, name: it.label || it.name, ...it })));
+        })
+        .catch(() => {});
+    }, 300);
+  }, [selectorUrl, selectorContext, token]);
+
   const filtered = useMemo(() => {
+    if (serverResults) return serverResults.slice(0, 20);
     if (!query) return options.slice(0, 15);
     const q = query.toLowerCase();
     return options.filter(o => {
       const name = o.name || o.label || o._identifier || '';
       return name.toLowerCase().includes(q);
     }).slice(0, 15);
-  }, [query, options]);
+  }, [query, options, serverResults]);
 
   const handleSelect = (opt) => {
     setQuery(opt.name || opt.label || opt._identifier || '');
     onChange(opt.id, opt.name || opt.label || opt._identifier || '', opt);
     setOpen(false);
+    setServerResults(null);
   };
 
   // Sync display when value is set externally
@@ -49,6 +73,8 @@ function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeho
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
+          setServerResults(null);
+          fetchServerResults(e.target.value);
           // Clear ID when typing (user is searching, not committed yet)
           if (value) onChange('', '');
         }}
@@ -69,7 +95,7 @@ function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeho
       />
       <ChevronDown className="absolute right-1.5 top-2 h-4 w-4 text-muted-foreground pointer-events-none" />
       {open && filtered.length > 0 && (
-        <div className="absolute z-50 top-full left-0 mt-0.5 bg-white border rounded-md shadow-lg max-h-40 overflow-auto min-w-[200px] w-max">
+        <div className="absolute z-50 bottom-full left-0 mb-0.5 bg-white border rounded-md shadow-lg max-h-40 overflow-auto min-w-[200px] w-max">
           {filtered.map(opt => (
             <button
               key={opt.id}
@@ -84,17 +110,6 @@ function InlineSearchCombo({ field, value, options, onChange, onKeyDown, placeho
       )}
     </div>
   );
-}
-
-/**
- * Format a number as currency with $ prefix and locale-aware separators.
- * e.g. 324000 → "$324.000,00"
- */
-function formatCurrency(value) {
-  if (value == null || value === '') return '\u2014';
-  const num = Number(value);
-  if (isNaN(num)) return value;
-  return '$' + num.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
@@ -161,7 +176,7 @@ function EmptyState({ hasFilter, totalCount }) {
  * Inline editable row rendered at the bottom of the table for rapid line entry.
  * Controlled by the `addRow` prop on DataTable.
  */
-function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, selectable }) {
+function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, selectable, token, apiBaseUrl, entity, selectorContext }) {
   const t = useLabel();
   const fieldMap = useMemo(() => {
     const map = {};
@@ -200,8 +215,11 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
     setValues(prev => ({ ...prev, [key]: val }));
   };
 
-  const handleConfirm = () => {
-    onAdd(values);
+  const handleConfirm = async () => {
+    const result = await onAdd(values);
+    if (result === false || result == null) {
+      return;
+    }
     // Reset for next rapid entry — recompute lineNo
     const nums = [...(data || []).map(r => Number(r.lineNo) || 0), Number(values.lineNo) || 0];
     const nextLineNo = Math.max(...nums) + 10;
@@ -244,7 +262,7 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleConfirm();
+      void handleConfirm();
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onCancel();
@@ -259,7 +277,7 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
       {selectable && (
         <TableCell className="w-10 px-1">
           <div className="flex gap-0.5">
-            <button type="button" onClick={handleConfirm} title="Add (Enter)"
+            <button type="button" onClick={() => { void handleConfirm(); }} title="Add (Enter)"
               className="h-7 w-7 flex items-center justify-center rounded text-emerald-600 hover:bg-emerald-50">
               <Check className="h-3.5 w-3.5" />
             </button>
@@ -273,20 +291,47 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
       {columns.map(col => {
         const field = fieldMap[col.key];
         if (!field) {
-          // Show callout-derived values if available, otherwise dash
-          const derivedVal = values[col.key];
+          // Show callout-derived values if available, otherwise dash.
+          // Prefer $_identifier (human-readable) over raw ID for FK fields.
+          const rawVal = values[col.key];
+          const identVal = values[col.key + '$_identifier'];
+          const displayVal = identVal || rawVal;
           return (
             <TableCell key={col.key} className="text-muted-foreground text-sm">
-              {derivedVal != null && derivedVal !== '' ? derivedVal : '\u2014'}
+              {displayVal != null && displayVal !== '' ? displayVal : '\u2014'}
             </TableCell>
           );
         }
         const isFirst = !firstInputAssigned;
         if (isFirst) firstInputAssigned = true;
 
+        // Lookup fields: click to open search modal (no inline combo)
+        if (field.type === 'search' && field.lookup) {
+          const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${field.column}` : null;
+          const displayLabel = values[field.key + '$_identifier'] || '';
+          return (
+            <TableCell key={col.key} className="py-1 px-2">
+              <LookupField
+                value={displayLabel}
+                placeholder={t(field.column) ?? field.label ?? field.key}
+                selectorUrl={selectorUrl}
+                token={token}
+                inputRef={isFirst ? firstInputRef : undefined}
+                onSelect={(item) => {
+                  handleChange(field.key + '$_identifier', item.label || item.name || item._identifier);
+                  handleFieldChange(field.key, item.id, item);
+                }}
+                onKeyDown={handleKeyDown}
+                title={t(field.column) ?? field.label ?? field.key}
+              />
+            </TableCell>
+          );
+        }
+
         // Search fields render as compact combobox (text input + filtered dropdown)
-        if (field.type === 'search' && catalogs?.[field.reference]) {
-          const options = catalogs[field.reference] || [];
+        if (field.type === 'search') {
+          const options = getCatalogOptions(catalogs, entity, field);
+          const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${field.column}` : null;
           return (
             <TableCell key={col.key} className="py-1 px-2">
               <InlineSearchCombo
@@ -300,14 +345,40 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
                   handleFieldChange(field.key, id, selectedItem);
                 }}
                 onKeyDown={handleKeyDown}
+                selectorUrl={selectorUrl}
+                selectorContext={selectorContext}
+                token={token}
               />
             </TableCell>
           );
         }
 
+        // Select fields with inline static options array
+        if (field.type === 'select' && field.options?.length) {
+          return (
+            <TableCell key={col.key} className="py-1 px-2">
+              <select
+                ref={isFirst ? firstInputRef : undefined}
+                value={values[field.key] ?? ''}
+                onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full h-8 text-sm rounded-md border border-input bg-background px-2 focus:ring-2 focus:ring-primary focus:outline-none"
+              >
+                <option value="" disabled hidden>{field.label ?? field.key}</option>
+                {field.options.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </TableCell>
+          );
+        }
+
         // Selector fields render as native <select> dropdowns (few options)
-        if (field.type === 'selector' && catalogs?.[field.reference]) {
-          const options = catalogs[field.reference] || [];
+        if (field.type === 'selector') {
+          const options = getCatalogOptions(catalogs, entity, field);
+          if (options.length === 0) {
+            return <TableCell key={col.key} className="py-1 px-2" />;
+          }
           return (
             <TableCell key={col.key} className="py-1 px-2">
               <select
@@ -324,7 +395,7 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
                 onKeyDown={handleKeyDown}
                 className="w-full h-8 text-sm rounded-md border border-input bg-background px-2 focus:ring-2 focus:ring-primary focus:outline-none"
               >
-                <option value="">{t(field.column) ?? field.label ?? field.key}</option>
+                <option value="" disabled hidden>{t(field.column) ?? field.label ?? field.key}</option>
                 {options.map(opt => (
                   <option key={opt.id} value={opt.id}>{opt.name || opt.label || opt._identifier || opt.id}</option>
                 ))}
@@ -354,6 +425,76 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
 }
 
 /**
+ * Inline field that shows selected value and opens modal on click/focus.
+ */
+function LookupField({ value, placeholder, selectorUrl, token, onSelect, onKeyDown, inputRef, title }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+
+  // Forward ref so parent can focus this field
+  useEffect(() => {
+    if (inputRef) inputRef.current = btnRef.current;
+  }, [inputRef]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(true); }
+          else if (onKeyDown) onKeyDown(e);
+        }}
+        className="w-full h-8 text-sm rounded-md border border-input bg-background px-2 text-left flex items-center gap-2 hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+      >
+        <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        {value ? (
+          <span className="truncate text-foreground">{value}</span>
+        ) : (
+          <span className="truncate text-muted-foreground">{placeholder}</span>
+        )}
+      </button>
+      <ProductSearchDrawer
+        open={open}
+        onClose={() => setOpen(false)}
+        onSelect={(item) => { onSelect(item); setOpen(false); }}
+        selectorUrl={selectorUrl}
+        token={token}
+        title={title ? `Search ${title}` : undefined}
+      />
+    </>
+  );
+}
+
+/**
+ * Small button that opens the ProductSearchDrawer for lookup-enabled fields.
+ */
+function LookupButton({ selectorUrl, token, onSelect, title }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="h-8 w-8 flex items-center justify-center rounded border border-input hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+        title={`Search ${title || ''}`}
+      >
+        <Search className="h-3.5 w-3.5" />
+      </button>
+      <ProductSearchDrawer
+        open={open}
+        onClose={() => setOpen(false)}
+        onSelect={(item) => { onSelect(item); setOpen(false); }}
+        selectorUrl={selectorUrl}
+        token={token}
+        title={title ? `Search ${title}` : undefined}
+      />
+    </>
+  );
+}
+
+/**
  * Generic data table driven by column/filter declarations.
  *
  * Props:
@@ -367,9 +508,10 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
  *  - loading: boolean (shows skeleton when true)
  *  - addRow: { active, fields, onAdd, onCancel, catalogs, onFieldChange } — inline add row config
  */
-export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, onNavigate, selectedId, compact, loading, addRow, selectable = true, onSelectionChange, sortColumn, sortDirection, onColumnsReady }) {
+export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, onNavigate, onRowClick, selectedRowId, selectedId, compact, loading, addRow, selectable = true, onSelectionChange, sortColumn, sortDirection, onColumnsReady, token, apiBaseUrl, showFooterTotals = true, selectorContext }) {
   const t = useLabel();
   const [searchQuery, setSearchQuery] = useState('');
+  const [columnFilters, setColumnFilters] = useState({});
   const [selectedRows, setSelectedRows] = useState(new Set());
 
   // Report columns to parent (e.g., ListView sort popover)
@@ -379,18 +521,32 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
     }
   }, [columns, onColumnsReady]);
 
-  const hasActiveFilter = searchQuery.length > 0;
+  const hasColumnFilter = useMemo(() => Object.values(columnFilters).some(v => v), [columnFilters]);
+  const hasActiveFilter = searchQuery.length > 0 || hasColumnFilter;
 
   const filteredData = useMemo(() => {
-    if (!searchQuery) return data;
-    const q = searchQuery.toLowerCase();
-    return data.filter(row =>
-      filters.some(key => {
+    let result = data;
+    // Global search (existing behaviour)
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(row =>
+        filters.some(key => {
+          const val = resolveIdentifier(row, key);
+          return String(val ?? '').toLowerCase().includes(q);
+        })
+      );
+    }
+    // Per-column filters (AND logic)
+    for (const [key, query] of Object.entries(columnFilters)) {
+      if (!query) continue;
+      const q = query.toLowerCase();
+      result = result.filter(row => {
         const val = resolveIdentifier(row, key);
         return String(val ?? '').toLowerCase().includes(q);
-      })
-    );
-  }, [data, filters, searchQuery]);
+      });
+    }
+    return result;
+  }, [data, filters, searchQuery, columnFilters]);
 
   const amountColumns = useMemo(
     () => columns.filter(col => col.type === 'amount'),
@@ -407,25 +563,87 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
   }, [filteredData, amountColumns]);
 
   const renderCellValue = (row, col) => {
+    // Custom render function takes priority
+    if (typeof col.render === 'function') return col.render(row);
     const display = resolveIdentifier(row, col.key);
     // Link styling on first string column
     if (col === columns[0] && col.type === 'string') {
-      return <span className="font-medium text-blue-600">{display}</span>;
+      const pill = col.pill;
+      const pillLabel = pill && pill.when(row) ? pill.label : null;
+      return (
+        <span className="inline-flex items-center gap-2">
+          <span className="font-medium text-blue-600">{display}</span>
+          {pillLabel && (
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${pill.className || 'bg-gray-50 text-gray-600 border-gray-200'}`} style={{ borderWidth: '0.5px' }}>
+              {pillLabel}
+            </span>
+          )}
+        </span>
+      );
     }
     if (col.type === 'enum') {
       const raw = row[col.key];
       const label = col.enumLabels?.[raw] ?? raw;
+      if (col.display === 'dot') {
+        const dotColor = getStatusDotColor(raw);
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+            {label}
+          </span>
+        );
+      }
       const badgeProps = getStatusBadgeProps(raw);
       return <Badge {...badgeProps}>{label}</Badge>;
     }
     if (col.type === 'status') {
       const raw = row[col.key];
-      const badgeProps = getStatusBadgeProps(raw);
       const label = col.enumLabels?.[raw] ?? statusLabel(raw);
+      if (col.display === 'dot') {
+        const dotColor = getStatusDotColor(raw);
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+            {label}
+          </span>
+        );
+      }
+      const badgeProps = getStatusBadgeProps(raw);
+      if (badgeProps.variant === 'outline' && !badgeProps.className) {
+        return <span className="text-sm text-muted-foreground">{label}</span>;
+      }
       return <Badge {...badgeProps}>{label}</Badge>;
+    }
+    if (col.type === 'percent') {
+      const val = Number(row[col.key]);
+      const pct = isNaN(val) ? 0 : val;
+      const color = pct >= 100 ? 'bg-emerald-500' : pct > 0 ? 'bg-amber-400' : 'bg-slate-200';
+      const textColor = pct >= 100 ? 'text-emerald-700' : pct > 0 ? 'text-amber-700' : 'text-slate-400';
+      return (
+        <div className="flex items-center gap-2">
+          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+          </div>
+          <span className={`text-xs tabular-nums ${textColor}`}>{pct}%</span>
+        </div>
+      );
     }
     if (col.type === 'boolean') {
       const val = row[col.key];
+      if (col.badge) {
+        const trueLabel  = col.badgeLabels?.true  ?? 'Completed';
+        const falseLabel = col.badgeLabels?.false ?? 'In Progress';
+        if (val === true || val === 'Y') return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+            {trueLabel}
+          </span>
+        );
+        if (val === false || val === 'N') return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+            {falseLabel}
+          </span>
+        );
+      }
       if (val === true || val === 'Y') return <span className="text-emerald-600">Yes</span>;
       if (val === false || val === 'N') return <span className="text-slate-400">No</span>;
       return <span className="text-slate-300">&mdash;</span>;
@@ -443,7 +661,7 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
       );
     }
     if (col.type === 'amount') {
-      return <span className="tabular-nums">{formatCurrency(row[col.key])}</span>;
+      return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
     }
     // Truncate long display values
     const val = display;
@@ -494,30 +712,71 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
       <div className="overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="border-b border-border/40">
+            <TableRow className="border-b border-border/40 bg-muted/30">
               {selectable && (
-                <TableHead className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={el => { if (el) el.indeterminate = someSelected; }}
-                    onChange={toggleAll}
-                    onClick={(e) => e.stopPropagation()}
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                  />
+                <TableHead className="w-10 px-3 align-top" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex flex-col gap-1.5 pt-1">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={el => { if (el) el.indeterminate = someSelected; }}
+                      onChange={toggleAll}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    />
+                    {hasColumnFilter && (
+                      <button
+                        onClick={() => setColumnFilters({})}
+                        title="Clear all filters"
+                        className="h-4 w-4 flex items-center justify-center rounded text-muted-foreground/50 hover:text-foreground transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
                 </TableHead>
               )}
               {columns.map(col => {
-                const colLabel = t(col.column) ?? col.label ?? col.key;
+                const colLabel = col.label ?? t(col.column) ?? col.key;
                 const isSorted = sortColumn === col.key;
+                const isRight = col.type === 'amount';
                 return (
-                  <TableHead key={col.key} className={`text-xs font-medium text-muted-foreground/70 tracking-wide ${col.type === 'amount' ? 'text-right' : ''}`}>
-                    <FieldHighlight entityName={entity} fieldName={col.key}>
-                      {colLabel}
-                      {isSorted && (
-                        <span className="ml-1 text-primary/70">{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
-                      )}
-                    </FieldHighlight>
+                  <TableHead key={col.key} className={`align-top ${isRight ? 'text-right' : ''}`}>
+                    <div className={`flex flex-col gap-1.5 pb-2 ${isRight ? 'items-end' : ''}`}>
+                      <span className="text-xs font-medium text-muted-foreground/70 tracking-wide">
+                        <FieldHighlight entityName={entity} fieldName={col.key}>
+                          {colLabel}
+                          {isSorted && (
+                            <span className="ml-1 text-primary/70">{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
+                          )}
+                        </FieldHighlight>
+                      </span>
+                      <div className="relative w-full">
+                        <input
+                          type="text"
+                          value={columnFilters[col.key] || ''}
+                          onChange={e => setColumnFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                          placeholder="Filter..."
+                          className={[
+                            'w-full h-6 rounded border bg-background/80 px-2 text-xs text-foreground',
+                            'placeholder:text-muted-foreground/35 transition-colors',
+                            'focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40',
+                            columnFilters[col.key]
+                              ? 'border-primary/40 bg-primary/5 pr-6'
+                              : 'border-border/35',
+                            isRight ? 'text-right' : '',
+                          ].filter(Boolean).join(' ')}
+                        />
+                        {columnFilters[col.key] && (
+                          <button
+                            onClick={() => setColumnFilters(prev => ({ ...prev, [col.key]: '' }))}
+                            className="absolute right-1 top-1/2 -translate-y-1/2 h-4 w-4 flex items-center justify-center text-muted-foreground/50 hover:text-foreground transition-colors"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </TableHead>
                 );
               })}
@@ -533,16 +792,23 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
             ) : (
               filteredData.map((row, idx) => {
                 const isChecked = selectedRows.has(row.id);
+                const isSelectedLine = row.id === selectedRowId;
                 return (
                   <TableRow
                     key={row.id ?? idx}
                     data-testid={`row-${row.id ?? idx}`}
-                    onClick={() => onNavigate ? onNavigate(row) : onRowSelect?.(row)}
+                    onClick={() => {
+                      if (onRowClick) onRowClick(row);
+                      else if (onNavigate) onNavigate(row);
+                      else onRowSelect?.(row);
+                    }}
                     className={[
-                      'cursor-pointer transition-colors h-12',
+                      'transition-colors h-12',
+                      onRowClick ? 'cursor-pointer' : 'cursor-pointer',
                       isChecked ? 'bg-primary/5' : '',
                       row.id === selectedId ? 'bg-primary/10' : '',
-                      'hover:bg-muted/50',
+                      isSelectedLine ? 'bg-zinc-700 text-white' : '',
+                      !isSelectedLine ? 'hover:bg-muted/50' : 'hover:bg-zinc-600',
                     ].filter(Boolean).join(' ')}
                   >
                     {selectable && (
@@ -574,18 +840,22 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
                 data={data}
                 catalogs={addRow.catalogs}
                 onFieldChange={addRow.onFieldChange}
-                selectable={selectable}
-              />
-            )}
+                  selectable={selectable}
+                  token={token}
+                  apiBaseUrl={apiBaseUrl}
+                  entity={entity}
+                  selectorContext={selectorContext}
+                />
+              )}
           </TableBody>
-          {totals && (
+          {totals && showFooterTotals && (
             <TableFooter>
               <TableRow className="font-medium">
                 {selectable && <TableCell />}
                 {columns.map((col, idx) => (
                   <TableCell key={col.key} className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}>
                     {col.type === 'amount'
-                      ? formatCurrency(totals[col.key])
+                      ? formatAmount(totals[col.key], filteredData[0]?.['currency$_identifier'])
                       : ''}
                   </TableCell>
                 ))}

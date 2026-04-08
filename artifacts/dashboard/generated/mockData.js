@@ -3,19 +3,23 @@
 export const kpis = {
   "revenueThisMonth": {
     "value": 48250,
-    "trend": 12.5
+    "trend": 12.5,
+    "previousValue": 42889
   },
   "expensesThisMonth": {
     "value": 31800,
-    "trend": 3.2
+    "trend": 3.2,
+    "previousValue": 30814
   },
   "netProfit": {
     "value": 16450,
-    "trend": 28.7
+    "trend": 28.7,
+    "previousValue": 12782
   },
   "pendingInvoices": {
     "value": 7,
-    "trend": -2
+    "trend": -2,
+    "previousValue": 7
   }
 };
 
@@ -55,23 +59,30 @@ export const pendingTasks = [
     "type": "warning",
     "text": "3 overdue invoices",
     "link": "/sales-invoice",
-    "amount": "$12,400"
+    "filter": { "documentStatus": "overdue" },
+    "amount": "$12,400",
+    "count": 3
   },
   {
     "type": "info",
     "text": "2 orders pending shipment",
-    "link": "/goods-shipment"
+    "link": "/goods-shipment",
+    "filter": { "documentStatus": "pending" },
+    "count": 2
   },
   {
     "type": "info",
     "text": "5 purchase orders to confirm",
-    "link": "/purchase-order"
+    "link": "/purchase-order",
+    "filter": { "documentStatus": "draft" },
+    "count": 5
   },
   {
     "type": "warning",
     "text": "1 low stock alert",
     "link": "/physical-inventory",
-    "detail": "Cerveza Ale 0.5L"
+    "detail": "Cerveza Ale 0.5L",
+    "count": 1
   }
 ];
 

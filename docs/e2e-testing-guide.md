@@ -413,6 +413,20 @@ make test-e2e-report    # Opens the report in browser
 
 Reports are saved to `artifacts/e2e-report/`. Screenshots from failed tests are in `e2e/test-results/`.
 
+## `data-testid` Convention
+
+Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit `data-testid` attributes automatically. Use `page.getByTestId()` in tests — it's language-independent and survives text changes.
+
+| Pattern | Example | Component |
+|---------|---------|-----------|
+| `field-{fieldKey}` | `field-businessPartner`, `field-partnerAddress` | EntityForm (all input types) |
+| `action-{name}` | `action-save`, `action-cancel`, `action-new`, `action-save-draft` | DetailView, ListView buttons |
+| `detail-view` | — | DetailView container |
+| `list-view` | — | ListView container |
+| `row-{id}` | `row-ABC123` | DataTable rows |
+| `option-{id}` | `option-ABC123` | SearchInput suggestions |
+| `option-{field}-{id}` | `option-warehouse-ABC123` | SelectorInput / DependentSelect items |
+
 ## Tips
 
 - **Start with smoke tests** — just verify the window loads. Then add flow tests.

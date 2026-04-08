@@ -1,0 +1,194 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "warehouse",
+    "name": "Physical Inventory"
+  },
+  "entities": {
+    "header": {
+      "name": "inventory",
+      "fields": {
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null
+        },
+        "warehouse": {
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null
+        },
+        "movementDate": {
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null
+        },
+        "inventoryType": {
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null
+        },
+        "name": {
+          "grid": true
+        },
+        "description": {
+          "readOnlyLogic": null
+        },
+        "docStatus": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true
+        },
+        "processed": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false
+        },
+        "asset": {
+          "visibility": "discarded"
+        },
+        "costCenter": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "lines": {
+      "name": "inventoryLine",
+      "fields": {
+        "locator": {
+          "inputMode": "selector",
+          "dependsOn": {
+            "field": "warehouse",
+            "filterKey": "M_Warehouse_ID"
+          },
+          "readOnlyLogic": null
+        },
+        "product": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "lineNo": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "bookQuantity": {
+          "visibility": "readOnly",
+          "label": "System Count",
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "quantityCount": {
+          "visibility": "editable",
+          "label": "User Count",
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "adjustmentQuantity": {
+          "visibility": "readOnly",
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "uOM": {
+          "visibility": "readOnly",
+          "grid": true,
+          "inputMode": "selector",
+          "readOnlyLogic": null
+        },
+        "attributeSetValue": {
+          "visibility": "discarded"
+        },
+        "orderQuantity": {
+          "visibility": "discarded"
+        },
+        "orderUOM": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "accounting": {
+      "name": "accounting",
+      "exclude": true
+    }
+  },
+  "rules": {
+    "SL_Inventory_Conversion": {
+      "entity": "inventoryLine",
+      "decision": "Omit",
+      "description": "UOM conversion for order UOM / operative quantity. Source not found — classic UI only.",
+      "impactIfOmitted": "UOM conversion not auto-calculated in UI; backend handles on save."
+    },
+    "SL_Inventory_Product": {
+      "entity": "inventoryLine",
+      "decision": "Omit",
+      "description": "Auto-fill UOM and storage bin from product. Source not found — classic UI only.",
+      "impactIfOmitted": "Users must manually set UOM and locator after selecting product."
+    },
+    "SL_Inventory_Locator": {
+      "entity": "inventoryLine",
+      "decision": "Omit",
+      "description": "Locator-related callout triggered on attribute set / locator. Source not found — classic UI only.",
+      "impactIfOmitted": "No auto-fill on locator change; acceptable for simplified UI."
+    },
+    "AD_Org show child organizations": {
+      "type": "validation",
+      "entity": "inventory",
+      "decision": "Keep",
+      "description": "Filters organization selector to child organizations in the hierarchy.",
+      "impactIfOmitted": "Users could select organizations outside their accessible tree."
+    },
+    "M_Locator of Warehouse": {
+      "type": "validation",
+      "entity": "inventoryLine",
+      "decision": "Keep",
+      "description": "Filters storage bin selector to bins belonging to the header warehouse (M_Locator.M_Warehouse_ID = @M_Warehouse_ID@).",
+      "impactIfOmitted": "Users could select storage bins from wrong warehouses."
+    },
+    "READONLY_Processed_Header": {
+      "type": "readOnlyLogic",
+      "entity": "inventory",
+      "decision": "Keep",
+      "description": "Header fields (warehouse, movementDate, description) become read-only when document is processed (Processed=Y).",
+      "impactIfOmitted": "Users could edit fields on confirmed inventory counts, breaking data integrity."
+    },
+    "READONLY_Processed_Lines": {
+      "type": "readOnlyLogic",
+      "entity": "inventoryLine",
+      "decision": "Keep",
+      "description": "Line fields (product, locator, lineNo, countQuantity) become read-only when document is processed.",
+      "impactIfOmitted": "Users could edit lines on confirmed inventory counts."
+    },
+    "PROCESS_ProcessInventoryCount": {
+      "type": "process",
+      "entity": "inventory",
+      "decision": "Omit",
+      "description": "Process Inventory Count classic button (Processing). Classic process — not applicable to simplified UI.",
+      "impactIfOmitted": "Inventory count processed through backend/workflow."
+    },
+    "PROCESS_CreateInventoryCountList": {
+      "type": "process",
+      "entity": "inventory",
+      "decision": "Omit",
+      "description": "Create Inventory Count List classic button (GenerateList). Generates count lines from stock — not applicable.",
+      "impactIfOmitted": "Lines added manually or through a separate flow."
+    },
+    "PROCESS_UpdateQuantity": {
+      "type": "process",
+      "entity": "inventory",
+      "decision": "Omit",
+      "description": "Update Quantity classic button. Not applicable to simplified UI.",
+      "impactIfOmitted": "Quantity update handled through backend."
+    },
+    "PROCESS_Posted": {
+      "type": "process",
+      "entity": "inventory",
+      "decision": "Omit",
+      "description": "Posted hardcoded button. Not applicable to simplified UI.",
+      "impactIfOmitted": "Accounting posting handled through backend."
+    }
+  },
+  "discardPatterns": [
+    "EM_*"
+  ],
+  "version": 2
+}

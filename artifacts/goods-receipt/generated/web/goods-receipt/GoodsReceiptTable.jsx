@@ -2,14 +2,16 @@ import { DataTable } from '@/components/contract-ui';
 
 // @sf-generated-start columns:goodsReceipt
 const columns = [
+  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
+  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
   { key: 'movementDate', column: 'MovementDate', type: 'date' },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'docStatus', column: 'DocStatus', type: 'status' },
+  { key: 'orderReference', column: 'POReference', type: 'string' },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status' },
 ];
 // @sf-generated-end columns:goodsReceipt
 
-const filters = ['businessPartner', 'movementDate', 'documentNo', 'docStatus'];
+const filters = ['documentNo', 'businessPartner', 'movementDate', 'orderReference', 'documentStatus'];
 
 // @sf-generated-start component:GoodsReceiptTable
 export default function GoodsReceiptTable(props) {

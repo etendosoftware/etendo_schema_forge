@@ -7,7 +7,6 @@ const columns = [
   { key: 'expectedAmount', column: 'Expected', type: 'amount' },
   { key: 'received', column: 'Received', type: 'amount' },
   { key: 'outstanding', column: 'Outstanding', type: 'amount' },
-  { key: 'lastPaymentDate', column: 'Lastpayment', type: 'date' },
   { key: 'numberOfPayments', column: 'Numberofpayments', type: 'number' },
   { key: 'currency', column: 'C_Currency_ID', type: 'string' },
 ];

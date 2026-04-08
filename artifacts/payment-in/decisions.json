@@ -1,0 +1,327 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "sales",
+    "name": "Payment In",
+    "documentPreview": { "titlePrefix": "Payment" },
+    "notesField": "description",
+    "relatedDocuments": true,
+    "hideDeleteWhenComplete": true,
+    "menuActions": [
+      { "key": "reverse", "label": "Reverse Payment", "destructive": true, "visibleWhenStatus": ["RPPC", "RPR", "RDNC"], "columnName": "aPRMReversePayment" }
+    ]
+  },
+  "entities": {
+    "header": {
+      "name": "finPayment",
+      "fields": {
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "inputMode": "text",
+          "section": "principal"
+        },
+        "businessPartner": {
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "paymentDate": {
+          "grid": true,
+          "searchable": true,
+          "inputMode": "date",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "amount": {
+          "grid": true,
+          "inputMode": "number",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "paymentMethod": {
+          "inputMode": "search",
+          "readOnlyLogic": null,
+          "section": "collapsed"
+        },
+        "account": {
+          "inputMode": "search",
+          "readOnlyLogic": null,
+          "dependsOn": {
+            "field": "paymentMethod",
+            "filterKey": "Fin_Paymentmethod_ID"
+          },
+          "section": "collapsed"
+        },
+        "currency": {
+          "inputMode": "search",
+          "readOnlyLogic": null,
+          "dependsOn": {
+            "field": "account",
+            "filterKey": "FIN_Financial_Account_ID"
+          },
+          "section": "collapsed"
+        },
+        "referenceNo": {
+          "inputMode": "text",
+          "section": "collapsed"
+        },
+        "description": {
+          "inputMode": "textarea",
+          "section": "collapsed"
+        },
+        "status": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false
+        },
+        "generatedCredit": {
+          "visibility": "discarded"
+        },
+        "usedCredit": {
+          "visibility": "discarded"
+        },
+        "organization": {
+          "visibility": "system"
+        },
+        "documentType": {
+          "visibility": "system"
+        },
+        "client": {
+          "visibility": "system"
+        },
+        "receipt": {
+          "visibility": "system"
+        },
+        "processed": {
+          "visibility": "system"
+        },
+        "payment": {
+          "visibility": "system"
+        },
+        "active": {
+          "visibility": "discarded"
+        },
+        "financialTransactionAmount": {
+          "visibility": "discarded"
+        },
+        "financialTransactionConvertRate": {
+          "visibility": "discarded"
+        },
+        "reversedPayment": {
+          "visibility": "discarded"
+        },
+        "processNow": {
+          "visibility": "discarded"
+        },
+        "aPRMReconcilePayment": {
+          "visibility": "discarded"
+        },
+        "aPRMReversePayment": {
+          "visibility": "discarded"
+        },
+        "writeoffAmount": {
+          "visibility": "discarded"
+        },
+        "aPRMAddScheduledpayments": {
+          "visibility": "discarded"
+        },
+        "posted": {
+          "visibility": "discarded"
+        },
+        "aPRMProcessPayment": {
+          "visibility": "discarded"
+        },
+        "aprmExecutepayment": {
+          "visibility": "discarded"
+        },
+        "project": {
+          "visibility": "discarded"
+        },
+        "costCenter": {
+          "visibility": "discarded"
+        },
+        "activity": {
+          "visibility": "discarded"
+        },
+        "salesCampaign": {
+          "visibility": "discarded"
+        },
+        "stDimension": {
+          "visibility": "discarded"
+        },
+        "ndDimension": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "lines": {
+      "name": "finPaymentScheduleDetail",
+      "fields": {
+        "invoicePaymentSchedule": {
+          "grid": true
+        },
+        "amount": {
+          "grid": true,
+          "inputMode": "number"
+        },
+        "dueDate": {
+          "grid": true,
+          "inputMode": "date"
+        },
+        "businessPartner": {
+          "visibility": "system"
+        },
+        "organization": {
+          "visibility": "system"
+        },
+        "client": {
+          "visibility": "system"
+        },
+        "fINPaymentScheduledetailID": {
+          "visibility": "system"
+        },
+        "writeoffAmount": {
+          "visibility": "discarded"
+        },
+        "canceled": {
+          "visibility": "discarded"
+        },
+        "doubtfulDebtAmount": {
+          "visibility": "discarded"
+        },
+        "invoicePaid": {
+          "visibility": "discarded"
+        },
+        "paymentDetails": {
+          "visibility": "discarded"
+        },
+        "documentNo": {
+          "visibility": "discarded",
+          "name": "documentNo2"
+        },
+        "active": {
+          "visibility": "discarded"
+        },
+        "orderPaymentSchedule": {
+          "visibility": "discarded"
+        },
+        "gLItem": {
+          "visibility": "discarded"
+        },
+        "expected": {
+          "visibility": "discarded"
+        },
+        "invoiceAmount": {
+          "visibility": "discarded"
+        },
+        "activity": {
+          "visibility": "discarded"
+        },
+        "product": {
+          "visibility": "discarded"
+        },
+        "salesCampaign": {
+          "visibility": "discarded"
+        },
+        "project": {
+          "visibility": "discarded"
+        },
+        "salesRegion": {
+          "visibility": "discarded"
+        },
+        "costCenter": {
+          "visibility": "discarded"
+        },
+        "stDimension": {
+          "visibility": "discarded"
+        },
+        "ndDimension": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "finPaymentExecHistoryV": {
+      "exclude": true
+    },
+    "cConversionRateDocument": {
+      "exclude": true
+    },
+    "finPaymentCredit": {
+      "exclude": true
+    },
+    "factAcct": {
+      "exclude": true
+    }
+  },
+  "rules": {
+    "SE_Payment_FinAccount": {},
+    "SE_Payment_MultiCurrency": {},
+    "SE_Payment_BPartner": {},
+    "SE_PaymentMethod_FinAccount": {},
+    "SL_AdvPayment_Document": {},
+    "SE_CalculateExchangeRate": {},
+    "AD_Client Trx Security validation": {
+      "type": "validation"
+    },
+    "AD_Org Trx Security validation": {
+      "type": "validation"
+    },
+    "AD_Client Security validation": {
+      "type": "validation"
+    },
+    "AD_Org Security validation": {
+      "type": "validation"
+    },
+    "Fin_FinancialAccountofPaymentMethod": {
+      "type": "validation"
+    },
+    "Currency of Financial Account": {
+      "type": "validation"
+    },
+    "FIN_Payment Status validation": {
+      "type": "validation"
+    },
+    "FIN_PaymentMethodsWithAccountIsReceiptControl": {
+      "type": "validation"
+    },
+    "C_DocType - Receive/Make Payment": {
+      "type": "validation"
+    },
+    "Document currency": {
+      "type": "validation"
+    },
+    "Accounting Schema currency": {
+      "type": "validation"
+    },
+    "undefined": {
+      "type": "readOnlyLogic",
+      "translated": "hASREVERSEDINVOICESO==true || hASREVERSEDINVOICEPO==true || posted==true"
+    },
+    "Execute Payment": {
+      "type": "process"
+    },
+    "Payment Process": {
+      "type": "process"
+    },
+    "Reverse Payment": {
+      "type": "process"
+    },
+    "EM_APRM_Reconcile_Payment": {
+      "type": "process"
+    },
+    "Posted": {
+      "type": "process"
+    },
+    "Add Payment": {
+      "type": "process"
+    },
+    "Print payments process": {
+      "type": "process"
+    }
+  },
+  "discardPatterns": [],
+  "version": 2
+}

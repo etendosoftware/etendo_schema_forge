@@ -2,12 +2,12 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:relatedServices
 const fields = [
-  { key: 'documentNo', column: 'documentNo', type: 'text', readOnly: true },
-  { key: 'lineNo', column: 'lineNo', type: 'number', readOnly: true },
-  { key: 'product', column: 'product', type: 'search', required: true, readOnly: true, reference: 'Product', inputMode: 'search' },
-  { key: 'attributeSetValue', column: 'attributeSetValue', type: 'text', readOnly: true },
-  { key: 'amount', column: 'amount', type: 'number', required: true, readOnly: true },
-  { key: 'quantity', column: 'quantity', type: 'text', required: true, readOnly: true },
+  { key: 'documentNo', column: 'documentNo', type: 'text', readOnly: true, section: 'other' },
+  { key: 'lineNo', column: 'lineNo', type: 'number', readOnly: true, section: 'other' },
+  { key: 'product', column: 'product', type: 'search', required: true, readOnly: true, section: 'other', reference: 'Product', inputMode: 'search' },
+  { key: 'attributeSetValue', column: 'attributeSetValue', type: 'text', readOnly: true, section: 'other' },
+  { key: 'amount', column: 'amount', type: 'number', required: true, readOnly: true, section: 'other' },
+  { key: 'quantity', column: 'quantity', type: 'text', required: true, readOnly: true, section: 'other' },
 ];
 // @sf-generated-end fields:relatedServices
 

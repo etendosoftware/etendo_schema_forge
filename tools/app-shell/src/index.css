@@ -17,6 +17,36 @@
   animation: page-enter 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+@keyframes slide-in-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.sidebar-slide-in {
+  animation: slide-in-from-right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slide-out-to-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.sidebar-slide-out {
+  animation: slide-out-to-right 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 .content-bg {
   background-image:
     radial-gradient(var(--section-accent, hsl(213 83% 48%)) 0.5px, transparent 0.5px);

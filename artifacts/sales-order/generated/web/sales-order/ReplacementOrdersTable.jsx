@@ -2,7 +2,7 @@ import { DataTable } from '@/components/contract-ui';
 
 // @sf-generated-start columns:replacementOrders
 const columns = [
-  { key: 'replacementOrder', column: 'C_Replacement_ID', type: 'string' },
+
 ];
 // @sf-generated-end columns:replacementOrders
 

@@ -1,17 +1,22 @@
 import { DataTable } from '@/components/contract-ui';
 
+// @sf-generated-start columns:inventoryLine
 const columns = [
-  { key: 'lineNo', column: 'Line', type: 'number' },
-  { key: 'product', column: 'M_Product_ID', type: 'string' },
-  { key: 'locator', column: 'M_Locator_ID', type: 'string' },
-  { key: 'bookQuantity', column: 'QtyBook', type: 'number' },
-  { key: 'countQuantity', column: 'QtyCount', type: 'number' },
-  { key: 'adjustmentQuantity', column: 'QtyAdjust', type: 'number' },
-  { key: 'uom', column: 'C_UOM_ID', type: 'string' },
+  { key: 'lineNo', column: 'Line', type: 'number', label: 'Line No.' },
+  { key: 'product', column: 'M_Product_ID', type: 'string', label: 'Product' },
+  { key: 'quantityCount', column: 'QtyCount', type: 'number', label: 'User Count' },
+  { key: 'uOM', column: 'C_UOM_ID', type: 'string', label: 'UOM' },
+  { key: 'bookQuantity', column: 'QtyBook', type: 'number', label: 'System Count' },
 ];
+// @sf-generated-end columns:inventoryLine
 
-const filters = ['product'];
+const filters = [];
 
+// @sf-generated-start component:InventoryLineTable
 export default function InventoryLineTable(props) {
+  // @sf-custom-slot hooks:InventoryLineTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
+// @sf-generated-end component:InventoryLineTable
+
+// @sf-custom-slot section:InventoryLineTable-custom

@@ -128,8 +128,8 @@ export function toPropertyName(adColumnName, { isPk = false, isCoreModule = true
 }
 
 export function toCamelCase(columnName) {
-  // Split on underscores first
-  const underscoreParts = columnName.split('_').filter(Boolean);
+  // Split on underscores and spaces first
+  const underscoreParts = columnName.split(/[_\s]+/).filter(Boolean);
 
   // Split each part on PascalCase boundaries (e.g. DocumentNo -> Document, No)
   const words = underscoreParts.flatMap((part) =>

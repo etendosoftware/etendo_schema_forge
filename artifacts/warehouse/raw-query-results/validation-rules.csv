@@ -1,2 +1,0 @@
-ad_val_rule_id,name,code,columnname
-103,AD_Client Security validation,AD_Client.AD_Client_ID in (@#User_Client@),AD_Client_ID

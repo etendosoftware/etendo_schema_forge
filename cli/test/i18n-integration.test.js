@@ -105,21 +105,20 @@ describe('generated artifacts i18n compliance', () => {
     assert.ok(jsxFiles.length > 0, `Expected generated JSX files in ${ARTIFACTS_DIR}`);
   });
 
-  it('all Form/Table files use column: instead of label: in field/column declarations', () => {
-    const filesWithLabel = [];
+  it('all field declarations have column: for i18n lookup; label: is allowed as per-window override', () => {
+    // Every field line must have column: (the i18n lookup key).
+    // label: is permitted alongside column: — it carries the per-window AD_Field.Name which
+    // takes priority over the global locale when the same column has different labels in
+    // different windows (e.g. BillTo_ID = "Invoice Address" in sales-order vs "Invoice From"
+    // in purchase-order).
     const filesWithoutColumn = [];
 
     for (const file of jsxFiles) {
       const content = readFileSync(file, 'utf8');
-      // Match field/column object literals with label: key (not inside comments or strings)
       const fieldLines = content.split('\n').filter(
         (line) => line.includes('{ key:') || line.includes("{ key:")
       );
       for (const line of fieldLines) {
-        if (line.includes('label:')) {
-          filesWithLabel.push(file);
-          break;
-        }
         if (!line.includes('column:')) {
           filesWithoutColumn.push(file);
           break;
@@ -127,11 +126,6 @@ describe('generated artifacts i18n compliance', () => {
       }
     }
 
-    assert.deepStrictEqual(
-      filesWithLabel,
-      [],
-      `Files still using label: instead of column: ${filesWithLabel.join(', ')}`,
-    );
     assert.deepStrictEqual(
       filesWithoutColumn,
       [],

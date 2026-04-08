@@ -1,0 +1,12 @@
+{
+  "processes": [
+    {
+      "name": "Process Receipt",
+      "entity": "returnMaterialReceipt",
+      "trigger": {
+        "field": "documentAction"
+      },
+      "params": []
+    }
+  ]
+}

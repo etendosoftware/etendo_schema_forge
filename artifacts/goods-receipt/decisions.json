@@ -1,0 +1,513 @@
+{
+  "$schema": "decisions-v1",
+  "window": {
+    "category": "purchases",
+    "name": "Goods Receipt"
+  },
+  "entities": {
+    "mInOut": {
+      "name": "goodsReceipt",
+      "fields": {
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null
+        },
+        "warehouse": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "businessPartner": {
+          "grid": true,
+          "searchable": true,
+          "reference": "BusinessPartner",
+          "readOnlyLogic": null
+        },
+        "partnerAddress": {
+          "reference": "BusinessPartnerLocation",
+          "inputMode": "dependent",
+          "dependsOn": {
+            "field": "businessPartner",
+            "filterKey": "C_BPartner_ID"
+          },
+          "readOnlyLogic": null
+        },
+        "movementDate": {
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null
+        },
+        "accountingDate": {
+          "readOnlyLogic": null
+        },
+        "orderReference": {
+          "grid": true,
+          "searchable": true
+        },
+        "documentStatus": {
+          "grid": true,
+          "form": false,
+          "searchable": true
+        },
+        "project": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "costcenter": {
+          "reference": "CostCenter",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "asset": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "stDimension": {
+          "reference": "UserDimension1",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "ndDimension": {
+          "reference": "UserDimension2",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "createLinesFrom": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "generateTo": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "processGoodsJava": {
+          "visibility": "discarded",
+          "displayLogic": null
+        }
+      }
+    },
+    "mInOutLine": {
+      "name": "goodsReceiptLine",
+      "fields": {
+        "lineNo": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "product": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "attributeSetValue": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "operativeQuantity": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "operativeUOM": {
+          "inputMode": "selector",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "movementQuantity": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "uOM": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "storageBin": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "invoiceQuantity": {
+          "grid": true,
+          "displayLogic": null
+        },
+        "businessPartner": {
+          "reference": "BusinessPartner",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "project": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "costcenter": {
+          "reference": "CostCenter",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "asset": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "stDimension": {
+          "reference": "UserDimension1",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "ndDimension": {
+          "reference": "UserDimension2",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "managePrereservation": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "explode": {
+          "visibility": "discarded",
+          "displayLogic": null
+        }
+      }
+    },
+    "factAcct": {
+      "name": "accounting",
+      "fields": {
+        "account": {
+          "grid": true,
+          "reference": null,
+          "inputMode": null
+        },
+        "accountingDate": {
+          "grid": true
+        },
+        "postingType": {
+          "visibility": "readOnly"
+        },
+        "debit": {
+          "grid": true
+        },
+        "credit": {
+          "grid": true
+        },
+        "description": {
+          "visibility": "readOnly"
+        },
+        "accountingFact": {
+          "name": "factAcct"
+        },
+        "table": {
+          "name": "adTable"
+        }
+      },
+      "javaQualifier": "factAcctHandler"
+    },
+    "mLcCost": {
+      "name": "landedCost",
+      "fields": {
+        "lineNo": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "landedCostType": {
+          "grid": true,
+          "reference": "LandedCostType",
+          "readOnlyLogic": null
+        },
+        "invoiceLine": {
+          "readOnlyLogic": null
+        },
+        "amount": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "currency": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "landedCostDistributionAlgorithm": {
+          "reference": "LandedCostDistributionAlgorithm",
+          "readOnlyLogic": null
+        },
+        "matched": {
+          "grid": true
+        },
+        "matchingAmount": {
+          "displayLogic": null
+        },
+        "landedCost": {
+          "reference": "LandedCost",
+          "readOnlyLogic": null
+        },
+        "matchingCostAdjustment": {
+          "inputMode": "selector",
+          "displayLogic": null
+        },
+        "isMatchingAdjusted": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "cancelMatching": {
+          "visibility": "discarded",
+          "displayLogic": null
+        }
+      }
+    }
+  },
+  "rules": {
+    "SL_InOut_AccountingDate": {
+      "entity": "goodsReceipt",
+      "decision": "Omit",
+      "description": "Auto-fill accounting date from movement date. Source not found — classic UI only, backend handles date defaulting.",
+      "impactIfOmitted": "Users must manually set accounting date; backend default still applies on save."
+    },
+    "SE_InOut_Organization": {
+      "entity": "goodsReceipt",
+      "decision": "Omit",
+      "description": "Organization change cascade. Source not found — classic UI only.",
+      "impactIfOmitted": "No cascade on organization change; acceptable for simplified UI."
+    },
+    "SE_InOut_DocType": {
+      "entity": "goodsReceipt",
+      "decision": "Omit",
+      "description": "Document type change cascade. Source not found — classic UI only.",
+      "impactIfOmitted": "No cascade on document type change."
+    },
+    "SL_InOut_BPartner": {
+      "entity": "goodsReceipt",
+      "decision": "Omit",
+      "description": "Auto-fill partner address from business partner. Source not found — classic UI only.",
+      "impactIfOmitted": "Users must manually select partner address after choosing business partner."
+    },
+    "SE_InOut_Warehouse": {
+      "entity": "goodsReceipt",
+      "decision": "Omit",
+      "description": "Warehouse change cascade. Source not found — classic UI only.",
+      "impactIfOmitted": "No cascade on warehouse change."
+    },
+    "SL_InOutLine_Product": {
+      "entity": "goodsReceiptLine",
+      "decision": "Omit",
+      "description": "Auto-fill UOM and storage bin from product. Source not found — classic UI only.",
+      "impactIfOmitted": "Users must manually set UOM and storage bin after selecting product."
+    },
+    "SL_InOut_Conversion": {
+      "entity": "goodsReceiptLine",
+      "decision": "Omit",
+      "description": "UOM conversion calculation for order UOM / operative quantity. Source not found — classic UI only.",
+      "impactIfOmitted": "UOM conversion not auto-calculated in UI; backend handles on save."
+    },
+    "OperativeQuantity_To_BaseQuantity": {
+      "entity": "goodsReceiptLine",
+      "decision": "Omit",
+      "description": "Converts operative quantity to base quantity. Source not found — classic UI only.",
+      "impactIfOmitted": "Base quantity calculated by backend on save."
+    },
+    "SL_LandedCost_Cost_Type": {
+      "entity": "landedCost",
+      "decision": "Omit",
+      "description": "Auto-fill amount and distribution algorithm from landed cost type. Source not found — classic UI only.",
+      "impactIfOmitted": "Users must manually fill amount and algorithm after selecting cost type."
+    },
+    "SL_LandedCost_InvoiceLine": {
+      "entity": "landedCost",
+      "decision": "Omit",
+      "description": "Auto-fill from invoice line selection. Source not found — classic UI only.",
+      "impactIfOmitted": "No auto-fill from invoice line."
+    },
+    "VAL_DocType_MaterialReceipt": {
+      "type": "validation",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Filters document type selector to material receipts/shipments matching transaction direction (IsSOTrx).",
+      "impactIfOmitted": "Users could select wrong document types (e.g., invoices instead of receipts)."
+    },
+    "VAL_BPartnerLocation_ShipTo": {
+      "type": "validation",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Filters partner address selector to ship-to locations of the selected business partner.",
+      "impactIfOmitted": "Users could select irrelevant addresses from other business partners."
+    },
+    "VAL_User_BPartnerContact": {
+      "type": "validation",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Filters user/contact selector to contacts of the selected business partner.",
+      "impactIfOmitted": "Users could select contacts from other business partners."
+    },
+    "VAL_User_OrgTree": {
+      "type": "validation",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Filters company agent selector to users in the organization hierarchy.",
+      "impactIfOmitted": "Users could select agents outside their org tree."
+    },
+    "VAL_Project_StatusAndBPartner": {
+      "type": "validation",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Filters project selector to open/ordered projects for the selected business partner.",
+      "impactIfOmitted": "Users could select closed or unrelated projects."
+    },
+    "VAL_DeliveryLocation_ShipTo": {
+      "type": "validation",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Filters delivery location to ship-to addresses of the selected business partner.",
+      "impactIfOmitted": "Users could select non-ship-to delivery addresses."
+    },
+    "VAL_Org_ShowChildren": {
+      "type": "validation",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Filters organization selector to child organizations in the hierarchy.",
+      "impactIfOmitted": "Users could select organizations outside their accessible tree."
+    },
+    "VAL_Locator_ByWarehouse": {
+      "type": "validation",
+      "entity": "goodsReceiptLine",
+      "decision": "Keep",
+      "description": "Filters storage bin selector to bins belonging to the header warehouse.",
+      "impactIfOmitted": "Users could select storage bins from wrong warehouses."
+    },
+    "VAL_UOM_ForProduct": {
+      "type": "validation",
+      "entity": "goodsReceiptLine",
+      "decision": "Keep",
+      "description": "Filters alternative UOM to valid UOMs for the selected product.",
+      "impactIfOmitted": "Users could select UOMs not applicable to the product."
+    },
+    "VAL_DocType_LandedCostCost": {
+      "type": "validation",
+      "entity": "landedCost",
+      "decision": "Keep",
+      "description": "Filters landed cost document type to LCC base type documents.",
+      "impactIfOmitted": "Users could select wrong document types for landed cost."
+    },
+    "READONLY_Processed_Header": {
+      "type": "readOnlyLogic",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Most header fields become read-only when document is processed (Processed=Y). Covers: documentNo, movementDate, businessPartner, partnerAddress, warehouse, priority, deliveryTerms, deliveryMethod, companyAgent, charge, documentType, chargeAmt.",
+      "impactIfOmitted": "Users could edit fields on confirmed receipts, breaking data integrity."
+    },
+    "READONLY_Posted_AccountingDate": {
+      "type": "readOnlyLogic",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Accounting date becomes read-only when document is posted (Posted=Y).",
+      "impactIfOmitted": "Users could change accounting date on posted documents."
+    },
+    "READONLY_BPartner_HasLines": {
+      "type": "readOnlyLogic",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Business partner becomes read-only when processed OR when receipt has existing lines (HAS_M_INOUTLINES=Y).",
+      "impactIfOmitted": "Users could change business partner after lines are added, causing inconsistency."
+    },
+    "READONLY_Processed_Lines": {
+      "type": "readOnlyLogic",
+      "entity": "goodsReceiptLine",
+      "decision": "Keep",
+      "description": "Line fields become read-only when parent header is processed. Covers: lineNo, product, storageBin, movementQty, uOM, orderUOM, orderQty, attributeSet, alternativeUOM, operativeQty.",
+      "impactIfOmitted": "Users could edit lines on confirmed receipts."
+    },
+    "READONLY_UomManagement_Qty": {
+      "type": "readOnlyLogic",
+      "entity": "goodsReceiptLine",
+      "decision": "Keep",
+      "description": "Movement quantity and UOM become read-only when UOM management is active (UomManagement=Y) — managed by the operative quantity field instead.",
+      "impactIfOmitted": "Users could override quantity/UOM that is controlled by operative UOM management."
+    },
+    "READONLY_LandedCost_Processed": {
+      "type": "readOnlyLogic",
+      "entity": "landedCost",
+      "decision": "Keep",
+      "description": "Landed cost fields become read-only when header is completed (HeaderStatus=CO) or processed. Covers: landedCost, landedCostType, amount, distributionAlgorithm, currency, invoiceLine, lineNo.",
+      "impactIfOmitted": "Users could modify landed cost records after completion."
+    },
+    "DISPLAY_InvoicedQty_WhenProcessed": {
+      "type": "displayLogic",
+      "entity": "goodsReceiptLine",
+      "decision": "Keep",
+      "description": "Invoiced quantity is only shown when header is processed (Processed=Y).",
+      "impactIfOmitted": "Invoiced quantity always visible even on draft receipts."
+    },
+    "DISPLAY_AttributeSet_WhenApplicable": {
+      "type": "displayLogic",
+      "entity": "goodsReceiptLine",
+      "decision": "Keep",
+      "description": "Attribute set value shown when product has attribute set and value type is not fixed, or when an instance already exists.",
+      "impactIfOmitted": "Attribute set selector shown for all products regardless of configuration."
+    },
+    "DISPLAY_OrderUOM_WhenApplicable": {
+      "type": "displayLogic",
+      "entity": "goodsReceiptLine",
+      "decision": "Keep",
+      "description": "Order UOM shown only when product has secondary UOM or UOM management is active.",
+      "impactIfOmitted": "Order UOM field always visible."
+    },
+    "DISPLAY_OperativeQty_WhenNoOrderUOM": {
+      "type": "displayLogic",
+      "entity": "goodsReceiptLine",
+      "decision": "Keep",
+      "description": "Operative quantity shown when product has no order UOM.",
+      "impactIfOmitted": "Operative quantity field always visible."
+    },
+    "DISPLAY_Dimensions_WhenEnabled": {
+      "type": "displayLogic",
+      "entity": "goodsReceipt",
+      "decision": "Keep",
+      "description": "Accounting dimensions (project, costcenter, asset, stDimension, ndDimension, activity, trxOrg) shown only when accounting dimension display is enabled (ACCT_DIMENSION_DISPLAY).",
+      "impactIfOmitted": "Dimension fields always visible regardless of system configuration."
+    },
+    "PROCESS_ProcessShipment": {
+      "type": "process",
+      "entity": "goodsReceipt",
+      "decision": "Omit",
+      "description": "Process Shipment action button (DocAction/Processing). Classic process button — not applicable to simplified UI.",
+      "impactIfOmitted": "Users process the receipt through backend/workflow, not through this UI."
+    },
+    "PROCESS_CreateLinesFrom": {
+      "type": "process",
+      "entity": "goodsReceipt",
+      "decision": "Omit",
+      "description": "Create Lines From hardcoded process. Classic UI picker — not applicable.",
+      "impactIfOmitted": "Lines must be added manually or through a separate flow."
+    },
+    "PROCESS_GenerateInvoice": {
+      "type": "process",
+      "entity": "goodsReceipt",
+      "decision": "Omit",
+      "description": "Generate Invoice from Receipt. Classic process button — discarded field.",
+      "impactIfOmitted": "Invoice generation handled separately."
+    },
+    "PROCESS_InvoiceFromShipment": {
+      "type": "process",
+      "entity": "goodsReceipt",
+      "decision": "Omit",
+      "description": "OBUIAPP Invoice From Shipment action handler. Not applicable to simplified UI.",
+      "impactIfOmitted": "Invoice generation handled through separate workflow."
+    },
+    "PROCESS_LandedCostMatching": {
+      "type": "process",
+      "entity": "landedCost",
+      "decision": "Omit",
+      "description": "Landed Cost Matching Process and Cancel Matching OBUIAPP processes. Complex costing actions — not applicable.",
+      "impactIfOmitted": "Landed cost matching managed through dedicated costing UI."
+    },
+    "PROCESS_ManagePrereservation": {
+      "type": "process",
+      "entity": "goodsReceiptLine",
+      "decision": "Omit",
+      "description": "Manage Prereservation Pick and Edit. Stock reservation management — not applicable.",
+      "impactIfOmitted": "Pre-reservation managed through dedicated stock UI."
+    },
+    "PROCESS_Explode": {
+      "type": "process",
+      "entity": "goodsReceiptLine",
+      "decision": "Omit",
+      "description": "Explode BOM process. Field discarded in curated schema.",
+      "impactIfOmitted": "BOM explosion not available in simplified UI."
+    }
+  },
+  "discardPatterns": [
+    "EM_*"
+  ]
+}

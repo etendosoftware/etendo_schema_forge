@@ -368,15 +368,19 @@ async function populateWindowSpec(client, { specId, windowId, moduleId, excludeS
     [windowId],
   );
 
-  // Load existing entities for this spec, indexed by ad_tab_id
+  // Load existing entities for this spec, indexed by ad_tab_id and name (fallback)
   const existingEntitiesResult = await client.query(
-    `SELECT etgo_sf_entity_id, ad_tab_id FROM etgo_sf_entity WHERE etgo_sf_spec_id = $1`,
+    `SELECT etgo_sf_entity_id, ad_tab_id, name FROM etgo_sf_entity WHERE etgo_sf_spec_id = $1`,
     [specId],
   );
   const existingEntityByTab = new Map();
+  const existingEntityByName = new Map();
   for (const row of existingEntitiesResult.rows) {
     if (row.ad_tab_id) {
       existingEntityByTab.set(row.ad_tab_id, row.etgo_sf_entity_id);
+    }
+    if (row.name) {
+      existingEntityByName.set(row.name, row.etgo_sf_entity_id);
     }
   }
 
@@ -397,7 +401,9 @@ async function populateWindowSpec(client, { specId, windowId, moduleId, excludeS
 
   for (const tab of tabsResult.rows) {
     const entitySeqNo = (entityCount + 1) * 10;
-    const existingEntityId = existingEntityByTab.get(tab.ad_tab_id) || null;
+    const existingEntityId = existingEntityByTab.get(tab.ad_tab_id)
+      || existingEntityByName.get(tab.name)
+      || null;
 
     const { entityId, created: entityCreated } = await upsertEntity(client, {
       specId,

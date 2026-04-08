@@ -1,8 +1,0 @@
-{
-  "version": "0.1.0",
-  "rules": [
-    { "name": "Commission_Require_Percentage_Or_Amount", "type": "validation", "entity": "commissionLine", "decision": "Keep", "description": "At least one of CommissionPercentage or CommissionAmount must be set on each line" },
-    { "name": "Commission_Percentage_Range", "type": "validation", "entity": "commissionLine", "decision": "Keep", "description": "CommissionPercentage must be between 0 and 100 when set" },
-    { "name": "Commission_Line_Criteria_Check", "type": "validation", "entity": "commissionLine", "decision": "Keep", "description": "At least one criteria (Product, ProductCategory, or BPGroup) should be set per line" }
-  ]
-}

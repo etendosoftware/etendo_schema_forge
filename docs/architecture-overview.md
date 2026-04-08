@@ -69,6 +69,42 @@ Schema Forge decides **what** to expose. Etendo Go decides **how** to serve it.
 
 ---
 
+## Two-Loop System
+
+- **Fast Loop (UI, seconds):** Human ↔ AI generating React components. Preview via sandboxed iframe with Babel standalone + mock data. No compilation, no backend.
+- **Validation Loop (Backend, minutes):** Configure via webhooks → contract tests (Node.js, instant) → verify endpoints live.
+
+## Stack
+
+| Layer | Technology | Location |
+|-------|-----------|----------|
+| CLI tools | Node.js (zero-dependency) | Schema Forge `cli/` |
+| Decision tools | React web apps | Schema Forge `tools/` |
+| AI integration | Claude Code subagents + skills | Schema Forge |
+| Runtime API | Java (NeoServlet, OBDal, CDI) | Etendo Go |
+| Configuration | Webhooks → ETGO_SF_* tables | Etendo Go |
+| Contract tests | Node.js (JSON assertions) | Schema Forge |
+| Integration tests | JUnit (extends OBBaseTest) | Etendo Go |
+
+## Repository Structure
+
+```
+schema-forge/                             # THIS REPO — design + tooling
+├── cli/                                  # Node.js CLI tools
+│   └── src/                              # All CLI source files
+├── tools/                                # React decision UIs
+│   ├── app-shell/                        # Main UI shell (Vite + React + Tailwind)
+│   ├── decision-panel/                   # Field visibility + rule curation
+│   └── ui-preview/                       # Live preview with mock data
+├── artifacts/{window-or-process-name}/   # Per-window/process: schemas, rules, decisions, generated code
+├── e2e/                                  # Playwright E2E tests
+├── core-maps/                            # system-columns.json, ad-reference-map.json, ad-menu-cache.json
+├── pending/                              # Future proposals
+└── docs/                                 # All documentation
+```
+
+---
+
 ## Data Flow
 
 ### 1. Extraction (Schema Forge reads Etendo)

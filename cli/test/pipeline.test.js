@@ -47,8 +47,8 @@ describe('buildPipelineSteps', () => {
     assert.equal(steps[1].name, 'extract-rules');
     assert.equal(steps[2].name, 'validate');
     assert.equal(steps[3].name, 'pre-classify');
-    // Step 4 is human-decisions (interactive, skippable)
-    assert.equal(steps[4].name, 'human-decisions');
+    // Step 4 is resolve-curated (applies raw + decisions → curated in memory)
+    assert.equal(steps[4].name, 'resolve-curated');
     assert.equal(steps[5].name, 'generate-contract');
   });
 
@@ -61,15 +61,16 @@ describe('buildPipelineSteps', () => {
     }
   });
 
-  it('marks human-decisions as interactive', () => {
+  it('marks translate-todos as interactive', () => {
     const steps = buildPipelineSteps();
-    const humanStep = steps.find(s => s.name === 'human-decisions');
-    assert.equal(humanStep.interactive, true);
+    const translateStep = steps.find(s => s.name === 'translate-todos');
+    assert.ok(translateStep, 'translate-todos step must exist');
+    assert.equal(translateStep.interactive, true);
   });
 
-  it('returns exactly 11 steps', () => {
+  it('returns exactly 12 steps', () => {
     const steps = buildPipelineSteps();
-    assert.equal(steps.length, 11);
+    assert.equal(steps.length, 12);
   });
 
   it('includes generate-frontend step with phase F8', () => {
@@ -114,13 +115,11 @@ describe('buildPipelineSteps', () => {
     assert.notEqual(lastStep.interactive, true, 'Last step should not be interactive');
   });
 
-  it('human-decisions and translate-todos steps are marked interactive', () => {
+  it('translate-todos is the only interactive step', () => {
     const steps = buildPipelineSteps();
     const interactiveSteps = steps.filter(s => s.interactive === true);
-    assert.equal(interactiveSteps.length, 2, `Expected exactly 2 interactive steps, found ${interactiveSteps.length}`);
-    const names = interactiveSteps.map(s => s.name);
-    assert.ok(names.includes('human-decisions'), 'human-decisions should be interactive');
-    assert.ok(names.includes('translate-todos'), 'translate-todos should be interactive');
+    assert.equal(interactiveSteps.length, 1, `Expected exactly 1 interactive step, found ${interactiveSteps.length}`);
+    assert.equal(interactiveSteps[0].name, 'translate-todos', 'translate-todos should be the only interactive step');
   });
 });
 

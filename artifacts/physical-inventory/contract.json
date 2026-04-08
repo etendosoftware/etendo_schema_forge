@@ -1,20 +1,53 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-03-06T18:08:57.629Z",
-  "checksum": "d4b2db3c97b45f55",
+  "generatedAt": "2026-03-30T12:31:11.025Z",
+  "checksum": "5abf790fffb64666",
   "frontendContract": {
     "window": {
       "id": "168",
       "name": "Physical Inventory",
       "primaryEntity": "inventory",
-      "category": "warehouse"
+      "category": "warehouse",
+      "layoutType": "default"
     },
     "entities": {
       "inventory": {
+        "tableName": "M_Inventory",
+        "tabId": "255",
+        "tabName": "Header",
+        "uiPattern": "STD",
         "fields": [
           {
+            "name": "movementDate",
+            "apiKey": "movementDate",
+            "column": "MovementDate",
+            "label": "Movement Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "@#Date@"
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "@#Date@"
+          },
+          {
             "name": "warehouse",
+            "apiKey": "warehouse",
             "column": "M_Warehouse_ID",
+            "label": "Warehouse",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
@@ -22,31 +55,13 @@
             "grid": true,
             "form": true,
             "reference": "Warehouse",
-            "inputMode": "selector"
-          },
-          {
-            "name": "movementDate",
-            "column": "MovementDate",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "inventoryType",
-            "column": "InventoryType",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true
+            "inputMode": "search"
           },
           {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
+            "label": "Description",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
@@ -55,50 +70,161 @@
             "form": true
           },
           {
-            "name": "documentNo",
-            "column": "DocumentNo",
-            "type": "string",
+            "name": "generateList",
+            "apiKey": "generateList",
+            "column": "GenerateList",
+            "label": "Create Inventory Count List",
+            "type": "button",
             "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "displayLogic": {
+              "raw": "@Processed@='N'",
+              "evaluable": true
+            }
           },
           {
-            "name": "docStatus",
-            "column": "DocStatus",
-            "type": "string",
+            "name": "updateQuantities",
+            "apiKey": "updateQuantities",
+            "column": "UpdateQty",
+            "label": "Update Quantity",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "displayLogic": {
+              "raw": "@Processed@='N'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "inventoryType",
+            "apiKey": "inventoryType",
+            "column": "Inventory_Type",
+            "label": "Inventory Type",
+            "type": "enum",
             "tsType": "string",
             "visibility": "readOnly",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "enumValues": [
+              {
+                "value": "C",
+                "name": "Closing Inventory"
+              },
+              {
+                "value": "N",
+                "name": "Normal"
+              },
+              {
+                "value": "O",
+                "name": "Opening Inventory"
+              }
+            ],
+            "defaultValue": "N"
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "search",
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "label": "Processed",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false
           }
         ],
         "searchableFields": [
-          "warehouse",
           "movementDate",
-          "inventoryType",
-          "documentNo",
-          "docStatus"
+          "warehouse",
+          "inventoryType"
         ],
-        "computedFields": []
+        "computedFields": [
+          {
+            "name": "movementDate",
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            }
+          },
+          {
+            "name": "name",
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            }
+          },
+          {
+            "name": "inventoryType",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "processed",
+            "derivation": {
+              "type": "computed",
+              "source": "false"
+            }
+          }
+        ]
       },
       "inventoryLine": {
+        "tableName": "M_InventoryLine",
+        "tabId": "256",
+        "tabName": "Lines",
+        "uiPattern": "STD",
         "fields": [
           {
             "name": "lineNo",
+            "apiKey": "lineNo",
             "column": "Line",
+            "label": "Line No.",
             "type": "integer",
             "tsType": "number",
             "visibility": "editable",
-            "required": true,
+            "required": false,
             "grid": true,
-            "form": true
+            "form": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InventoryLine WHERE M_Inventory_ID=@M_Inventory_ID@"
           },
           {
             "name": "product",
+            "apiKey": "product",
             "column": "M_Product_ID",
+            "label": "Product",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
@@ -106,34 +232,72 @@
             "grid": true,
             "form": true,
             "reference": "Product",
-            "inputMode": "search"
+            "inputMode": "search",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Inventory_Product"
+            }
           },
           {
-            "name": "locator",
+            "name": "storageBin",
+            "apiKey": "storageBin",
             "column": "M_Locator_ID",
+            "label": "Storage Bin",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": true,
+            "grid": false,
             "form": true,
             "reference": "Locator",
-            "inputMode": "selector"
+            "inputMode": "search",
+            "defaultValue": "@SQL=SELECT M_LOCATOR_ID AS DEFAULTVALUE FROM M_LOCATOR WHERE AD_ISORGINCLUDED(@AD_Org_ID@, M_LOCATOR.AD_Org_ID, @#AD_Client_ID@) <> -1 AND ISACTIVE='Y' AND M_WAREHOUSE_ID=@M_WAREHOUSE_ID@  ORDER BY M_LOCATOR.ISDEFAULT DESC",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Inventory_Locator"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true
+            }
           },
           {
-            "name": "bookQuantity",
-            "column": "QtyBook",
-            "type": "number",
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "quantityOrderBook",
+            "apiKey": "quantityOrderBook",
+            "column": "QuantityOrderBook",
+            "label": "Quantity order book",
+            "type": "quantity",
             "tsType": "number",
             "visibility": "readOnly",
             "required": false,
-            "grid": true,
-            "form": true
+            "grid": false,
+            "form": true,
+            "defaultValue": "0",
+            "displayLogic": {
+              "raw": "@HASSECONDUOM@=1",
+              "evaluable": true
+            }
           },
           {
-            "name": "countQuantity",
+            "name": "quantityCount",
+            "apiKey": "quantityCount",
             "column": "QtyCount",
-            "type": "number",
+            "label": "User Count",
+            "type": "quantity",
             "tsType": "number",
             "visibility": "editable",
             "required": true,
@@ -141,32 +305,72 @@
             "form": true
           },
           {
-            "name": "adjustmentQuantity",
-            "column": "QtyAdjust",
-            "type": "number",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "uom",
+            "name": "uOM",
+            "apiKey": "uOM",
             "column": "C_UOM_ID",
+            "label": "UOM",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "readOnly",
-            "required": false,
+            "required": true,
             "grid": true,
             "form": true,
             "reference": "UOM",
             "inputMode": "selector"
+          },
+          {
+            "name": "bookQuantity",
+            "apiKey": "bookQuantity",
+            "column": "QtyBook",
+            "label": "System Count",
+            "type": "quantity",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "cost",
+            "apiKey": "cost",
+            "column": "Cost",
+            "label": "Cost",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true
+            }
           }
         ],
-        "searchableFields": [
-          "product"
-        ],
-        "computedFields": []
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "lineNo",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InventoryLine WHERE M_Inventory_ID=@M_Inventory_ID@"
+            }
+          },
+          {
+            "name": "storageBin",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT M_LOCATOR_ID AS DEFAULTVALUE FROM M_LOCATOR WHERE AD_ISORGINCLUDED(@AD_Org_ID@, M_LOCATOR.AD_Org_ID, @#AD_Client_ID@) <> -1 AND ISACTIVE='Y' AND M_WAREHOUSE_ID=@M_WAREHOUSE_ID@  ORDER BY M_LOCATOR.ISDEFAULT DESC"
+            }
+          },
+          {
+            "name": "quantityOrderBook",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          }
+        ]
       }
     }
   },
@@ -179,161 +383,397 @@
     },
     "entities": {
       "inventory": {
+        "tableName": "M_Inventory",
+        "tabId": "255",
+        "tabName": "Header",
         "fields": [
           {
-            "name": "warehouse",
-            "column": "M_Warehouse_ID",
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
             "name": "movementDate",
+            "apiKey": "movementDate",
             "column": "MovementDate",
             "type": "date",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "inventoryType",
-            "column": "InventoryType",
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
             "type": "string",
             "visibility": "editable",
             "required": true
           },
           {
+            "name": "warehouse",
+            "apiKey": "warehouse",
+            "column": "M_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
             "type": "string",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "documentNo",
-            "column": "DocumentNo",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": true
+            "name": "generateList",
+            "apiKey": "generateList",
+            "column": "GenerateList",
+            "type": "button",
+            "visibility": "editable",
+            "required": false
           },
           {
-            "name": "docStatus",
-            "column": "DocStatus",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": true
+            "name": "updateQuantities",
+            "apiKey": "updateQuantities",
+            "column": "UpdateQty",
+            "type": "button",
+            "visibility": "editable",
+            "required": false
           },
           {
-            "name": "adClientId",
-            "column": "AD_Client_ID",
-            "type": "id",
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "type": "button",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "adOrgId",
-            "column": "AD_Org_ID",
-            "type": "id",
-            "visibility": "system",
+            "name": "inventoryType",
+            "apiKey": "inventoryType",
+            "column": "Inventory_Type",
+            "type": "enum",
+            "visibility": "readOnly",
             "required": true
           },
           {
-            "name": "cDocTypeId",
-            "column": "C_DocType_ID",
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "costCenter",
+            "apiKey": "costCenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "activity",
+            "apiKey": "activity",
+            "column": "C_Activity_ID",
             "type": "foreignKey",
             "visibility": "system",
-            "required": true
+            "required": false
+          },
+          {
+            "name": "salesCampaign",
+            "apiKey": "salesCampaign",
+            "column": "C_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "trxOrganization",
+            "apiKey": "trxOrganization",
+            "column": "AD_OrgTrx_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "processed",
+            "apiKey": "processed",
             "column": "Processed",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Inventory_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
             "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "created",
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
             "column": "Created",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
             "name": "updated",
+            "apiKey": "updated",
             "column": "Updated",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           }
         ]
       },
       "inventoryLine": {
+        "tableName": "M_InventoryLine",
+        "tabId": "256",
+        "tabName": "Lines",
         "fields": [
           {
             "name": "lineNo",
+            "apiKey": "lineNo",
             "column": "Line",
             "type": "integer",
             "visibility": "editable",
-            "required": true
+            "required": false
           },
           {
             "name": "product",
+            "apiKey": "product",
             "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "locator",
+            "name": "attributeSetValue",
+            "apiKey": "attributeSetValue",
+            "column": "M_AttributeSetInstance_ID",
+            "type": "productAttribute",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "storageBin",
+            "apiKey": "storageBin",
             "column": "M_Locator_ID",
             "type": "foreignKey",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "bookQuantity",
-            "column": "QtyBook",
-            "type": "number",
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "orderQuantity",
+            "apiKey": "orderQuantity",
+            "column": "QuantityOrder",
+            "type": "quantity",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "orderUOM",
+            "apiKey": "orderUOM",
+            "column": "M_Product_Uom_Id",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "quantityOrderBook",
+            "apiKey": "quantityOrderBook",
+            "column": "QuantityOrderBook",
+            "type": "quantity",
             "visibility": "readOnly",
             "required": false
           },
           {
-            "name": "countQuantity",
+            "name": "quantityCount",
+            "apiKey": "quantityCount",
             "column": "QtyCount",
-            "type": "number",
+            "type": "quantity",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "adjustmentQuantity",
-            "column": "QtyAdjust",
-            "type": "number",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "uom",
+            "name": "uOM",
+            "apiKey": "uOM",
             "column": "C_UOM_ID",
             "type": "foreignKey",
             "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "bookQuantity",
+            "apiKey": "bookQuantity",
+            "column": "QtyBook",
+            "type": "quantity",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "cost",
+            "apiKey": "cost",
+            "column": "Cost",
+            "type": "decimal",
+            "visibility": "editable",
             "required": false
           },
           {
-            "name": "adClientId",
-            "column": "AD_Client_ID",
-            "type": "id",
+            "name": "relatedInventory",
+            "apiKey": "relatedInventory",
+            "column": "Relatedinventorylineid",
+            "type": "foreignKey",
             "visibility": "system",
-            "required": true
+            "required": false
           },
           {
-            "name": "adOrgId",
+            "name": "organization",
+            "apiKey": "organization",
             "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "physInventory",
+            "apiKey": "physInventory",
+            "column": "M_Inventory_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_InventoryLine_ID",
             "type": "id",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "mInventoryId",
-            "column": "M_Inventory_ID",
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -347,11 +787,9 @@
         "path": "/inventory",
         "entity": "inventory",
         "supportedFilters": [
-          "warehouse",
           "movementDate",
-          "inventoryType",
-          "documentNo",
-          "docStatus"
+          "warehouse",
+          "inventoryType"
         ]
       },
       {
@@ -382,9 +820,7 @@
         "method": "GET",
         "path": "/inventoryLine",
         "entity": "inventoryLine",
-        "supportedFilters": [
-          "product"
-        ]
+        "supportedFilters": []
       },
       {
         "method": "GET",
@@ -413,18 +849,129 @@
     ],
     "processEndpoints": []
   },
+  "apiPrediction": {
+    "specName": "physical-inventory",
+    "baseUrl": "/sws/neo/physical-inventory",
+    "crud": {
+      "inventory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/physical-inventory/inventory",
+        "detailUrl": "/sws/neo/physical-inventory/inventory/{id}",
+        "supportedFilters": [
+          "movementDate",
+          "warehouse",
+          "inventoryType"
+        ]
+      },
+      "inventoryLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/physical-inventory/inventoryLine",
+        "detailUrl": "/sws/neo/physical-inventory/inventoryLine/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "inventory",
+        "field": "warehouse",
+        "column": "M_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "search",
+        "url": "/sws/neo/physical-inventory/inventory/selectors/warehouse"
+      },
+      {
+        "entity": "inventory",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/physical-inventory/inventory/selectors/project"
+      },
+      {
+        "entity": "inventoryLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/physical-inventory/inventoryLine/selectors/product"
+      },
+      {
+        "entity": "inventoryLine",
+        "field": "storageBin",
+        "column": "M_Locator_ID",
+        "reference": "Locator",
+        "inputMode": "search",
+        "url": "/sws/neo/physical-inventory/inventoryLine/selectors/storageBin"
+      },
+      {
+        "entity": "inventoryLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/physical-inventory/inventoryLine/selectors/uOM"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "inventory",
+        "field": "generateList",
+        "column": "GenerateList",
+        "url": "/sws/neo/physical-inventory/inventory/{id}/action/generateList",
+        "processId": "105",
+        "processType": "classic"
+      },
+      {
+        "entity": "inventory",
+        "field": "updateQuantities",
+        "column": "UpdateQty",
+        "url": "/sws/neo/physical-inventory/inventory/{id}/action/updateQuantities",
+        "processId": "106",
+        "processType": "classic"
+      },
+      {
+        "entity": "inventory",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/physical-inventory/inventory/{id}/action/processNow",
+        "processId": "107",
+        "processType": "classic"
+      },
+      {
+        "entity": "inventory",
+        "field": "posted",
+        "column": "Posted",
+        "url": "/sws/neo/physical-inventory/inventory/{id}/action/posted"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=physical-inventoryDate"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    }
+  },
   "testManifest": {
     "tests": [
       {
         "id": "t-1",
-        "category": "field-presence",
-        "entity": "inventory",
-        "field": "warehouse",
-        "runner": "node",
-        "description": "Field 'warehouse' should be present in inventory"
-      },
-      {
-        "id": "t-2",
         "category": "field-presence",
         "entity": "inventory",
         "field": "movementDate",
@@ -432,12 +979,20 @@
         "description": "Field 'movementDate' should be present in inventory"
       },
       {
+        "id": "t-2",
+        "category": "field-presence",
+        "entity": "inventory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in inventory"
+      },
+      {
         "id": "t-3",
         "category": "field-presence",
         "entity": "inventory",
-        "field": "inventoryType",
+        "field": "warehouse",
         "runner": "node",
-        "description": "Field 'inventoryType' should be present in inventory"
+        "description": "Field 'warehouse' should be present in inventory"
       },
       {
         "id": "t-4",
@@ -451,28 +1006,44 @@
         "id": "t-5",
         "category": "field-presence",
         "entity": "inventory",
-        "field": "documentNo",
+        "field": "generateList",
         "runner": "node",
-        "description": "Field 'documentNo' should be present in inventory"
+        "description": "Field 'generateList' should be present in inventory"
       },
       {
         "id": "t-6",
         "category": "field-presence",
         "entity": "inventory",
-        "field": "docStatus",
+        "field": "updateQuantities",
         "runner": "node",
-        "description": "Field 'docStatus' should be present in inventory"
+        "description": "Field 'updateQuantities' should be present in inventory"
       },
       {
         "id": "t-7",
-        "category": "field-type",
+        "category": "field-presence",
         "entity": "inventory",
-        "field": "warehouse",
+        "field": "inventoryType",
         "runner": "node",
-        "description": "Field 'warehouse' should have type 'string' in inventory"
+        "description": "Field 'inventoryType' should be present in inventory"
       },
       {
         "id": "t-8",
+        "category": "field-presence",
+        "entity": "inventory",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in inventory"
+      },
+      {
+        "id": "t-9",
+        "category": "field-presence",
+        "entity": "inventory",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should be present in inventory"
+      },
+      {
+        "id": "t-10",
         "category": "field-type",
         "entity": "inventory",
         "field": "movementDate",
@@ -480,15 +1051,23 @@
         "description": "Field 'movementDate' should have type 'string' in inventory"
       },
       {
-        "id": "t-9",
+        "id": "t-11",
         "category": "field-type",
         "entity": "inventory",
-        "field": "inventoryType",
+        "field": "name",
         "runner": "node",
-        "description": "Field 'inventoryType' should have type 'string' in inventory"
+        "description": "Field 'name' should have type 'string' in inventory"
       },
       {
-        "id": "t-10",
+        "id": "t-12",
+        "category": "field-type",
+        "entity": "inventory",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "Field 'warehouse' should have type 'string' in inventory"
+      },
+      {
+        "id": "t-13",
         "category": "field-type",
         "entity": "inventory",
         "field": "description",
@@ -496,31 +1075,47 @@
         "description": "Field 'description' should have type 'string' in inventory"
       },
       {
-        "id": "t-11",
-        "category": "field-type",
-        "entity": "inventory",
-        "field": "documentNo",
-        "runner": "node",
-        "description": "Field 'documentNo' should have type 'string' in inventory"
-      },
-      {
-        "id": "t-12",
-        "category": "field-type",
-        "entity": "inventory",
-        "field": "docStatus",
-        "runner": "node",
-        "description": "Field 'docStatus' should have type 'string' in inventory"
-      },
-      {
-        "id": "t-13",
-        "category": "searchable-filters",
-        "entity": "inventory",
-        "field": "warehouse",
-        "runner": "node",
-        "description": "Field 'warehouse' should be a supported filter for inventory"
-      },
-      {
         "id": "t-14",
+        "category": "field-type",
+        "entity": "inventory",
+        "field": "generateList",
+        "runner": "node",
+        "description": "Field 'generateList' should have type 'string' in inventory"
+      },
+      {
+        "id": "t-15",
+        "category": "field-type",
+        "entity": "inventory",
+        "field": "updateQuantities",
+        "runner": "node",
+        "description": "Field 'updateQuantities' should have type 'string' in inventory"
+      },
+      {
+        "id": "t-16",
+        "category": "field-type",
+        "entity": "inventory",
+        "field": "inventoryType",
+        "runner": "node",
+        "description": "Field 'inventoryType' should have type 'string' in inventory"
+      },
+      {
+        "id": "t-17",
+        "category": "field-type",
+        "entity": "inventory",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in inventory"
+      },
+      {
+        "id": "t-18",
+        "category": "field-type",
+        "entity": "inventory",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should have type 'boolean' in inventory"
+      },
+      {
+        "id": "t-19",
         "category": "searchable-filters",
         "entity": "inventory",
         "field": "movementDate",
@@ -528,7 +1123,15 @@
         "description": "Field 'movementDate' should be a supported filter for inventory"
       },
       {
-        "id": "t-15",
+        "id": "t-20",
+        "category": "searchable-filters",
+        "entity": "inventory",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "Field 'warehouse' should be a supported filter for inventory"
+      },
+      {
+        "id": "t-21",
         "category": "searchable-filters",
         "entity": "inventory",
         "field": "inventoryType",
@@ -536,30 +1139,102 @@
         "description": "Field 'inventoryType' should be a supported filter for inventory"
       },
       {
-        "id": "t-16",
-        "category": "searchable-filters",
-        "entity": "inventory",
-        "field": "documentNo",
-        "runner": "node",
-        "description": "Field 'documentNo' should be a supported filter for inventory"
-      },
-      {
-        "id": "t-17",
-        "category": "searchable-filters",
-        "entity": "inventory",
-        "field": "docStatus",
-        "runner": "node",
-        "description": "Field 'docStatus' should be a supported filter for inventory"
-      },
-      {
-        "id": "t-18",
+        "id": "t-22",
         "category": "visibility",
         "entity": "inventory",
         "runner": "node",
         "description": "Entity 'inventory' should only expose visible fields in frontend"
       },
       {
-        "id": "t-19",
+        "id": "t-23",
+        "category": "displaylogic-valid",
+        "entity": "inventory",
+        "field": "generateList",
+        "runner": "node",
+        "description": "Display logic for 'generateList' in inventory should be valid JS"
+      },
+      {
+        "id": "t-24",
+        "category": "displaylogic-valid",
+        "entity": "inventory",
+        "field": "updateQuantities",
+        "runner": "node",
+        "description": "Display logic for 'updateQuantities' in inventory should be valid JS"
+      },
+      {
+        "id": "t-25",
+        "category": "displaylogic-valid",
+        "entity": "inventory",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in inventory should be valid JS"
+      },
+      {
+        "id": "t-26",
+        "category": "readonlylogic-valid",
+        "entity": "inventory",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in inventory should be valid JS"
+      },
+      {
+        "id": "t-27",
+        "category": "displaylogic-evaluable",
+        "entity": "inventory",
+        "field": "generateList",
+        "runner": "node",
+        "description": "Display logic for 'generateList' in inventory should have evaluable flag"
+      },
+      {
+        "id": "t-28",
+        "category": "displaylogic-evaluable",
+        "entity": "inventory",
+        "field": "updateQuantities",
+        "runner": "node",
+        "description": "Display logic for 'updateQuantities' in inventory should have evaluable flag"
+      },
+      {
+        "id": "t-29",
+        "category": "displaylogic-evaluable",
+        "entity": "inventory",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in inventory should have evaluable flag"
+      },
+      {
+        "id": "t-30",
+        "category": "readonlylogic-evaluable",
+        "entity": "inventory",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in inventory should have evaluable flag"
+      },
+      {
+        "id": "t-31",
+        "category": "default-value-type",
+        "entity": "inventory",
+        "field": "movementDate",
+        "runner": "node",
+        "description": "Default value for 'movementDate' in inventory should be a string"
+      },
+      {
+        "id": "t-32",
+        "category": "default-value-type",
+        "entity": "inventory",
+        "field": "name",
+        "runner": "node",
+        "description": "Default value for 'name' in inventory should be a string"
+      },
+      {
+        "id": "t-33",
+        "category": "default-value-type",
+        "entity": "inventory",
+        "field": "inventoryType",
+        "runner": "node",
+        "description": "Default value for 'inventoryType' in inventory should be a string"
+      },
+      {
+        "id": "t-34",
         "category": "field-presence",
         "entity": "inventoryLine",
         "field": "lineNo",
@@ -567,7 +1242,7 @@
         "description": "Field 'lineNo' should be present in inventoryLine"
       },
       {
-        "id": "t-20",
+        "id": "t-35",
         "category": "field-presence",
         "entity": "inventoryLine",
         "field": "product",
@@ -575,15 +1250,47 @@
         "description": "Field 'product' should be present in inventoryLine"
       },
       {
-        "id": "t-21",
+        "id": "t-36",
         "category": "field-presence",
         "entity": "inventoryLine",
-        "field": "locator",
+        "field": "storageBin",
         "runner": "node",
-        "description": "Field 'locator' should be present in inventoryLine"
+        "description": "Field 'storageBin' should be present in inventoryLine"
       },
       {
-        "id": "t-22",
+        "id": "t-37",
+        "category": "field-presence",
+        "entity": "inventoryLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in inventoryLine"
+      },
+      {
+        "id": "t-38",
+        "category": "field-presence",
+        "entity": "inventoryLine",
+        "field": "quantityOrderBook",
+        "runner": "node",
+        "description": "Field 'quantityOrderBook' should be present in inventoryLine"
+      },
+      {
+        "id": "t-39",
+        "category": "field-presence",
+        "entity": "inventoryLine",
+        "field": "quantityCount",
+        "runner": "node",
+        "description": "Field 'quantityCount' should be present in inventoryLine"
+      },
+      {
+        "id": "t-40",
+        "category": "field-presence",
+        "entity": "inventoryLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should be present in inventoryLine"
+      },
+      {
+        "id": "t-41",
         "category": "field-presence",
         "entity": "inventoryLine",
         "field": "bookQuantity",
@@ -591,31 +1298,15 @@
         "description": "Field 'bookQuantity' should be present in inventoryLine"
       },
       {
-        "id": "t-23",
+        "id": "t-42",
         "category": "field-presence",
         "entity": "inventoryLine",
-        "field": "countQuantity",
+        "field": "cost",
         "runner": "node",
-        "description": "Field 'countQuantity' should be present in inventoryLine"
+        "description": "Field 'cost' should be present in inventoryLine"
       },
       {
-        "id": "t-24",
-        "category": "field-presence",
-        "entity": "inventoryLine",
-        "field": "adjustmentQuantity",
-        "runner": "node",
-        "description": "Field 'adjustmentQuantity' should be present in inventoryLine"
-      },
-      {
-        "id": "t-25",
-        "category": "field-presence",
-        "entity": "inventoryLine",
-        "field": "uom",
-        "runner": "node",
-        "description": "Field 'uom' should be present in inventoryLine"
-      },
-      {
-        "id": "t-26",
+        "id": "t-43",
         "category": "field-type",
         "entity": "inventoryLine",
         "field": "lineNo",
@@ -623,7 +1314,7 @@
         "description": "Field 'lineNo' should have type 'number' in inventoryLine"
       },
       {
-        "id": "t-27",
+        "id": "t-44",
         "category": "field-type",
         "entity": "inventoryLine",
         "field": "product",
@@ -631,15 +1322,47 @@
         "description": "Field 'product' should have type 'string' in inventoryLine"
       },
       {
-        "id": "t-28",
+        "id": "t-45",
         "category": "field-type",
         "entity": "inventoryLine",
-        "field": "locator",
+        "field": "storageBin",
         "runner": "node",
-        "description": "Field 'locator' should have type 'string' in inventoryLine"
+        "description": "Field 'storageBin' should have type 'string' in inventoryLine"
       },
       {
-        "id": "t-29",
+        "id": "t-46",
+        "category": "field-type",
+        "entity": "inventoryLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in inventoryLine"
+      },
+      {
+        "id": "t-47",
+        "category": "field-type",
+        "entity": "inventoryLine",
+        "field": "quantityOrderBook",
+        "runner": "node",
+        "description": "Field 'quantityOrderBook' should have type 'number' in inventoryLine"
+      },
+      {
+        "id": "t-48",
+        "category": "field-type",
+        "entity": "inventoryLine",
+        "field": "quantityCount",
+        "runner": "node",
+        "description": "Field 'quantityCount' should have type 'number' in inventoryLine"
+      },
+      {
+        "id": "t-49",
+        "category": "field-type",
+        "entity": "inventoryLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Field 'uOM' should have type 'string' in inventoryLine"
+      },
+      {
+        "id": "t-50",
         "category": "field-type",
         "entity": "inventoryLine",
         "field": "bookQuantity",
@@ -647,86 +1370,230 @@
         "description": "Field 'bookQuantity' should have type 'number' in inventoryLine"
       },
       {
-        "id": "t-30",
+        "id": "t-51",
         "category": "field-type",
         "entity": "inventoryLine",
-        "field": "countQuantity",
+        "field": "cost",
         "runner": "node",
-        "description": "Field 'countQuantity' should have type 'number' in inventoryLine"
+        "description": "Field 'cost' should have type 'number' in inventoryLine"
       },
       {
-        "id": "t-31",
-        "category": "field-type",
-        "entity": "inventoryLine",
-        "field": "adjustmentQuantity",
-        "runner": "node",
-        "description": "Field 'adjustmentQuantity' should have type 'number' in inventoryLine"
-      },
-      {
-        "id": "t-32",
-        "category": "field-type",
-        "entity": "inventoryLine",
-        "field": "uom",
-        "runner": "node",
-        "description": "Field 'uom' should have type 'string' in inventoryLine"
-      },
-      {
-        "id": "t-33",
-        "category": "searchable-filters",
-        "entity": "inventoryLine",
-        "field": "product",
-        "runner": "node",
-        "description": "Field 'product' should be a supported filter for inventoryLine"
-      },
-      {
-        "id": "t-34",
+        "id": "t-52",
         "category": "visibility",
         "entity": "inventoryLine",
         "runner": "node",
         "description": "Entity 'inventoryLine' should only expose visible fields in frontend"
       },
       {
-        "id": "t-35",
-        "category": "system-field",
-        "entity": "inventory",
-        "field": "adClientId",
+        "id": "t-53",
+        "category": "displaylogic-valid",
+        "entity": "inventoryLine",
+        "field": "quantityOrderBook",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for inventory"
+        "description": "Display logic for 'quantityOrderBook' in inventoryLine should be valid JS"
       },
       {
-        "id": "t-36",
-        "category": "system-field",
-        "entity": "inventory",
-        "field": "adOrgId",
+        "id": "t-54",
+        "category": "readonlylogic-valid",
+        "entity": "inventoryLine",
+        "field": "storageBin",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for inventory"
+        "description": "Read-only logic for 'storageBin' in inventoryLine should be valid JS"
       },
       {
-        "id": "t-37",
-        "category": "system-field",
-        "entity": "inventory",
-        "field": "cDocTypeId",
+        "id": "t-55",
+        "category": "readonlylogic-valid",
+        "entity": "inventoryLine",
+        "field": "description",
         "runner": "node",
-        "description": "System field 'cDocTypeId' should exist in backend but not frontend for inventory"
+        "description": "Read-only logic for 'description' in inventoryLine should be valid JS"
       },
       {
-        "id": "t-38",
-        "category": "system-field",
-        "entity": "inventory",
-        "field": "processed",
+        "id": "t-56",
+        "category": "readonlylogic-valid",
+        "entity": "inventoryLine",
+        "field": "cost",
         "runner": "node",
-        "description": "System field 'processed' should exist in backend but not frontend for inventory"
+        "description": "Read-only logic for 'cost' in inventoryLine should be valid JS"
       },
       {
-        "id": "t-39",
-        "category": "system-field",
-        "entity": "inventory",
-        "field": "created",
+        "id": "t-57",
+        "category": "displaylogic-evaluable",
+        "entity": "inventoryLine",
+        "field": "quantityOrderBook",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for inventory"
+        "description": "Display logic for 'quantityOrderBook' in inventoryLine should have evaluable flag"
       },
       {
-        "id": "t-40",
+        "id": "t-58",
+        "category": "readonlylogic-evaluable",
+        "entity": "inventoryLine",
+        "field": "storageBin",
+        "runner": "node",
+        "description": "Read-only logic for 'storageBin' in inventoryLine should have evaluable flag"
+      },
+      {
+        "id": "t-59",
+        "category": "readonlylogic-evaluable",
+        "entity": "inventoryLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Read-only logic for 'description' in inventoryLine should have evaluable flag"
+      },
+      {
+        "id": "t-60",
+        "category": "readonlylogic-evaluable",
+        "entity": "inventoryLine",
+        "field": "cost",
+        "runner": "node",
+        "description": "Read-only logic for 'cost' in inventoryLine should have evaluable flag"
+      },
+      {
+        "id": "t-61",
+        "category": "default-value-type",
+        "entity": "inventoryLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Default value for 'lineNo' in inventoryLine should be a string"
+      },
+      {
+        "id": "t-62",
+        "category": "default-value-type",
+        "entity": "inventoryLine",
+        "field": "storageBin",
+        "runner": "node",
+        "description": "Default value for 'storageBin' in inventoryLine should be a string"
+      },
+      {
+        "id": "t-63",
+        "category": "default-value-type",
+        "entity": "inventoryLine",
+        "field": "quantityOrderBook",
+        "runner": "node",
+        "description": "Default value for 'quantityOrderBook' in inventoryLine should be a string"
+      },
+      {
+        "id": "t-64",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-65",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-66",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "posted",
+        "runner": "node",
+        "description": "System field 'posted' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-67",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "System field 'costCenter' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-68",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "asset",
+        "runner": "node",
+        "description": "System field 'asset' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-69",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "activity",
+        "runner": "node",
+        "description": "System field 'activity' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-70",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "salesCampaign",
+        "runner": "node",
+        "description": "System field 'salesCampaign' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-71",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "System field 'stDimension' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-72",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "System field 'ndDimension' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-73",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "trxOrganization",
+        "runner": "node",
+        "description": "System field 'trxOrganization' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-74",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-75",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-76",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-77",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-78",
+        "category": "system-field",
+        "entity": "inventory",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for inventory"
+      },
+      {
+        "id": "t-79",
         "category": "system-field",
         "entity": "inventory",
         "field": "updated",
@@ -734,41 +1601,301 @@
         "description": "System field 'updated' should exist in backend but not frontend for inventory"
       },
       {
-        "id": "t-41",
+        "id": "t-80",
         "category": "system-field",
-        "entity": "inventoryLine",
-        "field": "adClientId",
+        "entity": "inventory",
+        "field": "updatedBy",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for inventoryLine"
+        "description": "System field 'updatedBy' should exist in backend but not frontend for inventory"
       },
       {
-        "id": "t-42",
+        "id": "t-81",
         "category": "system-field",
         "entity": "inventoryLine",
-        "field": "adOrgId",
+        "field": "attributeSetValue",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for inventoryLine"
+        "description": "System field 'attributeSetValue' should exist in backend but not frontend for inventoryLine"
       },
       {
-        "id": "t-43",
+        "id": "t-82",
         "category": "system-field",
         "entity": "inventoryLine",
-        "field": "mInventoryId",
+        "field": "orderQuantity",
         "runner": "node",
-        "description": "System field 'mInventoryId' should exist in backend but not frontend for inventoryLine"
+        "description": "System field 'orderQuantity' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-83",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "orderUOM",
+        "runner": "node",
+        "description": "System field 'orderUOM' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-84",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "relatedInventory",
+        "runner": "node",
+        "description": "System field 'relatedInventory' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-85",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-86",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-87",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "physInventory",
+        "runner": "node",
+        "description": "System field 'physInventory' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-88",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-89",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-90",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-91",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-92",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-93",
+        "category": "system-field",
+        "entity": "inventoryLine",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for inventoryLine"
+      },
+      {
+        "id": "t-94",
+        "category": "rule-declared",
+        "rule": "SL_Inventory_Conversion",
+        "runner": "node",
+        "description": "Rule 'SL_Inventory_Conversion' (undefined) should be declared"
+      },
+      {
+        "id": "t-95",
+        "category": "rule-declared",
+        "rule": "SL_Inventory_Product",
+        "runner": "node",
+        "description": "Rule 'SL_Inventory_Product' (undefined) should be declared"
+      },
+      {
+        "id": "t-96",
+        "category": "rule-declared",
+        "rule": "SL_Inventory_Locator",
+        "runner": "node",
+        "description": "Rule 'SL_Inventory_Locator' (undefined) should be declared"
+      },
+      {
+        "id": "t-97",
+        "category": "rule-declared",
+        "rule": "AD_Org show child organizations",
+        "runner": "node",
+        "description": "Rule 'AD_Org show child organizations' (validation) should be declared"
+      },
+      {
+        "id": "t-98",
+        "category": "rule-declared",
+        "rule": "M_Locator of Warehouse",
+        "runner": "node",
+        "description": "Rule 'M_Locator of Warehouse' (validation) should be declared"
+      },
+      {
+        "id": "t-99",
+        "category": "rule-declared",
+        "rule": "READONLY_Processed_Header",
+        "runner": "node",
+        "description": "Rule 'READONLY_Processed_Header' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-100",
+        "category": "rule-declared",
+        "rule": "READONLY_Processed_Lines",
+        "runner": "node",
+        "description": "Rule 'READONLY_Processed_Lines' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-101",
+        "category": "rule-declared",
+        "rule": "PROCESS_ProcessInventoryCount",
+        "runner": "node",
+        "description": "Rule 'PROCESS_ProcessInventoryCount' (process) should be declared"
+      },
+      {
+        "id": "t-102",
+        "category": "rule-declared",
+        "rule": "PROCESS_CreateInventoryCountList",
+        "runner": "node",
+        "description": "Rule 'PROCESS_CreateInventoryCountList' (process) should be declared"
+      },
+      {
+        "id": "t-103",
+        "category": "rule-declared",
+        "rule": "PROCESS_UpdateQuantity",
+        "runner": "node",
+        "description": "Rule 'PROCESS_UpdateQuantity' (process) should be declared"
+      },
+      {
+        "id": "t-104",
+        "category": "rule-declared",
+        "rule": "PROCESS_Posted",
+        "runner": "node",
+        "description": "Rule 'PROCESS_Posted' (process) should be declared"
+      },
+      {
+        "id": "t-105",
+        "category": "crud-flags",
+        "entity": "inventory",
+        "runner": "node",
+        "description": "CRUD flags for 'inventory' should all be booleans"
+      },
+      {
+        "id": "t-106",
+        "category": "crud-flags",
+        "entity": "inventoryLine",
+        "runner": "node",
+        "description": "CRUD flags for 'inventoryLine' should all be booleans"
+      },
+      {
+        "id": "t-107",
+        "category": "selector-endpoint",
+        "entity": "inventory",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "Selector endpoint for 'warehouse' in inventory should exist"
+      },
+      {
+        "id": "t-108",
+        "category": "selector-endpoint",
+        "entity": "inventory",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in inventory should exist"
+      },
+      {
+        "id": "t-109",
+        "category": "selector-endpoint",
+        "entity": "inventoryLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in inventoryLine should exist"
+      },
+      {
+        "id": "t-110",
+        "category": "selector-endpoint",
+        "entity": "inventoryLine",
+        "field": "storageBin",
+        "runner": "node",
+        "description": "Selector endpoint for 'storageBin' in inventoryLine should exist"
+      },
+      {
+        "id": "t-111",
+        "category": "selector-endpoint",
+        "entity": "inventoryLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Selector endpoint for 'uOM' in inventoryLine should exist"
+      },
+      {
+        "id": "t-112",
+        "category": "action-endpoint",
+        "entity": "inventory",
+        "field": "generateList",
+        "runner": "node",
+        "description": "Action endpoint for 'generateList' in inventory should exist"
+      },
+      {
+        "id": "t-113",
+        "category": "action-endpoint",
+        "entity": "inventory",
+        "field": "updateQuantities",
+        "runner": "node",
+        "description": "Action endpoint for 'updateQuantities' in inventory should exist"
+      },
+      {
+        "id": "t-114",
+        "category": "action-endpoint",
+        "entity": "inventory",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in inventory should exist"
+      },
+      {
+        "id": "t-115",
+        "category": "action-endpoint",
+        "entity": "inventory",
+        "field": "posted",
+        "runner": "node",
+        "description": "Action endpoint for 'posted' in inventory should exist"
       }
     ],
     "summary": {
-      "total": 43,
+      "total": 115,
       "byCategory": {
-        "field-presence": 13,
-        "field-type": 13,
-        "searchable-filters": 6,
+        "field-presence": 18,
+        "field-type": 18,
+        "searchable-filters": 3,
         "visibility": 2,
-        "system-field": 9
+        "displaylogic-valid": 4,
+        "readonlylogic-valid": 4,
+        "displaylogic-evaluable": 4,
+        "readonlylogic-evaluable": 4,
+        "default-value-type": 6,
+        "system-field": 30,
+        "rule-declared": 11,
+        "crud-flags": 2,
+        "selector-endpoint": 5,
+        "action-endpoint": 4
       },
       "byRunner": {
-        "node": 43,
+        "node": 115,
         "junit": 0
       }
     }

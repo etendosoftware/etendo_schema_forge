@@ -1,0 +1,307 @@
+{
+  "$schema": "decisions-v1",
+  "window": {
+    "category": "people",
+    "name": "Contacts",
+    "entityLabel": "Contact",
+    "detailLabel": "Location/Address",
+    "detailTabIndex": 3,
+    "detailEntity": "bpartnerLocation",
+    "listKpiCards": {
+      "customComponent": "ContactsKpiCards"
+    },
+    "headerExtra": {
+      "customForm": "BillingPreferencesForm"
+    },
+    "secondaryTabs": {
+      "user": {
+        "tabMode": "table-form",
+        "tabOrder": 1,
+        "label": "Contact",
+        "addLineFields": ["firstName", "lastName", "email", "phone", "position"]
+      },
+      "bpBankAccount": {
+        "tabMode": "table-form",
+        "tabOrder": 2,
+        "label": "Bank Account",
+        "addLineFields": ["bankName", "bankFormat", "accountNo", "iBAN"]
+      },
+      "bpartnerDiscount": {
+        "tabMode": "table-form",
+        "tabOrder": 3,
+        "label": "Basic Discount",
+        "addLineFields": ["lineNo", "discount"]
+      }
+    }
+  },
+  "entities": {
+    "cBpartner": {
+      "fields": {
+        "employee": {
+          "visibility": "editable",
+          "form": false
+        },
+        "isSalesRepresentative": {
+          "visibility": "editable",
+          "form": false
+        },
+        "operator": {
+          "visibility": "editable",
+          "form": false
+        },
+        "salaryCategory": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "name": {
+          "visibility": "editable",
+          "grid": true,
+          "searchable": true,
+          "section": "principal"
+        },
+        "searchKey": {
+          "visibility": "editable",
+          "grid": false,
+          "searchable": true,
+          "section": "principal"
+        },
+        "businessPartnerCategory": {
+          "visibility": "editable",
+          "grid": false,
+          "section": "principal",
+          "label": "Business Partner Category",
+          "reference": "BusinessPartnerCategory",
+          "inputMode": "selector"
+        },
+        "description": {
+          "visibility": "editable",
+          "grid": false,
+          "section": "principal"
+        },
+        "taxID": {
+          "visibility": "editable",
+          "section": "other"
+        },
+        "creditLimit": {
+          "visibility": "editable",
+          "label": "Credit Limit",
+          "grid": false,
+          "section": "other"
+        },
+        "creditUsed": {
+          "visibility": "readOnly",
+          "label": "Credit Used",
+          "grid": false,
+          "section": "other"
+        },
+        "active": {
+          "visibility": "readOnly",
+          "grid": false,
+          "section": "other"
+        },
+        "vendor": {
+          "visibility": "editable",
+          "label": "Vendor",
+          "form": false,
+          "section": "principal"
+        },
+        "purchasePricelist": {
+          "visibility": "editable",
+          "form": false,
+          "reference": "PriceList",
+          "inputMode": "selector",
+          "section": "principal",
+          "displayLogic": "record.vendor"
+        },
+        "pOPaymentMethod": {
+          "visibility": "editable",
+          "form": false,
+          "reference": "PaymentMethod",
+          "inputMode": "selector",
+          "section": "principal",
+          "displayLogic": "record.vendor"
+        },
+        "pOPaymentTerms": {
+          "visibility": "editable",
+          "form": false,
+          "reference": "PaymentTerm",
+          "inputMode": "selector",
+          "section": "principal",
+          "displayLogic": "record.vendor"
+        },
+        "pOFinancialAccount": {
+          "visibility": "editable",
+          "form": false,
+          "reference": "FIN_Financial_Account",
+          "inputMode": "selector",
+          "section": "principal",
+          "displayLogic": "record.vendor"
+        },
+        "vendorBlocking": {
+          "visibility": "editable",
+          "form": false,
+          "section": "principal",
+          "displayLogic": "record.vendor"
+        },
+        "customer": {
+          "visibility": "editable",
+          "label": "Customer",
+          "form": false,
+          "section": "principal"
+        },
+        "priceList": {
+          "visibility": "editable",
+          "form": false,
+          "reference": "PriceList",
+          "inputMode": "selector",
+          "section": "principal",
+          "displayLogic": "record.customer"
+        },
+        "paymentMethod": {
+          "visibility": "editable",
+          "form": false,
+          "reference": "PaymentMethod",
+          "inputMode": "selector",
+          "section": "principal",
+          "displayLogic": "record.customer"
+        },
+        "paymentTerms": {
+          "visibility": "editable",
+          "form": false,
+          "reference": "PaymentTerm",
+          "inputMode": "selector",
+          "section": "principal",
+          "displayLogic": "record.customer"
+        },
+        "account": {
+          "visibility": "editable",
+          "form": false,
+          "reference": "FIN_Financial_Account",
+          "inputMode": "selector",
+          "section": "principal",
+          "displayLogic": "record.customer"
+        },
+        "customerBlocking": {
+          "visibility": "editable",
+          "form": false,
+          "section": "principal",
+          "displayLogic": "record.customer"
+        }
+      }
+    },
+    "cBpartnerLocation": {
+      "fields": {
+        "name": {
+          "visibility": "editable",
+          "grid": true,
+          "searchable": true,
+          "section": "principal"
+        },
+        "phone": {
+          "visibility": "editable",
+          "grid": false,
+          "section": "other"
+        },
+        "active": {
+          "visibility": "readOnly",
+          "grid": false,
+          "section": "other"
+        }
+      }
+    },
+    "adUser": {
+      "fields": {
+        "name": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "section": "principal"
+        },
+        "firstName": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "lastName": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "email": {
+          "visibility": "editable",
+          "grid": true,
+          "searchable": true,
+          "section": "principal"
+        },
+        "phone": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "position": {
+          "visibility": "editable",
+          "section": "principal"
+        },
+        "active": {
+          "visibility": "readOnly",
+          "section": "other"
+        }
+      }
+    },
+    "cBpartnerDiscount": {
+      "fields": {
+        "lineNo": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "discount": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal",
+          "reference": "Discount",
+          "inputMode": "selector"
+        },
+        "customer": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "vendor": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        }
+      }
+    },
+    "cBpBankAccount": {
+      "fields": {
+        "bankName": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "bankFormat": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "accountNo": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "iBAN": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "displayedAccount": {
+          "visibility": "readOnly",
+          "grid": false,
+          "section": "principal"
+        }
+      }
+    }
+  }
+}

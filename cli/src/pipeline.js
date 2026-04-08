@@ -23,7 +23,7 @@ export function buildPipelineSteps() {
     { name: 'extract-rules', description: 'Extract business rules and callouts', phase: 'F1b' },
     { name: 'validate', description: 'Validate schema (4 levels) and processes', phase: 'F2' },
     { name: 'pre-classify', description: 'Pre-classify rules (deterministic + AI)', phase: 'F3' },
-    { name: 'human-decisions', description: 'Open Decision Panel for human review', phase: 'F4', interactive: true },
+    { name: 'resolve-curated', description: 'Resolve raw + decisions.json → curated schema in memory', phase: 'F4' },
     { name: 'generate-contract', description: 'Generate frontend/backend contracts + test manifest', phase: 'F6' },
     { name: 'check-version', description: 'Check contract version and classify changes', phase: 'F6b' },
     { name: 'push-to-neo', description: 'Configure NEO Headless via webhooks (from contract)', phase: 'F7' },
@@ -252,6 +252,24 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
   let frontendGenerated = false;
   console.log(`\n=== Schema Forge Pipeline: ${windowName} ===\n`);
 
+  // Holds resolved curated schema and rules between steps (set by resolve-curated, consumed by generate-contract)
+  const pipelineContext = {};
+
+  // Always refresh raw files from DB when skipping steps (prevents stale data).
+  // If DB is unreachable, existing raws are used with a warning.
+  if (skipTo) {
+    try {
+      const { main: extractFields } = await import('./extract-fields.js');
+      const { main: extractRules } = await import('./extract-rules.js');
+      console.log('[pre] Refreshing raw files from DB...');
+      await extractFields(windowId, windowName);
+      await extractRules(windowId, windowName);
+      console.log('[pre] Raw files refreshed.\n');
+    } catch (err) {
+      console.warn(`[pre] Could not refresh raws from DB (${err.message}) — using existing files.\n`);
+    }
+  }
+
   let skipping = !!skipTo;
 
   for (const step of steps) {
@@ -267,18 +285,8 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
 
     if (step.interactive) {
       if (skipInteractive) {
-        // Check if curated files exist to skip safely
-        const { access } = await import('node:fs/promises');
-        const curatedPath = `artifacts/${windowName}/schema-curated.json`;
-        try {
-          await access(curatedPath);
-          console.log(`[${step.phase}] ${step.description} — skipped (curated files exist, --skip-interactive)`);
-          continue;
-        } catch {
-          console.error(`[${step.phase}] Cannot skip: ${curatedPath} not found.`);
-          console.error('  Run /classify first to generate curated files, or remove --skip-interactive.');
-          process.exit(1);
-        }
+        console.log(`[${step.phase}] ${step.description} — skipped (--skip-interactive)`);
+        continue;
       }
 
       console.log(`\n[${step.phase}] ${step.description}`);
@@ -286,10 +294,6 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
         console.log('  → Review generated TODO comments in the frontend components');
         console.log('  → Use AI or manual translation to implement callout/onchange logic');
         console.log('  → Re-run pipeline with --skip-to=run-tests when done');
-      } else {
-        console.log('  → Open Decision Panel at http://localhost:3000');
-        console.log('  → Save curated artifacts, then re-run pipeline with --skip-to=generate-contract --skip-interactive');
-        console.log('  → For AI classification, run: /classify');
       }
       break;
     }
@@ -329,6 +333,62 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
           console.log(`  ✓ ${classified.summary.autoClassified} auto, ${classified.summary.humanReview} human`);
           break;
         }
+        case 'resolve-curated': {
+          const { resolveCurated } = await import('./resolve-curated.js');
+          const { readFile } = await import('node:fs/promises');
+
+          const schemaRaw = JSON.parse(await readFile(`artifacts/${windowName}/schema-raw.json`, 'utf8'));
+          const rulesRaw = JSON.parse(await readFile(`artifacts/${windowName}/rules-raw.json`, 'utf8'));
+
+          const decisionsPath = `artifacts/${windowName}/decisions.json`;
+          let decisions;
+          try {
+            decisions = JSON.parse(await readFile(decisionsPath, 'utf8'));
+
+            // Auto-migrate decisions schema version if needed
+            const { needsMigration: needsMig, getVersion: getVer, migrateDecisions: migDec } = await import('./migrations/index.js');
+            if (needsMig(decisions)) {
+              const fromV = getVer(decisions);
+              const result = migDec(decisions, { schemaRaw });
+              decisions = result.decisions;
+              const { writeFile } = await import('node:fs/promises');
+              await writeFile(decisionsPath, JSON.stringify(decisions, null, 2) + '\n', 'utf-8');
+              console.log(`  ✓ decisions.json auto-migrated: v${fromV} → v${result.toVersion}`);
+            }
+          } catch (err) {
+            if (err.code !== 'ENOENT') throw err;
+
+            // No decisions.json — auto-migrate from curated files if they exist
+            const curatedPath = `artifacts/${windowName}/schema-curated.json`;
+            try {
+              await readFile(curatedPath, 'utf8');
+              console.warn(`  ⚠ decisions.json not found — auto-migrating from curated files...`);
+              const { migrateWindow } = await import('./migrate-to-decisions.js');
+              await migrateWindow(windowName);
+              decisions = JSON.parse(await readFile(decisionsPath, 'utf8'));
+              console.log(`  ✓ Auto-migrated to decisions.json`);
+            } catch (e2) {
+              if (e2.code === 'ENOENT') {
+                console.error(`  ✗ decisions.json not found at ${decisionsPath}`);
+                console.error('  Run /classify to generate decisions.json first.');
+                process.exit(1);
+              }
+              throw e2;
+            }
+          }
+
+          const resolved = await resolveCurated(schemaRaw, rulesRaw, decisions);
+          pipelineContext.schema = resolved.schema;
+          pipelineContext.rules = resolved.rules;
+
+          // Count unclassified fields (no decision, using defaults)
+          const totalFields = resolved.schema.entities.reduce((sum, e) => sum + e.fields.length, 0);
+          console.log(`  ✓ Resolved ${totalFields} fields across ${resolved.schema.entities.length} entities`);
+          if (resolved.unclassifiedCount > 0) {
+            console.warn(`  ⚠ ${resolved.unclassifiedCount} fields using defaults (no decision) — run /classify to review`);
+          }
+          break;
+        }
         case 'generate-contract': {
           const { generateContract } = await import('./generate-contract.js');
           const { readFile, writeFile, access, mkdir } = await import('node:fs/promises');
@@ -339,30 +399,11 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
             await mkdir(`artifacts/${windowName}`, { recursive: true });
             await writeFile(processesPath, JSON.stringify({ processes: [] }, null, 2));
           }
-          const schema = JSON.parse(await readFile(`artifacts/${windowName}/schema-curated.json`, 'utf8'));
-          const rules = JSON.parse(await readFile(`artifacts/${windowName}/rules-curated.json`, 'utf8'));
+          const schema = pipelineContext.schema;
+          const rules = pipelineContext.rules || [];
           const processes = JSON.parse(await readFile(processesPath, 'utf8'));
 
-          // Enrich curated entities with tabId/tableName from schema-raw (needed by push-to-neo)
-          try {
-            const schemaRaw = JSON.parse(await readFile(`artifacts/${windowName}/schema-raw.json`, 'utf8'));
-            for (const entity of schema.entities) {
-              // Match by tableName (most reliable) or by name similarity
-              const rawEntity = schemaRaw.entities.find(re =>
-                re.tableName === entity.tableName ||
-                re.name.toLowerCase() === entity.name.toLowerCase(),
-              );
-              if (rawEntity) {
-                if (!entity.tabId && rawEntity.tabId) entity.tabId = rawEntity.tabId;
-                if (!entity.tabName && rawEntity.tabName) entity.tabName = rawEntity.tabName;
-                if (!entity.tableName && rawEntity.tableName) entity.tableName = rawEntity.tableName;
-              }
-            }
-          } catch {
-            // schema-raw not available — proceed without enrichment
-          }
-
-          const contract = generateContract(schema, rules.rules || [], processes.processes || []);
+          const contract = generateContract(schema, Array.isArray(rules) ? rules : rules.rules || [], processes.processes || []);
           // Snapshot current contract as prev for version diffing
           try {
             const existingContract = await readFile(`artifacts/${windowName}/contract.json`, 'utf-8');
@@ -509,6 +550,11 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
             }
           }
 
+          // Generate mockData.js (entity record data for local development)
+          const { generateMockDataFile } = await import('./generate-mock-data.js');
+          const mockDataPath = resolvePath(outDir, 'mockData.js');
+          await writeFile(mockDataPath, generateMockDataFile(contract), 'utf8');
+
           let summary = `  ✓ ${Object.keys(files).filter(k => !k.startsWith('__')).length} frontend components generated`;
           if (totalPreserved > 0 || totalUnmatched > 0) {
             summary += ` (preserved ${totalPreserved} custom sections`;
@@ -518,6 +564,31 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
             summary += ')';
           }
           console.log(summary);
+
+          // Scaffold customForm stubs for secondary tabs that declare a custom form
+          const secondaryTabsDecl = contract.frontendContract?.window?.secondaryTabs;
+          if (secondaryTabsDecl) {
+            const customForms = Object.values(secondaryTabsDecl)
+              .filter(cfg => cfg.customForm)
+              .map(cfg => cfg.customForm);
+            if (customForms.length > 0) {
+              const __filename = fileURLToPathMod(import.meta.url);
+              const repoRoot = resolvePath(dirnamePath(__filename), '../../');
+              const customDir = resolvePath(repoRoot, `tools/app-shell/src/windows/custom/${windowName}`);
+              await mkdir(customDir, { recursive: true });
+              for (const formName of customForms) {
+                const formPath = resolvePath(customDir, `${formName}.jsx`);
+                let formExists = false;
+                try { await access(formPath); formExists = true; } catch { /* first run */ }
+                if (!formExists) {
+                  const stub = `// Custom form for the "${windowName}" window.\n// This file is NOT regenerated by the pipeline — edit it directly.\nimport { EntityForm } from '@/components/contract-ui';\n\nexport default function ${formName}(props) {\n  return <div>{/* TODO: implement custom form */}</div>;\n}\n`;
+                  await writeFile(formPath, stub, 'utf8');
+                  console.log(`  Scaffolded custom form: tools/app-shell/src/windows/custom/${windowName}/${formName}.jsx`);
+                }
+              }
+            }
+          }
+
           frontendGenerated = true;
           break;
         }

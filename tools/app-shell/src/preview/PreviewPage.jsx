@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 
-import * as mockDataModule from '@generated/sales-order/generated/web/sales-order/mockData.js';
+import * as mockDataModule from '@generated/sales-order/custom/mockData.js';
 
 const COMPONENT_NAMES = ['OrderPage', 'OrderTable', 'OrderForm', 'OrderLineTable'];
 

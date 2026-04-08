@@ -54,6 +54,7 @@ export function mapVisibility(visibility) {
     case 'readOnly':
       return { isIncluded: 'Y', isReadOnly: 'Y' };
     case 'system':
+      return { isIncluded: 'Y', isReadOnly: 'Y' };
     case 'discarded':
       return { isIncluded: 'N', isReadOnly: 'N' };
     default:
@@ -162,23 +163,23 @@ export async function pushToNeo(windowName, options = {}) {
   const artifactsDir = join(projectRoot, 'artifacts', windowName);
 
   // Load artifacts
-  let contractRaw, schemaRaw;
+  let contractRaw, schemaRawJson;
   try {
     contractRaw = await readFile(join(artifactsDir, 'contract.json'), 'utf-8');
   } catch (err) {
     throw new Error(`Cannot read contract.json for window '${windowName}': ${err.message}`);
   }
   try {
-    schemaRaw = await readFile(join(artifactsDir, 'schema-curated.json'), 'utf-8');
+    schemaRawJson = await readFile(join(artifactsDir, 'schema-raw.json'), 'utf-8');
   } catch (err) {
-    throw new Error(`Cannot read schema-curated.json for window '${windowName}': ${err.message}`);
+    throw new Error(`Cannot read schema-raw.json for window '${windowName}': ${err.message}`);
   }
 
   const contract = JSON.parse(contractRaw);
-  const schema = JSON.parse(schemaRaw);
+  const schemaRawData = JSON.parse(schemaRawJson);
 
-  const windowId = schema.window.id;
-  const windowDisplayName = schema.window.name;
+  const windowId = schemaRawData.window.id;
+  const windowDisplayName = schemaRawData.window.name;
   // Use the artifact slug (windowName) as spec name so it matches the frontend route
   const specName = windowName;
 
@@ -310,10 +311,10 @@ export async function pushToNeo(windowName, options = {}) {
       }
     }
 
-    // Build curated entity name -> tableName map from schema
+    // Build entity name -> tableName map from schema-raw (used for entity matching)
     const curatedToTable = {};
-    if (schema.entities) {
-      for (const ent of schema.entities) {
+    if (schemaRawData.entities) {
+      for (const ent of schemaRawData.entities) {
         if (ent.name && ent.tableName) {
           curatedToTable[ent.name] = ent.tableName;
         }
@@ -322,21 +323,30 @@ export async function pushToNeo(windowName, options = {}) {
 
     console.log(`       Entities populated: ${popResult.entityCount}, Fields: ${popResult.fieldCount}`);
 
-    // Rename entities to match curated/contract names (e.g. "Header" → "order")
+    // Rename entities to match contract names (e.g. "Header" → "order")
     // Uses tabName (AD tab display name) as the primary key — unique within a window
     // and handles tabs that share the same DB table correctly.
-    if (schema.entities) {
-      for (const ent of schema.entities) {
+    // Read entity names from the backend contract which reflects the resolved curated schema.
+    const contractEntities = contract.backendContract
+      ? Object.entries(contract.backendContract.entities).map(([name, data]) => ({
+          name,
+          tabName: data.tabName,
+          tableName: data.tableName,
+          javaQualifier: data.javaQualifier,
+        }))
+      : (schemaRawData.entities || []);
+    if (contractEntities.length > 0) {
+      for (const ent of contractEntities) {
         const entityId = (ent.tabName && entityMapByName[ent.tabName])
           || (ent.tableName && entityMapByTableName[ent.tableName]);
         if (entityId) {
           await client.query(
-            'UPDATE etgo_sf_entity SET name = $1 WHERE etgo_sf_entity_id = $2',
-            [ent.name, entityId],
+            'UPDATE etgo_sf_entity SET name = $1, java_qualifier = $2 WHERE etgo_sf_entity_id = $3',
+            [ent.name, ent.javaQualifier ?? null, entityId],
           );
         }
       }
-      console.log(`       Entity names updated to contract names`);
+      console.log('       Entity names updated to contract names');
     }
 
     // Step 3: Update field visibility from contract

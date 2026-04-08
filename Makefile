@@ -60,21 +60,27 @@ ETENDO_ROOT ?= ..
 MODULE_WEB := $(ETENDO_ROOT)/modules/com.etendoerp.go/web/com.etendoerp.go
 
 deploy: build ## Build app-shell and deploy to Etendo module web dir
-	@rm -rf $(MODULE_WEB)
+	@rm -rf $(MODULE_WEB)/assets
 	@mkdir -p $(MODULE_WEB)
 	@cp -r tools/app-shell/dist/* $(MODULE_WEB)/
 	@echo "Deployed to $(MODULE_WEB)"
 
 # --- Report Server ---
 
-report-serve: ## Start jsreport Docker container
-	docker compose -f docker/jsreport/docker-compose.yml up
+JSREPORT_COMPOSE_DIR := ../modules/com.etendoerp.go/compose
+SCHEMA_FORGE_ABS := $(shell realpath .)
 
-report-serve-detach: ## Start jsreport in background
-	docker compose -f docker/jsreport/docker-compose.yml up -d
+report-build: ## Build jsreport Docker image (required before first resources.up)
+	cd $(JSREPORT_COMPOSE_DIR) && docker build -t etendo-jsreport:latest .
+
+report-serve: ## Start jsreport Docker container (run report-build first)
+	cd $(JSREPORT_COMPOSE_DIR) && SCHEMA_FORGE_DIR=$(SCHEMA_FORGE_ABS) docker compose -f com.etendoerp.go.yml up
+
+report-serve-detach: ## Start jsreport in background (run report-build first)
+	cd $(JSREPORT_COMPOSE_DIR) && SCHEMA_FORGE_DIR=$(SCHEMA_FORGE_ABS) docker compose -f com.etendoerp.go.yml up -d
 
 report-stop: ## Stop jsreport Docker container
-	docker compose -f docker/jsreport/docker-compose.yml down
+	cd $(JSREPORT_COMPOSE_DIR) && docker compose -f com.etendoerp.go.yml down
 
 report-preview: ## Preview Business Partner listing report
 	node cli/src/report-preview.js --artifact business-partner --report listing

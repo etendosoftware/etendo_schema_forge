@@ -23,10 +23,10 @@ flowchart TD
         CLASS_R["rules-classified.json<br/>(~60% auto-classified)"]
     end
 
-    subgraph Curation["3. CURATION (Human + Decision UI)"]
-        DP["Decision Panel<br/>(React — port 5174)"]
-        CUR_S["schema-curated.json<br/>(visibility decided)"]
-        CUR_R["rules-curated.json<br/>(disposition decided)"]
+    subgraph Classification["3. CLASSIFICATION (AI + /classify skill)"]
+        CLASSIFY["/classify skill<br/>(AI-guided, writes decisions.json)"]
+        DEC["decisions.json<br/>(AI/human overrides only,<br/>~200-300 lines)"]
+        RESOLVE_C["resolve-curated.js<br/>(raw + decisions → curated in memory)"]
     end
 
     subgraph Validation["4. VALIDATION (CLI)"]
@@ -106,19 +106,23 @@ flowchart TD
     RAW_R --> PC
     PC --> CLASS_R
 
-    %% Curation (windows only)
-    RAW_S --> DP
-    CLASS_R --> DP
-    DP --> CUR_S
-    DP --> CUR_R
+    %% Classification (windows only)
+    RAW_S --> CLASSIFY
+    CLASS_R --> CLASSIFY
+    CLASSIFY --> DEC
+
+    %% Resolve curated in memory (no intermediate files)
+    RAW_S --> RESOLVE_C
+    RAW_R --> RESOLVE_C
+    DEC --> RESOLVE_C
 
     %% Validation (windows only)
-    CUR_S --> VAL
-    VAL -->|fail| DP
+    RESOLVE_C --> VAL
+    VAL -->|fail| CLASSIFY
     VAL -->|pass| GC
 
     %% Contract generation (single source of truth)
-    CUR_R --> GC
+    RESOLVE_C --> GC
     GC --> CONTRACT
 
     %% Backend: contract → push-to-neo → direct DB → NEO Headless
@@ -167,10 +171,10 @@ flowchart TD
     classDef entry fill:#ff6b6b,stroke:#c0392b,color:white
 
     class AD db
-    class EXT,PEXT,PC,VAL cli
-    class DP human
+    class EXT,PEXT,PC,VAL,RESOLVE_C cli
+    class CLASSIFY human
     class NEO,AUTH,RESOLVE,FILTER,HANDLER,DS,SEL,PROC,RPT runtime
-    class RAW_S,RAW_R,RAW_P,CLASS_R,CUR_S,CUR_R,TABLES,CONTRACT,REACT,CUSTOM,MOCK artifact
+    class RAW_S,RAW_R,RAW_P,CLASS_R,DEC,TABLES,CONTRACT,REACT,CUSTOM,MOCK artifact
     class CT,IT test
     class APP client
     class GC,PTN,GF,GM,TT cli

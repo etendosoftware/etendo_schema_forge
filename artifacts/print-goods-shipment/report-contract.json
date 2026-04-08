@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "reportId": "print-goods-shipment",
+  "category": "sales",
+  "type": "document",
+  "source": "sql",
+  "title": { "en_US": "Goods Shipment", "es_ES": "Albaran de Venta" },
+  "orientation": "portrait",
+  "parameters": [
+    { "name": "documentId", "label": { "en_US": "Shipment ID", "es_ES": "ID Albaran" }, "type": "text", "required": true, "hidden": true }
+  ],
+  "sql": {
+    "header": "SELECT io.m_inout_id, io.documentno, io.movementdate, dt.name AS doc_type, bp.name AS bp_name, bpl.name AS bp_location, io.description, CASE io.docstatus WHEN 'CO' THEN 'Complete' WHEN 'DR' THEN 'Draft' WHEN 'VO' THEN 'Void' ELSE io.docstatus END AS status, org.name AS org_name, orgi.taxid AS org_taxid, orgl.address1 AS org_address, orgl.postal AS org_postal, orgl.city AS org_city FROM m_inout io JOIN c_bpartner bp ON bp.c_bpartner_id = io.c_bpartner_id JOIN c_bpartner_location bpl ON bpl.c_bpartner_location_id = io.c_bpartner_location_id LEFT JOIN c_doctype dt ON dt.c_doctype_id = io.c_doctype_id JOIN ad_org org ON org.ad_org_id = io.ad_org_id LEFT JOIN ad_orginfo orgi ON orgi.ad_org_id = io.ad_org_id LEFT JOIN c_location orgl ON orgl.c_location_id = orgi.c_location_id WHERE io.m_inout_id = '__DOCUMENTID__'",
+    "lines": "SELECT iol.line, COALESCE(p.name, iol.description) AS product_name, iol.movementqty AS quantity, uom.name AS uom FROM m_inoutline iol LEFT JOIN m_product p ON p.m_product_id = iol.m_product_id LEFT JOIN c_uom uom ON uom.c_uom_id = iol.c_uom_id WHERE iol.m_inout_id = '__DOCUMENTID__' ORDER BY iol.line"
+  },
+  "outputs": ["pdf", "html"],
+  "summary": {},
+  "mockDataFile": "mock-data.json"
+}

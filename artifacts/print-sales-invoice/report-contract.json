@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "reportId": "print-sales-invoice",
+  "category": "sales",
+  "type": "document",
+  "source": "sql",
+  "title": { "en_US": "Sales Invoice", "es_ES": "Factura de Venta" },
+  "orientation": "portrait",
+  "parameters": [
+    { "name": "documentId", "label": { "en_US": "Invoice ID", "es_ES": "ID Factura" }, "type": "text", "required": true, "hidden": true }
+  ],
+  "sql": {
+    "header": "SELECT i.c_invoice_id, i.documentno, i.dateinvoiced, dt.name AS doc_type, bp.name AS bp_name, bpl.name AS bp_location, i.description, i.grandtotal, i.totallines, pt.name AS payment_term, pm.name AS payment_method, cur.iso_code AS currency, CASE i.docstatus WHEN 'CO' THEN 'Complete' WHEN 'DR' THEN 'Draft' WHEN 'VO' THEN 'Void' ELSE i.docstatus END AS status, org.name AS org_name, orgi.taxid AS org_taxid, orgl.address1 AS org_address, orgl.postal AS org_postal, orgl.city AS org_city FROM c_invoice i JOIN c_bpartner bp ON bp.c_bpartner_id = i.c_bpartner_id JOIN c_bpartner_location bpl ON bpl.c_bpartner_location_id = i.c_bpartner_location_id LEFT JOIN c_doctype dt ON dt.c_doctype_id = i.c_doctypetarget_id LEFT JOIN c_paymentterm pt ON pt.c_paymentterm_id = i.c_paymentterm_id LEFT JOIN fin_paymentmethod pm ON pm.fin_paymentmethod_id = i.fin_paymentmethod_id LEFT JOIN c_currency cur ON cur.c_currency_id = i.c_currency_id JOIN ad_org org ON org.ad_org_id = i.ad_org_id LEFT JOIN ad_orginfo orgi ON orgi.ad_org_id = i.ad_org_id LEFT JOIN c_location orgl ON orgl.c_location_id = orgi.c_location_id WHERE i.c_invoice_id = '__DOCUMENTID__'",
+    "lines": "SELECT il.line, COALESCE(p.name, il.description) AS product_name, il.qtyinvoiced AS quantity, uom.name AS uom, il.priceactual, il.linenetamt FROM c_invoiceline il LEFT JOIN m_product p ON p.m_product_id = il.m_product_id LEFT JOIN c_uom uom ON uom.c_uom_id = il.c_uom_id WHERE il.c_invoice_id = '__DOCUMENTID__' ORDER BY il.line",
+    "taxes": "SELECT t.name AS tax_name, it.taxbaseamt, it.taxamt FROM c_invoicetax it JOIN c_tax t ON t.c_tax_id = it.c_tax_id WHERE it.c_invoice_id = '__DOCUMENTID__' ORDER BY t.name"
+  },
+  "outputs": ["pdf", "html"],
+  "summary": {},
+  "mockDataFile": "mock-data.json"
+}

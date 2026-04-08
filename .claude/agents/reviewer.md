@@ -90,3 +90,72 @@ Keep comments concise. Include file paths and test results when relevant.
 - If it works and is readable, don't block
 - Security issues are always blockers
 </decision_heuristics>
+
+<schema_forge_rules>
+## Schema Forge — Project-Specific Review Rules
+
+These are **BLOCKERS** unless explicitly justified.
+
+### Regeneration Invariant (BLOCKER)
+`artifacts/{window}/generated/` must be 100% regenerable by running the pipeline from scratch.
+The only hand-written files in `artifacts/` are `decisions.json` and `contract.json`.
+
+**Check for:**
+- Manual edits to files in `artifacts/*/generated/` without `@sf-generated-start/end` markers
+- Files in `generated/` that the pipeline does not produce (i.e., files that would vanish on a clean regeneration)
+- Imports in generated files pointing to `./SomeForm` where `SomeForm` is not produced by the generator
+
+**How to verify:** Look at `generate-frontend.js` `generateAll()` — the `files` object it returns is the exact set of files the pipeline writes. Anything in `generated/` not in that set is a manual file.
+
+### Custom Code Location (BLOCKER)
+Hand-written React components must live in one of these locations, NEVER in `artifacts/*/generated/`:
+- `tools/app-shell/src/windows/custom/{window-name}/` — for components loaded by the app shell
+- `artifacts/{window}/custom/` — for per-window custom files (e.g., `RelatedDocuments.jsx`, `mockData.js`)
+
+- If a secondary tab declares `customForm`, the form file must be in `windows/custom/`, and the generated import must use `@/windows/custom/{specName}/{FormName}` — not `./`.
+- Files in `artifacts/{window}/custom/` must be imported from generated files using relative paths to `../../../custom/`.
+- The pipeline should scaffold a stub if the file doesn't exist on first run (check `pipeline.js`).
+
+### Pipeline-Level Fixes (BLOCKER)
+Never fix a generated output file directly. If a generated file has a bug or wrong content, the fix must be in the generator (`generate-frontend.js`, `generate-contract.js`, `resolve-curated.js`, etc.) so it applies to all windows.
+
+### Section Markers (BLOCKER)
+All generated files must use `@sf-generated-start/end` markers on every code block the pipeline owns. This is what allows `preserveAndRegenerate()` to safely overwrite generated sections while preserving custom ones.
+
+Files without markers in `generated/` will be fully overwritten or lose custom content on next pipeline run.
+
+### Pipeline Chain Completeness (BLOCKER)
+When a new field is added to `decisions.json`, it must flow through the ENTIRE pipeline to be regeneration-safe:
+
+```
+decisions.json → resolve-curated.js → contract.json → generate-frontend.js → generated output
+```
+
+**Check for breaks in the chain:** If a field appears in `decisions.json` and `contract.json` but `generate-frontend.js` doesn't read it, the generated output will have it only because someone manually edited the Page — and it will be LOST on regeneration.
+
+**How to verify:** For each new decisions/contract field that affects generated UI:
+1. Grep `resolve-curated.js` for the field name — does it pass it through?
+2. Grep `generate-frontend.js` for the field name — does it emit it in the template?
+3. If either grep returns nothing, the chain is broken → BLOCKER.
+
+### Stale Files After Entity Rename (BLOCKER)
+When `decisions.json` renames entities (e.g., `cOrder` → `header`), the generator produces files with the NEW entity name (`HeaderForm.jsx`, `HeaderPage.jsx`, etc.). The OLD files (`OrderForm.jsx`, `OrderPage.jsx`, etc.) become orphans that would not be regenerated.
+
+**Check for:** Both old AND new entity-named files existing in the same `generated/` directory. If both exist, the old ones must be deleted.
+
+### Backup and Temporary Files (BLOCKER)
+Files with extensions like `.old`, `.bak`, `.backup`, `.tmp`, or `.orig` must NEVER be committed to `generated/` directories. Use git history for reference instead.
+
+### Decisions as Source of Truth (WARNING)
+Window-specific configuration (tab layout, secondary tabs, field overrides, entityLabel, detailEntity, etc.) must be declared in `decisions.json`, not hardcoded in generated components. Every configurable field must be documented in `docs/decisions-reference.md`.
+
+If a generated Page component has hardcoded tab structure that doesn't match anything in `decisions.json`, that's a sign the file was manually edited instead of driving the config through the pipeline.
+
+If a PR adds new fields to `decisions.json` without updating `docs/decisions-reference.md`, that's a WARNING — the reference doc is the guide for what can be configured.
+
+### Shared Component Changes (INFO)
+Changes to `tools/app-shell/src/components/contract-ui/` (DetailView, EntityForm, DataTable, etc.) must be:
+- **Generic** — not hardcoded for a specific window
+- **Backwards-compatible** — new props must be optional with sensible defaults
+- Verify no existing window breaks by checking that all new props have default values or guard conditions
+</schema_forge_rules>

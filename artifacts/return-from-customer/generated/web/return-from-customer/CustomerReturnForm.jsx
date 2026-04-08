@@ -2,17 +2,11 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:customerReturn
 const fields = [
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', required: true, section: 'principal', reference: 'BusinessPartner', inputMode: 'search' },
-  { key: 'documentDate', column: 'DateOrdered', type: 'date', required: true, section: 'principal' },
-  { key: 'returnDate', column: 'DateDelivered', type: 'date', section: 'principal' },
-  { key: 'originalShipment', column: 'InOut_ID', type: 'search', required: true, section: 'principal', reference: 'Shipment', inputMode: 'search' },
-  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', required: true, section: 'other', reference: 'Warehouse', inputMode: 'selector' },
-  { key: 'returnReason', column: 'Description', type: 'text', section: 'other' },
-  { key: 'salesRepresentative', column: 'SalesRep_ID', type: 'search', section: 'other', reference: 'User', inputMode: 'search' },
-  { key: 'documentNo', column: 'DocumentNo', type: 'text', required: true, readOnly: true, section: 'other' },
-  { key: 'docStatus', column: 'DocStatus', type: 'text', required: true, readOnly: true, section: 'other' },
-  { key: 'totalAmount', column: 'Amt', type: 'number', readOnly: true, section: 'other' },
-  { key: 'isApproved', column: 'IsApproved', type: 'checkbox', readOnly: true, section: 'other' },
+  { key: 'documentNo', column: 'DocumentNo', type: 'text', required: true, readOnly: true, section: 'principal' },
+  { key: 'orderDate', column: 'DateOrdered', type: 'date', required: true, section: 'principal' },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', required: true, section: 'principal', reference: 'BPartner', inputMode: 'search' },
+  { key: 'warehouse', column: 'M_Warehouse_ID', type: 'search', required: true, section: 'principal', reference: 'Warehouse', inputMode: 'search' },
+  { key: 'summedLineAmount', column: 'TotalLines', type: 'number', required: true, readOnly: true, section: 'summary' },
 ];
 // @sf-generated-end fields:customerReturn
 

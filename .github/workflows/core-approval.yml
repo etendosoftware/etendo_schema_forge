@@ -1,0 +1,70 @@
+name: Core Files Approval Gate
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  core-approval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for non-artifact changes
+        id: check
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          NON_ARTIFACT=$(git diff --name-only "$BASE" "$HEAD" | grep -v '^artifacts/' || true)
+          if [ -n "$NON_ARTIFACT" ]; then
+            echo "has_core_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Core files changed:"
+            echo "$NON_ARTIFACT"
+          else
+            echo "has_core_changes=false" >> "$GITHUB_OUTPUT"
+            echo "Only artifact changes — no approval gate needed."
+          fi
+
+      - name: Verify required approval
+        if: steps.check.outputs.has_core_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REQUIRED_REVIEWERS="valenvivaldi sebastianbarrozo"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+
+          # Skip check if PR author is a required reviewer
+          for reviewer in $REQUIRED_REVIEWERS; do
+            if [ "$PR_AUTHOR" = "$reviewer" ]; then
+              echo "PR author ($PR_AUTHOR) is a required reviewer — skipping approval gate."
+              exit 0
+            fi
+          done
+
+          APPROVALS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
+            --jq '[.[] | select(.state == "APPROVED") | .user.login] | unique | .[]')
+
+          echo "Current approvals: $APPROVALS"
+
+          APPROVED=false
+          for reviewer in $REQUIRED_REVIEWERS; do
+            if echo "$APPROVALS" | grep -qx "$reviewer"; then
+              echo "Approved by required reviewer: $reviewer"
+              APPROVED=true
+              break
+            fi
+          done
+
+          if [ "$APPROVED" = "false" ]; then
+            echo "::error::This PR modifies core files (outside artifacts/) and requires approval from one of: $REQUIRED_REVIEWERS"
+            exit 1
+          fi

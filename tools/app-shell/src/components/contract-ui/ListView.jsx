@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useMenuLabel, useLabel } from '@/i18n';
-import { Search, ArrowUpDown, SlidersHorizontal, Eye, ChevronDown, MoreVertical, Plus, CalendarDays, Link2, Sparkles, Bell, Mic, Printer } from 'lucide-react';
+import { Search, ArrowUpDown, SlidersHorizontal, Eye, ChevronDown, MoreVertical, Plus, CalendarDays, Link2, Sparkles, Bell, Mic, Printer, LayoutGrid, LayoutList } from 'lucide-react';
 import LocaleSwitcher from '@/components/LocaleSwitcher.jsx';
 import { UserAvatarButton, UserContextSwitcher } from '@/components/UserContextSwitcher.jsx';
 import ReportDrawer from './ReportDrawer.jsx';
@@ -21,6 +21,10 @@ export function ListView({
   token,
   apiBaseUrl,
   breadcrumb,
+  galleryRenderer,
+  hideCreate = false,
+  headerContent = null,
+  api = null,
 }) {
   const hook = useEntity(entity, null, { token, apiBaseUrl });
   const navigate = useNavigate();
@@ -33,6 +37,15 @@ export function ListView({
   const [showReport, setShowReport] = useState(false);
   const [showDocPrint, setShowDocPrint] = useState(false);
   const [tableColumns, setTableColumns] = useState([]);
+  const [viewMode, setViewMode] = useState(() =>
+    localStorage.getItem(`viewMode:${entity}`) || 'list'
+  );
+
+  const handleViewMode = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem(`viewMode:${entity}`, mode);
+  };
+
   const sortBtnRef = useRef(null);
   const scrollRef = useRef(null);
 
@@ -256,7 +269,25 @@ export function ListView({
                 <Printer className="h-3.5 w-3.5" />
                 Print
               </Button>
+              {/* View toggle */}
+              {galleryRenderer && (
+                <div className="inline-flex items-center border border-border rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => handleViewMode('list')}
+                    className={`h-9 w-9 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    <LayoutList className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleViewMode('gallery')}
+                    className={`h-9 w-9 flex items-center justify-center transition-colors ${viewMode === 'gallery' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
               {/* Split "New" button */}
+              {!hideCreate && (
               <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
                 <Button
                   className="rounded-none rounded-l-lg gap-1.5 px-4"
@@ -264,7 +295,7 @@ export function ListView({
                   onClick={() => navigate(`/${windowName}/new`)}
                 >
                   <Plus className="h-4 w-4" />
-                  New {label.replace(/s$/, '')}
+                  New {label.endsWith('ies') ? label.slice(0, -3) + 'y' : label.replace(/s$/, '')}
                 </Button>
                 <div className="w-px bg-primary-foreground/20" />
                 <Button
@@ -273,7 +304,17 @@ export function ListView({
                   <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
               </div>
+              )}
             </div>
+          </div>
+        )}
+
+        {/* KPI / header content */}
+        {headerContent && (
+          <div className="px-6 pt-4">
+            {typeof headerContent === 'function'
+              ? headerContent({ api, token, apiBaseUrl, items: hook.items, loading: hook.loading })
+              : headerContent}
           </div>
         )}
 
@@ -288,16 +329,21 @@ export function ListView({
             </div>
           ) : (
             <>
-              <Table
-                entity={entity}
-                data={hook.items}
-                onNavigate={(row) => navigate(`/${windowName}/${row.id}`)}
-                onSelectionChange={setSelectedRows}
-                compact={false}
-                sortColumn={hook.sortColumn}
-                sortDirection={hook.sortDirection}
-                onColumnsReady={setTableColumns}
-              />
+              {viewMode === 'gallery' && galleryRenderer
+                ? galleryRenderer({ data: hook.items, onNavigate: (id) => navigate(`/${windowName}/${id}`), token, apiBaseUrl })
+                : (
+                  <Table
+                    entity={entity}
+                    data={hook.items}
+                    onNavigate={(row) => navigate(`/${windowName}/${row.id}`)}
+                    onSelectionChange={setSelectedRows}
+                    compact={false}
+                    sortColumn={hook.sortColumn}
+                    sortDirection={hook.sortDirection}
+                    onColumnsReady={setTableColumns}
+                  />
+                )
+              }
               {hook.loadingMore && (
                 <div className="flex items-center justify-center py-4">
                   <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />

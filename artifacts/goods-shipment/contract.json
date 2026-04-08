@@ -1,20 +1,67 @@
 {
-  "version": "0.1.0",
-  "generatedAt": "2026-03-06T18:10:16.098Z",
-  "checksum": "f1ede7a66de1be7b",
+  "version": "0.3.0",
+  "generatedAt": "2026-03-27T18:47:04.744Z",
+  "checksum": "4f6180a0da7a8b00",
   "frontendContract": {
     "window": {
       "id": "169",
       "name": "Goods Shipment",
       "primaryEntity": "goodsShipment",
-      "category": "sales"
+      "category": "sales",
+      "documentPreview": {
+        "titlePrefix": "Shipment"
+      },
+      "notesField": "description",
+      "relatedDocuments": true,
+      "layoutType": "default"
     },
     "entities": {
       "goodsShipment": {
+        "tableName": "M_InOut",
+        "tabId": "257",
+        "tabName": "Header",
+        "uiPattern": "STD",
         "fields": [
           {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "label": "Document No.",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "warehouse",
+            "apiKey": "warehouse",
+            "column": "M_Warehouse_ID",
+            "label": "Warehouse",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Warehouse",
+            "inputMode": "search",
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_InOut_Warehouse"
+            }
+          },
+          {
             "name": "businessPartner",
+            "apiKey": "businessPartner",
             "column": "C_BPartner_ID",
+            "label": "Business Partner",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
@@ -22,11 +69,17 @@
             "grid": true,
             "form": true,
             "reference": "BusinessPartner",
-            "inputMode": "search"
+            "inputMode": "search",
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
+            }
           },
           {
             "name": "partnerAddress",
+            "apiKey": "partnerAddress",
             "column": "C_BPartner_Location_ID",
+            "label": "Partner Address",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
@@ -37,175 +90,215 @@
             "inputMode": "dependent",
             "dependsOn": {
               "field": "businessPartner",
-              "filterKey": "businessPartnerId"
+              "filterKey": "C_BPartner_ID"
+            },
+            "section": "principal"
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "text",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "collapsed"
+          },
+          {
+            "name": "movementDate",
+            "apiKey": "movementDate",
+            "column": "MovementDate",
+            "label": "Movement Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "@#Date@",
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate"
+            }
+          },
+          {
+            "name": "documentStatus",
+            "apiKey": "documentStatus",
+            "column": "DocStatus",
+            "label": "Document Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "CL",
+                "name": "Closed"
+              },
+              {
+                "value": "CO",
+                "name": "Completed"
+              },
+              {
+                "value": "DR",
+                "name": "Draft"
+              },
+              {
+                "value": "NA",
+                "name": "Not Accepted"
+              },
+              {
+                "value": "WP",
+                "name": "Not Paid"
+              },
+              {
+                "value": "RE",
+                "name": "Re-Opened"
+              },
+              {
+                "value": "TEMP",
+                "name": "Temporal"
+              },
+              {
+                "value": "IP",
+                "name": "Under Way"
+              },
+              {
+                "value": "??",
+                "name": "Unknown"
+              },
+              {
+                "value": "VO",
+                "name": "Voided"
+              }
+            ],
+            "defaultValue": "DR"
+          }
+        ],
+        "searchableFields": [
+          "documentNo",
+          "warehouse",
+          "businessPartner",
+          "movementDate",
+          "documentStatus"
+        ],
+        "computedFields": [
+          {
+            "name": "documentNo",
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
             }
           },
           {
             "name": "movementDate",
-            "column": "MovementDate",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            }
           },
           {
-            "name": "dateAcct",
-            "column": "DateAcct",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "warehouse",
-            "column": "M_Warehouse_ID",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "reference": "Warehouse",
-            "inputMode": "selector"
-          },
-          {
-            "name": "description",
-            "column": "Description",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "poReference",
-            "column": "POReference",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "isActive",
-            "column": "IsActive",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "documentNo",
-            "column": "DocumentNo",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "docStatus",
-            "column": "DocStatus",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true
+            "name": "documentStatus",
+            "derivation": {
+              "type": "computed",
+              "source": "DR"
+            }
           }
-        ],
-        "searchableFields": [
-          "businessPartner",
-          "movementDate",
-          "warehouse",
-          "poReference",
-          "documentNo",
-          "docStatus"
-        ],
-        "computedFields": []
+        ]
       },
       "goodsShipmentLine": {
+        "tableName": "M_InOutLine",
+        "tabId": "258",
+        "tabName": "Lines",
+        "uiPattern": "STD",
         "fields": [
           {
             "name": "product",
+            "apiKey": "product",
             "column": "M_Product_ID",
+            "label": "Product",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
-            "required": true,
+            "required": false,
             "grid": true,
             "form": true,
             "reference": "Product",
-            "inputMode": "search"
+            "inputMode": "search",
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
+            }
           },
           {
-            "name": "movementQty",
+            "name": "movementQuantity",
+            "apiKey": "movementQuantity",
             "column": "MovementQty",
-            "type": "number",
+            "label": "Movement Quantity",
+            "type": "quantity",
             "tsType": "number",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "locator",
-            "column": "M_Locator_ID",
-            "type": "foreignKey",
-            "tsType": "string",
             "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
-            "reference": "Locator",
-            "inputMode": "selector"
-          },
-          {
-            "name": "lineNo",
-            "column": "Line",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true
+            "defaultValue": "0",
+            "section": "principal"
           },
           {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
-            "type": "string",
+            "label": "Description",
+            "type": "text",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "section": "other"
           },
           {
-            "name": "uom",
-            "column": "C_UOM_ID",
-            "type": "foreignKey",
-            "tsType": "string",
+            "name": "orderQuantity",
+            "apiKey": "orderQuantity",
+            "column": "QuantityOrder",
+            "label": "Order Quantity",
+            "type": "quantity",
+            "tsType": "number",
             "visibility": "readOnly",
             "required": false,
             "grid": true,
             "form": true,
-            "reference": "UOM",
-            "inputMode": "selector"
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_Conversion"
+            },
+            "displayLogic": {
+              "raw": "(@HASSECONDUOM@=1 & @UomManagement@!'Y')  | (@UomManagement@='Y' & @M_Product_Uom_Id@!'')",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true
+            }
           }
         ],
         "searchableFields": [
           "product"
         ],
-        "computedFields": []
+        "computedFields": [
+          {
+            "name": "movementQuantity",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          }
+        ]
       }
     }
   },
@@ -214,13 +307,62 @@
       "id": "169",
       "name": "Goods Shipment",
       "primaryEntity": "goodsShipment",
-      "category": "sales"
+      "category": "sales",
+      "documentPreview": {
+        "titlePrefix": "Shipment"
+      },
+      "notesField": "description",
+      "relatedDocuments": true
     },
     "entities": {
       "goodsShipment": {
+        "tableName": "M_InOut",
+        "tabId": "257",
+        "tabName": "Header",
         "fields": [
           {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "documentType",
+            "apiKey": "documentType",
+            "column": "C_DocType_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "mConditionGoodsID",
+            "apiKey": "mConditionGoodsID",
+            "column": "M_Condition_Goods_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "warehouse",
+            "apiKey": "warehouse",
+            "column": "M_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
             "name": "businessPartner",
+            "apiKey": "businessPartner",
             "column": "C_BPartner_ID",
             "type": "foreignKey",
             "visibility": "editable",
@@ -228,207 +370,783 @@
           },
           {
             "name": "partnerAddress",
+            "apiKey": "partnerAddress",
             "column": "C_BPartner_Location_ID",
             "type": "foreignKey",
             "visibility": "editable",
             "required": true
           },
           {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "text",
+            "visibility": "editable",
+            "required": false
+          },
+          {
             "name": "movementDate",
+            "apiKey": "movementDate",
             "column": "MovementDate",
             "type": "date",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "dateAcct",
+            "name": "deliveryLocation",
+            "apiKey": "deliveryLocation",
+            "column": "Delivery_Location_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "documentStatus",
+            "apiKey": "documentStatus",
+            "column": "DocStatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "userContact",
+            "apiKey": "userContact",
+            "column": "AD_User_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
             "column": "DateAcct",
             "type": "date",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
-            "name": "warehouse",
-            "column": "M_Warehouse_ID",
+            "name": "salesOrder",
+            "apiKey": "salesOrder",
+            "column": "C_Order_ID",
             "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "description",
-            "column": "Description",
-            "type": "string",
-            "visibility": "editable",
+            "visibility": "system",
             "required": false
           },
           {
-            "name": "poReference",
+            "name": "orderReference",
+            "apiKey": "orderReference",
             "column": "POReference",
             "type": "string",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
-            "name": "isActive",
-            "column": "IsActive",
+            "name": "isnettingshipment",
+            "apiKey": "isnettingshipment",
+            "column": "Isnettingshipment",
             "type": "boolean",
-            "visibility": "editable",
-            "required": true
+            "visibility": "discarded",
+            "required": false
           },
           {
-            "name": "documentNo",
-            "column": "DocumentNo",
+            "name": "externalBusinessPartnerReference",
+            "apiKey": "externalBusinessPartnerReference",
+            "column": "Bpartner_Extref",
             "type": "string",
-            "visibility": "readOnly",
-            "required": true
+            "visibility": "discarded",
+            "required": false
           },
           {
-            "name": "docStatus",
-            "column": "DocStatus",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": true
+            "name": "orderDate",
+            "apiKey": "orderDate",
+            "column": "DateOrdered",
+            "type": "date",
+            "visibility": "system",
+            "required": false
           },
           {
-            "name": "adClientId",
-            "column": "AD_Client_ID",
-            "type": "id",
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "createLinesFrom",
+            "apiKey": "createLinesFrom",
+            "column": "CreateFrom",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "documentAction",
+            "apiKey": "documentAction",
+            "column": "DocAction",
+            "type": "button",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "adOrgId",
-            "column": "AD_Org_ID",
-            "type": "id",
+            "name": "processGoodsJava",
+            "apiKey": "processGoodsJava",
+            "column": "Process_Goods_Java",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "type": "button",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "isSotrx",
+            "name": "deliveryTerms",
+            "apiKey": "deliveryTerms",
+            "column": "DeliveryRule",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "deliveryMethod",
+            "apiKey": "deliveryMethod",
+            "column": "DeliveryViaRule",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "freightAmount",
+            "apiKey": "freightAmount",
+            "column": "FreightAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "freightCostRule",
+            "apiKey": "freightCostRule",
+            "column": "FreightCostRule",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "shippingCompany",
+            "apiKey": "shippingCompany",
+            "column": "M_Shipper_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "priority",
+            "apiKey": "priority",
+            "column": "PriorityRule",
+            "type": "enum",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "pickDate",
+            "apiKey": "pickDate",
+            "column": "PickDate",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "trackingNo",
+            "apiKey": "trackingNo",
+            "column": "TrackingNo",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "numberOfPackages",
+            "apiKey": "numberOfPackages",
+            "column": "NoPackages",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "movementType",
+            "apiKey": "movementType",
+            "column": "MovementType",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "charge",
+            "apiKey": "charge",
+            "column": "C_Charge_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "chargeAmount",
+            "apiKey": "chargeAmount",
+            "column": "ChargeAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "shipDate",
+            "apiKey": "shipDate",
+            "column": "ShipDate",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "activity",
+            "apiKey": "activity",
+            "column": "C_Activity_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesCampaign",
+            "apiKey": "salesCampaign",
+            "column": "C_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "trxOrganization",
+            "apiKey": "trxOrganization",
+            "column": "AD_OrgTrx_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "freightCategory",
+            "apiKey": "freightCategory",
+            "column": "M_FreightCategory_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "calculateFreight",
+            "apiKey": "calculateFreight",
+            "column": "Calculate_Freight",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "freightCurrency",
+            "apiKey": "freightCurrency",
+            "column": "Freight_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "invoiceStatus",
+            "apiKey": "invoiceStatus",
+            "column": "InvoiceStatus",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "completelyInvoiced",
+            "apiKey": "completelyInvoiced",
+            "column": "Iscompletelyinvoiced",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "invoicefromshipment",
+            "apiKey": "invoicefromshipment",
+            "column": "Invoicefromshipment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "receiveMaterials",
+            "apiKey": "receiveMaterials",
+            "column": "RM_Receipt_PickEdit",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "updateLines",
+            "apiKey": "updateLines",
+            "column": "UpdateLines",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "logistic",
+            "apiKey": "logistic",
+            "column": "Islogistic",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "generateTo",
+            "apiKey": "generateTo",
+            "column": "GenerateTo",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "print",
+            "apiKey": "print",
+            "column": "IsPrinted",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "sendMaterials",
+            "apiKey": "sendMaterials",
+            "column": "RM_Shipment_Pickedit",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesTransaction",
+            "apiKey": "salesTransaction",
             "column": "IsSOTrx",
             "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "movementType",
-            "column": "MovementType",
-            "type": "string",
+            "name": "datePrinted",
+            "apiKey": "datePrinted",
+            "column": "DatePrinted",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_InOut_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "cDocTypeId",
-            "column": "C_DocType_ID",
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "processed",
-            "column": "Processed",
-            "type": "boolean",
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "created",
-            "column": "Created",
-            "type": "datetime",
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
             "name": "updated",
+            "apiKey": "updated",
             "column": "Updated",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           }
         ]
       },
       "goodsShipmentLine": {
+        "tableName": "M_InOutLine",
+        "tabId": "258",
+        "tabName": "Lines",
         "fields": [
           {
-            "name": "product",
-            "column": "M_Product_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "movementQty",
-            "column": "MovementQty",
-            "type": "number",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "locator",
-            "column": "M_Locator_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
             "name": "lineNo",
+            "apiKey": "lineNo",
             "column": "Line",
             "type": "integer",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
-            "name": "description",
-            "column": "Description",
-            "type": "string",
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "uom",
+            "name": "mConditionGoodsID",
+            "apiKey": "mConditionGoodsID",
+            "column": "M_Condition_Goods_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "attributeSetValue",
+            "apiKey": "attributeSetValue",
+            "column": "M_AttributeSetInstance_ID",
+            "type": "productAttribute",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "operativeQuantity",
+            "apiKey": "operativeQuantity",
+            "column": "Aumqty",
+            "type": "quantity",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "operativeUOM",
+            "apiKey": "operativeUOM",
+            "column": "C_Aum",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "movementQuantity",
+            "apiKey": "movementQuantity",
+            "column": "MovementQty",
+            "type": "quantity",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
             "column": "C_UOM_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "storageBin",
+            "apiKey": "storageBin",
+            "column": "M_Locator_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "text",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "salesOrderLine",
+            "apiKey": "salesOrderLine",
+            "column": "C_OrderLine_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "orderUOM",
+            "apiKey": "orderUOM",
+            "column": "M_Product_Uom_Id",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "orderQuantity",
+            "apiKey": "orderQuantity",
+            "column": "QuantityOrder",
+            "type": "quantity",
             "visibility": "readOnly",
             "required": false
           },
           {
-            "name": "adClientId",
-            "column": "AD_Client_ID",
-            "type": "id",
-            "visibility": "system",
+            "name": "descriptionOnly",
+            "apiKey": "descriptionOnly",
+            "column": "IsDescription",
+            "type": "boolean",
+            "visibility": "discarded",
             "required": true
           },
           {
-            "name": "adOrgId",
+            "name": "canceledInoutLine",
+            "apiKey": "canceledInoutLine",
+            "column": "Canceled_Inoutline_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
             "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "explode",
+            "apiKey": "explode",
+            "column": "Explode",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "bOMParentID",
+            "apiKey": "bOMParentID",
+            "column": "BOM_Parent_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "invoiceQuantity",
+            "apiKey": "invoiceQuantity",
+            "column": "Qtyinvoiced",
+            "type": "quantity",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_InOutLine_ID",
             "type": "id",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "mInoutId",
+            "name": "reinvoice",
+            "apiKey": "reinvoice",
+            "column": "IsInvoiced",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "managePrereservation",
+            "apiKey": "managePrereservation",
+            "column": "Manage_Prereservation",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_Bpartner_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "shipmentReceipt",
+            "apiKey": "shipmentReceipt",
             "column": "M_InOut_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "movementDate",
-            "column": "MovementDate",
-            "type": "date",
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "cBpartnerId",
-            "column": "C_BPartner_ID",
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
             "type": "foreignKey",
             "visibility": "system",
-            "required": false
+            "required": true
           },
           {
-            "name": "warehouse",
-            "column": "M_Warehouse_ID",
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -442,12 +1160,11 @@
         "path": "/goodsShipment",
         "entity": "goodsShipment",
         "supportedFilters": [
+          "documentNo",
+          "warehouse",
           "businessPartner",
           "movementDate",
-          "warehouse",
-          "poReference",
-          "documentNo",
-          "docStatus"
+          "documentStatus"
         ]
       },
       {
@@ -507,7 +1224,195 @@
         "supportedFilters": []
       }
     ],
-    "processEndpoints": []
+    "processEndpoints": [
+      {
+        "name": "Process Shipment",
+        "method": "POST",
+        "path": "/goodsShipment/:id/action/documentAction",
+        "entity": "goodsShipment",
+        "columnName": "documentAction",
+        "params": [],
+        "preconditions": [],
+        "steps": 0
+      }
+    ]
+  },
+  "apiPrediction": {
+    "specName": "goods-shipment",
+    "baseUrl": "/sws/neo/goods-shipment",
+    "crud": {
+      "goodsShipment": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/goods-shipment/goodsShipment",
+        "detailUrl": "/sws/neo/goods-shipment/goodsShipment/{id}",
+        "supportedFilters": [
+          "documentNo",
+          "warehouse",
+          "businessPartner",
+          "movementDate",
+          "documentStatus"
+        ]
+      },
+      "goodsShipmentLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/goods-shipment/goodsShipmentLine",
+        "detailUrl": "/sws/neo/goods-shipment/goodsShipmentLine/{id}",
+        "supportedFilters": [
+          "product"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "goodsShipment",
+        "field": "warehouse",
+        "column": "M_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/warehouse"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BusinessPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/businessPartner"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "partnerAddress",
+        "column": "C_BPartner_Location_ID",
+        "reference": "BusinessPartnerLocation",
+        "inputMode": "dependent",
+        "url": "/sws/neo/goods-shipment/goodsShipment/selectors/partnerAddress"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/selectors/product"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "goodsShipment",
+        "field": "createLinesFrom",
+        "column": "CreateFrom",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/createLinesFrom"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "documentAction",
+        "column": "DocAction",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/documentAction",
+        "processId": "109",
+        "processType": "classic"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "processGoodsJava",
+        "column": "Process_Goods_Java",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
+        "processId": "49DEE812BF0545269781FCEBF2235924",
+        "processType": "classic"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "posted",
+        "column": "Posted",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/posted"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "calculateFreight",
+        "column": "Calculate_Freight",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/calculateFreight",
+        "processId": "800141",
+        "processType": "classic"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "invoicefromshipment",
+        "column": "Invoicefromshipment",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/invoicefromshipment",
+        "processId": "62250E8866EA4D96A66C309878DC039E",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "receiveMaterials",
+        "column": "RM_Receipt_PickEdit",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/receiveMaterials",
+        "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "updateLines",
+        "column": "UpdateLines",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/updateLines",
+        "processId": "800010",
+        "processType": "classic"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "generateTo",
+        "column": "GenerateTo",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/generateTo",
+        "processId": "154",
+        "processType": "classic"
+      },
+      {
+        "entity": "goodsShipment",
+        "field": "sendMaterials",
+        "column": "RM_Shipment_Pickedit",
+        "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/sendMaterials",
+        "processId": "4AD70293357245AB96E59C2CDB43A35D",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "explode",
+        "column": "Explode",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/{id}/action/explode",
+        "processId": "DAE719940FE9463F8A3E3C401BBAFC53",
+        "processType": "classic"
+      },
+      {
+        "entity": "goodsShipmentLine",
+        "field": "managePrereservation",
+        "column": "Manage_Prereservation",
+        "url": "/sws/neo/goods-shipment/goodsShipmentLine/{id}/action/managePrereservation",
+        "processId": "70E42AD47E5F4698A9ACCCAF3EB72B9E",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=goods-shipmentDate"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    }
   },
   "testManifest": {
     "tests": [
@@ -515,36 +1420,12 @@
         "id": "t-1",
         "category": "field-presence",
         "entity": "goodsShipment",
-        "field": "businessPartner",
+        "field": "documentNo",
         "runner": "node",
-        "description": "Field 'businessPartner' should be present in goodsShipment"
+        "description": "Field 'documentNo' should be present in goodsShipment"
       },
       {
         "id": "t-2",
-        "category": "field-presence",
-        "entity": "goodsShipment",
-        "field": "partnerAddress",
-        "runner": "node",
-        "description": "Field 'partnerAddress' should be present in goodsShipment"
-      },
-      {
-        "id": "t-3",
-        "category": "field-presence",
-        "entity": "goodsShipment",
-        "field": "movementDate",
-        "runner": "node",
-        "description": "Field 'movementDate' should be present in goodsShipment"
-      },
-      {
-        "id": "t-4",
-        "category": "field-presence",
-        "entity": "goodsShipment",
-        "field": "dateAcct",
-        "runner": "node",
-        "description": "Field 'dateAcct' should be present in goodsShipment"
-      },
-      {
-        "id": "t-5",
         "category": "field-presence",
         "entity": "goodsShipment",
         "field": "warehouse",
@@ -552,7 +1433,23 @@
         "description": "Field 'warehouse' should be present in goodsShipment"
       },
       {
-        "id": "t-6",
+        "id": "t-3",
+        "category": "field-presence",
+        "entity": "goodsShipment",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in goodsShipment"
+      },
+      {
+        "id": "t-4",
+        "category": "field-presence",
+        "entity": "goodsShipment",
+        "field": "partnerAddress",
+        "runner": "node",
+        "description": "Field 'partnerAddress' should be present in goodsShipment"
+      },
+      {
+        "id": "t-5",
         "category": "field-presence",
         "entity": "goodsShipment",
         "field": "description",
@@ -560,39 +1457,39 @@
         "description": "Field 'description' should be present in goodsShipment"
       },
       {
+        "id": "t-6",
+        "category": "field-presence",
+        "entity": "goodsShipment",
+        "field": "movementDate",
+        "runner": "node",
+        "description": "Field 'movementDate' should be present in goodsShipment"
+      },
+      {
         "id": "t-7",
         "category": "field-presence",
         "entity": "goodsShipment",
-        "field": "poReference",
+        "field": "documentStatus",
         "runner": "node",
-        "description": "Field 'poReference' should be present in goodsShipment"
+        "description": "Field 'documentStatus' should be present in goodsShipment"
       },
       {
         "id": "t-8",
-        "category": "field-presence",
-        "entity": "goodsShipment",
-        "field": "isActive",
-        "runner": "node",
-        "description": "Field 'isActive' should be present in goodsShipment"
-      },
-      {
-        "id": "t-9",
-        "category": "field-presence",
+        "category": "field-type",
         "entity": "goodsShipment",
         "field": "documentNo",
         "runner": "node",
-        "description": "Field 'documentNo' should be present in goodsShipment"
+        "description": "Field 'documentNo' should have type 'string' in goodsShipment"
+      },
+      {
+        "id": "t-9",
+        "category": "field-type",
+        "entity": "goodsShipment",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "Field 'warehouse' should have type 'string' in goodsShipment"
       },
       {
         "id": "t-10",
-        "category": "field-presence",
-        "entity": "goodsShipment",
-        "field": "docStatus",
-        "runner": "node",
-        "description": "Field 'docStatus' should be present in goodsShipment"
-      },
-      {
-        "id": "t-11",
         "category": "field-type",
         "entity": "goodsShipment",
         "field": "businessPartner",
@@ -600,12 +1497,20 @@
         "description": "Field 'businessPartner' should have type 'string' in goodsShipment"
       },
       {
-        "id": "t-12",
+        "id": "t-11",
         "category": "field-type",
         "entity": "goodsShipment",
         "field": "partnerAddress",
         "runner": "node",
         "description": "Field 'partnerAddress' should have type 'string' in goodsShipment"
+      },
+      {
+        "id": "t-12",
+        "category": "field-type",
+        "entity": "goodsShipment",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in goodsShipment"
       },
       {
         "id": "t-13",
@@ -619,92 +1524,12 @@
         "id": "t-14",
         "category": "field-type",
         "entity": "goodsShipment",
-        "field": "dateAcct",
+        "field": "documentStatus",
         "runner": "node",
-        "description": "Field 'dateAcct' should have type 'string' in goodsShipment"
+        "description": "Field 'documentStatus' should have type 'string' in goodsShipment"
       },
       {
         "id": "t-15",
-        "category": "field-type",
-        "entity": "goodsShipment",
-        "field": "warehouse",
-        "runner": "node",
-        "description": "Field 'warehouse' should have type 'string' in goodsShipment"
-      },
-      {
-        "id": "t-16",
-        "category": "field-type",
-        "entity": "goodsShipment",
-        "field": "description",
-        "runner": "node",
-        "description": "Field 'description' should have type 'string' in goodsShipment"
-      },
-      {
-        "id": "t-17",
-        "category": "field-type",
-        "entity": "goodsShipment",
-        "field": "poReference",
-        "runner": "node",
-        "description": "Field 'poReference' should have type 'string' in goodsShipment"
-      },
-      {
-        "id": "t-18",
-        "category": "field-type",
-        "entity": "goodsShipment",
-        "field": "isActive",
-        "runner": "node",
-        "description": "Field 'isActive' should have type 'boolean' in goodsShipment"
-      },
-      {
-        "id": "t-19",
-        "category": "field-type",
-        "entity": "goodsShipment",
-        "field": "documentNo",
-        "runner": "node",
-        "description": "Field 'documentNo' should have type 'string' in goodsShipment"
-      },
-      {
-        "id": "t-20",
-        "category": "field-type",
-        "entity": "goodsShipment",
-        "field": "docStatus",
-        "runner": "node",
-        "description": "Field 'docStatus' should have type 'string' in goodsShipment"
-      },
-      {
-        "id": "t-21",
-        "category": "searchable-filters",
-        "entity": "goodsShipment",
-        "field": "businessPartner",
-        "runner": "node",
-        "description": "Field 'businessPartner' should be a supported filter for goodsShipment"
-      },
-      {
-        "id": "t-22",
-        "category": "searchable-filters",
-        "entity": "goodsShipment",
-        "field": "movementDate",
-        "runner": "node",
-        "description": "Field 'movementDate' should be a supported filter for goodsShipment"
-      },
-      {
-        "id": "t-23",
-        "category": "searchable-filters",
-        "entity": "goodsShipment",
-        "field": "warehouse",
-        "runner": "node",
-        "description": "Field 'warehouse' should be a supported filter for goodsShipment"
-      },
-      {
-        "id": "t-24",
-        "category": "searchable-filters",
-        "entity": "goodsShipment",
-        "field": "poReference",
-        "runner": "node",
-        "description": "Field 'poReference' should be a supported filter for goodsShipment"
-      },
-      {
-        "id": "t-25",
         "category": "searchable-filters",
         "entity": "goodsShipment",
         "field": "documentNo",
@@ -712,22 +1537,78 @@
         "description": "Field 'documentNo' should be a supported filter for goodsShipment"
       },
       {
-        "id": "t-26",
+        "id": "t-16",
         "category": "searchable-filters",
         "entity": "goodsShipment",
-        "field": "docStatus",
+        "field": "warehouse",
         "runner": "node",
-        "description": "Field 'docStatus' should be a supported filter for goodsShipment"
+        "description": "Field 'warehouse' should be a supported filter for goodsShipment"
       },
       {
-        "id": "t-27",
+        "id": "t-17",
+        "category": "searchable-filters",
+        "entity": "goodsShipment",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be a supported filter for goodsShipment"
+      },
+      {
+        "id": "t-18",
+        "category": "searchable-filters",
+        "entity": "goodsShipment",
+        "field": "movementDate",
+        "runner": "node",
+        "description": "Field 'movementDate' should be a supported filter for goodsShipment"
+      },
+      {
+        "id": "t-19",
+        "category": "searchable-filters",
+        "entity": "goodsShipment",
+        "field": "documentStatus",
+        "runner": "node",
+        "description": "Field 'documentStatus' should be a supported filter for goodsShipment"
+      },
+      {
+        "id": "t-20",
         "category": "visibility",
         "entity": "goodsShipment",
         "runner": "node",
         "description": "Entity 'goodsShipment' should only expose visible fields in frontend"
       },
       {
-        "id": "t-28",
+        "id": "t-21",
+        "category": "readonlylogic-valid",
+        "entity": "goodsShipment",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Read-only logic for 'documentNo' in goodsShipment should be valid JS"
+      },
+      {
+        "id": "t-22",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsShipment",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Read-only logic for 'documentNo' in goodsShipment should have evaluable flag"
+      },
+      {
+        "id": "t-23",
+        "category": "default-value-type",
+        "entity": "goodsShipment",
+        "field": "movementDate",
+        "runner": "node",
+        "description": "Default value for 'movementDate' in goodsShipment should be a string"
+      },
+      {
+        "id": "t-24",
+        "category": "default-value-type",
+        "entity": "goodsShipment",
+        "field": "documentStatus",
+        "runner": "node",
+        "description": "Default value for 'documentStatus' in goodsShipment should be a string"
+      },
+      {
+        "id": "t-25",
         "category": "field-presence",
         "entity": "goodsShipmentLine",
         "field": "product",
@@ -735,31 +1616,15 @@
         "description": "Field 'product' should be present in goodsShipmentLine"
       },
       {
-        "id": "t-29",
+        "id": "t-26",
         "category": "field-presence",
         "entity": "goodsShipmentLine",
-        "field": "movementQty",
+        "field": "movementQuantity",
         "runner": "node",
-        "description": "Field 'movementQty' should be present in goodsShipmentLine"
+        "description": "Field 'movementQuantity' should be present in goodsShipmentLine"
       },
       {
-        "id": "t-30",
-        "category": "field-presence",
-        "entity": "goodsShipmentLine",
-        "field": "locator",
-        "runner": "node",
-        "description": "Field 'locator' should be present in goodsShipmentLine"
-      },
-      {
-        "id": "t-31",
-        "category": "field-presence",
-        "entity": "goodsShipmentLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Field 'lineNo' should be present in goodsShipmentLine"
-      },
-      {
-        "id": "t-32",
+        "id": "t-27",
         "category": "field-presence",
         "entity": "goodsShipmentLine",
         "field": "description",
@@ -767,15 +1632,15 @@
         "description": "Field 'description' should be present in goodsShipmentLine"
       },
       {
-        "id": "t-33",
+        "id": "t-28",
         "category": "field-presence",
         "entity": "goodsShipmentLine",
-        "field": "uom",
+        "field": "orderQuantity",
         "runner": "node",
-        "description": "Field 'uom' should be present in goodsShipmentLine"
+        "description": "Field 'orderQuantity' should be present in goodsShipmentLine"
       },
       {
-        "id": "t-34",
+        "id": "t-29",
         "category": "field-type",
         "entity": "goodsShipmentLine",
         "field": "product",
@@ -783,31 +1648,15 @@
         "description": "Field 'product' should have type 'string' in goodsShipmentLine"
       },
       {
-        "id": "t-35",
+        "id": "t-30",
         "category": "field-type",
         "entity": "goodsShipmentLine",
-        "field": "movementQty",
+        "field": "movementQuantity",
         "runner": "node",
-        "description": "Field 'movementQty' should have type 'number' in goodsShipmentLine"
+        "description": "Field 'movementQuantity' should have type 'number' in goodsShipmentLine"
       },
       {
-        "id": "t-36",
-        "category": "field-type",
-        "entity": "goodsShipmentLine",
-        "field": "locator",
-        "runner": "node",
-        "description": "Field 'locator' should have type 'string' in goodsShipmentLine"
-      },
-      {
-        "id": "t-37",
-        "category": "field-type",
-        "entity": "goodsShipmentLine",
-        "field": "lineNo",
-        "runner": "node",
-        "description": "Field 'lineNo' should have type 'number' in goodsShipmentLine"
-      },
-      {
-        "id": "t-38",
+        "id": "t-31",
         "category": "field-type",
         "entity": "goodsShipmentLine",
         "field": "description",
@@ -815,15 +1664,15 @@
         "description": "Field 'description' should have type 'string' in goodsShipmentLine"
       },
       {
-        "id": "t-39",
+        "id": "t-32",
         "category": "field-type",
         "entity": "goodsShipmentLine",
-        "field": "uom",
+        "field": "orderQuantity",
         "runner": "node",
-        "description": "Field 'uom' should have type 'string' in goodsShipmentLine"
+        "description": "Field 'orderQuantity' should have type 'number' in goodsShipmentLine"
       },
       {
-        "id": "t-40",
+        "id": "t-33",
         "category": "searchable-filters",
         "entity": "goodsShipmentLine",
         "field": "product",
@@ -831,38 +1680,254 @@
         "description": "Field 'product' should be a supported filter for goodsShipmentLine"
       },
       {
-        "id": "t-41",
+        "id": "t-34",
         "category": "visibility",
         "entity": "goodsShipmentLine",
         "runner": "node",
         "description": "Entity 'goodsShipmentLine' should only expose visible fields in frontend"
       },
       {
+        "id": "t-35",
+        "category": "displaylogic-valid",
+        "entity": "goodsShipmentLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Display logic for 'orderQuantity' in goodsShipmentLine should be valid JS"
+      },
+      {
+        "id": "t-36",
+        "category": "readonlylogic-valid",
+        "entity": "goodsShipmentLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Read-only logic for 'orderQuantity' in goodsShipmentLine should be valid JS"
+      },
+      {
+        "id": "t-37",
+        "category": "displaylogic-evaluable",
+        "entity": "goodsShipmentLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Display logic for 'orderQuantity' in goodsShipmentLine should have evaluable flag"
+      },
+      {
+        "id": "t-38",
+        "category": "readonlylogic-evaluable",
+        "entity": "goodsShipmentLine",
+        "field": "orderQuantity",
+        "runner": "node",
+        "description": "Read-only logic for 'orderQuantity' in goodsShipmentLine should have evaluable flag"
+      },
+      {
+        "id": "t-39",
+        "category": "default-value-type",
+        "entity": "goodsShipmentLine",
+        "field": "movementQuantity",
+        "runner": "node",
+        "description": "Default value for 'movementQuantity' in goodsShipmentLine should be a string"
+      },
+      {
+        "id": "t-40",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-41",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "documentType",
+        "runner": "node",
+        "description": "System field 'documentType' should exist in backend but not frontend for goodsShipment"
+      },
+      {
         "id": "t-42",
         "category": "system-field",
         "entity": "goodsShipment",
-        "field": "adClientId",
+        "field": "mConditionGoodsID",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for goodsShipment"
+        "description": "System field 'mConditionGoodsID' should exist in backend but not frontend for goodsShipment"
       },
       {
         "id": "t-43",
         "category": "system-field",
         "entity": "goodsShipment",
-        "field": "adOrgId",
+        "field": "deliveryLocation",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for goodsShipment"
+        "description": "System field 'deliveryLocation' should exist in backend but not frontend for goodsShipment"
       },
       {
         "id": "t-44",
         "category": "system-field",
         "entity": "goodsShipment",
-        "field": "isSotrx",
+        "field": "userContact",
         "runner": "node",
-        "description": "System field 'isSotrx' should exist in backend but not frontend for goodsShipment"
+        "description": "System field 'userContact' should exist in backend but not frontend for goodsShipment"
       },
       {
         "id": "t-45",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "System field 'accountingDate' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-46",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "salesOrder",
+        "runner": "node",
+        "description": "System field 'salesOrder' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-47",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "orderReference",
+        "runner": "node",
+        "description": "System field 'orderReference' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-48",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "isnettingshipment",
+        "runner": "node",
+        "description": "System field 'isnettingshipment' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-49",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "externalBusinessPartnerReference",
+        "runner": "node",
+        "description": "System field 'externalBusinessPartnerReference' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-50",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "orderDate",
+        "runner": "node",
+        "description": "System field 'orderDate' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-51",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "salesRepresentative",
+        "runner": "node",
+        "description": "System field 'salesRepresentative' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-52",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "createLinesFrom",
+        "runner": "node",
+        "description": "System field 'createLinesFrom' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-53",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "documentAction",
+        "runner": "node",
+        "description": "System field 'documentAction' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-54",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "processGoodsJava",
+        "runner": "node",
+        "description": "System field 'processGoodsJava' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-55",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "posted",
+        "runner": "node",
+        "description": "System field 'posted' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-56",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "deliveryTerms",
+        "runner": "node",
+        "description": "System field 'deliveryTerms' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-57",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "deliveryMethod",
+        "runner": "node",
+        "description": "System field 'deliveryMethod' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-58",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "freightAmount",
+        "runner": "node",
+        "description": "System field 'freightAmount' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-59",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "freightCostRule",
+        "runner": "node",
+        "description": "System field 'freightCostRule' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-60",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "shippingCompany",
+        "runner": "node",
+        "description": "System field 'shippingCompany' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-61",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "priority",
+        "runner": "node",
+        "description": "System field 'priority' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-62",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "pickDate",
+        "runner": "node",
+        "description": "System field 'pickDate' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-63",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "trackingNo",
+        "runner": "node",
+        "description": "System field 'trackingNo' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-64",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "numberOfPackages",
+        "runner": "node",
+        "description": "System field 'numberOfPackages' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-65",
         "category": "system-field",
         "entity": "goodsShipment",
         "field": "movementType",
@@ -870,15 +1935,223 @@
         "description": "System field 'movementType' should exist in backend but not frontend for goodsShipment"
       },
       {
-        "id": "t-46",
+        "id": "t-66",
         "category": "system-field",
         "entity": "goodsShipment",
-        "field": "cDocTypeId",
+        "field": "charge",
         "runner": "node",
-        "description": "System field 'cDocTypeId' should exist in backend but not frontend for goodsShipment"
+        "description": "System field 'charge' should exist in backend but not frontend for goodsShipment"
       },
       {
-        "id": "t-47",
+        "id": "t-67",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "chargeAmount",
+        "runner": "node",
+        "description": "System field 'chargeAmount' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-68",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "shipDate",
+        "runner": "node",
+        "description": "System field 'shipDate' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-69",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "activity",
+        "runner": "node",
+        "description": "System field 'activity' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-70",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "salesCampaign",
+        "runner": "node",
+        "description": "System field 'salesCampaign' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-71",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "trxOrganization",
+        "runner": "node",
+        "description": "System field 'trxOrganization' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-72",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "freightCategory",
+        "runner": "node",
+        "description": "System field 'freightCategory' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-73",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "calculateFreight",
+        "runner": "node",
+        "description": "System field 'calculateFreight' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-74",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "freightCurrency",
+        "runner": "node",
+        "description": "System field 'freightCurrency' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-75",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "invoiceStatus",
+        "runner": "node",
+        "description": "System field 'invoiceStatus' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-76",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-77",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "System field 'costcenter' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-78",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "asset",
+        "runner": "node",
+        "description": "System field 'asset' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-79",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "System field 'stDimension' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-80",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "System field 'ndDimension' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-81",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "completelyInvoiced",
+        "runner": "node",
+        "description": "System field 'completelyInvoiced' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-82",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "invoicefromshipment",
+        "runner": "node",
+        "description": "System field 'invoicefromshipment' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-83",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "receiveMaterials",
+        "runner": "node",
+        "description": "System field 'receiveMaterials' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-84",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "updateLines",
+        "runner": "node",
+        "description": "System field 'updateLines' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-85",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "logistic",
+        "runner": "node",
+        "description": "System field 'logistic' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-86",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "invoice",
+        "runner": "node",
+        "description": "System field 'invoice' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-87",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "generateTo",
+        "runner": "node",
+        "description": "System field 'generateTo' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-88",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "print",
+        "runner": "node",
+        "description": "System field 'print' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-89",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "sendMaterials",
+        "runner": "node",
+        "description": "System field 'sendMaterials' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-90",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "salesTransaction",
+        "runner": "node",
+        "description": "System field 'salesTransaction' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-91",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "datePrinted",
+        "runner": "node",
+        "description": "System field 'datePrinted' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-92",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-93",
         "category": "system-field",
         "entity": "goodsShipment",
         "field": "processed",
@@ -886,15 +2159,47 @@
         "description": "System field 'processed' should exist in backend but not frontend for goodsShipment"
       },
       {
-        "id": "t-48",
+        "id": "t-94",
         "category": "system-field",
         "entity": "goodsShipment",
-        "field": "created",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for goodsShipment"
+        "description": "System field 'id' should exist in backend but not frontend for goodsShipment"
       },
       {
-        "id": "t-49",
+        "id": "t-95",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-96",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-97",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-98",
+        "category": "system-field",
+        "entity": "goodsShipment",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for goodsShipment"
+      },
+      {
+        "id": "t-99",
         "category": "system-field",
         "entity": "goodsShipment",
         "field": "updated",
@@ -902,66 +2207,464 @@
         "description": "System field 'updated' should exist in backend but not frontend for goodsShipment"
       },
       {
-        "id": "t-50",
+        "id": "t-100",
         "category": "system-field",
-        "entity": "goodsShipmentLine",
-        "field": "adClientId",
+        "entity": "goodsShipment",
+        "field": "updatedBy",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for goodsShipmentLine"
+        "description": "System field 'updatedBy' should exist in backend but not frontend for goodsShipment"
       },
       {
-        "id": "t-51",
+        "id": "t-101",
         "category": "system-field",
         "entity": "goodsShipmentLine",
-        "field": "adOrgId",
+        "field": "lineNo",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for goodsShipmentLine"
+        "description": "System field 'lineNo' should exist in backend but not frontend for goodsShipmentLine"
       },
       {
-        "id": "t-52",
+        "id": "t-102",
         "category": "system-field",
         "entity": "goodsShipmentLine",
-        "field": "mInoutId",
+        "field": "mConditionGoodsID",
         "runner": "node",
-        "description": "System field 'mInoutId' should exist in backend but not frontend for goodsShipmentLine"
+        "description": "System field 'mConditionGoodsID' should exist in backend but not frontend for goodsShipmentLine"
       },
       {
-        "id": "t-53",
+        "id": "t-103",
         "category": "system-field",
         "entity": "goodsShipmentLine",
-        "field": "movementDate",
+        "field": "attributeSetValue",
         "runner": "node",
-        "description": "System field 'movementDate' should exist in backend but not frontend for goodsShipmentLine"
+        "description": "System field 'attributeSetValue' should exist in backend but not frontend for goodsShipmentLine"
       },
       {
-        "id": "t-54",
+        "id": "t-104",
         "category": "system-field",
         "entity": "goodsShipmentLine",
-        "field": "cBpartnerId",
+        "field": "operativeQuantity",
         "runner": "node",
-        "description": "System field 'cBpartnerId' should exist in backend but not frontend for goodsShipmentLine"
+        "description": "System field 'operativeQuantity' should exist in backend but not frontend for goodsShipmentLine"
       },
       {
-        "id": "t-55",
+        "id": "t-105",
         "category": "system-field",
         "entity": "goodsShipmentLine",
+        "field": "operativeUOM",
+        "runner": "node",
+        "description": "System field 'operativeUOM' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-106",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "System field 'uOM' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-107",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "storageBin",
+        "runner": "node",
+        "description": "System field 'storageBin' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-108",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "salesOrderLine",
+        "runner": "node",
+        "description": "System field 'salesOrderLine' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-109",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "orderUOM",
+        "runner": "node",
+        "description": "System field 'orderUOM' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-110",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "descriptionOnly",
+        "runner": "node",
+        "description": "System field 'descriptionOnly' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-111",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "canceledInoutLine",
+        "runner": "node",
+        "description": "System field 'canceledInoutLine' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-112",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-113",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-114",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "System field 'costcenter' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-115",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "asset",
+        "runner": "node",
+        "description": "System field 'asset' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-116",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "System field 'stDimension' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-117",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "System field 'ndDimension' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-118",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "explode",
+        "runner": "node",
+        "description": "System field 'explode' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-119",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "bOMParentID",
+        "runner": "node",
+        "description": "System field 'bOMParentID' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-120",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "invoiceQuantity",
+        "runner": "node",
+        "description": "System field 'invoiceQuantity' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-121",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-122",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "reinvoice",
+        "runner": "node",
+        "description": "System field 'reinvoice' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-123",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-124",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "managePrereservation",
+        "runner": "node",
+        "description": "System field 'managePrereservation' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-125",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "System field 'businessPartner' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-126",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-127",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "shipmentReceipt",
+        "runner": "node",
+        "description": "System field 'shipmentReceipt' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-128",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-129",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-130",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-131",
+        "category": "system-field",
+        "entity": "goodsShipmentLine",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for goodsShipmentLine"
+      },
+      {
+        "id": "t-132",
+        "category": "rule-declared",
+        "rule": "ReadOnly_When_Processed",
+        "runner": "node",
+        "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-133",
+        "category": "rule-declared",
+        "rule": "BP_AutoFill_Address",
+        "runner": "node",
+        "description": "Rule 'BP_AutoFill_Address' (callout) should be declared"
+      },
+      {
+        "id": "t-134",
+        "category": "rule-declared",
+        "rule": "Product_AutoFill_UOM",
+        "runner": "node",
+        "description": "Rule 'Product_AutoFill_UOM' (callout) should be declared"
+      },
+      {
+        "id": "t-135",
+        "category": "process-happy",
+        "process": "Process Shipment",
+        "entity": "goodsShipment",
+        "runner": "junit",
+        "description": "Process 'Process Shipment' should complete successfully with valid preconditions"
+      },
+      {
+        "id": "t-136",
+        "category": "process-failure",
+        "process": "Process Shipment",
+        "entity": "goodsShipment",
+        "runner": "junit",
+        "description": "Process 'Process Shipment' should fail when preconditions are not met"
+      },
+      {
+        "id": "t-137",
+        "category": "crud-flags",
+        "entity": "goodsShipment",
+        "runner": "node",
+        "description": "CRUD flags for 'goodsShipment' should all be booleans"
+      },
+      {
+        "id": "t-138",
+        "category": "crud-flags",
+        "entity": "goodsShipmentLine",
+        "runner": "node",
+        "description": "CRUD flags for 'goodsShipmentLine' should all be booleans"
+      },
+      {
+        "id": "t-139",
+        "category": "selector-endpoint",
+        "entity": "goodsShipment",
         "field": "warehouse",
         "runner": "node",
-        "description": "System field 'warehouse' should exist in backend but not frontend for goodsShipmentLine"
+        "description": "Selector endpoint for 'warehouse' in goodsShipment should exist"
+      },
+      {
+        "id": "t-140",
+        "category": "selector-endpoint",
+        "entity": "goodsShipment",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Selector endpoint for 'businessPartner' in goodsShipment should exist"
+      },
+      {
+        "id": "t-141",
+        "category": "selector-endpoint",
+        "entity": "goodsShipment",
+        "field": "partnerAddress",
+        "runner": "node",
+        "description": "Selector endpoint for 'partnerAddress' in goodsShipment should exist"
+      },
+      {
+        "id": "t-142",
+        "category": "selector-endpoint",
+        "entity": "goodsShipmentLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in goodsShipmentLine should exist"
+      },
+      {
+        "id": "t-143",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "createLinesFrom",
+        "runner": "node",
+        "description": "Action endpoint for 'createLinesFrom' in goodsShipment should exist"
+      },
+      {
+        "id": "t-144",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "documentAction",
+        "runner": "node",
+        "description": "Action endpoint for 'documentAction' in goodsShipment should exist"
+      },
+      {
+        "id": "t-145",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "processGoodsJava",
+        "runner": "node",
+        "description": "Action endpoint for 'processGoodsJava' in goodsShipment should exist"
+      },
+      {
+        "id": "t-146",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "posted",
+        "runner": "node",
+        "description": "Action endpoint for 'posted' in goodsShipment should exist"
+      },
+      {
+        "id": "t-147",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "calculateFreight",
+        "runner": "node",
+        "description": "Action endpoint for 'calculateFreight' in goodsShipment should exist"
+      },
+      {
+        "id": "t-148",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "invoicefromshipment",
+        "runner": "node",
+        "description": "Action endpoint for 'invoicefromshipment' in goodsShipment should exist"
+      },
+      {
+        "id": "t-149",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "receiveMaterials",
+        "runner": "node",
+        "description": "Action endpoint for 'receiveMaterials' in goodsShipment should exist"
+      },
+      {
+        "id": "t-150",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "updateLines",
+        "runner": "node",
+        "description": "Action endpoint for 'updateLines' in goodsShipment should exist"
+      },
+      {
+        "id": "t-151",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "generateTo",
+        "runner": "node",
+        "description": "Action endpoint for 'generateTo' in goodsShipment should exist"
+      },
+      {
+        "id": "t-152",
+        "category": "action-endpoint",
+        "entity": "goodsShipment",
+        "field": "sendMaterials",
+        "runner": "node",
+        "description": "Action endpoint for 'sendMaterials' in goodsShipment should exist"
+      },
+      {
+        "id": "t-153",
+        "category": "action-endpoint",
+        "entity": "goodsShipmentLine",
+        "field": "explode",
+        "runner": "node",
+        "description": "Action endpoint for 'explode' in goodsShipmentLine should exist"
+      },
+      {
+        "id": "t-154",
+        "category": "action-endpoint",
+        "entity": "goodsShipmentLine",
+        "field": "managePrereservation",
+        "runner": "node",
+        "description": "Action endpoint for 'managePrereservation' in goodsShipmentLine should exist"
       }
     ],
     "summary": {
-      "total": 55,
+      "total": 154,
       "byCategory": {
-        "field-presence": 16,
-        "field-type": 16,
-        "searchable-filters": 7,
+        "field-presence": 11,
+        "field-type": 11,
+        "searchable-filters": 6,
         "visibility": 2,
-        "system-field": 14
+        "readonlylogic-valid": 2,
+        "readonlylogic-evaluable": 2,
+        "default-value-type": 3,
+        "displaylogic-valid": 1,
+        "displaylogic-evaluable": 1,
+        "system-field": 92,
+        "rule-declared": 3,
+        "process-happy": 1,
+        "process-failure": 1,
+        "crud-flags": 2,
+        "selector-endpoint": 4,
+        "action-endpoint": 12
       },
       "byRunner": {
-        "node": 55,
-        "junit": 0
+        "node": 152,
+        "junit": 2
       }
     }
   }

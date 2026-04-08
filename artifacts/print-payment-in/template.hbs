@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10pt; color: #1e293b; line-height: 1.5; }
+  .doc-container { padding: 15mm; max-width: 210mm; margin: 0 auto; }
+
+  /* Header */
+  .doc-header { display: flex; justify-content: space-between; margin-bottom: 8mm; padding-bottom: 5mm; border-bottom: 2px solid #1a1a2e; }
+  .doc-company { max-width: 55%; }
+  .doc-company-name { font-size: 16pt; font-weight: 700; color: #1a1a2e; }
+  .doc-company-info { font-size: 8pt; color: #64748b; margin-top: 1mm; }
+  .doc-title-block { text-align: right; }
+  .doc-title { font-size: 14pt; font-weight: 700; color: #1a1a2e; }
+  .doc-number { font-size: 11pt; color: #475569; margin-top: 1mm; }
+  .doc-status { display: inline-block; padding: 1mm 3mm; border-radius: 2mm; font-size: 8pt; font-weight: 600; text-transform: uppercase; margin-top: 2mm; }
+  .doc-status-complete { background: #dcfce7; color: #166534; }
+  .doc-status-draft { background: #f1f5f9; color: #475569; }
+
+  /* Info grid */
+  .doc-info { display: flex; gap: 8mm; margin-bottom: 6mm; }
+  .doc-info-block { flex: 1; padding: 3mm 4mm; background: #f8fafc; border-radius: 2mm; }
+  .doc-info-label { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; font-weight: 600; }
+  .doc-info-value { font-size: 9pt; color: #1e293b; margin-top: 0.5mm; }
+
+  /* Lines table */
+  .doc-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 5mm; }
+  .doc-table thead th { background: #1a1a2e; color: #fff; padding: 2mm 3mm; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.3px; }
+  .doc-table thead th.right { text-align: right; }
+  .doc-table tbody td { padding: 2mm 3mm; border-bottom: 1px solid #e2e8f0; }
+  .doc-table tbody td.right { text-align: right; font-family: 'SF Mono', monospace; font-size: 8.5pt; }
+  .doc-table tbody tr:nth-child(even) { background: #f8fafc; }
+
+  /* Totals */
+  .doc-totals { display: flex; justify-content: flex-end; margin-bottom: 6mm; }
+  .doc-totals-table { width: 45%; }
+  .doc-totals-row { display: flex; justify-content: space-between; padding: 1.5mm 3mm; font-size: 9pt; }
+  .doc-totals-row.grand { border-top: 2px solid #1a1a2e; font-weight: 700; font-size: 11pt; padding-top: 2mm; }
+  .doc-totals-label { color: #64748b; }
+  .doc-totals-amount { font-family: 'SF Mono', monospace; text-align: right; }
+
+  /* Footer */
+  .doc-notes { margin-bottom: 5mm; padding: 3mm 4mm; background: #f8fafc; border-radius: 2mm; font-size: 8pt; color: #475569; }
+  .doc-notes-label { font-weight: 600; color: #1e293b; }
+  .doc-footer { border-top: 1px solid #e2e8f0; padding-top: 3mm; font-size: 7pt; color: #94a3b8; text-align: center; }
+
+  @page { margin: 10mm; size: A4 portrait; }
+  @media print { .doc-container { padding: 0; } }
+</style>
+</head>
+<body><div class="doc-container">
+
+  {{!-- Document Header --}}
+  <div class="doc-header">
+    <div class="doc-company">
+      <div class="doc-company-name">{{header.org_name}}</div>
+      <div class="doc-company-info">
+        {{#if header.org_taxid}}Tax ID: {{header.org_taxid}}<br>{{/if}}
+        {{#if header.org_address}}{{header.org_address}}{{#if header.org_postal}}, {{header.org_postal}}{{/if}}{{#if header.org_city}} {{header.org_city}}{{/if}}{{/if}}
+      </div>
+    </div>
+    <div class="doc-title-block">
+      <div class="doc-title">{{header.doc_type}}</div>
+      <div class="doc-number"># {{header.documentno}}</div>
+      <div class="doc-status {{#ifCond header.status '===' 'Received'}}doc-status-complete{{else}}doc-status-draft{{/ifCond}}">{{header.status}}</div>
+    </div>
+  </div>
+
+  {{!-- Info Grid --}}
+  <div class="doc-info">
+    <div class="doc-info-block">
+      <div class="doc-info-label">Customer</div>
+      <div class="doc-info-value">{{header.bp_name}}</div>
+    </div>
+    <div class="doc-info-block">
+      <div class="doc-info-label">Payment Date</div>
+      <div class="doc-info-value">{{formatDate header.paymentdate}}</div>
+    </div>
+    <div class="doc-info-block">
+      <div class="doc-info-label">Payment Method</div>
+      <div class="doc-info-value">{{header.payment_method}}</div>
+    </div>
+  </div>
+
+  {{#if header.finalsettlementdate}}
+  <div class="doc-info" style="margin-bottom:4mm">
+    <div class="doc-info-block">
+      <div class="doc-info-label">Settlement Date</div>
+      <div class="doc-info-value">{{formatDate header.finalsettlementdate}}</div>
+    </div>
+  </div>
+  {{/if}}
+
+  {{!-- Payment Details --}}
+  <table class="doc-table">
+    <thead>
+      <tr>
+        <th style="width:40%">Reference Document</th>
+        <th style="width:30%">Type</th>
+        <th class="right" style="width:30%">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each lines}}
+      <tr>
+        <td>{{this.reference_doc}}</td>
+        <td>{{this.doc_type}}</td>
+        <td class="right">{{formatCurrency this.amount}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+
+  {{!-- Total --}}
+  <div class="doc-totals">
+    <div class="doc-totals-table">
+      <div class="doc-totals-row grand">
+        <span>Total ({{header.currency}})</span>
+        <span class="doc-totals-amount">{{formatCurrency header.amount}}</span>
+      </div>
+    </div>
+  </div>
+
+  {{!-- Notes --}}
+  {{#if header.description}}
+  <div class="doc-notes">
+    <span class="doc-notes-label">Notes: </span>{{header.description}}
+  </div>
+  {{/if}}
+
+  {{!-- Footer with QR --}}
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:6mm; padding-top:4mm; border-top:1px solid #e2e8f0;">
+    <div style="flex-shrink:0;">
+      <img src="{{qrCode header}}" width="80" height="80" style="display:block;" />
+      <div style="font-size:6pt; color:#94a3b8; margin-top:1mm; max-width:80px; text-align:center;">Scan to verify</div>
+    </div>
+    <div style="font-size:7pt; color:#94a3b8; text-align:right;">
+      Generated on {{formatDate meta.generatedAt}}<br>{{header.org_name}}
+    </div>
+  </div>
+
+</div></body></html>

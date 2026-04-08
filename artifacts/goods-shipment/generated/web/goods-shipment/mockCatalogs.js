@@ -2,6 +2,29 @@
 
 const catalogs = {};
 
+catalogs['Warehouse'] = [
+  {
+    "id": "wh-001",
+    "name": "Main Warehouse"
+  },
+  {
+    "id": "wh-002",
+    "name": "East Distribution Center"
+  },
+  {
+    "id": "wh-003",
+    "name": "West Hub"
+  },
+  {
+    "id": "wh-004",
+    "name": "North Storage"
+  },
+  {
+    "id": "wh-005",
+    "name": "South Logistics"
+  }
+];
+
 catalogs['BusinessPartner'] = [
   {
     "id": "bp-001",
@@ -168,29 +191,6 @@ catalogs['BusinessPartnerLocation'] = [
   }
 ];
 
-catalogs['Warehouse'] = [
-  {
-    "id": "wh-001",
-    "name": "Main Warehouse"
-  },
-  {
-    "id": "wh-002",
-    "name": "East Distribution Center"
-  },
-  {
-    "id": "wh-003",
-    "name": "West Hub"
-  },
-  {
-    "id": "wh-004",
-    "name": "North Storage"
-  },
-  {
-    "id": "wh-005",
-    "name": "South Logistics"
-  }
-];
-
 catalogs['Product'] = [
   {
     "id": "prod-001",
@@ -311,29 +311,6 @@ catalogs['Product'] = [
     "name": "CPU Cooler",
     "price": 49,
     "uomId": "uom-001"
-  }
-];
-
-catalogs['UOM'] = [
-  {
-    "id": "uom-001",
-    "name": "Each"
-  },
-  {
-    "id": "uom-002",
-    "name": "Box"
-  },
-  {
-    "id": "uom-003",
-    "name": "Kg"
-  },
-  {
-    "id": "uom-004",
-    "name": "Meter"
-  },
-  {
-    "id": "uom-005",
-    "name": "Liter"
   }
 ];
 

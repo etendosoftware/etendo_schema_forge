@@ -1,0 +1,406 @@
+{
+  "$schema": "decisions-v1",
+  "window": {
+    "category": "reference",
+    "name": "Product",
+    "layoutType": "gallery"
+  },
+  "entities": {
+    "mProduct": {
+      "fields": {
+        "searchKey": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 1
+        },
+        "name": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 2
+        },
+        "description": {
+          "section": "principal",
+          "seq": 3
+        },
+        "productType": {
+          "grid": true,
+          "searchable": true,
+          "reference": "ProductType",
+          "inputMode": "selector",
+          "section": "principal",
+          "displayLogic": null,
+          "seq": 4
+        },
+        "productCategory": {
+          "grid": true,
+          "searchable": true,
+          "reference": "ProductCategory",
+          "section": "principal",
+          "seq": 5
+        },
+        "uOM": {
+          "section": "principal",
+          "seq": 6
+        },
+        "image": {
+          "type": "image",
+          "section": "principal",
+          "seq": 7
+        },
+        "taxCategory": {
+          "section": "other",
+          "displayLogic": null
+        },
+        "brand": {
+          "section": "other"
+        },
+        "attributeSet": {
+          "section": "other"
+        },
+        "uPCEAN": {
+          "searchable": true,
+          "section": "other",
+          "displayLogic": null
+        },
+        "sale": {
+          "grid": true,
+          "section": "other",
+          "displayLogic": null
+        },
+        "purchase": {
+          "grid": true,
+          "section": "other",
+          "displayLogic": null
+        },
+        "stocked": {
+          "section": "other",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "mProductStatusID": {
+          "reference": "ProductStatus",
+          "section": "other"
+        },
+        "returnable": {
+          "section": "other",
+          "displayLogic": null
+        },
+        "characteristicDescription": {
+          "visibility": "discarded"
+        },
+        "manageVariants": { "visibility": "discarded" },
+        "isGeneric": { "visibility": "discarded" },
+        "genericProduct": { "visibility": "discarded" },
+        "billOfMaterials": { "visibility": "discarded" },
+        "weight": {
+          "visibility": "editable",
+          "section": "other"
+        },
+        "uOMForWeight": {
+          "visibility": "editable",
+          "section": "other",
+          "reference": "UOM",
+          "inputMode": "selector"
+        },
+        "useAttributeSetValueAs": { "visibility": "discarded" },
+        "attributeSetValue": { "visibility": "discarded" },
+        "production": { "visibility": "discarded" },
+        "processPlan": { "visibility": "discarded" },
+        "overdueReturnDays": { "visibility": "discarded" },
+        "deferredRevenue": { "visibility": "discarded" },
+        "isdeferredexpense": { "visibility": "discarded" },
+        "bookUsingPurchaseOrderPrice": { "visibility": "discarded" },
+        "revenuePlanType": { "visibility": "discarded" },
+        "periodNumber": { "visibility": "discarded" },
+        "defaultPeriod": { "visibility": "discarded" },
+        "expplantype": { "visibility": "discarded" },
+        "periodnumberExp": { "visibility": "discarded" },
+        "defaultPeriodExpense": { "visibility": "discarded" },
+        "createVariants": { "visibility": "discarded" },
+        "updateInvariants": { "visibility": "discarded" },
+        "linkedToProduct": { "visibility": "discarded" },
+        "includedProductCategories": { "visibility": "discarded" },
+        "includedProducts": { "visibility": "discarded" },
+        "ispricerulebased": { "visibility": "discarded" },
+        "quantityRule": { "visibility": "discarded" },
+        "printDescription": { "visibility": "discarded" },
+        "modifyTax": { "visibility": "discarded" },
+        "relateprodcattoservice": { "visibility": "discarded" },
+        "relateprodtoservice": { "visibility": "discarded" },
+        "allowDeferredSell": { "visibility": "discarded" },
+        "deferredSellMaxDays": { "visibility": "discarded" },
+        "relateprodcattaxtoservice": { "visibility": "discarded" },
+        "copyservicemodifytaxconfig": { "visibility": "discarded" }
+      }
+    },
+    "mProductPrice": {
+      "fields": {
+        "cost": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false
+        },
+        "priceListVersion": {
+          "visibility": "editable",
+          "grid": true,
+          "reference": "PriceListVersion"
+        },
+        "standardPrice": {
+          "grid": true
+        },
+        "listPrice": {
+          "grid": true
+        }
+      }
+    },
+    "mProductBom": {
+      "fields": {
+        "lineNo": {
+          "grid": true,
+          "displayLogic": null
+        },
+        "bOMProduct": {
+          "grid": true,
+          "inputMode": "search",
+          "displayLogic": null
+        },
+        "bOMQuantity": {
+          "grid": true,
+          "displayLogic": null
+        },
+        "bomprice": {
+          "displayLogic": null
+        },
+        "description": {
+          "displayLogic": null
+        }
+      }
+    },
+    "mProductPo": {
+      "exclude": true
+    },
+    "mProductCh": {
+      "name": "productCharacteristic",
+      "fields": {
+        "sequenceNumber": {
+          "grid": true
+        },
+        "characteristic": {
+          "grid": true
+        },
+        "variant": {
+          "grid": true
+        },
+        "definesPrice": {
+          "displayLogic": null
+        },
+        "definesImage": {
+          "displayLogic": null
+        },
+        "characteristicSubset": {
+          "reference": "CharacteristicSubset",
+          "inputMode": "selector",
+          "displayLogic": null
+        }
+      }
+    },
+    "mStorageDetail": {
+      "fields": {
+        "storageBin": {
+          "visibility": "readOnly",
+          "grid": true,
+          "reference": "StorageBin"
+        },
+        "uOM": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "quantityOnHand": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "reservedQty": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "allocatedQuantity": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "attributeSetValue": {
+          "visibility": "readOnly",
+          "grid": true,
+          "reference": "AttributeSetValue",
+          "inputMode": "selector"
+        }
+      }
+    },
+    "mProductAum": {
+      "fields": {
+        "uOM": {
+          "grid": true
+        },
+        "conversionRate": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "sales": {
+          "grid": true
+        },
+        "purchase": {
+          "grid": true
+        },
+        "logistics": {
+          "grid": true
+        },
+        "mProductAumID": {
+          "name": "id"
+        }
+      }
+    },
+    "mServicePriceRuleVersion": {
+      "exclude": true
+    },
+    "mProductAcct": {
+      "exclude": true
+    },
+    "mCostingRuleProductV": {
+      "exclude": true
+    },
+    "mCosting": {
+      "fields": {
+        "costType": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "cost": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "startingDate": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "endingDate": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "quantity": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "warehouse": {
+          "visibility": "readOnly",
+          "grid": true,
+          "reference": "Warehouse",
+          "inputMode": "selector"
+        },
+        "cCurrencyID": {
+          "visibility": "readOnly",
+          "reference": "Currency",
+          "inputMode": "selector"
+        },
+        "originalCost": {
+          "visibility": "readOnly"
+        },
+        "inventoryTransaction": { "visibility": "discarded" },
+        "totalMovementQuantity": { "visibility": "discarded" },
+        "price": { "visibility": "discarded" },
+        "manual": { "visibility": "discarded" },
+        "permanent": { "visibility": "discarded" },
+        "totalStockValuation": { "visibility": "discarded" },
+        "production": { "visibility": "discarded" },
+        "active": { "visibility": "discarded" }
+      }
+    },
+    "mCostingTransactionsHql": {
+      "exclude": true
+    },
+    "mTransactionCost": {
+      "exclude": true
+    },
+    "mTransaction": {
+      "fields": {
+        "movementDate": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "movementType": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "storageBin": {
+          "visibility": "readOnly",
+          "grid": true,
+          "reference": "StorageBin",
+          "inputMode": "selector"
+        },
+        "movementQuantity": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "organization": {
+          "visibility": "readOnly",
+          "grid": true,
+          "reference": "Organization",
+          "inputMode": "selector"
+        },
+        "uOM": {
+          "visibility": "readOnly",
+          "grid": false
+        },
+        "totalCost": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "attributeSetValue": { "visibility": "discarded" },
+        "active": { "visibility": "discarded" },
+        "transactionProcessDate": { "visibility": "discarded" },
+        "goodsShipmentLine": { "visibility": "discarded" },
+        "physicalInventoryLine": { "visibility": "discarded" },
+        "movementLine": { "visibility": "discarded" },
+        "productionLine": { "visibility": "discarded" },
+        "projectIssue": { "visibility": "discarded" },
+        "isCostCalculated": { "visibility": "discarded" },
+        "costingStatus": { "visibility": "discarded" },
+        "transactionCost": { "visibility": "discarded" },
+        "unitCost": { "visibility": "discarded" },
+        "isCostPermanent": { "visibility": "discarded" },
+        "cCurrencyID": { "visibility": "discarded" },
+        "isProcessed": { "visibility": "discarded" },
+        "manualcostadjustment": { "visibility": "discarded" },
+        "costingAlgorithm": { "visibility": "discarded" },
+        "checkpricedifference": { "visibility": "discarded" },
+        "checkReservedQuantity": { "visibility": "discarded" },
+        "internalConsumptionLine": { "visibility": "discarded" },
+        "orderUOM": { "visibility": "discarded" },
+        "orderQuantity": { "visibility": "discarded" }
+      }
+    },
+    "mProductOrg": {
+      "exclude": true
+    },
+    "mProductTrl": {
+      "exclude": true
+    },
+    "mProductChConf": {
+      "exclude": true
+    },
+    "mStockValuation": {
+      "exclude": true
+    },
+    "mProductCategory": {
+      "exclude": true
+    },
+    "mProductService": {
+      "exclude": true
+    },
+    "mProductServicelinked": {
+      "exclude": true
+    }
+  },
+  "rules": {},
+  "discardPatterns": []
+}

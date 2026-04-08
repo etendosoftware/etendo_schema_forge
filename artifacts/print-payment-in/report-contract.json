@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "reportId": "print-payment-in",
+  "category": "sales",
+  "type": "document",
+  "source": "sql",
+  "title": { "en_US": "Payment Receipt", "es_ES": "Cobro" },
+  "orientation": "portrait",
+  "parameters": [
+    { "name": "documentId", "label": { "en_US": "Payment ID", "es_ES": "ID Cobro" }, "type": "text", "required": true, "hidden": true }
+  ],
+  "sql": {
+    "header": "SELECT p.fin_payment_id, p.documentno, p.paymentdate, dt.name AS doc_type, bp.name AS bp_name, p.description, p.amount, pm.name AS payment_method, cur.iso_code AS currency, CASE p.status WHEN 'RPR' THEN 'Received' WHEN 'RDNC' THEN 'Deposited Not Cleared' WHEN 'RPPC' THEN 'Cleared' WHEN 'RPVOID' THEN 'Voided' ELSE p.status END AS status, org.name AS org_name, orgi.taxid AS org_taxid, orgl.address1 AS org_address, orgl.postal AS org_postal, orgl.city AS org_city FROM fin_payment p JOIN c_bpartner bp ON bp.c_bpartner_id = p.c_bpartner_id LEFT JOIN c_doctype dt ON dt.c_doctype_id = p.c_doctype_id LEFT JOIN fin_paymentmethod pm ON pm.fin_paymentmethod_id = p.fin_paymentmethod_id LEFT JOIN c_currency cur ON cur.c_currency_id = p.c_currency_id JOIN ad_org org ON org.ad_org_id = p.ad_org_id LEFT JOIN ad_orginfo orgi ON orgi.ad_org_id = p.ad_org_id LEFT JOIN c_location orgl ON orgl.c_location_id = orgi.c_location_id WHERE p.fin_payment_id = '__DOCUMENTID__'",
+    "lines": "SELECT pd.amount, COALESCE(i.documentno, o.documentno, 'GL Item') AS reference_doc, CASE WHEN i.c_invoice_id IS NOT NULL THEN 'Invoice' WHEN o.c_order_id IS NOT NULL THEN 'Order' ELSE 'Other' END AS doc_type FROM fin_payment_detail pd LEFT JOIN fin_payment_scheduledetail psd ON psd.fin_payment_detail_id = pd.fin_payment_detail_id LEFT JOIN fin_payment_schedule ps ON ps.fin_payment_schedule_id = psd.fin_payment_schedule_invoice LEFT JOIN c_invoice i ON i.c_invoice_id = ps.c_invoice_id LEFT JOIN c_order o ON o.c_order_id = ps.c_order_id WHERE pd.fin_payment_id = '__DOCUMENTID__' ORDER BY pd.amount DESC"
+  },
+  "outputs": ["pdf", "html"],
+  "summary": {},
+  "mockDataFile": "mock-data.json"
+}

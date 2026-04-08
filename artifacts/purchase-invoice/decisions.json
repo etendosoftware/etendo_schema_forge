@@ -1,0 +1,626 @@
+{
+  "$schema": "decisions-v1",
+  "window": {
+    "category": "purchases",
+    "name": "Purchase Invoice"
+  },
+  "entities": {
+    "cInvoice": {
+      "fields": {
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null
+        },
+        "transactionDocument": {
+          "visibility": "editable",
+          "reference": "DocumentType",
+          "inputMode": "selector",
+          "readOnlyLogic": null
+        },
+        "invoiceDate": {
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null
+        },
+        "businessPartner": {
+          "grid": true,
+          "searchable": true,
+          "reference": "BusinessPartner",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "partnerAddress": {
+          "reference": "BusinessPartnerLocation",
+          "inputMode": "dependent",
+          "dependsOn": {
+            "field": "businessPartner",
+            "filterKey": "C_BPartner_ID"
+          },
+          "readOnlyLogic": null
+        },
+        "currency": {
+          "visibility": "editable",
+          "grid": true
+        },
+        "accountingDate": {
+          "readOnlyLogic": null
+        },
+        "paymentTerms": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "paymentMethod": {
+          "reference": "PaymentMethod",
+          "readOnlyLogic": null
+        },
+        "priceList": {
+          "readOnlyLogic": null
+        },
+        "orderReference": {
+          "searchable": true
+        },
+        "taxDate": {
+          "visibility": "editable"
+        },
+        "userContact": {
+          "visibility": "editable",
+          "reference": "User",
+          "inputMode": "search",
+          "readOnlyLogic": null
+        },
+        "salesRepresentative": {
+          "visibility": "editable",
+          "reference": "User",
+          "inputMode": "search"
+        },
+        "charge": {
+          "visibility": "editable",
+          "reference": "Charge",
+          "inputMode": "selector",
+          "readOnlyLogic": null
+        },
+        "chargeAmount": {
+          "visibility": "editable",
+          "readOnlyLogic": null
+        },
+        "project": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "costcenter": {
+          "reference": "CostCenter",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "asset": {
+          "visibility": "editable",
+          "reference": "Asset",
+          "inputMode": "selector",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "stDimension": {
+          "reference": "UserDimension1",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "ndDimension": {
+          "reference": "UserDimension2",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "documentStatus": {
+          "grid": true,
+          "searchable": true
+        },
+        "grandTotalAmount": {
+          "grid": true
+        },
+        "salesOrder": {
+          "inputMode": "selector"
+        },
+        "paymentComplete": {
+          "displayLogic": null
+        },
+        "totalPaid": {
+          "displayLogic": null
+        },
+        "outstandingAmount": {
+          "displayLogic": null
+        },
+        "dueAmount": {
+          "displayLogic": null
+        },
+        "prepaymentamt": {
+          "name": "prepaymentAmount"
+        },
+        "withholdingamount": {
+          "visibility": "readOnly",
+          "name": "withholdingAmount",
+          "displayLogic": null
+        },
+        "orderDate": {
+          "visibility": "readOnly"
+        },
+        "generateTo": {
+          "visibility": "discarded"
+        },
+        "documentAction": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "createLinesFromOrder": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "createLinesFromShipment": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "posted": {
+          "visibility": "discarded"
+        },
+        "trxOrganization": {
+          "visibility": "discarded"
+        },
+        "salesCampaign": {
+          "visibility": "discarded",
+          "reference": null,
+          "inputMode": null,
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "withholding": {
+          "visibility": "discarded"
+        },
+        "percentageOverdue": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "finalSettlementDate": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "daysSalesOutstanding": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "daysTillDue": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "printDiscount": {
+          "visibility": "discarded"
+        },
+        "processNow": {
+          "visibility": "discarded"
+        },
+        "activity": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "cInvoiceLine": {
+      "fields": {
+        "lineNo": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "product": {
+          "grid": true,
+          "inputMode": "search",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "account": {
+          "reference": "GLAccount",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "attributeSetValue": {
+          "reference": "AttributeSetInstance",
+          "inputMode": "selector",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "operativeQuantity": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "operativeUOM": {
+          "inputMode": "selector",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "invoicedQuantity": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "uOM": {
+          "readOnlyLogic": null
+        },
+        "unitPrice": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "listPrice": {
+          "visibility": "readOnly",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "lineNetAmount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "tax": {
+          "grid": true,
+          "inputMode": "selector",
+          "readOnlyLogic": null
+        },
+        "taxableAmount": {
+          "visibility": "readOnly",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "salesOrderLine": {
+          "inputMode": "selector"
+        },
+        "goodsShipmentLine": {
+          "reference": "GoodsShipmentLine",
+          "inputMode": "selector"
+        },
+        "project": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "costcenter": {
+          "reference": "CostCenter",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "asset": {
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "stDimension": {
+          "reference": "UserDimension1",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "ndDimension": {
+          "reference": "UserDimension2",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "grossUnitPrice": {
+          "visibility": "discarded",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "grossAmount": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "grossListPrice": {
+          "visibility": "discarded",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "baseGrossUnitPrice": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "standardPrice": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "deferred": {
+          "visibility": "discarded",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "deferredPlanType": {
+          "visibility": "discarded",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "periodNumber": {
+          "visibility": "discarded",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "period": {
+          "visibility": "discarded",
+          "reference": null,
+          "inputMode": null,
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "businessPartner": {
+          "visibility": "discarded",
+          "reference": null,
+          "inputMode": null,
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "explode": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "matchLCCosts": {
+          "visibility": "discarded",
+          "displayLogic": null
+        },
+        "financialInvoiceLine": {
+          "visibility": "discarded",
+          "readOnlyLogic": null
+        }
+      }
+    },
+    "cInvoiceTax": {
+      "fields": {
+        "lineNo": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "tax": {
+          "visibility": "readOnly",
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "taxableAmount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "taxAmount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "recalculate": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "cInvoiceDiscount": {
+      "name": "basicDiscounts",
+      "fields": {
+        "lineNo": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "discount": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "cascade": {
+          "grid": true
+        }
+      }
+    },
+    "finPaymentSchedule": {
+      "name": "paymentPlan",
+      "fields": {
+        "dueDate": {
+          "grid": true
+        },
+        "expectedDate": {
+          "grid": true
+        },
+        "finPaymentmethodID": {
+          "grid": true,
+          "reference": "PaymentMethod",
+          "name": "paymentMethod"
+        },
+        "amount": {
+          "grid": true
+        },
+        "paidAmount": {
+          "grid": true
+        },
+        "outstandingAmount": {
+          "grid": true
+        }
+      }
+    },
+    "factAcct": {
+      "name": "accounting",
+      "fields": {
+        "account": {
+          "grid": true,
+          "reference": null,
+          "inputMode": null
+        },
+        "accountingDate": {
+          "grid": true
+        },
+        "postingType": {
+          "visibility": "readOnly"
+        },
+        "debit": {
+          "grid": true
+        },
+        "credit": {
+          "grid": true
+        },
+        "description": {
+          "visibility": "readOnly"
+        },
+        "accountingFact": {
+          "name": "factAcct"
+        },
+        "table": {
+          "name": "adTable"
+        }
+      },
+      "javaQualifier": "factAcctHandler"
+    },
+    "cInvoiceReverse": {
+      "name": "reversedInvoices",
+      "fields": {
+        "reversedInvoice": {
+          "visibility": "readOnly",
+          "grid": true,
+          "readOnlyLogic": null
+        }
+      }
+    },
+    "cInvoiceLineTax": {
+      "exclude": true
+    },
+    "finPaymentScheduleDetail": {
+      "exclude": true
+    },
+    "cConversionRateDocument": {
+      "exclude": true
+    }
+  },
+  "rules": {
+    "SE_Invoice_BPartner": {
+      "entity": "invoice",
+      "decision": "Omit",
+      "description": "Auto-fill partner address, payment terms, price list from business partner. Classic UI only.",
+      "impactIfOmitted": "Users must manually set address, payment terms, and price list after choosing a business partner."
+    },
+    "SE_Invoice_BPartnerLocation": {
+      "entity": "invoice",
+      "decision": "Omit",
+      "description": "Cascade on partner address change. Classic UI only.",
+      "impactIfOmitted": "No cascade on address change."
+    },
+    "SL_Invoice_DocType": {
+      "entity": "invoice",
+      "decision": "Omit",
+      "description": "Auto-fill payment terms and method from document type. Classic UI only.",
+      "impactIfOmitted": "Users must manually set payment terms and method."
+    },
+    "SE_Invoice_AccountingDate": {
+      "entity": "invoice",
+      "decision": "Omit",
+      "description": "Auto-fill accounting date. Backend default applies on save.",
+      "impactIfOmitted": "Backend sets accounting date on save."
+    },
+    "SL_Invoice_PriceList": {
+      "entity": "invoice",
+      "decision": "Omit",
+      "description": "Cascade on price list change. Classic UI only.",
+      "impactIfOmitted": "No cascade on price list change."
+    },
+    "SL_Invoice_Product": {
+      "entity": "invoiceLine",
+      "decision": "Omit",
+      "description": "Auto-fill price, UOM, tax from product selection. Classic UI only.",
+      "impactIfOmitted": "Users must manually set price, UOM, and tax after selecting a product."
+    },
+    "SL_Invoice_Amt": {
+      "entity": "invoiceLine",
+      "decision": "Omit",
+      "description": "Recalculate line amount on quantity/price change. Backend handles on save.",
+      "impactIfOmitted": "Line amounts calculated by backend on save."
+    },
+    "SL_Invoice_Conversion": {
+      "entity": "invoiceLine",
+      "decision": "Omit",
+      "description": "UOM conversion calculation. Backend handles on save.",
+      "impactIfOmitted": "UOM conversion calculated by backend."
+    },
+    "OperativeQuantity_To_BaseQuantity": {
+      "entity": "invoiceLine",
+      "decision": "Omit",
+      "description": "Converts operative quantity to base quantity. Backend handles on save.",
+      "impactIfOmitted": "Base quantity calculated by backend."
+    },
+    "VAL_BPartnerLocation_BillTo": {
+      "type": "validation",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Filters partner address selector to bill-to locations of the selected business partner.",
+      "impactIfOmitted": "Users could select irrelevant addresses."
+    },
+    "VAL_DocType_APInvoice": {
+      "type": "validation",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Filters document type to AP invoices and credit memos (IsSOTrx=N).",
+      "impactIfOmitted": "Users could select wrong document types."
+    },
+    "VAL_User_BPartnerContact": {
+      "type": "validation",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Filters user/contact to contacts of the selected business partner.",
+      "impactIfOmitted": "Users could select contacts from other business partners."
+    },
+    "VAL_User_OrgTree": {
+      "type": "validation",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Filters company agent to users in the organization hierarchy.",
+      "impactIfOmitted": "Users could select agents outside their org tree."
+    },
+    "VAL_Project_StatusAndBPartner": {
+      "type": "validation",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Filters project to open/ordered projects for the selected business partner.",
+      "impactIfOmitted": "Users could select closed or unrelated projects."
+    },
+    "VAL_PriceList_IsSOTrx": {
+      "type": "validation",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Filters price list to purchase price lists (IsSOTrx=N).",
+      "impactIfOmitted": "Users could select sales price lists for purchase invoices."
+    },
+    "VAL_PaymentMethod_Account": {
+      "type": "validation",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Filters payment method to valid AP payment methods with accounts.",
+      "impactIfOmitted": "Users could select payment methods without AP accounts."
+    },
+    "VAL_Tax_IsSOTrx_Date": {
+      "type": "validation",
+      "entity": "invoiceLine",
+      "decision": "Keep",
+      "description": "Filters tax selector to purchase taxes valid for the invoice date.",
+      "impactIfOmitted": "Users could select sales taxes or expired taxes."
+    },
+    "READONLY_Processed_Header": {
+      "type": "readOnlyLogic",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Most header fields become read-only when document is processed (Processed=Y). Covers: documentNo, invoiceDate, businessPartner, partnerAddress, currency, paymentTerms, paymentMethod, priceList, transactionDocument.",
+      "impactIfOmitted": "Users could edit fields on confirmed invoices, breaking data integrity."
+    },
+    "READONLY_Processed_Lines": {
+      "type": "readOnlyLogic",
+      "entity": "invoiceLine",
+      "decision": "Keep",
+      "description": "Line fields become read-only when parent header is processed. Covers: lineNo, product, invoicedQuantity, unitPrice, tax, description.",
+      "impactIfOmitted": "Users could edit lines on confirmed invoices."
+    },
+    "READONLY_ReversedInvoice_Processed": {
+      "type": "readOnlyLogic",
+      "entity": "reversedInvoices",
+      "decision": "Keep",
+      "description": "Reversed invoice reference becomes read-only when document is processed.",
+      "impactIfOmitted": "Users could modify reversal links on processed invoices."
+    },
+    "DISPLAY_OperativeQty_WhenApplicable": {
+      "type": "displayLogic",
+      "entity": "invoiceLine",
+      "decision": "Keep",
+      "description": "Operative quantity and UOM shown only when product has UOM management active.",
+      "impactIfOmitted": "Operative quantity fields always visible."
+    }
+  },
+  "discardPatterns": [
+    "CopyFrom*",
+    "EM_*"
+  ]
+}

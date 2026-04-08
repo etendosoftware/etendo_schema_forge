@@ -35,12 +35,21 @@ function formatValue(value, format) {
   }
 }
 
+const KPI_SCHEMES = {
+  revenueThisMonth:  { bg: 'bg-emerald-50 dark:bg-emerald-950', icon: 'text-emerald-600' },
+  expensesThisMonth: { bg: 'bg-red-50 dark:bg-red-950',         icon: 'text-red-500'     },
+  netProfit:         { bg: 'bg-blue-50 dark:bg-blue-950',        icon: 'text-blue-600'    },
+  pendingInvoices:   { bg: 'bg-amber-50 dark:bg-amber-950',      icon: 'text-amber-600'   },
+};
+const DEFAULT_SCHEME = { bg: 'bg-primary/10', icon: 'text-primary' };
+
 /**
  * A single KPI metric card.
  */
-function KPICard({ label, value, format, trend, icon: Icon }) {
+export function KPICard({ label, value, format, trend, previousValue, icon: Icon, kpiKey }) {
   const hasTrend = trend != null && trend !== 0;
   const isPositive = trend > 0;
+  const scheme = KPI_SCHEMES[kpiKey] || DEFAULT_SCHEME;
 
   return (
     <Card className="flex-1 min-w-[160px]">
@@ -55,8 +64,8 @@ function KPICard({ label, value, format, trend, icon: Icon }) {
             </p>
           </div>
           {Icon && (
-            <div className="h-8 w-8 shrink-0 rounded-md bg-primary/10 flex items-center justify-center">
-              <Icon className="h-4 w-4 text-primary" />
+            <div className={`h-8 w-8 shrink-0 rounded-md ${scheme.bg} flex items-center justify-center`}>
+              <Icon className={`h-4 w-4 ${scheme.icon}`} />
             </div>
           )}
         </div>
@@ -79,6 +88,12 @@ function KPICard({ label, value, format, trend, icon: Icon }) {
             </span>
           </div>
         )}
+
+        {previousValue != null && hasTrend && (
+          <p className="text-xs text-muted-foreground mt-1">
+            vs {formatValue(previousValue, format)} prev. month
+          </p>
+        )}
       </CardContent>
     </Card>
   );
@@ -99,10 +114,12 @@ export function KPIHeader({ kpis = [] }) {
       {kpis.map((kpi, index) => (
         <KPICard
           key={kpi.label || index}
+          kpiKey={kpi.key}
           label={kpi.label}
           value={kpi.value}
           format={kpi.format}
           trend={kpi.trend}
+          previousValue={kpi.previousValue}
           icon={kpi.icon}
         />
       ))}

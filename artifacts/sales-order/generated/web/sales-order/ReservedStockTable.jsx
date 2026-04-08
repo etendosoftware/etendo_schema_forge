@@ -4,7 +4,6 @@ import { DataTable } from '@/components/contract-ui';
 const columns = [
   { key: 'stockReservation', column: 'M_Reservation_ID', type: 'string' },
   { key: 'storageBin', column: 'M_Locator_ID', type: 'string' },
-  { key: 'vendor', column: 'C_BPartner_ID', type: 'string' },
   { key: 'quantity', column: 'Quantity', type: 'string' },
   { key: 'released', column: 'ReleasedQty', type: 'string' },
 ];

@@ -69,7 +69,7 @@ export function createDbPool(config, gradlePropertiesPath) {
   }
 
   return new pg.Pool({
-    host: process.env.ETENDO_DB_HOST || gradleHost || 'localhost',
+    host: process.env.ETENDO_DB_HOST || (gradleHost === 'db' ? 'localhost' : gradleHost) || 'localhost',
     port: parseInt(process.env.ETENDO_DB_PORT, 10) || gradlePort || 5432,
     user: process.env.ETENDO_DB_USER || gradle?.['bbdd.user'] || 'etendo',
     password: process.env.ETENDO_DB_PASSWORD || gradle?.['bbdd.password'] || '',

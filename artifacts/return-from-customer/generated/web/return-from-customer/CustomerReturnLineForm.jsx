@@ -2,14 +2,11 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:customerReturnLine
 const fields = [
-  { key: 'originalShipmentLine', column: 'M_InOutLine_ID', type: 'selector', required: true, section: 'principal', reference: 'ShipmentLine', inputMode: 'selector' },
-  { key: 'quantity', column: 'Qty', type: 'number', required: true, section: 'principal' },
-  { key: 'lineNo', column: 'Line', type: 'number', required: true, section: 'principal' },
-  { key: 'description', column: 'Description', type: 'textarea', section: 'principal' },
-  { key: 'product', column: 'M_Product_ID', type: 'search', readOnly: true, section: 'other', reference: 'Product', inputMode: 'search' },
-  { key: 'uom', column: 'C_UOM_ID', type: 'selector', readOnly: true, section: 'other', reference: 'UOM', inputMode: 'selector' },
-  { key: 'lineAmount', column: 'Amt', type: 'number', readOnly: true, section: 'other' },
-  { key: 'tax', column: 'C_Tax_ID', type: 'selector', readOnly: true, section: 'other', reference: 'Tax', inputMode: 'selector' },
+  { key: 'product', column: 'M_Product_ID', type: 'search', required: true, readOnly: true, section: 'principal', reference: 'Product', inputMode: 'search' },
+  { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', required: true, section: 'principal', label: 'Return Qty' },
+  { key: 'unitPrice', column: 'PriceActual', type: 'number', required: true, readOnly: true, section: 'principal' },
+  { key: 'lineNetAmount', column: 'LineNetAmt', type: 'number', required: true, readOnly: true, section: 'principal' },
+  { key: 'tax', column: 'C_Tax_ID', type: 'selector', required: true, readOnly: true, section: 'principal', reference: 'Tax', inputMode: 'selector' },
 ];
 // @sf-generated-end fields:customerReturnLine
 

@@ -1,0 +1,402 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "sales",
+    "name": "Sales Quotation",
+    "documentPreview": {
+      "titlePrefix": "Quotation"
+    },
+    "notesField": "description",
+    "relatedDocuments": true,
+    "hideDeleteWhenComplete": true,
+    "menuActions": [
+      { "key": "duplicate", "label": "Duplicate" },
+      { "key": "cancel", "label": "Cancel", "destructive": true, "visibleWhenStatus": "CO" }
+    ]
+  },
+  "entities": {
+    "header": {
+      "name": "quotation",
+      "fields": {
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "inputMode": "text",
+          "section": "principal"
+        },
+        "businessPartner": {
+          "grid": true,
+          "searchable": true,
+          "reference": "BusinessPartner",
+          "inputMode": "search",
+          "readOnlyLogic": null,
+          "displayLogic": null,
+          "section": "principal"
+        },
+        "partnerAddress": {
+          "reference": "BusinessPartnerLocation",
+          "inputMode": "dependent",
+          "dependsOn": {
+            "field": "businessPartner",
+            "filterKey": "C_BPartner_ID"
+          },
+          "readOnlyLogic": null,
+          "section": "collapsed"
+        },
+        "orderDate": {
+          "grid": true,
+          "searchable": true,
+          "inputMode": "date",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "validUntil": {
+          "grid": true,
+          "searchable": true,
+          "inputMode": "date",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "scheduledDeliveryDate": {
+          "visibility": "discarded"
+        },
+        "priceList": {
+          "visibility": "system"
+        },
+        "currency": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "section": "summary"
+        },
+        "paymentTerms": {
+          "visibility": "system"
+        },
+        "paymentMethod": {
+          "section": "collapsed"
+        },
+        "salesRepresentative": {
+          "visibility": "system"
+        },
+        "orderReference": {
+          "visibility": "discarded"
+        },
+        "summedLineAmount": {
+          "visibility": "readOnly",
+          "section": "summary"
+        },
+        "grandTotalAmount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "summary"
+        },
+        "documentStatus": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "form": false
+        },
+        "invoiceAddress": {
+          "visibility": "discarded"
+        },
+        "description": {
+          "inputMode": "textarea",
+          "section": "collapsed"
+        },
+        "client": {
+          "visibility": "system"
+        },
+        "organization": {
+          "visibility": "system"
+        },
+        "transactionDocument": {
+          "visibility": "system"
+        },
+        "documentType": {
+          "visibility": "system"
+        },
+        "salesTransaction": {
+          "visibility": "system"
+        },
+        "created": {
+          "visibility": "system"
+        },
+        "updated": {
+          "visibility": "system"
+        },
+        "active": {
+          "visibility": "discarded"
+        },
+        "accountingDate": {
+          "visibility": "discarded"
+        },
+        "invoiceTerms": {
+          "visibility": "discarded"
+        },
+        "deliveryTerms": {
+          "visibility": "discarded"
+        },
+        "deliveryMethod": {
+          "visibility": "discarded"
+        },
+        "priority": {
+          "visibility": "discarded"
+        },
+        "formOfPayment": {
+          "visibility": "discarded"
+        },
+        "project": {
+          "visibility": "discarded"
+        },
+        "processed": {
+          "visibility": "discarded"
+        },
+        "posted": {
+          "visibility": "discarded"
+        },
+        "warehouse": {
+          "visibility": "discarded"
+        },
+        "costcenter": {
+          "visibility": "discarded"
+        },
+        "stDimension": {
+          "visibility": "discarded"
+        },
+        "ndDimension": {
+          "visibility": "discarded"
+        },
+        "freightCostRule": {
+          "visibility": "discarded"
+        },
+        "freightAmount": {
+          "visibility": "discarded"
+        },
+        "chargeAmount": {
+          "visibility": "discarded"
+        },
+        "printDescription": {
+          "visibility": "discarded"
+        },
+        "deliveryLocation": {
+          "visibility": "discarded"
+        },
+        "isSotrx": {
+          "visibility": "discarded"
+        },
+        "rejectReason": {
+          "visibility": "discarded"
+        },
+        "documentAction": {
+          "visibility": "discarded"
+        },
+        "createOrder": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "lines": {
+      "name": "quotationLine",
+      "fields": {
+        "lineNo": {
+          "visibility": "system"
+        },
+        "product": {
+          "grid": true,
+          "searchable": true,
+          "inputMode": "search",
+          "readOnlyLogic": null
+        },
+        "orderedQuantity": {
+          "grid": true,
+          "inputMode": "number",
+          "readOnlyLogic": null
+        },
+        "uOM": {
+          "visibility": "system"
+        },
+        "unitPrice": {
+          "grid": true,
+          "inputMode": "number",
+          "readOnlyLogic": null
+        },
+        "discount": {
+          "grid": true,
+          "inputMode": "number",
+          "readOnlyLogic": null
+        },
+        "lineNetAmount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "inputMode": "number",
+          "readOnlyLogic": null
+        },
+        "tax": {
+          "grid": true,
+          "inputMode": "selector",
+          "readOnlyLogic": null
+        },
+        "description": {
+          "grid": false,
+          "form": true,
+          "inputMode": "textarea"
+        },
+        "client": {
+          "visibility": "system"
+        },
+        "organization": {
+          "visibility": "system"
+        },
+        "salesOrder": {
+          "visibility": "system"
+        },
+        "orderDate": {
+          "visibility": "system"
+        },
+        "scheduledDeliveryDate": {
+          "visibility": "system"
+        },
+        "currency": {
+          "visibility": "system"
+        },
+        "businessPartner": {
+          "visibility": "system"
+        },
+        "operativeUOM": {
+          "visibility": "discarded"
+        },
+        "attributeSetValue": {
+          "visibility": "discarded"
+        },
+        "orderLine": {
+          "visibility": "discarded"
+        },
+        "project": {
+          "visibility": "discarded"
+        },
+        "costcenter": {
+          "visibility": "discarded"
+        },
+        "stDimension": {
+          "visibility": "discarded"
+        },
+        "ndDimension": {
+          "visibility": "discarded"
+        },
+        "printDescription": {
+          "visibility": "discarded"
+        },
+        "descriptionOnly": {
+          "visibility": "discarded"
+        },
+        "explode": {
+          "visibility": "discarded"
+        },
+        "cancelDiscountsAndPromotions": {
+          "visibility": "discarded"
+        },
+        "baseNetUnitPrice": {
+          "visibility": "discarded"
+        },
+        "lineGrossAmount": {
+          "visibility": "discarded"
+        },
+        "editLineNetAmount": {
+          "visibility": "discarded"
+        },
+        "resourceAssignment": {
+          "visibility": "discarded"
+        },
+        "priceLimit": {
+          "visibility": "discarded"
+        },
+        "operativeQuantity": {
+          "visibility": "discarded"
+        },
+        "grossUnitPrice": {
+          "visibility": "discarded"
+        },
+        "listPrice": {
+          "visibility": "discarded"
+        },
+        "grossListPrice": {
+          "visibility": "discarded"
+        },
+        "taxableAmount": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "lineTax": {
+      "exclude": true
+    },
+    "mReservationStock": {
+      "exclude": true
+    },
+    "basicDiscounts": {
+      "exclude": true
+    },
+    "tax": {
+      "exclude": true
+    },
+    "finPaymentSchedOrdV": {
+      "exclude": true
+    },
+    "finPaymentDetailV": {
+      "exclude": true
+    }
+  },
+  "rules": {
+    "BP_AutoFill_Address": {
+      "type": "callout",
+      "entity": "quotation",
+      "decision": "Keep",
+      "description": "When changing business partner, auto-fill delivery address and price list"
+    },
+    "Line_Recalc_Totals": {
+      "type": "eventHandler",
+      "entity": "quotationLine",
+      "decision": "Keep",
+      "description": "After saving a line, recalculate header totals (TotalLines, GrandTotal)"
+    },
+    "Product_AutoFill_Price": {
+      "type": "callout",
+      "entity": "quotationLine",
+      "decision": "Keep",
+      "description": "When selecting a product, auto-fill unit price, tax and UOM from price list"
+    },
+    "Line_Calc_NetAmount": {
+      "type": "callout",
+      "entity": "quotationLine",
+      "decision": "Keep",
+      "description": "Recalculate line net amount when quantity, price or discount changes"
+    },
+    "ReadOnly_When_Processed": {
+      "type": "displayLogic",
+      "entity": "quotation",
+      "decision": "Keep",
+      "description": "Lock all editable fields when quotation status is Completed or Voided"
+    },
+    "ValidUntil_Default": {
+      "type": "callout",
+      "entity": "quotation",
+      "decision": "Keep",
+      "description": "Default validUntil to orderDate + 30 days when creating a new quotation"
+    },
+    "Convert_To_Order": {
+      "type": "process",
+      "entity": "quotation",
+      "decision": "Keep",
+      "description": "Process to convert an approved quotation into a Sales Order (copies header + lines, sets new doc type)"
+    },
+    "Delivery_Fields_Hidden": {
+      "type": "displayLogic",
+      "entity": "quotation",
+      "decision": "Omit",
+      "description": "Delivery-related fields (isDelivered, deliveryLocation, warehouse on header) are not relevant for quotations and are omitted from the schema"
+    }
+  },
+  "discardPatterns": [],
+  "version": 2
+}

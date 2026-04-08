@@ -7,12 +7,21 @@
 | [architecture-overview.md](architecture-overview.md) | System architecture: Schema Forge (tooling) + Etendo Go (runtime), data flow, component inventory |
 | [NEO Headless API Reference](../modules/com.etendoerp.go/docs/neo-headless.md) | Full API reference for the runtime module (NeoServlet, selectors, processes, webhooks) |
 | [NEO Headless Extensibility Guide](neo-headless-extensibility.md) | How to extend/customize NEO Headless: NeoHandler hooks, configuration, patterns |
+| [Widget Endpoints Guide](widget-endpoints.md) | How to create widget endpoints: handler pattern, XML registration, frontend `useWidget` hook, response contracts |
+| [Architecture Radar (sf-radar)](architecture-radar.md) | Guide for the sf-radar CLI tool — query and update architecture decisions (optional repo) |
 
 ## Testing
 
 | File | Description |
 |------|-------------|
 | [e2e-testing-guide.md](e2e-testing-guide.md) | E2E testing guide: discover with agent-browser, automate with Playwright |
+
+## Field & Pipeline Reference
+
+| File | Description |
+|------|-------------|
+| [decisions-reference.md](decisions-reference.md) | **Complete reference for all `decisions.json` options**: visibility, draftMode, sections, selectors, rules, discard patterns |
+| [field-visibility-types.md](field-visibility-types.md) | Field visibility types (editable, readOnly, system, discarded): behavior across pipeline, NEO Headless, and frontend |
 
 ## Design Specs
 
@@ -23,6 +32,7 @@
 | [TDD.md](TDD.md) | Technical design, data models, validation rules, generator specs |
 | [TDD-anex.md](TDD-anex.md) | API versioning implementation details |
 | [conventions.md](conventions.md) | Edge case conventions (13 rules for extraction, validation, DB access) |
+| [decisions-versioning.md](decisions-versioning.md) | Decisions.json versioning system: writing migrations, batch upgrades, FAQ |
 
 ## Etendo AD Reference
 
@@ -34,6 +44,14 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | [etendo-ad/schema-mappings.md](etendo-ad/schema-mappings.md) | AD table relationships: callouts, logic columns, tab clauses |
 | [etendo-ad/process-mechanisms.md](etendo-ad/process-mechanisms.md) | The 3 process mechanisms: tab_process, classic_process, obuiapp_process |
 | [etendo-ad/display-logic-variables.md](etendo-ad/display-logic-variables.md) | The 6 types of variables in DisplayLogic: fields, auxiliary inputs, session, preferences, acct dimensions |
+
+## Guides
+
+| File | Description |
+|------|-------------|
+| [developer-tools.md](developer-tools.md) | CLI tools used by the team: RTK (token optimization) and GWS (Google Workspace CLI) |
+| [claude-md-best-practices.md](claude-md-best-practices.md) | Best practices for writing effective CLAUDE.md files (research compilation) |
+| [self-documentation-policy.md](self-documentation-policy.md) | Self-documentation policy: triggers, checklists, and phase responsibilities for keeping docs in sync with code |
 
 ## Plans & Evaluations
 

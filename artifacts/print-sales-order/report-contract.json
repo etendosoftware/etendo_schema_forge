@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "reportId": "print-sales-order",
+  "category": "sales",
+  "type": "document",
+  "source": "sql",
+  "title": { "en_US": "Sales Order", "es_ES": "Pedido de Venta" },
+  "orientation": "portrait",
+  "parameters": [
+    { "name": "documentId", "label": { "en_US": "Order ID", "es_ES": "ID Pedido" }, "type": "text", "required": true, "hidden": true }
+  ],
+  "sql": {
+    "header": "SELECT o.c_order_id, o.documentno, o.dateordered, dt.name AS doc_type, bp.name AS bp_name, bpl.name AS bp_location, o.description, o.grandtotal, o.totallines, pt.name AS payment_term, pm.name AS payment_method, drl.name AS delivery_term, cur.iso_code AS currency, CASE o.docstatus WHEN 'CO' THEN 'Complete' WHEN 'DR' THEN 'Draft' WHEN 'VO' THEN 'Void' ELSE o.docstatus END AS status, org.name AS org_name, orgi.taxid AS org_taxid, orgl.address1 AS org_address, orgl.postal AS org_postal, orgl.city AS org_city FROM c_order o JOIN c_bpartner bp ON bp.c_bpartner_id = o.c_bpartner_id JOIN c_bpartner_location bpl ON bpl.c_bpartner_location_id = o.c_bpartner_location_id LEFT JOIN c_doctype dt ON dt.c_doctype_id = o.c_doctypetarget_id LEFT JOIN c_paymentterm pt ON pt.c_paymentterm_id = o.c_paymentterm_id LEFT JOIN fin_paymentmethod pm ON pm.fin_paymentmethod_id = o.fin_paymentmethod_id LEFT JOIN ad_ref_list_v drl ON drl.value = o.deliveryrule AND drl.ad_reference_id = '151' AND drl.ad_language = 'en_US' LEFT JOIN c_currency cur ON cur.c_currency_id = o.c_currency_id JOIN ad_org org ON org.ad_org_id = o.ad_org_id LEFT JOIN ad_orginfo orgi ON orgi.ad_org_id = o.ad_org_id LEFT JOIN c_location orgl ON orgl.c_location_id = orgi.c_location_id WHERE o.c_order_id = '__DOCUMENTID__'",
+    "lines": "SELECT ol.line, COALESCE(p.name, ol.description) AS product_name, ol.qtyordered AS quantity, uom.name AS uom, ol.priceactual, ol.linenetamt FROM c_orderline ol LEFT JOIN m_product p ON p.m_product_id = ol.m_product_id LEFT JOIN c_uom uom ON uom.c_uom_id = ol.c_uom_id WHERE ol.c_order_id = '__DOCUMENTID__' ORDER BY ol.line",
+    "taxes": "SELECT t.name AS tax_name, ot.taxbaseamt, ot.taxamt FROM c_ordertax ot JOIN c_tax t ON t.c_tax_id = ot.c_tax_id WHERE ot.c_order_id = '__DOCUMENTID__' ORDER BY t.name"
+  },
+  "outputs": ["pdf", "html"],
+  "summary": {},
+  "mockDataFile": "mock-data.json"
+}

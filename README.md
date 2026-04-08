@@ -132,6 +132,99 @@ etendo_core/                    ← branch: feature/ETP-3519
 └── gradle.properties
 ```
 
+## jsreport Installation (Draft)
+
+> ⚠️ **This section is in the process of official integration.** The `com.etendoerp:docker` dependency is not yet part of `com.etendoerp.go` — add it manually until it is integrated.
+
+jsreport is the report engine used by NEO Headless for PDF report generation. It runs as a Docker container managed by the `com.etendoerp:docker` module.
+
+### 1. Add the Docker dependency to build.gradle
+
+In the Etendo project's `build.gradle`, add inside the `dependencies` block:
+
+```groovy
+implementation 'com.etendoerp:docker:latest.release'
+```
+
+### 2. Configure gradle.properties
+
+Add the following to the project's `gradle.properties`:
+
+```properties
+docker_com.etendoerp.go=true
+JSREPORT_PORT=5488
+SCHEMA_FORGE_DIR=../../schema_forge
+```
+
+> **Note:** `SCHEMA_FORGE_DIR` is a placeholder — replace it with the actual path to your `schema_forge` directory (relative or absolute).
+
+### 3. Build the jsreport Docker image
+
+> **Temporary step:** This manual build will be removed once the image is published to a registry. In a future version, the image will be pulled automatically without needing to build from the Dockerfile.
+
+```bash
+cd modules/com.etendoerp.go/compose
+docker buildx build -f Dockerfile -t etendo-jsreport:latest .
+```
+
+### 4. Start jsreport
+
+From the Etendo root directory:
+
+```bash
+./gradlew resources.up
+```
+
+This starts the jsreport container (and any other configured Docker resources). The `com.etendoerp:docker` module manages the container lifecycle.
+
+### 5. Server Deployment: Apache Proxy for jsreport
+
+When deploying to a server (production, staging, experimental), the frontend accesses jsreport through a relative path (`/jsreport/api/report`). In development, Vite proxies this automatically. In a deployed environment, you need to configure your web server to proxy these requests to the jsreport container.
+
+#### Apache (with SSL / Let's Encrypt)
+
+Edit your Apache virtual host config (e.g., `/etc/apache2/sites-available/000-default-le-ssl.conf`) and add the jsreport proxy **before** the catch-all `ProxyPass "/"` rule:
+
+```apache
+<VirtualHost *:443>
+    # ... existing config ...
+
+    # jsreport proxy — must be BEFORE the catch-all ProxyPass
+    ProxyPass "/jsreport/" "http://127.0.0.1:5488/"
+    ProxyPassReverse "/jsreport/" "http://127.0.0.1:5488/"
+
+    # Existing Etendo/app proxy (catch-all, must be last)
+    ProxyPass "/" "http://127.0.0.1:3000/"
+    ProxyPassReverse "/" "http://127.0.0.1:3000/"
+
+    # ... SSL config ...
+</VirtualHost>
+```
+
+> **Important:** Apache evaluates `ProxyPass` rules in order. The more specific `/jsreport/` rule must appear before the generic `/` rule, otherwise all requests will be caught by the generic rule first.
+
+After editing, restart Apache:
+
+```bash
+sudo systemctl restart apache2
+```
+
+Verify the proxy is working:
+
+```bash
+curl https://your-domain.com/jsreport/api/ping
+```
+
+#### How it works
+
+```
+Browser → HTTPS (443) → Apache (SSL termination) → HTTP (5488) → jsreport
+```
+
+Apache handles SSL — jsreport does not need its own SSL configuration. The same build works across all environments as long as each server has this proxy rule configured.
+
+---
+
 ## First Steps (Claude Guided) (Recommended)
 This tool is designed to be used iteratively through the Claude Code interface, interacting with the agent.
 

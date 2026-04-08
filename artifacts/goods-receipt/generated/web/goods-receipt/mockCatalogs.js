@@ -2,6 +2,29 @@
 
 const catalogs = {};
 
+catalogs['Warehouse'] = [
+  {
+    "id": "wh-001",
+    "name": "Main Warehouse"
+  },
+  {
+    "id": "wh-002",
+    "name": "East Distribution Center"
+  },
+  {
+    "id": "wh-003",
+    "name": "West Hub"
+  },
+  {
+    "id": "wh-004",
+    "name": "North Storage"
+  },
+  {
+    "id": "wh-005",
+    "name": "South Logistics"
+  }
+];
+
 catalogs['BusinessPartner'] = [
   {
     "id": "bp-001",
@@ -62,6 +85,109 @@ catalogs['BusinessPartner'] = [
   {
     "id": "bp-015",
     "name": "Quantum Logistics"
+  }
+];
+
+catalogs['BusinessPartnerLocation'] = [
+  {
+    "id": "bploc-001",
+    "name": "HQ - 100 Main St",
+    "businessPartnerId": "bp-001"
+  },
+  {
+    "id": "bploc-002",
+    "name": "Branch - 200 Oak Ave",
+    "businessPartnerId": "bp-001"
+  },
+  {
+    "id": "bploc-003",
+    "name": "Warehouse - 300 Elm Dr",
+    "businessPartnerId": "bp-002"
+  },
+  {
+    "id": "bploc-004",
+    "name": "Office - 50 Pine Rd",
+    "businessPartnerId": "bp-002"
+  },
+  {
+    "id": "bploc-005",
+    "name": "Factory - 400 Maple Ln",
+    "businessPartnerId": "bp-003"
+  },
+  {
+    "id": "bploc-006",
+    "name": "Store - 150 Cedar Blvd",
+    "businessPartnerId": "bp-003"
+  },
+  {
+    "id": "bploc-007",
+    "name": "Depot - 250 Birch Way",
+    "businessPartnerId": "bp-004"
+  },
+  {
+    "id": "bploc-008",
+    "name": "Lab - 75 Spruce Ct",
+    "businessPartnerId": "bp-004"
+  },
+  {
+    "id": "bploc-009",
+    "name": "HQ - 500 Willow St",
+    "businessPartnerId": "bp-005"
+  },
+  {
+    "id": "bploc-010",
+    "name": "Branch - 600 Ash Ave",
+    "businessPartnerId": "bp-005"
+  },
+  {
+    "id": "bploc-011",
+    "name": "Office - 10 Palm Dr",
+    "businessPartnerId": "bp-006"
+  },
+  {
+    "id": "bploc-012",
+    "name": "Store - 20 Ivy Rd",
+    "businessPartnerId": "bp-006"
+  },
+  {
+    "id": "bploc-013",
+    "name": "Depot - 30 Fern Ln",
+    "businessPartnerId": "bp-007"
+  },
+  {
+    "id": "bploc-014",
+    "name": "Lab - 40 Sage Blvd",
+    "businessPartnerId": "bp-007"
+  },
+  {
+    "id": "bploc-015",
+    "name": "HQ - 55 Rose Way",
+    "businessPartnerId": "bp-008"
+  },
+  {
+    "id": "bploc-016",
+    "name": "Branch - 65 Lily Ct",
+    "businessPartnerId": "bp-008"
+  },
+  {
+    "id": "bploc-017",
+    "name": "Office - 70 Daisy St",
+    "businessPartnerId": "bp-009"
+  },
+  {
+    "id": "bploc-018",
+    "name": "Store - 80 Tulip Ave",
+    "businessPartnerId": "bp-009"
+  },
+  {
+    "id": "bploc-019",
+    "name": "Depot - 90 Orchid Dr",
+    "businessPartnerId": "bp-010"
+  },
+  {
+    "id": "bploc-020",
+    "name": "Lab - 95 Violet Rd",
+    "businessPartnerId": "bp-010"
   }
 ];
 
@@ -185,6 +311,29 @@ catalogs['Product'] = [
     "name": "CPU Cooler",
     "price": 49,
     "uomId": "uom-001"
+  }
+];
+
+catalogs['UOM'] = [
+  {
+    "id": "uom-001",
+    "name": "Each"
+  },
+  {
+    "id": "uom-002",
+    "name": "Box"
+  },
+  {
+    "id": "uom-003",
+    "name": "Kg"
+  },
+  {
+    "id": "uom-004",
+    "name": "Meter"
+  },
+  {
+    "id": "uom-005",
+    "name": "Liter"
   }
 ];
 

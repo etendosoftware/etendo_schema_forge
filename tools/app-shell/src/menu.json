@@ -18,8 +18,7 @@
         { "name": "sales-order", "label": "Sales Orders" },
         { "name": "goods-shipment", "label": "Shipments" },
         { "name": "sales-invoice", "label": "Invoices" },
-        { "name": "return-from-customer", "label": "Returns" },
-        { "name": "return-material-receipt", "label": "Return Receipts" }
+        { "name": "return-from-customer", "label": "Returns" }
       ]
     },
     {
@@ -28,7 +27,7 @@
       "items": [
         { "name": "purchase-order", "label": "Purchase Orders" },
         { "name": "goods-receipt", "label": "Goods Receipt" },
-        { "name": "purchase-invoice", "label": "Invoices" },
+        { "name": "purchase-invoice", "label": "Purchase Invoice" },
         { "name": "return-to-vendor", "label": "Returns" },
         { "name": "return-to-vendor-shipment", "label": "Return Shipments" },
         { "name": "report-viewer-purchases", "label": "Reports", "path": "report-viewer?category=purchases" }
@@ -42,6 +41,7 @@
         { "name": "payment-out", "label": "Payments Out" },
         { "name": "bank-reconciliation", "label": "Bank Reconciliation" },
         { "name": "chart-of-accounts", "label": "Chart of Accounts" },
+        { "name": "assets", "label": "Assets" },
         { "name": "recurring-invoice", "label": "Recurring Invoices", "hidden": true },
         { "name": "report-viewer-finance", "label": "Reports", "path": "report-viewer?category=finance" }
       ]

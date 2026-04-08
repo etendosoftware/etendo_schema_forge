@@ -42,6 +42,25 @@ The distinction is made at the **Document Type** level, not the table level.
    - Links the new order back to the originating quotation
 3. **No delivery tracking:** Since quotations are pre-sale documents, delivery-related fields (`IsDelivered`, `QtyDelivered`, `DeliveryLocation`) are not exposed.
 
+## Field Curation Decisions (UX Simplification)
+
+Based on competitor analysis (Salesforce CPQ, HubSpot, Odoo, SAP B1) and sales-user workflow,
+the header was trimmed from 15 to 9 visible fields:
+
+| Field | Decision | Reason |
+|-------|----------|--------|
+| `summedLineAmount` | discarded | Redundant — grand total is sufficient |
+| `currency` | discarded | Derived from price list, not a standalone input |
+| `paymentMethod` | discarded | Rarely changed per-quote; comes from partner defaults |
+| `salesRepresentative` | discarded | Auto-assigned from logged-in user |
+| `orderReference` | discarded | Secondary free-text; not core to the quoting flow |
+| `invoiceAddress` | discarded | Not relevant at quotation stage; resolved at invoicing |
+
+**Retained header fields (9):** `documentNo`, `businessPartner`, `partnerAddress`,
+`orderDate`, `validUntil`, `priceList`, `paymentTerms`, `grandTotalAmount`, `documentStatus`.
+
+**Description** kept in section `other` as optional notes field.
+
 ## Fields Shared (Identical Behavior)
 
 All business partner, pricing, payment, and line-level fields behave identically:

@@ -3,7 +3,6 @@ import { DataTable } from '@/components/contract-ui';
 // @sf-generated-start columns:basicDiscounts
 const columns = [
   { key: 'lineNo', column: 'Line', type: 'number' },
-  { key: 'basicDiscount', column: 'C_Discount_ID', type: 'string' },
   { key: 'cascade', column: 'Cascade', type: 'boolean' },
   { key: 'active', column: 'Isactive', type: 'boolean' },
 ];

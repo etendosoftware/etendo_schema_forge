@@ -1,0 +1,457 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "sales",
+    "name": "Sales Invoice",
+    "documentPreview": {
+      "titlePrefix": "Invoice"
+    },
+    "relatedDocuments": true,
+    "notesField": "description",
+    "hideDeleteWhenComplete": true,
+    "customComponents": {
+      "headerTable": "InvoiceHeaderTable",
+      "bottomSection": "InvoiceBottomPanel",
+      "topbarRight": "InvoiceTopbarExtra"
+    },
+    "menuActions": [
+      { "key": "duplicate", "label": "Duplicate" },
+      { "key": "cancel", "label": "Cancel", "destructive": true, "visibleWhenStatus": "CO" }
+    ]
+  },
+  "entities": {
+    "header": {
+      "fields": {
+        "businessPartner": {
+          "grid": true,
+          "searchable": true,
+          "reference": "BusinessPartner",
+          "readOnlyLogic": null,
+          "displayLogic": null,
+          "section": "principal"
+        },
+        "partnerAddress": {
+          "reference": "BusinessPartnerLocation",
+          "inputMode": "dependent",
+          "dependsOn": {
+            "field": "businessPartner",
+            "filterKey": "C_BPartner_ID"
+          },
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "invoiceDate": {
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "accountingDate": {
+          "visibility": "system"
+        },
+        "paymentTerms": {
+          "visibility": "system"
+        },
+        "paymentMethod": {
+          "reference": "PaymentMethod",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "priceList": {
+          "visibility": "system"
+        },
+        "currency": {
+          "visibility": "readOnly",
+          "grid": false,
+          "form": false,
+          "section": "summary",
+          "reference": "Currency",
+          "inputMode": "selector"
+        },
+        "description": {
+          "form": false
+        },
+        "aPRMAddpayment": {
+          "visibility": "discarded"
+        },
+        "aPRMProcessinvoice": {
+          "visibility": "discarded"
+        },
+        "documentAction": {
+          "visibility": "discarded"
+        },
+        "createLinesFromOrder": {
+          "visibility": "discarded"
+        },
+        "createLinesFromShipment": {
+          "visibility": "discarded"
+        },
+        "copyFrom": {
+          "visibility": "discarded"
+        },
+        "calculatePromotions": {
+          "visibility": "discarded"
+        },
+        "orderReference": {
+          "visibility": "discarded"
+        },
+        "active": {
+          "visibility": "discarded",
+          "form": true,
+          "name": "isActive"
+        },
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "documentStatus": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "form": false
+        },
+        "grandTotalAmount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "summary"
+        },
+        "summedLineAmount": {
+          "visibility": "readOnly",
+          "section": "summary"
+        },
+        "outstandingAmount": {
+          "visibility": "readOnly",
+          "section": "summary"
+        },
+        "isPaid": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false
+        },
+        "paymentComplete": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false
+        },
+        "totalPaid": {
+          "visibility": "discarded"
+        },
+        "dueAmount": {
+          "visibility": "discarded"
+        },
+        "daysTillDue": {
+          "visibility": "discarded"
+        },
+        "percentageOverdue": {
+          "visibility": "discarded"
+        },
+        "finalSettlementDate": {
+          "visibility": "discarded"
+        },
+        "daysSalesOutstanding": {
+          "visibility": "discarded"
+        },
+        "salesOrder": {
+          "visibility": "system"
+        },
+        "externalBusinessPartnerReference": {
+          "visibility": "discarded"
+        },
+        "prepaymentamt": {
+          "visibility": "discarded"
+        },
+        "paidAmountAtInvoicing": {
+          "visibility": "discarded"
+        },
+        "salesRepresentative": {
+          "visibility": "system"
+        },
+        "client": {
+          "name": "adClientId"
+        },
+        "organization": {
+          "name": "adOrgId"
+        },
+        "transactionDocument": {
+          "name": "cDocTypeTargetId"
+        },
+        "documentType": {
+          "name": "cDocTypeId"
+        },
+        "salesTransaction": {
+          "name": "isSotrx"
+        },
+        "paymentRule": {
+          "visibility": "system"
+        },
+        "creationDate": {
+          "name": "created"
+        },
+        "updated": {
+          "visibility": "system"
+        },
+        "project": {
+          "visibility": "discarded"
+        },
+        "costcenter": {
+          "visibility": "discarded"
+        },
+        "salesCampaign": {
+          "visibility": "discarded"
+        },
+        "stDimension": {
+          "visibility": "discarded"
+        },
+        "ndDimension": {
+          "visibility": "discarded"
+        },
+        "withholdingamount": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "lines": {
+      "fields": {
+        "lineNo": {
+          "visibility": "system"
+        },
+        "product": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "inputMode": "search",
+          "readOnlyLogic": null,
+          "displayLogic": null
+        },
+        "invoicedQuantity": {
+          "grid": true,
+          "section": "principal",
+          "readOnlyLogic": null
+        },
+        "uOM": {
+          "visibility": "system"
+        },
+        "unitPrice": {
+          "grid": true,
+          "section": "principal",
+          "readOnlyLogic": null
+        },
+        "tax": {
+          "grid": true,
+          "section": "principal",
+          "inputMode": "selector",
+          "readOnlyLogic": null
+        },
+        "lineNetAmount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "principal",
+          "readOnlyLogic": null
+        },
+        "discount": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "listPrice": {
+          "visibility": "discarded"
+        },
+        "description": {
+          "section": "collapsed"
+        },
+        "taxAmount": {
+          "visibility": "discarded"
+        },
+        "operativeQuantity": {
+          "visibility": "discarded"
+        },
+        "operativeUOM": {
+          "visibility": "discarded"
+        },
+        "grossUnitPrice": {
+          "visibility": "discarded"
+        },
+        "grossAmount": {
+          "visibility": "discarded"
+        },
+        "grossListPrice": {
+          "visibility": "discarded"
+        },
+        "baseGrossUnitPrice": {
+          "visibility": "discarded"
+        },
+        "standardPrice": {
+          "visibility": "discarded"
+        },
+        "financialInvoiceLine": {
+          "visibility": "discarded"
+        },
+        "account": {
+          "visibility": "discarded"
+        },
+        "attributeSetValue": {
+          "visibility": "discarded"
+        },
+        "taxableAmount": {
+          "visibility": "discarded"
+        },
+        "deferred": {
+          "visibility": "discarded"
+        },
+        "deferredPlanType": {
+          "visibility": "discarded"
+        },
+        "periodNumber": {
+          "visibility": "discarded"
+        },
+        "period": {
+          "visibility": "discarded"
+        },
+        "cancelPriceAdjustment": {
+          "visibility": "discarded"
+        },
+        "explode": {
+          "visibility": "discarded"
+        },
+        "businessPartner": {
+          "visibility": "discarded"
+        },
+        "project": {
+          "visibility": "discarded"
+        },
+        "costcenter": {
+          "visibility": "discarded"
+        },
+        "asset": {
+          "visibility": "discarded"
+        },
+        "stDimension": {
+          "visibility": "discarded"
+        },
+        "ndDimension": {
+          "visibility": "discarded"
+        },
+        "client": {
+          "name": "adClientId",
+          "visibility": "system"
+        },
+        "organization": {
+          "name": "adOrgId",
+          "visibility": "system"
+        },
+        "invoice": {
+          "name": "cInvoiceId",
+          "visibility": "system"
+        },
+        "dateInvoiced": {
+          "visibility": "system"
+        },
+        "cCurrencyId": {
+          "visibility": "system"
+        },
+        "cBpartnerId": {
+          "visibility": "system"
+        },
+        "salesOrderLine": {
+          "visibility": "system",
+          "reference": null,
+          "inputMode": null,
+          "name": "cOrderlineId"
+        },
+        "goodsShipmentLine": {
+          "visibility": "system",
+          "reference": null,
+          "inputMode": null,
+          "name": "mInoutlineId"
+        }
+      }
+    },
+    "lineTax": {
+      "exclude": true
+    },
+    "tax": {
+      "exclude": true
+    },
+    "basicDiscounts": {
+      "exclude": true
+    },
+    "paymentPlan": {
+      "httpMethods": { "get": true, "post": false, "put": false, "delete": false },
+      "fields": {
+        "finPaymentScheduleID": { "visibility": "readOnly" },
+        "amount": { "visibility": "readOnly" },
+        "paidAmount": { "visibility": "readOnly" },
+        "outstandingAmount": { "visibility": "readOnly" },
+        "dueDate": { "visibility": "readOnly" },
+        "lastPaymentDate": { "visibility": "readOnly" }
+      }
+    },
+    "paymentDetails": {
+      "exclude": true
+    },
+    "reversedInvoices": {
+      "exclude": true
+    },
+    "exchangeRates": {
+      "exclude": true
+    },
+    "accounting": {
+      "exclude": true
+    }
+  },
+  "rules": {
+    "BP_AutoFill_Address": {
+      "type": "callout",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "When changing business partner, auto-fill partner address, payment terms, payment method and price list from customer defaults"
+    },
+    "Line_Recalc_Totals": {
+      "type": "eventHandler",
+      "entity": "invoiceLine",
+      "decision": "Keep",
+      "description": "After saving a line, recalculate header totals (TotalLines, GrandTotal) including taxes"
+    },
+    "Product_AutoFill_Price": {
+      "type": "callout",
+      "entity": "invoiceLine",
+      "decision": "Keep",
+      "description": "When selecting a product, auto-fill unit price, tax and UOM from the sales price list"
+    },
+    "Line_Calc_NetAmount": {
+      "type": "callout",
+      "entity": "invoiceLine",
+      "decision": "Keep",
+      "description": "Recalculate line net amount and tax amount when quantity, price or discount changes"
+    },
+    "ReadOnly_When_Processed": {
+      "type": "displayLogic",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "Lock all editable fields when invoice status is Completed or Voided"
+    },
+    "Match_SO_Shipment": {
+      "type": "eventHandler",
+      "entity": "invoiceLine",
+      "decision": "Keep",
+      "description": "When a line references a sales order line or shipment line (C_OrderLine_ID, M_InOutLine_ID), validate quantity does not exceed outstanding amount from the linked document"
+    },
+    "DateAcct_Default": {
+      "type": "callout",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "When dateInvoiced changes, auto-fill dateAcct with the same value unless manually overridden"
+    },
+    "Currency_From_PriceList": {
+      "type": "callout",
+      "entity": "invoice",
+      "decision": "Keep",
+      "description": "When price list changes, auto-fill currency from the selected price list"
+    }
+  },
+  "discardPatterns": [],
+  "version": 2
+}

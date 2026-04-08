@@ -12,12 +12,21 @@ artifacts/test-report.xml
 artifacts/test-report.html
 .DS_Store
 .mcp.json
+.playwright-mcp/
 .worktrees/
 window-locks.json
 tools/app-shell/dist/
 tools/app-shell/.env.local
 tools/app-shell/.env.development
 artifacts/e2e-report/
+# Artifacts: only decisions.json, contract*.json, and generated/ are tracked
+artifacts/*/schema-raw.json
+artifacts/*/rules-raw.json
+artifacts/*/schema-curated.json
+artifacts/*/rules-curated.json
+artifacts/*/processes.json
+artifacts/*/raw-query-results/
+artifacts/*/backup-curated-jorge/
 e2e/test-results/
 e2e/playwright-report/
 e2e/recordings/

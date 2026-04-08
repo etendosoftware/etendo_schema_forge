@@ -29,7 +29,14 @@ async function loadCoreMap(filename) {
  * 6. Everything else → editable
  */
 export function classifyField(fieldRow, systemColumns) {
-  const { columnname, tablename, isdisplayed, isreadonly, isupdateable, defaultvalue } = fieldRow;
+  const { columnname, tablename, isdisplayed, isreadonly, isupdateable, defaultvalue, field_isactive, isshowninstatusbar } = fieldRow;
+
+  // 0. Inactive field → discarded
+  if (field_isactive === 'N') {
+    return {
+      visibility: 'discarded',
+    };
+  }
 
   // 1. Primary key
   if (columnname === tablename + '_ID') {
@@ -59,8 +66,11 @@ export function classifyField(fieldRow, systemColumns) {
     };
   }
 
-  // 4. Not displayed
+  // 4. Not displayed (but shown in status bar → readOnly, not system)
   if (isdisplayed === 'N') {
+    if (fieldRow.isshowninstatusbar === 'Y') {
+      return { visibility: 'readOnly' };
+    }
     return {
       visibility: 'system',
       ...(inferCategoryFromColumn(columnname) && {
@@ -217,6 +227,25 @@ export function buildReference(row) {
     };
   }
 
+  // Last-resort fallback for FK columns without _ID suffix (e.g., CreatedBy, UpdatedBy).
+  // These are known FK columns that don't follow the {Table}_ID naming convention.
+  // We use the column name itself as the best-effort target table hint.
+  const KNOWN_FK_COLUMNS = {
+    'CreatedBy':  { targetTable: 'AD_User', keyColumn: 'AD_User_ID', displayColumn: 'Name' },
+    'UpdatedBy':  { targetTable: 'AD_User', keyColumn: 'AD_User_ID', displayColumn: 'Name' },
+    'Createdby':  { targetTable: 'AD_User', keyColumn: 'AD_User_ID', displayColumn: 'Name' },
+    'Updatedby':  { targetTable: 'AD_User', keyColumn: 'AD_User_ID', displayColumn: 'Name' },
+  };
+
+  const knownRef = KNOWN_FK_COLUMNS[row.columnname];
+  if (knownRef) {
+    return {
+      type: refName || 'TableDir',
+      ...knownRef,
+      filterExpression: null,
+    };
+  }
+
   return null;
 }
 
@@ -287,6 +316,7 @@ export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
         tabName: row.tab_name,
         tabLevel: row.tablevel,
         tabSeq: row.tab_seq,
+        uiPattern: row.ui_pattern,
         tableName: row.tablename,
         entityClassname: row.entity_classname,
         entityAlias: row.entity_alias,
@@ -372,6 +402,19 @@ export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
         }
       }
 
+      // Add processId for button-type fields (AD_Reference_ID = 28)
+      // Priority: OBUIAPP (modern) > Classic > Hardcoded (no ID)
+      if (schemaType === 'button') {
+        if (row.em_obuiapp_process_id) {
+          fieldDef.processId = row.em_obuiapp_process_id;
+          fieldDef.processType = 'obuiapp';
+        } else if (row.ad_process_id) {
+          fieldDef.processId = row.ad_process_id;
+          fieldDef.processType = 'classic';
+        }
+        // No processId + no processType = hardcoded button (resolved by convention)
+      }
+
       // Attach enum values for List-type fields (AD_Reference_ID = 17)
       if (schemaType === 'enum' && row.ad_reference_value_id) {
         const enumValues = enumValuesMap[row.ad_reference_value_id];
@@ -391,12 +434,17 @@ export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
     const semanticLevel = mapTabLevel(tab.tabLevel);
 
     // Track the primary entity (first header-level tab)
+    // Prefer tabName (human-readable tab label) over tableName (DB table)
+    const entityName = tab.tabName
+      ? toCamelCase(tab.tabName)
+      : toCamelCase(tab.tableName);
+
     if (semanticLevel === 'header' && !primaryEntity) {
-      primaryEntity = toCamelCase(tab.tableName);
+      primaryEntity = entityName;
     }
 
     const entity = {
-      name: toCamelCase(tab.tableName),
+      name: entityName,
       tableName: tab.tableName,
       tabId: tab.tabId,
       entityClassname,
@@ -448,19 +496,21 @@ export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
 const EXTRACT_SQL = `
 SELECT
   w.AD_Window_ID, w.Name AS window_name,
-  t.AD_Tab_ID, t.Name AS tab_name, t.TabLevel, t.SeqNo AS tab_seq,
+  t.AD_Tab_ID, t.Name AS tab_name, t.TabLevel, t.SeqNo AS tab_seq, t.UIPattern AS ui_pattern,
   t.WhereClause, t.OrderByClause, t.FilterClause,
   t.HQLWhereClause, t.HQLOrderByClause, t.HQLFilterClause,
   tbl.TableName, tbl.Classname AS entity_classname, tbl.Entity_Alias,
   pkg.JavaPackage AS entity_javapackage,
-  f.AD_Field_ID, f.Name AS field_name,
-  f.IsDisplayed, f.IsReadOnly,
+  f.AD_Field_ID, f.Name AS field_name, f.IsActive AS field_isactive,
+  f.IsDisplayed, f.IsReadOnly, f.IsShownInStatusBar,
   f.DisplayLogic, f.DisplayLogic_Server, f.DisplayLogicGrid,
   f.SeqNo AS field_seq,
   c.ColumnName, c.Name AS obdal_name, c.AD_Reference_ID, c.IsMandatory, c.IsUpdateable,
   c.DefaultValue, c.FieldLength, c.ValueMin, c.ValueMax,
   c.AD_Val_Rule_ID, c.ReadOnlyLogic,
   c.AD_Reference_Value_ID,
+  c.AD_Process_ID,
+  c.EM_OBUIAPP_Process_ID,
   c.AD_Module_ID AS column_module_id, NULL AS table_module_id,
   r.Name AS reference_name,
   vr.Name AS val_rule_name,
@@ -508,8 +558,80 @@ LEFT JOIN ad_val_rule vr ON c.ad_val_rule_id = vr.ad_val_rule_id
 LEFT JOIN obuisel_selector sel ON sel.ad_reference_id = c.ad_reference_value_id
 LEFT JOIN ad_table sel_tgt ON sel.ad_table_id = sel_tgt.ad_table_id
 WHERE w.AD_Window_ID = $1
-  AND f.IsActive = 'Y' AND t.IsActive = 'Y'
+  AND t.IsActive = 'Y'
 ORDER BY t.SeqNo, f.SeqNo
+`;
+
+/**
+ * SQL to fetch columns that have NO AD_Field in a given window's tabs.
+ * These are table columns (e.g. Created, Updated, parent FKs) that exist
+ * in the DB but were never registered as fields in the window.
+ */
+const ORPHAN_COLUMNS_SQL = `
+SELECT
+  w.AD_Window_ID, w.Name AS window_name,
+  t.AD_Tab_ID, t.Name AS tab_name, t.TabLevel, t.SeqNo AS tab_seq, t.UIPattern AS ui_pattern,
+  t.WhereClause, t.OrderByClause, t.FilterClause,
+  t.HQLWhereClause, t.HQLOrderByClause, t.HQLFilterClause,
+  tbl.TableName, tbl.Classname AS entity_classname, tbl.Entity_Alias,
+  pkg.JavaPackage AS entity_javapackage,
+  NULL AS ad_field_id, c.ColumnName AS field_name, 'Y' AS field_isactive,
+  'N' AS isdisplayed, 'Y' AS isreadonly, 'N' AS isshowninstatusbar,
+  NULL AS displaylogic, NULL AS displaylogic_server, NULL AS displaylogicgrid,
+  99999 AS field_seq,
+  c.ColumnName, c.Name AS obdal_name, c.AD_Reference_ID, c.IsMandatory, c.IsUpdateable,
+  c.DefaultValue, c.FieldLength, c.ValueMin, c.ValueMax,
+  c.AD_Val_Rule_ID, c.ReadOnlyLogic,
+  c.AD_Reference_Value_ID,
+  c.AD_Process_ID,
+  c.EM_OBUIAPP_Process_ID,
+  c.AD_Module_ID AS column_module_id, NULL AS table_module_id,
+  r.Name AS reference_name,
+  vr.Name AS val_rule_name,
+  vr.Code AS val_rule_code,
+  mo.Classname AS callout_class,
+  -- Table/TableDir reference config
+  rt_tgt.TableName AS ref_table_target,
+  rt_disp.ColumnName AS ref_table_display,
+  rt_key.ColumnName AS ref_table_key,
+  rt.WhereClause AS ref_table_filter,
+  rt.OrderByClause AS ref_table_orderby,
+  -- Search reference config
+  rs_tgt.TableName AS ref_search_target,
+  rs_col.ColumnName AS ref_search_column,
+  -- Selector reference config
+  sel.Name AS ref_selector_name,
+  sel_tgt.TableName AS ref_selector_target,
+  sel.WhereClause AS ref_selector_filter,
+  sel.HQL AS ref_selector_hql,
+  NULL AS onchangefunction,
+  c.IsIdentifier, c.IsSelectionColumn, c.AllowFiltering AS IsFilterable,
+  NULL AS Precision, c.IsTranslated,
+  c.Help AS help_text, NULL AS field_group_name
+FROM AD_Tab t
+JOIN AD_Window w ON t.AD_Window_ID = w.AD_Window_ID
+JOIN AD_Table tbl ON t.AD_Table_ID = tbl.AD_Table_ID
+JOIN AD_Column c ON c.AD_Table_ID = tbl.AD_Table_ID AND c.IsActive = 'Y'
+LEFT JOIN AD_Package pkg ON tbl.AD_Package_ID = pkg.AD_Package_ID
+JOIN AD_Reference r ON c.AD_Reference_ID = r.AD_Reference_ID
+LEFT JOIN AD_Model_Object mo ON mo.AD_Callout_ID = c.AD_Callout_ID
+LEFT JOIN ad_val_rule vr ON c.ad_val_rule_id = vr.ad_val_rule_id
+LEFT JOIN ad_ref_table rt ON c.ad_reference_value_id = rt.ad_reference_id
+LEFT JOIN ad_table rt_tgt ON rt.ad_table_id = rt_tgt.ad_table_id
+LEFT JOIN ad_column rt_key ON rt.ad_key = rt_key.ad_column_id
+LEFT JOIN ad_column rt_disp ON rt.ad_display = rt_disp.ad_column_id
+LEFT JOIN ad_ref_search rs ON c.ad_reference_value_id = rs.ad_reference_id
+LEFT JOIN ad_table rs_tgt ON rs.ad_table_id = rs_tgt.ad_table_id
+LEFT JOIN ad_column rs_col ON rs.ad_column_id = rs_col.ad_column_id
+LEFT JOIN obuisel_selector sel ON sel.ad_reference_id = c.ad_reference_value_id
+LEFT JOIN ad_table sel_tgt ON sel.ad_table_id = sel_tgt.ad_table_id
+WHERE w.AD_Window_ID = $1
+  AND t.IsActive = 'Y'
+  AND NOT EXISTS (
+    SELECT 1 FROM AD_Field f2
+    WHERE f2.AD_Tab_ID = t.AD_Tab_ID AND f2.AD_Column_ID = c.AD_Column_ID
+  )
+ORDER BY t.SeqNo, c.ColumnName
 `;
 
 /**
@@ -524,8 +646,11 @@ export async function main(windowId, windowName) {
 
   const pool = createDbPool();
   try {
-    const result = await pool.query(EXTRACT_SQL, [windowId]);
-    const rows = result.rows;
+    const [fieldResult, orphanResult] = await Promise.all([
+      pool.query(EXTRACT_SQL, [windowId]),
+      pool.query(ORPHAN_COLUMNS_SQL, [windowId]),
+    ]);
+    const rows = [...fieldResult.rows, ...orphanResult.rows];
 
     if (rows.length === 0) {
       console.warn(`No fields found for window ID ${windowId}`);

@@ -1,0 +1,312 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "sales",
+    "name": "Goods Shipment",
+    "documentPreview": {
+      "titlePrefix": "Shipment"
+    },
+    "notesField": "description",
+    "relatedDocuments": true,
+    "hideDeleteWhenComplete": true,
+    "menuActions": [
+      { "key": "cancel", "label": "Cancel", "destructive": true, "visibleWhenStatus": "CO" }
+    ]
+  },
+  "entities": {
+    "header": {
+      "name": "goodsShipment",
+      "fields": {
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "inputMode": "text",
+          "section": "principal"
+        },
+        "businessPartner": {
+          "grid": true,
+          "searchable": true,
+          "reference": "BusinessPartner",
+          "inputMode": "search",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "movementDate": {
+          "grid": true,
+          "searchable": true,
+          "inputMode": "date",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "warehouse": {
+          "grid": true,
+          "searchable": true,
+          "inputMode": "search",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "documentStatus": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "form": false
+        },
+        "partnerAddress": {
+          "reference": "BusinessPartnerLocation",
+          "inputMode": "dependent",
+          "dependsOn": {
+            "field": "businessPartner",
+            "filterKey": "C_BPartner_ID"
+          },
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "accountingDate": {
+          "visibility": "system"
+        },
+        "orderReference": {
+          "visibility": "discarded"
+        },
+        "description": {
+          "inputMode": "textarea",
+          "section": "collapsed"
+        },
+        "shippingCompany": {
+          "visibility": "discarded"
+        },
+        "trackingNo": {
+          "visibility": "discarded"
+        },
+        "shipDate": {
+          "visibility": "discarded"
+        },
+        "deliveryTerms": {
+          "visibility": "discarded"
+        },
+        "deliveryMethod": {
+          "visibility": "discarded"
+        },
+        "freightCategory": {
+          "visibility": "discarded"
+        },
+        "calculateFreight": {
+          "visibility": "discarded"
+        },
+        "freightCurrency": {
+          "visibility": "discarded"
+        },
+        "client": {
+          "visibility": "system"
+        },
+        "organization": {
+          "visibility": "system"
+        },
+        "salesTransaction": {
+          "visibility": "system"
+        },
+        "documentType": {
+          "visibility": "system"
+        },
+        "created": {
+          "visibility": "system"
+        },
+        "updated": {
+          "visibility": "system"
+        },
+        "active": {
+          "visibility": "discarded"
+        },
+        "deliveryLocation": {
+          "visibility": "discarded"
+        },
+        "project": {
+          "visibility": "discarded"
+        },
+        "processed": {
+          "visibility": "discarded"
+        },
+        "movementType": {
+          "visibility": "discarded"
+        },
+        "freightCostRule": {
+          "visibility": "discarded"
+        },
+        "freightAmount": {
+          "visibility": "discarded"
+        },
+        "chargeAmount": {
+          "visibility": "discarded"
+        },
+        "costcenter": {
+          "visibility": "discarded"
+        },
+        "stDimension": {
+          "visibility": "discarded"
+        },
+        "ndDimension": {
+          "visibility": "discarded"
+        },
+        "printDescription": {
+          "visibility": "discarded"
+        },
+        "invoiceStatus": {
+          "visibility": "discarded"
+        },
+        "salesOrder": {
+          "visibility": "system"
+        },
+        "isnettingshipment": {
+          "visibility": "discarded"
+        },
+        "externalBusinessPartnerReference": {
+          "visibility": "discarded"
+        },
+        "createLinesFrom": {
+          "visibility": "discarded"
+        },
+        "processGoodsJava": {
+          "visibility": "discarded"
+        },
+        "completelyInvoiced": {
+          "visibility": "discarded"
+        },
+        "invoicefromshipment": {
+          "visibility": "discarded"
+        },
+        "asset": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "lines": {
+      "name": "goodsShipmentLine",
+      "fields": {
+        "lineNo": {
+          "visibility": "system"
+        },
+        "product": {
+          "grid": true,
+          "searchable": true,
+          "inputMode": "search",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "movementQuantity": {
+          "grid": true,
+          "inputMode": "number",
+          "readOnlyLogic": null,
+          "section": "principal"
+        },
+        "uOM": {
+          "visibility": "system"
+        },
+        "orderQuantity": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "principal"
+        },
+        "storageBin": {
+          "visibility": "discarded"
+        },
+        "description": {
+          "grid": false,
+          "form": true,
+          "inputMode": "textarea",
+          "section": "other"
+        },
+        "client": {
+          "visibility": "system"
+        },
+        "organization": {
+          "visibility": "system"
+        },
+        "shipmentReceipt": {
+          "visibility": "system"
+        },
+        "movementDate": {
+          "visibility": "system"
+        },
+        "cBpartnerId": {
+          "visibility": "system"
+        },
+        "warehouse": {
+          "visibility": "system"
+        },
+        "operativeUOM": {
+          "visibility": "discarded"
+        },
+        "attributeSetValue": {
+          "visibility": "discarded"
+        },
+        "orderLine": {
+          "visibility": "discarded"
+        },
+        "locatorTo": {
+          "visibility": "discarded"
+        },
+        "costcenter": {
+          "visibility": "discarded"
+        },
+        "stDimension": {
+          "visibility": "discarded"
+        },
+        "ndDimension": {
+          "visibility": "discarded"
+        },
+        "printDescription": {
+          "visibility": "discarded"
+        },
+        "descriptionOnly": {
+          "visibility": "discarded"
+        },
+        "operativeQuantity": {
+          "visibility": "discarded"
+        },
+        "salesOrderLine": {
+          "visibility": "discarded"
+        },
+        "project": {
+          "visibility": "discarded"
+        },
+        "asset": {
+          "visibility": "discarded"
+        },
+        "explode": {
+          "visibility": "discarded"
+        },
+        "invoiceQuantity": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "accounting": {
+      "exclude": true
+    },
+    "mInOutLineTax": {
+      "exclude": true
+    }
+  },
+  "rules": {
+    "ReadOnly_When_Processed": {
+      "type": "displayLogic",
+      "entity": "goodsShipment",
+      "decision": "Keep",
+      "description": "Lock all editable fields when shipment status is Completed or Voided"
+    },
+    "BP_AutoFill_Address": {
+      "type": "callout",
+      "entity": "goodsShipment",
+      "decision": "Keep",
+      "description": "When changing business partner, auto-fill delivery address"
+    },
+    "Product_AutoFill_UOM": {
+      "type": "callout",
+      "entity": "goodsShipmentLine",
+      "decision": "Keep",
+      "description": "When selecting a product on a line, auto-fill UOM from product default"
+    }
+  },
+  "discardPatterns": [],
+  "version": 2
+}

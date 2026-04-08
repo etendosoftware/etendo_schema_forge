@@ -11,33 +11,69 @@ const ROOT = join(__dirname, '..', '..');
 
 const QUERIES = {
   fields: `
-SELECT
-  w.AD_Window_ID, w.Name AS window_name,
-  t.AD_Tab_ID, t.Name AS tab_name, t.TabLevel, t.SeqNo AS tab_seq,
-  t.WhereClause, t.OrderByClause, t.FilterClause,
-  t.HQLWhereClause, t.HQLOrderByClause, t.HQLFilterClause,
-  tbl.TableName, tbl.Classname AS entity_classname, tbl.Entity_Alias,
-  pkg.JavaPackage AS entity_javapackage,
-  f.AD_Field_ID, f.Name AS field_name,
-  f.IsDisplayed, f.IsReadOnly,
-  f.DisplayLogic, f.DisplayLogic_Server, f.DisplayLogicGrid,
-  f.SeqNo AS field_seq,
-  c.ColumnName, c.AD_Reference_ID, c.IsMandatory, c.IsUpdateable,
-  c.DefaultValue, c.FieldLength, c.ValueMin, c.ValueMax,
-  c.AD_Val_Rule_ID, c.ReadOnlyLogic,
-  r.Name AS reference_name,
-  mo.Classname AS callout_class
-FROM AD_Field f
-JOIN AD_Tab t ON f.AD_Tab_ID = t.AD_Tab_ID
-JOIN AD_Window w ON t.AD_Window_ID = w.AD_Window_ID
-JOIN AD_Column c ON f.AD_Column_ID = c.AD_Column_ID
-JOIN AD_Table tbl ON c.AD_Table_ID = tbl.AD_Table_ID
-LEFT JOIN AD_Package pkg ON tbl.AD_Package_ID = pkg.AD_Package_ID
-JOIN AD_Reference r ON c.AD_Reference_ID = r.AD_Reference_ID
-LEFT JOIN AD_Model_Object mo ON mo.AD_Callout_ID = c.AD_Callout_ID
-WHERE w.AD_Window_ID = $1
-  AND f.IsActive = 'Y' AND t.IsActive = 'Y'
-ORDER BY t.SeqNo, f.SeqNo`,
+SELECT * FROM (
+  -- Fields with AD_Field registration
+  SELECT
+    w.AD_Window_ID, w.Name AS window_name,
+    t.AD_Tab_ID, t.Name AS tab_name, t.TabLevel, t.SeqNo AS tab_seq,
+    t.WhereClause, t.OrderByClause, t.FilterClause,
+    t.HQLWhereClause, t.HQLOrderByClause, t.HQLFilterClause,
+    tbl.TableName, tbl.Classname AS entity_classname, tbl.Entity_Alias,
+    pkg.JavaPackage AS entity_javapackage,
+    f.AD_Field_ID, f.Name AS field_name, f.IsActive AS field_isactive,
+    f.IsDisplayed, f.IsReadOnly, f.IsShownInStatusBar,
+    f.DisplayLogic, f.DisplayLogic_Server, f.DisplayLogicGrid,
+    f.SeqNo AS field_seq,
+    c.ColumnName, c.AD_Reference_ID, c.IsMandatory, c.IsUpdateable,
+    c.DefaultValue, c.FieldLength, c.ValueMin, c.ValueMax,
+    c.AD_Val_Rule_ID, c.ReadOnlyLogic,
+    r.Name AS reference_name,
+    mo.Classname AS callout_class
+  FROM AD_Field f
+  JOIN AD_Tab t ON f.AD_Tab_ID = t.AD_Tab_ID
+  JOIN AD_Window w ON t.AD_Window_ID = w.AD_Window_ID
+  JOIN AD_Column c ON f.AD_Column_ID = c.AD_Column_ID
+  JOIN AD_Table tbl ON c.AD_Table_ID = tbl.AD_Table_ID
+  LEFT JOIN AD_Package pkg ON tbl.AD_Package_ID = pkg.AD_Package_ID
+  JOIN AD_Reference r ON c.AD_Reference_ID = r.AD_Reference_ID
+  LEFT JOIN AD_Model_Object mo ON mo.AD_Callout_ID = c.AD_Callout_ID
+  WHERE w.AD_Window_ID = $1
+    AND t.IsActive = 'Y'
+
+  UNION ALL
+
+  -- Columns WITHOUT AD_Field (e.g. Created, Updated, parent FKs on child tabs)
+  SELECT
+    w.AD_Window_ID, w.Name AS window_name,
+    t.AD_Tab_ID, t.Name AS tab_name, t.TabLevel, t.SeqNo AS tab_seq,
+    t.WhereClause, t.OrderByClause, t.FilterClause,
+    t.HQLWhereClause, t.HQLOrderByClause, t.HQLFilterClause,
+    tbl.TableName, tbl.Classname AS entity_classname, tbl.Entity_Alias,
+    pkg.JavaPackage AS entity_javapackage,
+    NULL AS ad_field_id, c.ColumnName AS field_name, 'Y' AS field_isactive,
+    'N' AS isdisplayed, 'Y' AS isreadonly, 'N' AS isshowninstatusbar,
+    NULL AS displaylogic, NULL AS displaylogic_server, NULL AS displaylogicgrid,
+    99999 AS field_seq,
+    c.ColumnName, c.AD_Reference_ID, c.IsMandatory, c.IsUpdateable,
+    c.DefaultValue, c.FieldLength, c.ValueMin, c.ValueMax,
+    c.AD_Val_Rule_ID, c.ReadOnlyLogic,
+    r.Name AS reference_name,
+    mo.Classname AS callout_class
+  FROM AD_Tab t
+  JOIN AD_Window w ON t.AD_Window_ID = w.AD_Window_ID
+  JOIN AD_Table tbl ON t.AD_Table_ID = tbl.AD_Table_ID
+  JOIN AD_Column c ON c.AD_Table_ID = tbl.AD_Table_ID AND c.IsActive = 'Y'
+  LEFT JOIN AD_Package pkg ON tbl.AD_Package_ID = pkg.AD_Package_ID
+  JOIN AD_Reference r ON c.AD_Reference_ID = r.AD_Reference_ID
+  LEFT JOIN AD_Model_Object mo ON mo.AD_Callout_ID = c.AD_Callout_ID
+  WHERE w.AD_Window_ID = $1
+    AND t.IsActive = 'Y'
+    AND NOT EXISTS (
+      SELECT 1 FROM AD_Field f2
+      WHERE f2.AD_Tab_ID = t.AD_Tab_ID AND f2.AD_Column_ID = c.AD_Column_ID
+    )
+) combined
+ORDER BY tab_seq, field_seq`,
 
   callouts: `
 SELECT co.AD_Callout_ID, co.Name AS callout_name,

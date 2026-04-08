@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
 import { cn } from '@/lib/utils';
 import { Bot, X, Send, Sparkles } from 'lucide-react';
+import { useCopilot } from './CopilotContext';
 
 const mockResponses = {
   invoice:
@@ -38,7 +39,7 @@ function getResponse(text) {
 }
 
 export function CopilotWidget() {
-  const [open, setOpen] = React.useState(false);
+  const { isOpen: open, open: openPanel, close: closePanel, toggle } = useCopilot();
   const [messages, setMessages] = React.useState([
     {
       role: 'copilot',
@@ -67,7 +68,7 @@ export function CopilotWidget() {
   React.useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === 'Escape' && open) {
-        setOpen(false);
+        closePanel();
       }
     }
     document.addEventListener('keydown', handleKeyDown);
@@ -122,7 +123,7 @@ export function CopilotWidget() {
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={() => setOpen(false)}
+              onClick={() => closePanel()}
               aria-label="Close Copilot"
             >
               <X className="h-4 w-4" />
@@ -223,7 +224,7 @@ export function CopilotWidget() {
 
       {/* Floating trigger button */}
       <Button
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         size="icon"
         className={cn(
           'fixed bottom-6 right-6 z-50 h-12 w-12 rounded-full shadow-lg transition-all duration-200',

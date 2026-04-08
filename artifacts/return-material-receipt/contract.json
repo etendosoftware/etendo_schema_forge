@@ -1,22 +1,60 @@
 {
   "version": "0.1.0",
-  "generatedAt": "2026-03-06T18:10:00.390Z",
-  "checksum": "ed6fc6613f0e45d8",
+  "generatedAt": "2026-03-25T17:13:16.168Z",
+  "checksum": "17be0a6fb8d06a73",
   "frontendContract": {
     "window": {
-      "id": "53013",
+      "id": "123271B9AD60469BAE8A924841456B63",
       "name": "Return Material Receipt",
-      "primaryEntity": "returnReceipt",
+      "primaryEntity": "returnMaterialReceipt",
       "category": "sales",
-      "whereClause": "M_InOut.IsSOTrx='Y' AND M_InOut.MovementType='C+'",
-      "notes": "Physical receipt of goods returned by a customer. Uses M_InOut with MovementType='C+' (customer inbound return). Typically linked to a Return from Customer (M_RMA) authorization. The sales-side counterpart of Return to Vendor Shipment (V-)."
+      "layoutType": "default"
     },
     "entities": {
-      "returnReceipt": {
+      "returnMaterialReceipt": {
+        "tableName": "M_InOut",
+        "tabId": "30576C6ABD12419F9D19D497216FC9B8",
+        "tabName": "Header",
+        "uiPattern": "STD",
         "fields": [
           {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "label": "Document No.",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "movementDate",
+            "apiKey": "movementDate",
+            "column": "MovementDate",
+            "label": "Movement Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_AccountingDate"
+            }
+          },
+          {
             "name": "businessPartner",
+            "apiKey": "businessPartner",
             "column": "C_BPartner_ID",
+            "label": "Business Partner",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
@@ -24,11 +62,48 @@
             "grid": true,
             "form": true,
             "reference": "BusinessPartner",
-            "inputMode": "search"
+            "inputMode": "search",
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "text",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "other"
+          },
+          {
+            "name": "warehouse",
+            "apiKey": "warehouse",
+            "column": "M_Warehouse_ID",
+            "label": "Warehouse",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "reference": "Warehouse",
+            "inputMode": "search",
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_InOut_Warehouse"
+            }
           },
           {
             "name": "partnerAddress",
+            "apiKey": "partnerAddress",
             "column": "C_BPartner_Location_ID",
+            "label": "Partner Address",
             "type": "foreignKey",
             "tsType": "string",
             "visibility": "editable",
@@ -39,486 +114,1115 @@
             "inputMode": "dependent",
             "dependsOn": {
               "field": "businessPartner",
-              "filterKey": "businessPartnerId"
+              "filterKey": "C_BPartner_ID"
+            },
+            "section": "other"
+          },
+          {
+            "name": "documentStatus",
+            "apiKey": "documentStatus",
+            "column": "DocStatus",
+            "label": "Document Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "CL",
+                "name": "Closed"
+              },
+              {
+                "value": "CO",
+                "name": "Completed"
+              },
+              {
+                "value": "DR",
+                "name": "Draft"
+              },
+              {
+                "value": "NA",
+                "name": "Not Accepted"
+              },
+              {
+                "value": "WP",
+                "name": "Not Paid"
+              },
+              {
+                "value": "RE",
+                "name": "Re-Opened"
+              },
+              {
+                "value": "TEMP",
+                "name": "Temporal"
+              },
+              {
+                "value": "IP",
+                "name": "Under Way"
+              },
+              {
+                "value": "??",
+                "name": "Unknown"
+              },
+              {
+                "value": "VO",
+                "name": "Voided"
+              }
+            ]
+          },
+          {
+            "name": "salesOrder",
+            "apiKey": "salesOrder",
+            "column": "C_Order_ID",
+            "label": "RM order",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Order",
+            "inputMode": "search",
+            "section": "principal"
+          },
+          {
+            "name": "trackingNo",
+            "apiKey": "trackingNo",
+            "column": "TrackingNo",
+            "label": "Tracking No",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "other",
+            "displayLogic": {
+              "raw": "@DeliveryViaRule@='S'",
+              "evaluable": true
+            }
+          }
+        ],
+        "searchableFields": [
+          "documentNo",
+          "movementDate",
+          "businessPartner",
+          "documentStatus"
+        ],
+        "computedFields": [
+          {
+            "name": "documentNo",
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
             }
           },
           {
             "name": "movementDate",
-            "column": "MovementDate",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            }
           },
           {
-            "name": "dateAcct",
-            "column": "DateAcct",
-            "type": "date",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "warehouse",
-            "column": "M_Warehouse_ID",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "reference": "Warehouse",
-            "inputMode": "selector"
-          },
-          {
-            "name": "returnReason",
-            "column": "M_RMA_ID",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "reference": "ReturnMaterialAuthorization",
-            "inputMode": "search"
-          },
-          {
-            "name": "orderReference",
-            "column": "C_Order_ID",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "SalesOrder",
-            "inputMode": "search"
-          },
-          {
-            "name": "description",
-            "column": "Description",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "poReference",
-            "column": "POReference",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "isActive",
-            "column": "IsActive",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "documentNo",
-            "column": "DocumentNo",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "docStatus",
-            "column": "DocStatus",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true
+            "name": "documentStatus",
+            "derivation": {
+              "type": "computed",
+              "source": "DR"
+            }
           }
-        ],
-        "searchableFields": [
-          "businessPartner",
-          "movementDate",
-          "warehouse",
-          "returnReason",
-          "orderReference",
-          "poReference",
-          "documentNo",
-          "docStatus"
-        ],
-        "computedFields": []
+        ]
       },
-      "returnReceiptLine": {
+      "returnMaterialReceiptLine": {
+        "tableName": "M_InOutLine",
+        "tabId": "CF6D6C7B85EB473CB88E757E14D1D022",
+        "tabName": "Lines",
+        "uiPattern": "STD",
         "fields": [
           {
+            "name": "lineNo",
+            "apiKey": "lineNo",
+            "column": "Line",
+            "label": "Line No.",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
             "name": "product",
+            "apiKey": "product",
             "column": "M_Product_ID",
+            "label": "Product",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "editable",
-            "required": true,
+            "visibility": "readOnly",
+            "required": false,
             "grid": true,
             "form": true,
             "reference": "Product",
-            "inputMode": "search"
+            "inputMode": "search",
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_InOutLine_Product"
+            }
           },
           {
-            "name": "movementQty",
+            "name": "movementQuantity",
+            "apiKey": "movementQuantity",
             "column": "MovementQty",
-            "type": "number",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": true,
-            "grid": true,
-            "form": true
-          },
-          {
-            "name": "locator",
-            "column": "M_Locator_ID",
-            "type": "foreignKey",
+            "label": "Movement Quantity",
+            "type": "quantity",
             "tsType": "string",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true,
-            "reference": "Locator",
-            "inputMode": "selector"
+            "section": "principal"
           },
           {
-            "name": "lineNo",
-            "column": "Line",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "editable",
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "label": "UOM",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "reference": "UOM",
+            "inputMode": "search",
+            "section": "principal",
+            "readOnlyLogic": {
+              "raw": "@UomManagement@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "salesOrderLine",
+            "apiKey": "salesOrderLine",
+            "column": "C_OrderLine_ID",
+            "label": "Return from Customer line",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "OrderLine",
+            "inputMode": "search",
+            "section": "other"
           },
           {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "returnOrderLine",
-            "column": "C_OrderLine_ID",
-            "type": "foreignKey",
+            "label": "Description",
+            "type": "text",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
             "form": true,
-            "reference": "SalesOrderLine",
-            "inputMode": "dependent",
-            "dependsOn": {
-              "field": "returnReceipt.orderReference",
-              "filterKey": "cOrderId"
-            }
+            "section": "other"
           },
           {
-            "name": "rmaLine",
-            "column": "M_RMALine_ID",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ReturnMaterialAuthorizationLine",
-            "inputMode": "dependent",
-            "dependsOn": {
-              "field": "returnReceipt.returnReason",
-              "filterKey": "mRmaId"
-            }
-          },
-          {
-            "name": "uom",
-            "column": "C_UOM_ID",
-            "type": "foreignKey",
+            "name": "orderQuantity",
+            "apiKey": "orderQuantity",
+            "column": "QuantityOrder",
+            "label": "Order Quantity",
+            "type": "quantity",
             "tsType": "string",
             "visibility": "readOnly",
             "required": false,
             "grid": true,
             "form": true,
-            "reference": "UOM",
-            "inputMode": "selector"
+            "section": "other",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_Conversion"
+            },
+            "displayLogic": {
+              "raw": "@HASSECONDUOM@=1",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true
+            }
           }
         ],
         "searchableFields": [
           "product"
         ],
-        "computedFields": []
+        "computedFields": [
+          {
+            "name": "lineNo",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@"
+            }
+          },
+          {
+            "name": "movementQuantity",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          }
+        ]
       }
     }
   },
   "backendContract": {
     "window": {
-      "id": "53013",
+      "id": "123271B9AD60469BAE8A924841456B63",
       "name": "Return Material Receipt",
-      "primaryEntity": "returnReceipt",
-      "category": "sales",
-      "whereClause": "M_InOut.IsSOTrx='Y' AND M_InOut.MovementType='C+'",
-      "notes": "Physical receipt of goods returned by a customer. Uses M_InOut with MovementType='C+' (customer inbound return). Typically linked to a Return from Customer (M_RMA) authorization. The sales-side counterpart of Return to Vendor Shipment (V-)."
+      "primaryEntity": "returnMaterialReceipt",
+      "category": "sales"
     },
     "entities": {
-      "returnReceipt": {
+      "returnMaterialReceipt": {
+        "tableName": "M_InOut",
+        "tabId": "30576C6ABD12419F9D19D497216FC9B8",
+        "tabName": "Header",
         "fields": [
           {
-            "name": "businessPartner",
-            "column": "C_BPartner_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "partnerAddress",
-            "column": "C_BPartner_Location_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "movementDate",
-            "column": "MovementDate",
-            "type": "date",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "dateAcct",
-            "column": "DateAcct",
-            "type": "date",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "warehouse",
-            "column": "M_Warehouse_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "returnReason",
-            "column": "M_RMA_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
+            "name": "receiveMaterials",
+            "apiKey": "receiveMaterials",
+            "column": "RM_Receipt_PickEdit",
+            "type": "button",
+            "visibility": "discarded",
             "required": false
           },
           {
-            "name": "orderReference",
-            "column": "C_Order_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "description",
-            "column": "Description",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "poReference",
-            "column": "POReference",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "isActive",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "documentNo",
-            "column": "DocumentNo",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "docStatus",
-            "column": "DocStatus",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "adClientId",
-            "column": "AD_Client_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "adOrgId",
+            "name": "organization",
+            "apiKey": "organization",
             "column": "AD_Org_ID",
-            "type": "id",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "isSotrx",
-            "column": "IsSOTrx",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "movementType",
-            "column": "MovementType",
-            "type": "string",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "cDocTypeId",
+            "name": "documentType",
+            "apiKey": "documentType",
             "column": "C_DocType_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "mConditionGoodsID",
+            "apiKey": "mConditionGoodsID",
+            "column": "M_Condition_Goods_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "movementDate",
+            "apiKey": "movementDate",
+            "column": "MovementDate",
+            "type": "date",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "text",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "warehouse",
+            "apiKey": "warehouse",
+            "column": "M_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "partnerAddress",
+            "apiKey": "partnerAddress",
+            "column": "C_BPartner_Location_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "deliveryLocation",
+            "apiKey": "deliveryLocation",
+            "column": "Delivery_Location_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "documentStatus",
+            "apiKey": "documentStatus",
+            "column": "DocStatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "userContact",
+            "apiKey": "userContact",
+            "column": "AD_User_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "type": "date",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "salesOrder",
+            "apiKey": "salesOrder",
+            "column": "C_Order_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "orderReference",
+            "apiKey": "orderReference",
+            "column": "POReference",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "orderDate",
+            "apiKey": "orderDate",
+            "column": "DateOrdered",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "createLinesFrom",
+            "apiKey": "createLinesFrom",
+            "column": "CreateFrom",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "documentAction",
+            "apiKey": "documentAction",
+            "column": "DocAction",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "deliveryTerms",
+            "apiKey": "deliveryTerms",
+            "column": "DeliveryRule",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "deliveryMethod",
+            "apiKey": "deliveryMethod",
+            "column": "DeliveryViaRule",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "freightAmount",
+            "apiKey": "freightAmount",
+            "column": "FreightAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "freightCostRule",
+            "apiKey": "freightCostRule",
+            "column": "FreightCostRule",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "shippingCompany",
+            "apiKey": "shippingCompany",
+            "column": "M_Shipper_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "priority",
+            "apiKey": "priority",
+            "column": "PriorityRule",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "pickDate",
+            "apiKey": "pickDate",
+            "column": "PickDate",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "trackingNo",
+            "apiKey": "trackingNo",
+            "column": "TrackingNo",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "numberOfPackages",
+            "apiKey": "numberOfPackages",
+            "column": "NoPackages",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "movementType",
+            "apiKey": "movementType",
+            "column": "MovementType",
+            "type": "enum",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "charge",
+            "apiKey": "charge",
+            "column": "C_Charge_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "chargeAmount",
+            "apiKey": "chargeAmount",
+            "column": "ChargeAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "shipDate",
+            "apiKey": "shipDate",
+            "column": "ShipDate",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "freightCategory",
+            "apiKey": "freightCategory",
+            "column": "M_FreightCategory_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "calculateFreight",
+            "apiKey": "calculateFreight",
+            "column": "Calculate_Freight",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "freightCurrency",
+            "apiKey": "freightCurrency",
+            "column": "Freight_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "invoiceStatus",
+            "apiKey": "invoiceStatus",
+            "column": "InvoiceStatus",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "activity",
+            "apiKey": "activity",
+            "column": "C_Activity_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesCampaign",
+            "apiKey": "salesCampaign",
+            "column": "C_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "trxOrganization",
+            "apiKey": "trxOrganization",
+            "column": "AD_OrgTrx_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "sendMaterials",
+            "apiKey": "sendMaterials",
+            "column": "RM_Shipment_Pickedit",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
             "name": "processed",
+            "apiKey": "processed",
             "column": "Processed",
             "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "created",
-            "column": "Created",
-            "type": "datetime",
+            "name": "salesTransaction",
+            "apiKey": "salesTransaction",
+            "column": "IsSOTrx",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
+            "name": "datePrinted",
+            "apiKey": "datePrinted",
+            "column": "DatePrinted",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "print",
+            "apiKey": "print",
+            "column": "IsPrinted",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_InOut_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "generateTo",
+            "apiKey": "generateTo",
+            "column": "GenerateTo",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "updateLines",
+            "apiKey": "updateLines",
+            "column": "UpdateLines",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "logistic",
+            "apiKey": "logistic",
+            "column": "Islogistic",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "externalBusinessPartnerReference",
+            "apiKey": "externalBusinessPartnerReference",
+            "column": "Bpartner_Extref",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "invoicefromshipment",
+            "apiKey": "invoicefromshipment",
+            "column": "Invoicefromshipment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "completelyInvoiced",
+            "apiKey": "completelyInvoiced",
+            "column": "Iscompletelyinvoiced",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "isnettingshipment",
+            "apiKey": "isnettingshipment",
+            "column": "Isnettingshipment",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "processGoodsJava",
+            "apiKey": "processGoodsJava",
+            "column": "Process_Goods_Java",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
             "name": "updated",
+            "apiKey": "updated",
             "column": "Updated",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           }
         ]
       },
-      "returnReceiptLine": {
+      "returnMaterialReceiptLine": {
+        "tableName": "M_InOutLine",
+        "tabId": "CF6D6C7B85EB473CB88E757E14D1D022",
+        "tabName": "Lines",
         "fields": [
           {
-            "name": "product",
-            "column": "M_Product_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "movementQty",
-            "column": "MovementQty",
-            "type": "number",
-            "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "locator",
-            "column": "M_Locator_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": true
-          },
-          {
             "name": "lineNo",
+            "apiKey": "lineNo",
             "column": "Line",
             "type": "integer",
-            "visibility": "editable",
+            "visibility": "readOnly",
             "required": true
           },
           {
-            "name": "description",
-            "column": "Description",
-            "type": "string",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "returnOrderLine",
-            "column": "C_OrderLine_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "rmaLine",
-            "column": "M_RMALine_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
-            "required": false
-          },
-          {
-            "name": "uom",
-            "column": "C_UOM_ID",
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
             "type": "foreignKey",
             "visibility": "readOnly",
             "required": false
           },
           {
-            "name": "adClientId",
+            "name": "attributeSetValue",
+            "apiKey": "attributeSetValue",
+            "column": "M_AttributeSetInstance_ID",
+            "type": "productAttribute",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "mConditionGoodsID",
+            "apiKey": "mConditionGoodsID",
+            "column": "M_Condition_Goods_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "operativeQuantity",
+            "apiKey": "operativeQuantity",
+            "column": "Aumqty",
+            "type": "quantity",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "operativeUOM",
+            "apiKey": "operativeUOM",
+            "column": "C_Aum",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "movementQuantity",
+            "apiKey": "movementQuantity",
+            "column": "MovementQty",
+            "type": "quantity",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "storageBin",
+            "apiKey": "storageBin",
+            "column": "M_Locator_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesOrderLine",
+            "apiKey": "salesOrderLine",
+            "column": "C_OrderLine_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "text",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "orderUOM",
+            "apiKey": "orderUOM",
+            "column": "M_Product_Uom_Id",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "orderQuantity",
+            "apiKey": "orderQuantity",
+            "column": "QuantityOrder",
+            "type": "quantity",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "descriptionOnly",
+            "apiKey": "descriptionOnly",
+            "column": "IsDescription",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "reinvoice",
+            "apiKey": "reinvoice",
+            "column": "IsInvoiced",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
             "column": "AD_Client_ID",
-            "type": "id",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "adOrgId",
-            "column": "AD_Org_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "mInoutId",
+            "name": "shipmentReceipt",
+            "apiKey": "shipmentReceipt",
             "column": "M_InOut_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "movementDate",
-            "column": "MovementDate",
-            "type": "date",
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "cBpartnerId",
-            "column": "C_BPartner_ID",
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_InOutLine_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "bOMParentID",
+            "apiKey": "bOMParentID",
+            "column": "BOM_Parent_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "canceledInoutLine",
+            "apiKey": "canceledInoutLine",
+            "column": "Canceled_Inoutline_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_Bpartner_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "warehouse",
-            "column": "M_Warehouse_ID",
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "explode",
+            "apiKey": "explode",
+            "column": "Explode",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "managePrereservation",
+            "apiKey": "managePrereservation",
+            "column": "Manage_Prereservation",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "invoiceQuantity",
+            "apiKey": "invoiceQuantity",
+            "column": "Qtyinvoiced",
+            "type": "quantity",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -529,654 +1233,1602 @@
     "endpoints": [
       {
         "method": "GET",
-        "path": "/returnReceipt",
-        "entity": "returnReceipt",
+        "path": "/returnMaterialReceipt",
+        "entity": "returnMaterialReceipt",
         "supportedFilters": [
-          "businessPartner",
-          "movementDate",
-          "warehouse",
-          "returnReason",
-          "orderReference",
-          "poReference",
           "documentNo",
-          "docStatus"
+          "movementDate",
+          "businessPartner",
+          "documentStatus"
         ]
       },
       {
         "method": "GET",
-        "path": "/returnReceipt/:id",
-        "entity": "returnReceipt",
+        "path": "/returnMaterialReceipt/:id",
+        "entity": "returnMaterialReceipt",
         "supportedFilters": []
       },
       {
         "method": "POST",
-        "path": "/returnReceipt",
-        "entity": "returnReceipt",
+        "path": "/returnMaterialReceipt",
+        "entity": "returnMaterialReceipt",
         "supportedFilters": []
       },
       {
         "method": "PUT",
-        "path": "/returnReceipt/:id",
-        "entity": "returnReceipt",
+        "path": "/returnMaterialReceipt/:id",
+        "entity": "returnMaterialReceipt",
         "supportedFilters": []
       },
       {
         "method": "DELETE",
-        "path": "/returnReceipt/:id",
-        "entity": "returnReceipt",
+        "path": "/returnMaterialReceipt/:id",
+        "entity": "returnMaterialReceipt",
         "supportedFilters": []
       },
       {
         "method": "GET",
-        "path": "/returnReceiptLine",
-        "entity": "returnReceiptLine",
+        "path": "/returnMaterialReceiptLine",
+        "entity": "returnMaterialReceiptLine",
         "supportedFilters": [
           "product"
         ]
       },
       {
         "method": "GET",
-        "path": "/returnReceiptLine/:id",
-        "entity": "returnReceiptLine",
+        "path": "/returnMaterialReceiptLine/:id",
+        "entity": "returnMaterialReceiptLine",
         "supportedFilters": []
       },
       {
         "method": "POST",
-        "path": "/returnReceiptLine",
-        "entity": "returnReceiptLine",
+        "path": "/returnMaterialReceiptLine",
+        "entity": "returnMaterialReceiptLine",
         "supportedFilters": []
       },
       {
         "method": "PUT",
-        "path": "/returnReceiptLine/:id",
-        "entity": "returnReceiptLine",
+        "path": "/returnMaterialReceiptLine/:id",
+        "entity": "returnMaterialReceiptLine",
         "supportedFilters": []
       },
       {
         "method": "DELETE",
-        "path": "/returnReceiptLine/:id",
-        "entity": "returnReceiptLine",
+        "path": "/returnMaterialReceiptLine/:id",
+        "entity": "returnMaterialReceiptLine",
         "supportedFilters": []
       }
     ],
-    "processEndpoints": []
+    "processEndpoints": [
+      {
+        "name": "Process Receipt",
+        "method": "POST",
+        "path": "/returnMaterialReceipt/:id/action/documentAction",
+        "entity": "returnMaterialReceipt",
+        "columnName": "documentAction",
+        "params": [],
+        "preconditions": [],
+        "steps": 0
+      }
+    ]
+  },
+  "apiPrediction": {
+    "specName": "return-material-receipt",
+    "baseUrl": "/sws/neo/return-material-receipt",
+    "crud": {
+      "returnMaterialReceipt": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/return-material-receipt/returnMaterialReceipt",
+        "detailUrl": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}",
+        "supportedFilters": [
+          "documentNo",
+          "movementDate",
+          "businessPartner",
+          "documentStatus"
+        ]
+      },
+      "returnMaterialReceiptLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/return-material-receipt/returnMaterialReceiptLine",
+        "detailUrl": "/sws/neo/return-material-receipt/returnMaterialReceiptLine/{id}",
+        "supportedFilters": [
+          "product"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BusinessPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/businessPartner"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "warehouse",
+        "column": "M_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "search",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/warehouse"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "partnerAddress",
+        "column": "C_BPartner_Location_ID",
+        "reference": "BusinessPartnerLocation",
+        "inputMode": "dependent",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/partnerAddress"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "salesOrder",
+        "column": "C_Order_ID",
+        "reference": "Order",
+        "inputMode": "search",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/selectors/salesOrder"
+      },
+      {
+        "entity": "returnMaterialReceiptLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "search",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceiptLine/selectors/product"
+      },
+      {
+        "entity": "returnMaterialReceiptLine",
+        "field": "uOM",
+        "column": "C_UOM_ID",
+        "reference": "UOM",
+        "inputMode": "search",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceiptLine/selectors/uOM"
+      },
+      {
+        "entity": "returnMaterialReceiptLine",
+        "field": "salesOrderLine",
+        "column": "C_OrderLine_ID",
+        "reference": "OrderLine",
+        "inputMode": "search",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceiptLine/selectors/salesOrderLine"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "receiveMaterials",
+        "column": "RM_Receipt_PickEdit",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/receiveMaterials"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "createLinesFrom",
+        "column": "CreateFrom",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/createLinesFrom"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "documentAction",
+        "column": "DocAction",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/documentAction"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "column": "Posted",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/posted"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "calculateFreight",
+        "column": "Calculate_Freight",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/calculateFreight"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "sendMaterials",
+        "column": "RM_Shipment_Pickedit",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "generateTo",
+        "column": "GenerateTo",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/generateTo"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "updateLines",
+        "column": "UpdateLines",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/updateLines"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "invoicefromshipment",
+        "column": "Invoicefromshipment",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/invoicefromshipment"
+      },
+      {
+        "entity": "returnMaterialReceipt",
+        "field": "processGoodsJava",
+        "column": "Process_Goods_Java",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/processGoodsJava"
+      },
+      {
+        "entity": "returnMaterialReceiptLine",
+        "field": "explode",
+        "column": "Explode",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceiptLine/{id}/action/explode"
+      },
+      {
+        "entity": "returnMaterialReceiptLine",
+        "field": "managePrereservation",
+        "column": "Manage_Prereservation",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceiptLine/{id}/action/managePrereservation"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=return-material-receiptDate"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    }
   },
   "testManifest": {
     "tests": [
       {
         "id": "t-1",
         "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "businessPartner",
+        "entity": "returnMaterialReceipt",
+        "field": "documentNo",
         "runner": "node",
-        "description": "Field 'businessPartner' should be present in returnReceipt"
+        "description": "Field 'documentNo' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-2",
         "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "partnerAddress",
+        "entity": "returnMaterialReceipt",
+        "field": "movementDate",
         "runner": "node",
-        "description": "Field 'partnerAddress' should be present in returnReceipt"
+        "description": "Field 'movementDate' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-3",
         "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "movementDate",
+        "entity": "returnMaterialReceipt",
+        "field": "businessPartner",
         "runner": "node",
-        "description": "Field 'movementDate' should be present in returnReceipt"
+        "description": "Field 'businessPartner' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-4",
         "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "dateAcct",
+        "entity": "returnMaterialReceipt",
+        "field": "description",
         "runner": "node",
-        "description": "Field 'dateAcct' should be present in returnReceipt"
+        "description": "Field 'description' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-5",
         "category": "field-presence",
-        "entity": "returnReceipt",
+        "entity": "returnMaterialReceipt",
         "field": "warehouse",
         "runner": "node",
-        "description": "Field 'warehouse' should be present in returnReceipt"
+        "description": "Field 'warehouse' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-6",
         "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "returnReason",
+        "entity": "returnMaterialReceipt",
+        "field": "partnerAddress",
         "runner": "node",
-        "description": "Field 'returnReason' should be present in returnReceipt"
+        "description": "Field 'partnerAddress' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-7",
         "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "orderReference",
+        "entity": "returnMaterialReceipt",
+        "field": "documentStatus",
         "runner": "node",
-        "description": "Field 'orderReference' should be present in returnReceipt"
+        "description": "Field 'documentStatus' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-8",
         "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "description",
+        "entity": "returnMaterialReceipt",
+        "field": "salesOrder",
         "runner": "node",
-        "description": "Field 'description' should be present in returnReceipt"
+        "description": "Field 'salesOrder' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-9",
         "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "poReference",
+        "entity": "returnMaterialReceipt",
+        "field": "trackingNo",
         "runner": "node",
-        "description": "Field 'poReference' should be present in returnReceipt"
+        "description": "Field 'trackingNo' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-10",
-        "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "isActive",
+        "category": "field-type",
+        "entity": "returnMaterialReceipt",
+        "field": "documentNo",
         "runner": "node",
-        "description": "Field 'isActive' should be present in returnReceipt"
+        "description": "Field 'documentNo' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-11",
-        "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "documentNo",
+        "category": "field-type",
+        "entity": "returnMaterialReceipt",
+        "field": "movementDate",
         "runner": "node",
-        "description": "Field 'documentNo' should be present in returnReceipt"
+        "description": "Field 'movementDate' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-12",
-        "category": "field-presence",
-        "entity": "returnReceipt",
-        "field": "docStatus",
+        "category": "field-type",
+        "entity": "returnMaterialReceipt",
+        "field": "businessPartner",
         "runner": "node",
-        "description": "Field 'docStatus' should be present in returnReceipt"
+        "description": "Field 'businessPartner' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-13",
         "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "businessPartner",
+        "entity": "returnMaterialReceipt",
+        "field": "description",
         "runner": "node",
-        "description": "Field 'businessPartner' should have type 'string' in returnReceipt"
+        "description": "Field 'description' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-14",
         "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "partnerAddress",
+        "entity": "returnMaterialReceipt",
+        "field": "warehouse",
         "runner": "node",
-        "description": "Field 'partnerAddress' should have type 'string' in returnReceipt"
+        "description": "Field 'warehouse' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-15",
         "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "movementDate",
+        "entity": "returnMaterialReceipt",
+        "field": "partnerAddress",
         "runner": "node",
-        "description": "Field 'movementDate' should have type 'string' in returnReceipt"
+        "description": "Field 'partnerAddress' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-16",
         "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "dateAcct",
+        "entity": "returnMaterialReceipt",
+        "field": "documentStatus",
         "runner": "node",
-        "description": "Field 'dateAcct' should have type 'string' in returnReceipt"
+        "description": "Field 'documentStatus' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-17",
         "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "warehouse",
+        "entity": "returnMaterialReceipt",
+        "field": "salesOrder",
         "runner": "node",
-        "description": "Field 'warehouse' should have type 'string' in returnReceipt"
+        "description": "Field 'salesOrder' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-18",
         "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "returnReason",
+        "entity": "returnMaterialReceipt",
+        "field": "trackingNo",
         "runner": "node",
-        "description": "Field 'returnReason' should have type 'string' in returnReceipt"
+        "description": "Field 'trackingNo' should have type 'string' in returnMaterialReceipt"
       },
       {
         "id": "t-19",
-        "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "orderReference",
+        "category": "searchable-filters",
+        "entity": "returnMaterialReceipt",
+        "field": "documentNo",
         "runner": "node",
-        "description": "Field 'orderReference' should have type 'string' in returnReceipt"
+        "description": "Field 'documentNo' should be a supported filter for returnMaterialReceipt"
       },
       {
         "id": "t-20",
-        "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "description",
+        "category": "searchable-filters",
+        "entity": "returnMaterialReceipt",
+        "field": "movementDate",
         "runner": "node",
-        "description": "Field 'description' should have type 'string' in returnReceipt"
+        "description": "Field 'movementDate' should be a supported filter for returnMaterialReceipt"
       },
       {
         "id": "t-21",
-        "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "poReference",
+        "category": "searchable-filters",
+        "entity": "returnMaterialReceipt",
+        "field": "businessPartner",
         "runner": "node",
-        "description": "Field 'poReference' should have type 'string' in returnReceipt"
+        "description": "Field 'businessPartner' should be a supported filter for returnMaterialReceipt"
       },
       {
         "id": "t-22",
-        "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "isActive",
+        "category": "searchable-filters",
+        "entity": "returnMaterialReceipt",
+        "field": "documentStatus",
         "runner": "node",
-        "description": "Field 'isActive' should have type 'boolean' in returnReceipt"
+        "description": "Field 'documentStatus' should be a supported filter for returnMaterialReceipt"
       },
       {
         "id": "t-23",
-        "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "documentNo",
+        "category": "visibility",
+        "entity": "returnMaterialReceipt",
         "runner": "node",
-        "description": "Field 'documentNo' should have type 'string' in returnReceipt"
+        "description": "Entity 'returnMaterialReceipt' should only expose visible fields in frontend"
       },
       {
         "id": "t-24",
-        "category": "field-type",
-        "entity": "returnReceipt",
-        "field": "docStatus",
+        "category": "displaylogic-valid",
+        "entity": "returnMaterialReceipt",
+        "field": "trackingNo",
         "runner": "node",
-        "description": "Field 'docStatus' should have type 'string' in returnReceipt"
+        "description": "Display logic for 'trackingNo' in returnMaterialReceipt should be valid JS"
       },
       {
         "id": "t-25",
-        "category": "searchable-filters",
-        "entity": "returnReceipt",
-        "field": "businessPartner",
+        "category": "readonlylogic-valid",
+        "entity": "returnMaterialReceipt",
+        "field": "documentNo",
         "runner": "node",
-        "description": "Field 'businessPartner' should be a supported filter for returnReceipt"
+        "description": "Read-only logic for 'documentNo' in returnMaterialReceipt should be valid JS"
       },
       {
         "id": "t-26",
-        "category": "searchable-filters",
-        "entity": "returnReceipt",
-        "field": "movementDate",
+        "category": "displaylogic-evaluable",
+        "entity": "returnMaterialReceipt",
+        "field": "trackingNo",
         "runner": "node",
-        "description": "Field 'movementDate' should be a supported filter for returnReceipt"
+        "description": "Display logic for 'trackingNo' in returnMaterialReceipt should have evaluable flag"
       },
       {
         "id": "t-27",
-        "category": "searchable-filters",
-        "entity": "returnReceipt",
-        "field": "warehouse",
+        "category": "readonlylogic-evaluable",
+        "entity": "returnMaterialReceipt",
+        "field": "documentNo",
         "runner": "node",
-        "description": "Field 'warehouse' should be a supported filter for returnReceipt"
+        "description": "Read-only logic for 'documentNo' in returnMaterialReceipt should have evaluable flag"
       },
       {
         "id": "t-28",
-        "category": "searchable-filters",
-        "entity": "returnReceipt",
-        "field": "returnReason",
+        "category": "field-presence",
+        "entity": "returnMaterialReceiptLine",
+        "field": "lineNo",
         "runner": "node",
-        "description": "Field 'returnReason' should be a supported filter for returnReceipt"
+        "description": "Field 'lineNo' should be present in returnMaterialReceiptLine"
       },
       {
         "id": "t-29",
-        "category": "searchable-filters",
-        "entity": "returnReceipt",
-        "field": "orderReference",
+        "category": "field-presence",
+        "entity": "returnMaterialReceiptLine",
+        "field": "product",
         "runner": "node",
-        "description": "Field 'orderReference' should be a supported filter for returnReceipt"
+        "description": "Field 'product' should be present in returnMaterialReceiptLine"
       },
       {
         "id": "t-30",
-        "category": "searchable-filters",
-        "entity": "returnReceipt",
-        "field": "poReference",
+        "category": "field-presence",
+        "entity": "returnMaterialReceiptLine",
+        "field": "movementQuantity",
         "runner": "node",
-        "description": "Field 'poReference' should be a supported filter for returnReceipt"
+        "description": "Field 'movementQuantity' should be present in returnMaterialReceiptLine"
       },
       {
         "id": "t-31",
-        "category": "searchable-filters",
-        "entity": "returnReceipt",
-        "field": "documentNo",
+        "category": "field-presence",
+        "entity": "returnMaterialReceiptLine",
+        "field": "uOM",
         "runner": "node",
-        "description": "Field 'documentNo' should be a supported filter for returnReceipt"
+        "description": "Field 'uOM' should be present in returnMaterialReceiptLine"
       },
       {
         "id": "t-32",
-        "category": "searchable-filters",
-        "entity": "returnReceipt",
-        "field": "docStatus",
+        "category": "field-presence",
+        "entity": "returnMaterialReceiptLine",
+        "field": "salesOrderLine",
         "runner": "node",
-        "description": "Field 'docStatus' should be a supported filter for returnReceipt"
+        "description": "Field 'salesOrderLine' should be present in returnMaterialReceiptLine"
       },
       {
         "id": "t-33",
-        "category": "visibility",
-        "entity": "returnReceipt",
+        "category": "field-presence",
+        "entity": "returnMaterialReceiptLine",
+        "field": "description",
         "runner": "node",
-        "description": "Entity 'returnReceipt' should only expose visible fields in frontend"
+        "description": "Field 'description' should be present in returnMaterialReceiptLine"
       },
       {
         "id": "t-34",
         "category": "field-presence",
-        "entity": "returnReceiptLine",
-        "field": "product",
+        "entity": "returnMaterialReceiptLine",
+        "field": "orderQuantity",
         "runner": "node",
-        "description": "Field 'product' should be present in returnReceiptLine"
+        "description": "Field 'orderQuantity' should be present in returnMaterialReceiptLine"
       },
       {
         "id": "t-35",
-        "category": "field-presence",
-        "entity": "returnReceiptLine",
-        "field": "movementQty",
+        "category": "field-type",
+        "entity": "returnMaterialReceiptLine",
+        "field": "lineNo",
         "runner": "node",
-        "description": "Field 'movementQty' should be present in returnReceiptLine"
+        "description": "Field 'lineNo' should have type 'number' in returnMaterialReceiptLine"
       },
       {
         "id": "t-36",
-        "category": "field-presence",
-        "entity": "returnReceiptLine",
-        "field": "locator",
+        "category": "field-type",
+        "entity": "returnMaterialReceiptLine",
+        "field": "product",
         "runner": "node",
-        "description": "Field 'locator' should be present in returnReceiptLine"
+        "description": "Field 'product' should have type 'string' in returnMaterialReceiptLine"
       },
       {
         "id": "t-37",
-        "category": "field-presence",
-        "entity": "returnReceiptLine",
-        "field": "lineNo",
+        "category": "field-type",
+        "entity": "returnMaterialReceiptLine",
+        "field": "movementQuantity",
         "runner": "node",
-        "description": "Field 'lineNo' should be present in returnReceiptLine"
+        "description": "Field 'movementQuantity' should have type 'string' in returnMaterialReceiptLine"
       },
       {
         "id": "t-38",
-        "category": "field-presence",
-        "entity": "returnReceiptLine",
-        "field": "description",
+        "category": "field-type",
+        "entity": "returnMaterialReceiptLine",
+        "field": "uOM",
         "runner": "node",
-        "description": "Field 'description' should be present in returnReceiptLine"
+        "description": "Field 'uOM' should have type 'string' in returnMaterialReceiptLine"
       },
       {
         "id": "t-39",
-        "category": "field-presence",
-        "entity": "returnReceiptLine",
-        "field": "returnOrderLine",
+        "category": "field-type",
+        "entity": "returnMaterialReceiptLine",
+        "field": "salesOrderLine",
         "runner": "node",
-        "description": "Field 'returnOrderLine' should be present in returnReceiptLine"
+        "description": "Field 'salesOrderLine' should have type 'string' in returnMaterialReceiptLine"
       },
       {
         "id": "t-40",
-        "category": "field-presence",
-        "entity": "returnReceiptLine",
-        "field": "rmaLine",
+        "category": "field-type",
+        "entity": "returnMaterialReceiptLine",
+        "field": "description",
         "runner": "node",
-        "description": "Field 'rmaLine' should be present in returnReceiptLine"
+        "description": "Field 'description' should have type 'string' in returnMaterialReceiptLine"
       },
       {
         "id": "t-41",
-        "category": "field-presence",
-        "entity": "returnReceiptLine",
-        "field": "uom",
+        "category": "field-type",
+        "entity": "returnMaterialReceiptLine",
+        "field": "orderQuantity",
         "runner": "node",
-        "description": "Field 'uom' should be present in returnReceiptLine"
+        "description": "Field 'orderQuantity' should have type 'string' in returnMaterialReceiptLine"
       },
       {
         "id": "t-42",
-        "category": "field-type",
-        "entity": "returnReceiptLine",
+        "category": "searchable-filters",
+        "entity": "returnMaterialReceiptLine",
         "field": "product",
         "runner": "node",
-        "description": "Field 'product' should have type 'string' in returnReceiptLine"
+        "description": "Field 'product' should be a supported filter for returnMaterialReceiptLine"
       },
       {
         "id": "t-43",
-        "category": "field-type",
-        "entity": "returnReceiptLine",
-        "field": "movementQty",
+        "category": "visibility",
+        "entity": "returnMaterialReceiptLine",
         "runner": "node",
-        "description": "Field 'movementQty' should have type 'number' in returnReceiptLine"
+        "description": "Entity 'returnMaterialReceiptLine' should only expose visible fields in frontend"
       },
       {
         "id": "t-44",
-        "category": "field-type",
-        "entity": "returnReceiptLine",
-        "field": "locator",
+        "category": "displaylogic-valid",
+        "entity": "returnMaterialReceiptLine",
+        "field": "orderQuantity",
         "runner": "node",
-        "description": "Field 'locator' should have type 'string' in returnReceiptLine"
+        "description": "Display logic for 'orderQuantity' in returnMaterialReceiptLine should be valid JS"
       },
       {
         "id": "t-45",
-        "category": "field-type",
-        "entity": "returnReceiptLine",
+        "category": "readonlylogic-valid",
+        "entity": "returnMaterialReceiptLine",
         "field": "lineNo",
         "runner": "node",
-        "description": "Field 'lineNo' should have type 'number' in returnReceiptLine"
+        "description": "Read-only logic for 'lineNo' in returnMaterialReceiptLine should be valid JS"
       },
       {
         "id": "t-46",
-        "category": "field-type",
-        "entity": "returnReceiptLine",
-        "field": "description",
+        "category": "readonlylogic-valid",
+        "entity": "returnMaterialReceiptLine",
+        "field": "uOM",
         "runner": "node",
-        "description": "Field 'description' should have type 'string' in returnReceiptLine"
+        "description": "Read-only logic for 'uOM' in returnMaterialReceiptLine should be valid JS"
       },
       {
         "id": "t-47",
-        "category": "field-type",
-        "entity": "returnReceiptLine",
-        "field": "returnOrderLine",
+        "category": "readonlylogic-valid",
+        "entity": "returnMaterialReceiptLine",
+        "field": "orderQuantity",
         "runner": "node",
-        "description": "Field 'returnOrderLine' should have type 'string' in returnReceiptLine"
+        "description": "Read-only logic for 'orderQuantity' in returnMaterialReceiptLine should be valid JS"
       },
       {
         "id": "t-48",
-        "category": "field-type",
-        "entity": "returnReceiptLine",
-        "field": "rmaLine",
+        "category": "displaylogic-evaluable",
+        "entity": "returnMaterialReceiptLine",
+        "field": "orderQuantity",
         "runner": "node",
-        "description": "Field 'rmaLine' should have type 'string' in returnReceiptLine"
+        "description": "Display logic for 'orderQuantity' in returnMaterialReceiptLine should have evaluable flag"
       },
       {
         "id": "t-49",
-        "category": "field-type",
-        "entity": "returnReceiptLine",
-        "field": "uom",
+        "category": "readonlylogic-evaluable",
+        "entity": "returnMaterialReceiptLine",
+        "field": "lineNo",
         "runner": "node",
-        "description": "Field 'uom' should have type 'string' in returnReceiptLine"
+        "description": "Read-only logic for 'lineNo' in returnMaterialReceiptLine should have evaluable flag"
       },
       {
         "id": "t-50",
-        "category": "searchable-filters",
-        "entity": "returnReceiptLine",
-        "field": "product",
+        "category": "readonlylogic-evaluable",
+        "entity": "returnMaterialReceiptLine",
+        "field": "uOM",
         "runner": "node",
-        "description": "Field 'product' should be a supported filter for returnReceiptLine"
+        "description": "Read-only logic for 'uOM' in returnMaterialReceiptLine should have evaluable flag"
       },
       {
         "id": "t-51",
-        "category": "visibility",
-        "entity": "returnReceiptLine",
+        "category": "readonlylogic-evaluable",
+        "entity": "returnMaterialReceiptLine",
+        "field": "orderQuantity",
         "runner": "node",
-        "description": "Entity 'returnReceiptLine' should only expose visible fields in frontend"
+        "description": "Read-only logic for 'orderQuantity' in returnMaterialReceiptLine should have evaluable flag"
       },
       {
         "id": "t-52",
         "category": "system-field",
-        "entity": "returnReceipt",
-        "field": "adClientId",
+        "entity": "returnMaterialReceipt",
+        "field": "receiveMaterials",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for returnReceipt"
+        "description": "System field 'receiveMaterials' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-53",
         "category": "system-field",
-        "entity": "returnReceipt",
-        "field": "adOrgId",
+        "entity": "returnMaterialReceipt",
+        "field": "organization",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for returnReceipt"
+        "description": "System field 'organization' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-54",
         "category": "system-field",
-        "entity": "returnReceipt",
-        "field": "isSotrx",
+        "entity": "returnMaterialReceipt",
+        "field": "documentType",
         "runner": "node",
-        "description": "System field 'isSotrx' should exist in backend but not frontend for returnReceipt"
+        "description": "System field 'documentType' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-55",
         "category": "system-field",
-        "entity": "returnReceipt",
-        "field": "movementType",
+        "entity": "returnMaterialReceipt",
+        "field": "mConditionGoodsID",
         "runner": "node",
-        "description": "System field 'movementType' should exist in backend but not frontend for returnReceipt"
+        "description": "System field 'mConditionGoodsID' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-56",
         "category": "system-field",
-        "entity": "returnReceipt",
-        "field": "cDocTypeId",
+        "entity": "returnMaterialReceipt",
+        "field": "deliveryLocation",
         "runner": "node",
-        "description": "System field 'cDocTypeId' should exist in backend but not frontend for returnReceipt"
+        "description": "System field 'deliveryLocation' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-57",
         "category": "system-field",
-        "entity": "returnReceipt",
-        "field": "processed",
+        "entity": "returnMaterialReceipt",
+        "field": "userContact",
         "runner": "node",
-        "description": "System field 'processed' should exist in backend but not frontend for returnReceipt"
+        "description": "System field 'userContact' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-58",
         "category": "system-field",
-        "entity": "returnReceipt",
-        "field": "created",
+        "entity": "returnMaterialReceipt",
+        "field": "accountingDate",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for returnReceipt"
+        "description": "System field 'accountingDate' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-59",
         "category": "system-field",
-        "entity": "returnReceipt",
-        "field": "updated",
+        "entity": "returnMaterialReceipt",
+        "field": "orderReference",
         "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for returnReceipt"
+        "description": "System field 'orderReference' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-60",
         "category": "system-field",
-        "entity": "returnReceiptLine",
-        "field": "adClientId",
+        "entity": "returnMaterialReceipt",
+        "field": "orderDate",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for returnReceiptLine"
+        "description": "System field 'orderDate' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-61",
         "category": "system-field",
-        "entity": "returnReceiptLine",
-        "field": "adOrgId",
+        "entity": "returnMaterialReceipt",
+        "field": "salesRepresentative",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for returnReceiptLine"
+        "description": "System field 'salesRepresentative' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-62",
         "category": "system-field",
-        "entity": "returnReceiptLine",
-        "field": "mInoutId",
+        "entity": "returnMaterialReceipt",
+        "field": "createLinesFrom",
         "runner": "node",
-        "description": "System field 'mInoutId' should exist in backend but not frontend for returnReceiptLine"
+        "description": "System field 'createLinesFrom' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-63",
         "category": "system-field",
-        "entity": "returnReceiptLine",
-        "field": "movementDate",
+        "entity": "returnMaterialReceipt",
+        "field": "documentAction",
         "runner": "node",
-        "description": "System field 'movementDate' should exist in backend but not frontend for returnReceiptLine"
+        "description": "System field 'documentAction' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-64",
         "category": "system-field",
-        "entity": "returnReceiptLine",
-        "field": "cBpartnerId",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
         "runner": "node",
-        "description": "System field 'cBpartnerId' should exist in backend but not frontend for returnReceiptLine"
+        "description": "System field 'posted' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-65",
         "category": "system-field",
-        "entity": "returnReceiptLine",
-        "field": "warehouse",
+        "entity": "returnMaterialReceipt",
+        "field": "deliveryTerms",
         "runner": "node",
-        "description": "System field 'warehouse' should exist in backend but not frontend for returnReceiptLine"
+        "description": "System field 'deliveryTerms' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-66",
-        "category": "rule-declared",
-        "rule": "BP_AutoFill_Address",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "deliveryMethod",
         "runner": "node",
-        "description": "Rule 'BP_AutoFill_Address' (callout) should be declared"
+        "description": "System field 'deliveryMethod' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-67",
-        "category": "rule-declared",
-        "rule": "RMA_AutoFill_Header",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "freightAmount",
         "runner": "node",
-        "description": "Rule 'RMA_AutoFill_Header' (callout) should be declared"
+        "description": "System field 'freightAmount' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-68",
-        "category": "rule-declared",
-        "rule": "Product_AutoFill_UOM",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "freightCostRule",
         "runner": "node",
-        "description": "Rule 'Product_AutoFill_UOM' (callout) should be declared"
+        "description": "System field 'freightCostRule' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-69",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "shippingCompany",
+        "runner": "node",
+        "description": "System field 'shippingCompany' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-70",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "priority",
+        "runner": "node",
+        "description": "System field 'priority' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-71",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "pickDate",
+        "runner": "node",
+        "description": "System field 'pickDate' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-72",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "numberOfPackages",
+        "runner": "node",
+        "description": "System field 'numberOfPackages' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-73",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "movementType",
+        "runner": "node",
+        "description": "System field 'movementType' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-74",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "charge",
+        "runner": "node",
+        "description": "System field 'charge' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-75",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "chargeAmount",
+        "runner": "node",
+        "description": "System field 'chargeAmount' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-76",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "shipDate",
+        "runner": "node",
+        "description": "System field 'shipDate' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-77",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "freightCategory",
+        "runner": "node",
+        "description": "System field 'freightCategory' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-78",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "calculateFreight",
+        "runner": "node",
+        "description": "System field 'calculateFreight' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-79",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "freightCurrency",
+        "runner": "node",
+        "description": "System field 'freightCurrency' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-80",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "invoiceStatus",
+        "runner": "node",
+        "description": "System field 'invoiceStatus' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-81",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "activity",
+        "runner": "node",
+        "description": "System field 'activity' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-82",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "salesCampaign",
+        "runner": "node",
+        "description": "System field 'salesCampaign' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-83",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "trxOrganization",
+        "runner": "node",
+        "description": "System field 'trxOrganization' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-84",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-85",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "System field 'costcenter' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-86",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "System field 'stDimension' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-87",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "System field 'ndDimension' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-88",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "sendMaterials",
+        "runner": "node",
+        "description": "System field 'sendMaterials' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-89",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "processed",
+        "runner": "node",
+        "description": "System field 'processed' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-90",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "salesTransaction",
+        "runner": "node",
+        "description": "System field 'salesTransaction' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-91",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "datePrinted",
+        "runner": "node",
+        "description": "System field 'datePrinted' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-92",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "invoice",
+        "runner": "node",
+        "description": "System field 'invoice' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-93",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "print",
+        "runner": "node",
+        "description": "System field 'print' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-94",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-95",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-96",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-97",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "generateTo",
+        "runner": "node",
+        "description": "System field 'generateTo' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-98",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "updateLines",
+        "runner": "node",
+        "description": "System field 'updateLines' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-99",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "logistic",
+        "runner": "node",
+        "description": "System field 'logistic' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-100",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-101",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "asset",
+        "runner": "node",
+        "description": "System field 'asset' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-102",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "externalBusinessPartnerReference",
+        "runner": "node",
+        "description": "System field 'externalBusinessPartnerReference' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-103",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-104",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-105",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "invoicefromshipment",
+        "runner": "node",
+        "description": "System field 'invoicefromshipment' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-106",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "completelyInvoiced",
+        "runner": "node",
+        "description": "System field 'completelyInvoiced' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-107",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "isnettingshipment",
+        "runner": "node",
+        "description": "System field 'isnettingshipment' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-108",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "processGoodsJava",
+        "runner": "node",
+        "description": "System field 'processGoodsJava' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-109",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-110",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
+        "id": "t-111",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "attributeSetValue",
+        "runner": "node",
+        "description": "System field 'attributeSetValue' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-112",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "mConditionGoodsID",
+        "runner": "node",
+        "description": "System field 'mConditionGoodsID' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-113",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "operativeQuantity",
+        "runner": "node",
+        "description": "System field 'operativeQuantity' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-114",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "operativeUOM",
+        "runner": "node",
+        "description": "System field 'operativeUOM' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-115",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "storageBin",
+        "runner": "node",
+        "description": "System field 'storageBin' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-116",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "orderUOM",
+        "runner": "node",
+        "description": "System field 'orderUOM' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-117",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "descriptionOnly",
+        "runner": "node",
+        "description": "System field 'descriptionOnly' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-118",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-119",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "costcenter",
+        "runner": "node",
+        "description": "System field 'costcenter' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-120",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "System field 'stDimension' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-121",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "System field 'ndDimension' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-122",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "reinvoice",
+        "runner": "node",
+        "description": "System field 'reinvoice' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-123",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-124",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "shipmentReceipt",
+        "runner": "node",
+        "description": "System field 'shipmentReceipt' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-125",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-126",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-127",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-128",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "asset",
+        "runner": "node",
+        "description": "System field 'asset' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-129",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "bOMParentID",
+        "runner": "node",
+        "description": "System field 'bOMParentID' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-130",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "canceledInoutLine",
+        "runner": "node",
+        "description": "System field 'canceledInoutLine' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-131",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "System field 'businessPartner' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-132",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-133",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-134",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "explode",
+        "runner": "node",
+        "description": "System field 'explode' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-135",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "managePrereservation",
+        "runner": "node",
+        "description": "System field 'managePrereservation' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-136",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "invoiceQuantity",
+        "runner": "node",
+        "description": "System field 'invoiceQuantity' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-137",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-138",
+        "category": "system-field",
+        "entity": "returnMaterialReceiptLine",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for returnMaterialReceiptLine"
+      },
+      {
+        "id": "t-139",
         "category": "rule-declared",
         "rule": "ReadOnly_When_Processed",
         "runner": "node",
         "description": "Rule 'ReadOnly_When_Processed' (displayLogic) should be declared"
       },
       {
-        "id": "t-70",
+        "id": "t-140",
         "category": "rule-declared",
-        "rule": "Validate_Qty_Positive",
+        "rule": "RMA_AutoFill_Lines",
         "runner": "node",
-        "description": "Rule 'Validate_Qty_Positive' (eventHandler) should be declared"
+        "description": "Rule 'RMA_AutoFill_Lines' (callout) should be declared"
       },
       {
-        "id": "t-71",
+        "id": "t-141",
         "category": "rule-declared",
-        "rule": "Validate_Locator_Available",
+        "rule": "BP_AutoFill_Address",
         "runner": "node",
-        "description": "Rule 'Validate_Locator_Available' (eventHandler) should be declared"
+        "description": "Rule 'BP_AutoFill_Address' (callout) should be declared"
+      },
+      {
+        "id": "t-142",
+        "category": "rule-declared",
+        "rule": "Product_AutoFill_UOM",
+        "runner": "node",
+        "description": "Rule 'Product_AutoFill_UOM' (callout) should be declared"
+      },
+      {
+        "id": "t-143",
+        "category": "process-happy",
+        "process": "Process Receipt",
+        "entity": "returnMaterialReceipt",
+        "runner": "junit",
+        "description": "Process 'Process Receipt' should complete successfully with valid preconditions"
+      },
+      {
+        "id": "t-144",
+        "category": "process-failure",
+        "process": "Process Receipt",
+        "entity": "returnMaterialReceipt",
+        "runner": "junit",
+        "description": "Process 'Process Receipt' should fail when preconditions are not met"
+      },
+      {
+        "id": "t-145",
+        "category": "crud-flags",
+        "entity": "returnMaterialReceipt",
+        "runner": "node",
+        "description": "CRUD flags for 'returnMaterialReceipt' should all be booleans"
+      },
+      {
+        "id": "t-146",
+        "category": "crud-flags",
+        "entity": "returnMaterialReceiptLine",
+        "runner": "node",
+        "description": "CRUD flags for 'returnMaterialReceiptLine' should all be booleans"
+      },
+      {
+        "id": "t-147",
+        "category": "selector-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Selector endpoint for 'businessPartner' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-148",
+        "category": "selector-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "warehouse",
+        "runner": "node",
+        "description": "Selector endpoint for 'warehouse' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-149",
+        "category": "selector-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "partnerAddress",
+        "runner": "node",
+        "description": "Selector endpoint for 'partnerAddress' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-150",
+        "category": "selector-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "salesOrder",
+        "runner": "node",
+        "description": "Selector endpoint for 'salesOrder' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-151",
+        "category": "selector-endpoint",
+        "entity": "returnMaterialReceiptLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in returnMaterialReceiptLine should exist"
+      },
+      {
+        "id": "t-152",
+        "category": "selector-endpoint",
+        "entity": "returnMaterialReceiptLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "Selector endpoint for 'uOM' in returnMaterialReceiptLine should exist"
+      },
+      {
+        "id": "t-153",
+        "category": "selector-endpoint",
+        "entity": "returnMaterialReceiptLine",
+        "field": "salesOrderLine",
+        "runner": "node",
+        "description": "Selector endpoint for 'salesOrderLine' in returnMaterialReceiptLine should exist"
+      },
+      {
+        "id": "t-154",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "receiveMaterials",
+        "runner": "node",
+        "description": "Action endpoint for 'receiveMaterials' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-155",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "createLinesFrom",
+        "runner": "node",
+        "description": "Action endpoint for 'createLinesFrom' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-156",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "documentAction",
+        "runner": "node",
+        "description": "Action endpoint for 'documentAction' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-157",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "posted",
+        "runner": "node",
+        "description": "Action endpoint for 'posted' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-158",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "calculateFreight",
+        "runner": "node",
+        "description": "Action endpoint for 'calculateFreight' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-159",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "sendMaterials",
+        "runner": "node",
+        "description": "Action endpoint for 'sendMaterials' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-160",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "generateTo",
+        "runner": "node",
+        "description": "Action endpoint for 'generateTo' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-161",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "updateLines",
+        "runner": "node",
+        "description": "Action endpoint for 'updateLines' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-162",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "invoicefromshipment",
+        "runner": "node",
+        "description": "Action endpoint for 'invoicefromshipment' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-163",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceipt",
+        "field": "processGoodsJava",
+        "runner": "node",
+        "description": "Action endpoint for 'processGoodsJava' in returnMaterialReceipt should exist"
+      },
+      {
+        "id": "t-164",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceiptLine",
+        "field": "explode",
+        "runner": "node",
+        "description": "Action endpoint for 'explode' in returnMaterialReceiptLine should exist"
+      },
+      {
+        "id": "t-165",
+        "category": "action-endpoint",
+        "entity": "returnMaterialReceiptLine",
+        "field": "managePrereservation",
+        "runner": "node",
+        "description": "Action endpoint for 'managePrereservation' in returnMaterialReceiptLine should exist"
       }
     ],
     "summary": {
-      "total": 71,
+      "total": 165,
       "byCategory": {
-        "field-presence": 20,
-        "field-type": 20,
-        "searchable-filters": 9,
+        "field-presence": 16,
+        "field-type": 16,
+        "searchable-filters": 5,
         "visibility": 2,
-        "system-field": 14,
-        "rule-declared": 6
+        "displaylogic-valid": 2,
+        "readonlylogic-valid": 4,
+        "displaylogic-evaluable": 2,
+        "readonlylogic-evaluable": 4,
+        "system-field": 87,
+        "rule-declared": 4,
+        "process-happy": 1,
+        "process-failure": 1,
+        "crud-flags": 2,
+        "selector-endpoint": 7,
+        "action-endpoint": 12
       },
       "byRunner": {
-        "node": 71,
-        "junit": 0
+        "node": 163,
+        "junit": 2
       }
     }
   }

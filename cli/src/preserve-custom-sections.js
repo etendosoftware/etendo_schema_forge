@@ -78,10 +78,22 @@ export function injectCustomSections(newFileContent, customSections) {
   const matchedIds = new Set();
   const lines = newFileContent.split('\n');
   const result = [];
+  let skippingGeneratedId = null;
 
   for (const line of lines) {
     const trimmed = line.trim();
+
+    // If a custom section was injected for this ID, skip the generated default block
+    if (skippingGeneratedId !== null) {
+      const endMatch = trimmed.match(PATTERNS.GENERATED_END);
+      if (endMatch && endMatch[1] === skippingGeneratedId) {
+        skippingGeneratedId = null;
+      }
+      continue;
+    }
+
     const slotMatch = trimmed.match(PATTERNS.CUSTOM_SLOT);
+    const genStartMatch = trimmed.match(PATTERNS.GENERATED_START);
 
     if (slotMatch) {
       const id = slotMatch[1];
@@ -97,6 +109,9 @@ export function injectCustomSections(newFileContent, customSections) {
         // No custom section for this slot — keep the slot as-is
         result.push(line);
       }
+    } else if (genStartMatch && matchedIds.has(genStartMatch[1])) {
+      // A custom section was already injected for this ID — skip the generated default
+      skippingGeneratedId = genStartMatch[1];
     } else {
       result.push(line);
     }

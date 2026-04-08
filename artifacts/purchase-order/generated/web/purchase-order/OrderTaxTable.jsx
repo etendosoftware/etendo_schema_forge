@@ -4,8 +4,8 @@ import { DataTable } from '@/components/contract-ui';
 const columns = [
   { key: 'lineNo', column: 'Line', type: 'number' },
   { key: 'tax', column: 'C_Tax_ID', type: 'string' },
-  { key: 'taxableAmount', column: 'TaxBaseAmt', type: 'amount' },
   { key: 'taxAmount', column: 'TaxAmt', type: 'amount' },
+  { key: 'taxableAmount', column: 'TaxBaseAmt', type: 'amount' },
 ];
 // @sf-generated-end columns:orderTax
 
