@@ -3,16 +3,24 @@
   "window": {
     "category": "sales",
     "name": "Sales Quotation",
-    "documentPreview": {
-      "titlePrefix": "Quotation"
-    },
+    "salesTheme": true,
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
+    "hidePrint": true,
+    "customComponents": {
+      "topbarRight": "QuotationTopbarActions"
+    },
     "menuActions": [
       { "key": "duplicate", "label": "Duplicate" },
       { "key": "cancel", "label": "Cancel", "destructive": true, "visibleWhenStatus": "CO" }
-    ]
+    ],
+    "processOverrides": {
+      "Complete": { "exclude": true },
+      "Convert to Order": { "exclude": true },
+      "Void": { "label": "Void", "style": "destructive", "displayLogicRaw": "@documentStatus@='CO'" },
+      "Reactivate": { "label": "Reactivate", "displayLogicRaw": "@documentStatus@='VO'" }
+    }
   },
   "entities": {
     "header": {
@@ -30,7 +38,6 @@
           "searchable": true,
           "reference": "BusinessPartner",
           "inputMode": "search",
-          "readOnlyLogic": null,
           "displayLogic": null,
           "section": "principal"
         },
@@ -41,21 +48,18 @@
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
-          "readOnlyLogic": null,
-          "section": "collapsed"
+          "section": "principal"
         },
         "orderDate": {
           "grid": true,
           "searchable": true,
           "inputMode": "date",
-          "readOnlyLogic": null,
           "section": "principal"
         },
         "validUntil": {
           "grid": true,
           "searchable": true,
           "inputMode": "date",
-          "readOnlyLogic": null,
           "section": "principal"
         },
         "scheduledDeliveryDate": {
@@ -95,7 +99,8 @@
           "visibility": "readOnly",
           "grid": true,
           "searchable": true,
-          "form": false
+          "form": false,
+          "display": "dot"
         },
         "invoiceAddress": {
           "visibility": "discarded"
@@ -150,7 +155,9 @@
           "visibility": "discarded"
         },
         "processed": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false,
+          "grid": false
         },
         "posted": {
           "visibility": "discarded"
@@ -205,37 +212,31 @@
         "product": {
           "grid": true,
           "searchable": true,
-          "inputMode": "search",
-          "readOnlyLogic": null
+          "inputMode": "search"
         },
         "orderedQuantity": {
           "grid": true,
-          "inputMode": "number",
-          "readOnlyLogic": null
+          "inputMode": "number"
         },
         "uOM": {
           "visibility": "system"
         },
         "unitPrice": {
           "grid": true,
-          "inputMode": "number",
-          "readOnlyLogic": null
+          "inputMode": "number"
         },
         "discount": {
           "grid": true,
-          "inputMode": "number",
-          "readOnlyLogic": null
+          "inputMode": "number"
         },
         "lineNetAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "inputMode": "number",
-          "readOnlyLogic": null
+          "inputMode": "number"
         },
         "tax": {
           "grid": true,
-          "inputMode": "selector",
-          "readOnlyLogic": null
+          "inputMode": "selector"
         },
         "description": {
           "grid": false,

@@ -1,0 +1,9 @@
+[
+  {"account_no":"40000","account_id":"mock-1","account_name":"Proveedores (euros) a corto plazo","opening_balance":-46220278.78,"activity_debit":0.00,"activity_credit":429.55,"closing_balance":-46220708.33},
+  {"account_no":"43000","account_id":"mock-2","account_name":"Clientes (euros) a corto plazo","opening_balance":13929.07,"activity_debit":2658.47,"activity_credit":0.00,"closing_balance":16587.54},
+  {"account_no":"47200","account_id":"mock-3","account_name":"Hacienda Pública IVA soportado","opening_balance":8021701.28,"activity_debit":74.55,"activity_credit":0.00,"closing_balance":8021775.83},
+  {"account_no":"47700","account_id":"mock-4","account_name":"Hacienda Pública IVA repercutido","opening_balance":-11677502.72,"activity_debit":0.00,"activity_credit":461.39,"closing_balance":-11677964.11},
+  {"account_no":"57200","account_id":"mock-5","account_name":"Bancos e instituciones de crédito c/c vista euros","opening_balance":67270729.48,"activity_debit":0.00,"activity_credit":0.00,"closing_balance":67270729.48},
+  {"account_no":"60000","account_id":"mock-6","account_name":"Compras de mercaderías","opening_balance":38198577.50,"activity_debit":355.00,"activity_credit":0.00,"closing_balance":38198932.50},
+  {"account_no":"70000","account_id":"mock-7","account_name":"Ventas de mercaderías","opening_balance":-55607155.83,"activity_debit":0.00,"activity_credit":2197.08,"closing_balance":-55609352.91}
+]

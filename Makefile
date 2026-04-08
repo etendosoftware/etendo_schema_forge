@@ -58,12 +58,19 @@ export
 # Etendo root: set in .env, override with make deploy ETENDO_ROOT=/path, or fallback to ..
 ETENDO_ROOT ?= ..
 MODULE_WEB := $(ETENDO_ROOT)/modules/com.etendoerp.go/web/com.etendoerp.go
+LEGACY_DEPLOY ?= 0
 
-deploy: build ## Build app-shell and deploy to Etendo module web dir
-	@rm -rf $(MODULE_WEB)/assets
-	@mkdir -p $(MODULE_WEB)
-	@cp -r tools/app-shell/dist/* $(MODULE_WEB)/
-	@echo "Deployed to $(MODULE_WEB)"
+deploy: ## Deprecated: use the dedicated UI container; set LEGACY_DEPLOY=1 to run the old copy flow
+	@if [ "$(LEGACY_DEPLOY)" = "1" ] || [ "$(LEGACY_DEPLOY)" = "true" ] || [ "$(LEGACY_DEPLOY)" = "yes" ]; then \
+		$(MAKE) build && \
+		rm -rf "$(MODULE_WEB)/assets" && \
+		mkdir -p "$(MODULE_WEB)" && \
+		cp -r tools/app-shell/dist/* "$(MODULE_WEB)/" && \
+		echo "Deployed to $(MODULE_WEB)"; \
+	else \
+		echo "Deprecated: make deploy is no longer needed because the UI is compiled during commits and deployed in a separate container from Etendo Classic."; \
+		echo "Use 'make deploy LEGACY_DEPLOY=1' only if you need the old copy-to-Etendo flow."; \
+	fi
 
 # --- Report Server ---
 

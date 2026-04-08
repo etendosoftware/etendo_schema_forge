@@ -28,11 +28,16 @@ export function generateAggregateFiles(contract) {
 function generateConfig(contract) {
   const { meta, sections: sectionsList, layout, actions } = contract;
 
-  // Find the kpi-header section and extract its kpis array
-  const kpiSection = sectionsList.find(s => s.id === 'kpi-header');
-  const kpisConfig = kpiSection?.kpis ?? [];
+  // Build kpisConfig from individual kpi-single sections (new format)
+  // or fall back to the legacy kpi-header.kpis array (old format)
+  const kpiHeaderSection = sectionsList.find(s => s.id === 'kpi-header');
+  const kpisConfig = kpiHeaderSection?.kpis
+    ?? sectionsList
+        .filter(s => s.type === 'kpi-single')
+        .map(({ id, type, ...cfg }) => cfg);
 
-  // Build sections object keyed by id, excluding kpi-header
+  // Build sections object keyed by id, excluding kpi-header and kpi-single entries
+  // (kpi-single sections are represented via kpisConfig, not as standalone sections)
   const sectionsObj = {};
   for (const section of sectionsList) {
     if (section.id === 'kpi-header') continue;
@@ -71,8 +76,24 @@ function generateMockData(contract) {
     '',
   ];
 
+  // Group kpi-single sections into a combined 'kpis' object keyed by their `key` field
+  const kpiSingleSections = sectionsList.filter(s => s.type === 'kpi-single');
+  if (kpiSingleSections.length > 0) {
+    const kpisObj = {};
+    for (const s of kpiSingleSections) {
+      if (s.key && mockData[s.id] !== undefined) {
+        kpisObj[s.key] = mockData[s.id];
+      }
+    }
+    if (Object.keys(kpisObj).length > 0) {
+      lines.push(`export const kpis = ${JSON.stringify(kpisObj, null, 2)};`);
+      lines.push('');
+    }
+  }
+
   for (const section of sectionsList) {
     if (section.type === 'quick-actions') continue;
+    if (section.type === 'kpi-single') continue; // already handled above
 
     const data = mockData[section.id];
     if (data === undefined) continue;

@@ -529,5 +529,28 @@
     ],
     "author": "pipeline",
     "date": "2026-03-20"
+  },
+  {
+    "from": "0.1.0",
+    "to": "0.2.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"movementDate\" property \"defaultValue\" changed from \"undefined\" to \"@#Date@\" in frontend (additive)",
+      "Field \"accountingDate\" property \"defaultValue\" changed from \"undefined\" to \"@#Date@\" in frontend (additive)",
+      "Field \"documentStatus\" property \"defaultValue\" changed from \"undefined\" to \"DR\" in frontend (additive)",
+      "Field \"lineNo\" property \"defaultValue\" changed from \"undefined\" to \"@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_InOutLine WHERE M_InOut_ID=@M_InOut_ID@\" in frontend (additive)",
+      "Field \"operativeQuantity\" property \"tsType\" changed from \"string\" to \"number\" in frontend (breaking)",
+      "Field \"movementQuantity\" property \"tsType\" changed from \"string\" to \"number\" in frontend (breaking)",
+      "Field \"movementQuantity\" property \"defaultValue\" changed from \"undefined\" to \"0\" in frontend (additive)",
+      "Field \"storageBin\" property \"defaultValue\" changed from \"undefined\" to \"@OnHandLocatorDefault@\" in frontend (additive)",
+      "Field \"invoiceQuantity\" property \"tsType\" changed from \"string\" to \"number\" in frontend (breaking)",
+      "Field \"invoiceQuantity\" property \"defaultValue\" changed from \"undefined\" to \"0\" in frontend (additive)",
+      "Field \"lineNo\" property \"defaultValue\" changed from \"undefined\" to \"@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM M_LC_COST\n WHERE (m_landedcost_id is not null and m_landedcost_id =@m_landedcost_id@) \n   or (m_landedcost_id is null and m_inout_id = @m_inout_id@)\" in frontend (additive)",
+      "Field \"amount\" property \"tsType\" changed from \"string\" to \"number\" in frontend (breaking)",
+      "Field \"matched\" property \"defaultValue\" changed from \"undefined\" to \"N\" in frontend (additive)",
+      "Field \"isMatchingAdjusted\" property \"defaultValue\" changed from \"undefined\" to \"N\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-03-31"
   }
 ]

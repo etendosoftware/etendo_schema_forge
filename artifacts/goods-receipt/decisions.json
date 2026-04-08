@@ -1,27 +1,27 @@
 {
-  "$schema": "decisions-v1",
+  "$schema": "decisions-v2",
   "window": {
     "category": "purchases",
     "name": "Goods Receipt"
   },
   "entities": {
-    "mInOut": {
+    "header": {
       "name": "goodsReceipt",
       "fields": {
         "documentNo": {
           "visibility": "readOnly",
           "grid": true,
           "searchable": true,
-          "readOnlyLogic": null
-        },
-        "warehouse": {
-          "grid": true,
+          "section": "principal",
+          "seq": 10,
           "readOnlyLogic": null
         },
         "businessPartner": {
           "grid": true,
           "searchable": true,
           "reference": "BusinessPartner",
+          "section": "principal",
+          "seq": 20,
           "readOnlyLogic": null
         },
         "partnerAddress": {
@@ -31,19 +31,39 @@
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
+          "section": "principal",
+          "seq": 30,
+          "readOnlyLogic": null
+        },
+        "warehouse": {
+          "grid": true,
+          "section": "principal",
+          "seq": 40,
           "readOnlyLogic": null
         },
         "movementDate": {
           "grid": true,
           "searchable": true,
-          "readOnlyLogic": null
-        },
-        "accountingDate": {
+          "section": "principal",
+          "seq": 50,
           "readOnlyLogic": null
         },
         "orderReference": {
           "grid": true,
-          "searchable": true
+          "searchable": true,
+          "section": "principal",
+          "seq": 60
+        },
+        "description": {
+          "section": "collapsed",
+          "seq": 70
+        },
+        "accountingDate": {
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "salesOrder": {
+          "form": false
         },
         "documentStatus": {
           "grid": true,
@@ -51,27 +71,35 @@
           "searchable": true
         },
         "project": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "costcenter": {
           "reference": "CostCenter",
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "asset": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "stDimension": {
           "reference": "UserDimension1",
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "ndDimension": {
           "reference": "UserDimension2",
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
+        },
+        "invoiceStatus": {
+          "form": false
         },
         "createLinesFrom": {
           "visibility": "discarded",
@@ -87,71 +115,98 @@
         }
       }
     },
-    "mInOutLine": {
+    "lines": {
       "name": "goodsReceiptLine",
       "fields": {
-        "lineNo": {
-          "grid": true,
-          "readOnlyLogic": null
-        },
         "product": {
           "grid": true,
+          "section": "principal",
+          "seq": 10,
           "readOnlyLogic": null
         },
         "attributeSetValue": {
+          "section": "principal",
+          "seq": 20,
           "readOnlyLogic": null,
           "displayLogic": null
         },
+        "uOM": {
+          "grid": true,
+          "section": "principal",
+          "seq": 30,
+          "readOnlyLogic": null
+        },
+        "movementQuantity": {
+          "grid": true,
+          "section": "principal",
+          "seq": 40,
+          "readOnlyLogic": null
+        },
+        "storageBin": {
+          "grid": true,
+          "section": "principal",
+          "seq": 50,
+          "readOnlyLogic": null
+        },
+        "description": {
+          "section": "principal",
+          "seq": 60
+        },
+        "lineNo": {
+          "grid": true,
+          "form": false,
+          "readOnlyLogic": null
+        },
         "operativeQuantity": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "operativeUOM": {
           "inputMode": "selector",
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
-        "movementQuantity": {
-          "grid": true,
-          "readOnlyLogic": null
-        },
-        "uOM": {
-          "grid": true,
-          "readOnlyLogic": null
-        },
-        "storageBin": {
-          "grid": true,
-          "readOnlyLogic": null
+        "salesOrderLine": {
+          "form": false
         },
         "invoiceQuantity": {
           "grid": true,
+          "form": false,
           "displayLogic": null
         },
         "businessPartner": {
           "reference": "BusinessPartner",
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "project": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "costcenter": {
           "reference": "CostCenter",
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "asset": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "stDimension": {
           "reference": "UserDimension1",
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "ndDimension": {
           "reference": "UserDimension2",
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
@@ -165,7 +220,7 @@
         }
       }
     },
-    "factAcct": {
+    "accounting": {
       "name": "accounting",
       "fields": {
         "account": {
@@ -197,7 +252,7 @@
       },
       "javaQualifier": "factAcctHandler"
     },
-    "mLcCost": {
+    "landedCost": {
       "name": "landedCost",
       "fields": {
         "lineNo": {
@@ -509,5 +564,6 @@
   },
   "discardPatterns": [
     "EM_*"
-  ]
+  ],
+  "version": 2
 }

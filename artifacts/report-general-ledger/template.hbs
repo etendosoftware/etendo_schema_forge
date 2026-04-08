@@ -5,6 +5,10 @@
 {{{css}}}
 .group-header td { border: none !important; }
 .group-subheader td { border-bottom: 1px solid #e2e8f0 !important; }
+.report-totals { display: flex; gap: 8px; margin-top: 8mm; }
+.total-card { flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4mm 5mm; background: #ffffff; }
+.total-label { font-size: 7.5pt; font-weight: 700; color: #64748b; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 1.5mm; }
+.total-value { font-size: 18pt; font-weight: 700; color: #0f172a; }
 </style>
 </head>
 <body><div class="report-container">
@@ -22,7 +26,7 @@
   <table class="report-table">
     <thead><tr>
       <th style="width: 10%">Date</th>
-      <th style="width: 25%">Business Partner</th>
+      <th style="width: 25%">{{meta.descriptionLabel}}</th>
       <th style="width: 15%">Debit</th>
       <th style="width: 15%">Credit</th>
       <th style="width: 15%">Balance</th>
@@ -32,14 +36,16 @@
         {{#if (isGroupBreak 'name' (lookup this 'name'))}}
         <tr class="group-header group-level-0">
           <td colspan="5" style="background: #1a1a2e; color: #ffffff; font-weight: 600; padding: 2mm 4mm; font-size: 11pt;">
-            Account: {{lookup this 'name'}}
+            {{@root.meta.groupLabel}}: {{lookup this 'name'}}
           </td>
         </tr>
+        {{#if (lookup this 'value')}}
         <tr class="group-subheader">
           <td colspan="5" style="background: #f1f5f9; padding: 1.5mm 4mm; font-size: 8pt; color: #475569;">
             <span style="margin-right: 3mm;"><strong>Code:</strong> {{lookup this 'value'}}</span>
           </td>
         </tr>
+        {{/if}}
         {{/if}}
         <tr>
           <td>{{formatDate (lookup this 'dateacct')}}</td>
@@ -51,6 +57,23 @@
       {{/each}}
     </tbody>
   </table>
+
+  {{#if meta.totals}}
+  <div class="report-totals">
+    <div class="total-card">
+      <div class="total-label">Total Debit</div>
+      <div class="total-value">{{formatCurrency meta.totals.amtacctdr}}</div>
+    </div>
+    <div class="total-card">
+      <div class="total-label">Total Credit</div>
+      <div class="total-value">{{formatCurrency meta.totals.amtacctcr}}</div>
+    </div>
+    <div class="total-card">
+      <div class="total-label">Net Balance</div>
+      <div class="total-value">{{formatCurrency meta.totals.total}}</div>
+    </div>
+  </div>
+  {{/if}}
 
   <div class="report-footer">
     <div class="report-summary">Total: {{meta.recordCount}} records</div>

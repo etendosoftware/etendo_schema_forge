@@ -7,8 +7,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Main Warehouse",
     "description": "Standard order for Q1 delivery",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -19,8 +18,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "East Distribution Center",
     "description": "Rush order - priority shipping required",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -31,8 +29,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "West Hub",
     "description": "Bulk purchase for warehouse restocking",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -43,8 +40,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "North Storage",
     "description": "Sample order for client evaluation",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -55,8 +51,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "South Logistics",
     "description": "Recurring monthly supply order",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -67,8 +62,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Central Depot",
     "description": "Special pricing agreement applies",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -79,8 +73,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Regional Warehouse A",
     "description": "Consolidated order from multiple requests",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -91,8 +84,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Regional Warehouse B",
     "description": "Trial order for new product line",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -103,8 +95,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "Main Warehouse",
     "description": "Replacement for damaged goods",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -115,8 +106,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "East Distribution Center",
     "description": "Pre-season inventory build-up",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -127,8 +117,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "West Hub",
     "description": "Customer-specific configuration",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"
@@ -139,8 +128,7 @@ export const inventory = [
     "name": "Sample name",
     "warehouse": "North Storage",
     "description": "Government contract fulfillment",
-    "generateList": "Sample generateList",
-    "updateQuantities": "Sample updateQuantities",
+    "processNow": "Sample processNow",
     "inventoryType": "Sample inventoryType",
     "project": "Sample project",
     "processed": "Sample processed"

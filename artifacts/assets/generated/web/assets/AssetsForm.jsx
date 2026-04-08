@@ -8,9 +8,9 @@ const fields = [
   { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: 'Asset Category', required: true, section: 'principal', reference: 'AssetGroup', inputMode: 'selector' },
   { key: 'documentNo', column: 'DocumentNo', type: 'text', label: 'Document No.', readOnly: true, section: 'other' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal' },
-  { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', section: 'other', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@' },
+  { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', section: 'other', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: (record) => Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0 },
   // @sf-custom-slot callout:SL_Asset_Product
-  { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', section: 'other', reference: 'Product', inputMode: 'search' },
+  { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', popup: true, section: 'other', reference: 'Product', inputMode: 'search' },
   { key: 'depreciate', column: 'IsDepreciated', type: 'checkbox', label: 'Depreciate', required: true, section: 'other' },
   { key: 'depreciationType', column: 'Amortizationtype', type: 'select', label: 'Depreciation Type', required: true, section: 'other', options: [{ value: 'LI', label: 'Linear' }], displayLogic: (record) => record.depreciate === true || record.depreciate === 'Y' },
   { key: 'calculateType', column: 'Amortizationcalctype', type: 'select', label: 'Calculate Type', required: true, section: 'other', options: [{ value: 'PE', label: 'Percentage' }, { value: 'TI', label: 'Time' }], displayLogic: (record) => record.depreciate === true || record.depreciate === 'Y' },
@@ -30,7 +30,7 @@ const fields = [
   // @sf-custom-slot callout:SL_Assets
   { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: 'Depreciation Amt.', section: 'other', displayLogic: (record) => record.depreciate === true || record.depreciate === 'Y' },
   { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'number', label: 'Previously Depreciated Amt.', section: 'other', defaultValue: '0', displayLogic: (record) => record.depreciate === true || record.depreciate === 'Y' },
-  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'other', reference: 'Project', inputMode: 'search', displayLogic: (record) => record.depreciate === true || record.depreciate === 'Y' },
+  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'other', reference: 'Project', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'accounting-dimension' },
 ];
 // @sf-generated-end fields:assets
 

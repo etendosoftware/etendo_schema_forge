@@ -168,6 +168,29 @@ catalogs['BusinessPartnerLocation'] = [
   }
 ];
 
+catalogs['PaymentTerm'] = [
+  {
+    "id": "pt-001",
+    "name": "Immediate"
+  },
+  {
+    "id": "pt-002",
+    "name": "Net 15"
+  },
+  {
+    "id": "pt-003",
+    "name": "Net 30"
+  },
+  {
+    "id": "pt-004",
+    "name": "Net 60"
+  },
+  {
+    "id": "pt-005",
+    "name": "2/10 Net 30"
+  }
+];
+
 catalogs['PaymentMethod'] = [
   {
     "id": "pm-001",

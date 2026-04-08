@@ -67,7 +67,9 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
     }
   }, [value, displayValue]);
 
-  const catalogOptions = catalogs?.[field.reference];
+  // When a selectorUrl is configured, always use server search — ignore local catalog.
+  // Mock catalog data is only a fallback for when no server is available (e.g. mock mode).
+  const catalogOptions = selectorUrl ? null : catalogs?.[field.reference];
 
   // If we have an initial value but no label yet (and no catalog), try to fetch the single record
   React.useEffect(() => {
@@ -92,17 +94,16 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
       .catch(() => { });
   }, [value, displayValue, selectorUrl, selectorContext, token, catalogs, entityName, field]);
 
-  // Server-side search triggered on typing
+  // Server-side search triggered on typing or on focus (empty query = load initial options).
   const triggerServerSearch = (searchQuery) => {
     if (catalogOptions || !selectorUrl || !token) return;
 
-    if (!searchQuery || searchQuery.length < 2) {
-      setServerResults(null);
-      return;
-    }
+    // Build params: include q only when the user has typed enough to filter
+    const params = { ...selectorContext };
+    if (searchQuery && searchQuery.length >= 2) params.q = searchQuery.trim();
 
     setFetching(true);
-    fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, q: searchQuery.trim() }), {
+    fetch(buildUrlWithParams(selectorUrl, params), {
       headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     })
       .then(res => res.ok ? res.json() : null)
@@ -176,7 +177,8 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
           }}
           onFocus={() => {
             setOpen(true);
-            if (!catalogOptions && query.length >= 2 && !serverResults) {
+            // Always load options on focus when none are cached yet (covers empty/cleared field)
+            if (!catalogOptions && !serverResults) {
               triggerServerSearch(query);
             }
           }}
@@ -348,8 +350,10 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
         if (data?.items) {
           const items = data.items.map(i => ({ id: i.id, name: i.label || i.name || i.id, ...i }));
           setDynamicOptions(items);
-          // Auto-select first option if no current value
-          if (!value && items.length > 0 && field.required) {
+          // Auto-select first option if current value is empty or not in the new options
+          // (e.g., BP changed → old address no longer valid)
+          const currentValid = value && items.some(i => i.id === value);
+          if (!currentValid && items.length > 0) {
             onChange(items[0].id, items[0].name);
           }
         }
@@ -396,6 +400,42 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
 }
 
 /**
+ * Form field that opens a ProductSearchDrawer for lookup-enabled search fields.
+ */
+function LookupFormField({ field, value, displayValue, selectorUrl, token, resolvedLabel, onChange }) {
+  const [open, setOpen] = useState(false);
+  const display = displayValue || value || '';
+  return (
+    <>
+      <button
+        type="button"
+        data-testid={`field-${field.key}`}
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center gap-2 h-9 rounded-md border border-input bg-background px-3 text-sm text-left hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+      >
+        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+        {display ? (
+          <span className="flex-1 truncate text-foreground">{display}</span>
+        ) : (
+          <span className="flex-1 truncate text-muted-foreground">Search {resolvedLabel}...</span>
+        )}
+      </button>
+      <ProductSearchDrawer
+        open={open}
+        onClose={() => setOpen(false)}
+        onSelect={(item) => {
+          onChange(item.id, item.label || item.name || item._identifier || '', item);
+          setOpen(false);
+        }}
+        selectorUrl={selectorUrl}
+        token={token}
+        title={resolvedLabel}
+      />
+    </>
+  );
+}
+
+/**
  * Generic Entity Form component.
  * Layouts: 'horizontal' (grid-based edit form) | 'vertical' (stack-based sidebar)
  * 
@@ -406,7 +446,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
  *  - catalogs: Record<string, Array<{ id, name, ... }>> for FK reference data
  *  - displayLogic: { readOnly: { fieldName: bool }, visibility: { fieldName: bool } }
  */
-export function EntityForm({ entity, fields = [], data, onChange, catalogs, layout, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {} }) {
+export function EntityForm({ entity, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false }) {
   const t = useLabel();
   let displayFields;
   if (section) {
@@ -440,9 +480,12 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
 
   if (displayFields.length === 0) return null;
 
-  const gridClass = layout === 'horizontal'
-    ? 'grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4'
-    : 'grid grid-cols-2 gap-3 md:grid-cols-3';
+  const gridClass = cols
+    ? 'grid'
+    : (layout === 'horizontal'
+      ? 'grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-3'
+      : 'grid grid-cols-2 gap-3 md:grid-cols-3');
+  const gridStyle = cols ? { gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 16 } : undefined;
 
   // If there's an image field, pin it to the right — rest of fields render in a 3-col grid on the left
   const imageField = displayFields.find(f => f.type === 'image');
@@ -452,7 +495,8 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     // Resolution order: per-window AD_Field label (most specific) → global locale by column → camelCase key
     const label = f.label ?? t(f.column) ?? f.key;
     // Field is read-only if statically declared, dynamically set by evaluate-display, or readOnlyLogic evaluates to true
-    const isReadOnly = f.readOnly
+    const isReadOnly = formReadOnly
+      || f.readOnly
       || displayLogic?.readOnly?.[f.key] === true
       || (typeof f.readOnlyLogic === 'function' && !!f.readOnlyLogic(data ?? {}));
     const displayValue = resolveIdentifier(data, f.key) ?? data?.[f.key] ?? '';
@@ -566,7 +610,13 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
                 if (label) onChange?.(f.key + '$_identifier', label);
                 if (auxData) {
                   for (const [suffix, auxVal] of Object.entries(auxData)) {
-                    onChange?.(f.key + suffix, auxVal);
+                    if (suffix === '_aux' && auxVal && typeof auxVal === 'object') {
+                      for (const [auxSuffix, auxSuffixVal] of Object.entries(auxVal)) {
+                        onChange?.(f.key + auxSuffix, auxSuffixVal);
+                      }
+                    } else {
+                      onChange?.(f.key + suffix, auxVal);
+                    }
                   }
                 }
               }}
@@ -592,6 +642,23 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           </FieldHighlight>
         );
       }
+      const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${f.column}` : null;
+      const searchOnChange = (val, lbl, auxData) => {
+        onChange?.(f.key, val, f.column);
+        if (lbl) onChange?.(f.key + '$_identifier', lbl);
+        if (auxData) {
+          for (const [suffix, auxVal] of Object.entries(auxData)) {
+            if (suffix === '_aux' && auxVal && typeof auxVal === 'object') {
+              for (const [auxSuffix, auxSuffixVal] of Object.entries(auxVal)) {
+                onChange?.(f.key + auxSuffix, auxSuffixVal);
+              }
+            } else {
+              onChange?.(f.key + suffix, auxVal);
+            }
+          }
+        }
+      };
+      // Popup fields open a full ProductSearchDrawer instead of inline dropdown
       if (f.popup) {
         return (
           <FieldHighlight key={f.key} entityName={entity} fieldName={f.key}>
@@ -608,8 +675,29 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
                   if (lbl) onChange?.(f.key + '$_identifier', lbl);
                 }}
                 label={label}
-                selectorUrl={apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${f.column}` : null}
+                selectorUrl={selectorUrl}
                 token={token}
+              />
+            </div>
+          </FieldHighlight>
+        );
+      }
+      // Lookup fields open a full ProductSearchDrawer instead of inline dropdown
+      if (f.lookup) {
+        return (
+          <FieldHighlight key={f.key} entityName={entity} fieldName={f.key}>
+            <div className="space-y-1.5">
+              <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
+                {label}{f.required ? <span className="text-red-500 ml-0.5">*</span> : ''}
+              </Label>
+              <LookupFormField
+                field={f}
+                value={data?.[f.key] ?? ''}
+                displayValue={data?.[f.key + '$_identifier']}
+                selectorUrl={selectorUrl}
+                token={token}
+                resolvedLabel={label}
+                onChange={searchOnChange}
               />
             </div>
           </FieldHighlight>
@@ -626,18 +714,10 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
               field={f}
               value={data?.[f.key] ?? ''}
               displayValue={data?.[f.key + '$_identifier']}
-              onChange={(val, label, auxData) => {
-                onChange?.(f.key, val, f.column);
-                if (label) onChange?.(f.key + '$_identifier', label);
-                if (auxData) {
-                  for (const [suffix, auxVal] of Object.entries(auxData)) {
-                    onChange?.(f.key + suffix, auxVal);
-                  }
-                }
-              }}
+              onChange={searchOnChange}
               catalogs={catalogs}
               resolvedLabel={label}
-              selectorUrl={apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${f.column}` : null}
+              selectorUrl={selectorUrl}
               selectorContext={selectorContext}
               token={token}
             />
@@ -671,6 +751,32 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
         </FieldHighlight>
       );
     }
+    if (f.type === 'textarea') {
+      return (
+        <FieldHighlight key={f.key} entityName={entity} fieldName={f.key}>
+          <div className="space-y-1.5 h-full flex flex-col">
+            <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
+              {label}{f.required && !isReadOnly ? <span className="text-red-500 ml-0.5">*</span> : ''}
+            </Label>
+            <textarea
+              id={f.key}
+              name={f.key}
+              data-testid={`field-${f.key}`}
+              rows={4}
+              value={isReadOnly ? displayValue : (data?.[f.key] ?? '')}
+              onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
+              disabled={isReadOnly}
+              className={[
+                'flex w-full rounded-md border border-input px-3 py-2 text-sm shadow-sm',
+                'placeholder:text-muted-foreground resize-none flex-1 min-h-[96px]',
+                'focus:outline-none focus:ring-2 focus:ring-primary',
+                isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-background',
+              ].join(' ')}
+            />
+          </div>
+        </FieldHighlight>
+      );
+    }
     const inputType = f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text';
     return (
       <FieldHighlight key={f.key} entityName={entity} fieldName={f.key}>
@@ -696,12 +802,13 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
 
   if (imageField) {
     const imgLabel = imageField.label ?? t(imageField.column) ?? imageField.key;
-    const imgReadOnly = imageField.readOnly
+    const imgReadOnly = formReadOnly
+      || imageField.readOnly
       || displayLogic?.readOnly?.[imageField.key] === true
       || (typeof imageField.readOnlyLogic === 'function' && !!imageField.readOnlyLogic(data ?? {}));
     return (
       <div className="flex gap-6 items-start">
-        <div className={`flex-1 min-w-0 ${gridClass}`}>
+        <div className={`flex-1 min-w-0 ${gridClass}`} style={gridStyle}>
           {fieldsToRender.map(renderField)}
         </div>
         <div className="shrink-0 w-56">
@@ -720,7 +827,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   }
 
   return (
-    <div className={gridClass}>
+    <div className={gridClass} style={gridStyle}>
       {displayFields.map(renderField)}
     </div>
   );

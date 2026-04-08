@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/auth/AuthContext.jsx';
+import { useUI } from '@/i18n';
 import {
   Shield,
   Building2,
@@ -47,6 +48,7 @@ export function UserAvatarButton({ isOpen, onClick }) {
  */
 export function UserContextSwitcher({ onClose, positionClassName }) {
   const { username, roleList, selectedRole, selectedOrg, switchContext, logout } = useAuth();
+  const ui = useUI();
 
   const [pendingRoleId, setPendingRoleId] = useState(selectedRole?.id || '');
   const [pendingOrgId, setPendingOrgId] = useState(selectedOrg?.id || '');
@@ -84,9 +86,9 @@ export function UserContextSwitcher({ onClose, positionClassName }) {
     } catch (e) {
       if (e.message === 'SESSION_EXPIRED') {
         setNeedsPassword(true);
-        setError('Enter password to switch.');
+        setError(ui('enterPasswordToSwitch'));
       } else {
-        setError(e.message || 'Failed to switch context.');
+        setError(e.message || ui('failedToSwitch'));
       }
     } finally {
       setSwitching(false);
@@ -104,7 +106,7 @@ export function UserContextSwitcher({ onClose, positionClassName }) {
       <div className="border-b px-4 py-3">
         <p className="text-sm font-semibold">{username}</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {selectedRole?.name || selectedRole?.id || 'No role'} &middot; {selectedOrg?.name || selectedOrg?.id || 'No org'}
+          {selectedRole?.name || selectedRole?.id || ui('noRole')} &middot; {selectedOrg?.name || selectedOrg?.id || ui('noOrg')}
         </p>
       </div>
 
@@ -112,14 +114,14 @@ export function UserContextSwitcher({ onClose, positionClassName }) {
       <div className="px-4 py-3 space-y-3">
         <div>
           <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
-            <Shield className="h-3 w-3" /> Role
+            <Shield className="h-3 w-3" /> {ui('role')}
           </label>
           <select
             value={pendingRoleId}
             onChange={handleRoleChange}
             className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
           >
-            <option value="" disabled>Select role...</option>
+            <option value="" disabled>{ui('selectRole')}</option>
             {roleList.map(r => (
               <option key={r.id} value={r.id}>{r.name || r.id}</option>
             ))}
@@ -128,7 +130,7 @@ export function UserContextSwitcher({ onClose, positionClassName }) {
 
         <div>
           <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
-            <Building2 className="h-3 w-3" /> Organization
+            <Building2 className="h-3 w-3" /> {ui('organization')}
           </label>
           <select
             value={pendingOrgId}
@@ -136,7 +138,7 @@ export function UserContextSwitcher({ onClose, positionClassName }) {
             disabled={orgOptions.length === 0}
             className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
           >
-            <option value="" disabled>Select org...</option>
+            <option value="" disabled>{ui('selectOrg')}</option>
             {orgOptions.map(o => (
               <option key={o.id} value={o.id}>{o.name || o.id}</option>
             ))}
@@ -146,14 +148,14 @@ export function UserContextSwitcher({ onClose, positionClassName }) {
         {needsPassword && (
           <div>
             <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
-              <KeyRound className="h-3 w-3" /> Password
+              <KeyRound className="h-3 w-3" /> {ui('password')}
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleApply()}
-              placeholder="Your password..."
+              placeholder={ui('yourPassword')}
               className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
@@ -166,16 +168,16 @@ export function UserContextSwitcher({ onClose, positionClassName }) {
             className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {switching ? (
-              <><RefreshCw className="h-3 w-3 animate-spin" /> Switching...</>
+              <><RefreshCw className="h-3 w-3 animate-spin" /> {ui('switching')}</>
             ) : (
-              'Apply'
+              ui('apply')
             )}
           </button>
         )}
 
         {success && (
           <p className="flex items-center gap-1 text-xs text-green-600">
-            <Check className="h-3 w-3" /> Context updated
+            <Check className="h-3 w-3" /> {ui('contextUpdated')}
           </p>
         )}
         {error && <p className="text-xs text-destructive">{error}</p>}
@@ -188,7 +190,7 @@ export function UserContextSwitcher({ onClose, positionClassName }) {
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors"
         >
           <LogOut className="h-3.5 w-3.5" />
-          Logout
+          {ui('logout')}
         </button>
       </div>
     </div>

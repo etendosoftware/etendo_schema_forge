@@ -395,6 +395,7 @@ export async function pushToNeo(windowName, options = {}) {
         moduleId,
         isIncluded: vis.isIncluded,
         isReadOnly: vis.isReadOnly,
+        javaQualifier: f.fieldName,
         audit: auditOpts,
       });
       fieldResults.push({ column: f.column, entityName: f.entityName, success: true });

@@ -2,9 +2,9 @@ import { DataTable } from '@/components/contract-ui';
 
 // @sf-generated-start columns:productCharacteristic
 const columns = [
-  { key: 'sequenceNumber', column: 'Seqno', type: 'number' },
-  { key: 'characteristic', column: 'M_Characteristic_ID', type: 'string' },
-  { key: 'variant', column: 'Isvariant', type: 'boolean' },
+  { key: 'sequenceNumber', column: 'Seqno', type: 'number', label: 'Sequence Number' },
+  { key: 'characteristic', column: 'M_Characteristic_ID', type: 'string', label: 'Characteristic' },
+  { key: 'variant', column: 'Isvariant', type: 'boolean', label: 'Variant' },
 ];
 // @sf-generated-end columns:productCharacteristic
 

@@ -14,22 +14,29 @@
     "handler": "agingReportHandler"
   },
   "columns": [
-    { "field": "bPartner", "label": { "en_US": "Vendor", "es_ES": "Proveedor" }, "type": "string", "width": "25%", "sortable": true },
-    { "field": "current", "label": { "en_US": "Current", "es_ES": "Corriente" }, "type": "amount", "width": "12%", "sortable": true },
-    { "field": "days30", "label": { "en_US": "1-30 Days", "es_ES": "1-30 Días" }, "type": "amount", "width": "12%", "sortable": true },
-    { "field": "days60", "label": { "en_US": "31-60 Days", "es_ES": "31-60 Días" }, "type": "amount", "width": "12%", "sortable": true },
-    { "field": "days90", "label": { "en_US": "61-90 Days", "es_ES": "61-90 Días" }, "type": "amount", "width": "12%", "sortable": true },
-    { "field": "days120", "label": { "en_US": "91-120 Days", "es_ES": "91-120 Días" }, "type": "amount", "width": "12%", "sortable": true },
-    { "field": "total", "label": { "en_US": "Total", "es_ES": "Total" }, "type": "amount", "width": "12%", "sortable": true }
+    { "field": "bPartner", "label": { "en_US": "Contacts", "es_ES": "Contactos" }, "type": "string", "width": "20%", "sortable": true },
+    { "field": "current", "label": { "en_US": "Current", "es_ES": "Corriente" }, "type": "amount", "width": "10%", "sortable": true },
+    { "field": "days30", "label": { "en_US": "1-30", "es_ES": "1-30" }, "type": "amount", "width": "9%", "sortable": true },
+    { "field": "days60", "label": { "en_US": "31-60", "es_ES": "31-60" }, "type": "amount", "width": "9%", "sortable": true },
+    { "field": "days90", "label": { "en_US": "61-90", "es_ES": "61-90" }, "type": "amount", "width": "9%", "sortable": true },
+    { "field": "days120", "label": { "en_US": "91-120", "es_ES": "91-120" }, "type": "amount", "width": "9%", "sortable": true },
+    { "field": "days150plus", "label": { "en_US": ">120", "es_ES": ">120" }, "type": "amount", "width": "9%", "sortable": true },
+    { "field": "total", "label": { "en_US": "Total", "es_ES": "Total" }, "type": "amount", "width": "10%", "sortable": true },
+    { "field": "credits", "label": { "en_US": "Credits", "es_ES": "Créditos" }, "type": "amount", "width": "8%", "sortable": true },
+    { "field": "net", "label": { "en_US": "Net", "es_ES": "Neto" }, "type": "amount", "width": "8%", "sortable": true }
   ],
   "groups": [],
   "filters": [],
   "parameters": [
-    { "name": "currentDate", "label": { "en_US": "As of Date", "es_ES": "Fecha corte" }, "type": "date", "default": "__TODAY__" },
-    { "name": "column1", "label": { "en_US": "Bucket 1 (days)", "es_ES": "Tramo 1 (días)" }, "type": "number", "default": "30" },
-    { "name": "column2", "label": { "en_US": "Bucket 2", "es_ES": "Tramo 2" }, "type": "number", "default": "60" },
-    { "name": "column3", "label": { "en_US": "Bucket 3", "es_ES": "Tramo 3" }, "type": "number", "default": "90" },
-    { "name": "column4", "label": { "en_US": "Bucket 4", "es_ES": "Tramo 4" }, "type": "number", "default": "120" }
+    { "name": "orgId", "label": { "en_US": "Organization", "es_ES": "Organización" }, "type": "search", "selector": "org", "inputStyle": "popup-single", "required": true },
+    { "name": "glId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true },
+    { "name": "currentDate", "label": { "en_US": "As of Date", "es_ES": "Fecha corte" }, "type": "date", "default": "__TODAY__", "required": true },
+    { "name": "bPartnerId", "label": { "en_US": "Contacts", "es_ES": "Contactos" }, "type": "search", "selector": "bpartner", "inputStyle": "popup" },
+    { "name": "showDetails", "label": { "en_US": "Show Details", "es_ES": "Mostrar Detalles" }, "type": "boolean" },
+    { "name": "column1", "label": { "en_US": "Days Group 1", "es_ES": "Días Tramo 1" }, "type": "number" },
+    { "name": "column2", "label": { "en_US": "Days Group 2", "es_ES": "Días Tramo 2" }, "type": "number" },
+    { "name": "column3", "label": { "en_US": "Days Group 3", "es_ES": "Días Tramo 3" }, "type": "number" },
+    { "name": "column4", "label": { "en_US": "Days Group 4", "es_ES": "Días Tramo 4" }, "type": "number" }
   ],
   "defaultSort": { "field": "bPartner", "direction": "asc" },
   "outputs": ["pdf", "xlsx", "csv", "html"],

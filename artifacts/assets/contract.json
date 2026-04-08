@@ -1,45 +1,22 @@
 {
-  "version": "0.1.1",
-  "generatedAt": "2026-03-31T12:10:56.173Z",
-  "checksum": "d5c03c6682c517b5",
+  "version": "0.5.0",
+  "generatedAt": "2026-04-06T17:36:30.403Z",
+  "checksum": "87c2dfdb59d16ecc",
   "frontendContract": {
     "window": {
       "id": "800027",
       "name": "Assets",
       "primaryEntity": "assets",
       "category": "accounting",
+      "sidebarLayout": true,
       "secondaryTabs": {
         "assetAcct": {
           "label": "Accounting",
           "tabOrder": 1
         }
       },
-      "statusBar": {
-        "cards": [
-          {
-            "field": "depreciatedValue",
-            "label": "Depreciated Value",
-            "color": "blue",
-            "icon": "TrendingDown"
-          },
-          {
-            "field": "depreciatedPlan",
-            "label": "Depreciated Plan",
-            "color": "teal",
-            "icon": "TrendingDown"
-          }
-        ],
-        "progress": {
-          "numerator": "depreciatedValue",
-          "denominator": "assetValue",
-          "condition": "depreciate",
-          "label": "Depreciation",
-          "color": "orange",
-          "completedColor": "green",
-          "completedIcon": "CheckCircle2"
-        }
-      },
       "detailSortBy": "sEQNoAsset asc",
+      "disableProcessedLock": true,
       "layoutType": "default"
     },
     "entities": {
@@ -130,7 +107,8 @@
             "defaultValue": "@C_Currency_ID@",
             "readOnlyLogic": {
               "raw": "@existAmortizationLines@ = 'Y'",
-              "evaluable": true
+              "evaluable": true,
+              "js": "Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0"
             }
           },
           {
@@ -146,6 +124,7 @@
             "form": true,
             "reference": "Product",
             "inputMode": "search",
+            "popup": true,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Asset_Product"
             }
@@ -542,7 +521,7 @@
               "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
               "evaluable": false,
               "reason": "accounting-dimension",
-              "js": "record.depreciate === true || record.depreciate === 'Y'"
+              "js": null
             }
           },
           {
@@ -682,7 +661,8 @@
             "form": true,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
-              "evaluable": true
+              "evaluable": true,
+              "js": "record['processed'] === 'Y'"
             }
           },
           {
@@ -698,7 +678,8 @@
             "form": true,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
-              "evaluable": true
+              "evaluable": true,
+              "js": "record['processed'] === 'Y'"
             }
           },
           {
@@ -716,7 +697,8 @@
             "inputMode": "selector",
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
-              "evaluable": true
+              "evaluable": true,
+              "js": "record['processed'] === 'Y'"
             }
           }
         ],
@@ -791,38 +773,15 @@
       "name": "Assets",
       "primaryEntity": "assets",
       "category": "accounting",
+      "sidebarLayout": true,
       "secondaryTabs": {
         "assetAcct": {
           "label": "Accounting",
           "tabOrder": 1
         }
       },
-      "statusBar": {
-        "cards": [
-          {
-            "field": "depreciatedValue",
-            "label": "Depreciated Value",
-            "color": "blue",
-            "icon": "TrendingDown"
-          },
-          {
-            "field": "depreciatedPlan",
-            "label": "Depreciated Plan",
-            "color": "teal",
-            "icon": "TrendingDown"
-          }
-        ],
-        "progress": {
-          "numerator": "depreciatedValue",
-          "denominator": "assetValue",
-          "condition": "depreciate",
-          "label": "Depreciation",
-          "color": "orange",
-          "completedColor": "green",
-          "completedIcon": "CheckCircle2"
-        }
-      },
-      "detailSortBy": "sEQNoAsset asc"
+      "detailSortBy": "sEQNoAsset asc",
+      "disableProcessedLock": true
     },
     "entities": {
       "assets": {

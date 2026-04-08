@@ -3,12 +3,18 @@ import OrderTable from './OrderTable';
 import OrderForm from './OrderForm';
 import OrderLineTable from './OrderLineTable';
 import OrderLineForm from './OrderLineForm';
+import OrderLineTaxTable from './OrderLineTaxTable';
+import OrderLineTaxForm from './OrderLineTaxForm';
+import ReservedStockTable from './ReservedStockTable';
+import ReservedStockForm from './ReservedStockForm';
 import OrderTaxTable from './OrderTaxTable';
 import OrderTaxForm from './OrderTaxForm';
 import BasicDiscountsTable from './BasicDiscountsTable';
 import BasicDiscountsForm from './BasicDiscountsForm';
 import PaymentPlanTable from './PaymentPlanTable';
 import PaymentPlanForm from './PaymentPlanForm';
+import PaymentDetailsTable from './PaymentDetailsTable';
+import PaymentDetailsForm from './PaymentDetailsForm';
 import catalogs from './mockCatalogs';
 
 const breadcrumb = 'Purchases / Purchase Order';
@@ -22,11 +28,14 @@ const summary = [
 const statusField = 'documentStatus';
 // @sf-generated-end summary:order
 
+// @sf-custom-slot extraBadges:order
+// @sf-generated-start extraBadges:order
+const extraBadges = [];
+// @sf-generated-end extraBadges:order
+
 // @sf-generated-start processes:order
 const processes = [
-  { name: 'processOrder', label: 'Process Order', style: 'positive' },
-  { name: 'copyFromPO', label: 'Copy From P O', style: 'positive' },
-  { name: 'print', label: 'Print', style: 'positive' },
+
 ];
 // @sf-generated-end processes:order
 
@@ -73,8 +82,8 @@ const api = {
       "detailUrl": "/sws/neo/purchase-order/order/{id}",
       "supportedFilters": [
         "documentNo",
-        "orderDate",
         "businessPartner",
+        "orderDate",
         "documentStatus",
         "orderReference"
       ]
@@ -160,18 +169,18 @@ const api = {
   "selectors": [
     {
       "entity": "order",
-      "field": "transactionDocument",
-      "column": "C_DocTypeTarget_ID",
-      "reference": "DocumentType",
-      "url": "/sws/neo/purchase-order/order/selectors/transactionDocument"
-    },
-    {
-      "entity": "order",
       "field": "businessPartner",
       "column": "C_BPartner_ID",
       "reference": "BusinessPartner",
       "inputMode": "search",
       "url": "/sws/neo/purchase-order/order/selectors/businessPartner"
+    },
+    {
+      "entity": "order",
+      "field": "transactionDocument",
+      "column": "C_DocTypeTarget_ID",
+      "reference": "DocumentType",
+      "url": "/sws/neo/purchase-order/order/selectors/transactionDocument"
     },
     {
       "entity": "order",
@@ -544,6 +553,12 @@ const api = {
     },
     {
       "entity": "order",
+      "field": "eTBLKCBulkcompletion",
+      "column": "EM_Etblkc_Bulkcompletion",
+      "url": "/sws/neo/purchase-order/order/{id}/action/eTBLKCBulkcompletion"
+    },
+    {
+      "entity": "order",
       "field": "posted",
       "column": "Posted",
       "url": "/sws/neo/purchase-order/order/{id}/action/posted"
@@ -631,6 +646,7 @@ export default function OrderPage({ windowName, recordId, ...props }) {
         DetailForm={OrderLineForm}
         summary={summary}
         statusField={statusField}
+        extraBadges={extraBadges}
         processes={processes}
         addLineFields={addLineFields}
         catalogs={catalogs}
@@ -641,9 +657,12 @@ export default function OrderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
+          { key: 'orderLineTax', label: 'Line Tax', Table: OrderLineTaxTable, Form: OrderLineTaxForm },
+          { key: 'reservedStock', label: 'Prereserved Qty', Table: ReservedStockTable, Form: ReservedStockForm },
           { key: 'orderTax', label: 'Tax', Table: OrderTaxTable, Form: OrderTaxForm },
           { key: 'basicDiscounts', label: 'Basic Discounts', Table: BasicDiscountsTable, Form: BasicDiscountsForm },
           { key: 'paymentPlan', label: 'Payment Plan', Table: PaymentPlanTable, Form: PaymentPlanForm },
+          { key: 'paymentDetails', label: 'Payment Details', Table: PaymentDetailsTable, Form: PaymentDetailsForm },
         ]}
         {...props}
       />

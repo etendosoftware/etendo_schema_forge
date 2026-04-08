@@ -21,6 +21,9 @@ function createMockPool(mockData) {
       if (sql.includes('ad_menu')) {
         return Promise.resolve({ rows: mockData.menus || [] });
       }
+      if (sql.includes('ad_ref_list')) {
+        return Promise.resolve({ rows: mockData.statuses || [] });
+      }
       return Promise.resolve({ rows: [] });
     },
   };
@@ -41,10 +44,12 @@ describe('extractLabels', () => {
     assert.ok(result.windows, 'should have windows section');
     assert.ok(result.tabs, 'should have tabs section');
     assert.ok(result.menus, 'should have menus section');
+    assert.ok(result.statuses, 'should have statuses section');
     assert.equal(typeof result.fields, 'object');
     assert.equal(typeof result.windows, 'object');
     assert.equal(typeof result.tabs, 'object');
     assert.equal(typeof result.menus, 'object');
+    assert.equal(typeof result.statuses, 'object');
   });
 
   it('maps field rows by column_key with label and description', async () => {
@@ -166,6 +171,7 @@ describe('extractLabels', () => {
     assert.deepEqual(result.windows, {});
     assert.deepEqual(result.tabs, {});
     assert.deepEqual(result.menus, {});
+    assert.deepEqual(result.statuses, {});
   });
 
   it('passes language parameter to pool.query', async () => {
@@ -179,8 +185,8 @@ describe('extractLabels', () => {
 
     await extractLabels(pool, 'es_AR');
 
-    // All 4 queries should receive the language parameter
-    assert.equal(capturedParams.length, 4);
+    // All 5 queries should receive the language parameter
+    assert.equal(capturedParams.length, 5);
     for (const params of capturedParams) {
       assert.deepEqual(params, ['es_AR']);
     }
@@ -315,7 +321,7 @@ describe('extractLabels', () => {
     assert.equal(result.fields.Col_0.label, 'Label 0');
   });
 
-  it('all four queries run concurrently via Promise.all', async () => {
+  it('all five queries run concurrently via Promise.all', async () => {
     const callOrder = [];
     let resolveCount = 0;
     const pool = {
@@ -334,8 +340,8 @@ describe('extractLabels', () => {
 
     await extractLabels(pool, 'en_US');
 
-    // All 4 queries should have started before any ended
+    // All 5 queries should have started before any ended
     const starts = callOrder.filter((e) => e.startsWith('start-'));
-    assert.equal(starts.length, 4, 'all 4 queries should start');
+    assert.equal(starts.length, 5, 'all 5 queries should start');
   });
 });

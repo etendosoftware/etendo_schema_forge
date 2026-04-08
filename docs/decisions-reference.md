@@ -28,6 +28,35 @@ Complete reference for all configurable options in `decisions.json` files. These
 | `entities` | object | Yes | — | Entity definitions keyed by entity name. |
 | `rules` | object | No | `{}` | Business rule catalog. |
 | `discardPatterns` | array | No | `[]` | Glob patterns to auto-discard fields. |
+| `labelOverrides` | object | No | `{}` | Per-locale label overrides for field columns. See below. |
+
+## Label Overrides (`labelOverrides`)
+
+Per-locale field label overrides. When the simplified interface needs to rename a field differently from the base Etendo AD translation, add it here instead of modifying the global locale dictionary.
+
+**Schema:**
+```json
+{
+  "labelOverrides": {
+    "es_ES": {
+      "C_BPartner_ID": "Cliente",
+      "DateOrdered": "Fecha de Pedido"
+    },
+    "en_US": {
+      "C_BPartner_ID": "Customer"
+    }
+  }
+}
+```
+
+**Resolution chain** (frontend `useLabel`):
+1. `labelOverrides[currentLocale][columnName]` — per-window override (this section)
+2. `dictionary.fields[columnName].label` — Etendo AD translation from `extract-labels.js`
+3. `null` — caller falls back to raw label from spec
+
+**How to use:**
+- Pass `spec?.window?.labelOverrides` to `useLabel()` in components that have access to the loaded spec
+- `resolve-curated.js` forwards `labelOverrides` to `schema.window.labelOverrides` automatically
 
 ## Window Properties (`window.*`)
 
@@ -37,12 +66,14 @@ Complete reference for all configurable options in `decisions.json` files. These
 | `name` | string | From AD | — | Display name for breadcrumbs and titles. |
 | `layoutType` | string | `"default"` | `"default"`, `"kanban"`, `"calendar"`, `"custom"` | Frontend rendering mode. See `docs/window-templates.md`. |
 | `templateConfig` | object | `null` | Layout-specific | Extra config for non-default layouts (e.g., `groupBy`, `dateField`). |
+| `detailEntity` | string \| null | Auto-inferred | Entity name or `null` | Explicitly sets which entity is the detail/lines tab. When omitted, the generator picks the first non-primary entity automatically. Set to `null` to create a header-only page (no detail tab). Set to a specific entity name to override the auto-inference. |
 | `relatedDocuments` | boolean | `false` | — | Enables the Related Documents footer in the detail view. Requires a hand-written `RelatedDocuments.jsx` in `artifacts/{window}/custom/`. The generator emits the import and `customTabs` prop automatically. |
 | `notesField` | string | `null` | Any entity field name | Field to display as a notes/description panel in the detail view footer (e.g., `"description"`). Rendered as an expandable text input. |
 | `documentPreview` | object | `null` | `{ titlePrefix: string }` | Enables the document preview button in the detail header. `titlePrefix` is shown in the preview drawer title (e.g., `"Order"`, `"Invoice"`). |
 | `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. |
 | `customComponents` | object | `null` | See below | Override generated components with custom ones from `artifacts/{window}/custom/`. The generator emits the correct imports and props automatically. |
 | `menuActions` | array | `[]` | See below | Additional actions in the detail view's "more" menu (triple dot). Each action can have visibility conditions based on document status. |
+| `processOverrides` | object | `{}` | See below | Override presentation and behavior of process buttons in the detail view. Keys are process names or column names. See Process Overrides subsection. |
 | `detailSortBy` | string | `null` | Any valid sort expression | Default sort order for the detail entity tab (e.g., `"sEQNoAsset asc"`). Passed directly to DetailView as the `detailSortBy` prop. |
 | `statusBar` | object | `null` | See below | Generates a summary status bar above the detail form showing key numeric fields and an optional progress indicator. |
 
@@ -134,6 +165,32 @@ Additional actions shown in the detail view's "more" menu (triple dot icon). Eac
 | `destructive` | boolean | If `true`, renders in red as a destructive action. |
 | `visibleWhenStatus` | string or string[] | Only show the action when document status matches. Omit to always show. |
 | `columnName` | string | If set, triggers the named process column via `hook.handleProcess`. If omitted, generates an empty `onClick` placeholder. |
+
+### Process Overrides (`window.processOverrides`)
+
+Override the presentation and behavior of process buttons rendered in the detail view. Each key is a process name or column name from the backend contract. The generator matches overrides by `p.name` first, then falls back to `p.columnName`.
+
+```json
+{
+  "processOverrides": {
+    "completeOrder": { "label": "Approve", "style": "positive" },
+    "voidOrder": { "exclude": true },
+    "customAction": { "add": true, "label": "Custom Action", "style": "neutral", "displayLogicRaw": "data.status === 'DR'" }
+  }
+}
+```
+
+Each override entry supports the following properties:
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `label` | string | Override the default process label. |
+| `style` | string | Button style: `"positive"`, `"destructive"`, `"neutral"`. Default inferred from name. |
+| `displayLogicRaw` | string | JavaScript expression controlling button visibility (e.g., `"data.status === 'DR'"`). |
+| `exclude` | boolean | If `true`, hides this process button entirely. |
+| `add` | boolean | If `true`, defines a new process button not present in the backend contract. |
+
+When `style` is not specified, the generator defaults to `"destructive"` for processes whose names contain destructive keywords (e.g., `void`, `cancel`, `reverse`) and `"positive"` for all others.
 
 ## Entity Properties (`entities.{entityName}.*`)
 

@@ -1,8 +1,111 @@
 [
-  {"bPartner":"Global Trade Ltd","current":12000,"days30":5000,"days60":2000,"days90":0,"days120":0,"total":19000},
-  {"bPartner":"Barcelona Foods","current":8500,"days30":3200,"days60":0,"days90":1500,"days120":0,"total":13200},
-  {"bPartner":"Valencia Exports","current":6000,"days30":4000,"days60":3500,"days90":2800,"days120":0,"total":16300},
-  {"bPartner":"Madrid Logistics","current":4200,"days30":1800,"days60":0,"days90":0,"days120":0,"total":6000},
-  {"bPartner":"Sevilla Motors","current":3500,"days30":2200,"days60":1500,"days90":800,"days120":0,"total":8000},
-  {"bPartner":"Bilbao Tech","current":2800,"days30":700,"days60":0,"days90":1000,"days120":0,"total":4500}
+  {
+    "bPartner": "Global Trade Ltd",
+    "bPartnerId": "A1B2C3D4E5F6789012345678901234AB",
+    "current": 12000.00,
+    "days30": 5000.00,
+    "days60": 2000.00,
+    "days90": 0.00,
+    "days120": 0.00,
+    "days150plus": 0.00,
+    "total": 19000.00,
+    "credits": 500.00,
+    "net": 18500.00,
+    "docs": [
+      { "invoiceId": "INV-AR-001", "docNo": "1000100", "dateInvoiced": "2026-01-15", "current": 12000.00, "days30": 0.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-002", "docNo": "1000098", "dateInvoiced": "2026-03-01", "current": 0.00, "days30": 5000.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-003", "docNo": "1000085", "dateInvoiced": "2026-02-05", "current": 0.00, "days30": 0.00, "days60": 2000.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 }
+    ]
+  },
+  {
+    "bPartner": "Barcelona Foods",
+    "bPartnerId": "B2C3D4E5F6789012345678901234BC56",
+    "current": 8500.00,
+    "days30": 3200.00,
+    "days60": 0.00,
+    "days90": 1500.00,
+    "days120": 0.00,
+    "days150plus": 0.00,
+    "total": 13200.00,
+    "credits": 0.00,
+    "net": 13200.00,
+    "docs": [
+      { "invoiceId": "INV-AR-004", "docNo": "1000112", "dateInvoiced": "2026-03-20", "current": 8500.00, "days30": 0.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-005", "docNo": "1000095", "dateInvoiced": "2026-03-05", "current": 0.00, "days30": 3200.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-006", "docNo": "1000070", "dateInvoiced": "2026-01-05", "current": 0.00, "days30": 0.00, "days60": 0.00, "days90": 1500.00, "days120": 0.00, "days150plus": 0.00 }
+    ]
+  },
+  {
+    "bPartner": "Valencia Exports",
+    "bPartnerId": "C3D4E5F678901234567890123456CD78",
+    "current": 6000.00,
+    "days30": 4000.00,
+    "days60": 3500.00,
+    "days90": 2800.00,
+    "days120": 0.00,
+    "days150plus": 0.00,
+    "total": 16300.00,
+    "credits": 1200.00,
+    "net": 15100.00,
+    "docs": [
+      { "invoiceId": "INV-AR-007", "docNo": "1000120", "dateInvoiced": "2026-03-28", "current": 6000.00, "days30": 0.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-008", "docNo": "1000108", "dateInvoiced": "2026-03-08", "current": 0.00, "days30": 4000.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-009", "docNo": "1000089", "dateInvoiced": "2026-02-08", "current": 0.00, "days30": 0.00, "days60": 3500.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-010", "docNo": "1000062", "dateInvoiced": "2026-01-08", "current": 0.00, "days30": 0.00, "days60": 0.00, "days90": 2800.00, "days120": 0.00, "days150plus": 0.00 }
+    ]
+  },
+  {
+    "bPartner": "Madrid Logistics",
+    "bPartnerId": "D4E5F67890123456789012345678DE90",
+    "current": 4200.00,
+    "days30": 1800.00,
+    "days60": 0.00,
+    "days90": 0.00,
+    "days120": 0.00,
+    "days150plus": 0.00,
+    "total": 6000.00,
+    "credits": 0.00,
+    "net": 6000.00,
+    "docs": [
+      { "invoiceId": "INV-AR-011", "docNo": "1000115", "dateInvoiced": "2026-03-25", "current": 4200.00, "days30": 0.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-012", "docNo": "1000102", "dateInvoiced": "2026-03-10", "current": 0.00, "days30": 1800.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 }
+    ]
+  },
+  {
+    "bPartner": "Sevilla Motors",
+    "bPartnerId": "E5F6789012345678901234567890EF12",
+    "current": 3500.00,
+    "days30": 2200.00,
+    "days60": 1500.00,
+    "days90": 800.00,
+    "days120": 0.00,
+    "days150plus": 0.00,
+    "total": 8000.00,
+    "credits": 300.00,
+    "net": 7700.00,
+    "docs": [
+      { "invoiceId": "INV-AR-013", "docNo": "1000118", "dateInvoiced": "2026-03-22", "current": 3500.00, "days30": 0.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-014", "docNo": "1000105", "dateInvoiced": "2026-03-07", "current": 0.00, "days30": 2200.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-015", "docNo": "1000090", "dateInvoiced": "2026-02-07", "current": 0.00, "days30": 0.00, "days60": 1500.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-016", "docNo": "1000072", "dateInvoiced": "2026-01-07", "current": 0.00, "days30": 0.00, "days60": 0.00, "days90": 800.00, "days120": 0.00, "days150plus": 0.00 }
+    ]
+  },
+  {
+    "bPartner": "Bilbao Tech",
+    "bPartnerId": "F6789012345678901234567890123456",
+    "current": 2800.00,
+    "days30": 700.00,
+    "days60": 0.00,
+    "days90": 1000.00,
+    "days120": 0.00,
+    "days150plus": 0.00,
+    "total": 4500.00,
+    "credits": 0.00,
+    "net": 4500.00,
+    "docs": [
+      { "invoiceId": "INV-AR-017", "docNo": "1000119", "dateInvoiced": "2026-03-26", "current": 2800.00, "days30": 0.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-018", "docNo": "1000107", "dateInvoiced": "2026-03-12", "current": 0.00, "days30": 700.00, "days60": 0.00, "days90": 0.00, "days120": 0.00, "days150plus": 0.00 },
+      { "invoiceId": "INV-AR-019", "docNo": "1000068", "dateInvoiced": "2026-01-12", "current": 0.00, "days30": 0.00, "days60": 0.00, "days90": 1000.00, "days120": 0.00, "days150plus": 0.00 }
+    ]
+  }
 ]

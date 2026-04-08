@@ -196,12 +196,24 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const quotationId = data?.quotation;
   const quotationLabel = data?.['quotation$_identifier'];
   if (quotationId) {
+    // Parse backend _identifier: "1000373 - 07-04-2026 - 191.80"
+    let qTitle = 'Quotation';
+    let qAmount = null;
+    let qStatus = 'CO'; // quotations linked to orders are always confirmed
+    if (quotationLabel) {
+      const parts = quotationLabel.split(' - ');
+      if (parts.length >= 1) qTitle = `Quotation #${parts[0].trim()}`;
+      if (parts.length >= 3) qAmount = parseFloat(parts[2].trim()) || null;
+    }
     chips.push(
       <DocChip
         key="quotation"
         icon={CHIP_ICONS.quotation}
         iconColor={CHIP_COLORS.quotation}
-        title={quotationLabel || quotationId}
+        title={qTitle}
+        amount={qAmount}
+        currency={data?.['currency$_identifier']}
+        status={qStatus}
         onClick={() => navigate(`/sales-quotation/${quotationId}`)}
       />
     );

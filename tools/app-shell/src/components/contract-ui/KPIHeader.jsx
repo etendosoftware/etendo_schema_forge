@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { TrendingUp, TrendingDown } from 'lucide-react';
+import { useMenuLabel } from '@/i18n';
 
 /**
  * Format a KPI value according to the specified format type.
@@ -47,6 +48,7 @@ const DEFAULT_SCHEME = { bg: 'bg-primary/10', icon: 'text-primary' };
  * A single KPI metric card.
  */
 export function KPICard({ label, value, format, trend, previousValue, icon: Icon, kpiKey }) {
+  const tMenu = useMenuLabel();
   const hasTrend = trend != null && trend !== 0;
   const isPositive = trend > 0;
   const scheme = KPI_SCHEMES[kpiKey] || DEFAULT_SCHEME;
@@ -91,7 +93,7 @@ export function KPICard({ label, value, format, trend, previousValue, icon: Icon
 
         {previousValue != null && hasTrend && (
           <p className="text-xs text-muted-foreground mt-1">
-            vs {formatValue(previousValue, format)} prev. month
+            vs {formatValue(previousValue, format)} {tMenu('prev. month')}
           </p>
         )}
       </CardContent>

@@ -116,8 +116,10 @@ export function generateTableComponent(entityName, contract) {
       : '';
     const labelPart = f.label ? `, label: '${f.label.replace(/'/g, "\\'")}'` : '';
     const badgePart = f.badge ? ', badge: true' : '';
+    const badgeLabelsPart = f.badgeLabels ? `, badgeLabels: ${JSON.stringify(f.badgeLabels)}` : '';
     const summablePart = f.summable ? ', summable: true' : '';
-    return `  { key: '${f.name}', column: '${f.column}', type: '${type}'${labelPart}${enumLabelsPart}${selectionPart}${badgePart}${summablePart} },`;
+    const displayPart = f.display ? `, display: '${f.display}'` : '';
+    return `  { key: '${f.name}', column: '${f.column}', type: '${type}'${labelPart}${enumLabelsPart}${selectionPart}${badgePart}${badgeLabelsPart}${summablePart}${displayPart} },`;
   }).join('\n');
 
   const filtersArray = searchableFields.map(f => `'${f}'`).join(', ');
@@ -134,12 +136,9 @@ const filters = [${filtersArray}];
 
 ${MARKERS.GENERATED_START(`component:${compName}`)}
 export default function ${compName}(props) {
-  ${MARKERS.CUSTOM_SLOT(`hooks:${compName}`)}
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 ${MARKERS.GENERATED_END(`component:${compName}`)}
-
-${MARKERS.CUSTOM_SLOT(`section:${compName}-custom`)}
 `;
 }
 
@@ -150,6 +149,8 @@ ${MARKERS.CUSTOM_SLOT(`section:${compName}-custom`)}
  */
 export function generateFormComponent(entityName, contract) {
   const entity = contract.frontendContract.entities[entityName];
+  const formCols = entity.formCols ?? null;
+  const colsProp = formCols != null ? ` cols={${formCols}}` : '';
   // Sort by seq override if present (stable sort: fields without seq keep natural DB order)
   const formFields = entity.fields
     .filter(f => f.form && f.type !== 'button')
@@ -178,6 +179,8 @@ export function generateFormComponent(entityName, contract) {
   const fieldsArray = formFields.map((f, idx) => {
     const type = mapFormFieldType(f);
     const requiredPart = f.required ? ', required: true' : '';
+    const lookupPart = f.lookup ? ', lookup: true' : '';
+    const popupPart = f.popup ? ', popup: true' : '';
     const readOnlyPart = f.visibility === 'readOnly' ? ', readOnly: true' : '';
     const referencePart = f.reference ? `, reference: '${f.reference}'` : '';
     const inputModePart = f.inputMode ? `, inputMode: '${f.inputMode}'` : '';
@@ -187,7 +190,7 @@ export function generateFormComponent(entityName, contract) {
     // Section classification
     const sectionPart = `, section: '${fieldSections[idx]}'`;
     // UI hints
-    const defaultValuePart = f.defaultValue ? `, defaultValue: '${f.defaultValue.replace(/'/g, "\\'")}'` : '';
+    const defaultValuePart = f.defaultValue ? `, defaultValue: '${f.defaultValue.replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '')}'` : '';
     const helpPart = f.help ? `, help: '${f.help.replace(/'/g, "\\'")}'` : '';
     const fieldGroupPart = f.fieldGroup ? `, fieldGroup: '${f.fieldGroup.replace(/'/g, "\\'")}'` : '';
     const precisionPart = f.precision ? `, precision: ${f.precision}` : '';
@@ -208,20 +211,12 @@ export function generateFormComponent(entityName, contract) {
         readOnlyLogicPart = `, readOnlyLogic: (record) => ${f.readOnlyLogic.js}`;
       }
     }
-    // Custom slots for callout and onChangeFunction behavioral hints
     const slotLines = [];
-    if (f.callout) {
-      const calloutId = f.callout.className.replace(/.*\./, '');
-      slotLines.push(`  ${MARKERS.CUSTOM_SLOT(`callout:${calloutId}`)}`);
-    }
-    if (f.onChangeFunction) {
-      slotLines.push(`  ${MARKERS.CUSTOM_SLOT(`onchange:${f.onChangeFunction.name}`)}`);
-    }
     const optionsPart = (type === 'select' && f.enumValues?.length)
       ? `, options: [${f.enumValues.map(o => `{ value: '${o.value}', label: '${o.name.replace(/'/g, "\\'")}' }`).join(', ')}]`
       : '';
     const formLabelPart = f.label ? `, label: '${f.label.replace(/'/g, "\\'")}'` : '';
-    const fieldLine = `  { key: '${f.name}', column: '${f.column}', type: '${type}'${formLabelPart}${requiredPart}${readOnlyPart}${sectionPart}${referencePart}${inputModePart}${dependsOnPart}${optionsPart}${defaultValuePart}${helpPart}${fieldGroupPart}${precisionPart}${displayLogicPart}${readOnlyLogicPart} },`;
+    const fieldLine = `  { key: '${f.name}', column: '${f.column}', type: '${type}'${formLabelPart}${requiredPart}${lookupPart}${popupPart}${readOnlyPart}${sectionPart}${referencePart}${inputModePart}${dependsOnPart}${optionsPart}${defaultValuePart}${helpPart}${fieldGroupPart}${precisionPart}${displayLogicPart}${readOnlyLogicPart} },`;
     return [...slotLines, fieldLine].join('\n');
   }).join('\n');
 
@@ -241,12 +236,9 @@ ${MARKERS.GENERATED_END(`fields:${entityName}`)}
 
 ${MARKERS.GENERATED_START(`component:${compName}`)}
 export default function ${compName}(props) {
-  ${MARKERS.CUSTOM_SLOT(`hooks:${compName}`)}
-  return <EntityForm fields={fields} {...props} />;
+  return <EntityForm fields={fields}${colsProp} {...props} />;
 }
 ${MARKERS.GENERATED_END(`component:${compName}`)}
-
-${MARKERS.CUSTOM_SLOT(`section:${compName}-custom`)}
 `;
 }
 
@@ -379,10 +371,11 @@ ${MARKERS.GENERATED_END(`statusBar:${headerEntity}`)}`;
  */
 export function generatePageComponent(headerEntity, detailEntity, contract) {
   const headerName = capitalize(headerEntity);
-  const detailName = capitalize(detailEntity);
+  const detailName = detailEntity ? capitalize(detailEntity) : null;
   const compName = `${headerName}Page`;
   const layoutType = contract?.frontendContract?.window?.layoutType ?? 'default';
   const isGallery = layoutType === 'gallery';
+  const isSidebar = !!contract?.frontendContract?.window?.sidebarLayout;
   const processes = getProcessesForEntity(contract, headerEntity);
   const readOnlyFields = getReadOnlyFields(contract, headerEntity);
 
@@ -394,8 +387,16 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   // Prefer DocStatus column (document workflow status) if present, even when form:false.
   const allEntityFields = contract.frontendContract.entities[headerEntity]?.fields ?? [];
   const docStatusField = allEntityFields.find(f => f.column === 'DocStatus');
-  const statusField = docStatusField ?? readOnlyFields.find(f => f.name.toLowerCase().includes('status'));
-  const summaryFields = readOnlyFields.filter(f => f !== statusField);
+  const statusFieldOverride = contract.frontendContract.window.statusField;
+  const statusField = statusFieldOverride
+    ? (allEntityFields.find(f => f.name === statusFieldOverride) ?? null)
+    : (docStatusField ?? allEntityFields.find(f => f.visibility === 'readOnly' && f.name.toLowerCase().includes('status')));
+  const summaryFieldsOverride = contract.frontendContract.window.summaryFields;
+  const summaryFields = Array.isArray(summaryFieldsOverride)
+    ? summaryFieldsOverride.length === 0
+      ? []
+      : readOnlyFields.filter(f => f !== statusField && summaryFieldsOverride.includes(f.name))
+    : readOnlyFields.filter(f => f !== statusField);
 
   // Summary config
   const summaryArray = summaryFields.map(f => {
@@ -407,22 +408,47 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const statusFieldLine = statusField ? `'${statusField.name}'` : 'null';
 
   // Process config: backendContract process endpoints + button-type fields from frontendContract
+  // processOverrides from decisions.json allow label, style, displayLogicRaw, and exclude overrides
+  const processOverrides = contract?.frontendContract?.window?.processOverrides ?? {};
   const buttonFields = allEntityFields.filter(f => f.type === 'button' && f.form);
   const processesArray = [
     ...processes.map(p => {
+      const ovr = processOverrides[p.name] || processOverrides[p.columnName] || {};
+      if (ovr.exclude) return null;
       const isDestructive = /void|cancel|reject/i.test(p.name);
-      const style = isDestructive ? 'destructive' : 'positive';
+      const style = ovr.style || (isDestructive ? 'destructive' : 'positive');
+      const label = ovr.label || toLabel(p.name);
       const colPart = p.columnName ? `, columnName: '${p.columnName}'` : '';
       const paramsPart = p.params?.length ? `, params: ${JSON.stringify(p.params)}` : '';
-      return `  { name: '${p.name}', label: '${toLabel(p.name)}', style: '${style}'${colPart}${paramsPart} },`;
-    }),
+      const dlRaw = ovr.displayLogicRaw
+        ? `,\n    displayLogicRaw: "${ovr.displayLogicRaw.replace(/"/g, '\\"')}"`
+        : '';
+      return `  { name: '${p.name}', label: '${label.replace(/'/g, "\\'")}', style: '${style}'${colPart}${paramsPart}${dlRaw} },`;
+    }).filter(Boolean),
     ...buttonFields.map(f => {
+      const ovr = processOverrides[f.name] || {};
+      if (ovr.exclude) return null;
       const isDestructive = /void|cancel|reject/i.test(f.name);
-      const style = isDestructive ? 'destructive' : 'positive';
-      const label = f.label || toLabel(f.name);
-      const dlRaw = f.displayLogic?.raw ? `, displayLogicRaw: '${f.displayLogic.raw.replace(/'/g, "\\'")}'` : '';
-      return `  { name: '${f.name}', label: '${label}', style: '${style}'${dlRaw} },`;
-    }),
+      const style = ovr.style || (isDestructive ? 'destructive' : 'positive');
+      const label = ovr.label || f.label || toLabel(f.name);
+      const dlRawVal = ovr.displayLogicRaw || f.displayLogic?.raw;
+      const dlRaw = dlRawVal ? `,\n    displayLogicRaw: "${dlRawVal.replace(/"/g, '\\"')}"` : '';
+      const requiresLinesPart = ovr.requiresLines ? `, requiresLines: true` : '';
+      return `  { name: '${f.name}', label: '${label.replace(/'/g, "\\'")}', style: '${style}'${dlRaw}${requiresLinesPart} },`;
+    }).filter(Boolean),
+    // Extra processes defined purely in decisions.json (not in backend contract)
+    ...Object.entries(processOverrides)
+      .filter(([, ovr]) => ovr.add && !ovr.exclude)
+      .map(([name, ovr]) => {
+        const style = ovr.style || 'positive';
+        const label = ovr.label || toLabel(name);
+        const colPart = ovr.columnName ? `, columnName: '${ovr.columnName}'` : '';
+        const dlRaw = ovr.displayLogicRaw
+          ? `,\n    displayLogicRaw: "${ovr.displayLogicRaw.replace(/"/g, '\\"')}"`
+          : '';
+        const requiresLinesPart = ovr.requiresLines ? `, requiresLines: true` : '';
+        return `  { name: '${name}', label: '${label.replace(/'/g, "\\'")}', style: '${style}'${colPart}${dlRaw}${requiresLinesPart} },`;
+      }),
   ].join('\n');
 
   // Separate entry fields (user types) from auto-derived fields (price, tax, discount, amount)
@@ -459,7 +485,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   }).join('\n');
 
   const hiddenDefaultsArray = hiddenDefaultFields.map(f => {
-    const defaultValue = String(f.defaultValue).replace(/'/g, "\\'");
+    const defaultValue = String(f.defaultValue).replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '');
     return `    { key: '${f.name}', value: '${defaultValue}' },`;
   }).join('\n');
 
@@ -470,6 +496,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
     : '';
   const apiProp = apiPrediction ? '\n      api={api}' : '';
 
+  const windowBreadcrumbOverride = contract?.frontendContract?.window?.breadcrumb;
   const windowCategory = capitalize(contract?.frontendContract?.window?.category ?? 'general');
   const windowLabel = contract?.frontendContract?.window?.name ?? toLabel(headerEntity);
 
@@ -479,10 +506,12 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const notesField = windowConfig.notesField ?? null;
   const relatedDocuments = windowConfig.relatedDocuments ?? false;
   const hideDeleteWhenComplete = windowConfig.hideDeleteWhenComplete ?? false;
+  const hidePrint = windowConfig.hidePrint ?? false;
   const customComponents = windowConfig.customComponents ?? {};
   const menuActionsConfig = windowConfig.menuActions ?? [];
   const statusBar = windowConfig.statusBar ?? null;
   const detailSortBy = windowConfig.detailSortBy ?? null;
+  const salesTheme = windowConfig.salesTheme ?? false;
 
   // Detect secondary child entities for additional tabs
   const secondaryTabsDecl = windowConfig.secondaryTabs;
@@ -495,7 +524,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
       .map(([key, cfg]) => {
         const isFormTab = cfg.tabMode === 'form-only';
         const FormName = cfg.customForm ?? `${capitalize(key)}Form`;
-        const TableName = `${capitalize(key)}Table`;
+        const TableName = cfg.customTable ?? `${capitalize(key)}Table`;
         const addLineFieldKeys = cfg.addLineFields ?? [];
         const entityFields = contract.frontendContract.entities[key]?.fields ?? [];
         const addLineEntries = addLineFieldKeys.map(fk => {
@@ -511,18 +540,18 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
             : '';
           return `          { key: '${fk}', column: '${f.column}', type: '${type}'${requiredPart}${labelPart}${referencePart}${inputModePart}${optionsPart} }`;
         }).filter(Boolean);
-        return { key, label: cfg.label ?? toLabel(key), isFormTab, isCustomForm: !!cfg.customForm, FormName, TableName, addLineEntries };
+        return { key, label: cfg.label ?? toLabel(key), isFormTab, isCustomForm: !!cfg.customForm, isCustomTable: !!cfg.customTable, FormName, TableName, addLineEntries };
       });
   } else {
     // Fallback: hardcoded known list + entity inference (backward compat)
     const allEntityEntries = Object.entries(contract.frontendContract.entities);
     const knownSecondaryTabDefs = [
-      { key: 'orderTax',         label: 'Tax',               TableName: 'OrderTaxTable',         FormName: 'OrderTaxForm' },
-      { key: 'invoiceTax',       label: 'Tax',               TableName: 'InvoiceTaxTable',       FormName: 'InvoiceTaxForm' },
-      { key: 'basicDiscounts',   label: 'Basic Discounts',   TableName: 'BasicDiscountsTable',   FormName: 'BasicDiscountsForm' },
-      { key: 'paymentPlan',      label: 'Payment Plan',      TableName: 'PaymentPlanTable',      FormName: 'PaymentPlanForm' },
-      { key: 'accounting',       label: 'Accounting',        TableName: 'AccountingTable',       FormName: 'AccountingForm' },
-      { key: 'landedCost',       label: 'Landed Cost',       TableName: 'LandedCostTable',       FormName: 'LandedCostForm' },
+      { key: 'orderTax', label: 'Tax', TableName: 'OrderTaxTable', FormName: 'OrderTaxForm' },
+      { key: 'invoiceTax', label: 'Tax', TableName: 'InvoiceTaxTable', FormName: 'InvoiceTaxForm' },
+      { key: 'basicDiscounts', label: 'Basic Discounts', TableName: 'BasicDiscountsTable', FormName: 'BasicDiscountsForm' },
+      { key: 'paymentPlan', label: 'Payment Plan', TableName: 'PaymentPlanTable', FormName: 'PaymentPlanForm' },
+      { key: 'accounting', label: 'Accounting', TableName: 'AccountingTable', FormName: 'AccountingForm' },
+      { key: 'landedCost', label: 'Landed Cost', TableName: 'LandedCostTable', FormName: 'LandedCostForm' },
       { key: 'reversedInvoices', label: 'Reversed Invoices', TableName: 'ReversedInvoicesTable', FormName: 'ReversedInvoicesForm' },
     ].filter(t => allEntityEntries.some(([name]) => name === t.key));
 
@@ -555,10 +584,13 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
       const formImportPath = (t.isCustomForm && specName)
         ? `@/windows/custom/${specName}/${t.FormName}`
         : `./${t.FormName}`;
+      const tableImportPath = (t.isCustomTable && specName)
+        ? `@/windows/custom/${specName}/${t.TableName}`
+        : `./${t.TableName}`;
       if (t.isFormTab) {
         return `import ${t.FormName} from '${formImportPath}';`;
       }
-      return `import ${t.TableName} from './${t.TableName}';\nimport ${t.FormName} from '${formImportPath}';`;
+      return `import ${t.TableName} from '${tableImportPath}';\nimport ${t.FormName} from '${formImportPath}';`;
     })
     .join('\n');
 
@@ -590,6 +622,9 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   // hideDeleteWhenComplete prop
   const hideDeleteProp = hideDeleteWhenComplete ? '\n        hideDeleteWhenComplete' : '';
 
+  // hidePrint prop
+  const hidePrintProp = hidePrint ? '\n        hidePrint' : '';
+
   // Custom component props (bottomSection, topbarRight)
   const customComponentImports = [];
   const customComponentProps = [];
@@ -600,6 +635,19 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   if (customComponents.topbarRight) {
     customComponentImports.push(`import ${customComponents.topbarRight} from '../../../custom/${customComponents.topbarRight}';`);
     customComponentProps.push(`\n        topbarRight={${customComponents.topbarRight}}`);
+  }
+  if (customComponents.bulkActions) {
+    customComponentImports.push(`import ${customComponents.bulkActions} from '../../../custom/${customComponents.bulkActions}';`);
+  }
+  if (customComponents.sidePanel) {
+    customComponentImports.push(`import ${customComponents.sidePanel} from '../../../custom/${customComponents.sidePanel}';`);
+    customComponentProps.push(`\n        sidePanel={${customComponents.sidePanel}}`);
+    if (customComponents.sidePanelStyle) {
+      customComponentProps.push(`\n        sidePanelStyle={${JSON.stringify(customComponents.sidePanelStyle)}}`);
+    }
+  }
+  if (customComponents.newRecordComponent) {
+    customComponentImports.push(`import ${customComponents.newRecordComponent} from '../../../custom/${customComponents.newRecordComponent}';`);
   }
   const customCompImportBlock = customComponentImports.length > 0
     ? customComponentImports.join('\n') + '\n'
@@ -641,8 +689,9 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
 
   // entityLabel / detailLabel / detailTabIndex from window decisions config
   const entityLabel = windowConfig.entityLabel || toLabel(headerEntity);
-  const entityDetailLabel = windowConfig.detailLabel
-    || (contract.frontendContract.entities[detailEntity]?.tabName ?? toLabel(detailEntity));
+  const entityDetailLabel = detailEntity
+    ? (windowConfig.detailLabel || contract.frontendContract.entities[detailEntity]?.tabName || toLabel(detailEntity))
+    : '';
   const detailTabIndexProp = windowConfig.detailTabIndex != null
     ? `\n        detailTabIndex={${windowConfig.detailTabIndex}}`
     : '';
@@ -653,16 +702,29 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const statusBarCode = statusBarResult ? `\n${statusBarResult.componentCode}\n` : '';
   const headerContentProp = statusBar
     ? `\n        headerContent={(data) => <${headerName}StatusBar data={data} />}`
-    : (isGallery ? `\n        headerContent={
+    : (isGallery && !isSidebar ? `\n        headerContent={
           <${headerName}DetailHeader
             recordId={recordId}
             token={props.token}
             apiBaseUrl={api.baseUrl}
           />
         }` : '');
+  const sidebarContentProp = isSidebar
+    ? `\n        sidebarContent={(data) => (
+          <${headerName}Sidebar
+            recordId={recordId}
+            data={data}
+            token={props.token}
+            apiBaseUrl={props.apiBaseUrl}
+          />
+        )}`
+    : '';
 
   // detailSortBy prop
   const detailSortByProp = detailSortBy ? `\n        detailSortBy="${detailSortBy}"` : '';
+
+  // salesTheme prop
+  const salesThemeProp = salesTheme ? '\n        salesTheme' : '';
 
   // listKpiCards → headerContent prop in ListView
   const listKpiCardsConfig = windowConfig.listKpiCards ?? null;
@@ -671,8 +733,13 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   if (listKpiCardsConfig?.customComponent && specName) {
     const kpiComp = listKpiCardsConfig.customComponent;
     listKpiCardsImport = `import ${kpiComp} from '@/windows/custom/${specName}/${kpiComp}';\n`;
-    listKpiCardsProp = `\n      headerContent={(p) => <${kpiComp} {...p} />}\n      api={api}`;
+    listKpiCardsProp = `\n      headerContent={(p) => <${kpiComp} {...p} />}`;
   }
+
+  // bulkActions → render function prop in ListView
+  const bulkActionsProp = customComponents.bulkActions
+    ? `\n      bulkActions={(ctx) => <${customComponents.bulkActions} {...ctx} />}`
+    : '';
 
   // headerExtra → formFooter prop
   const headerExtraConfig = windowConfig.headerExtra ?? null;
@@ -684,16 +751,42 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
     formFooterProp = `\n        formFooter={${compName}}`;
   }
 
-  return `import { ListView, DetailView } from '@/components/contract-ui';${menuActionsConfig.length > 0 ? `\nimport { toast } from 'sonner';` : ''}
-${headerTableImport}
-import ${headerName}Form from './${headerName}Form';
-import ${detailName}Table from './${detailName}Table';
-import ${detailName}Form from './${detailName}Form';
-${secondaryTabDefs.length > 0 ? `${secondaryTabsImports}\n` : ''}${formFooterImport}${listKpiCardsImport}${relatedDocsImport}${customCompImportBlock}import catalogs from './mockCatalogs';
-${isGallery ? `import ${headerName}Gallery from '@/windows/custom/${headerEntity}/${headerName}Gallery';
-import ${headerName}DetailHeader from '@/windows/custom/${headerEntity}/${headerName}DetailHeader';` : ''}${statusBarImport}
+  // primaryTabs support
+  const primaryTabsConfig = windowConfig.primaryTabs ?? null;
+  let primaryTabsImports = '';
+  let primaryTabsProp = '';
+  if (primaryTabsConfig && specName) {
+    const imports = [];
+    const tabEntries = primaryTabsConfig.map(tab => {
+      if (tab.panel) {
+        imports.push(`import ${tab.panel} from '@/windows/custom/${specName}/${tab.panel}';`);
+        return `{ key: '${tab.key}', label: '${tab.label}', Panel: ${tab.panel} }`;
+      }
+      return `{ key: '${tab.key}', label: '${tab.label}' }`;
+    });
+    primaryTabsImports = imports.length > 0 ? imports.join('\n') + '\n' : '';
+    primaryTabsProp = `\n        primaryTabs={[\n          ${tabEntries.join(',\n          ')},\n        ]}`;
+  }
 
-const breadcrumb = '${windowCategory} / ${windowLabel}';
+  // othersLabel support
+  const othersLabelValue = windowConfig.othersLabel ?? null;
+  const othersLabelProp = othersLabelValue ? `\n        othersLabel="${othersLabelValue}"` : '';
+
+  // disableProcessedLock support
+  const disableProcessedLockProp = windowConfig.disableProcessedLock ? `\n        lockWhenProcessed={false}` : '';
+
+  return `import { useEffect } from 'react';
+import { ListView, DetailView } from '@/components/contract-ui';${menuActionsConfig.length > 0 ? `\nimport { toast } from 'sonner';` : ''}
+${headerTableImport}
+import ${headerName}Form from './${headerName}Form';${detailEntity ? `
+import ${detailName}Table from './${detailName}Table';
+import ${detailName}Form from './${detailName}Form';` : ''}
+${secondaryTabDefs.length > 0 ? `${secondaryTabsImports}\n` : ''}${formFooterImport}${primaryTabsImports}${listKpiCardsImport}${relatedDocsImport}${customCompImportBlock}import catalogs from './mockCatalogs';
+${isGallery ? `import ${headerName}Gallery from '@/windows/custom/${headerEntity}/${headerName}Gallery';` : ''}${isSidebar ? `
+import ${headerName}Sidebar from '@/windows/custom/${headerEntity}/${headerName}Sidebar';` : (isGallery ? `
+import ${headerName}DetailHeader from '@/windows/custom/${headerEntity}/${headerName}DetailHeader';` : '')}${statusBarImport}
+
+const breadcrumb = '${windowBreadcrumbOverride !== undefined ? windowBreadcrumbOverride : `${windowCategory} / ${windowLabel}`}';
 ${statusBarCode}
 
 ${MARKERS.GENERATED_START(`summary:${headerEntity}`)}
@@ -704,7 +797,6 @@ ${summaryArray}
 const statusField = ${statusFieldLine};
 ${MARKERS.GENERATED_END(`summary:${headerEntity}`)}
 
-${MARKERS.CUSTOM_SLOT(`extraBadges:${headerEntity}`)}
 ${MARKERS.GENERATED_START(`extraBadges:${headerEntity}`)}
 const extraBadges = [];
 ${MARKERS.GENERATED_END(`extraBadges:${headerEntity}`)}
@@ -719,7 +811,7 @@ ${MARKERS.GENERATED_START(`draftMode:${headerEntity}`)}
 const draftMode = ${draftModeValue};
 ${MARKERS.GENERATED_END(`draftMode:${headerEntity}`)}
 
-${MARKERS.GENERATED_START(`addLineFields:${detailEntity}`)}
+${detailEntity ? `${MARKERS.GENERATED_START(`addLineFields:${detailEntity}`)}
 const addLineFields = {
   entry: [
 ${entryArray}
@@ -731,31 +823,33 @@ ${derivedArray}
 ${hiddenDefaultsArray}
   ],
 };
-${MARKERS.GENERATED_END(`addLineFields:${detailEntity}`)}
+${MARKERS.GENERATED_END(`addLineFields:${detailEntity}`)}` : ''}
 ${apiBlock}
 ${MARKERS.GENERATED_START(`component:${compName}`)}
 export default function ${compName}({ windowName, recordId, ...props }) {
-  ${MARKERS.CUSTOM_SLOT(`hooks:${compName}`)}
+  ${customComponents.newRecordComponent ? `if (recordId === 'new') {
+    return <${customComponents.newRecordComponent} token={props.token} apiBaseUrl={props.apiBaseUrl} windowName={windowName} />;
+  }` : ''}
   if (recordId) {
     return (
       <DetailView
-        entity="${headerEntity}"
-        detailEntity="${detailEntity}"
-        Form={${headerName}Form}
+        entity="${headerEntity}"${detailEntity ? `
+        detailEntity="${detailEntity}"` : ''}
+        Form={${headerName}Form}${detailEntity ? `
         DetailTable={${detailName}Table}
-        DetailForm={${detailName}Form}
+        DetailForm={${detailName}Form}` : ''}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
-        processes={processes}
-        addLineFields={addLineFields}
+        processes={processes}${detailEntity ? `
+        addLineFields={addLineFields}` : ''}
         catalogs={catalogs}
-        entityLabel="${entityLabel}"
-        detailLabel="${entityDetailLabel}"
+        entityLabel="${entityLabel}"${detailEntity ? `
+        detailLabel="${entityDetailLabel}"` : ''}
         windowName={windowName}
         recordId={recordId}
-        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${documentPreviewProp}${hideDeleteProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${headerContentProp}${detailSortByProp}
-        {...props}
+        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${primaryTabsProp}${othersLabelProp}${documentPreviewProp}${hideDeleteProp}${hidePrintProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${headerContentProp}${detailSortByProp}${salesThemeProp}${disableProcessedLockProp}
+        {...props}${sidebarContentProp}
       />
     );
   }
@@ -764,17 +858,15 @@ export default function ${compName}({ windowName, recordId, ...props }) {
     <ListView
       entity="${headerEntity}"
       Table={${headerName}Table}
-      entityLabel="${windowConfig.name || pluralize(entityLabel)}"
+      entityLabel="${windowConfig.name || entityLabel}"
       windowName={windowName}
       breadcrumb={breadcrumb}${apiProp}${isGallery ? `
-      galleryRenderer={(gProps) => <${headerName}Gallery {...gProps} />}` : ''}${listKpiCardsProp}
+      galleryRenderer={(gProps) => <${headerName}Gallery {...gProps} />}` : ''}${listKpiCardsProp}${bulkActionsProp}
       {...props}
     />
   );
 }
 ${MARKERS.GENERATED_END(`component:${compName}`)}
-
-${MARKERS.CUSTOM_SLOT(`section:${compName}-custom`)}
 `;
 }
 
@@ -788,70 +880,19 @@ export function generateIndexComponent(headerEntity, detailEntity, contract) {
   const windowName = contract?.frontendContract?.window?.name ?? toLabel(headerEntity);
   const apiPrediction = contract?.apiPrediction;
 
-  if (detailEntity) {
-    const apiBlock = apiPrediction
-      ? `\nconst api = ${JSON.stringify(apiPrediction, null, 2)};\n`
-      : '';
-    const apiProp = apiPrediction ? ' api={api}' : '';
-    return `import ${headerName}Page from './${headerName}Page';
+  const apiBlock = apiPrediction
+    ? `\nconst api = ${JSON.stringify(apiPrediction, null, 2)};\n`
+    : '';
+  const apiProp = apiPrediction ? ' api={api}' : '';
+  return `import ${headerName}Page from './${headerName}Page';
 
 const windowMeta = { category: '${category}', name: '${windowName}' };
 ${apiBlock}
 ${MARKERS.GENERATED_START('component:App')}
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {
-  ${MARKERS.CUSTOM_SLOT('hooks:App')}
   return <${headerName}Page windowName={windowName} recordId={recordId} token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta}${apiProp} {...rest} />;
 }
 ${MARKERS.GENERATED_END('component:App')}
-
-${MARKERS.CUSTOM_SLOT('section:App-custom')}
-`;
-  }
-
-  const apiBlock = apiPrediction
-    ? `\nconst api = ${JSON.stringify(apiPrediction, null, 2)};\n`
-    : '';
-  const apiProp = apiPrediction ? '\n      api={api}' : '';
-
-  return `import { ListView, DetailView } from '@/components/contract-ui';
-import ${headerName}Table from './${headerName}Table';
-import ${headerName}Form from './${headerName}Form';
-import catalogs from './mockCatalogs';
-
-const windowMeta = { category: '${category}', name: '${windowName}' };
-${apiBlock}
-${MARKERS.GENERATED_START('component:App')}
-export default function App({ windowName, recordId, ...props }) {
-  ${MARKERS.CUSTOM_SLOT('hooks:App')}
-  if (recordId) {
-    return (
-      <DetailView
-        entity="${headerEntity}"
-        Form={${headerName}Form}
-        catalogs={catalogs}
-        entityLabel="${toLabel(headerEntity)}"
-        windowName={windowName}
-        recordId={recordId}
-        window={windowMeta}${apiProp}
-        {...props}
-      />
-    );
-  }
-
-  return (
-    <ListView
-      entity="${headerEntity}"
-      Table={${headerName}Table}
-      entityLabel="${toLabel(headerEntity)}"
-      windowName={windowName}
-      window={windowMeta}${apiProp}
-      {...props}
-    />
-  );
-}
-${MARKERS.GENERATED_END('component:App')}
-
-${MARKERS.CUSTOM_SLOT('section:App-custom')}
 `;
 }
 
@@ -983,7 +1024,9 @@ export function generateAll(contract) {
   const { window: win, entities } = frontendContract;
   const primaryEntity = win.primaryEntity;
   const entityNames = Object.keys(entities);
-  const detailEntity = win.detailEntity || entityNames.find(name => name !== primaryEntity);
+  const detailEntity = 'detailEntity' in win
+    ? win.detailEntity
+    : entityNames.find(name => name !== primaryEntity);
 
   const files = {};
 
@@ -994,10 +1037,8 @@ export function generateAll(contract) {
     files[`${capName}Form.jsx`] = generateFormComponent(entityName, contract);
   }
 
-  // Generate Page if there is a detail entity
-  if (detailEntity) {
-    files[`${capitalize(primaryEntity)}Page.jsx`] = generatePageComponent(primaryEntity, detailEntity, contract);
-  }
+  // Generate Page component (handles both header-detail and header-only layouts)
+  files[`${capitalize(primaryEntity)}Page.jsx`] = generatePageComponent(primaryEntity, detailEntity, contract);
 
   // Generate mock catalogs
   files['mockCatalogs.js'] = generateMockCatalogs(contract);
@@ -1048,7 +1089,7 @@ export function generateProcessFormComponent(contract) {
 
   const paramsArray = contract.parameters.map(p => {
     const requiredPart = p.required ? ', required: true' : '';
-    const defaultPart = p.defaultValue ? `, defaultValue: '${p.defaultValue.replace(/'/g, "\\'")}'` : '';
+    const defaultPart = p.defaultValue ? `, defaultValue: '${p.defaultValue.replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '')}'` : '';
     const referencePart = p.referenceValueId ? `, reference: '${p.referenceValueId}'` : '';
     return `  { key: '${p.name}', column: '${p.column}', type: '${p.inputMode}'${requiredPart}${defaultPart}${referencePart} },`;
   }).join('\n');
@@ -1117,7 +1158,7 @@ export function generateReportFormComponent(contract) {
 
   const paramsArray = contract.parameters.map(p => {
     const requiredPart = p.required ? ', required: true' : '';
-    const defaultPart = p.defaultValue ? `, defaultValue: '${p.defaultValue.replace(/'/g, "\\'")}'` : '';
+    const defaultPart = p.defaultValue ? `, defaultValue: '${p.defaultValue.replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '')}'` : '';
     const referencePart = p.referenceValueId ? `, reference: '${p.referenceValueId}'` : '';
     return `  { key: '${p.name}', column: '${p.column}', type: '${p.inputMode}'${requiredPart}${defaultPart}${referencePart} },`;
   }).join('\n');

@@ -364,19 +364,25 @@ const api = {
       "entity": "goodsReceipt",
       "field": "generateTo",
       "column": "GenerateTo",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/generateTo"
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/generateTo",
+      "processId": "154",
+      "processType": "classic"
     },
     {
       "entity": "goodsReceipt",
       "field": "documentAction",
       "column": "DocAction",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/documentAction"
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/documentAction",
+      "processId": "109",
+      "processType": "classic"
     },
     {
       "entity": "goodsReceipt",
       "field": "processGoodsJava",
       "column": "Process_Goods_Java",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/processGoodsJava"
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/processGoodsJava",
+      "processId": "49DEE812BF0545269781FCEBF2235924",
+      "processType": "classic"
     },
     {
       "entity": "goodsReceipt",
@@ -388,61 +394,81 @@ const api = {
       "entity": "goodsReceipt",
       "field": "calculateFreight",
       "column": "Calculate_Freight",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/calculateFreight"
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/calculateFreight",
+      "processId": "800141",
+      "processType": "classic"
     },
     {
       "entity": "goodsReceipt",
       "field": "updateLines",
       "column": "UpdateLines",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/updateLines"
-    },
-    {
-      "entity": "goodsReceipt",
-      "field": "receiveMaterials",
-      "column": "RM_Receipt_PickEdit",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials"
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/updateLines",
+      "processId": "800010",
+      "processType": "classic"
     },
     {
       "entity": "goodsReceipt",
       "field": "sendMaterials",
       "column": "RM_Shipment_Pickedit",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/sendMaterials"
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/sendMaterials",
+      "processId": "4AD70293357245AB96E59C2CDB43A35D",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "goodsReceipt",
+      "field": "receiveMaterials",
+      "column": "RM_Receipt_PickEdit",
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/receiveMaterials",
+      "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
+      "processType": "obuiapp"
     },
     {
       "entity": "goodsReceipt",
       "field": "invoicefromshipment",
       "column": "Invoicefromshipment",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/invoicefromshipment"
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/invoicefromshipment",
+      "processId": "62250E8866EA4D96A66C309878DC039E",
+      "processType": "obuiapp"
     },
     {
       "entity": "goodsReceiptLine",
       "field": "managePrereservation",
       "column": "Manage_Prereservation",
-      "url": "/sws/neo/goods-receipt/goodsReceiptLine/{id}/action/managePrereservation"
+      "url": "/sws/neo/goods-receipt/goodsReceiptLine/{id}/action/managePrereservation",
+      "processId": "70E42AD47E5F4698A9ACCCAF3EB72B9E",
+      "processType": "obuiapp"
     },
     {
       "entity": "goodsReceiptLine",
       "field": "explode",
       "column": "Explode",
-      "url": "/sws/neo/goods-receipt/goodsReceiptLine/{id}/action/explode"
+      "url": "/sws/neo/goods-receipt/goodsReceiptLine/{id}/action/explode",
+      "processId": "DAE719940FE9463F8A3E3C401BBAFC53",
+      "processType": "classic"
     },
     {
       "entity": "landedCost",
       "field": "processMatching",
       "column": "Process_Matching",
-      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/processMatching"
+      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/processMatching",
+      "processId": "24E052E6FEB64295B64E683B5196230B",
+      "processType": "obuiapp"
     },
     {
       "entity": "landedCost",
       "field": "cancelMatching",
       "column": "Cancel_Matching",
-      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/cancelMatching"
+      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/cancelMatching",
+      "processId": "DDB20065809843FF92835E59ADB2234C",
+      "processType": "obuiapp"
     },
     {
       "entity": "landedCost",
       "field": "posted",
       "column": "Posted",
-      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/posted"
+      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/posted",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
     },
     {
       "entity": "landedCost",

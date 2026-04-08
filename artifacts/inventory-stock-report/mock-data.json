@@ -1,0 +1,29 @@
+[
+  {
+    "warehouse": "Main Warehouse",
+    "productSearchKey": "P-0001",
+    "product": "Raw Material A",
+    "uom": "Unit",
+    "qtyOnHand": 120,
+    "unitCost": 8.5,
+    "totalValuation": 1020
+  },
+  {
+    "warehouse": "Main Warehouse",
+    "productSearchKey": "P-0002",
+    "product": "Raw Material B",
+    "uom": "Unit",
+    "qtyOnHand": 75,
+    "unitCost": 5.2,
+    "totalValuation": 390
+  },
+  {
+    "warehouse": "Secondary Warehouse",
+    "productSearchKey": "P-0100",
+    "product": "Finished Product X",
+    "uom": "Unit",
+    "qtyOnHand": 42,
+    "unitCost": 31.75,
+    "totalValuation": 1333.5
+  }
+]

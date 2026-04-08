@@ -5,10 +5,12 @@ import QuotationForm from './QuotationForm';
 import QuotationLineTable from './QuotationLineTable';
 import QuotationLineForm from './QuotationLineForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
+import QuotationTopbarActions from '../../../custom/QuotationTopbarActions';
 import catalogs from './mockCatalogs';
 
 
 const breadcrumb = 'Sales / Sales Quotation';
+
 
 // @sf-generated-start summary:quotation
 const summary = [
@@ -27,18 +29,10 @@ const extraBadges = [];
 
 // @sf-generated-start processes:quotation
 const processes = [
-  // Complete the quotation (confirm it)
-  { name: 'Complete', label: 'Confirm', style: 'positive', columnName: 'documentAction',
-    displayLogicRaw: "@documentStatus@='DR'" },
-  // Void a confirmed quotation
-  { name: 'Void', label: 'Void', style: 'destructive', columnName: 'documentAction',
+  { name: 'Void', label: 'Void', style: 'destructive',
     displayLogicRaw: "@documentStatus@='CO'" },
-  // Reactivate a voided quotation
-  { name: 'Reactivate', label: 'Reactivate', style: 'positive', columnName: 'documentAction',
+  { name: 'Reactivate', label: 'Reactivate', style: 'positive',
     displayLogicRaw: "@documentStatus@='VO'" },
-  // TODO: "Convert to Order" — wire to createOrder action (process A3FE1F9892394386A49FB707AA50A0FA)
-  // Needs OBUIAPP process parameter UI. Visible when status is Complete.
-  // On success: navigate to the newly created Sales Order.
 ];
 // @sf-generated-end processes:quotation
 
@@ -355,14 +349,18 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        documentPreview={{ titlePrefix: 'Quotation', pdfUrl: null }}
+        hideDeleteWhenComplete
+        hidePrint
         notesField="description"
         customTabs={[{ key: 'related', label: 'Related Documents', Component: RelatedDocuments }]}
-        hideDeleteWhenComplete
+        topbarRight={QuotationTopbarActions}
+        statusFieldLabel="Document Status"
+        statusEnumLabels={{ DR: 'Draft', UE: 'Under Evaluation', CO: 'Confirmed', CA: 'Converted', VO: 'Voided' }}
         menuActions={({ status }) => [
-          { key: 'duplicate', label: 'Duplicate', onClick: () => toast('Coming soon') },
-          { key: 'cancel', label: 'Cancel', destructive: true, visible: status === 'CO', onClick: () => toast('Coming soon') },
+          { key: 'duplicate', label: 'Duplicate', onClick: () => {}, },
+          { key: 'cancel', label: 'Cancel', destructive: true, visible: status === 'CO', onClick: () => {}, }
         ]}
+        salesTheme
         {...props}
       />
     );
@@ -372,7 +370,7 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
     <ListView
       entity="quotation"
       Table={QuotationTable}
-      entityLabel="Quotations"
+      entityLabel="Sales Quotation"
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}

@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "reportId": "inventory-stock-report",
+  "category": "inventory",
+  "type": "grouped-listing",
+  "source": "neo",
+  "title": {
+    "en_US": "Inventory Stock Report",
+    "es_ES": "Reporte de Stock"
+  },
+  "orientation": "landscape",
+  "neo": {
+    "endpoint": "/sws/neo/inventory-stock-report",
+    "method": "POST",
+    "body": {},
+    "dataPath": "response.data",
+    "handler": "inventoryStockReportHandler"
+  },
+  "columns": [
+    {
+      "field": "productSearchKey",
+      "label": {
+        "en_US": "Search Key",
+        "es_ES": "Clave"
+      },
+      "type": "string",
+      "width": "15%",
+      "sortable": true
+    },
+    {
+      "field": "product",
+      "label": {
+        "en_US": "Product",
+        "es_ES": "Producto"
+      },
+      "type": "string",
+      "width": "30%",
+      "sortable": true
+    },
+    {
+      "field": "uom",
+      "label": {
+        "en_US": "UoM",
+        "es_ES": "UdM"
+      },
+      "type": "string",
+      "width": "10%",
+      "sortable": true
+    },
+    {
+      "field": "qtyOnHand",
+      "label": {
+        "en_US": "Qty on Hand",
+        "es_ES": "Cantidad"
+      },
+      "type": "amount",
+      "width": "15%",
+      "sortable": true
+    },
+    {
+      "field": "unitCost",
+      "label": {
+        "en_US": "Unit Cost",
+        "es_ES": "Costo Unitario"
+      },
+      "type": "amount",
+      "width": "12%",
+      "sortable": true
+    },
+    {
+      "field": "totalValuation",
+      "label": {
+        "en_US": "Total Valuation",
+        "es_ES": "Valorizacion Total"
+      },
+      "type": "amount",
+      "width": "18%",
+      "sortable": true
+    }
+  ],
+  "groups": [
+    {
+      "field": "warehouse",
+      "label": {
+        "en_US": "Warehouse",
+        "es_ES": "Almacen"
+      }
+    }
+  ],
+  "filters": [],
+  "parameters": [
+    {
+      "name": "M_Product_ID",
+      "label": {
+        "en_US": "Product",
+        "es_ES": "Producto"
+      },
+      "type": "search",
+      "selector": "product",
+      "multi": true
+    },
+    {
+      "name": "M_Warehouse_ID",
+      "label": {
+        "en_US": "Warehouse",
+        "es_ES": "Almacen"
+      },
+      "type": "search",
+      "selector": "warehouse",
+      "multi": true,
+      "inputStyle": "dropdown"
+    }
+  ],
+  "defaultSort": {
+    "field": "productSearchKey",
+    "direction": "asc"
+  },
+  "outputs": [
+    "pdf",
+    "xlsx",
+    "csv",
+    "html"
+  ],
+  "summary": {
+    "totalRows": true
+  },
+  "mockDataFile": "mock-data.json"
+}

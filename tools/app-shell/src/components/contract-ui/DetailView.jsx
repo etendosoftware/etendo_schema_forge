@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { X, MoreVertical, Check, Save, List, Search, Sparkles, Plus, Bell, Mic, Printer, Send, Trash2 } from 'lucide-react';
@@ -10,12 +10,12 @@ import { useEntity } from '@/hooks/useEntity';
 import { useCatalogs } from '@/hooks/useCatalogs';
 import { useDisplayLogic } from '@/hooks/useDisplayLogic';
 import { useCallout } from '@/hooks/useCallout';
-import { useMenuLabel } from '@/i18n';
+import { useMenuLabel, useUI, useLocale } from '@/i18n';
 import { SummaryBar } from './SummaryBar.jsx';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { formatAmount } from '@/lib/formatAmount.js';
-import { getStatusBadgeProps, getStatusDotColor, statusLabel } from '@/lib/statusBadge.js';
+import { getStatusBadgeProps, getStatusDotColor, getStatusPillClass, statusLabel } from '@/lib/statusBadge.js';
 
 /**
  * Evaluate a simple Etendo display-logic expression (@Field@='Value') against record data.
@@ -106,15 +106,27 @@ export function DetailView({
   extraActions = [],
   menuActions = [],
   hideDeleteWhenComplete = false,
+  hidePrint = false,
   CustomLines = null,
   customLinesLabel = 'Invoices',
   sidePanel = null,
+  sidePanelStyle = null,
   afterTotals = null,
   bottomSection = null,
   topbarExtra = null,
   topbarRight = null,
+  statusFieldLabel = null,
+  statusEnumLabels = null,
+  salesTheme = false,
+  sidebarContent = null,
+  othersLabel = null,
+  primaryTabs = null,
+  lockWhenProcessed = true,
+  onAfterSave,
 }) {
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl });
+  const LinesEmptyState = bottomSection?.linesEmptyState ?? null;
+  const DetailExtraActions = bottomSection?.detailExtraActions ?? null;
   // Static hooks for up to 4 secondary tabs (React rules forbid dynamic hook calls)
   const secondaryHook0 = useEntity(entity, secondaryTabs[0]?.isFormTab ? null : (secondaryTabs[0]?.key ?? null), { token, apiBaseUrl });
   const secondaryHook1 = useEntity(entity, secondaryTabs[1]?.isFormTab ? null : (secondaryTabs[1]?.key ?? null), { token, apiBaseUrl });
@@ -140,10 +152,19 @@ export function DetailView({
   const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const embedded = searchParams.get('embedded') === '1';
   const tMenu = useMenuLabel();
+  const ui = useUI();
+  const dictionary = useLocale();
   const [addingLine, setAddingLine] = useState(false);
   const [addingSecondaryLine, setAddingSecondaryLine] = useState({});
   const [activeTab, setActiveTab] = useState(0);
+
+  // Document-level read-only: when processed===true, the entire record (including lines) is read-only.
+  const _headerData = hook.selected ?? hook.editing;
+  const isDocumentReadOnly = lockWhenProcessed && (_headerData?.processed === true || _headerData?.processed === 'Y');
+  const isProcessed = _headerData?.processed === true || _headerData?.processed === 'Y';
   const [showPrint, setShowPrint] = useState(false);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -296,16 +317,33 @@ export function DetailView({
         hook.handleChange(key, entry.value);
         if (entry._identifier) {
           hook.handleChange(key + '$_identifier', entry._identifier);
+        } else if (entry.value && api?.selectors) {
+          // Callout returned an ID without _identifier — resolve from loaded catalogs
+          const sel = api.selectors.find(s => s.field === key);
+          if (sel) {
+            const options = getCatalogOptions(catalogs, sel.entity, sel);
+            const match = Array.isArray(options) && options.find(o => o.id === entry.value);
+            if (match) {
+              hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
+            }
+          }
         }
       }
     }
     if (combos) {
       for (const [key, combo] of Object.entries(combos)) {
-        if (combo.selected != null) {
+        let selectedVal = combo.selected;
+        let selectedLabel = combo._identifier;
+        // Auto-select first entry if no explicit selection (e.g., BP address combo)
+        if (selectedVal == null && Array.isArray(combo.entries) && combo.entries.length > 0) {
+          selectedVal = combo.entries[0].id;
+          selectedLabel = combo.entries[0].identifier || combo.entries[0]._identifier;
+        }
+        if (selectedVal != null) {
           appliedFields.add(key);
-          hook.handleChange(key, combo.selected);
-          if (combo._identifier) {
-            hook.handleChange(key + '$_identifier', combo._identifier);
+          hook.handleChange(key, selectedVal);
+          if (selectedLabel) {
+            hook.handleChange(key + '$_identifier', selectedLabel);
           }
         }
       }
@@ -404,6 +442,14 @@ export function DetailView({
           if (match) result[key + '$_identifier'] = match.label || match.name || match._identifier || '';
         }
       }
+      // Last resort: check snapshot for a display hint passed by the selector item.
+      // Pattern: field='product', result key='uOM' → look for rowValues['product_uOM'] = "Unit"
+      for (const key of Object.keys(result)) {
+        if (key.includes('$_identifier')) continue;
+        if (result[key + '$_identifier']) continue;
+        const hint = rowValues[field + '_' + key];
+        if (hint && typeof hint === 'string') result[key + '$_identifier'] = hint;
+      }
       if (Object.keys(result).length > 0) applyUpdates?.(result);
     } catch {
       // Callout is best-effort
@@ -412,7 +458,7 @@ export function DetailView({
 
   const data = hook.editing || currentItem || {};
   const title = isNew
-    ? `New ${entityLabel || entity}`
+    ? ui('newRecord')
     : `${resolveIdentifier(data, titleField) || data._identifier || data.id || ''}`;
 
   const allEntryFields = addLineFields.entry ?? [];
@@ -436,7 +482,9 @@ export function DetailView({
     tabs.unshift({ key: 'customLines', label: customLinesLabel });
   }
   // "Others" tab is added dynamically via othersRef after first render
-  const [showOthers, setShowOthers] = useState(null); // null = unknown, true/false after mount
+  // When primaryTabs is in use, skip auto-adding Others (handled by a primary tab)
+  const [showOthers, setShowOthers] = useState(primaryTabs ? false : null);
+  const [activePrimaryTab, setActivePrimaryTab] = useState(primaryTabs?.[0]?.key ?? 'general');
   const [notesFocused, setNotesFocused] = useState(false);
   const othersRef = useRef(null);
 
@@ -448,13 +496,13 @@ export function DetailView({
   });
 
   if (showOthers === true) {
-    tabs.push({ key: 'others', label: 'Others' });
+    tabs.push({ key: 'others', label: othersLabel || ui('others') });
   }
 
   if (hook.loading) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground">
-        Loading...
+        {ui('loading')}
       </div>
     );
   }
@@ -462,7 +510,7 @@ export function DetailView({
   return (
     <div className="h-full flex flex-col" data-testid="detail-view">
       {/* Top bar area (gray background, inherited from parent) */}
-      <div className="px-6 pt-3 pb-3">
+      {!embedded && <div className="px-6 pt-3 pb-3">
         {/* Row: Title + Global search + action icons */}
         <div className="flex items-center gap-4">
           {/* Left: title + breadcrumb */}
@@ -472,7 +520,7 @@ export function DetailView({
             </div>
             {breadcrumb && (
               <p className="text-sm text-muted-foreground mt-0.5">
-                {breadcrumb}{title ? ` / ${title}` : ''}
+                {breadcrumb.split(' / ').map(s => tMenu(s.trim())).join(' / ')}{title ? ` / ${title}` : ''}
               </p>
             )}
           </div>
@@ -483,7 +531,7 @@ export function DetailView({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search clients, orders, invoices..."
+                placeholder={ui('searchPlaceholder')}
                 readOnly
                 tabIndex={-1}
                 className="w-full h-9 rounded-lg border border-border/50 bg-white/60 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-colors cursor-default"
@@ -506,11 +554,23 @@ export function DetailView({
             <LocaleSwitcher />
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* White content card with rounded top-left corner */}
       <div className="flex-1 flex flex-col bg-white rounded-tl-2xl overflow-hidden min-h-0">
         {/* Action bar: Cancel + status | actions + save */}
+        {embedded ? (
+          statusField && data[statusField] ? (
+            <div className="flex items-center gap-3 px-6 py-3 border-b border-border/30">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[13px] font-medium ${getStatusPillClass(data[statusField])}`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusDotColor(data[statusField])}`} />
+                {statusFieldLabel || 'Document Status'}
+                <span style={{ opacity: 0.4 }}>&middot;</span>
+                <span className="font-semibold">{statusEnumLabels?.[data[statusField]] || statusLabel(data[statusField])}</span>
+              </span>
+            </div>
+          ) : null
+        ) : (
         <div className="flex items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <Button
@@ -521,14 +581,19 @@ export function DetailView({
               onClick={() => navigate(`/${windowName}`)}
             >
               <X className="h-3.5 w-3.5" />
-              Cancel
+              {ui('cancel')}
             </Button>
-            {!topbarRight && statusField && data[statusField] && (
-              <span className="inline-flex items-center gap-1.5 ml-1 text-xs font-medium">
-                <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusDotColor(data[statusField])}`} />
-                <span className="text-foreground/70">{statusLabel(data[statusField])}</span>
-              </span>
-            )}
+            {statusField && data[statusField] != null && (() => {
+              const _s = data[statusField];
+              return (
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[13px] font-medium ${getStatusPillClass(_s)}`}>
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusDotColor(_s)}`} />
+                  {statusFieldLabel || 'Document Status'}
+                  <span style={{ opacity: 0.4 }}>&middot;</span>
+                  <span className="font-semibold">{statusEnumLabels?.[_s] || statusLabel(_s, dictionary)}</span>
+                </span>
+              );
+            })()}
             {extraBadges.map(b => {
               const when = b.when !== undefined ? b.when : true;
               const show = when ? !!data[b.key] : !data[b.key];
@@ -561,18 +626,18 @@ export function DetailView({
               <button
                 onClick={() => setShowPrint(true)}
                 className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
-                title="Send / Preview"
+                title={ui('sendPreview')}
                 data-testid="action-document-preview"
               >
                 <Send className="h-4 w-4" />
               </button>
             )}
             {/* Print document — shown when documentPreview is not provided */}
-            {!documentPreview && !isNew && recordId && (
+            {!documentPreview && !hidePrint && !isNew && recordId && (
               <button
                 onClick={() => setShowPrint(true)}
                 className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
-                title="Print"
+                title={ui('print')}
               >
                 <Printer className="h-4 w-4" />
               </button>
@@ -582,7 +647,7 @@ export function DetailView({
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 className="h-9 w-9 flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
-                title="Delete"
+                title={ui('delete')}
                 data-testid="action-delete"
               >
                 <Trash2 className="h-4 w-4" />
@@ -651,13 +716,20 @@ export function DetailView({
               .filter(p => p.displayLogicRaw
                 ? evalDisplayLogicRaw(p.displayLogicRaw, data)
                 : displayLogic?.visibility?.[p.name] !== false)
+              .filter(p => !p.requiresLines || hook.children.length > 0)
               .map(p => {
                 const isPrimary = p.style === 'positive';
-                const btnClass = p.style === 'destructive'
-                  ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                  : isPrimary
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90 border-transparent'
-                    : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
+                const btnClass = salesTheme
+                  ? (p.style === 'destructive'
+                    ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                    : isPrimary
+                      ? 'bg-amber-400 text-black hover:bg-amber-500 border-transparent font-medium'
+                      : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100')
+                  : (p.style === 'destructive'
+                    ? 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20'
+                    : isPrimary
+                      ? ''
+                      : '');
                 return (
                   <Button
                     key={p.name}
@@ -678,37 +750,81 @@ export function DetailView({
                   if (saved?.id && isNew) navigate(`/${windowName}/${saved.id}`, { replace: true });
                 }}>
                   <Save className="h-3.5 w-3.5" />
-                  Save draft
+                  {ui('saveDraft')}
                 </Button>
                 <Button size="sm" className="gap-1.5" data-testid="action-save" onClick={async () => {
                   const saved = await hook.handleSaveAndProcess(draftMode);
-                  if (saved?.id && isNew) navigate(`/${windowName}/${saved.id}`, { replace: true });
+                  if (saved) {
+                    if (onAfterSave) {
+                      navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved } });
+                    } else if (saved.id && isNew) {
+                      navigate(`/${windowName}/${saved.id}`, { replace: true });
+                    }
+                  }
                 }}>
                   <Check className="h-3.5 w-3.5" />
-                  Save &amp; {draftMode.label || 'Process'}
+                  {ui('save')} &amp; {draftMode.label || ui('process')}
                 </Button>
               </>
             ) : (
-              <Button size="sm" className="gap-1.5" data-testid="action-save" onClick={async () => {
+              <Button size="sm" className="gap-1.5" data-testid="action-save" disabled={isDocumentReadOnly} onClick={async () => {
                 const saved = await hook.handleSave(data);
-                if (saved?.id && isNew) navigate(`/${windowName}/${saved.id}`, { replace: true });
+                if (saved) {
+                  if (onAfterSave) {
+                    navigate(`/${windowName}`, { replace: true, state: { savedRecord: saved } });
+                  } else if (saved.id && isNew) {
+                    navigate(`/${windowName}/${saved.id}`, { replace: true });
+                  }
+                }
               }}>
                 <Check className="h-3.5 w-3.5" />
-                Save
+                {ui('save')}
               </Button>
             )}
           </div>
         </div>
+        )}
 
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-auto px-6 pb-6">
-          {headerContent}
+        {/* Primary tab bar (General / Additional Info / etc.) */}
+        {primaryTabs && (
+          <div className="flex border-b border-border/50 px-6 shrink-0">
+            {primaryTabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActivePrimaryTab(tab.key)}
+                className={[
+                  'flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors relative',
+                  activePrimaryTab === tab.key ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                ].join(' ')}
+              >
+                {tab.label}
+                {activePrimaryTab === tab.key && (
+                  <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Scrollable content + optional sidebarContent (full-height independent column) */}
+        <div className="flex-1 flex overflow-hidden">
+        {/* Non-general primary tab: show Panel fullscreen */}
+        {primaryTabs && activePrimaryTab !== 'general' ? (() => {
+          const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
+          return activeTab?.Panel ? (
+            <div className="flex-1 overflow-auto px-6 pb-6 min-w-0">
+              <activeTab.Panel data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} />
+            </div>
+          ) : null;
+        })() : null}
+        <div className={`flex-1 overflow-auto px-6 pb-6 min-w-0${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`}>
+          {typeof headerContent === 'function' ? headerContent(data) : headerContent}
           <div className={`${sidePanel ? 'flex items-start gap-0' : ''}`}>
-          <div className={`${sidePanel ? 'flex-1 min-w-0' : 'max-w-full'}`}>
+          <div className={`${sidePanel ? 'flex-1 min-w-0' : 'max-w-full'} space-y-6`}>
             {/* Principal header fields (horizontal row) */}
             {/* Visibility logic is intentionally not applied here: principal fields must always
                 be visible (shown as readOnly when needed). Only readOnly state is propagated. */}
-            <div>
+            <div style={{ padding: '24px 0 8px' }} className={embedded ? 'pointer-events-none' : ''}>
               <Form
                 entity={entity}
                 data={data}
@@ -724,27 +840,29 @@ export function DetailView({
             </div>
 
             {/* Collapsible secondary header fields (hidden if no collapsed fields) */}
-            <div className="mt-6">
-            <CollapsibleSection title="More details">
-              <Form
-                entity={entity}
-                data={data}
-                onChange={handleChangeWithCallout}
-                catalogs={catalogs}
-                layout="horizontal"
-                section="collapsed"
-                excludeFields={notesField ? [notesField] : []}
-                displayLogic={displayLogic}
-                api={api}
-                token={token}
-                apiBaseUrl={apiBaseUrl}
-              />
+            <div className={`${sidePanel ? 'mt-2' : 'mt-6'}`}>
+            <CollapsibleSection title={ui('moreDetails')}>
+              <div className={embedded ? 'pointer-events-none' : ''}>
+                <Form
+                  entity={entity}
+                  data={data}
+                  onChange={handleChangeWithCallout}
+                  catalogs={catalogs}
+                  layout="horizontal"
+                  section="collapsed"
+                  excludeFields={notesField ? [notesField] : []}
+                  displayLogic={displayLogic}
+                  api={api}
+                  token={token}
+                  apiBaseUrl={apiBaseUrl}
+                />
+              </div>
             </CollapsibleSection>
             </div>
 
             {/* Form footer: inline content below form, above tabs (e.g. BillingPreferencesForm) */}
             {formFooter && (
-              <div className="pt-2">
+              <div className={`pt-2${embedded ? ' pointer-events-none' : ''}`}>
                 {React.createElement(formFooter, { data, onChange: handleChangeWithCallout, catalogs, api, token, apiBaseUrl })}
               </div>
             )}
@@ -782,7 +900,17 @@ export function DetailView({
 
                 {/* Tab content: Lines */}
                 {tabs[activeTab]?.key === 'lines' && DetailTable && (
-                  <div className="pt-3 flex items-start gap-4">
+                  hook.children.length === 0 && !addingLine && LinesEmptyState && hook.editing && !isDocumentReadOnly ? (
+                    <LinesEmptyState
+                      data={data}
+                      onAddLine={() => { setAddingLine(true); setEditingChild(null); }}
+                      recordId={data?.id || recordId}
+                      token={token}
+                      apiBaseUrl={apiBaseUrl}
+                      onRefresh={() => hook.fetchChildren?.(data?.id || recordId)}
+                    />
+                  ) : (
+                  <div className={`pt-3 flex items-start gap-4${embedded ? ' pointer-events-none' : ''}`}>
                     {/* Table + add button */}
                     <div className="flex-1 min-w-0">
                       <DetailTable
@@ -855,18 +983,18 @@ export function DetailView({
                               }}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                             >
-                              {savingChild ? 'Saving…' : 'Save'}
+                              {savingChild ? ui('loading') : ui('save')}
                             </button>
                             <button
                               onClick={() => setEditingChild(null)}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
                             >
-                              Cancel
+                              {ui('cancel')}
                             </button>
                             <button
                               disabled={savingChild}
                               onClick={async () => {
-                                if (!window.confirm('Delete this record?')) return;
+                                if (!window.confirm(ui('deleteConfirmMessage'))) return;
                                 setSavingChild(true);
                                 try {
                                   const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', editingChild.id)
@@ -880,19 +1008,29 @@ export function DetailView({
                               }}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
                             >
-                              Delete
+                              {ui('delete')}
                             </button>
                           </div>
                         </div>
                       )}
 
-                      {allEntryFields.length > 0 && hook.editing && (
-                        <button
-                          onClick={() => { setAddingLine(!addingLine); setEditingChild(null); }}
-                          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 mt-3 font-medium"
-                        >
-                          + Add {detailLabel || 'line'}
-                        </button>
+                      {hook.editing && !isDocumentReadOnly && ((!isNew && allEntryFields.length > 0) || DetailExtraActions) && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)', padding: '10px 16px' }}>
+                          {allEntryFields.length > 0 && !isNew && (
+                            <button
+                              onClick={() => { setAddingLine(!addingLine); setEditingChild(null); }}
+                              style={{ all: 'unset', fontSize: 13, fontWeight: 500, color: 'var(--color-text-info, #2563eb)', cursor: 'pointer' }}
+                            >
+                              + Add {detailLabel || 'Lines'}
+                            </button>
+                          )}
+                          {DetailExtraActions && (
+                            <DetailExtraActions data={data} recordId={data?.id || recordId} token={token} apiBaseUrl={apiBaseUrl} onRefresh={() => hook.fetchChildren?.(data?.id || recordId)} />
+                          )}
+                        </div>
+                      )}
+                      {allEntryFields.length > 0 && isNew && (
+                        <p className="text-xs text-muted-foreground mt-3">Save the header first to add lines.</p>
                       )}
                     </div>
 
@@ -910,7 +1048,7 @@ export function DetailView({
                         </div>
                         <DetailForm
                           data={lineEdits ?? selectedLine}
-                          readOnly={!hook.editing}
+                          readOnly={!hook.editing || isProcessed}
                           onChange={(key, val, column) => {
                             setLineEdits(prev => ({ ...(prev ?? selectedLine), [key]: val }));
                             if (column) setLineEditColumns(prev => ({ ...prev, [key]: column }));
@@ -923,7 +1061,7 @@ export function DetailView({
                         />
                         {hook.editing && (lineEdits || selectedLine?.id) && (
                           <div className="flex gap-2 mt-4">
-                            {lineEdits && (
+                            {lineEdits && !isDocumentReadOnly && (
                               <>
                                 <button
                                   disabled={savingLine}
@@ -965,21 +1103,21 @@ export function DetailView({
                                   }}
                                   className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                                 >
-                                  {savingLine ? 'Saving…' : 'Save'}
+                                  {savingLine ? ui('loading') : ui('save')}
                                 </button>
                                 <button
                                   onClick={() => setLineEdits(null)}
                                   className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
                                 >
-                                  Discard
+                                  {ui('discard')}
                                 </button>
                               </>
                             )}
-                            {(api?.crud?.[detailEntity]?.delete ?? true) && selectedLine?.id && (
+                            {(api?.crud?.[detailEntity]?.delete ?? true) && selectedLine?.id && !isDocumentReadOnly && (
                               <button
                                 disabled={savingLine}
                                 onClick={async () => {
-                                  if (!window.confirm('Delete this record?')) return;
+                                  if (!window.confirm(ui('deleteConfirmMessage'))) return;
                                   setSavingLine(true);
                                   try {
                                     const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', selectedLine.id)
@@ -1002,7 +1140,7 @@ export function DetailView({
                                 className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
                               >
                                 <Trash2 className="h-4 w-4" />
-                                Delete
+                                {ui('delete')}
                               </button>
                             )}
                           </div>
@@ -1010,11 +1148,12 @@ export function DetailView({
                       </div>
                     )}
                   </div>
+                  )
                 )}
 
                 {/* Tab content: CustomLines (replaces standard lines table) */}
                 {tabs[activeTab]?.key === 'customLines' && CustomLines && (
-                  <div className="pt-3">
+                  <div className={`pt-3${embedded ? ' pointer-events-none' : ''}`}>
                     <CustomLines
                       recordId={data?.id || recordId}
                       data={data}
@@ -1023,14 +1162,14 @@ export function DetailView({
                       apiBaseUrl={apiBaseUrl}
                       api={api}
                       editing={hook.editing}
-                      onRefresh={() => hook.refetch?.()}
+                      onRefresh={() => hook.fetchChildren?.(data?.id || recordId)}
                     />
                   </div>
                 )}
 
                 {/* Tab content: secondary child entity tabs (or form-only tabs) */}
                 {secondaryTabs.map((st, stIdx) => tabs[activeTab]?.key === st.key && (
-                  <div key={st.key} className="pt-3 flex items-start gap-4">
+                  <div key={st.key} className={`pt-3 flex flex-col gap-3${embedded ? ' pointer-events-none' : ''}`}>
                     {st.isFormTab ? (
                       <div className="flex-1 min-w-0">
                         <st.Form
@@ -1047,7 +1186,17 @@ export function DetailView({
                           selectorContext={selectorContextByEntity[st.key]}
                         />
                       </div>
+                    ) : st.Panel ? (
+                      <div className="flex-1 min-w-0">
+                        <st.Panel
+                          parentId={data?.id}
+                          token={token}
+                          apiBaseUrl={apiBaseUrl}
+                        />
+                      </div>
                     ) : (
+                    <>
+                    <div className="flex items-start gap-4">
                     <div className="flex-1 min-w-0">
                       <st.Table
                         data={secondaryHooks[stIdx]?.children ?? []}
@@ -1072,17 +1221,8 @@ export function DetailView({
                           catalogs,
                         } : undefined}
                       />
-                      {st.addLineFields?.entry?.length > 0 && hook.editing && (
-                        <button
-                          onClick={() => { setAddingSecondaryLine(prev => ({ ...prev, [st.key]: !prev[st.key] })); setSelectedSecondaryLine(null); }}
-                          className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 mt-3 font-medium"
-                        >
-                          + Add {st.label}
-                        </button>
-                      )}
                     </div>
-                    )}
-                    {st.Form && (selectedSecondaryLine?._tabKey === st.key || isClosingSecondaryLine) && (
+                    {st.Form && !st.Panel && (selectedSecondaryLine?._tabKey === st.key || isClosingSecondaryLine) && (
                       <div className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${isClosingSecondaryLine ? 'sidebar-slide-out' : 'sidebar-slide-in'}`}>
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-medium text-foreground">{st.label} Detail</span>
@@ -1148,13 +1288,13 @@ export function DetailView({
                                   }}
                                   className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                                 >
-                                  {savingSecondaryLine ? 'Saving…' : 'Save'}
+                                  {savingSecondaryLine ? ui('loading') : ui('save')}
                                 </button>
                                 <button
                                   onClick={() => setSecondaryLineEdits(null)}
                                   className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border hover:bg-accent"
                                 >
-                                  Discard
+                                  {ui('discard')}
                                 </button>
                               </>
                             )}
@@ -1162,7 +1302,7 @@ export function DetailView({
                               <button
                                 disabled={savingSecondaryLine}
                                 onClick={async () => {
-                                  if (!window.confirm('Delete this record?')) return;
+                                  if (!window.confirm(ui('deleteConfirmMessage'))) return;
                                   setSavingSecondaryLine(true);
                                   try {
                                     const secUrl = `${apiBaseUrl}/${st.key}/${selectedSecondaryLine.id}`;
@@ -1184,7 +1324,7 @@ export function DetailView({
                                 className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
                               >
                                 <Trash2 className="h-4 w-4" />
-                                Delete
+                                {ui('delete')}
                               </button>
                             )}
                           </div>
@@ -1192,11 +1332,22 @@ export function DetailView({
                       </div>
                     )}
                     </div>
+                    {st.addLineFields?.entry?.length > 0 && hook.editing && (
+                      <button
+                        onClick={() => { setAddingSecondaryLine(prev => ({ ...prev, [st.key]: !prev[st.key] })); setSelectedSecondaryLine(null); }}
+                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        + Add {st.label}
+                      </button>
+                    )}
+                    </>
+                    )}
+                    </div>
                 ))}
 
                 {/* Tab content: Others (secondary header fields) */}
                 {tabs[activeTab]?.key === 'others' && (
-                  <div className="pt-5">
+                  <div className={`pt-5${embedded ? ' pointer-events-none' : ''}`}>
                     <Form
                       entity={entity}
                       data={data}
@@ -1212,18 +1363,19 @@ export function DetailView({
                   </div>
                 )}
 
-                {/* Hidden probe: detect if Others form has content */}
-                {showOthers === null && (
-                  <div ref={othersRef} className="hidden">
-                    <Form
-                      entity={entity}
-                      data={data}
-                      onChange={() => {}}
-                      catalogs={catalogs}
-                      section="other"
-                    />
-                  </div>
-                )}
+              </div>
+            )}
+
+            {/* Hidden probe: detect if Others form has content (outside tabs block so it fires even when tabs is empty) */}
+            {showOthers === null && (
+              <div ref={othersRef} className="hidden">
+                <Form
+                  entity={entity}
+                  data={data}
+                  onChange={() => {}}
+                  catalogs={catalogs}
+                  section="other"
+                />
               </div>
             )}
 
@@ -1302,7 +1454,7 @@ export function DetailView({
                 {(customTabs.length > 0 || !!notesField) && (
                   <div className="mt-1 bg-muted/20 border-t border-border/40" style={{ borderTopWidth: '0.5px' }}>
                     {customTabs.length > 0 && (
-                      <div className="flex items-start gap-3 px-4 py-2.5 border-b border-border/30" style={{ borderBottomWidth: '0.5px' }}>
+                      <div className={`flex items-start gap-3 px-4 py-2.5 border-b border-border/30${embedded ? ' pointer-events-none' : ''}`} style={{ borderBottomWidth: '0.5px' }}>
                         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-0.5 shrink-0 w-20">Docs</span>
                         <div className="flex-1">
                           {customTabs.map(ct => {
@@ -1323,7 +1475,7 @@ export function DetailView({
                       </div>
                     )}
                     {notesField && (
-                      <div className="flex items-start gap-3 px-4 py-2.5">
+                      <div className={`flex items-start gap-3 px-4 py-2.5${embedded ? ' pointer-events-none' : ''}`}>
                         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-1.5 shrink-0 w-20">Notes</span>
                         <div className={`flex-1 flex flex-col border border-border/40 rounded bg-white transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
                           {notesFocused ? (
@@ -1356,11 +1508,22 @@ export function DetailView({
             )}
           </div>
           {sidePanel && (
-            <div className="w-[280px] shrink-0 border-l border-border/50 self-stretch bg-muted/20 px-4" style={{ borderLeftWidth: '1px' }}>
-              {typeof sidePanel === 'function' ? sidePanel({ recordId: data?.id || recordId, data, token, apiBaseUrl, api }) : sidePanel}
+            <div
+              className="w-[280px] shrink-0 border-l border-border/50 self-stretch bg-muted/20 px-4"
+              style={{ borderLeftWidth: '1px', ...sidePanelStyle }}
+            >
+              {typeof sidePanel === 'function'
+                ? React.createElement(sidePanel, { recordId: data?.id || recordId, data, token, apiBaseUrl, api })
+                : sidePanel}
             </div>
           )}
           </div>
+        </div>
+        {sidebarContent && (
+          <div className="w-96 shrink-0 border-l border-gray-100 overflow-y-auto p-5 bg-gray-50/40">
+            {typeof sidebarContent === 'function' ? sidebarContent(data) : sidebarContent}
+          </div>
+        )}
         </div>
       </div>
       <DocumentPrintDrawer
@@ -1373,14 +1536,14 @@ export function DetailView({
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete record</DialogTitle>
+            <DialogTitle>{ui('deleteConfirmTitle')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this record? This action cannot be undone.
+              {ui('deleteConfirmMessage')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline" size="sm">Cancel</Button>
+              <Button variant="outline" size="sm">{ui('cancel')}</Button>
             </DialogClose>
             <Button
               variant="destructive"
@@ -1392,7 +1555,7 @@ export function DetailView({
                 navigate(`/${windowName}`);
               }}
             >
-              Delete
+              {ui('delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

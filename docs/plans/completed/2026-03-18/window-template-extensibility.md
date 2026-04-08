@@ -116,7 +116,7 @@ For Custom:
 
 Both generators still produce `Table.jsx`, `Form.jsx` (for the detail/edit view when clicking a card/event) and `mockCatalogs.js`.
 
-Both include `@sf-custom-slot` markers (like default layout) so developers can inject hooks or custom logic without switching to `layoutType: "custom"`.
+UI customization is driven by `decisions.json` config keys (see `docs/ui-customization.md`), not inline code markers.
 
 `generateCustomScaffold(primaryEntity, detailEntity, contract)`:
 - Generates a **single `index.jsx`** file placed in `windows/custom/{window-name}/`

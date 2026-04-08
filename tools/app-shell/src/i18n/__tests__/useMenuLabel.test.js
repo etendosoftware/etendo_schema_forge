@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
  */
 
 function resolveMenuLabel(dictionary, key) {
-  return dictionary?.menus?.[key]?.label ??
-    dictionary?.ui?.[key]?.label ??
+  return dictionary?.ui?.[key]?.label ??
+    dictionary?.menus?.[key]?.label ??
     key;
 }
 
@@ -32,12 +32,12 @@ describe('resolveMenuLabel', () => {
     assert.equal(resolveMenuLabel(sampleDictionary, 'Dashboard'), 'Panel');
   });
 
-  it('prefers menus over ui when key exists in both', () => {
+  it('prefers ui over menus when key exists in both', () => {
     const dict = {
       menus: { Test: { label: 'From Menus' } },
       ui: { Test: { label: 'From UI' } },
     };
-    assert.equal(resolveMenuLabel(dict, 'Test'), 'From Menus');
+    assert.equal(resolveMenuLabel(dict, 'Test'), 'From UI');
   });
 
   it('falls back to the raw key when not found in either section', () => {

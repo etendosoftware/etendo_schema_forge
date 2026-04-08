@@ -6,6 +6,7 @@ const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name' },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string', label: 'Warehouse' },
   { key: 'inventoryType', column: 'Inventory_Type', type: 'enum', label: 'Inventory Type', enumLabels: { 'C': 'Closing Inventory', 'N': 'Normal', 'O': 'Opening Inventory' } },
+  { key: 'processed', column: 'Processed', type: 'status', label: 'Status' },
 ];
 // @sf-generated-end columns:inventory
 

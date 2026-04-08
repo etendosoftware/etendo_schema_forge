@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "reportId": "report-journal-entries",
+  "category": "finance",
+  "type": "grouped-listing",
+  "source": "sql",
+  "title": { "en_US": "Journal Entries", "es_ES": "Asientos Contables" },
+  "orientation": "landscape",
+  "sql": {
+    "query": "WITH je AS (SELECT fa.dateacct, DENSE_RANK() OVER (ORDER BY fa.dateacct, fa.fact_acct_group_id) AS entry_no, COALESCE(MAX(dt.name), 'Journal') AS document_type, fa.fact_acct_group_id, fa.record_id, fa.ad_table_id, fa.acctvalue AS account_no, fa.acctdescription AS account_name, SUM(fa.amtacctdr) AS amtacctdr, SUM(fa.amtacctcr) AS amtacctcr, MIN(fa.seqno) AS min_seqno FROM fact_acct fa LEFT JOIN c_doctype dt ON dt.c_doctype_id = fa.c_doctype_id WHERE fa.ad_client_id IN ('__CLIENT_ID__') AND fa.factaccttype IN ('C','N','O','R','D') AND ('__DATEFROM__' = '' OR fa.dateacct >= '__DATEFROM__'::date) AND ('__DATETO__' = '' OR fa.dateacct <= '__DATETO__'::date) AND ('__ORGID__' = '' OR fa.ad_org_id = '__ORGID__') AND ('__ACCTSCHEMAID__' = '' OR fa.c_acctschema_id = '__ACCTSCHEMAID__') AND ('__BPARTNERID__' = '' OR fa.c_bpartner_id = '__BPARTNERID__') AND ('__PRODUCTID__' = '' OR fa.m_product_id = '__PRODUCTID__') AND ('__PROJECTID__' = '' OR fa.c_project_id = '__PROJECTID__') AND ('__FROMACCOUNTID__' = '' OR fa.acctvalue >= '__FROMACCOUNTID__') AND ('__TOACCOUNTID__' = '' OR fa.acctvalue <= '__TOACCOUNTID__') GROUP BY fa.fact_acct_group_id, fa.dateacct, fa.acctvalue, fa.acctdescription, fa.record_id, fa.ad_table_id, fa.account_id, fa.factaccttype, (CASE fa.amtacctdr WHEN 0 THEN (CASE SIGN(fa.amtacctcr) WHEN -1 THEN 1 ELSE 2 END) ELSE (CASE SIGN(fa.amtacctdr) WHEN -1 THEN 3 ELSE 4 END) END) HAVING (SUM(fa.amtacctdr) <> 0 OR SUM(fa.amtacctcr) <> 0)) SELECT dateacct, entry_no, document_type, fact_acct_group_id, record_id, ad_table_id, account_no, account_name, amtacctdr, amtacctcr FROM je ORDER BY dateacct, fact_acct_group_id, min_seqno"
+  },
+  "columns": [
+    { "field": "account_no", "label": { "en_US": "Account No.", "es_ES": "Nº Cuenta" }, "type": "string", "width": "10%", "sortable": true },
+    { "field": "account_name", "label": { "en_US": "Name", "es_ES": "Nombre" }, "type": "string", "width": "30%", "sortable": true },
+    { "field": "amtacctdr", "label": { "en_US": "Debit", "es_ES": "Debe" }, "type": "amount", "width": "13%", "sortable": true },
+    { "field": "amtacctcr", "label": { "en_US": "Credit", "es_ES": "Haber" }, "type": "amount", "width": "13%", "sortable": true }
+  ],
+  "groups": [
+    {
+      "field": "fact_acct_group_id",
+      "label": { "en_US": "Entry", "es_ES": "Asiento" },
+      "headerFields": [
+        { "field": "dateacct", "label": { "en_US": "Date", "es_ES": "Fecha" } },
+        { "field": "document_type", "label": { "en_US": "Detail", "es_ES": "Detalle" } }
+      ]
+    }
+  ],
+  "parameters": [
+    { "name": "dateFrom", "label": { "en_US": "From Date", "es_ES": "Desde" }, "type": "date", "default": "__FIRST_OF_PREV_MONTH__", "required": false, "section": "primary" },
+    { "name": "dateTo", "label": { "en_US": "To Date", "es_ES": "Hasta" }, "type": "date", "default": "__TODAY__", "required": false, "section": "primary" },
+    { "name": "orgId", "label": { "en_US": "Organization", "es_ES": "Organización" }, "type": "search", "selector": "org", "inputStyle": "popup-single", "required": true, "section": "primary" },
+    { "name": "acctSchemaId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true, "section": "primary" },
+    { "name": "fromAccountId", "label": { "en_US": "From Account", "es_ES": "Desde la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "filters" },
+    { "name": "toAccountId", "label": { "en_US": "To Account", "es_ES": "A la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "filters" },
+    { "name": "bPartnerId", "label": { "en_US": "Contacts", "es_ES": "Contactos" }, "type": "search", "selector": "bpartner", "multi": true, "inputStyle": "popup", "section": "dimensions" },
+    { "name": "productId", "label": { "en_US": "Product", "es_ES": "Producto" }, "type": "search", "selector": "product", "multi": true, "inputStyle": "popup", "section": "dimensions" },
+    { "name": "projectId", "label": { "en_US": "Project", "es_ES": "Proyecto" }, "type": "search", "selector": "project", "multi": true, "inputStyle": "popup", "section": "dimensions" }
+  ],
+  "defaultSort": { "field": "dateacct", "direction": "asc" },
+  "outputs": ["pdf", "xlsx", "csv", "html"],
+  "summary": { "totalRows": true },
+  "mockDataFile": "mock-data.json"
+}

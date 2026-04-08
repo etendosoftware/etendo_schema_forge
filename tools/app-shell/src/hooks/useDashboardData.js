@@ -13,10 +13,6 @@ import { useAuth } from '@/auth/AuthContext';
  * ----------------------------------------------------------------*/
 
 const FETCH_TIMEOUT_MS = 10000;
-const LARGE_PAGE = 9999;
-
-const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /* ------------------------------------------------------------------
  * Low-level helpers
@@ -31,16 +27,11 @@ function getApiBase() {
 }
 
 /**
- * Fetch ALL records from a NEO Headless endpoint (no server-side filters).
- * NEO does not reliably filter by field values — all filtering is done client-side.
+ * Fetch a dashboard widget endpoint.
+ * All widget endpoints live under /sws/neo/dashboard/{entity}.
  */
-async function fetchAllRecords(apiBase, token, spec, entity) {
-  const params = new URLSearchParams();
-  params.set('_startRow', '0');
-  params.set('_endRow', String(LARGE_PAGE));
-  params.set('_sortBy', 'creationDate desc');
-
-  const url = `${apiBase}/sws/neo/${spec}/${entity}?${params}`;
+async function fetchWidget(apiBase, token, entity) {
+  const url = `${apiBase}/sws/neo/dashboard/${entity}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
 
@@ -52,43 +43,16 @@ async function fetchAllRecords(apiBase, token, spec, entity) {
     clearTimeout(timer);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
-    if (!json?.response || json.response.status !== 0) {
-      console.warn(`[dashboard] API error for ${spec}/${entity}:`, json?.response?.error ?? 'unknown');
+    if (!json?.response) {
+      console.warn(`[dashboard] Unexpected response shape for dashboard/${entity}:`, json);
       return null;
     }
     return json.response.data ?? [];
   } catch (err) {
     clearTimeout(timer);
-    console.warn(`[dashboard] Failed to fetch ${spec}/${entity}:`, err.message);
+    console.warn(`[dashboard] Failed to fetch dashboard/${entity}:`, err.message);
     return null;
   }
-}
-
-/** Parse a date string (ISO or Etendo dd-MM-yyyy format). */
-function parseDate(str) {
-  if (!str) return null;
-  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return new Date(str);
-  const m = str.match(/^(\d{2})-(\d{2})-(\d{4})/);
-  if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}`);
-  return new Date(str);
-}
-
-/** Check if a value is falsy in Etendo's boolean world (Y/N strings). */
-function isFalsy(val) {
-  return !val || val === 'N' || val === 'false' || val === 'No' || val === false;
-}
-
-/** Sum a numeric field across records. */
-function sumField(records, field) {
-  return records.reduce((acc, r) => acc + (Number(r[field]) || 0), 0);
-}
-
-/** Filter records whose dateField falls within a given year/month. */
-function filterByMonth(records, dateField, year, month) {
-  return records.filter((r) => {
-    const d = parseDate(r[dateField]);
-    return d && d.getFullYear() === year && d.getMonth() === month;
-  });
 }
 
 /** Format a dollar amount for display. */
@@ -97,290 +61,175 @@ function fmtAmount(n) {
 }
 
 /* ------------------------------------------------------------------
- * Aggregation: KPIs
+ * Mappers: handler response → frontend shape
  * ----------------------------------------------------------------*/
 
-function buildKpis(allSalesInvoices, allPurchaseInvoices) {
-  const now = new Date();
-  const curYear = now.getFullYear();
-  const curMonth = now.getMonth();
-  const prevMonth = curMonth === 0 ? 11 : curMonth - 1;
-  const prevYear = curMonth === 0 ? curYear - 1 : curYear;
+/**
+ * Map KPI handler response to the shape expected by DashboardPage.
+ * Handler returns: [{key, label, value, format, trend, icon}, ...]
+ */
+function mapKpis(handlerData) {
+  if (!handlerData || handlerData.length === 0) return null;
 
-  // Client-side filter: only completed invoices for revenue/expenses
-  const completedSales = allSalesInvoices.filter((r) => r.documentStatus === 'CO');
-  const completedPurchases = allPurchaseInvoices.filter((r) => r.documentStatus === 'CO');
-
-  const curSales = filterByMonth(completedSales, 'invoiceDate', curYear, curMonth);
-  const prevSales = filterByMonth(completedSales, 'invoiceDate', prevYear, prevMonth);
-  const curPurchases = filterByMonth(completedPurchases, 'invoiceDate', curYear, curMonth);
-  const prevPurchases = filterByMonth(completedPurchases, 'invoiceDate', prevYear, prevMonth);
-
-  const revenue = sumField(curSales, 'grandTotalAmount');
-  const prevRevenue = sumField(prevSales, 'grandTotalAmount');
-  const expenses = sumField(curPurchases, 'grandTotalAmount');
-  const prevExpenses = sumField(prevPurchases, 'grandTotalAmount');
-  const profit = revenue - expenses;
-  const prevProfit = prevRevenue - prevExpenses;
-
-  // Pending invoices: draft sales + draft purchase invoices
-  const pendingCount = allSalesInvoices.filter((r) => r.documentStatus === 'DR').length
-    + allPurchaseInvoices.filter((r) => r.documentStatus === 'DR').length;
-
-  function trendPct(cur, prev) {
-    if (prev === 0) return cur > 0 ? 100 : 0;
-    return Math.round(((cur - prev) / Math.abs(prev)) * 1000) / 10;
+  // Build a lookup from handler data keyed by `key`
+  const byKey = {};
+  for (const item of handlerData) {
+    byKey[item.key] = item;
   }
 
-  const values = {
-    revenueThisMonth: { value: revenue, trend: trendPct(revenue, prevRevenue), previousValue: prevRevenue },
-    expensesThisMonth: { value: expenses, trend: trendPct(expenses, prevExpenses), previousValue: prevExpenses },
-    netProfit: { value: profit, trend: trendPct(profit, prevProfit), previousValue: prevProfit },
-    pendingInvoices: { value: pendingCount, trend: 0, previousValue: pendingCount },
-  };
-
-  return kpisConfig.map((cfg) => ({ ...cfg, ...values[cfg.key] }));
-}
-
-/* ------------------------------------------------------------------
- * Aggregation: Revenue Trend (12 months)
- * ----------------------------------------------------------------*/
-
-function buildRevenueTrend(allSalesInvoices) {
-  const completedSales = allSalesInvoices.filter((r) => r.documentStatus === 'CO');
-  const now = new Date();
-  const labels = [];
-  const values = [];
-
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    labels.push(MONTH_LABELS[d.getMonth()]);
-    const monthRecords = filterByMonth(completedSales, 'invoiceDate', d.getFullYear(), d.getMonth());
-    values.push(sumField(monthRecords, 'grandTotalAmount'));
-  }
-
-  return { labels, values };
-}
-
-/* ------------------------------------------------------------------
- * Aggregation: Expense Trend (12 months)
- * ----------------------------------------------------------------*/
-
-function buildExpenseTrend(allPurchaseInvoices) {
-  const completedPurchases = allPurchaseInvoices.filter((r) => r.documentStatus === 'CO');
-  const now = new Date();
-  const values = [];
-
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthRecords = filterByMonth(completedPurchases, 'invoiceDate', d.getFullYear(), d.getMonth());
-    values.push(sumField(monthRecords, 'grandTotalAmount'));
-  }
-
-  return values;
-}
-
-/* ------------------------------------------------------------------
- * Aggregation: Top Clients (last 12 months)
- * ----------------------------------------------------------------*/
-
-function buildTopClients(allSalesInvoices) {
-  const now = new Date();
-  const cutoff = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-  const completedSales = allSalesInvoices.filter((r) => {
-    if (r.documentStatus !== 'CO') return false;
-    const d = parseDate(r.invoiceDate);
-    return d && d >= cutoff;
+  return kpisConfig.map((cfg) => {
+    const h = byKey[cfg.key];
+    if (!h) return { ...cfg, value: 0, trend: 0, previousValue: 0 };
+    const trend = h.trend || 0;
+    const value = h.value || 0;
+    const previousValue = trend !== 0
+      ? Math.round(value / (1 + trend / 100))
+      : value;
+    return { ...cfg, value, trend, previousValue };
   });
-  const totals = {};
-  for (const r of completedSales) {
-    const name = r['businessPartner$_identifier'] || r.businessPartner || 'Unknown';
-    totals[name] = (totals[name] || 0) + (Number(r.grandTotalAmount) || 0);
-  }
-  return Object.entries(totals)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, total]) => ({ name, total }));
-}
-
-/* ------------------------------------------------------------------
- * Aggregation: Pending Tasks
- * ----------------------------------------------------------------*/
-
-function buildPendingTasks(allSalesInvoices, allPurchaseInvoices, allPurchaseOrders, allShipments) {
-  const draftSalesInvoices = allSalesInvoices.filter((r) => r.documentStatus === 'DR');
-  const draftPurchaseInvoices = (allPurchaseInvoices ?? []).filter((r) => r.documentStatus === 'DR');
-
-  // Draft shipments and purchase orders (client-side filter)
-  const draftShipments = allShipments.filter((r) => r.documentStatus === 'DR');
-  const draftPOs = allPurchaseOrders.filter((r) => r.documentStatus === 'DR');
-
-  const tasks = [];
-
-  if (draftSalesInvoices.length > 0) {
-    tasks.push({
-      type: 'info',
-      text: `${draftSalesInvoices.length} Sales Invoice${draftSalesInvoices.length > 1 ? 's' : ''} pending`,
-      link: '/sales-invoice',
-      count: draftSalesInvoices.length,
-      amount: fmtAmount(sumField(draftSalesInvoices, 'grandTotalAmount')),
-    });
-  }
-
-  if (draftPurchaseInvoices.length > 0) {
-    tasks.push({
-      type: 'info',
-      text: `${draftPurchaseInvoices.length} Purchase Invoice${draftPurchaseInvoices.length > 1 ? 's' : ''} pending`,
-      link: '/purchase-invoice',
-      count: draftPurchaseInvoices.length,
-      amount: fmtAmount(sumField(draftPurchaseInvoices, 'grandTotalAmount')),
-    });
-  }
-
-  if (draftShipments.length > 0) {
-    tasks.push({
-      type: 'info',
-      text: `${draftShipments.length} orders pending shipment`,
-      link: '/goods-shipment',
-      count: draftShipments.length,
-    });
-  }
-
-  if (draftPOs.length > 0) {
-    tasks.push({
-      type: 'info',
-      text: `${draftPOs.length} purchase orders to confirm`,
-      link: '/purchase-order',
-      count: draftPOs.length,
-    });
-  }
-
-  return tasks;
-}
-
-/* ------------------------------------------------------------------
- * Aggregation: Recent Invoices (last 5)
- * ----------------------------------------------------------------*/
-
-function buildRecentInvoices(allSalesInvoices) {
-  return [...allSalesInvoices]
-    .sort((a, b) => {
-      const da = parseDate(a.invoiceDate);
-      const db = parseDate(b.invoiceDate);
-      if (!da) return 1;
-      if (!db) return -1;
-      return db - da;
-    })
-    .slice(0, 5)
-    .map((r) => ({
-      id: r.id,
-      client: r['businessPartner$_identifier'] || 'Unknown',
-      date: r.invoiceDate,
-      amount: Number(r.grandTotalAmount) || 0,
-      status: r.documentStatus,
-    }));
-}
-
-/* ------------------------------------------------------------------
- * Aggregation: Best Products (top 5 by revenue in order lines)
- * ----------------------------------------------------------------*/
-
-/**
- * Build a Map<orderId, dateOrdered> from sales order headers.
- * Used to join order lines (which have no date) with their parent order.
- */
-function buildOrderDateMap(allSalesOrders) {
-  const map = new Map();
-  if (!allSalesOrders) return map;
-  if (allSalesOrders.length > 0) {
-    console.debug('[dashboard] Sample sales order header fields:', Object.keys(allSalesOrders[0]));
-    console.debug('[dashboard] Sample sales order header:', allSalesOrders[0]);
-  }
-  for (const o of allSalesOrders) {
-    const date = o.dateOrdered || o.orderDate;
-    if (o.id && date) map.set(o.id, date);
-  }
-  console.debug(`[dashboard] orderDateMap built: ${map.size} entries`);
-  return map;
 }
 
 /**
- * Returns the cutoff date for a 12-month window (first day of month 11 months ago).
- * If orderDateMap is empty we cannot filter — return null so callers include everything.
+ * Map trends handler response.
+ * Handler returns: [{labels, values}]
  */
-function get12MonthCutoff(orderDateMap) {
-  if (!orderDateMap || orderDateMap.size === 0) return null;
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth() - 11, 1);
-}
-
-function buildBestProducts(allOrderLines, orderDateMap) {
-  if (!allOrderLines || allOrderLines.length === 0) return [];
-  const cutoff = get12MonthCutoff(orderDateMap);
-
-  // Debug: log field names of the first order line to verify FK field name
-  if (allOrderLines.length > 0) {
-    console.debug('[dashboard] Sample order line fields:', Object.keys(allOrderLines[0]));
-    console.debug('[dashboard] Sample order line:', allOrderLines[0]);
-  }
-
-  const totals = {};
-  for (const line of allOrderLines) {
-    if (cutoff) {
-      // C_OrderLine.C_Order_ID is exposed as 'salesOrder' in NEO (Etendo OB property name)
-      const orderId = line.salesOrder || line.order || line.salesOrderId || line.cOrderId;
-      const rawDate = orderId ? orderDateMap.get(orderId) : undefined;
-      const d = rawDate ? parseDate(rawDate) : null;
-      // If no date found, exclude the line (conservative) — avoids pulling all-time history
-      if (!d || d < cutoff) continue;
-    }
-    const name = line['product$_identifier'] || line.product || 'Unknown';
-    if (!name || name === 'Unknown') continue;
-    if (!totals[name]) totals[name] = { name, qty: 0, amount: 0 };
-    totals[name].qty += Number(line.orderedQuantity) || 0;
-    totals[name].amount += Number(line.lineNetAmount) || 0;
-  }
-  return Object.values(totals)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 5);
-}
-
-/* ------------------------------------------------------------------
- * Aggregation: Best Sellers (top 10 by quantity, with UOM)
- * ----------------------------------------------------------------*/
-
-function buildBestSellers(allOrderLines, orderDateMap) {
-  if (!allOrderLines || allOrderLines.length === 0) return [];
-  const cutoff = get12MonthCutoff(orderDateMap);
-  const totals = {};
-  for (const line of allOrderLines) {
-    if (cutoff) {
-      const orderId = line.salesOrder || line.order || line.salesOrderId || line.cOrderId;
-      const rawDate = orderId ? orderDateMap.get(orderId) : undefined;
-      const d = rawDate ? parseDate(rawDate) : null;
-      if (!d || d < cutoff) continue;
-    }
-    const name = line['product$_identifier'] || line.product || 'Unknown';
-    if (!name || name === 'Unknown') continue;
-    const uom = line['uOM$_identifier'] || line['uom$_identifier'] || '';
-    if (!totals[name]) totals[name] = { name, qty: 0, uom };
-    totals[name].qty += Number(line.orderedQuantity) || 0;
-  }
-  return Object.values(totals)
-    .sort((a, b) => b.qty - a.qty)
-    .slice(0, 10);
-}
-
-/* ------------------------------------------------------------------
- * Aggregation: Pending Amounts (to collect / to pay)
- * ----------------------------------------------------------------*/
-
-function buildPendingAmounts(allSalesInvoices, allPurchaseInvoices) {
-  const draftSales = allSalesInvoices.filter((r) => r.documentStatus === 'DR');
-  const draftPurchases = (allPurchaseInvoices || []).filter((r) => r.documentStatus === 'DR');
+function mapTrends(handlerData) {
+  if (!handlerData || handlerData.length === 0) return null;
+  const trend = handlerData[0];
   return {
-    toCollect: { count: draftSales.length, amount: sumField(draftSales, 'grandTotalAmount') },
-    toPay: { count: draftPurchases.length, amount: sumField(draftPurchases, 'grandTotalAmount') },
+    labels: trend.labels || [],
+    values: trend.values || [],
+  };
+}
+
+/**
+ * Map pending tasks handler response.
+ * Handler returns: [{type, text, link, amount?, detail?}]
+ */
+function mapPendingTasks(handlerData) {
+  if (!handlerData || handlerData.length === 0) return [];
+
+  return handlerData.map((task) => {
+    const mapped = {
+      type: task.type || 'info',
+      text: task.text || '',
+      link: task.link || '',
+    };
+    if (task.amount) mapped.amount = task.amount;
+    if (task.detail) mapped.detail = task.detail;
+    if (task.count) mapped.count = task.count;
+    if (task.labelKey) mapped.labelKey = task.labelKey;
+    if (task.taskKey) mapped.taskKey = task.taskKey;
+
+    // Only infer taskKey if not provided by handler
+    if (!mapped.taskKey) {
+      mapped.taskKey = inferPendingTaskKey(mapped);
+    }
+
+    return mapped;
+  });
+}
+
+function inferPendingTaskKey(task) {
+  const text = String(task?.text ?? '').toLowerCase();
+
+  if (task?.taskKey) return task.taskKey;
+  if (task?.link === '/sales-invoice' || text.includes('overdue invoices')) {
+    return task?.count === 1 ? 'overdueInvoices' : 'overdueInvoices_plural';
+  }
+  if (task?.link === '/goods-shipment' || text.includes('pending shipment')) {
+    return 'pendingShipments';
+  }
+  if (task?.link === '/purchase-order' || text.includes('purchase orders to confirm')) {
+    return 'purchaseOrdersToConfirm';
+  }
+  if (task?.link === '/physical-inventory' || text.includes('low stock alert')) {
+    return task?.count === 1 ? 'lowStockAlert' : 'lowStockAlerts';
+  }
+  return null;
+}
+
+/**
+ * Map activity handler response.
+ * Handler returns: [{id, author, text, timestamp, type}]
+ */
+function mapActivity(handlerData) {
+  if (!handlerData || handlerData.length === 0) return [];
+  return handlerData;
+}
+
+/**
+ * Map recent invoices handler response.
+ * Handler returns: [{id, client, date, amount, status}]
+ */
+function mapRecentInvoices(handlerData) {
+  if (!handlerData || handlerData.length === 0) return null;
+  return handlerData.map((inv) => ({
+    id: inv.id || '',
+    client: inv.client || '',
+    date: inv.date || '',
+    amount: inv.amount || 0,
+    status: inv.status || '',
+  }));
+}
+
+/**
+ * Map best products handler response.
+ * Handler returns: [{name, qty, amount}]
+ */
+function mapBestProducts(handlerData) {
+  if (!handlerData || handlerData.length === 0) return null;
+  return handlerData.map((p) => ({
+    name: p.name || '',
+    qty: p.qty || 0,
+    amount: p.amount || 0,
+  }));
+}
+
+/**
+ * Map best sellers handler response.
+ * Handler returns: [{name, qty, uom}]
+ */
+function mapBestSellers(handlerData) {
+  if (!handlerData || handlerData.length === 0) return null;
+  return handlerData.map((s) => ({
+    name: s.name || '',
+    qty: s.qty || 0,
+    uom: s.uom || '',
+  }));
+}
+
+/**
+ * Map top clients handler response.
+ * Handler returns: [{name, total}]
+ */
+function mapTopClients(handlerData) {
+  if (!handlerData || handlerData.length === 0) return null;
+  return handlerData.map((c) => ({
+    name: c.name || '',
+    total: c.total || 0,
+  }));
+}
+
+/**
+ * Map pending amounts handler response.
+ * Handler returns: {toCollect: {count, amount}, toPay: {count, amount}}
+ * Note: this endpoint returns a single object, not an array.
+ */
+function mapPendingAmounts(handlerData) {
+  if (!handlerData) return null;
+  // Handler returns data as object (not array) or as first element of array
+  const obj = Array.isArray(handlerData) ? handlerData[0] : handlerData;
+  if (!obj) return null;
+  return {
+    toCollect: {
+      count: obj.toCollect?.count ?? 0,
+      amount: obj.toCollect?.amount ?? 0,
+    },
+    toPay: {
+      count: obj.toPay?.count ?? 0,
+      amount: obj.toPay?.amount ?? 0,
+    },
   };
 }
 
@@ -433,7 +282,7 @@ function buildMockFallback() {
   return {
     kpis,
     revenueTrend: mockRevenueTrend,
-    pendingTasks: mockPendingTasks,
+    pendingTasks: [],
     recentMessages: mockRecentMessages,
     recentInvoices: MOCK_RECENT_INVOICES,
     bestProducts: MOCK_BEST_PRODUCTS,
@@ -448,8 +297,8 @@ function buildMockFallback() {
 
 /**
  * Hook that provides all dashboard data.
- * Fetches all records from NEO Headless CRUD endpoints in parallel,
- * filters and aggregates client-side, falls back to mock on error.
+ * Fetches from 4 dedicated widget handler endpoints in parallel,
+ * falls back to mock on error.
  */
 export function useDashboardData() {
   const { token } = useAuth();
@@ -467,65 +316,70 @@ export function useDashboardData() {
 
     setLoading(true);
     try {
-      // Fetch all records — filtering is done client-side because NEO
-      // does not reliably apply field-level query parameters as filters.
-      const [salesRes, purchasesRes, posRes, shipmentsRes, orderLinesRes, salesOrdersRes] = await Promise.allSettled([
-        fetchAllRecords(apiBase, token, 'sales-invoice', 'header'),
-        fetchAllRecords(apiBase, token, 'purchase-invoice', 'invoice'),
-        fetchAllRecords(apiBase, token, 'purchase-order', 'order'),
-        fetchAllRecords(apiBase, token, 'goods-shipment', 'goodsShipment'),
-        fetchAllRecords(apiBase, token, 'sales-order', 'lines'),
-        fetchAllRecords(apiBase, token, 'sales-order', 'header'),
+      const [
+        kpisRes, trendsRes, pendingRes, activityRes,
+        invoicesRes, bestProductsRes, bestSellersRes, pendingAmountsRes,
+        topClientsRes,
+      ] = await Promise.allSettled([
+        fetchWidget(apiBase, token, 'kpis'),
+        fetchWidget(apiBase, token, 'trends'),
+        fetchWidget(apiBase, token, 'pending-tasks'),
+        fetchWidget(apiBase, token, 'activity'),
+        fetchWidget(apiBase, token, 'recent-invoices'),
+        fetchWidget(apiBase, token, 'best-products'),
+        fetchWidget(apiBase, token, 'best-sellers'),
+        fetchWidget(apiBase, token, 'pending-amounts'),
+        fetchWidget(apiBase, token, 'top-clients'),
       ]);
 
-      const salesInvoices   = salesRes.status        === 'fulfilled' ? salesRes.value        : null;
-      const purchaseInvoices= purchasesRes.status    === 'fulfilled' ? purchasesRes.value    : null;
-      const purchaseOrders  = posRes.status          === 'fulfilled' ? posRes.value          : null;
-      const shipments       = shipmentsRes.status    === 'fulfilled' ? shipmentsRes.value    : null;
-      const orderLines      = orderLinesRes.status   === 'fulfilled' ? orderLinesRes.value   : null;
-      const salesOrders     = salesOrdersRes.status  === 'fulfilled' ? salesOrdersRes.value  : null;
+      const kpisData    = kpisRes.status    === 'fulfilled' ? kpisRes.value    : null;
+      const trendsData  = trendsRes.status  === 'fulfilled' ? trendsRes.value  : null;
+      const pendingData = pendingRes.status === 'fulfilled' ? pendingRes.value : null;
+      const activityData = activityRes.status === 'fulfilled' ? activityRes.value : null;
+      const invoicesData = invoicesRes.status === 'fulfilled' ? invoicesRes.value : null;
+      const bestProductsData = bestProductsRes.status === 'fulfilled' ? bestProductsRes.value : null;
+      const bestSellersData = bestSellersRes.status === 'fulfilled' ? bestSellersRes.value : null;
+      const pendingAmountsData = pendingAmountsRes.status === 'fulfilled' ? pendingAmountsRes.value : null;
+      const topClientsData = topClientsRes.status === 'fulfilled' ? topClientsRes.value : null;
 
-      // Map orderId → dateOrdered for joining with order lines (C_OrderLine has no date)
-      const orderDateMap = buildOrderDateMap(salesOrders);
+      console.debug('[dashboard] widget fetch results:', {
+        kpis: kpisData?.length ?? 'FAILED',
+        trends: trendsData?.length ?? 'FAILED',
+        pending: pendingData?.length ?? 'FAILED',
+        activity: activityData?.length ?? 'FAILED',
+        invoices: invoicesData?.length ?? 'FAILED',
+        bestProducts: bestProductsData?.length ?? 'FAILED',
+        bestSellers: bestSellersData?.length ?? 'FAILED',
+        pendingAmounts: pendingAmountsData ? 'OK' : 'FAILED',
+        topClients: topClientsData?.length ?? 'FAILED',
+      });
 
-      if (!salesInvoices && !purchaseInvoices && !purchaseOrders && !shipments && !orderLines && !salesOrders) {
-        console.warn('[dashboard] All API queries failed — using mock data');
+      // If ALL handlers failed, fall back to full mock
+      const allFailed = !kpisData && !trendsData && !pendingData && !activityData
+        && !invoicesData && !bestProductsData && !bestSellersData && !pendingAmountsData
+        && !topClientsData;
+      if (allFailed) {
+        console.warn('[dashboard] All widget endpoints failed — using mock data');
         setData(buildMockFallback());
         setLoading(false);
         return;
       }
 
       const mock = buildMockFallback();
+      const mappedKpis = mapKpis(kpisData);
+      const mappedTrends = mapTrends(trendsData);
 
       setData({
-        kpis: salesInvoices
-          ? buildKpis(salesInvoices, purchaseInvoices ?? [])
-          : mock.kpis,
-        revenueTrend: salesInvoices
-          ? buildRevenueTrend(salesInvoices)
-          : mock.revenueTrend,
-        expenseTrend: purchaseInvoices
-          ? buildExpenseTrend(purchaseInvoices)
-          : mock.revenueTrend.values.map(() => 0),
-        topClients: salesInvoices
-          ? buildTopClients(salesInvoices)
-          : [],
-        pendingTasks: (salesInvoices && purchaseOrders && shipments)
-          ? buildPendingTasks(salesInvoices, purchaseInvoices, purchaseOrders, shipments)
-          : mock.pendingTasks,
-        recentMessages: mockRecentMessages,
-        recentInvoices: salesInvoices
-          ? buildRecentInvoices(salesInvoices)
-          : mock.recentInvoices,
-        bestProducts: orderLines
-          ? buildBestProducts(orderLines, orderDateMap)
-          : mock.bestProducts,
-        bestSellers: orderLines
-          ? buildBestSellers(orderLines, orderDateMap)
-          : mock.bestSellers,
-        pendingAmounts: salesInvoices
-          ? buildPendingAmounts(salesInvoices, purchaseInvoices)
-          : mock.pendingAmounts,
+        kpis: mappedKpis ?? mock.kpis,
+        revenueTrend: mappedTrends ?? mock.revenueTrend,
+        expenseTrend: mock.revenueTrend.values.map(() => 0),
+        topClients: mapTopClients(topClientsData) ?? [],
+        pendingTasks: mapPendingTasks(pendingData),
+        recentMessages: mapActivity(activityData) || mock.recentMessages,
+        recentInvoices: mapRecentInvoices(invoicesData) ?? mock.recentInvoices,
+        bestProducts: mapBestProducts(bestProductsData) ?? mock.bestProducts,
+        bestSellers: mapBestSellers(bestSellersData) ?? mock.bestSellers,
+        pendingAmounts: mapPendingAmounts(pendingAmountsData) ?? mock.pendingAmounts,
       });
     } catch (err) {
       console.warn('[dashboard] Unexpected error, using mock data:', err.message);

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
-import { useMenuLabel, useLabel } from '@/i18n';
+import { useMenuLabel, useLabel, useUI } from '@/i18n';
 import { Search, ArrowUpDown, SlidersHorizontal, Eye, ChevronDown, MoreVertical, Plus, CalendarDays, Link2, Sparkles, Bell, Mic, Printer, LayoutGrid, LayoutList } from 'lucide-react';
 import LocaleSwitcher from '@/components/LocaleSwitcher.jsx';
 import { UserAvatarButton, UserContextSwitcher } from '@/components/UserContextSwitcher.jsx';
@@ -25,11 +25,14 @@ export function ListView({
   hideCreate = false,
   headerContent = null,
   api = null,
+  bulkActions = null,
+  isRowSelectable = null,
 }) {
   const hook = useEntity(entity, null, { token, apiBaseUrl });
   const navigate = useNavigate();
   const tMenu = useMenuLabel();
   const t = useLabel();
+  const ui = useUI();
   const label = tMenu(entityLabel) || entityLabel || entity;
   const [selectedRows, setSelectedRows] = useState([]);
   const [showUserContext, setShowUserContext] = useState(false);
@@ -108,7 +111,7 @@ export function ListView({
               </button>
             </div>
             {breadcrumb && (
-              <p className="text-sm text-muted-foreground mt-0.5">{breadcrumb}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">{breadcrumb.split(' / ').map(s => tMenu(s.trim())).join(' / ')}</p>
             )}
           </div>
 
@@ -118,7 +121,7 @@ export function ListView({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search clients, orders, invoices..."
+                placeholder={ui('searchPlaceholder')}
                 readOnly
                 tabIndex={-1}
                 className="w-full h-9 rounded-lg border border-border/50 bg-white/60 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-colors cursor-default"
@@ -151,7 +154,7 @@ export function ListView({
         {selectedRows.length > 0 ? (
           <div className="flex items-center justify-between px-6 py-3 border-b border-border/30">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold">{selectedRows.length} Selected</span>
+              <span className="text-sm font-semibold">{ui('selected').replace('{count}', selectedRows.length)}</span>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -161,7 +164,7 @@ export function ListView({
                 onClick={() => setShowDocPrint(true)}
               >
                 <Eye className="h-3.5 w-3.5" />
-                Preview
+                {ui('preview')}
               </Button>
               <Button
                 size="sm"
@@ -169,10 +172,11 @@ export function ListView({
                 onClick={() => printDocuments(windowName, selectedRows.map(r => r.id || r), token)}
               >
                 <Printer className="h-3.5 w-3.5" />
-                Print ({selectedRows.length})
+                {ui('print')} ({selectedRows.length})
               </Button>
+              {bulkActions && bulkActions({ selectedRows, clearSelection: () => setSelectedRows([]), token, apiBaseUrl, windowName, api })}
               <Button variant="outline" size="sm" className="text-muted-foreground" onClick={() => setSelectedRows([])}>
-                Clear
+                {ui('clear')}
               </Button>
             </div>
           </div>
@@ -180,12 +184,12 @@ export function ListView({
           <div className="flex items-center justify-between px-6 py-3">
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white">
-                All statuses
+                {ui('allStatuses')}
                 <ChevronDown className="h-3.5 w-3.5" />
               </Button>
               <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white">
                 <CalendarDays className="h-3.5 w-3.5" />
-                Last year
+                {ui('lastYear')}
                 <ChevronDown className="h-3.5 w-3.5" />
               </Button>
               <button className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
@@ -214,7 +218,7 @@ export function ListView({
                 {showSortPopover && tableColumns.length > 0 && (
                   <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-card shadow-lg py-1">
                     <div className="px-3 py-2 text-xs font-medium text-muted-foreground tracking-wide">
-                      Sort by
+                      {ui('sortBy')}
                     </div>
                     {tableColumns.map(col => {
                       const colLabel = t(col.column) ?? col.label ?? col.key;
@@ -243,7 +247,7 @@ export function ListView({
                           className="w-full flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
                         >
                           <span className="w-4" />
-                          <span className="flex-1 text-left">Clear sort</span>
+                          <span className="flex-1 text-left">{ui('clearSort')}</span>
                         </button>
                       </>
                     )}
@@ -267,7 +271,7 @@ export function ListView({
                 onClick={() => setShowReport(true)}
               >
                 <Printer className="h-3.5 w-3.5" />
-                Print
+                {ui('print')}
               </Button>
               {/* View toggle */}
               {galleryRenderer && (
@@ -295,7 +299,7 @@ export function ListView({
                   onClick={() => navigate(`/${windowName}/new`)}
                 >
                   <Plus className="h-4 w-4" />
-                  New {label.endsWith('ies') ? label.slice(0, -3) + 'y' : label.replace(/s$/, '')}
+                  {ui('newRecord')}
                 </Button>
                 <div className="w-px bg-primary-foreground/20" />
                 <Button
@@ -337,21 +341,25 @@ export function ListView({
                     data={hook.items}
                     onNavigate={(row) => navigate(`/${windowName}/${row.id}`)}
                     onSelectionChange={setSelectedRows}
+                    isRowSelectable={isRowSelectable}
                     compact={false}
                     sortColumn={hook.sortColumn}
                     sortDirection={hook.sortDirection}
                     onColumnsReady={setTableColumns}
+                    api={api}
+                    token={token}
+                    apiBaseUrl={apiBaseUrl}
                   />
                 )
               }
               {hook.loadingMore && (
                 <div className="flex items-center justify-center py-4">
                   <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                  <span className="ml-2 text-sm text-muted-foreground">Loading more...</span>
+                  <span className="ml-2 text-sm text-muted-foreground">{ui('loadingMore')}</span>
                 </div>
               )}
               {!hook.hasMore && hook.items.length > 0 && !hook.loadingMore && (
-                <p className="text-center text-xs text-muted-foreground/60 py-3">All records loaded</p>
+                <p className="text-center text-xs text-muted-foreground/60 py-3">{ui('allRecordsLoaded')}</p>
               )}
             </>
           )}

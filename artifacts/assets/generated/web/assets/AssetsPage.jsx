@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import AssetsTable from './AssetsTable';
 import AssetsForm from './AssetsForm';
@@ -7,60 +8,9 @@ import AssetAcctTable from './AssetAcctTable';
 import AssetAcctForm from './AssetAcctForm';
 import catalogs from './mockCatalogs';
 
-import { TrendingDown, CheckCircle2 } from 'lucide-react';
+import AssetsSidebar from '@/windows/custom/assets/AssetsSidebar';
 
 const breadcrumb = 'Accounting / Assets';
-
-// @sf-generated-start statusBar:assets
-function AssetsStatusBar({ data }) {
-  if (!data) return null;
-  const fmt = (v) => v != null ? Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
-  const depreciate = data.depreciate === true || data.depreciate === 'Y';
-  const depreciatedValue = Number(data.depreciatedValue ?? 0);
-  const assetValue = Number(data.assetValue ?? 0);
-  const pct = (depreciate && assetValue > 0) ? Math.min(100, Math.round((depreciatedValue / assetValue) * 100)) : null;
-  const colorMap = {
-    blue:   { bg: 'bg-blue-100',   border: 'border-l-blue-500',    text: 'text-blue-800',    sub: 'text-blue-500',    icon: 'text-blue-500',    bar: 'bg-blue-500',    barTrack: 'bg-blue-200'    },
-    teal:   { bg: 'bg-teal-50',    border: 'border-l-teal-500',    text: 'text-teal-800',    sub: 'text-teal-500',    icon: 'text-teal-500',    bar: 'bg-teal-500',    barTrack: 'bg-teal-200'    },
-    orange: { bg: 'bg-orange-50',  border: 'border-l-orange-500',  text: 'text-orange-700',  sub: 'text-orange-500',  icon: 'text-orange-500',  bar: 'bg-orange-500',  barTrack: 'bg-orange-200'  },
-    green:  { bg: 'bg-emerald-50', border: 'border-l-emerald-500', text: 'text-emerald-800', sub: 'text-emerald-500', icon: 'text-emerald-500', bar: 'bg-emerald-500', barTrack: 'bg-emerald-200' },
-  };
-  const cards = [
-    { label: 'Depreciated Value', value: fmt(data.depreciatedValue), color: 'blue',  Icon: TrendingDown },
-    { label: 'Depreciated Plan', value: fmt(data.depreciatedPlan), color: 'teal',  Icon: TrendingDown },
-  ];
-    const progressColor = pct === 100 ? 'green' : 'orange';
-  const pc = colorMap[progressColor];
-  return (
-    <div className="flex flex-wrap gap-3 pt-2 pb-3 mb-2 border-b border-gray-100">
-      {cards.map(({ label, value, color, Icon }) => {
-        const c = colorMap[color];
-        return (
-          <div key={label} className={`flex items-center gap-3 ${c.bg} border-l-4 ${c.border} rounded-lg px-4 py-2.5 min-w-[160px]`}>
-            <Icon size={18} className={c.icon} />
-            <div>
-              <div className={`text-lg font-semibold leading-tight ${c.text}`}>{value}</div>
-              <div className={`text-xs ${c.sub} mt-0.5`}>{label}</div>
-            </div>
-          </div>
-        );
-      })}
-      {pct !== null && (
-        <div className={`flex items-center gap-3 ${pc.bg} border-l-4 ${pc.border} rounded-lg px-4 py-2.5 min-w-[170px]`}>
-          {pct === 100 ? <CheckCircle2 size={18} className={pc.icon} /> : <TrendingDown size={18} className={pc.icon} />}
-          <div>
-            <div className={`text-lg font-semibold leading-tight ${pc.text}`}>{pct}%</div>
-            <div className={`text-xs ${pc.sub} mt-0.5`}>Depreciation</div>
-            <div className={`mt-1.5 h-1.5 w-24 ${pc.barTrack} rounded-full overflow-hidden`}>
-              <div className={`h-full ${pc.bar} rounded-full transition-all`} style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-// @sf-generated-end statusBar:assets
 
 
 // @sf-generated-start summary:assets
@@ -255,6 +205,7 @@ const api = {
 // @sf-generated-start component:AssetsPage
 export default function AssetsPage({ windowName, recordId, ...props }) {
   // @sf-custom-slot hooks:AssetsPage
+  
   if (recordId) {
     return (
       <DetailView
@@ -278,9 +229,17 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
         secondaryTabs={[
           { key: 'assetAcct', label: 'Accounting', Table: AssetAcctTable, Form: AssetAcctForm },
         ]}
-        headerContent={(data) => <AssetsStatusBar data={data} />}
         detailSortBy="sEQNoAsset asc"
+        lockWhenProcessed={false}
         {...props}
+        sidebarContent={(data) => (
+          <AssetsSidebar
+            recordId={recordId}
+            data={data}
+            token={props.token}
+            apiBaseUrl={props.apiBaseUrl}
+          />
+        )}
       />
     );
   }

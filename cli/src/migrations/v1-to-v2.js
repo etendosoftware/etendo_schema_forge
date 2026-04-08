@@ -20,12 +20,16 @@ import { toCamelCase } from '../utils.js';
  */
 function autoSimplifyEntityName(rawName) {
   if (!rawName) return rawName;
-  const match = rawName.match(/^(c|m|ad)([A-Z].*)$/);
+  // Replace slashes with camelCase join: "vendor/creditor" → "vendorCreditor"
+  let name = rawName.includes('/')
+    ? rawName.split('/').map((seg, i) => i === 0 ? seg : seg.charAt(0).toUpperCase() + seg.slice(1)).join('')
+    : rawName;
+  const match = name.match(/^(c|m|ad)([A-Z].*)$/);
   if (match) {
     const rest = match[2];
     return rest.charAt(0).toLowerCase() + rest.slice(1);
   }
-  return rawName;
+  return name;
 }
 
 /**
@@ -52,17 +56,18 @@ export function migrate(decisions, context = {}) {
   for (const rawEntity of schemaRaw.entities) {
     if (!rawEntity.tabName || !rawEntity.tableName) continue;
 
-    const newKey = toCamelCase(rawEntity.tabName);
+    const newKey = autoSimplifyEntityName(toCamelCase(rawEntity.tabName));
     const tableBasedKey = toCamelCase(rawEntity.tableName);
     const simplifiedKey = autoSimplifyEntityName(tableBasedKey);
 
     // Try to match against existing decision keys
     // Check: exact tableName-based key (e.g., "cOrder")
-    if (decisions.entities[tableBasedKey]) {
+    // Skip if already mapped (multiple tabs can share the same table, e.g. C_BPartner)
+    if (decisions.entities[tableBasedKey] && !keyMap[tableBasedKey]) {
       keyMap[tableBasedKey] = newKey;
     }
     // Check: simplified key (e.g., "order") from previous autoSimplify
-    else if (decisions.entities[simplifiedKey] && simplifiedKey !== tableBasedKey) {
+    else if (decisions.entities[simplifiedKey] && simplifiedKey !== tableBasedKey && !keyMap[simplifiedKey]) {
       keyMap[simplifiedKey] = newKey;
     }
     // If the key already matches the new format, no remapping needed
@@ -81,13 +86,36 @@ export function migrate(decisions, context = {}) {
     return decisions;
   }
 
+  // Build full remap (including simplified → newKey for window-level references)
+  const allRemap = {};
+  for (const [oldKey, newKey] of Object.entries(keyMap)) {
+    allRemap[oldKey] = newKey;
+    const simplified = autoSimplifyEntityName(oldKey);
+    if (simplified !== oldKey) allRemap[simplified] = newKey;
+  }
+
   // Remap entity keys
   const newEntities = {};
   for (const [oldKey, value] of Object.entries(decisions.entities)) {
     const newKey = keyMap[oldKey] || oldKey;
     newEntities[newKey] = value;
   }
-
   decisions.entities = newEntities;
+
+  // Remap window-level entity references
+  if (decisions.window) {
+    if (decisions.window.detailEntity && allRemap[decisions.window.detailEntity]) {
+      decisions.window.detailEntity = allRemap[decisions.window.detailEntity];
+    }
+    if (decisions.window.secondaryTabs) {
+      const newTabs = {};
+      for (const [tabKey, tabVal] of Object.entries(decisions.window.secondaryTabs)) {
+        const newTabKey = allRemap[tabKey] || tabKey;
+        newTabs[newTabKey] = tabVal;
+      }
+      decisions.window.secondaryTabs = newTabs;
+    }
+  }
+
   return decisions;
 }

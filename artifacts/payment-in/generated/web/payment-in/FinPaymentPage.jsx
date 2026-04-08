@@ -1,13 +1,21 @@
 import { ListView, DetailView } from '@/components/contract-ui';
+import { toast } from 'sonner';
 import FinPaymentTable from './FinPaymentTable';
 import FinPaymentForm from './FinPaymentForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
+import PaymentBottomPanel from '../../../custom/PaymentBottomPanel';
+import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
+import NewPaymentModal from '../../../custom/NewPaymentModal';
 import catalogs from './mockCatalogs';
+
 
 const breadcrumb = 'Sales / Payment In';
 
+
 // @sf-generated-start summary:finPayment
-const summary = [];
+const summary = [
+
+];
 
 const statusField = 'status';
 // @sf-generated-end summary:finPayment
@@ -19,8 +27,7 @@ const extraBadges = [];
 
 // @sf-generated-start processes:finPayment
 const processes = [
-  // Process payment (Awaiting Payment → Received/Deposited)
-  { name: 'Process Payment', label: 'Process Payment', style: 'positive', columnName: 'aPRMProcessPayment',
+  { name: 'Payment Process', label: 'Process Payment', style: 'positive', columnName: 'aPRMProcessPayment',
     displayLogicRaw: "@status@='RPAP'" },
 ];
 // @sf-generated-end processes:finPayment
@@ -29,9 +36,7 @@ const processes = [
 const draftMode = null;
 // @sf-generated-end draftMode:finPayment
 
-// @sf-generated-start addLineFields:finPaymentScheduleDetail
-const addLineFields = { entry: [], derived: [], hidden: [] };
-// @sf-generated-end addLineFields:finPaymentScheduleDetail
+
 
 const api = {
   "specName": "payment-in",
@@ -170,6 +175,9 @@ const api = {
 // @sf-generated-start component:FinPaymentPage
 export default function FinPaymentPage({ windowName, recordId, ...props }) {
   // @sf-custom-slot hooks:FinPaymentPage
+  if (recordId === 'new') {
+    return <NewPaymentModal token={props.token} apiBaseUrl={props.apiBaseUrl} windowName={windowName} />;
+  }
   if (recordId) {
     return (
       <DetailView
@@ -180,18 +188,21 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         extraBadges={extraBadges}
         processes={processes}
         catalogs={catalogs}
-        entityLabel="Payment"
+        entityLabel="Fin Payment"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
-        api={api}
+      api={api}
         documentPreview={{ titlePrefix: 'Payment', pdfUrl: null }}
-        notesField="description"
-        customTabs={[{ key: 'docs', label: 'Docs', Component: RelatedDocuments }]}
         hideDeleteWhenComplete
+        notesField="description"
+        customTabs={[{ key: 'related', label: 'Related Documents', Component: RelatedDocuments }]}
+        bottomSection={PaymentBottomPanel}
+        topbarRight={PaymentActivityToggle}
         menuActions={({ status }) => [
-          { key: 'reverse', label: 'Reverse Payment', destructive: true, visible: status === 'RPPC' || status === 'RPR' || status === 'RDNC', columnName: 'aPRMReversePayment' },
+          { key: 'reverse', label: 'Reverse Payment', destructive: true, visible: ["RPPC","RPR","RDNC"].includes(status), columnName: 'aPRMReversePayment',  }
         ]}
+        salesTheme
         {...props}
       />
     );
@@ -201,7 +212,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
     <ListView
       entity="finPayment"
       Table={FinPaymentTable}
-      entityLabel="Payments"
+      entityLabel="Payment In"
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}

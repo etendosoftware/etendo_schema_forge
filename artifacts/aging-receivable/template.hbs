@@ -1,43 +1,164 @@
-{{!-- Aging of Receivables template with dynamic bucket headers --}}
+{{!-- Aging of Receivables --}}
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><style>{{{css}}}</style></head>
+<html><head><meta charset="UTF-8"><style>
+{{{css}}}
+.report-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 40px; margin: 8px 0 16px; font-size: 12px; }
+.report-info-grid span { color: #555; }
+.report-info-grid strong { color: #111; }
+tfoot tr td { font-weight: bold; border-top: 2px solid #333; }
+.bp-header-row td { font-weight: bold; font-size: 13px; padding-top: 12px; padding-bottom: 2px; border: none; background: transparent; }
+.bp-subtotal-row td { font-weight: bold; border-top: 1px solid #aaa; border-bottom: 2px solid #333; }
+.doc-row td { border: none; font-size: 11px; }
+.bp-drilldown-link { cursor: pointer; color: #2563eb; text-decoration: underline; }
+.bp-drilldown-link:hover { opacity: 0.75; text-decoration: none; }
+.doc-link { cursor: pointer; color: #2563eb; text-decoration: underline; }
+.doc-link:hover { opacity: 0.75; text-decoration: none; }
+.report-empty { padding: 48px 0; text-align: center; color: #888; font-size: 14px; }
+</style></head>
 <body><div class="report-container">
+
   <div class="report-header">
-    <div><div class="report-title">{{meta.title}}</div></div>
-    <div class="report-meta"><div>{{formatDate meta.generatedAt}}</div><div>{{meta.recordCount}} records</div></div>
+    <div class="report-title">{{meta.title}}</div>
   </div>
 
-  {{#if meta.filters.length}}
-  <div class="report-filters"><strong>Filters:</strong>
-    {{#each meta.filters}}<span>{{this.label}}: {{this.value}} &nbsp;</span>{{/each}}
+  <div class="report-info-grid">
+    {{#if meta.params._display_orgId}}
+    <div><span>Organization: </span><strong>{{meta.params._display_orgId}}</strong></div>
+    {{/if}}
+    <div><span>As of Date: </span><strong>{{formatDateDisplay meta.params.currentDate}}</strong></div>
+    {{#if meta.params._display_glId}}
+    <div><span>General Ledger: </span><strong>{{meta.params._display_glId}}</strong></div>
+    {{/if}}
+    {{#if meta.params._display_bPartnerId}}
+    <div><span>Business Partner: </span><strong>{{meta.params._display_bPartnerId}}</strong></div>
+    {{/if}}
   </div>
-  {{/if}}
 
+  {{#if rows.length}}
+
+  {{#if meta.showDetails}}
+
+  {{!-- VISTA DETALLE: filas de documentos agrupadas por tercero --}}
   <table class="report-table">
     <thead><tr>
-      <th style="width: 25%">Business Partner</th>
-      <th style="width: 12%">Current</th>
-      <th style="width: 12%">1-{{meta.params.column1}} Days</th>
-      <th style="width: 12%">{{meta.params.column1}}-{{meta.params.column2}} Days</th>
-      <th style="width: 12%">{{meta.params.column2}}-{{meta.params.column3}} Days</th>
-      <th style="width: 12%">{{meta.params.column3}}-{{meta.params.column4}} Days</th>
-      <th style="width: 12%">Total</th>
+      <th style="width:18%">Business Partner</th>
+      <th style="width:14%">Document No.</th>
+      <th style="width:10%">Document Date</th>
+      <th style="width:8%" class="cell-amount">Current</th>
+      <th style="width:8%" class="cell-amount">1-{{meta.column1}}</th>
+      {{#if meta.showBucket2}}<th style="width:8%" class="cell-amount">{{meta.column1}}-{{meta.column2}}</th>{{/if}}
+      {{#if meta.showBucket3}}<th style="width:8%" class="cell-amount">{{meta.column2}}-{{meta.column3}}</th>{{/if}}
+      {{#if meta.showBucket4}}<th style="width:8%" class="cell-amount">{{meta.column3}}-{{meta.column4}}</th>{{/if}}
+      <th style="width:8%" class="cell-amount">{{meta.lastBucketLabel}}</th>
+      <th style="width:7%" class="cell-amount">Credits</th>
+      <th style="width:7%" class="cell-amount">Net</th>
+    </tr></thead>
+    <tbody>
+      {{#each rows}}
+      {{!-- Fila de cabecera del tercero --}}
+      <tr class="bp-header-row">
+        <td colspan="{{#if @root.meta.showBucket4}}10{{else}}{{#if @root.meta.showBucket3}}9{{else}}{{#if @root.meta.showBucket2}}8{{else}}7{{/if}}{{/if}}{{/if}}">{{bPartner}}</td>
+      </tr>
+      {{!-- Filas de documentos individuales --}}
+      {{#each docs}}<tr class="doc-row">
+        <td></td>
+        <td><span class="doc-link" onclick="window.parent.postMessage({type:'navigate-invoice',invoiceId:'{{invoiceId}}'},'*')">{{docNo}}</span></td>
+        <td>{{formatDateDisplay dateInvoiced}}</td>
+        <td class="cell-amount">{{formatCurrency current}}</td>
+        <td class="cell-amount">{{formatCurrency days30}}</td>
+        {{#if @root.meta.showBucket2}}<td class="cell-amount">{{formatCurrency days60}}</td>{{/if}}
+        {{#if @root.meta.showBucket3}}<td class="cell-amount">{{formatCurrency days90}}</td>{{/if}}
+        {{#if @root.meta.showBucket4}}<td class="cell-amount">{{formatCurrency days120}}</td>{{/if}}
+        <td class="cell-amount">{{formatCurrency days150plus}}</td>
+        <td class="cell-amount"></td>
+        <td class="cell-amount"></td>
+      </tr>{{/each}}
+      {{!-- Fila de subtotal del tercero --}}
+      <tr class="bp-subtotal-row">
+        <td></td>
+        <td></td>
+        <td></td>
+        <td class="cell-amount">{{formatCurrency current}}</td>
+        <td class="cell-amount">{{formatCurrency days30}}</td>
+        {{#if @root.meta.showBucket2}}<td class="cell-amount">{{formatCurrency days60}}</td>{{/if}}
+        {{#if @root.meta.showBucket3}}<td class="cell-amount">{{formatCurrency days90}}</td>{{/if}}
+        {{#if @root.meta.showBucket4}}<td class="cell-amount">{{formatCurrency days120}}</td>{{/if}}
+        <td class="cell-amount">{{formatCurrency days150plus}}</td>
+        <td class="cell-amount">{{formatCurrency credits}}</td>
+        <td class="cell-amount">{{formatCurrency net}}</td>
+      </tr>
+      {{/each}}
+    </tbody>
+    <tfoot><tr>
+      <td colspan="3">TOTAL:</td>
+      <td class="cell-amount">{{formatCurrency (sumField rows 'current')}}</td>
+      <td class="cell-amount">{{formatCurrency (sumField rows 'days30')}}</td>
+      {{#if meta.showBucket2}}<td class="cell-amount">{{formatCurrency (sumField rows 'days60')}}</td>{{/if}}
+      {{#if meta.showBucket3}}<td class="cell-amount">{{formatCurrency (sumField rows 'days90')}}</td>{{/if}}
+      {{#if meta.showBucket4}}<td class="cell-amount">{{formatCurrency (sumField rows 'days120')}}</td>{{/if}}
+      <td class="cell-amount">{{formatCurrency (sumField rows 'days150plus')}}</td>
+      <td class="cell-amount">{{formatCurrency (sumField rows 'credits')}}</td>
+      <td class="cell-amount">{{formatCurrency (sumField rows 'net')}}</td>
+    </tr></tfoot>
+  </table>
+
+  {{else}}
+
+  {{!-- VISTA RESUMEN: una fila por tercero --}}
+  <table class="report-table">
+    <thead><tr>
+      <th style="width:20%">Business Partner</th>
+      <th style="width:10%" class="cell-amount">Current</th>
+      <th style="width:9%" class="cell-amount">1-{{meta.column1}}</th>
+      {{#if meta.showBucket2}}<th style="width:9%" class="cell-amount">{{meta.column1}}-{{meta.column2}}</th>{{/if}}
+      {{#if meta.showBucket3}}<th style="width:9%" class="cell-amount">{{meta.column2}}-{{meta.column3}}</th>{{/if}}
+      {{#if meta.showBucket4}}<th style="width:9%" class="cell-amount">{{meta.column3}}-{{meta.column4}}</th>{{/if}}
+      <th style="width:9%" class="cell-amount">{{meta.lastBucketLabel}}</th>
+      <th style="width:10%" class="cell-amount">Total</th>
+      <th style="width:8%" class="cell-amount">Credits</th>
+      <th style="width:8%" class="cell-amount">Net</th>
     </tr></thead>
     <tbody>
       {{#each rows}}<tr>
-        <td>{{lookup this 'bPartner'}}</td>
+        <td><span class="bp-drilldown-link" onclick="window.parent.postMessage({type:'aging-drilldown',bpId:'{{lookup this 'bPartnerId'}}',bpName:'{{lookup this 'bPartner'}}'},'*')">{{lookup this 'bPartner'}}</span></td>
         <td class="cell-amount">{{formatCurrency (lookup this 'current')}}</td>
         <td class="cell-amount">{{formatCurrency (lookup this 'days30')}}</td>
-        <td class="cell-amount">{{formatCurrency (lookup this 'days60')}}</td>
-        <td class="cell-amount">{{formatCurrency (lookup this 'days90')}}</td>
-        <td class="cell-amount">{{formatCurrency (lookup this 'days120')}}</td>
+        {{#if @root.meta.showBucket2}}<td class="cell-amount">{{formatCurrency (lookup this 'days60')}}</td>{{/if}}
+        {{#if @root.meta.showBucket3}}<td class="cell-amount">{{formatCurrency (lookup this 'days90')}}</td>{{/if}}
+        {{#if @root.meta.showBucket4}}<td class="cell-amount">{{formatCurrency (lookup this 'days120')}}</td>{{/if}}
+        <td class="cell-amount">{{formatCurrency (lookup this 'days150plus')}}</td>
         <td class="cell-amount">{{formatCurrency (lookup this 'total')}}</td>
+        <td class="cell-amount">{{formatCurrency (lookup this 'credits')}}</td>
+        <td class="cell-amount">{{formatCurrency (lookup this 'net')}}</td>
       </tr>{{/each}}
     </tbody>
+    <tfoot><tr>
+      <td>TOTAL:</td>
+      <td class="cell-amount">{{formatCurrency (sumField rows 'current')}}</td>
+      <td class="cell-amount">{{formatCurrency (sumField rows 'days30')}}</td>
+      {{#if meta.showBucket2}}<td class="cell-amount">{{formatCurrency (sumField rows 'days60')}}</td>{{/if}}
+      {{#if meta.showBucket3}}<td class="cell-amount">{{formatCurrency (sumField rows 'days90')}}</td>{{/if}}
+      {{#if meta.showBucket4}}<td class="cell-amount">{{formatCurrency (sumField rows 'days120')}}</td>{{/if}}
+      <td class="cell-amount">{{formatCurrency (sumField rows 'days150plus')}}</td>
+      <td class="cell-amount">{{formatCurrency (sumField rows 'total')}}</td>
+      <td class="cell-amount">{{formatCurrency (sumField rows 'credits')}}</td>
+      <td class="cell-amount">{{formatCurrency (sumField rows 'net')}}</td>
+    </tr></tfoot>
   </table>
 
+  {{/if}}
+
+  {{else}}
+
+  <div class="report-empty">
+    <p>No data found for the selected filters.</p>
+  </div>
+
+  {{/if}}
+
   <div class="report-footer">
-    <div class="report-summary">Total: {{meta.recordCount}} records</div>
+    <div>{{meta.recordCount}} records</div>
     <div>Generated by Etendo Go</div>
   </div>
+
 </div></body></html>

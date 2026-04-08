@@ -1,4 +1,5 @@
 import { Users } from 'lucide-react';
+import { useLocale } from '@/i18n';
 
 function KpiCard({ title, value, icon: Icon, loading }) {
   return (
@@ -17,15 +18,19 @@ function KpiCard({ title, value, icon: Icon, loading }) {
 }
 
 export default function ContactsKpiCards({ items = [], loading = false }) {
+  const dictionary = useLocale();
+  const gl = dictionary?.genericLabels || {};
+  const t = (key) => gl[key] || key;
+
   const total = items.length;
-  const customers = items.filter(i => i.customer === true || i.customer === 'Y').length;
-  const vendors = items.filter(i => i.vendor === true || i.vendor === 'Y').length;
+  const customerCount = items.filter(i => i.customer === true || i.customer === 'Y').length;
+  const vendorCount = items.filter(i => i.vendor === true || i.vendor === 'Y').length;
 
   return (
     <div className="flex gap-4 mb-4">
-      <KpiCard title="Total Contacts" value={total || null} icon={Users} loading={loading} />
-      <KpiCard title="Customers" value={customers || null} loading={loading} />
-      <KpiCard title="Vendors" value={vendors || null} loading={loading} />
+      <KpiCard title={t('totalContacts')} value={total || null} icon={Users} loading={loading} />
+      <KpiCard title={t('customers')} value={customerCount || null} loading={loading} />
+      <KpiCard title={t('vendors')} value={vendorCount || null} loading={loading} />
     </div>
   );
 }

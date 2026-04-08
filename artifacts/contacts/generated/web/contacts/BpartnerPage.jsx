@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import BpartnerTable from './BpartnerTable';
 import BpartnerForm from './BpartnerForm';
@@ -464,7 +465,6 @@ export default function BpartnerPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       headerContent={(p) => <ContactsKpiCards {...p} />}
-      api={api}
       {...props}
     />
   );

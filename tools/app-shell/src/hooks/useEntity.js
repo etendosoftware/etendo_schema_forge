@@ -14,6 +14,8 @@ function buildHeaders(token) {
 async function extractErrorMessage(res) {
   try {
     const data = await res.json();
+    // NEO Headless top-level error: { error: { message, status } }
+    if (data?.error?.message) return data.error.message;
     // Etendo JsonDataService wraps errors in response.error
     const err = data?.response?.error;
     if (err?.message) return err.message;
@@ -109,7 +111,7 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl, childSortBy 
         setChildren(rows);
       })
       .catch(() => setChildren([]));
-  }, [apiBaseUrl, childEntity, token]);
+  }, [apiBaseUrl, childEntity, token, childSortBy]);
 
   const fetchById = useCallback((id) => {
     if (!id) return;
@@ -265,8 +267,9 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl, childSortBy 
         return null;
       }
       const data = await res.json().catch(() => null);
-      // Refresh children from backend
+      // Refresh children and header (totals recalculated by backend)
       fetchChildren(selected.id);
+      fetchById(selected.id);
       setSaveError(null);
       toast.success('Line added');
       return data?.response?.data?.[0] ?? data ?? true;
@@ -284,11 +287,15 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl, childSortBy 
       if (typeof fieldOrObject === 'object') return { ...c, ...fieldOrObject };
       return { ...c, [fieldOrObject]: value };
     }));
-  }, []);
+    // Refetch header to update totals after line edit
+    if (selected?.id) fetchById(selected.id);
+  }, [selected, fetchById]);
 
   const handleDeleteChild = useCallback((childId) => {
     setChildren(prev => prev.filter(c => String(c.id) !== String(childId)));
-  }, []);
+    // Refetch header to update totals after line deletion
+    if (selected?.id) fetchById(selected.id);
+  }, [selected, fetchById]);
 
   const handleSaveAndProcess = useCallback(async (draftModeConfig) => {
     const saved = await handleSave();
@@ -319,23 +326,32 @@ export function useEntity(entity, childEntity, { token, apiBaseUrl, childSortBy 
       if (p.hidden) fieldValues[p.key] = p.value;
     }
     Object.assign(fieldValues, paramValues);
-    const columnName = process.columnName;
-    const url = columnName
-      ? `${apiBaseUrl}/${entity}/${selected.id}/action/${columnName}`
-      : `${apiBaseUrl}/process/${process.name}`;
-    await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ fieldValues }),
-    });
-    refresh();
-  }, [selected, entity, apiBaseUrl, token, refresh]);
+    const url = `${apiBaseUrl}/${entity}/${selected.id}/action/${process.columnName ?? process.name}`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ fieldValues }),
+      });
+      if (res.ok) {
+        toast.success(process.label ? `${process.label} completed` : 'Process completed');
+        window.dispatchEvent(new CustomEvent('neo:processSuccess', { detail: { process, entity, recordId: selected.id } }));
+        fetchById(selected.id);
+        refresh();
+      } else {
+        const msg = await extractErrorMessage(res);
+        toast.error(msg);
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Network error');
+    }
+  }, [selected, entity, apiBaseUrl, token, refresh, fetchById]);
 
   return {
     items, selected, editing, children, loading, loadingMore, hasMore, saveError,
     handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
     handleAddChild, handleUpdateChild, handleDeleteChild,
-    refresh, fetchById, loadMore,
+    refresh, fetchById, fetchChildren, loadMore,
     sortColumn, sortDirection, setSortColumn, setSortDirection,
   };
 }

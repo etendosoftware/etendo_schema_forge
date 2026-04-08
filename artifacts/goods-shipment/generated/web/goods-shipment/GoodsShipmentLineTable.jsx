@@ -2,8 +2,9 @@ import { DataTable } from '@/components/contract-ui';
 
 // @sf-generated-start columns:goodsShipmentLine
 const columns = [
-  { key: 'product', column: 'M_Product_ID', type: 'string' },
-  { key: 'movementQuantity', column: 'MovementQty', type: 'number' },
+  { key: 'product', column: 'M_Product_ID', type: 'string', label: 'Product' },
+  { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity' },
+  { key: 'orderQuantity', column: 'QuantityOrder', type: 'number', label: 'Order Quantity' },
 ];
 // @sf-generated-end columns:goodsShipmentLine
 

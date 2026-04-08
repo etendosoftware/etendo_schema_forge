@@ -2,16 +2,10 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:businessPartner
 const fields = [
-  { key: 'name', column: 'Name', type: 'text', required: true, section: 'principal' },
-  { key: 'searchKey', column: 'Value', type: 'text', required: true, section: 'principal' },
-  { key: 'businessPartnerCategory', column: 'C_BP_Group_ID', type: 'selector', section: 'principal' },
-  { key: 'description', column: 'Description', type: 'textarea', section: 'principal' },
-  { key: 'customer', column: 'IsCustomer', type: 'checkbox', section: 'principal' },
-  { key: 'vendor', column: 'IsVendor', type: 'checkbox', section: 'principal' },
-  { key: 'taxID', column: 'TaxID', type: 'text', section: 'other' },
-  { key: 'creditLimit', column: 'SO_CreditLimit', type: 'number', section: 'other' },
-  { key: 'creditUsed', column: 'SO_CreditUsed', type: 'number', readOnly: true, section: 'other' },
-  { key: 'active', column: 'IsActive', type: 'checkbox', required: true, readOnly: true, section: 'other' },
+  { key: 'searchKey', column: 'Value', type: 'text', label: 'Search Key', required: true, section: 'principal' },
+  { key: 'name', column: 'Name', type: 'text', label: 'Commercial Name', required: true, section: 'principal' },
+  { key: 'businessPartnerCategory', column: 'C_BP_Group_ID', type: 'selector', label: 'Business Partner Category', required: true, section: 'principal', reference: 'BusinessPartnerCategory', inputMode: 'selector', defaultValue: '@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = \'Y\' AND AD_CLIENT_ID = @#AD_CLIENT_ID@' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal' },
 ];
 // @sf-generated-end fields:businessPartner
 

@@ -256,8 +256,8 @@ It is recommended to give the agent the "decisions" from the start so they can b
 ### 7. Use the agent to test the UI or investigate issues
 - "I have an issue with the generated UI for the Sales Order window. The 'Add Line' button is not working as expected. Can you help me debug this issue?" The agent can guide you through using the Chrome DevTools MCP server to inspect the frontend code, check network requests, and analyze logs to identify the root cause of the issue.
 
-### 8. Deploy the UI to the Etendo Go module
-- Once you are satisfied with the generated UI in development mode, you can ask the agent to deploy it to the Etendo Go module. The agent will build the frontend for production and copy the build artifacts to the correct location in the `com.etendoerp.go` module. Example: "Deploy the UI to the Etendo Go module".
+### 8. Deploy the UI
+- This step is now handled by the dedicated UI container during commits. Use the legacy copy flow only if you explicitly need to publish to the Etendo Go module. Example: "Deploy the UI legacy flow" or run `make deploy LEGACY_DEPLOY=1`.
 
 
 
@@ -328,13 +328,21 @@ VITE_MOCK=false
 VITE_API_BASE=http://localhost:8080/etendo
 ```
 
-### 5. Build and deploy to Etendo
+### 5. Legacy deploy to Etendo (optional)
 
 ```bash
 make deploy
 ```
 
-The built SPA is copied to `modules/com.etendoerp.go/web/com.etendoerp.go/` and served by Tomcat at `/etendo/web/com.etendoerp.go/` — no restart needed.
+`make deploy` is deprecated. The UI is now compiled during commits and deployed in a separate container, so this command only prints a warning by default.
+
+If you still need the old copy-to-Etendo flow, run:
+
+```bash
+make deploy LEGACY_DEPLOY=1
+```
+
+In legacy mode, the built SPA is copied to `modules/com.etendoerp.go/web/com.etendoerp.go/` and served by Tomcat at `/etendo/web/com.etendoerp.go/` — no restart needed.
 
 ### 6. Run tests
 
@@ -367,7 +375,7 @@ make help           Show all targets
 make install        Install all workspace dependencies
 make dev            Start dev server (localhost:3100)
 make build          Build app-shell for production
-make deploy         Build + deploy to Etendo module
+make deploy         Deprecated; use LEGACY_DEPLOY=1 for the old copy flow
 make test           Run all CLI tests
 make test-frontend  Run frontend generator tests
 make clean          Remove build artifacts

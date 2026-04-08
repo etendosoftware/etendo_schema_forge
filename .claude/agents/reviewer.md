@@ -39,12 +39,22 @@ model: inherit
 ## Worktree
 You ALWAYS work in the git worktree assigned by the coordinator. NEVER work in the main repo directory.
 
+## Fetching PR Changes
+Always use `gh` to inspect the PR diff — never rely on local file state alone:
+```bash
+gh pr diff <PR-number> --repo etendosoftware/schema-forge          # full diff
+gh pr view <PR-number> --repo etendosoftware/schema-forge --json files  # list of changed files
+```
+Use the file list to know what to read, then use the diff to understand exactly what changed.
+
 ## Workflow
-1. Receive code from coordinator (worktree path)
-2. Read all changed files
-3. Run build and tests
-4. Classify issues: BLOCKER / WARNING / SUGGESTION
-5. APPROVE if 0 blockers, REJECT if any blockers
+1. Receive PR number (and optionally worktree path) from coordinator
+2. Fetch changed files and diff via `gh` (see above)
+3. Read the changed files in full for context
+3. **Classify each changed file as source vs. generated (UI Change Survival Check — see `schema_forge_rules`)** — if any UI fix is directly in `artifacts/*/generated/` without a generator change, REJECT immediately before proceeding
+4. Run build and tests
+5. Classify remaining issues: BLOCKER / WARNING / SUGGESTION
+6. APPROVE if 0 blockers, REJECT if any blockers
 
 ### Report Format
 ```
@@ -153,9 +163,27 @@ If a generated Page component has hardcoded tab structure that doesn't match any
 
 If a PR adds new fields to `decisions.json` without updating `docs/decisions-reference.md`, that's a WARNING — the reference doc is the guide for what can be configured.
 
-### Shared Component Changes (INFO)
+### Shared Component Changes (WARNING)
 Changes to `tools/app-shell/src/components/contract-ui/` (DetailView, EntityForm, DataTable, etc.) must be:
 - **Generic** — not hardcoded for a specific window
 - **Backwards-compatible** — new props must be optional with sensible defaults
 - Verify no existing window breaks by checking that all new props have default values or guard conditions
+
+### UI Change Survival Check (BLOCKER)
+**Every PR that touches UI must be verified for regeneration survival.** This is one of the most critical checks in Schema Forge.
+
+For each changed UI file, classify it:
+
+| Location | Type | Survives re-execution? |
+|---|---|---|
+| `tools/app-shell/src/` | Source | ✅ Yes — generator imports from it, never overwrites |
+| `artifacts/*/generated/` | Generated output | ❌ No — will be overwritten by next pipeline run |
+| `artifacts/*/custom/` | Hand-written | ✅ Yes — pipeline never touches this directory |
+
+**How to verify:**
+1. For each changed file, check if it lives in `tools/app-shell/src/` or `artifacts/*/generated/`
+2. If in `tools/app-shell/src/`: confirm no generator writes to that exact file path (grep `generate-frontend.js` for the filename)
+3. If in `artifacts/*/generated/`: it must go through the pipeline chain — check that the change is driven from `decisions.json` → generator template, NOT a manual edit
+
+**If a UI fix is directly in `artifacts/*/generated/` without a corresponding generator change → BLOCKER.** The fix must be moved to the generator so it applies to all windows and survives regeneration.
 </schema_forge_rules>

@@ -3,74 +3,91 @@
   "window": {
     "category": "sales",
     "name": "Payment In",
+    "salesTheme": true,
     "documentPreview": { "titlePrefix": "Payment" },
-    "notesField": "description",
     "relatedDocuments": true,
+    "customComponents": {
+      "bottomSection": "PaymentBottomPanel",
+      "topbarRight": "PaymentActivityToggle",
+      "newRecordComponent": "NewPaymentModal"
+    },
+    "detailEntity": null,
     "hideDeleteWhenComplete": true,
+    "summaryFields": [],
     "menuActions": [
       { "key": "reverse", "label": "Reverse Payment", "destructive": true, "visibleWhenStatus": ["RPPC", "RPR", "RDNC"], "columnName": "aPRMReversePayment" }
-    ]
+    ],
+    "processOverrides": {
+      "aPRMProcessPayment": { "label": "Process Payment", "displayLogicRaw": "@status@='RPAP'" },
+      "aPRMAddScheduledpayments": { "exclude": true },
+      "aprmExecutepayment": { "exclude": true },
+      "aPRMReversePayment": { "exclude": true },
+      "aPRMReconcilePayment": { "exclude": true }
+    }
   },
   "entities": {
     "header": {
       "name": "finPayment",
+      "formCols": 3,
       "fields": {
         "documentNo": {
           "visibility": "readOnly",
           "grid": true,
           "searchable": true,
           "inputMode": "text",
-          "section": "principal"
-        },
-        "businessPartner": {
-          "grid": true,
-          "searchable": true,
-          "readOnlyLogic": null,
-          "section": "principal"
+          "form": false
         },
         "paymentDate": {
+          "visibility": "readOnly",
           "grid": true,
           "searchable": true,
-          "inputMode": "date",
-          "readOnlyLogic": null,
-          "section": "principal"
+          "form": false,
+          "inputMode": "date"
+        },
+        "businessPartner": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "form": false
         },
         "amount": {
+          "visibility": "readOnly",
           "grid": true,
-          "inputMode": "number",
-          "readOnlyLogic": null,
-          "section": "principal"
+          "form": false,
+          "inputMode": "number"
         },
         "paymentMethod": {
-          "inputMode": "search",
-          "readOnlyLogic": null,
-          "section": "collapsed"
+          "visibility": "readOnly",
+          "form": false,
+          "inputMode": "search"
         },
         "account": {
+          "visibility": "readOnly",
+          "form": false,
           "inputMode": "search",
-          "readOnlyLogic": null,
           "dependsOn": {
             "field": "paymentMethod",
             "filterKey": "Fin_Paymentmethod_ID"
-          },
-          "section": "collapsed"
+          }
+        },
+        "referenceNo": {
+          "visibility": "readOnly",
+          "form": false,
+          "inputMode": "text"
         },
         "currency": {
+          "visibility": "readOnly",
+          "form": false,
           "inputMode": "search",
-          "readOnlyLogic": null,
           "dependsOn": {
             "field": "account",
             "filterKey": "FIN_Financial_Account_ID"
           },
-          "section": "collapsed"
-        },
-        "referenceNo": {
-          "inputMode": "text",
-          "section": "collapsed"
+          "section": "principal"
         },
         "description": {
-          "inputMode": "textarea",
-          "section": "collapsed"
+          "form": false,
+          "inputMode": "textarea"
         },
         "status": {
           "visibility": "readOnly",

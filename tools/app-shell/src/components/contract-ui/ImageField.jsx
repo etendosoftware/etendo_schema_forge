@@ -101,7 +101,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
 
       {/* Upload button */}
       {!readOnly && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center gap-2">
           <button
             type="button"
             disabled={uploading}
@@ -127,9 +127,6 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
             style={{ visibility: 'hidden', position: 'absolute', width: 0, height: 0 }}
           />
 
-          {imageId && (
-            <span className="text-xs text-muted-foreground truncate">{imageId.substring(0, 8)}…</span>
-          )}
         </div>
       )}
 

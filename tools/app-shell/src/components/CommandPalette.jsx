@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUI } from '@/i18n';
 import {
   CommandDialog,
   CommandEmpty,
@@ -35,6 +36,7 @@ const ICON_MAP = {
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const ui = useUI();
 
   useEffect(() => {
     const down = (e) => {
@@ -54,9 +56,9 @@ export function CommandPalette() {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Search pages..." />
+      <CommandInput placeholder={ui('searchPages')} />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
+        <CommandEmpty>{ui('noResultsFound')}</CommandEmpty>
         {menuConfig.menu.map((group) => {
           const Icon = ICON_MAP[group.icon] || Package;
           return (

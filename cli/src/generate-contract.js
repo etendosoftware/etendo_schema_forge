@@ -41,6 +41,36 @@ function findMatchingRule(rules, identifier, type) {
 }
 
 /**
+ * Convert an Etendo readOnly/displayLogic expression into a JS expression string.
+ * Uses a column→propertyName map built from the schema to resolve @Column@ references.
+ * Falls back to camelCase of the column name when not found in the map.
+ */
+function convertLogicToJs(rawExpr, columnMap, booleanFields) {
+  const boolSet = new Set(booleanFields || []);
+  // Helper: for Y/N comparisons on boolean fields, use true/false instead of string
+  function eqExpr(col, val) {
+    const prop = columnMap[col] ?? (col.charAt(0).toLowerCase() + col.slice(1));
+    if ((val === 'Y' || val === 'N') && boolSet.has(prop)) {
+      return val === 'Y' ? `record['${prop}'] === true` : `record['${prop}'] !== true`;
+    }
+    return `record['${prop}'] === '${val}'`;
+  }
+  function neqExpr(col, val) {
+    const prop = columnMap[col] ?? (col.charAt(0).toLowerCase() + col.slice(1));
+    if ((val === 'Y' || val === 'N') && boolSet.has(prop)) {
+      return val === 'Y' ? `record['${prop}'] !== true` : `record['${prop}'] === true`;
+    }
+    return `record['${prop}'] !== '${val}'`;
+  }
+  return rawExpr
+    .replace(/@(\w+)@='([^']+)'/g, (_, col, val) => eqExpr(col, val))
+    .replace(/@(\w+)@!='([^']+)'/g, (_, col, val) => neqExpr(col, val))
+    .replace(/@(\w+)@!'([^']+)'/g, (_, col, val) => neqExpr(col, val))
+    .replace(/\s*\|\s*/g, ' || ')
+    .replace(/\s*&\s*/g, ' && ');
+}
+
+/**
  * Classify whether a raw display/readOnly logic expression can be evaluated client-side.
  * Returns { evaluable: true } or { evaluable: false, reason: string }.
  */
@@ -63,6 +93,10 @@ function classifyEvaluability(rawExpr) {
   const sessionVarPatterns = [
     'FinancialManagement', 'StockReservations', 'IsSOTrx', 'ShowAcct', 'ShowTrl',
     'ACCS_Account_Ope', 'APRM_', 'showAddPayment', 'IsStocked',
+    // SQL-computed auxiliary fields (HAS_* are server-only boolean checks)
+    'HAS_C_INVOICELINES', 'HAS_M_INOUTLINES', 'HAS_C_ORDERLINES',
+    // Payment module session variables
+    'IsMultiCurrencyEnabled', 'NotAllowChangeExchange', 'isReceipt',
   ];
   for (const pattern of sessionVarPatterns) {
     if (rawExpr.includes(`@${pattern}`)) {
@@ -85,6 +119,18 @@ function classifyEvaluability(rawExpr) {
 export function generateFrontendContract(schema, rules = []) {
   const entities = {};
 
+  // Build a column→propertyName map from all entities for readOnly/display logic JS conversion
+  // Curated fields use field.column (the DB column name) and field.name (the JS property name)
+  const columnMap = {};
+  const booleanFields = [];
+  for (const entity of schema.entities) {
+    for (const field of entity.fields ?? []) {
+      const col = field.column || field.columnName;
+      if (col && field.name) columnMap[col] = field.name;
+      if (field.type === 'boolean') booleanFields.push(field.name);
+    }
+  }
+
   for (const entity of schema.entities) {
     const visibleFields = entity.fields.filter(isVisible);
 
@@ -106,6 +152,8 @@ export function generateFrontendContract(schema, rules = []) {
       if (f.enumValues) mapped.enumValues = f.enumValues;
       if (f.inputMode) mapped.inputMode = f.inputMode;
       if (f.dependsOn) mapped.dependsOn = f.dependsOn;
+      if (f.lookup) mapped.lookup = true;
+      if (f.popup) mapped.popup = true;
 
       // UI hints
       if (f.defaultValue) mapped.defaultValue = f.defaultValue;
@@ -120,7 +168,9 @@ export function generateFrontendContract(schema, rules = []) {
       if (f.seq != null) mapped.seq = f.seq;
       if (f.statusBar) mapped.statusBar = true;
       if (f.badge) mapped.badge = true;
+      if (f.badgeLabels) mapped.badgeLabels = f.badgeLabels;
       if (f.summable) mapped.summable = true;
+      if (f.display) mapped.display = f.display;
 
       // Behavioral metadata: callout
       if (f.callout) {
@@ -158,7 +208,8 @@ export function generateFrontendContract(schema, rules = []) {
           mapped.displayLogic.js = f.displayLogic;
         }
         // Prefer explicit displayLogicJs from decisions over rule-based lookup
-        if (f.displayLogicJs != null) {
+        // but only when evaluable — if not evaluable, js must remain null
+        if (f.displayLogicJs != null && mapped.displayLogic.evaluable !== false) {
           mapped.displayLogic.js = f.displayLogicJs;
         }
       }
@@ -175,10 +226,15 @@ export function generateFrontendContract(schema, rules = []) {
         if (!evalInfo.evaluable) {
           mapped.readOnlyLogic.reason = evalInfo.reason;
           mapped.readOnlyLogic.js = null;
-        } else if (!mapped.readOnlyLogic.js && !f.readOnlyLogic.includes('@')) {
-          // Raw expression has no Etendo @Variable@ markers — treat as direct JS
-          mapped.readOnlyLogic.js = f.readOnlyLogic;
+        } else if (!mapped.readOnlyLogic.js) {
+          mapped.readOnlyLogic.js = convertLogicToJs(f.readOnlyLogic, columnMap, booleanFields);
         }
+      }
+      // Prefer explicit readOnlyLogicJs from decisions over AD-expression translation
+      if (f.readOnlyLogicJs != null) {
+        if (!mapped.readOnlyLogic) mapped.readOnlyLogic = {};
+        mapped.readOnlyLogic.js = f.readOnlyLogicJs;
+        mapped.readOnlyLogic.evaluable = true;
       }
 
       return mapped;
@@ -195,6 +251,7 @@ export function generateFrontendContract(schema, rules = []) {
     const feEntity = { tableName: entity.tableName, tabId: entity.tabId, tabName: entity.tabName, uiPattern: entity.uiPattern ?? 'STD', fields, searchableFields, computedFields };
     if (entity.javaQualifier) feEntity.javaQualifier = entity.javaQualifier;
     if (entity.draftMode?.enabled) feEntity.draftMode = entity.draftMode;
+    if (entity.formCols != null) feEntity.formCols = entity.formCols;
     entities[entity.name] = feEntity;
   }
 
@@ -613,7 +670,7 @@ export function generateApiPrediction(schema, frontendContract, backendContract)
 /**
  * Main orchestrator: generates the full contract object.
  */
-export function generateContract(schema, rules = [], processes = []) {
+export function generateContract(schema, rules = [], processes = [], previousVersion = null) {
   const frontendContract = generateFrontendContract(schema, rules);
   const backendContract = generateBackendContract(schema, rules, processes);
   const testManifest = generateTestManifest(frontendContract, backendContract, rules, processes);
@@ -672,7 +729,7 @@ export function generateContract(schema, rules = [], processes = []) {
     .slice(0, 16);
 
   return {
-    version: schema.version ?? '0.1.0',
+    version: previousVersion ?? schema.version ?? '0.1.0',
     generatedAt: new Date().toISOString(),
     checksum,
     ...contractData,

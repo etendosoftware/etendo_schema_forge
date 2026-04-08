@@ -59,7 +59,9 @@ export const pendingTasks = [
     "type": "warning",
     "text": "3 overdue invoices",
     "link": "/sales-invoice",
-    "filter": { "documentStatus": "overdue" },
+    "filter": {
+      "documentStatus": "overdue"
+    },
     "amount": "$12,400",
     "count": 3
   },
@@ -67,14 +69,18 @@ export const pendingTasks = [
     "type": "info",
     "text": "2 orders pending shipment",
     "link": "/goods-shipment",
-    "filter": { "documentStatus": "pending" },
+    "filter": {
+      "documentStatus": "pending"
+    },
     "count": 2
   },
   {
     "type": "info",
     "text": "5 purchase orders to confirm",
     "link": "/purchase-order",
-    "filter": { "documentStatus": "draft" },
+    "filter": {
+      "documentStatus": "draft"
+    },
     "count": 5
   },
   {

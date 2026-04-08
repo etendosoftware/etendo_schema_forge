@@ -46,3 +46,11 @@ function ifCond(v1, operator, v2, options) {
 }
 
 function eq(a, b) { return a === b; }
+
+// Sum the `field` values of rows whose `category` starts with categoryPrefix
+function sumRowsByCategory(rows, categoryPrefix, field) {
+  if (!Array.isArray(rows)) return 0;
+  return rows
+    .filter(function(r) { return (r.category || '').startsWith(categoryPrefix); })
+    .reduce(function(sum, r) { return sum + (Number(r[field]) || 0); }, 0);
+}

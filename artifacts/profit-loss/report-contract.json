@@ -7,7 +7,7 @@
   "title": { "en_US": "Profit & Loss", "es_ES": "Pérdidas y Ganancias" },
   "orientation": "portrait",
   "sql": {
-    "query": "SELECT CASE ev.accounttype WHEN 'R' THEN '1. Revenue' WHEN 'E' THEN '2. Expenses' END AS category, ev.value || ' - ' || ev.name AS account, CASE ev.accounttype WHEN 'R' THEN SUM(fa.amtacctcr) - SUM(fa.amtacctdr) ELSE SUM(fa.amtacctdr) - SUM(fa.amtacctcr) END AS amount FROM fact_acct fa JOIN c_elementvalue ev ON ev.c_elementvalue_id = fa.account_id WHERE fa.ad_client_id IN ('__CLIENT_ID__') AND ev.accounttype IN ('R', 'E') AND ev.issummary = 'N' AND ('__DATEFROM__' = '' OR fa.dateacct >= '__DATEFROM__'::date) AND ('__DATETO__' = '' OR fa.dateacct <= '__DATETO__'::date) GROUP BY ev.accounttype, ev.value, ev.name HAVING ABS(SUM(fa.amtacctdr) - SUM(fa.amtacctcr)) > 0.01 ORDER BY category, ev.value"
+    "query": "SELECT category, account, amount FROM (SELECT CASE ev.accounttype WHEN 'R' THEN '1. Revenue' WHEN 'E' THEN '2. Expenses' END AS category, ev.value || ' - ' || ev.name AS account, CASE ev.accounttype WHEN 'R' THEN SUM(fa.amtacctcr) - SUM(fa.amtacctdr) ELSE SUM(fa.amtacctdr) - SUM(fa.amtacctcr) END AS amount FROM fact_acct fa JOIN c_elementvalue ev ON ev.c_elementvalue_id = fa.account_id WHERE fa.ad_client_id IN ('__CLIENT_ID__') AND fa.factaccttype NOT IN ('R', 'C') AND ev.accounttype IN ('R', 'E') AND ('__YEARID__' = '' OR fa.dateacct BETWEEN (SELECT MIN(p.startdate) FROM c_period p WHERE p.c_year_id = '__YEARID__') AND (SELECT MAX(p.enddate) FROM c_period p WHERE p.c_year_id = '__YEARID__')) AND ('__ORGID__' = '' OR ad_isorgincluded(fa.ad_org_id, '__ORGID__', fa.ad_client_id) <> -1) AND ('__ACCTSCHEMAID__' = '' OR fa.c_acctschema_id = '__ACCTSCHEMAID__') GROUP BY ev.accounttype, ev.value, ev.name HAVING ABS(SUM(fa.amtacctdr) - SUM(fa.amtacctcr)) > 0.01 UNION ALL SELECT '3. Net Income' AS category, 'Net Income' AS account, SUM(fa.amtacctcr - fa.amtacctdr) AS amount FROM fact_acct fa JOIN c_elementvalue ev ON ev.c_elementvalue_id = fa.account_id WHERE fa.ad_client_id IN ('__CLIENT_ID__') AND fa.factaccttype NOT IN ('R', 'C') AND ev.accounttype IN ('R', 'E') AND ('__YEARID__' = '' OR fa.dateacct BETWEEN (SELECT MIN(p.startdate) FROM c_period p WHERE p.c_year_id = '__YEARID__') AND (SELECT MAX(p.enddate) FROM c_period p WHERE p.c_year_id = '__YEARID__')) AND ('__ORGID__' = '' OR ad_isorgincluded(fa.ad_org_id, '__ORGID__', fa.ad_client_id) <> -1) AND ('__ACCTSCHEMAID__' = '' OR fa.c_acctschema_id = '__ACCTSCHEMAID__')) q ORDER BY category, account"
   },
   "columns": [
     { "field": "account", "label": { "en_US": "Account", "es_ES": "Cuenta" }, "type": "string", "width": "55%", "sortable": true },
@@ -17,8 +17,9 @@
     { "field": "category", "label": { "en_US": "Category", "es_ES": "Categoría" } }
   ],
   "parameters": [
-    { "name": "dateFrom", "label": { "en_US": "Date From", "es_ES": "Desde" }, "type": "date" },
-    { "name": "dateTo", "label": { "en_US": "Date To", "es_ES": "Hasta" }, "type": "date", "default": "__TODAY__" }
+    { "name": "acctSchemaId",     "label": { "en_US": "General Ledger",                "es_ES": "Libro Mayor" },             "type": "search",  "selector": "acctschema", "inputStyle": "popup-single", "required": true, "section": "primary" },
+    { "name": "orgId",            "label": { "en_US": "Organization",                  "es_ES": "Organización" },            "type": "search",  "selector": "org",        "inputStyle": "popup-single", "required": true, "section": "primary" },
+    { "name": "yearId",           "label": { "en_US": "Year",                          "es_ES": "Año" },                     "type": "search",  "selector": "year", "inputStyle": "popup-single", "required": true, "dependsOn": "orgId", "section": "primary" }
   ],
   "defaultSort": { "field": "account", "direction": "asc" },
   "outputs": ["pdf", "xlsx", "csv", "html"],

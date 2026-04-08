@@ -8,7 +8,10 @@
     },
     "notesField": "description",
     "relatedDocuments": true,
-    "hideDeleteWhenComplete": true
+    "hideDeleteWhenComplete": true,
+    "processOverrides": {
+      "documentAction": { "label": "Complete Return", "displayLogicRaw": "@documentStatus@='DR'" }
+    }
   },
   "entities": {
     "cOrder": {

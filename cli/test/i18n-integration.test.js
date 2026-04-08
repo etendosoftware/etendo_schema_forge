@@ -87,6 +87,8 @@ function getGeneratedJsxFiles(dir) {
       const stat = statSync(full, { throwIfNoEntry: false });
       if (!stat) continue;
       if (stat.isDirectory()) {
+        // Skip custom/ directories — hand-written files are not generated
+        if (entry === 'custom') continue;
         results.push(...getGeneratedJsxFiles(full));
       } else if (entry.endsWith('Form.jsx') || entry.endsWith('Table.jsx')) {
         results.push(full);

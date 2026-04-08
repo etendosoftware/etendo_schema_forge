@@ -40,8 +40,7 @@ schema-forge/
 │       ├── generate-contract.js          # Frontend/backend contracts (windows, processes, reports)
 │       ├── push-to-neo.js                # Direct DB writes → NEO Headless config (specType W/P/R)
 │       ├── neo-writer.js                 # Low-level DB writer for ETGO_SF_* tables
-│       ├── custom-section-markers.js     # Delimiter constants for code preservation
-│       ├── preserve-custom-sections.js   # Extract/inject custom sections on regeneration
+│       ├── custom-section-markers.js     # Delimiter constants for generated code boundaries
 │       ├── generate-frontend.js          # React SPA generation (windows, processes, reports)
 │       ├── generate-mock-data.js         # Mock catalogs for UI preview
 │       ├── run-contract-tests.js         # Contract test runner

@@ -1,0 +1,247 @@
+// Auto-generated mock data - do not edit manually
+
+export const finPayment = [
+  {
+    "id": "mock-finPayment-001",
+    "documentNo": "FI-00001",
+    "referenceNo": "FI-00001",
+    "paymentDate": "2026-01-15",
+    "businessPartner": "Acme Corp",
+    "description": "Standard order for Q1 delivery",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 38907,
+    "account": "Sample account",
+    "currency": "USD",
+    "status": "DR"
+  },
+  {
+    "id": "mock-finPayment-002",
+    "documentNo": "FI-00002",
+    "referenceNo": "FI-00002",
+    "paymentDate": "2026-01-16",
+    "businessPartner": "TechFlow Inc",
+    "description": "Rush order - priority shipping required",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 9306,
+    "account": "Sample account",
+    "currency": "EUR",
+    "status": "CO"
+  },
+  {
+    "id": "mock-finPayment-003",
+    "documentNo": "FI-00003",
+    "referenceNo": "FI-00003",
+    "paymentDate": "2026-01-17",
+    "businessPartner": "Global Trade Ltd",
+    "description": "Bulk purchase for warehouse restocking",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 11544,
+    "account": "Sample account",
+    "currency": "GBP",
+    "status": "VO"
+  },
+  {
+    "id": "mock-finPayment-004",
+    "documentNo": "FI-00004",
+    "referenceNo": "FI-00004",
+    "paymentDate": "2026-01-18",
+    "businessPartner": "Summit Industries",
+    "description": "Sample order for client evaluation",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 11872,
+    "account": "Sample account",
+    "currency": "USD",
+    "status": "IP"
+  },
+  {
+    "id": "mock-finPayment-005",
+    "documentNo": "FI-00005",
+    "referenceNo": "FI-00005",
+    "paymentDate": "2026-01-19",
+    "businessPartner": "Pacific Partners",
+    "description": "Recurring monthly supply order",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 48460,
+    "account": "Sample account",
+    "currency": "EUR",
+    "status": "DR"
+  },
+  {
+    "id": "mock-finPayment-006",
+    "documentNo": "FI-00006",
+    "referenceNo": "FI-00006",
+    "paymentDate": "2026-01-20",
+    "businessPartner": "Alpine Solutions",
+    "description": "Special pricing agreement applies",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 45418,
+    "account": "Sample account",
+    "currency": "GBP",
+    "status": "CO"
+  },
+  {
+    "id": "mock-finPayment-007",
+    "documentNo": "FI-00007",
+    "referenceNo": "FI-00007",
+    "paymentDate": "2026-01-21",
+    "businessPartner": "Meridian Group",
+    "description": "Consolidated order from multiple requests",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 33840,
+    "account": "Sample account",
+    "currency": "USD",
+    "status": "VO"
+  },
+  {
+    "id": "mock-finPayment-008",
+    "documentNo": "FI-00008",
+    "referenceNo": "FI-00008",
+    "paymentDate": "2026-01-22",
+    "businessPartner": "Vertex Systems",
+    "description": "Trial order for new product line",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 25716,
+    "account": "Sample account",
+    "currency": "EUR",
+    "status": "IP"
+  },
+  {
+    "id": "mock-finPayment-009",
+    "documentNo": "FI-00009",
+    "referenceNo": "FI-00009",
+    "paymentDate": "2026-01-23",
+    "businessPartner": "Atlas Manufacturing",
+    "description": "Replacement for damaged goods",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 44780,
+    "account": "Sample account",
+    "currency": "GBP",
+    "status": "DR"
+  },
+  {
+    "id": "mock-finPayment-010",
+    "documentNo": "FI-00010",
+    "referenceNo": "FI-00010",
+    "paymentDate": "2026-01-24",
+    "businessPartner": "Nova Enterprises",
+    "description": "Pre-season inventory build-up",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 12483,
+    "account": "Sample account",
+    "currency": "USD",
+    "status": "CO"
+  },
+  {
+    "id": "mock-finPayment-011",
+    "documentNo": "FI-00011",
+    "referenceNo": "FI-00011",
+    "paymentDate": "2026-01-25",
+    "businessPartner": "Pinnacle Services",
+    "description": "Customer-specific configuration",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 46022,
+    "account": "Sample account",
+    "currency": "EUR",
+    "status": "VO"
+  },
+  {
+    "id": "mock-finPayment-012",
+    "documentNo": "FI-00012",
+    "referenceNo": "FI-00012",
+    "paymentDate": "2026-01-26",
+    "businessPartner": "Horizon Labs",
+    "description": "Government contract fulfillment",
+    "paymentMethod": "Sample paymentMethod",
+    "amount": 38634,
+    "account": "Sample account",
+    "currency": "GBP",
+    "status": "IP"
+  }
+];
+
+export const finPaymentScheduleDetail = [
+  {
+    "id": "mock-finPaymentScheduleDetail-001",
+    "dueDate": "2026-01-15",
+    "amount": 38907,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-001"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-002",
+    "dueDate": "2026-01-16",
+    "amount": 9306,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-002"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-003",
+    "dueDate": "2026-01-17",
+    "amount": 11544,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-003"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-004",
+    "dueDate": "2026-01-18",
+    "amount": 11872,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-004"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-005",
+    "dueDate": "2026-01-19",
+    "amount": 48460,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-005"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-006",
+    "dueDate": "2026-01-20",
+    "amount": 45418,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-006"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-007",
+    "dueDate": "2026-01-21",
+    "amount": 33840,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-007"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-008",
+    "dueDate": "2026-01-22",
+    "amount": 25716,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-008"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-009",
+    "dueDate": "2026-01-23",
+    "amount": 44780,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-009"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-010",
+    "dueDate": "2026-01-24",
+    "amount": 12483,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-010"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-011",
+    "dueDate": "2026-01-25",
+    "amount": 46022,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-011"
+  },
+  {
+    "id": "mock-finPaymentScheduleDetail-012",
+    "dueDate": "2026-01-26",
+    "amount": 38634,
+    "invoicePaymentSchedule": "Sample invoicePaymentSchedule",
+    "finPaymentId": "mock-finPayment-012"
+  }
+];

@@ -4,21 +4,8 @@
     "category": "accounting",
     "name": "Assets",
     "detailSortBy": "sEQNoAsset asc",
-    "statusBar": {
-      "cards": [
-        { "field": "depreciatedValue", "label": "Depreciated Value", "color": "blue", "icon": "TrendingDown" },
-        { "field": "depreciatedPlan", "label": "Depreciated Plan", "color": "teal", "icon": "TrendingDown" }
-      ],
-      "progress": {
-        "numerator": "depreciatedValue",
-        "denominator": "assetValue",
-        "condition": "depreciate",
-        "label": "Depreciation",
-        "color": "orange",
-        "completedColor": "green",
-        "completedIcon": "CheckCircle2"
-      }
-    },
+    "sidebarLayout": true,
+    "disableProcessedLock": true,
     "secondaryTabs": {
       "assetAcct": {
         "label": "Accounting",
@@ -48,7 +35,8 @@
         },
         "product": {
           "inputMode": "search",
-          "reference": "Product"
+          "reference": "Product",
+          "popup": true
         },
         "summaryLevel": {
           "visibility": "discarded",
@@ -138,6 +126,9 @@
           "inputMode": "search",
           "reference": "Project",
           "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "currency": {
+          "readOnlyLogicJs": "Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0"
         }
       }
     },

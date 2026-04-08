@@ -3,12 +3,11 @@
   "window": {
     "category": "sales",
     "name": "Sales Invoice",
-    "documentPreview": {
-      "titlePrefix": "Invoice"
-    },
+    "salesTheme": true,
     "relatedDocuments": true,
     "notesField": "description",
     "hideDeleteWhenComplete": true,
+    "hidePrint": true,
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",
       "bottomSection": "InvoiceBottomPanel",
@@ -17,7 +16,11 @@
     "menuActions": [
       { "key": "duplicate", "label": "Duplicate" },
       { "key": "cancel", "label": "Cancel", "destructive": true, "visibleWhenStatus": "CO" }
-    ]
+    ],
+    "secondaryTabs": {},
+    "processOverrides": {
+      "Complete": { "add": true, "label": "Confirm & Send", "columnName": "DocAction", "displayLogicRaw": "@documentStatus@='DR'" }
+    }
   },
   "entities": {
     "header": {
@@ -26,9 +29,29 @@
           "grid": true,
           "searchable": true,
           "reference": "BusinessPartner",
-          "readOnlyLogic": null,
           "displayLogic": null,
-          "section": "principal"
+          "readOnlyLogic": "@Processed@='Y'",
+          "section": "principal",
+          "seq": 30
+        },
+        "invoiceDate": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 20
+        },
+        "accountingDate": {
+          "visibility": "system"
+        },
+        "paymentMethod": {
+          "reference": "PaymentMethod",
+          "section": "principal",
+          "seq": 40
+        },
+        "paymentTerms": {
+          "inputMode": "search",
+          "section": "principal",
+          "seq": 50
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -37,25 +60,8 @@
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
-          "readOnlyLogic": null,
-          "section": "principal"
-        },
-        "invoiceDate": {
-          "grid": true,
-          "searchable": true,
-          "readOnlyLogic": null,
-          "section": "principal"
-        },
-        "accountingDate": {
-          "visibility": "system"
-        },
-        "paymentTerms": {
-          "visibility": "system"
-        },
-        "paymentMethod": {
-          "reference": "PaymentMethod",
-          "readOnlyLogic": null,
-          "section": "principal"
+          "section": "principal",
+          "seq": 60
         },
         "priceList": {
           "visibility": "system"
@@ -104,14 +110,25 @@
           "visibility": "readOnly",
           "grid": true,
           "searchable": true,
-          "readOnlyLogic": null,
-          "section": "principal"
+          "section": "principal",
+          "seq": 10
         },
         "documentStatus": {
           "visibility": "readOnly",
           "grid": true,
           "searchable": true,
-          "form": false
+          "form": false,
+          "display": "dot"
+        },
+        "processed": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": false
+        },
+        "posted": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": false
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
@@ -223,33 +240,28 @@
           "searchable": true,
           "section": "principal",
           "inputMode": "search",
-          "readOnlyLogic": null,
           "displayLogic": null
         },
         "invoicedQuantity": {
           "grid": true,
-          "section": "principal",
-          "readOnlyLogic": null
+          "section": "principal"
         },
         "uOM": {
           "visibility": "system"
         },
         "unitPrice": {
           "grid": true,
-          "section": "principal",
-          "readOnlyLogic": null
+          "section": "principal"
         },
         "tax": {
           "grid": true,
           "section": "principal",
-          "inputMode": "selector",
-          "readOnlyLogic": null
+          "inputMode": "selector"
         },
         "lineNetAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "section": "principal",
-          "readOnlyLogic": null
+          "section": "principal"
         },
         "discount": {
           "visibility": "editable",

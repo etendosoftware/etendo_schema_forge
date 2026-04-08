@@ -7,7 +7,7 @@
   "title": { "en_US": "General Ledger", "es_ES": "Libro Mayor" },
   "orientation": "landscape",
   "sql": {
-    "query": "SELECT ev.value, ev.name, fa.dateacct, COALESCE(bp.name, fa.description) AS groupbyname, fa.amtacctdr, fa.amtacctcr, (fa.amtacctdr - fa.amtacctcr) AS total, bp.name AS bpname, p.name AS productname FROM fact_acct fa JOIN c_elementvalue ev ON ev.c_elementvalue_id = fa.account_id LEFT JOIN c_bpartner bp ON bp.c_bpartner_id = fa.c_bpartner_id LEFT JOIN m_product p ON p.m_product_id = fa.m_product_id WHERE fa.ad_client_id IN ('__CLIENT_ID__') AND fa.factaccttype NOT IN ('R', 'C') AND ('__DATEFROM__' = '' OR fa.dateacct >= '__DATEFROM__'::date) AND ('__DATETO__' = '' OR fa.dateacct <= '__DATETO__'::date) AND ('__AMTFROM__' = '' OR GREATEST(fa.amtacctdr, fa.amtacctcr) >= '__AMTFROM__'::numeric) AND ('__AMTTO__' = '' OR GREATEST(fa.amtacctdr, fa.amtacctcr) <= '__AMTTO__'::numeric) AND ('__ACCOUNTFROM__' = '' OR ev.value >= '__ACCOUNTFROM__') AND ('__ACCOUNTTO__' = '' OR ev.value <= '__ACCOUNTTO__') AND ('__BPARTNERID__' = '' OR fa.c_bpartner_id = '__BPARTNERID__') AND ('__PRODUCTID__' = '' OR fa.m_product_id = '__PRODUCTID__') AND ('__ORGID__' = '' OR fa.ad_org_id = '__ORGID__') ORDER BY ev.value, ev.name, fa.dateacct"
+    "query": "SELECT ev.value, ev.name, fa.dateacct, COALESCE(bp.name, fa.description) AS groupbyname, fa.amtacctdr, fa.amtacctcr, (fa.amtacctdr - fa.amtacctcr) AS total, bp.name AS bpname, p.name AS productname, pj.name AS projectname FROM fact_acct fa JOIN c_elementvalue ev ON ev.c_elementvalue_id = fa.account_id LEFT JOIN c_bpartner bp ON bp.c_bpartner_id = fa.c_bpartner_id LEFT JOIN m_product p ON p.m_product_id = fa.m_product_id LEFT JOIN c_project pj ON pj.c_project_id = fa.c_project_id WHERE fa.ad_client_id IN ('__CLIENT_ID__') AND fa.factaccttype NOT IN ('R', 'C') AND ('__DATEFROM__' = '' OR fa.dateacct >= '__DATEFROM__'::date) AND ('__DATETO__' = '' OR fa.dateacct <= '__DATETO__'::date) AND ('__BPARTNERID__' = '' OR fa.c_bpartner_id = '__BPARTNERID__') AND ('__PRODUCTID__' = '' OR fa.m_product_id = '__PRODUCTID__') AND ('__ORGID__' = '' OR fa.ad_org_id = '__ORGID__') AND ('__ACCTSCHEMAID__' = '' OR fa.c_acctschema_id = '__ACCTSCHEMAID__') AND ('__PROJECTID__' = '' OR fa.c_project_id = '__PROJECTID__') AND ('__FROMACCOUNTID__' = '' OR ev.value >= '__FROMACCOUNTID__') AND ('__TOACCOUNTID__' = '' OR ev.value <= '__TOACCOUNTID__') ORDER BY ev.value, ev.name, fa.dateacct"
   },
   "columns": [
     { "field": "dateacct", "label": { "en_US": "Date", "es_ES": "Fecha" }, "type": "date", "width": "10%", "sortable": true },
@@ -26,17 +26,17 @@
     }
   ],
   "parameters": [
-    { "name": "dateFrom", "label": { "en_US": "From Date", "es_ES": "Desde" }, "type": "date" },
-    { "name": "dateTo", "label": { "en_US": "To Date", "es_ES": "Hasta" }, "type": "date", "default": "__TODAY__" },
-    { "name": "amtFrom", "label": { "en_US": "From Amount", "es_ES": "Importe desde" }, "type": "number" },
-    { "name": "amtTo", "label": { "en_US": "To Amount", "es_ES": "Importe hasta" }, "type": "number" },
-    { "name": "bPartnerId", "label": { "en_US": "Business Partner", "es_ES": "Tercero" }, "type": "search", "selector": "bpartner", "multi": true },
-    { "name": "productId", "label": { "en_US": "Product", "es_ES": "Producto" }, "type": "search", "selector": "product", "multi": true },
-    { "name": "groupBy", "label": { "en_US": "Group By", "es_ES": "Agrupar por" }, "type": "select", "options": [
-      { "value": "", "label": "Account" },
-      { "value": "bpartner", "label": "Business Partner", "field": "bpname" },
-      { "value": "product", "label": "Product", "field": "productname" }
-    ]}
+    { "name": "dateFrom", "label": { "en_US": "From Date", "es_ES": "Desde" }, "type": "date", "default": "__FIRST_OF_PREV_MONTH__", "required": true, "section": "primary" },
+    { "name": "dateTo", "label": { "en_US": "To Date", "es_ES": "Hasta" }, "type": "date", "default": "__TODAY__", "required": true, "section": "primary" },
+    { "name": "orgId", "label": { "en_US": "Organization", "es_ES": "Organización" }, "type": "search", "selector": "org", "inputStyle": "popup-single", "required": true, "section": "primary" },
+    { "name": "acctSchemaId", "label": { "en_US": "General Ledger", "es_ES": "Libro Mayor" }, "type": "search", "selector": "acctschema", "inputStyle": "popup-single", "required": true, "section": "primary" },
+    { "name": "bPartnerId", "label": { "en_US": "Contacts", "es_ES": "Contactos" }, "type": "search", "selector": "bpartner", "multi": true, "inputStyle": "popup", "section": "dimensions", "groupByValue": "bpartner", "groupByField": "bpname" },
+    { "name": "productId", "label": { "en_US": "Product", "es_ES": "Producto" }, "type": "search", "selector": "product", "multi": true, "inputStyle": "popup", "section": "dimensions", "groupByValue": "product", "groupByField": "productname" },
+    { "name": "projectId", "label": { "en_US": "Project", "es_ES": "Proyecto" }, "type": "search", "selector": "project", "multi": true, "inputStyle": "popup", "section": "dimensions" },
+    { "name": "fromAccountId", "label": { "en_US": "From Account", "es_ES": "Desde la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "primary" },
+    { "name": "toAccountId", "label": { "en_US": "To Account", "es_ES": "A la cuenta" }, "type": "search", "selector": "account", "inputStyle": "popup-single", "dependsOn": "acctSchemaId", "section": "primary" },
+    { "name": "groupBy", "label": { "en_US": "Group results by", "es_ES": "Agrupar por" }, "type": "select", "section": "options" },
+    { "name": "showOpenBalances", "label": { "en_US": "Include open balances", "es_ES": "Incluir saldos iniciales" }, "type": "boolean", "description": "Keep open items visible in the generated report.", "section": "options" }
   ],
   "defaultSort": { "field": "dateacct", "direction": "asc" },
   "outputs": ["pdf", "xlsx", "csv", "html"],

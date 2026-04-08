@@ -1,0 +1,11 @@
+[
+  {"dateacct":"2019-01-15","entry_no":1,"document_type":"Journal","fact_acct_group_id":"entry-1","record_id":"mock-r1","ad_table_id":"1","account_no":"57200","account_name":"Bancos e instituciones de crédito c/c vista euros","amtacctdr":1100549.93,"amtacctcr":0.00},
+  {"dateacct":"2019-01-15","entry_no":1,"document_type":"Journal","fact_acct_group_id":"entry-1","record_id":"mock-r1","ad_table_id":"1","account_no":"43000","account_name":"Clientes (euros) a corto plazo","amtacctdr":0.00,"amtacctcr":1100549.93},
+  {"dateacct":"2019-01-15","entry_no":2,"document_type":"AR Invoice","fact_acct_group_id":"entry-2","record_id":"mock-r2","ad_table_id":"318","account_no":"43000","account_name":"Clientes (euros) a corto plazo","amtacctdr":1100549.93,"amtacctcr":0.00},
+  {"dateacct":"2019-01-15","entry_no":2,"document_type":"AR Invoice","fact_acct_group_id":"entry-2","record_id":"mock-r2","ad_table_id":"318","account_no":"70000","account_name":"Ventas de mercaderías","amtacctdr":101060.60,"amtacctcr":0.00},
+  {"dateacct":"2019-01-15","entry_no":2,"document_type":"AR Invoice","fact_acct_group_id":"entry-2","record_id":"mock-r2","ad_table_id":"318","account_no":"70000","account_name":"Ventas de mercaderías","amtacctdr":0.00,"amtacctcr":1010606.00},
+  {"dateacct":"2019-01-15","entry_no":2,"document_type":"AR Invoice","fact_acct_group_id":"entry-2","record_id":"mock-r2","ad_table_id":"318","account_no":"47700","account_name":"Hacienda Pública IVA repercutido","amtacctdr":0.00,"amtacctcr":191004.53},
+  {"dateacct":"2019-01-31","entry_no":3,"document_type":"AP Invoice","fact_acct_group_id":"entry-3","record_id":"mock-r3","ad_table_id":"318","account_no":"60000","account_name":"Compras de mercaderías","amtacctdr":1144440.00,"amtacctcr":0.00},
+  {"dateacct":"2019-01-31","entry_no":3,"document_type":"AP Invoice","fact_acct_group_id":"entry-3","record_id":"mock-r3","ad_table_id":"318","account_no":"47200","account_name":"Hacienda Pública IVA soportado","amtacctdr":240332.40,"amtacctcr":0.00},
+  {"dateacct":"2019-01-31","entry_no":3,"document_type":"AP Invoice","fact_acct_group_id":"entry-3","record_id":"mock-r3","ad_table_id":"318","account_no":"40000","account_name":"Proveedores (euros) a corto plazo","amtacctdr":0.00,"amtacctcr":1384772.40}
+]

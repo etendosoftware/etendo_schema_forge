@@ -66,6 +66,14 @@ const api = {
     },
     {
       "entity": "header",
+      "field": "paymentTerms",
+      "column": "C_PaymentTerm_ID",
+      "reference": "PaymentTerm",
+      "inputMode": "search",
+      "url": "/sws/neo/sales-invoice/header/selectors/paymentTerms"
+    },
+    {
+      "entity": "header",
       "field": "paymentMethod",
       "column": "FIN_Paymentmethod_ID",
       "reference": "PaymentMethod",

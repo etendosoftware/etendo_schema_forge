@@ -16,6 +16,9 @@ import {
   ShoppingCart,
   Users,
   Box,
+  Truck,
+  ShoppingBag,
+  FileInput,
   AlertTriangle,
   Info,
   ChevronRight,
@@ -35,12 +38,14 @@ import {
 } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useCopilot } from '@/components/CopilotContext';
+import { useUI } from '@/i18n';
+import { useMenuLabel, useLocaleSwitch } from '@/i18n';
 
 /* ------------------------------------------------------------------
  * Icon lookup
  * ----------------------------------------------------------------*/
 
-const ICON_MAP = { DollarSign, CreditCard, TrendingUp, Clock, FileText, ShoppingCart, Users, Box };
+const ICON_MAP = { DollarSign, CreditCard, TrendingUp, Clock, FileText, ShoppingCart, Users, Box, Truck, ShoppingBag, FileInput };
 
 /* ------------------------------------------------------------------
  * Widget Registry
@@ -48,26 +53,55 @@ const ICON_MAP = { DollarSign, CreditCard, TrendingUp, Clock, FileText, Shopping
 
 const WIDGET_REGISTRY = [
   // Row 1: 4 KPI cards (1 col each → fills all 4 cols)
-  { id: 'kpi-revenue',          label: 'Revenue this month',    defaultSize: 'small',  defaultVisible: true  },
-  { id: 'kpi-expenses',         label: 'Expenses this month',   defaultSize: 'small',  defaultVisible: true  },
-  { id: 'kpi-profit',           label: 'Net Profit',            defaultSize: 'small',  defaultVisible: true  },
-  { id: 'kpi-pending',          label: 'Pending Invoices',      defaultSize: 'small',  defaultVisible: true  },
+  { id: 'kpi-revenue',          labelKey: 'revenueThisMonth',      defaultSize: 'small',  defaultVisible: true  },
+  { id: 'kpi-expenses',         labelKey: 'expensesThisMonth',     defaultSize: 'small',  defaultVisible: true  },
+  { id: 'kpi-profit',           labelKey: 'netProfit',             defaultSize: 'small',  defaultVisible: true  },
+  { id: 'kpi-pending',          labelKey: 'pendingInvoices',       defaultSize: 'small',  defaultVisible: true  },
   // Row 2: Revenue chart (2 cols) + Pending Tasks (1) + Top Clients (1)
-  { id: 'revenue-chart',        label: 'Revenue vs Expenses',   defaultSize: 'medium', defaultVisible: true  },
-  { id: 'pending-tasks',        label: 'Pending Tasks',         defaultSize: 'small',  defaultVisible: true  },
-  { id: 'top-clients',          label: 'Top Clients',           defaultSize: 'small',  defaultVisible: true  },
+  { id: 'revenue-chart',        labelKey: 'revenueVsExpenses',     defaultSize: 'medium', defaultVisible: true  },
+  { id: 'pending-tasks',        labelKey: 'pendingTasks',          defaultSize: 'small',  defaultVisible: true  },
+  { id: 'top-clients',          labelKey: 'topClients',            defaultSize: 'small',  defaultVisible: true  },
   // Row 3: Quick Actions (2 cols)
-  { id: 'quick-actions',        label: 'Quick Actions',         defaultSize: 'medium', defaultVisible: true  },
+  { id: 'quick-actions',        labelKey: 'quickActions',          defaultSize: 'medium', defaultVisible: true  },
   // Hidden by default
-  { id: 'cashflow',             label: 'Cash Flow',             defaultSize: 'small',  defaultVisible: false },
-  { id: 'collections-payments', label: 'Collections & Payments',defaultSize: 'small',  defaultVisible: false },
-  { id: 'recent-invoices',      label: 'Recent Invoices',       defaultSize: 'medium', defaultVisible: false },
-  { id: 'best-products',        label: 'Best Products',         defaultSize: 'medium', defaultVisible: false },
-  { id: 'best-sellers',         label: 'Best Sellers',          defaultSize: 'medium', defaultVisible: false },
+  { id: 'cashflow',             labelKey: 'cashFlow',              defaultSize: 'small',  defaultVisible: false },
+  { id: 'collections-payments', labelKey: 'collectionsPayments',   defaultSize: 'small',  defaultVisible: false },
+  { id: 'recent-invoices',      labelKey: 'recentInvoices',        defaultSize: 'medium', defaultVisible: false },
+  { id: 'best-products',        labelKey: 'bestProducts',          defaultSize: 'medium', defaultVisible: false },
+  { id: 'best-sellers',         labelKey: 'bestSellers',           defaultSize: 'medium', defaultVisible: false },
 ];
 
 function getWidgetMeta(id) {
   return WIDGET_REGISTRY.find((w) => w.id === id);
+}
+
+function resolvePendingTaskKey(task) {
+  const text = String(task?.text ?? '').toLowerCase();
+
+  if (task?.taskKey) return task.taskKey;
+  if (task?.link === '/sales-invoice' || text.includes('overdue invoices')) {
+    return task?.count === 1 ? 'overdueInvoices' : 'overdueInvoices_plural';
+  }
+  if (task?.link === '/goods-shipment' || text.includes('pending shipment')) {
+    return 'pendingShipments';
+  }
+  if (task?.link === '/purchase-order' || text.includes('purchase orders to confirm')) {
+    return 'purchaseOrdersToConfirm';
+  }
+  if (task?.link === '/physical-inventory' || text.includes('low stock alert')) {
+    return task?.count === 1 ? 'lowStockAlert' : 'lowStockAlerts';
+  }
+  return null;
+}
+
+function resolveQuickActionLabel(ui, action) {
+  switch (action?.to) {
+    case '/sales-invoice': return `+ ${ui('invoice')}`;
+    case '/sales-order': return `+ ${ui('order')}`;
+    case '/contacts': return `+ ${ui('contact')}`;
+    case '/product': return `+ ${ui('product')}`;
+    default: return action?.label ?? '';
+  }
 }
 
 /* ------------------------------------------------------------------
@@ -235,7 +269,7 @@ const WIDGET_PREVIEWS = {
       <circle cx="246" cy="36" r="1.5" fill="#d97706" />
     </svg>
   ),
-  'revenue-chart': (
+  'revenue-chart': (ui) => (
     <svg viewBox="0 0 280 100" className="w-full h-full">
       <rect width="280" height="100" rx="0" fill="#f8fafc" />
       {[0,1,2,3].map((i) => (
@@ -261,39 +295,41 @@ const WIDGET_PREVIEWS = {
       ))}
     </svg>
   ),
-  'pending-tasks': (
+  'pending-tasks': (ui) => (
     <svg viewBox="0 0 280 100" className="w-full h-full">
       <rect width="280" height="100" rx="0" fill="#f8fafc" />
-      {[['#f59e0b', '3 overdue invoices'], ['#3b82f6', '2 pending shipments'], ['#3b82f6', '5 POs to confirm'], ['#f59e0b', '1 low stock alert']].map(([color, text], i) => (
+      {[['#f59e0b', ui('overdueInvoices_plural', { count: 3 })], ['#3b82f6', ui('pendingShipments', { count: 2 })], ['#3b82f6', ui('purchaseOrdersToConfirm', { count: 5 })], ['#f59e0b', ui('lowStockAlert', { count: 1 })]].map(([color, text], i) => (
         <g key={i} transform={`translate(12, ${10 + i * 22})`}>
           <circle cx="6" cy="7" r="5" fill={color} opacity="0.8" />
           <rect x="18" y="3" width="110" height="7" rx="3.5" fill="#cbd5e1" />
+          <text x="20" y="9" fontSize="7" fill="#475569">{text}</text>
           <rect x="238" y="3" width="22" height="7" rx="3.5" fill={color} opacity="0.3" />
         </g>
       ))}
     </svg>
   ),
-  'quick-actions': (
+  'quick-actions': (ui) => (
     <svg viewBox="0 0 280 100" className="w-full h-full">
       <rect width="280" height="100" rx="0" fill="#f8fafc" />
-      {[['+ Invoice', 0], ['+ Order', 1], ['+ Contact', 2], ['+ Product', 3]].map(([label, i]) => (
+      {[`+ ${ui('invoice')}`, `+ ${ui('order')}`, `+ ${ui('contact')}`, `+ ${ui('product')}`].map((label, i) => (
         <g key={i} transform={`translate(${10 + (i % 2) * 135}, ${10 + Math.floor(i / 2) * 44})`}>
           <rect width="120" height="34" rx="6" fill="white" stroke="#e2e8f0" strokeWidth="1.5" />
           <rect x="12" y="10" width="14" height="14" rx="3" fill="#e0e7ff" />
           <rect x="32" y="13" width="50" height="8" rx="4" fill="#cbd5e1" />
+          <text x="32" y="28" fontSize="7" fill="#64748b">{label}</text>
         </g>
       ))}
     </svg>
   ),
-  'cashflow': (
+  'cashflow': (ui) => (
     <svg viewBox="0 0 280 100" className="w-full h-full">
       <rect width="280" height="100" rx="0" fill="#f8fafc" />
       <rect x="30" y="20" width="90" height="60" rx="6" fill="#f1f5f9" />
       <rect x="160" y="20" width="90" height="60" rx="6" fill="#f1f5f9" />
       <rect x="46" y="35" width="58" height="30" rx="4" fill="#22c55e" opacity="0.7" />
       <rect x="176" y="42" width="58" height="23" rx="4" fill="#ef4444" opacity="0.7" />
-      <text x="75" y="80" textAnchor="middle" fontSize="8" fill="#64748b">Revenue</text>
-      <text x="205" y="80" textAnchor="middle" fontSize="8" fill="#64748b">Expenses</text>
+      <text x="75" y="80" textAnchor="middle" fontSize="8" fill="#64748b">{ui('revenue')}</text>
+      <text x="205" y="80" textAnchor="middle" fontSize="8" fill="#64748b">{ui('expenses')}</text>
     </svg>
   ),
   'collections-payments': (
@@ -369,7 +405,7 @@ const snapToRows = (px) =>
 // Widgets that default to 4 rows instead of 2
 const TALL_DEFAULT = new Set(['pending-tasks', 'top-clients']);
 
-function WidgetManagerSheet({ open, onClose, config, toggle, reorder, onReset }) {
+function WidgetManagerSheet({ open, onClose, config, toggle, reorder, onReset, ui }) {
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
 
@@ -402,8 +438,8 @@ function WidgetManagerSheet({ open, onClose, config, toggle, reorder, onReset })
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="right" className="w-full sm:w-[560px] sm:max-w-[560px] flex flex-col p-0 overflow-hidden">
         <SheetHeader className="px-6 py-4 border-b shrink-0">
-          <SheetTitle>Customize Dashboard</SheetTitle>
-          <p className="text-xs text-muted-foreground">Drag cards to reorder. Toggle to show/hide.</p>
+          <SheetTitle>{ui('customizeDashboard')}</SheetTitle>
+          <p className="text-xs text-muted-foreground">{ui('dragCardsToReorder')}</p>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -412,6 +448,7 @@ function WidgetManagerSheet({ open, onClose, config, toggle, reorder, onReset })
               const meta = getWidgetMeta(item.id);
               if (!meta) return null;
               const preview = WIDGET_PREVIEWS[item.id];
+              const renderedPreview = typeof preview === 'function' ? preview(ui) : preview;
               const isDragging = draggingId === item.id;
               const isOver = dragOverId === item.id;
 
@@ -436,14 +473,14 @@ function WidgetManagerSheet({ open, onClose, config, toggle, reorder, onReset })
 
                   {/* Preview */}
                   <div className="h-[84px] bg-slate-50 overflow-hidden flex items-center justify-center">
-                    {preview || <div className="w-full h-full bg-muted" />}
+                    {renderedPreview || <div className="w-full h-full bg-muted" />}
                   </div>
 
                   {/* Card footer */}
                   <div className="p-2.5 bg-white space-y-2">
                     {/* Name + toggle */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium leading-tight truncate">{meta.label}</span>
+                      <span className="text-xs font-medium leading-tight truncate">{ui(meta.labelKey)}</span>
                       <Switch
                         checked={item.visible}
                         onCheckedChange={() => toggle(item.id)}
@@ -461,12 +498,12 @@ function WidgetManagerSheet({ open, onClose, config, toggle, reorder, onReset })
         </div>
 
         <div className="px-6 py-3 border-t shrink-0 flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">Changes are saved automatically.</p>
+          <p className="text-xs text-muted-foreground">{ui('changesSavedAutomatically')}</p>
           <button
             onClick={onReset}
             className="text-xs text-destructive hover:text-destructive/80 font-medium transition-colors shrink-0"
           >
-            Reset to defaults
+            {ui('resetToDefaults')}
           </button>
         </div>
       </SheetContent>
@@ -494,8 +531,20 @@ function useCollapsed(key) {
 }
 
 function RevenueChart({ labels = [], values = [], expenseValues = [] }) {
+  const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const [collapsed, toggleCollapsed] = useCollapsed('dashboard_collapsed_revenue');
   const [chartType, setChartType] = useState(() => localStorage.getItem('dashboard_chart_type') || 'line');
+
+  // Generate locale-aware month abbreviations for the same window as the incoming labels
+  const bcp47 = locale === 'es_ES' ? 'es-ES' : 'en-US';
+  const fmt = new Intl.DateTimeFormat(bcp47, { month: 'short' });
+  const localizedLabels = labels.map((_, i) => {
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth() - (labels.length - 1 - i), 1);
+    const s = fmt.format(d);
+    return s.charAt(0).toUpperCase() + s.slice(1).replace('.', '');
+  });
 
   const switchChartType = (type) => {
     setChartType(type);
@@ -544,7 +593,7 @@ function RevenueChart({ labels = [], values = [], expenseValues = [] }) {
           <div className="flex items-center gap-2 cursor-pointer select-none" onClick={toggleCollapsed}>
             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`} />
             <CardTitle className="text-sm font-medium">
-              {chartType === 'line' && hasExpenses ? 'Revenue vs Expenses (12 months)' : 'Revenue (12 months)'}
+              {chartType === 'line' && hasExpenses ? ui('revenueVsExpenses12m') : ui('revenue12m')}
             </CardTitle>
           </div>
           {!collapsed && (
@@ -553,11 +602,11 @@ function RevenueChart({ labels = [], values = [], expenseValues = [] }) {
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    Revenue
+                    {ui('revenue')}
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="inline-block w-2.5 h-2.5 rounded-full bg-destructive" />
-                    Expenses
+                    {ui('expenses')}
                   </span>
                 </div>
               )}
@@ -588,7 +637,7 @@ function RevenueChart({ labels = [], values = [], expenseValues = [] }) {
               viewBox={`0 0 ${CHART_W} ${CHART_H}`}
               className="w-full h-auto"
               role="img"
-              aria-label="Revenue and expenses trend chart for the last 12 months"
+              aria-label={ui('invoiceTrendLabel')}
             >
               <defs>
                 <linearGradient id="chart-gradient" x1="0" y1="0" x2="0" y2="1">
@@ -630,17 +679,17 @@ function RevenueChart({ labels = [], values = [], expenseValues = [] }) {
                 <circle key={i} cx={p.x} cy={p.y} r="3" fill="hsl(var(--background))" stroke="#10b981" strokeWidth="2" />
               ))}
 
-              {labels.map((m, i) => {
-                const x = PAD_X + (i / (labels.length - 1)) * plotW;
+              {localizedLabels.map((m, i) => {
+                const x = PAD_X + (i / (localizedLabels.length - 1)) * plotW;
                 return (
-                  <text key={m} x={x} y={CHART_H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize="10">
+                  <text key={i} x={x} y={CHART_H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize="10">
                     {m}
                   </text>
                 );
               })}
             </svg>
           ) : (
-            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="w-full h-auto" role="img" aria-label="Monthly sales bar chart">
+            <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="w-full h-auto" role="img" aria-label={ui('barChartAria')}>
               {/* Y-axis grid lines (same as line chart) */}
               {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
                 const y = BAR_PAD_Y + barPlotH - frac * barPlotH;
@@ -665,7 +714,7 @@ function RevenueChart({ labels = [], values = [], expenseValues = [] }) {
                       fill={i === lastIdx ? '#10b981' : 'rgba(16,185,129,0.35)'}
                     />
                     <text x={x + barW / 2} y={CHART_H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize="10">
-                      {labels[i]}
+                      {localizedLabels[i]}
                     </text>
                   </g>
                 );
@@ -683,18 +732,19 @@ function RevenueChart({ labels = [], values = [], expenseValues = [] }) {
  * ----------------------------------------------------------------*/
 
 function TopClients({ clients = [] }) {
+  const ui = useUI();
   const [collapsed, toggleCollapsed] = useCollapsed('dashboard_collapsed_topclients');
   return (
-    <Card>
-      <CardHeader className="pb-2 cursor-pointer select-none" onClick={toggleCollapsed}>
+    <Card className="flex flex-col h-full">
+      <CardHeader className="pb-2 cursor-pointer select-none flex-none" onClick={toggleCollapsed}>
         <div className="flex items-center gap-2">
           <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-          <CardTitle className="text-sm font-medium">Top Clients (12 months)</CardTitle>
+          <CardTitle className="text-sm font-medium">{ui('topClients12m')}</CardTitle>
         </div>
       </CardHeader>
-      {!collapsed && <CardContent className="p-4 pt-0">
+      {!collapsed && <CardContent className="p-4 pt-0 flex-1 min-h-0 overflow-y-auto">
         {clients.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No data available</p>
+            <p className="text-sm text-muted-foreground">{ui('noDataAvailable')}</p>
         ) : (
           <div className="space-y-0">
             {clients.map((c, i) => (
@@ -723,10 +773,12 @@ function TopClients({ clients = [] }) {
  * ----------------------------------------------------------------*/
 
 function QuickActions({ actions = [] }) {
+  const ui = useUI();
+  const tMenu = useMenuLabel();
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
+        <CardTitle className="text-sm font-medium">{ui('quickActions')}</CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0">
         <div className="flex flex-wrap gap-2">
@@ -736,7 +788,7 @@ function QuickActions({ actions = [] }) {
               <Button key={action.to} variant="outline" size="sm" asChild>
                 <Link to={action.to}>
                   <Icon className="h-4 w-4 mr-1.5" />
-                  {action.label}
+                  {tMenu(action.label)}
                 </Link>
               </Button>
             );
@@ -752,19 +804,25 @@ function QuickActions({ actions = [] }) {
  * ----------------------------------------------------------------*/
 
 function PendingTasks({ tasks = [] }) {
+  const ui = useUI();
+  const tMenu = useMenuLabel();
   const [collapsed, toggleCollapsed] = useCollapsed('dashboard_collapsed_pendingtasks');
   return (
-    <Card>
-      <CardHeader className="pb-2 cursor-pointer select-none" onClick={toggleCollapsed}>
+    <Card className="flex flex-col h-full">
+      <CardHeader className="pb-2 cursor-pointer select-none flex-none" onClick={toggleCollapsed}>
         <div className="flex items-center gap-2">
           <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-          <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
+          <CardTitle className="text-sm font-medium">{ui('pendingTasks')}</CardTitle>
         </div>
       </CardHeader>
-      {!collapsed && <CardContent className="p-4 pt-0">
+      {!collapsed && <CardContent className="p-4 pt-0 flex-1 min-h-0 overflow-y-auto">
+        {tasks.length === 0 && (
+          <p className="text-sm text-muted-foreground">{tMenu('No pending tasks')}</p>
+        )}
         <div className="space-y-1">
           {tasks.map((task, i) => {
             const isWarning = task.type === 'warning';
+            const taskKey = resolvePendingTaskKey(task);
             return (
               <React.Fragment key={i}>
                 {i > 0 && <Separator />}
@@ -778,7 +836,11 @@ function PendingTasks({ tasks = [] }) {
                     <Info className="h-4 w-4 shrink-0 text-blue-500" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate">{task.text}</p>
+                    <p className="text-sm truncate">
+                      {task.labelKey && task.count != null
+                        ? `${task.count} ${tMenu(task.labelKey)}`
+                        : taskKey ? ui(taskKey, { count: task.count }) : task.text}
+                    </p>
                     {(task.amount || task.detail) && (
                       <p className="text-xs text-muted-foreground truncate">
                         {task.amount || task.detail}
@@ -812,6 +874,7 @@ function PendingTasks({ tasks = [] }) {
  * ----------------------------------------------------------------*/
 
 function CashFlowWidget({ kpis = [] }) {
+  const ui = useUI();
   const revenue = kpis.find((k) => k.key === 'revenueThisMonth');
   const expenses = kpis.find((k) => k.key === 'expensesThisMonth');
   const profit = kpis.find((k) => k.key === 'netProfit');
@@ -825,14 +888,14 @@ function CashFlowWidget({ kpis = [] }) {
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Cash Flow — This Month</CardTitle>
+        <CardTitle className="text-sm font-medium">{ui('cashFlow')}</CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-0 space-y-3">
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500" />
-              <span className="text-muted-foreground">Income</span>
+              <span className="text-muted-foreground">{ui('income')}</span>
             </div>
             <span className="font-medium">${revenue.value.toLocaleString('en-US')}</span>
           </div>
@@ -844,7 +907,7 @@ function CashFlowWidget({ kpis = [] }) {
           <div className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-destructive" />
-              <span className="text-muted-foreground">Expenses</span>
+              <span className="text-muted-foreground">{ui('expenses')}</span>
             </div>
             <span className="font-medium">${expenses.value.toLocaleString('en-US')}</span>
           </div>
@@ -854,7 +917,7 @@ function CashFlowWidget({ kpis = [] }) {
         </div>
         <Separator />
         <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground font-medium">Net</span>
+          <span className="text-muted-foreground font-medium">{ui('net')}</span>
           <span className={`font-semibold ${isPositive ? 'text-green-600' : 'text-destructive'}`}>
             {isPositive ? '+' : ''}${(profit?.value ?? 0).toLocaleString('en-US')}
           </span>
@@ -869,19 +932,20 @@ function CashFlowWidget({ kpis = [] }) {
  * ----------------------------------------------------------------*/
 
 function CollectionsPayments({ pendingAmounts = {} }) {
+  const ui = useUI();
   const { toCollect = { count: 0, amount: 0 }, toPay = { count: 0, amount: 0 } } = pendingAmounts;
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Collections & Payments</CardTitle>
+    <Card className="flex flex-col h-full">
+      <CardHeader className="pb-2 flex-none">
+        <CardTitle className="text-sm font-medium">{ui('collectionsPayments')}</CardTitle>
       </CardHeader>
-      <CardContent className="p-4 pt-0 space-y-3">
+      <CardContent className="p-4 pt-0 space-y-3 flex-1 min-h-0 overflow-y-auto">
         <Link to="/sales-invoice" className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-muted/50 transition-colors group">
           <div className="flex items-center gap-2">
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
             <div>
-              <p className="text-sm font-medium">To Collect</p>
-              <p className="text-xs text-muted-foreground">{toCollect.count} invoice{toCollect.count !== 1 ? 's' : ''} pending</p>
+              <p className="text-sm font-medium">{ui('toCollect')}</p>
+              <p className="text-xs text-muted-foreground">{toCollect.count !== 1 ? ui('invoicesPending', { count: toCollect.count }) : ui('invoicePending', { count: toCollect.count })}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
@@ -894,8 +958,8 @@ function CollectionsPayments({ pendingAmounts = {} }) {
           <div className="flex items-center gap-2">
             <span className="inline-block w-2.5 h-2.5 rounded-full bg-destructive" />
             <div>
-              <p className="text-sm font-medium">To Pay</p>
-              <p className="text-xs text-muted-foreground">{toPay.count} invoice{toPay.count !== 1 ? 's' : ''} pending</p>
+              <p className="text-sm font-medium">{ui('toPay')}</p>
+              <p className="text-xs text-muted-foreground">{toPay.count !== 1 ? ui('invoicesPending', { count: toPay.count }) : ui('invoicePending', { count: toPay.count })}</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
@@ -922,19 +986,20 @@ function fmtDate(str) {
 }
 
 function RecentInvoices({ invoices = [] }) {
+  const ui = useUI();
   const [collapsed, toggleCollapsed] = useCollapsed('dashboard_collapsed_recent_invoices');
   return (
-    <Card>
-      <CardHeader className="pb-2 cursor-pointer select-none" onClick={toggleCollapsed}>
+    <Card className="flex flex-col h-full">
+      <CardHeader className="pb-2 cursor-pointer select-none flex-none" onClick={toggleCollapsed}>
         <div className="flex items-center gap-2">
           <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-          <CardTitle className="text-sm font-medium">Recent Invoices</CardTitle>
+          <CardTitle className="text-sm font-medium">{ui('recentInvoices')}</CardTitle>
         </div>
       </CardHeader>
       {!collapsed && (
-        <CardContent className="p-4 pt-0">
+        <CardContent className="p-4 pt-0 flex-1 min-h-0 overflow-y-auto">
           {invoices.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No invoices found</p>
+            <p className="text-sm text-muted-foreground">{ui('noInvoicesFound')}</p>
           ) : (
             <div className="space-y-0">
               {invoices.map((inv, i) => (
@@ -949,7 +1014,7 @@ function RecentInvoices({ invoices = [] }) {
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${inv.status === 'CO' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {inv.status === 'CO' ? 'Done' : 'Draft'}
+                        {inv.status === 'CO' ? ui('done') : ui('draft')}
                       </span>
                       <span className="text-sm font-medium">${inv.amount.toLocaleString('en-US')}</span>
                     </div>
@@ -980,22 +1045,23 @@ function fmtCompact(n) {
  * ----------------------------------------------------------------*/
 
 function BestProducts({ products = [] }) {
+  const ui = useUI();
   const [collapsed, toggleCollapsed] = useCollapsed('dashboard_collapsed_best_products');
   return (
-    <Card>
-      <CardHeader className="pb-2 cursor-pointer select-none" onClick={toggleCollapsed}>
+    <Card className="flex flex-col h-full">
+      <CardHeader className="pb-2 cursor-pointer select-none flex-none" onClick={toggleCollapsed}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer select-none">
             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-            <CardTitle className="text-sm font-medium">Best Products</CardTitle>
+            <CardTitle className="text-sm font-medium">{ui('bestProducts')}</CardTitle>
           </div>
-          <span className="text-xs text-muted-foreground">12 months · by revenue</span>
+          <span className="text-xs text-muted-foreground">{ui('months12ByRevenue')}</span>
         </div>
       </CardHeader>
       {!collapsed && (
-        <CardContent className="p-4 pt-0">
+        <CardContent className="p-4 pt-0 flex-1 min-h-0 overflow-y-auto">
           {products.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No data available</p>
+            <p className="text-sm text-muted-foreground">{ui('noDataAvailable')}</p>
           ) : (
             <div className="space-y-0">
               {products.map((p, i) => (
@@ -1007,7 +1073,7 @@ function BestProducts({ products = [] }) {
                       <span className="text-sm truncate">{p.name}</span>
                     </div>
                     <div className="flex items-center gap-3 shrink-0 ml-2">
-                      <span className="text-xs text-muted-foreground">{fmtCompact(p.qty)} units</span>
+                      <span className="text-xs text-muted-foreground">{fmtCompact(p.qty)} {ui('units')}</span>
                       <span className="text-sm font-medium">${fmtCompact(p.amount)}</span>
                     </div>
                   </div>
@@ -1026,28 +1092,29 @@ function BestProducts({ products = [] }) {
  * ----------------------------------------------------------------*/
 
 function BestSellers({ sellers = [] }) {
+  const ui = useUI();
   const [collapsed, toggleCollapsed] = useCollapsed('dashboard_collapsed_best_sellers');
   return (
-    <Card>
-      <CardHeader className="pb-2 cursor-pointer select-none" onClick={toggleCollapsed}>
+    <Card className="flex flex-col h-full">
+      <CardHeader className="pb-2 cursor-pointer select-none flex-none" onClick={toggleCollapsed}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-            <CardTitle className="text-sm font-medium">Best Sellers</CardTitle>
+            <CardTitle className="text-sm font-medium">{ui('bestSellers')}</CardTitle>
           </div>
-          <span className="text-xs text-muted-foreground">12 months · by qty</span>
+          <span className="text-xs text-muted-foreground">{ui('months12ByQty')}</span>
         </div>
       </CardHeader>
       {!collapsed && (
-        <CardContent className="p-0">
+        <CardContent className="p-0 flex-1 min-h-0 overflow-y-auto">
           {sellers.length === 0 ? (
-            <p className="text-sm text-muted-foreground p-4">No data available</p>
+            <p className="text-sm text-muted-foreground p-4">{ui('noDataAvailable')}</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">Product Name</th>
-                  <th className="text-right text-xs font-medium text-muted-foreground px-4 py-2">Qty</th>
+                  <th className="text-left text-xs font-medium text-muted-foreground px-4 py-2">{ui('productName')}</th>
+                  <th className="text-right text-xs font-medium text-muted-foreground px-4 py-2">{ui('qty')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1134,6 +1201,7 @@ function DashboardSkeleton() {
  * ----------------------------------------------------------------*/
 
 export default function DashboardPage() {
+  const ui = useUI();
   const [showUserContext, setShowUserContext] = useState(false);
   const [widgetManagerOpen, setWidgetManagerOpen] = useState(false);
   const [dashDraggingId, setDashDraggingId] = useState(null);
@@ -1148,9 +1216,14 @@ export default function DashboardPage() {
   const { kpis, revenueTrend, expenseTrend, topClients, pendingTasks, recentInvoices, bestProducts, bestSellers, pendingAmounts, actions, loading } = useDashboardData();
   const { open: openCopilot } = useCopilot();
   const { config, toggle, resize, setHeight, reorder, reset } = useWidgetConfig();
+  const tMenu = useMenuLabel();
 
   const resolvedKpis = kpis.map((k) => ({ ...k, icon: ICON_MAP[k.icon] || DollarSign }));
-  const quickActions = actions.map((a) => ({ label: a.label, to: a.route, icon: ICON_MAP[a.icon] || FileText }));
+  const quickActions = actions.map((a) => ({
+    label: resolveQuickActionLabel(ui, { label: a.label, to: a.route }),
+    to: a.route,
+    icon: ICON_MAP[a.icon] || FileText,
+  }));
 
   const visibleItems = config.filter((c) => c.visible && getWidgetMeta(c.id));
 
@@ -1158,7 +1231,19 @@ export default function DashboardPage() {
     const kpiWidget = (kpiKey) => {
       const kpi = resolvedKpis.find((k) => k.key === kpiKey);
       if (!kpi) return null;
-      return <KPICard key={id} label={kpi.label} value={kpi.value} format={kpi.format} trend={kpi.trend} previousValue={kpi.previousValue} icon={kpi.icon} kpiKey={kpi.key} />;
+      const localizedLabel = ui(kpi.key);
+      return (
+        <KPICard
+          key={id}
+          label={localizedLabel === kpi.key ? kpi.label : localizedLabel}
+          value={kpi.value}
+          format={kpi.format}
+          trend={kpi.trend}
+          previousValue={kpi.previousValue}
+          icon={kpi.icon}
+          kpiKey={kpi.key}
+        />
+      );
     };
     switch (id) {
       case 'kpi-revenue':          return kpiWidget('revenueThisMonth');
@@ -1184,14 +1269,14 @@ export default function DashboardPage() {
       <div className="px-6 pt-3 pb-3">
         <div className="flex items-center gap-4">
           <div className="shrink-0">
-            <h1 className="text-xl font-bold text-foreground">Dashboard</h1>
+            <h1 className="text-xl font-bold text-foreground">{ui('dashboardTitle')}</h1>
           </div>
           <div className="flex-1 flex justify-center">
             <div className="relative w-full max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search clients, orders, invoices..."
+                placeholder={ui('searchPlaceholder')}
                 readOnly
                 tabIndex={-1}
                 className="w-full h-9 rounded-lg border border-border/50 bg-white/60 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-colors cursor-default"
@@ -1209,7 +1294,7 @@ export default function DashboardPage() {
             <button
               onClick={() => setWidgetManagerOpen(true)}
               className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-              title="Customize dashboard"
+              title={ui('customizeDashboard')}
             >
               <LayoutGrid className="h-4 w-4" />
             </button>
@@ -1375,7 +1460,7 @@ export default function DashboardPage() {
                   <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     <div className="flex items-center gap-1 bg-background border rounded-b-lg px-2 py-0.5 shadow-sm">
                       <GripVertical className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-[10px] text-muted-foreground select-none">drag to reorder</span>
+                      <span className="text-[10px] text-muted-foreground select-none">{ui('dragToReorder')}</span>
                     </div>
                   </div>
                   {/* Width resize handle — bottom-right corner */}
@@ -1431,6 +1516,7 @@ export default function DashboardPage() {
         toggle={toggle}
         reorder={reorder}
         onReset={reset}
+        ui={ui}
       />
     </div>
   );

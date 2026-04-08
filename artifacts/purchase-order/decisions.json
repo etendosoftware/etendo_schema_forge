@@ -1,26 +1,26 @@
 {
-  "$schema": "decisions-v1",
+  "$schema": "decisions-v2",
   "window": {
     "category": "purchases",
     "name": "Purchase Order"
   },
   "entities": {
-    "cOrder": {
+    "header": {
       "fields": {
         "transactionDocument": {
           "visibility": "editable",
           "grid": true,
+          "form": false,
           "reference": "DocumentType",
           "section": "other",
-          "inputMode": null,
-          "readOnlyLogic": null
+          "inputMode": null
         },
         "documentNo": {
           "visibility": "readOnly",
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "readOnlyLogic": null
+          "order": 1
         },
         "documentStatus": {
           "grid": true,
@@ -36,16 +36,16 @@
         "orderDate": {
           "grid": true,
           "searchable": true,
-          "section": "other",
-          "readOnlyLogic": null
+          "section": "principal",
+          "order": 3
         },
         "businessPartner": {
           "grid": true,
           "searchable": true,
           "reference": "BusinessPartner",
           "section": "principal",
-          "readOnlyLogic": null,
-          "displayLogic": null
+          "displayLogic": null,
+          "order": 2
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -54,31 +54,29 @@
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
-          "section": "other",
-          "readOnlyLogic": null
+          "section": "principal"
         },
         "warehouse": {
           "grid": true,
-          "section": "principal",
-          "readOnlyLogic": null
+          "section": "collapsed"
         },
         "scheduledDeliveryDate": {
           "section": "principal",
-          "readOnlyLogic": null
+          "form": false,
+          "order": 4
         },
         "paymentMethod": {
           "reference": "PaymentMethod",
-          "section": "other",
-          "readOnlyLogic": null
+          "section": "collapsed"
         },
         "paymentTerms": {
           "section": "other",
-          "readOnlyLogic": null
+          "form": false
         },
         "priceList": {
           "grid": true,
           "section": "other",
-          "readOnlyLogic": null
+          "form": false
         },
         "invoiceAddress": {
           "reference": "BusinessPartnerLocation",
@@ -88,18 +86,19 @@
             "filterKey": "C_BPartner_ID"
           },
           "section": "other",
-          "readOnlyLogic": null,
+          "form": false,
           "name": "invoiceFrom"
         },
         "description": {
-          "section": "other"
+          "section": "collapsed"
         },
         "deliveryNotes": {
-          "section": "other"
+          "section": "other",
+          "form": false
         },
         "orderReference": {
           "searchable": true,
-          "section": "other"
+          "section": "collapsed"
         },
         "grandTotalAmount": {
           "grid": true,
@@ -112,34 +111,35 @@
         },
         "priceIncludesTax": {
           "visibility": "readOnly",
-          "section": "other"
+          "section": "other",
+          "form": false
         },
         "project": {
           "section": "other",
-          "readOnlyLogic": null,
+          "form": false,
           "displayLogic": null
         },
         "costcenter": {
           "reference": "CostCenter",
           "section": "other",
-          "readOnlyLogic": null,
+          "form": false,
           "displayLogic": null
         },
         "asset": {
           "section": "other",
-          "readOnlyLogic": null,
+          "form": false,
           "displayLogic": null
         },
         "stDimension": {
           "reference": "UserDimension1",
           "section": "other",
-          "readOnlyLogic": null,
+          "form": false,
           "displayLogic": null
         },
         "ndDimension": {
           "reference": "UserDimension2",
           "section": "other",
-          "readOnlyLogic": null,
+          "form": false,
           "displayLogic": null
         },
         "salesRepresentative": {
@@ -153,8 +153,7 @@
         "accountingDate": {
           "visibility": "readOnly",
           "form": false,
-          "section": "other",
-          "readOnlyLogic": null
+          "section": "other"
         },
         "incoterms": {
           "visibility": "editable",
@@ -176,35 +175,30 @@
         "deliveryMethod": {
           "visibility": "editable",
           "form": false,
-          "section": "other",
-          "readOnlyLogic": null
+          "section": "other"
         },
         "priority": {
           "visibility": "editable",
           "grid": true,
           "form": false,
-          "section": "other",
-          "readOnlyLogic": null
+          "section": "other"
         },
         "chargeAmount": {
           "visibility": "readOnly",
           "form": false,
-          "section": "other",
-          "readOnlyLogic": null
+          "section": "other"
         },
         "charge": {
           "visibility": "editable",
           "form": false,
           "section": "other",
           "reference": null,
-          "inputMode": null,
-          "readOnlyLogic": null
+          "inputMode": null
         },
         "deliveryTerms": {
           "visibility": "editable",
           "form": false,
-          "section": "other",
-          "readOnlyLogic": null
+          "section": "other"
         },
         "deliveryStatusPurchase": {
           "grid": true,
@@ -226,89 +220,109 @@
         }
       }
     },
-    "cOrderLine": {
+    "lines": {
       "fields": {
         "lineNo": {
           "grid": true,
+          "form": false,
           "readOnlyLogic": null
         },
         "product": {
           "grid": true,
+          "section": "principal",
           "readOnlyLogic": null
         },
         "operativeQuantity": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "operativeUOM": {
+          "form": false,
           "inputMode": "selector",
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "orderedQuantity": {
           "grid": true,
+          "section": "principal",
           "readOnlyLogic": null
         },
         "uOM": {
           "grid": true,
+          "form": false,
           "inputMode": null,
           "readOnlyLogic": null
         },
         "unitPrice": {
           "grid": true,
+          "section": "principal",
           "readOnlyLogic": null
         },
         "grossUnitPrice": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "lineNetAmount": {
           "grid": true,
+          "section": "principal",
           "readOnlyLogic": null
         },
         "lineGrossAmount": {
+          "form": false,
           "displayLogic": null
         },
         "tax": {
           "grid": true,
+          "section": "principal",
           "inputMode": "selector",
           "readOnlyLogic": null
         },
         "listPrice": {
           "visibility": "readOnly",
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "grossListPrice": {
+          "form": false,
           "displayLogic": null
         },
         "discount": {
           "grid": true,
+          "section": "principal",
           "readOnlyLogic": null
         },
         "taxableAmount": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "project": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "costcenter": {
+          "form": false,
           "reference": "CostCenter",
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "asset": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "stDimension": {
+          "form": false,
           "reference": "UserDimension1",
           "readOnlyLogic": null,
           "displayLogic": null
         },
         "ndDimension": {
+          "form": false,
           "reference": "UserDimension2",
           "readOnlyLogic": null,
           "displayLogic": null
@@ -342,9 +356,11 @@
         },
         "orderDate": {
           "visibility": "readOnly",
+          "form": false,
           "displayLogic": null
         },
         "scheduledDeliveryDate": {
+          "form": false,
           "displayLogic": null
         },
         "reservedQuantity": {
@@ -373,8 +389,12 @@
           "displayLogic": null
         },
         "attributeSetValue": {
+          "form": false,
           "readOnlyLogic": null,
           "displayLogic": null
+        },
+        "description": {
+          "section": "principal"
         },
         "managePrereservation": {
           "visibility": "discarded",
@@ -386,7 +406,7 @@
         }
       }
     },
-    "cOrderLineTax": {
+    "lineTax": {
       "fields": {
         "lineNo": {
           "visibility": "readOnly",
@@ -407,7 +427,7 @@
         }
       }
     },
-    "mReservationStock": {
+    "prereservedQty": {
       "name": "reservedStock",
       "fields": {
         "reservation": {
@@ -442,7 +462,7 @@
         }
       }
     },
-    "cOrderDiscount": {
+    "basicDiscounts": {
       "name": "basicDiscounts",
       "fields": {
         "lineNo": {
@@ -467,7 +487,7 @@
         }
       }
     },
-    "cOrderTax": {
+    "tax": {
       "fields": {
         "lineNo": {
           "visibility": "readOnly",
@@ -485,7 +505,7 @@
         }
       }
     },
-    "finPaymentSchedOrdV": {
+    "paymentPlan": {
       "name": "paymentPlan",
       "fields": {
         "dueDate": {
@@ -522,7 +542,7 @@
         }
       }
     },
-    "finPaymentDetailV": {
+    "paymentDetails": {
       "name": "paymentDetails",
       "fields": {
         "payment": {
@@ -581,5 +601,6 @@
   "discardPatterns": [
     "CopyFrom*",
     "EM_*"
-  ]
+  ],
+  "version": 2
 }

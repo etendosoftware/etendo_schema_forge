@@ -3,46 +3,32 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:invoice
 const fields = [
   // @sf-custom-slot callout:SL_Invoice_DocType
-  { key: 'transactionDocument', column: 'C_DocTypeTarget_ID', type: 'selector', required: true, section: 'principal', reference: 'DocumentType', inputMode: 'selector' },
-  { key: 'documentNo', column: 'DocumentNo', type: 'text', required: true, readOnly: true, section: 'other' },
+  { key: 'transactionDocument', column: 'C_DocTypeTarget_ID', type: 'selector', label: 'Transaction Document', required: true, section: 'other', reference: 'DocumentType', inputMode: 'selector' },
+  { key: 'documentNo', column: 'DocumentNo', type: 'text', label: 'Document No.', required: true, readOnly: true, section: 'principal' },
   // @sf-custom-slot callout:SE_Invoice_AccountingDate
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', required: true, section: 'principal' },
+  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date', required: true, section: 'principal', defaultValue: '@#Date@' },
   // @sf-custom-slot callout:SE_Invoice_BPartner
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', required: true, section: 'principal', reference: 'BusinessPartner', inputMode: 'search' },
+  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'search', label: 'Business Partner', required: true, section: 'principal', reference: 'BusinessPartner', inputMode: 'search' },
   // @sf-custom-slot callout:SE_Invoice_BPartnerLocation
-  { key: 'partnerAddress', column: 'C_BPartner_Location_ID', type: 'dependent', required: true, section: 'principal', reference: 'BusinessPartnerLocation', inputMode: 'dependent', dependsOn: { field: 'businessPartner', filterKey: 'C_BPartner_ID' } },
+  { key: 'partnerAddress', column: 'C_BPartner_Location_ID', type: 'dependent', label: 'Partner Address', required: true, section: 'principal', reference: 'BusinessPartnerLocation', inputMode: 'dependent', dependsOn: { field: 'businessPartner', filterKey: 'C_BPartner_ID' } },
   // @sf-custom-slot callout:SL_Invoice_PriceList
-  { key: 'priceList', column: 'M_PriceList_ID', type: 'selector', required: true, section: 'other', reference: 'PriceList', inputMode: 'selector' },
+  { key: 'priceList', column: 'M_PriceList_ID', type: 'selector', label: 'Price List', required: true, section: 'other', reference: 'PriceList', inputMode: 'selector' },
   // @sf-custom-slot callout:SE_Invoice_TaxDate
-  { key: 'accountingDate', column: 'DateAcct', type: 'date', required: true, section: 'other' },
-  { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', required: true, section: 'other', reference: 'PaymentTerm', inputMode: 'selector' },
+  { key: 'accountingDate', column: 'DateAcct', type: 'date', label: 'Accounting Date', required: true, section: 'other', defaultValue: '@#Date@' },
+  { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', label: 'Payment Terms', required: true, section: 'other', reference: 'PaymentTerm', inputMode: 'selector' },
   // @sf-custom-slot callout:SE_Invoice_BPartner
-  { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', required: true, section: 'other', reference: 'PaymentMethod', inputMode: 'selector' },
-  { key: 'description', column: 'Description', type: 'textarea', section: 'other' },
-  { key: 'salesOrder', column: 'C_Order_ID', type: 'selector', readOnly: true, section: 'other', reference: 'Order', inputMode: 'selector' },
-  { key: 'orderReference', column: 'POReference', type: 'text', section: 'other' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'text', required: true, readOnly: true, section: 'other' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'number', required: true, readOnly: true, section: 'other' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'number', required: true, readOnly: true, section: 'other' },
-  { key: 'currency', column: 'C_Currency_ID', type: 'selector', required: true, section: 'other', reference: 'Currency', inputMode: 'selector' },
-  { key: 'paymentComplete', column: 'Ispaid', type: 'checkbox', required: true, readOnly: true, section: 'other' },
-  { key: 'userContact', column: 'AD_User_ID', type: 'search', section: 'other', reference: 'User', inputMode: 'search' },
-  { key: 'totalPaid', column: 'Totalpaid', type: 'number', required: true, readOnly: true, section: 'other' },
-  { key: 'taxDate', column: 'Taxdate', type: 'date', section: 'other' },
-  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'number', required: true, readOnly: true, section: 'other' },
-  { key: 'orderDate', column: 'DateOrdered', type: 'date', readOnly: true, section: 'other' },
-  { key: 'dueAmount', column: 'DueAmt', type: 'number', required: true, readOnly: true, section: 'other' },
-  { key: 'salesRepresentative', column: 'SalesRep_ID', type: 'search', section: 'other', reference: 'User', inputMode: 'search' },
-  { key: 'withholdingAmount', column: 'Withholdingamount', type: 'number', readOnly: true, section: 'other' },
-  { key: 'chargeAmount', column: 'ChargeAmt', type: 'number', section: 'other' },
-  { key: 'charge', column: 'C_Charge_ID', type: 'selector', section: 'other', reference: 'Charge', inputMode: 'selector' },
+  { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', label: 'Payment Method', required: true, section: 'other', reference: 'PaymentMethod', inputMode: 'selector' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'other' },
+  { key: 'salesOrder', column: 'C_Order_ID', type: 'selector', label: 'Purchase Order', readOnly: true, section: 'other', reference: 'Order', inputMode: 'selector' },
+  { key: 'orderReference', column: 'POReference', type: 'text', label: 'Supplier Reference', section: 'other' },
+  { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true, section: 'other', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@' },
+  { key: 'userContact', column: 'AD_User_ID', type: 'search', label: 'User/Contact', section: 'other', reference: 'User', inputMode: 'search' },
+  { key: 'salesRepresentative', column: 'SalesRep_ID', type: 'search', label: 'Company Agent', section: 'other', reference: 'User', inputMode: 'search' },
+  { key: 'chargeAmount', column: 'ChargeAmt', type: 'number', label: 'Charge Amount', section: 'other' },
+  { key: 'charge', column: 'C_Charge_ID', type: 'selector', label: 'Charge', section: 'other', reference: 'Charge', inputMode: 'selector' },
   // @sf-custom-slot callout:SE_Invoice_Project
-  { key: 'project', column: 'C_Project_ID', type: 'search', section: 'other', reference: 'Project', inputMode: 'search' },
-  { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', section: 'other', reference: 'CostCenter', inputMode: 'selector' },
-  { key: 'asset', column: 'A_Asset_ID', type: 'selector', section: 'other', reference: 'Asset', inputMode: 'selector' },
-  { key: 'stDimension', column: 'User1_ID', type: 'selector', section: 'other', reference: 'UserDimension1', inputMode: 'selector' },
-  { key: 'ndDimension', column: 'User2_ID', type: 'selector', section: 'other', reference: 'UserDimension2', inputMode: 'selector' },
-  { key: 'prepaymentAmount', column: 'Prepaymentamt', type: 'number', required: true, readOnly: true, section: 'other' },
+  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'other', reference: 'Project', inputMode: 'search' },
+  { key: 'prepaymentAmount', column: 'Prepaymentamt', type: 'number', label: 'Prepayment Amount', required: true, readOnly: true, section: 'other', defaultValue: '0' },
 ];
 // @sf-generated-end fields:invoice
 

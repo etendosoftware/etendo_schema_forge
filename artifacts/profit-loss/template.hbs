@@ -5,6 +5,10 @@
 {{{css}}}
 .group-header td { border: none !important; }
 .group-subheader td { border-bottom: 1px solid #e2e8f0 !important; }
+.report-totals { display: flex; gap: 8px; margin-top: 8mm; }
+.total-card { flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 4mm 5mm; background: #ffffff; }
+.total-label { font-size: 7.5pt; font-weight: 700; color: #64748b; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 1.5mm; }
+.total-value { font-size: 18pt; font-weight: 700; color: #0f172a; }
 </style>
 </head>
 <body><div class="report-container">
@@ -40,6 +44,21 @@
       {{/each}}
     </tbody>
   </table>
+
+  <div class="report-totals">
+    <div class="total-card">
+      <div class="total-label">Total Revenue</div>
+      <div class="total-value">{{formatCurrency (sumRowsByCategory rows "1." "amount")}}</div>
+    </div>
+    <div class="total-card">
+      <div class="total-label">Total Expenses</div>
+      <div class="total-value">{{formatCurrency (sumRowsByCategory rows "2." "amount")}}</div>
+    </div>
+    <div class="total-card">
+      <div class="total-label">Net Income</div>
+      <div class="total-value">{{formatCurrency (sumRowsByCategory rows "3." "amount")}}</div>
+    </div>
+  </div>
 
   <div class="report-footer">
     <div class="report-summary">Total: {{meta.recordCount}} records</div>

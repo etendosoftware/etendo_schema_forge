@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, Inbox, X, ChevronDown, Check } from 'lucide-react';
 import { FieldHighlight } from '@/components/inspector/FieldHighlight.jsx';
-import { useLabel } from '@/i18n';
+import { useLabel, useUI, useLocale } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
 import { getStatusBadgeProps, getStatusDotColor, statusLabel } from '@/lib/statusBadge.js';
@@ -154,18 +154,19 @@ function TableSkeleton({ columns }) {
  * Empty state shown when the table has no data (or all rows are filtered out).
  */
 function EmptyState({ hasFilter, totalCount }) {
+  const ui = useUI();
   return (
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
       <Inbox className="h-10 w-10 mb-3 opacity-40" />
       {hasFilter ? (
         <>
-          <p className="text-sm font-medium">No matching records</p>
-          <p className="text-xs mt-1">Try adjusting your filters to find what you are looking for.</p>
+          <p className="text-sm font-medium">{ui('noMatchingRecords')}</p>
+          <p className="text-xs mt-1">{ui('adjustFilters')}</p>
         </>
       ) : (
         <>
-          <p className="text-sm font-medium">No records yet</p>
-          <p className="text-xs mt-1">Create a new record to get started.</p>
+          <p className="text-sm font-medium">{ui('noRecordsYet')}</p>
+          <p className="text-xs mt-1">{ui('createNewRecord')}</p>
         </>
       )}
     </div>
@@ -178,6 +179,7 @@ function EmptyState({ hasFilter, totalCount }) {
  */
 function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFieldChange, selectable, token, apiBaseUrl, entity, selectorContext }) {
   const t = useLabel();
+  const ui = useUI();
   const fieldMap = useMemo(() => {
     const map = {};
     for (const f of fields) map[f.key] = f;
@@ -250,6 +252,20 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
         handleChange(key + suffix, auxVal);
       }
     }
+    // Also fire top-level display fields from selectedItem (mirrors EntityForm behavior).
+    // Skips structural/object fields; fires e.g. product_uOM = "Unit" for identifier resolution.
+    if (selectedItem && typeof selectedItem === 'object') {
+      for (const [topField, topVal] of Object.entries(selectedItem)) {
+        if (topField === 'id' || topField === '_aux' || topField === 'label'
+            || topField === 'name' || topField === 'searchKey'
+            || typeof topVal === 'object' || topVal === null) continue;
+        const ctxKey = `${key}_${topField}`;
+        if (!(ctxKey in snapshot)) {
+          snapshot[ctxKey] = topVal;
+          handleChange(ctxKey, topVal);
+        }
+      }
+    }
     // Notify parent for callout execution — pass computed snapshot (not stale React state)
     onFieldChange?.(key, val, snapshot, (updates) => {
       // Callback to apply callout results to the inline row
@@ -281,7 +297,7 @@ function InlineAddRow({ columns, fields, onAdd, onCancel, data, catalogs, onFiel
               className="h-7 w-7 flex items-center justify-center rounded text-emerald-600 hover:bg-emerald-50">
               <Check className="h-3.5 w-3.5" />
             </button>
-            <button type="button" onClick={onCancel} title="Cancel (Esc)"
+            <button type="button" onClick={onCancel} title={ui('cancelEsc')}
               className="h-7 w-7 flex items-center justify-center rounded text-red-500 hover:bg-red-50">
               <X className="h-3.5 w-3.5" />
             </button>
@@ -508,8 +524,10 @@ function LookupButton({ selectorUrl, token, onSelect, title }) {
  *  - loading: boolean (shows skeleton when true)
  *  - addRow: { active, fields, onAdd, onCancel, catalogs, onFieldChange } — inline add row config
  */
-export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, onNavigate, onRowClick, selectedRowId, selectedId, compact, loading, addRow, selectable = true, onSelectionChange, sortColumn, sortDirection, onColumnsReady, token, apiBaseUrl, showFooterTotals = true, selectorContext }) {
+export function DataTable({ entity, columns = [], filters = [], data = [], onRowSelect, onNavigate, onRowClick, selectedRowId, selectedId, compact, loading, addRow, selectable = true, isRowSelectable, onSelectionChange, sortColumn, sortDirection, onColumnsReady, token, apiBaseUrl, showFooterTotals = true, selectorContext }) {
   const t = useLabel();
+  const ui = useUI();
+  const dictionary = useLocale();
   const [searchQuery, setSearchQuery] = useState('');
   const [columnFilters, setColumnFilters] = useState({});
   const [selectedRows, setSelectedRows] = useState(new Set());
@@ -598,7 +616,7 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
     }
     if (col.type === 'status') {
       const raw = row[col.key];
-      const label = col.enumLabels?.[raw] ?? statusLabel(raw);
+      const label = col.enumLabels?.[raw] ?? statusLabel(raw, dictionary);
       if (col.display === 'dot') {
         const dotColor = getStatusDotColor(raw);
         return (
@@ -631,8 +649,8 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
     if (col.type === 'boolean') {
       const val = row[col.key];
       if (col.badge) {
-        const trueLabel  = col.badgeLabels?.true  ?? 'Completed';
-        const falseLabel = col.badgeLabels?.false ?? 'In Progress';
+        const trueLabel  = col.badgeLabels?.true  ?? ui('statusComplete');
+        const falseLabel = col.badgeLabels?.false ?? ui('statusInProcess');
         if (val === true || val === 'Y') return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
             {trueLabel}
@@ -644,15 +662,16 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
           </span>
         );
       }
-      if (val === true || val === 'Y') return <span className="text-emerald-600">Yes</span>;
-      if (val === false || val === 'N') return <span className="text-slate-400">No</span>;
+      if (val === true || val === 'Y') return <span className="text-emerald-600">{ui('yes')}</span>;
+      if (val === false || val === 'N') return <span className="text-slate-400">{ui('no')}</span>;
       return <span className="text-slate-300">&mdash;</span>;
     }
     if (col.type === 'date') {
       const dotColor = getDateDotColor(row[col.key]);
-      const formatted = row[col.key]
-        ? new Date(row[col.key]).toLocaleDateString()
-        : '\u2014';
+      const raw = row[col.key];
+      // Parse date-only strings (yyyy-MM-dd) as local to avoid timezone shift
+      const parsed = raw ? (/^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(raw + 'T00:00:00') : new Date(raw)) : null;
+      const formatted = parsed && !isNaN(parsed) ? parsed.toLocaleDateString() : '\u2014';
       return (
         <span className="inline-flex items-center gap-1.5">
           {formatted}
@@ -682,20 +701,23 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
   const allSelected = filteredData.length > 0 && selectedRows.size === filteredData.length;
   const someSelected = selectedRows.size > 0 && !allSelected;
 
+  const selectableData = isRowSelectable ? filteredData.filter(isRowSelectable) : filteredData;
+
   const toggleAll = (e) => {
     e.stopPropagation();
     if (allSelected) {
       setSelectedRows(new Set());
       onSelectionChange?.([]);
     } else {
-      const allIds = new Set(filteredData.map(r => r.id));
+      const allIds = new Set(selectableData.map(r => r.id));
       setSelectedRows(allIds);
-      onSelectionChange?.(filteredData);
+      onSelectionChange?.(selectableData);
     }
   };
 
   const toggleRow = (e, row) => {
     e.stopPropagation();
+    if (isRowSelectable && !isRowSelectable(row)) return;
     setSelectedRows(prev => {
       const next = new Set(prev);
       if (next.has(row.id)) next.delete(row.id);
@@ -727,7 +749,7 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
                     {hasColumnFilter && (
                       <button
                         onClick={() => setColumnFilters({})}
-                        title="Clear all filters"
+                        title={ui('clearAllFilters')}
                         className="h-4 w-4 flex items-center justify-center rounded text-muted-foreground/50 hover:text-foreground transition-colors"
                       >
                         <X className="h-3 w-3" />
@@ -737,7 +759,7 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
                 </TableHead>
               )}
               {columns.map(col => {
-                const colLabel = col.label ?? t(col.column) ?? col.key;
+                const colLabel = t(col.column) ?? col.label ?? col.key;
                 const isSorted = sortColumn === col.key;
                 const isRight = col.type === 'amount';
                 return (
@@ -756,7 +778,7 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
                           type="text"
                           value={columnFilters[col.key] || ''}
                           onChange={e => setColumnFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
-                          placeholder="Filter..."
+                          placeholder={ui('filter')}
                           className={[
                             'w-full h-6 rounded border bg-background/80 px-2 text-xs text-foreground',
                             'placeholder:text-muted-foreground/35 transition-colors',
@@ -804,24 +826,29 @@ export function DataTable({ entity, columns = [], filters = [], data = [], onRow
                     }}
                     className={[
                       'transition-colors h-12',
-                      onRowClick ? 'cursor-pointer' : 'cursor-pointer',
+                      (onRowClick || onNavigate) ? 'cursor-pointer' : 'cursor-default',
                       isChecked ? 'bg-primary/5' : '',
                       row.id === selectedId ? 'bg-primary/10' : '',
                       isSelectedLine ? 'bg-zinc-700 text-white' : '',
-                      !isSelectedLine ? 'hover:bg-muted/50' : 'hover:bg-zinc-600',
+                      isSelectedLine ? 'hover:bg-zinc-600' : (onRowClick || onNavigate) ? 'hover:bg-muted/50' : '',
                     ].filter(Boolean).join(' ')}
                   >
-                    {selectable && (
-                      <TableCell className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => toggleRow(e, row)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                        />
-                      </TableCell>
-                    )}
+                    {selectable && (() => {
+                      const rowDisabled = isRowSelectable && !isRowSelectable(row);
+                      return (
+                        <TableCell className="w-10 px-3" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            disabled={rowDisabled}
+                            onChange={(e) => toggleRow(e, row)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                            style={rowDisabled ? { opacity: 0.3, cursor: 'not-allowed' } : undefined}
+                          />
+                        </TableCell>
+                      );
+                    })()}
                     {columns.map(col => (
                       <TableCell key={col.key} className={col.type === 'amount' ? 'text-right' : ''}>
                         {renderCellValue(row, col)}

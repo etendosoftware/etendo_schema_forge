@@ -10,3 +10,4 @@ export { DetailView } from './DetailView';
 export { DocumentPreview } from './DocumentPreview';
 export { SummaryBar } from './SummaryBar';
 export { CompactHeader } from './CompactHeader';
+export { default as DocumentStatusPill } from './DocumentStatusPill';

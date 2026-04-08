@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { DataTable } from '@/components/contract-ui';
+import { useLocale } from '@/i18n';
 
 // ─── Invoice-specific status logic ───────────────────────────────
 
@@ -7,84 +8,95 @@ function isCreditNote(row) {
   return (row['transactionDocument$_identifier'] || '').toLowerCase().includes('credit');
 }
 
-const STATUS_STYLES = {
-  draft:   { label: 'Draft',   className: 'bg-gray-100 text-gray-600 border border-gray-200' },
-  paid:    { label: 'Paid',    className: 'bg-emerald-600 text-white border-transparent' },
-  partial: { label: 'Partial', className: 'bg-blue-50 text-blue-700 border border-blue-300' },
-  pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700 border border-amber-300' },
-  overdue: { label: 'Overdue', className: 'bg-red-50 text-red-700 border border-red-300' },
-  voided:  { label: 'Voided',  className: 'bg-red-100 text-red-600 border border-red-200' },
-  closed:  { label: 'Closed',  className: 'bg-gray-100 text-gray-600 border border-gray-200' },
+// Status classNames — locale-independent
+const STATUS_CLASS = {
+  draft:   'bg-gray-100 text-gray-600 border border-gray-200',
+  paid:    'bg-emerald-600 text-white border-transparent',
+  partial: 'bg-blue-50 text-blue-700 border border-blue-300',
+  pending: 'bg-amber-50 text-amber-700 border border-amber-300',
+  overdue: 'bg-red-50 text-red-700 border border-red-300',
+  voided:  'bg-red-100 text-red-600 border border-red-200',
+  closed:  'bg-gray-100 text-gray-600 border border-gray-200',
+};
+
+// i18n keys for each status / UI element
+const STATUS_KEYS = {
+  draft: 'statusDraft', paid: 'statusPaid', partial: 'statusPartial',
+  pending: 'statusPending', overdue: 'statusOverdue', voided: 'statusVoided', closed: 'statusClosed',
 };
 
 function getInvoiceStatus(row) {
   const docStatus = row.documentStatus;
-  if (docStatus === 'DR') return STATUS_STYLES.draft;
-  if (docStatus === 'VO') return STATUS_STYLES.voided;
-  if (docStatus === 'CL') return STATUS_STYLES.closed;
+  if (docStatus === 'DR') return 'draft';
+  if (docStatus === 'VO') return 'voided';
+  if (docStatus === 'CL') return 'closed';
   const grand = row.grandTotalAmount ?? 0;
   const outstanding = row.outstandingAmount ?? grand;
   const paid = grand - outstanding;
   if (outstanding <= 0 || row.paymentComplete === true || row.paymentComplete === 'Y')
-    return STATUS_STYLES.paid;
+    return 'paid';
   if (row.dueDate) {
     const due = new Date(row.dueDate);
-    if (due < new Date() && outstanding > 0) return STATUS_STYLES.overdue;
+    if (due < new Date() && outstanding > 0) return 'overdue';
   }
-  if (paid > 0) return STATUS_STYLES.partial;
-  return STATUS_STYLES.pending;
+  if (paid > 0) return 'partial';
+  return 'pending';
 }
 
 function getPaymentFilter(row) {
   const s = getInvoiceStatus(row);
-  if (s === STATUS_STYLES.paid) return 'paid';
-  if (s === STATUS_STYLES.partial) return 'partial';
-  if (s === STATUS_STYLES.pending || s === STATUS_STYLES.overdue) return 'pending';
+  if (s === 'paid') return 'paid';
+  if (s === 'partial') return 'partial';
+  if (s === 'pending' || s === 'overdue') return 'pending';
   return null;
 }
 
-// ─── Custom columns (override generated ones) ───────────────────
-
-const columns = [
-  {
-    key: 'documentNo', column: 'DocumentNo', type: 'string',
-    pill: {
-      when: (row) => isCreditNote(row),
-      label: 'Credit note',
-      className: 'bg-purple-50 text-purple-700 border-purple-200',
-    },
-  },
-  { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' },
-  { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
-  { key: '_status', column: '_status', type: 'custom', label: 'Status',
-    render: (row) => {
-      const s = getInvoiceStatus(row);
-      return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${s.className}`} style={{ borderWidth: '0.5px' }}>{s.label}</span>;
-    },
-  },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-];
-
 const filters = ['documentNo', 'invoiceDate', 'businessPartner'];
-
-// ─── Filter options ─────────────────────────────────────────────
-
-const TYPE_OPTIONS = [
-  { value: 'all', label: 'All' },
-  { value: 'invoices', label: 'Invoices' },
-  { value: 'credit-notes', label: 'Credit notes' },
-];
-
-const PAYMENT_STATUS_OPTIONS = [
-  { value: 'all', label: 'All payments' },
-  { value: 'paid', label: 'Paid', dot: 'bg-emerald-500' },
-  { value: 'pending', label: 'Pending', dot: 'bg-amber-500' },
-  { value: 'partial', label: 'Partial', dot: 'bg-blue-500' },
-];
 
 // ─── Component ──────────────────────────────────────────────────
 
 export default function InvoiceHeaderTable(props) {
+  const dictionary = useLocale();
+  const gl = dictionary?.genericLabels || {};
+  const t = (key) => gl[key] || key;
+
+  // ─── Custom columns (override generated ones) ─────────────────
+  const columns = useMemo(() => [
+    {
+      key: 'documentNo', column: 'DocumentNo', type: 'string',
+      pill: {
+        when: (row) => isCreditNote(row),
+        label: t('creditNoteLabel'),
+        className: 'bg-purple-50 text-purple-700 border-purple-200',
+      },
+    },
+    { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' },
+    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
+    { key: '_status', column: '_status', type: 'custom', label: t('statusColumn'),
+      render: (row) => {
+        const statusKey = getInvoiceStatus(row);
+        const className = STATUS_CLASS[statusKey] || STATUS_CLASS.pending;
+        const label = gl[STATUS_KEYS[statusKey]] || statusKey;
+        return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${className}`} style={{ borderWidth: '0.5px' }}>{label}</span>;
+      },
+    },
+    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
+  ], [gl]);
+
+  // ─── Filter options ───────────────────────────────────────────
+  const TYPE_OPTIONS = useMemo(() => [
+    { value: 'all',          label: t('allTab') },
+    { value: 'invoices',     label: t('invoicesTab') },
+    { value: 'credit-notes', label: t('creditNotesTab') },
+  ], [gl]);
+
+  const PAYMENT_STATUS_OPTIONS = useMemo(() => [
+    { value: 'all',     label: t('allPayments') },
+    { value: 'paid',    label: t('statusPaid'),    dot: 'bg-emerald-500' },
+    { value: 'pending', label: t('statusPending'), dot: 'bg-amber-500' },
+    { value: 'partial', label: t('statusPartial'), dot: 'bg-blue-500' },
+  ], [gl]);
+
   const [typeFilter, setTypeFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
@@ -106,7 +118,7 @@ export default function InvoiceHeaderTable(props) {
     return rows;
   }, [props.data, typeFilter, paymentFilter]);
 
-  const activePaymentLabel = PAYMENT_STATUS_OPTIONS.find(o => o.value === paymentFilter)?.label || 'All payments';
+  const activePaymentLabel = PAYMENT_STATUS_OPTIONS.find(o => o.value === paymentFilter)?.label || t('allPayments');
 
   return (
     <div>
@@ -120,13 +132,13 @@ export default function InvoiceHeaderTable(props) {
               onClick={() => setTypeFilter(opt.value)}
               className={`text-xs px-2.5 py-1.5 transition-colors relative ${
                 typeFilter === opt.value
-                  ? 'text-foreground font-medium'
+                  ? 'text-foreground font-semibold bg-muted/50 rounded-t-md'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {opt.label}
               {typeFilter === opt.value && (
-                <span className="absolute bottom-0 left-1 right-1 h-0.5 bg-foreground rounded-full" />
+                <span className="absolute bottom-0 left-1 right-1 h-[2px] bg-primary rounded-full" />
               )}
             </button>
           ))}

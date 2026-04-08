@@ -2,11 +2,11 @@ import { DataTable } from '@/components/contract-ui';
 
 // @sf-generated-start columns:finPayment
 const columns = [
-  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'paymentDate', column: 'Paymentdate', type: 'date' },
-  { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'string' },
-  { key: 'amount', column: 'Amount', type: 'amount' },
-  { key: 'status', column: 'Status', type: 'status', display: 'dot' },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.' },
+  { key: 'paymentDate', column: 'Paymentdate', type: 'date', label: 'Payment Date' },
+  { key: 'businessPartner', column: 'C_Bpartner_ID', type: 'string', label: 'Received From' },
+  { key: 'amount', column: 'Amount', type: 'amount', label: 'Amount' },
+  { key: 'status', column: 'Status', type: 'status', label: 'Status' },
 ];
 // @sf-generated-end columns:finPayment
 

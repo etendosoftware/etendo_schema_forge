@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createDbPool, closePool } from './db.js';
 
@@ -34,6 +34,23 @@ SELECT m.name AS key, COALESCE(mt.name, m.name) AS label
 FROM ad_menu m
 LEFT JOIN ad_menu_trl mt ON m.ad_menu_id = mt.ad_menu_id AND mt.ad_language = $1
 WHERE m.isactive = 'Y'`,
+
+  // Document and payment status codes used by statusBadge.js.
+  // DISTINCT ON ensures one row per value code when the same code appears in multiple references.
+  statuses: `
+SELECT DISTINCT ON (rl.value)
+  rl.value AS key,
+  COALESCE(rlt.name, rl.name) AS label
+FROM ad_ref_list rl
+LEFT JOIN ad_ref_list_trl rlt
+  ON rl.ad_ref_list_id = rlt.ad_ref_list_id AND rlt.ad_language = $1
+WHERE rl.value IN (
+  'DR', 'CO', 'VO', 'IP', 'CL', 'PA', 'UE', 'CA',
+  'RPR', 'RPAE', 'RPAP', 'RPPC', 'RPVOID',
+  'PPM', 'PWNC', 'RDNC'
+)
+AND rl.isactive = 'Y'
+ORDER BY rl.value, rlt.name NULLS LAST`,
 };
 
 /**
@@ -82,11 +99,12 @@ function buildKeyLabelMap(rows) {
  * Accepts a pool (or pool-like object with a query method) for testability.
  */
 export async function extractLabels(pool, lang) {
-  const [fieldsRes, windowsRes, tabsRes, menusRes] = await Promise.all([
+  const [fieldsRes, windowsRes, tabsRes, menusRes, statusesRes] = await Promise.all([
     pool.query(QUERIES.fields, [lang]),
     pool.query(QUERIES.windows, [lang]),
     pool.query(QUERIES.tabs, [lang]),
     pool.query(QUERIES.menus, [lang]),
+    pool.query(QUERIES.statuses, [lang]),
   ]);
 
   return {
@@ -94,6 +112,7 @@ export async function extractLabels(pool, lang) {
     windows: buildKeyLabelMap(windowsRes.rows),
     tabs: buildKeyLabelMap(tabsRes.rows),
     menus: buildKeyLabelMap(menusRes.rows),
+    statuses: buildKeyLabelMap(statusesRes.rows),
   };
 }
 
@@ -131,15 +150,29 @@ async function main() {
     const windowCount = Object.keys(labels.windows).length;
     const tabCount = Object.keys(labels.tabs).length;
     const menuCount = Object.keys(labels.menus).length;
+    const statusCount = Object.keys(labels.statuses).length;
 
     console.log(`Extracted labels for "${lang}":`);
-    console.log(`  fields:  ${fieldCount}`);
-    console.log(`  windows: ${windowCount}`);
-    console.log(`  tabs:    ${tabCount}`);
-    console.log(`  menus:   ${menuCount}`);
+    console.log(`  fields:   ${fieldCount}`);
+    console.log(`  windows:  ${windowCount}`);
+    console.log(`  tabs:     ${tabCount}`);
+    console.log(`  menus:    ${menuCount}`);
+    console.log(`  statuses: ${statusCount}`);
 
+    // Merge with existing file to preserve non-extracted sections (e.g. genericLabels, ui)
     await mkdir(dirname(out), { recursive: true });
-    await writeFile(out, JSON.stringify(labels, null, 2) + '\n', 'utf-8');
+    let merged = labels;
+    try {
+      const existing = JSON.parse(await readFile(out, 'utf-8'));
+      merged = { ...existing, ...labels };
+      const preserved = Object.keys(existing).filter(k => !(k in labels));
+      if (preserved.length) {
+        console.log(`  preserved: ${preserved.join(', ')}`);
+      }
+    } catch {
+      // File doesn't exist yet — write fresh
+    }
+    await writeFile(out, JSON.stringify(merged, null, 2) + '\n', 'utf-8');
     console.log(`\nWritten to ${out}`);
   } finally {
     await closePool(pool);

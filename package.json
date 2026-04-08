@@ -15,6 +15,7 @@
     "test": "mkdir -p artifacts && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=artifacts/test-report.xml 'cli/test/*.test.js' && node cli/src/test-report-html.js"
   },
   "devDependencies": {
+    "handlebars": "^4.7.9",
     "shadcn": "^4.0.2"
   }
 }

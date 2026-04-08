@@ -1,7 +1,7 @@
 [
-  {"vendor":"Acme Supplies","current":8500,"days30":3200,"days60":1000,"days90plus":0,"total":12700},
-  {"vendor":"Tech Components Ltd","current":5600,"days30":2400,"days60":0,"days90plus":0,"total":8000},
-  {"vendor":"Pacific Materials","current":3200,"days30":1800,"days60":1200,"days90plus":500,"total":6700},
-  {"vendor":"Euro Logistics","current":4100,"days30":900,"days60":0,"days90plus":0,"total":5000},
-  {"vendor":"Nordic Equipment","current":2800,"days30":1500,"days60":800,"days90plus":500,"total":5600}
+  {"bPartner":"Bebidas Alegres, S.L.","current":0.00,"days30":0.00,"days60":0.00,"days90":0.00,"days120":0.00,"days150plus":839135.00,"total":839135.00,"credits":0.00,"net":839135.00},
+  {"bPartner":"La Fruta es la Vida, S.L.","current":0.00,"days30":0.00,"days60":0.00,"days90":0.00,"days120":0.00,"days150plus":370163.20,"total":370163.20,"credits":0.00,"net":370163.20},
+  {"bPartner":"Tech Components Ltd","current":5600.00,"days30":2400.00,"days60":0.00,"days90":0.00,"days120":0.00,"days150plus":0.00,"total":8000.00,"credits":0.00,"net":8000.00},
+  {"bPartner":"Pacific Materials","current":3200.00,"days30":1800.00,"days60":1200.00,"days90":500.00,"days120":0.00,"days150plus":0.00,"total":6700.00,"credits":200.00,"net":6500.00},
+  {"bPartner":"Euro Logistics","current":4100.00,"days30":900.00,"days60":0.00,"days90":0.00,"days120":0.00,"days150plus":0.00,"total":5000.00,"credits":0.00,"net":5000.00}
 ]

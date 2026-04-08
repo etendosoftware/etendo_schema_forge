@@ -1,15 +1,15 @@
 // Auto-generated mock data - do not edit manually
 
-export const order = [
+export const header = [
   {
-    "id": "mock-order-001",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00001",
-    "orderDate": "2026-01-15",
+    "id": "mock-header-001",
+    "documentNo": "HE-00001",
     "businessPartner": "Acme Corp",
+    "orderDate": "2026-01-15",
+    "scheduledDeliveryDate": "2026-01-15",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Acme Corp",
     "warehouse": "Main Warehouse",
-    "scheduledDeliveryDate": "2026-01-15",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -41,14 +41,14 @@ export const order = [
     "accountingDate": "2026-01-15"
   },
   {
-    "id": "mock-order-002",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00002",
-    "orderDate": "2026-01-16",
+    "id": "mock-header-002",
+    "documentNo": "HE-00002",
     "businessPartner": "TechFlow Inc",
+    "orderDate": "2026-01-16",
+    "scheduledDeliveryDate": "2026-01-16",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "TechFlow Inc",
     "warehouse": "East Distribution Center",
-    "scheduledDeliveryDate": "2026-01-16",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -80,14 +80,14 @@ export const order = [
     "accountingDate": "2026-01-16"
   },
   {
-    "id": "mock-order-003",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00003",
-    "orderDate": "2026-01-17",
+    "id": "mock-header-003",
+    "documentNo": "HE-00003",
     "businessPartner": "Global Trade Ltd",
+    "orderDate": "2026-01-17",
+    "scheduledDeliveryDate": "2026-01-17",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Global Trade Ltd",
     "warehouse": "West Hub",
-    "scheduledDeliveryDate": "2026-01-17",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -119,14 +119,14 @@ export const order = [
     "accountingDate": "2026-01-17"
   },
   {
-    "id": "mock-order-004",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00004",
-    "orderDate": "2026-01-18",
+    "id": "mock-header-004",
+    "documentNo": "HE-00004",
     "businessPartner": "Summit Industries",
+    "orderDate": "2026-01-18",
+    "scheduledDeliveryDate": "2026-01-18",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Summit Industries",
     "warehouse": "North Storage",
-    "scheduledDeliveryDate": "2026-01-18",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -158,14 +158,14 @@ export const order = [
     "accountingDate": "2026-01-18"
   },
   {
-    "id": "mock-order-005",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00005",
-    "orderDate": "2026-01-19",
+    "id": "mock-header-005",
+    "documentNo": "HE-00005",
     "businessPartner": "Pacific Partners",
+    "orderDate": "2026-01-19",
+    "scheduledDeliveryDate": "2026-01-19",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Pacific Partners",
     "warehouse": "South Logistics",
-    "scheduledDeliveryDate": "2026-01-19",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -197,14 +197,14 @@ export const order = [
     "accountingDate": "2026-01-19"
   },
   {
-    "id": "mock-order-006",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00006",
-    "orderDate": "2026-01-20",
+    "id": "mock-header-006",
+    "documentNo": "HE-00006",
     "businessPartner": "Alpine Solutions",
+    "orderDate": "2026-01-20",
+    "scheduledDeliveryDate": "2026-01-20",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Alpine Solutions",
     "warehouse": "Central Depot",
-    "scheduledDeliveryDate": "2026-01-20",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -236,14 +236,14 @@ export const order = [
     "accountingDate": "2026-01-20"
   },
   {
-    "id": "mock-order-007",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00007",
-    "orderDate": "2026-01-21",
+    "id": "mock-header-007",
+    "documentNo": "HE-00007",
     "businessPartner": "Meridian Group",
+    "orderDate": "2026-01-21",
+    "scheduledDeliveryDate": "2026-01-21",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Meridian Group",
     "warehouse": "Regional Warehouse A",
-    "scheduledDeliveryDate": "2026-01-21",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -275,14 +275,14 @@ export const order = [
     "accountingDate": "2026-01-21"
   },
   {
-    "id": "mock-order-008",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00008",
-    "orderDate": "2026-01-22",
+    "id": "mock-header-008",
+    "documentNo": "HE-00008",
     "businessPartner": "Vertex Systems",
+    "orderDate": "2026-01-22",
+    "scheduledDeliveryDate": "2026-01-22",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Vertex Systems",
     "warehouse": "Regional Warehouse B",
-    "scheduledDeliveryDate": "2026-01-22",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -314,14 +314,14 @@ export const order = [
     "accountingDate": "2026-01-22"
   },
   {
-    "id": "mock-order-009",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00009",
-    "orderDate": "2026-01-23",
+    "id": "mock-header-009",
+    "documentNo": "HE-00009",
     "businessPartner": "Atlas Manufacturing",
+    "orderDate": "2026-01-23",
+    "scheduledDeliveryDate": "2026-01-23",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Atlas Manufacturing",
     "warehouse": "Main Warehouse",
-    "scheduledDeliveryDate": "2026-01-23",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -353,14 +353,14 @@ export const order = [
     "accountingDate": "2026-01-23"
   },
   {
-    "id": "mock-order-010",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00010",
-    "orderDate": "2026-01-24",
+    "id": "mock-header-010",
+    "documentNo": "HE-00010",
     "businessPartner": "Nova Enterprises",
+    "orderDate": "2026-01-24",
+    "scheduledDeliveryDate": "2026-01-24",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Nova Enterprises",
     "warehouse": "East Distribution Center",
-    "scheduledDeliveryDate": "2026-01-24",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -392,14 +392,14 @@ export const order = [
     "accountingDate": "2026-01-24"
   },
   {
-    "id": "mock-order-011",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00011",
-    "orderDate": "2026-01-25",
+    "id": "mock-header-011",
+    "documentNo": "HE-00011",
     "businessPartner": "Pinnacle Services",
+    "orderDate": "2026-01-25",
+    "scheduledDeliveryDate": "2026-01-25",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Pinnacle Services",
     "warehouse": "West Hub",
-    "scheduledDeliveryDate": "2026-01-25",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -431,14 +431,14 @@ export const order = [
     "accountingDate": "2026-01-25"
   },
   {
-    "id": "mock-order-012",
-    "transactionDocument": "Sample transactionDocument",
-    "documentNo": "SO-00012",
-    "orderDate": "2026-01-26",
+    "id": "mock-header-012",
+    "documentNo": "HE-00012",
     "businessPartner": "Horizon Labs",
+    "orderDate": "2026-01-26",
+    "scheduledDeliveryDate": "2026-01-26",
+    "transactionDocument": "Sample transactionDocument",
     "partnerAddress": "Horizon Labs",
     "warehouse": "North Storage",
-    "scheduledDeliveryDate": "2026-01-26",
     "paymentMethod": "Sample paymentMethod",
     "paymentTerms": "Sample paymentTerms",
     "priceList": "Sample priceList",
@@ -471,14 +471,14 @@ export const order = [
   }
 ];
 
-export const orderLine = [
+export const lines = [
   {
-    "id": "mock-orderLine-001",
+    "id": "mock-lines-001",
     "lineNo": 10,
     "product": "Laptop Pro 15",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 402,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 402,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -487,14 +487,14 @@ export const orderLine = [
     "lineGrossAmount": 38907,
     "tax": "VAT 21%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 99.44,
     "discount": 6,
     "description": "Standard order for Q1 delivery",
     "taxableAmount": "VAT 21%",
     "warehouse": "Main Warehouse",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 402,
+    "deliveredQuantity": 402,
+    "invoicedQuantity": 402,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-15",
     "scheduledDeliveryDate": "2026-01-15",
@@ -507,15 +507,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "USD",
-    "orderId": "mock-order-001"
+    "headerId": "mock-header-001"
   },
   {
-    "id": "mock-orderLine-002",
+    "id": "mock-lines-002",
     "lineNo": 20,
     "product": "USB-C Cable",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 54,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 54,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -524,14 +524,14 @@ export const orderLine = [
     "lineGrossAmount": 9306,
     "tax": "VAT 10%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 96.94,
     "discount": 21,
     "description": "Rush order - priority shipping required",
     "taxableAmount": "VAT 10%",
     "warehouse": "East Distribution Center",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 54,
+    "deliveredQuantity": 54,
+    "invoicedQuantity": 54,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-16",
     "scheduledDeliveryDate": "2026-01-16",
@@ -544,15 +544,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "EUR",
-    "orderId": "mock-order-002"
+    "headerId": "mock-header-002"
   },
   {
-    "id": "mock-orderLine-003",
+    "id": "mock-lines-003",
     "lineNo": 30,
     "product": "Wireless Mouse",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 150,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 150,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -561,14 +561,14 @@ export const orderLine = [
     "lineGrossAmount": 11544,
     "tax": "VAT 0%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 12.48,
     "discount": 0,
     "description": "Bulk purchase for warehouse restocking",
     "taxableAmount": "VAT 0%",
     "warehouse": "West Hub",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 150,
+    "deliveredQuantity": 150,
+    "invoicedQuantity": 150,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-17",
     "scheduledDeliveryDate": "2026-01-17",
@@ -581,15 +581,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "GBP",
-    "orderId": "mock-order-003"
+    "headerId": "mock-header-003"
   },
   {
-    "id": "mock-orderLine-004",
+    "id": "mock-lines-004",
     "lineNo": 40,
     "product": "Mechanical Keyboard",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 97,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 97,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -598,14 +598,14 @@ export const orderLine = [
     "lineGrossAmount": 11872,
     "tax": "Sales Tax 8.5%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 96.31,
     "discount": 6,
     "description": "Sample order for client evaluation",
     "taxableAmount": "Sales Tax 8.5%",
     "warehouse": "North Storage",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 97,
+    "deliveredQuantity": 97,
+    "invoicedQuantity": 97,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-18",
     "scheduledDeliveryDate": "2026-01-18",
@@ -618,15 +618,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "USD",
-    "orderId": "mock-order-004"
+    "headerId": "mock-header-004"
   },
   {
-    "id": "mock-orderLine-005",
+    "id": "mock-lines-005",
     "lineNo": 50,
     "product": "Monitor 27\"",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 311,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 311,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -635,14 +635,14 @@ export const orderLine = [
     "lineGrossAmount": 48460,
     "tax": "Exempt",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 31.27,
     "discount": 14,
     "description": "Recurring monthly supply order",
     "taxableAmount": "Exempt",
     "warehouse": "South Logistics",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 311,
+    "deliveredQuantity": 311,
+    "invoicedQuantity": 311,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-19",
     "scheduledDeliveryDate": "2026-01-19",
@@ -655,15 +655,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "EUR",
-    "orderId": "mock-order-005"
+    "headerId": "mock-header-005"
   },
   {
-    "id": "mock-orderLine-006",
+    "id": "mock-lines-006",
     "lineNo": 60,
     "product": "Webcam HD",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 451,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 451,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -672,14 +672,14 @@ export const orderLine = [
     "lineGrossAmount": 45418,
     "tax": "Reduced Rate 5%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 76.52,
     "discount": 4,
     "description": "Special pricing agreement applies",
     "taxableAmount": "Reduced Rate 5%",
     "warehouse": "Central Depot",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 451,
+    "deliveredQuantity": 451,
+    "invoicedQuantity": 451,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-20",
     "scheduledDeliveryDate": "2026-01-20",
@@ -692,15 +692,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "GBP",
-    "orderId": "mock-order-006"
+    "headerId": "mock-header-006"
   },
   {
-    "id": "mock-orderLine-007",
+    "id": "mock-lines-007",
     "lineNo": 70,
     "product": "Headset Pro",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 496,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 496,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -709,14 +709,14 @@ export const orderLine = [
     "lineGrossAmount": 33840,
     "tax": "Standard Rate 20%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 2.66,
     "discount": 6,
     "description": "Consolidated order from multiple requests",
     "taxableAmount": "Standard Rate 20%",
     "warehouse": "Regional Warehouse A",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 496,
+    "deliveredQuantity": 496,
+    "invoicedQuantity": 496,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-21",
     "scheduledDeliveryDate": "2026-01-21",
@@ -729,15 +729,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "USD",
-    "orderId": "mock-order-007"
+    "headerId": "mock-header-007"
   },
   {
-    "id": "mock-orderLine-008",
+    "id": "mock-lines-008",
     "lineNo": 80,
     "product": "Docking Station",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 284,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 284,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -746,14 +746,14 @@ export const orderLine = [
     "lineGrossAmount": 25716,
     "tax": "VAT 21%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 10.03,
     "discount": 10,
     "description": "Trial order for new product line",
     "taxableAmount": "VAT 21%",
     "warehouse": "Regional Warehouse B",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 284,
+    "deliveredQuantity": 284,
+    "invoicedQuantity": 284,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-22",
     "scheduledDeliveryDate": "2026-01-22",
@@ -766,15 +766,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "EUR",
-    "orderId": "mock-order-008"
+    "headerId": "mock-header-008"
   },
   {
-    "id": "mock-orderLine-009",
+    "id": "mock-lines-009",
     "lineNo": 90,
     "product": "SSD 1TB",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 225,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 225,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -783,14 +783,14 @@ export const orderLine = [
     "lineGrossAmount": 44780,
     "tax": "VAT 10%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 93.97,
     "discount": 17,
     "description": "Replacement for damaged goods",
     "taxableAmount": "VAT 10%",
     "warehouse": "Main Warehouse",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 225,
+    "deliveredQuantity": 225,
+    "invoicedQuantity": 225,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-23",
     "scheduledDeliveryDate": "2026-01-23",
@@ -803,15 +803,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "GBP",
-    "orderId": "mock-order-009"
+    "headerId": "mock-header-009"
   },
   {
-    "id": "mock-orderLine-010",
+    "id": "mock-lines-010",
     "lineNo": 100,
     "product": "RAM 16GB",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 479,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 479,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -820,14 +820,14 @@ export const orderLine = [
     "lineGrossAmount": 12483,
     "tax": "VAT 0%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 1.1,
     "discount": 14,
     "description": "Pre-season inventory build-up",
     "taxableAmount": "VAT 0%",
     "warehouse": "East Distribution Center",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 479,
+    "deliveredQuantity": 479,
+    "invoicedQuantity": 479,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-24",
     "scheduledDeliveryDate": "2026-01-24",
@@ -840,15 +840,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "USD",
-    "orderId": "mock-order-010"
+    "headerId": "mock-header-010"
   },
   {
-    "id": "mock-orderLine-011",
+    "id": "mock-lines-011",
     "lineNo": 110,
     "product": "Power Supply 750W",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 123,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 123,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -857,14 +857,14 @@ export const orderLine = [
     "lineGrossAmount": 46022,
     "tax": "Sales Tax 8.5%",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 79.99,
     "discount": 19,
     "description": "Customer-specific configuration",
     "taxableAmount": "Sales Tax 8.5%",
     "warehouse": "West Hub",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 123,
+    "deliveredQuantity": 123,
+    "invoicedQuantity": 123,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-25",
     "scheduledDeliveryDate": "2026-01-25",
@@ -877,15 +877,15 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "EUR",
-    "orderId": "mock-order-011"
+    "headerId": "mock-header-011"
   },
   {
-    "id": "mock-orderLine-012",
+    "id": "mock-lines-012",
     "lineNo": 120,
     "product": "Network Switch",
-    "operativeQuantity": "Sample operativeQuantity",
+    "operativeQuantity": 337,
     "operativeUOM": "Sample operativeUOM",
-    "orderedQuantity": "Sample orderedQuantity",
+    "orderedQuantity": 337,
     "uOM": "Sample uOM",
     "attributeSetValue": "Sample attributeSetValue",
     "unitPrice": "Sample unitPrice",
@@ -894,14 +894,14 @@ export const orderLine = [
     "lineGrossAmount": 38634,
     "tax": "Exempt",
     "listPrice": "Sample listPrice",
-    "grossListPrice": "Sample grossListPrice",
+    "grossListPrice": 53.61,
     "discount": 12,
     "description": "Government contract fulfillment",
     "taxableAmount": "Exempt",
     "warehouse": "North Storage",
-    "reservedQuantity": "Sample reservedQuantity",
-    "deliveredQuantity": "Sample deliveredQuantity",
-    "invoicedQuantity": "Sample invoicedQuantity",
+    "reservedQuantity": 337,
+    "deliveredQuantity": 337,
+    "invoicedQuantity": 337,
     "shippingCompany": "Sample shippingCompany",
     "orderDate": "2026-01-26",
     "scheduledDeliveryDate": "2026-01-26",
@@ -914,106 +914,106 @@ export const orderLine = [
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
     "currency": "GBP",
-    "orderId": "mock-order-012"
+    "headerId": "mock-header-012"
   }
 ];
 
-export const orderLineTax = [
+export const lineTax = [
   {
-    "id": "mock-orderLineTax-001",
+    "id": "mock-lineTax-001",
     "lineNo": 10,
     "tax": "VAT 21%",
     "taxableAmount": "VAT 21%",
     "taxAmount": "VAT 21%",
-    "orderId": "mock-order-001"
+    "headerId": "mock-header-001"
   },
   {
-    "id": "mock-orderLineTax-002",
+    "id": "mock-lineTax-002",
     "lineNo": 20,
     "tax": "VAT 10%",
     "taxableAmount": "VAT 10%",
     "taxAmount": "VAT 10%",
-    "orderId": "mock-order-002"
+    "headerId": "mock-header-002"
   },
   {
-    "id": "mock-orderLineTax-003",
+    "id": "mock-lineTax-003",
     "lineNo": 30,
     "tax": "VAT 0%",
     "taxableAmount": "VAT 0%",
     "taxAmount": "VAT 0%",
-    "orderId": "mock-order-003"
+    "headerId": "mock-header-003"
   },
   {
-    "id": "mock-orderLineTax-004",
+    "id": "mock-lineTax-004",
     "lineNo": 40,
     "tax": "Sales Tax 8.5%",
     "taxableAmount": "Sales Tax 8.5%",
     "taxAmount": "Sales Tax 8.5%",
-    "orderId": "mock-order-004"
+    "headerId": "mock-header-004"
   },
   {
-    "id": "mock-orderLineTax-005",
+    "id": "mock-lineTax-005",
     "lineNo": 50,
     "tax": "Exempt",
     "taxableAmount": "Exempt",
     "taxAmount": "Exempt",
-    "orderId": "mock-order-005"
+    "headerId": "mock-header-005"
   },
   {
-    "id": "mock-orderLineTax-006",
+    "id": "mock-lineTax-006",
     "lineNo": 60,
     "tax": "Reduced Rate 5%",
     "taxableAmount": "Reduced Rate 5%",
     "taxAmount": "Reduced Rate 5%",
-    "orderId": "mock-order-006"
+    "headerId": "mock-header-006"
   },
   {
-    "id": "mock-orderLineTax-007",
+    "id": "mock-lineTax-007",
     "lineNo": 70,
     "tax": "Standard Rate 20%",
     "taxableAmount": "Standard Rate 20%",
     "taxAmount": "Standard Rate 20%",
-    "orderId": "mock-order-007"
+    "headerId": "mock-header-007"
   },
   {
-    "id": "mock-orderLineTax-008",
+    "id": "mock-lineTax-008",
     "lineNo": 80,
     "tax": "VAT 21%",
     "taxableAmount": "VAT 21%",
     "taxAmount": "VAT 21%",
-    "orderId": "mock-order-008"
+    "headerId": "mock-header-008"
   },
   {
-    "id": "mock-orderLineTax-009",
+    "id": "mock-lineTax-009",
     "lineNo": 90,
     "tax": "VAT 10%",
     "taxableAmount": "VAT 10%",
     "taxAmount": "VAT 10%",
-    "orderId": "mock-order-009"
+    "headerId": "mock-header-009"
   },
   {
-    "id": "mock-orderLineTax-010",
+    "id": "mock-lineTax-010",
     "lineNo": 100,
     "tax": "VAT 0%",
     "taxableAmount": "VAT 0%",
     "taxAmount": "VAT 0%",
-    "orderId": "mock-order-010"
+    "headerId": "mock-header-010"
   },
   {
-    "id": "mock-orderLineTax-011",
+    "id": "mock-lineTax-011",
     "lineNo": 110,
     "tax": "Sales Tax 8.5%",
     "taxableAmount": "Sales Tax 8.5%",
     "taxAmount": "Sales Tax 8.5%",
-    "orderId": "mock-order-011"
+    "headerId": "mock-header-011"
   },
   {
-    "id": "mock-orderLineTax-012",
+    "id": "mock-lineTax-012",
     "lineNo": 120,
     "tax": "Exempt",
     "taxableAmount": "Exempt",
     "taxAmount": "Exempt",
-    "orderId": "mock-order-012"
+    "headerId": "mock-header-012"
   }
 ];
 
@@ -1026,8 +1026,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 5,
-    "released": "Sample released",
-    "orderId": "mock-order-001"
+    "released": 402,
+    "headerId": "mock-header-001"
   },
   {
     "id": "mock-reservedStock-002",
@@ -1037,8 +1037,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 33,
-    "released": "Sample released",
-    "orderId": "mock-order-002"
+    "released": 54,
+    "headerId": "mock-header-002"
   },
   {
     "id": "mock-reservedStock-003",
@@ -1048,8 +1048,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 86,
-    "released": "Sample released",
-    "orderId": "mock-order-003"
+    "released": 150,
+    "headerId": "mock-header-003"
   },
   {
     "id": "mock-reservedStock-004",
@@ -1059,8 +1059,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 3,
-    "released": "Sample released",
-    "orderId": "mock-order-004"
+    "released": 97,
+    "headerId": "mock-header-004"
   },
   {
     "id": "mock-reservedStock-005",
@@ -1070,8 +1070,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 91,
-    "released": "Sample released",
-    "orderId": "mock-order-005"
+    "released": 311,
+    "headerId": "mock-header-005"
   },
   {
     "id": "mock-reservedStock-006",
@@ -1081,8 +1081,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 31,
-    "released": "Sample released",
-    "orderId": "mock-order-006"
+    "released": 451,
+    "headerId": "mock-header-006"
   },
   {
     "id": "mock-reservedStock-007",
@@ -1092,8 +1092,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 89,
-    "released": "Sample released",
-    "orderId": "mock-order-007"
+    "released": 496,
+    "headerId": "mock-header-007"
   },
   {
     "id": "mock-reservedStock-008",
@@ -1103,8 +1103,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 39,
-    "released": "Sample released",
-    "orderId": "mock-order-008"
+    "released": 284,
+    "headerId": "mock-header-008"
   },
   {
     "id": "mock-reservedStock-009",
@@ -1114,8 +1114,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 49,
-    "released": "Sample released",
-    "orderId": "mock-order-009"
+    "released": 225,
+    "headerId": "mock-header-009"
   },
   {
     "id": "mock-reservedStock-010",
@@ -1125,8 +1125,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 72,
-    "released": "Sample released",
-    "orderId": "mock-order-010"
+    "released": 479,
+    "headerId": "mock-header-010"
   },
   {
     "id": "mock-reservedStock-011",
@@ -1136,8 +1136,8 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 25,
-    "released": "Sample released",
-    "orderId": "mock-order-011"
+    "released": 123,
+    "headerId": "mock-header-011"
   },
   {
     "id": "mock-reservedStock-012",
@@ -1147,107 +1147,107 @@ export const reservedStock = [
     "attributeSetValue": "Sample attributeSetValue",
     "allocated": "Sample allocated",
     "quantity": 21,
-    "released": "Sample released",
-    "orderId": "mock-order-012"
+    "released": 337,
+    "headerId": "mock-header-012"
   }
 ];
 
-export const orderTax = [
+export const tax = [
   {
-    "id": "mock-orderTax-001",
+    "id": "mock-tax-001",
     "lineNo": 10,
     "tax": "VAT 21%",
     "taxAmount": "VAT 21%",
     "taxableAmount": "VAT 21%",
-    "orderId": "mock-order-001"
+    "headerId": "mock-header-001"
   },
   {
-    "id": "mock-orderTax-002",
+    "id": "mock-tax-002",
     "lineNo": 20,
     "tax": "VAT 10%",
     "taxAmount": "VAT 10%",
     "taxableAmount": "VAT 10%",
-    "orderId": "mock-order-002"
+    "headerId": "mock-header-002"
   },
   {
-    "id": "mock-orderTax-003",
+    "id": "mock-tax-003",
     "lineNo": 30,
     "tax": "VAT 0%",
     "taxAmount": "VAT 0%",
     "taxableAmount": "VAT 0%",
-    "orderId": "mock-order-003"
+    "headerId": "mock-header-003"
   },
   {
-    "id": "mock-orderTax-004",
+    "id": "mock-tax-004",
     "lineNo": 40,
     "tax": "Sales Tax 8.5%",
     "taxAmount": "Sales Tax 8.5%",
     "taxableAmount": "Sales Tax 8.5%",
-    "orderId": "mock-order-004"
+    "headerId": "mock-header-004"
   },
   {
-    "id": "mock-orderTax-005",
+    "id": "mock-tax-005",
     "lineNo": 50,
     "tax": "Exempt",
     "taxAmount": "Exempt",
     "taxableAmount": "Exempt",
-    "orderId": "mock-order-005"
+    "headerId": "mock-header-005"
   },
   {
-    "id": "mock-orderTax-006",
+    "id": "mock-tax-006",
     "lineNo": 60,
     "tax": "Reduced Rate 5%",
     "taxAmount": "Reduced Rate 5%",
     "taxableAmount": "Reduced Rate 5%",
-    "orderId": "mock-order-006"
+    "headerId": "mock-header-006"
   },
   {
-    "id": "mock-orderTax-007",
+    "id": "mock-tax-007",
     "lineNo": 70,
     "tax": "Standard Rate 20%",
     "taxAmount": "Standard Rate 20%",
     "taxableAmount": "Standard Rate 20%",
-    "orderId": "mock-order-007"
+    "headerId": "mock-header-007"
   },
   {
-    "id": "mock-orderTax-008",
+    "id": "mock-tax-008",
     "lineNo": 80,
     "tax": "VAT 21%",
     "taxAmount": "VAT 21%",
     "taxableAmount": "VAT 21%",
-    "orderId": "mock-order-008"
+    "headerId": "mock-header-008"
   },
   {
-    "id": "mock-orderTax-009",
+    "id": "mock-tax-009",
     "lineNo": 90,
     "tax": "VAT 10%",
     "taxAmount": "VAT 10%",
     "taxableAmount": "VAT 10%",
-    "orderId": "mock-order-009"
+    "headerId": "mock-header-009"
   },
   {
-    "id": "mock-orderTax-010",
+    "id": "mock-tax-010",
     "lineNo": 100,
     "tax": "VAT 0%",
     "taxAmount": "VAT 0%",
     "taxableAmount": "VAT 0%",
-    "orderId": "mock-order-010"
+    "headerId": "mock-header-010"
   },
   {
-    "id": "mock-orderTax-011",
+    "id": "mock-tax-011",
     "lineNo": 110,
     "tax": "Sales Tax 8.5%",
     "taxAmount": "Sales Tax 8.5%",
     "taxableAmount": "Sales Tax 8.5%",
-    "orderId": "mock-order-011"
+    "headerId": "mock-header-011"
   },
   {
-    "id": "mock-orderTax-012",
+    "id": "mock-tax-012",
     "lineNo": 120,
     "tax": "Exempt",
     "taxAmount": "Exempt",
     "taxableAmount": "Exempt",
-    "orderId": "mock-order-012"
+    "headerId": "mock-header-012"
   }
 ];
 
@@ -1258,7 +1258,7 @@ export const basicDiscounts = [
     "discount": 6,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-001"
+    "headerId": "mock-header-001"
   },
   {
     "id": "mock-basicDiscounts-002",
@@ -1266,7 +1266,7 @@ export const basicDiscounts = [
     "discount": 21,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-002"
+    "headerId": "mock-header-002"
   },
   {
     "id": "mock-basicDiscounts-003",
@@ -1274,7 +1274,7 @@ export const basicDiscounts = [
     "discount": 0,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-003"
+    "headerId": "mock-header-003"
   },
   {
     "id": "mock-basicDiscounts-004",
@@ -1282,7 +1282,7 @@ export const basicDiscounts = [
     "discount": 6,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-004"
+    "headerId": "mock-header-004"
   },
   {
     "id": "mock-basicDiscounts-005",
@@ -1290,7 +1290,7 @@ export const basicDiscounts = [
     "discount": 14,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-005"
+    "headerId": "mock-header-005"
   },
   {
     "id": "mock-basicDiscounts-006",
@@ -1298,7 +1298,7 @@ export const basicDiscounts = [
     "discount": 4,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-006"
+    "headerId": "mock-header-006"
   },
   {
     "id": "mock-basicDiscounts-007",
@@ -1306,7 +1306,7 @@ export const basicDiscounts = [
     "discount": 6,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-007"
+    "headerId": "mock-header-007"
   },
   {
     "id": "mock-basicDiscounts-008",
@@ -1314,7 +1314,7 @@ export const basicDiscounts = [
     "discount": 10,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-008"
+    "headerId": "mock-header-008"
   },
   {
     "id": "mock-basicDiscounts-009",
@@ -1322,7 +1322,7 @@ export const basicDiscounts = [
     "discount": 17,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-009"
+    "headerId": "mock-header-009"
   },
   {
     "id": "mock-basicDiscounts-010",
@@ -1330,7 +1330,7 @@ export const basicDiscounts = [
     "discount": 14,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-010"
+    "headerId": "mock-header-010"
   },
   {
     "id": "mock-basicDiscounts-011",
@@ -1338,7 +1338,7 @@ export const basicDiscounts = [
     "discount": 19,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-011"
+    "headerId": "mock-header-011"
   },
   {
     "id": "mock-basicDiscounts-012",
@@ -1346,7 +1346,7 @@ export const basicDiscounts = [
     "discount": 12,
     "cascade": "Sample cascade",
     "active": "Sample active",
-    "orderId": "mock-order-012"
+    "headerId": "mock-header-012"
   }
 ];
 
@@ -1361,7 +1361,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-15",
     "numberOfPayments": 90,
     "currency": "USD",
-    "orderId": "mock-order-001"
+    "headerId": "mock-header-001"
   },
   {
     "id": "mock-paymentPlan-002",
@@ -1373,7 +1373,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-16",
     "numberOfPayments": 93,
     "currency": "EUR",
-    "orderId": "mock-order-002"
+    "headerId": "mock-header-002"
   },
   {
     "id": "mock-paymentPlan-003",
@@ -1385,7 +1385,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-17",
     "numberOfPayments": 8,
     "currency": "GBP",
-    "orderId": "mock-order-003"
+    "headerId": "mock-header-003"
   },
   {
     "id": "mock-paymentPlan-004",
@@ -1397,7 +1397,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-18",
     "numberOfPayments": 91,
     "currency": "USD",
-    "orderId": "mock-order-004"
+    "headerId": "mock-header-004"
   },
   {
     "id": "mock-paymentPlan-005",
@@ -1409,7 +1409,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-19",
     "numberOfPayments": 72,
     "currency": "EUR",
-    "orderId": "mock-order-005"
+    "headerId": "mock-header-005"
   },
   {
     "id": "mock-paymentPlan-006",
@@ -1421,7 +1421,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-20",
     "numberOfPayments": 78,
     "currency": "GBP",
-    "orderId": "mock-order-006"
+    "headerId": "mock-header-006"
   },
   {
     "id": "mock-paymentPlan-007",
@@ -1433,7 +1433,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-21",
     "numberOfPayments": 31,
     "currency": "USD",
-    "orderId": "mock-order-007"
+    "headerId": "mock-header-007"
   },
   {
     "id": "mock-paymentPlan-008",
@@ -1445,7 +1445,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-22",
     "numberOfPayments": 97,
     "currency": "EUR",
-    "orderId": "mock-order-008"
+    "headerId": "mock-header-008"
   },
   {
     "id": "mock-paymentPlan-009",
@@ -1457,7 +1457,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-23",
     "numberOfPayments": 70,
     "currency": "GBP",
-    "orderId": "mock-order-009"
+    "headerId": "mock-header-009"
   },
   {
     "id": "mock-paymentPlan-010",
@@ -1469,7 +1469,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-24",
     "numberOfPayments": 77,
     "currency": "USD",
-    "orderId": "mock-order-010"
+    "headerId": "mock-header-010"
   },
   {
     "id": "mock-paymentPlan-011",
@@ -1481,7 +1481,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-25",
     "numberOfPayments": 32,
     "currency": "EUR",
-    "orderId": "mock-order-011"
+    "headerId": "mock-header-011"
   },
   {
     "id": "mock-paymentPlan-012",
@@ -1493,7 +1493,7 @@ export const paymentPlan = [
     "lastPayment": "2026-01-26",
     "numberOfPayments": 26,
     "currency": "GBP",
-    "orderId": "mock-order-012"
+    "headerId": "mock-header-012"
   }
 ];
 
@@ -1513,7 +1513,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "DR",
-    "orderId": "mock-order-001"
+    "headerId": "mock-header-001"
   },
   {
     "id": "mock-paymentDetails-002",
@@ -1530,7 +1530,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "CO",
-    "orderId": "mock-order-002"
+    "headerId": "mock-header-002"
   },
   {
     "id": "mock-paymentDetails-003",
@@ -1547,7 +1547,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "VO",
-    "orderId": "mock-order-003"
+    "headerId": "mock-header-003"
   },
   {
     "id": "mock-paymentDetails-004",
@@ -1564,7 +1564,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "IP",
-    "orderId": "mock-order-004"
+    "headerId": "mock-header-004"
   },
   {
     "id": "mock-paymentDetails-005",
@@ -1581,7 +1581,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "DR",
-    "orderId": "mock-order-005"
+    "headerId": "mock-header-005"
   },
   {
     "id": "mock-paymentDetails-006",
@@ -1598,7 +1598,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "CO",
-    "orderId": "mock-order-006"
+    "headerId": "mock-header-006"
   },
   {
     "id": "mock-paymentDetails-007",
@@ -1615,7 +1615,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "VO",
-    "orderId": "mock-order-007"
+    "headerId": "mock-header-007"
   },
   {
     "id": "mock-paymentDetails-008",
@@ -1632,7 +1632,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "IP",
-    "orderId": "mock-order-008"
+    "headerId": "mock-header-008"
   },
   {
     "id": "mock-paymentDetails-009",
@@ -1649,7 +1649,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "DR",
-    "orderId": "mock-order-009"
+    "headerId": "mock-header-009"
   },
   {
     "id": "mock-paymentDetails-010",
@@ -1666,7 +1666,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "CO",
-    "orderId": "mock-order-010"
+    "headerId": "mock-header-010"
   },
   {
     "id": "mock-paymentDetails-011",
@@ -1683,7 +1683,7 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "VO",
-    "orderId": "mock-order-011"
+    "headerId": "mock-header-011"
   },
   {
     "id": "mock-paymentDetails-012",
@@ -1700,6 +1700,6 @@ export const paymentDetails = [
     "finaccTxnConvertRate": "Sample finaccTxnConvertRate",
     "canceled": "Sample canceled",
     "status": "IP",
-    "orderId": "mock-order-012"
+    "headerId": "mock-header-012"
   }
 ];

@@ -7,43 +7,39 @@ import { Separator } from '@/components/ui/separator.jsx';
 import { cn } from '@/lib/utils';
 import { Bot, X, Send, Sparkles } from 'lucide-react';
 import { useCopilot } from './CopilotContext';
+import { useUI } from '@/i18n';
 
-const mockResponses = {
-  invoice:
-    "I'll help you create an invoice. Opening Sales Invoice...\n\nYou can also say 'show pending invoices' to see what's outstanding.",
-  stock:
-    "Here's a quick stock summary:\n\u2022 Cerveza Ale 0.5L: 150 units\n\u2022 Vino Tinto Reserva: 80 units\n\u2022 Aceite de Oliva 1L: 230 units\n\nWould you like to check a specific product?",
-  order:
-    "You have 5 pending orders:\n\u2022 SO-2026-0234 \u2014 Empresa ABC ($8,500)\n\u2022 SO-2026-0235 \u2014 Tech Solutions ($3,200)\n\u2022 SO-2026-0236 \u2014 Global Trade ($15,000)\n\nShould I open the orders list?",
-  contact:
-    "I found 156 contacts. Top customers by revenue:\n1. Global Trade Ltd \u2014 $85,000\n2. Empresa ABC \u2014 $52,000\n3. Ib\u00e9rica Industrial \u2014 $34,000\n\nWho are you looking for?",
-  default:
-    'I can help with invoices, orders, stock, contacts, and more. What would you like to do?',
-};
-
-const suggestionChips = [
-  'Create an invoice',
-  'Check stock levels',
-  'Show pending orders',
-  'Find a contact',
-];
-
-function getResponse(text) {
+function getResponse(text, responses) {
   const lower = text.toLowerCase();
-  for (const key of Object.keys(mockResponses)) {
+  for (const key of Object.keys(responses)) {
     if (key !== 'default' && lower.includes(key)) {
-      return mockResponses[key];
+      return responses[key];
     }
   }
-  return mockResponses.default;
+  return responses.default;
 }
 
 export function CopilotWidget() {
-  const { isOpen: open, open: openPanel, close: closePanel, toggle } = useCopilot();
+  const { isOpen: open, close: closePanel, toggle } = useCopilot();
+  const ui = useUI();
+  const mockResponses = React.useMemo(() => ({
+    invoice: ui('copilotInvoiceResponse'),
+    stock: ui('copilotStockResponse'),
+    order: ui('copilotOrderResponse'),
+    contact: ui('copilotContactResponse'),
+    default: ui('copilotDefaultResponse'),
+  }), [ui]);
+  const suggestionChips = React.useMemo(() => ([
+    ui('createInvoice'),
+    ui('checkStockLevels'),
+    ui('showPendingOrders'),
+    ui('findContact'),
+  ]), [ui]);
+  const welcomeMessage = ui('copilotWelcome');
   const [messages, setMessages] = React.useState([
     {
       role: 'copilot',
-      text: "Hi! I'm your ERP assistant. What do you need today?",
+      text: welcomeMessage,
     },
   ]);
   const [input, setInput] = React.useState('');
@@ -66,6 +62,14 @@ export function CopilotWidget() {
   }, [open]);
 
   React.useEffect(() => {
+    setMessages((prev) => (
+      prev.length === 1 && prev[0]?.role === 'copilot'
+        ? [{ role: 'copilot', text: welcomeMessage }]
+        : prev
+    ));
+  }, [welcomeMessage]);
+
+  React.useEffect(() => {
     function handleKeyDown(e) {
       if (e.key === 'Escape' && open) {
         closePanel();
@@ -84,12 +88,12 @@ export function CopilotWidget() {
       setIsTyping(true);
 
       setTimeout(() => {
-        const response = getResponse(text);
+        const response = getResponse(text, mockResponses);
         setMessages((prev) => [...prev, { role: 'copilot', text: response }]);
         setIsTyping(false);
       }, 800);
     },
-    []
+    [mockResponses]
   );
 
   const handleSubmit = React.useCallback(
@@ -117,14 +121,14 @@ export function CopilotWidget() {
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-              <CardTitle className="text-base">Copilot</CardTitle>
+              <CardTitle className="text-base">{ui('copilot')}</CardTitle>
             </div>
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7"
               onClick={() => closePanel()}
-              aria-label="Close Copilot"
+              aria-label={ui('closeCopilot')}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -204,7 +208,7 @@ export function CopilotWidget() {
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask something..."
+                placeholder={ui('askSomething')}
                 className="flex-1 h-9"
                 disabled={isTyping}
               />
@@ -213,7 +217,7 @@ export function CopilotWidget() {
                 size="icon"
                 className="h-9 w-9 shrink-0"
                 disabled={!input.trim() || isTyping}
-                aria-label="Send message"
+                aria-label={ui('send')}
               >
                 <Send className="h-4 w-4" />
               </Button>
@@ -230,7 +234,7 @@ export function CopilotWidget() {
           'fixed bottom-6 right-6 z-50 h-12 w-12 rounded-full shadow-lg transition-all duration-200',
           !open && 'animate-pulse shadow-primary/25 shadow-xl'
         )}
-        aria-label={open ? 'Close Copilot' : 'Open Copilot'}
+        aria-label={open ? ui('closeCopilot') : ui('openCopilot')}
       >
         {open ? (
           <X className="h-5 w-5" />

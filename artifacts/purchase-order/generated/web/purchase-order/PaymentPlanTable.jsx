@@ -2,11 +2,11 @@ import { DataTable } from '@/components/contract-ui';
 
 // @sf-generated-start columns:paymentPlan
 const columns = [
-  { key: 'dueDate', column: 'Duedate', type: 'date' },
-  { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'string' },
-  { key: 'expected', column: 'Expected', type: 'amount' },
-  { key: 'received', column: 'Received', type: 'amount' },
-  { key: 'outstanding', column: 'Outstanding', type: 'amount' },
+  { key: 'dueDate', column: 'Duedate', type: 'date', label: 'Due Date' },
+  { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'string', label: 'Payment Method' },
+  { key: 'expected', column: 'Expected', type: 'amount', label: 'Expected Amount' },
+  { key: 'received', column: 'Received', type: 'amount', label: 'Paid' },
+  { key: 'outstanding', column: 'Outstanding', type: 'amount', label: 'Outstanding' },
 ];
 // @sf-generated-end columns:paymentPlan
 

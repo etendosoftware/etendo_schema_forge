@@ -30,12 +30,16 @@ const ROOT = join(__dirname, '..', '..');
  */
 export function autoSimplifyEntityName(rawName) {
   if (!rawName) return rawName;
-  const match = rawName.match(/^(c|m|ad)([A-Z].*)$/);
+  // Replace slashes with camelCase join: "vendor/creditor" → "vendorCreditor"
+  let name = rawName.includes('/')
+    ? rawName.split('/').map((seg, i) => i === 0 ? seg : seg.charAt(0).toUpperCase() + seg.slice(1)).join('')
+    : rawName;
+  const match = name.match(/^(c|m|ad)([A-Z].*)$/);
   if (match) {
     const rest = match[2];
     return rest.charAt(0).toLowerCase() + rest.slice(1);
   }
-  return rawName;
+  return name;
 }
 
 // ---------------------------------------------------------------------------
@@ -209,8 +213,10 @@ function buildCuratedField(rawField, fieldDecision, discardPatterns) {
 
   // Visual hints — badge (boolean pill), summable (numeric footer total), columnType override
   if (fieldDecision.badge) field.badge = true;
+  if (fieldDecision.badgeLabels) field.badgeLabels = fieldDecision.badgeLabels;
   if (fieldDecision.summable) field.summable = true;
   if (fieldDecision.columnType) field.columnType = fieldDecision.columnType;
+  if (fieldDecision.display) field.display = fieldDecision.display;
 
   const isVisible = visibility !== 'system' && visibility !== 'discarded';
 
@@ -238,6 +244,9 @@ function buildCuratedField(rawField, fieldDecision, discardPatterns) {
 
     const dependsOn = fieldDecision.dependsOn || null;
     if (dependsOn) field.dependsOn = dependsOn;
+
+    if (fieldDecision.lookup) field.lookup = true;
+    if (fieldDecision.popup) field.popup = true;
   }
 
   // derivation — carry from raw field
@@ -264,6 +273,10 @@ function buildCuratedField(rawField, fieldDecision, discardPatterns) {
 
     if (fieldDecision.displayLogicJs != null) {
       field.displayLogicJs = fieldDecision.displayLogicJs;
+    }
+
+    if (fieldDecision.readOnlyLogicJs != null) {
+      field.readOnlyLogicJs = fieldDecision.readOnlyLogicJs;
     }
 
     // callout — carry from raw
@@ -360,7 +373,13 @@ function findEntityDecision(rawEntity, entitiesDecisions) {
   // 1. Exact match by current name (tabName-based)
   if (entitiesDecisions[rawEntity.name]) return entitiesDecisions[rawEntity.name];
 
-  // 2. Fallback: match by tableName derivation (handles unmigrated decisions)
+  // 2. Match by auto-simplified name (handles slash-named entities like "location/address" → "locationAddress")
+  const autoSimplified = autoSimplifyEntityName(rawEntity.name);
+  if (autoSimplified !== rawEntity.name && entitiesDecisions[autoSimplified]) {
+    return entitiesDecisions[autoSimplified];
+  }
+
+  // 3. Fallback: match by tableName derivation (handles unmigrated decisions)
   if (rawEntity.tableName) {
     const tableBasedKey = toCamelCase(rawEntity.tableName);
     if (entitiesDecisions[tableBasedKey]) return entitiesDecisions[tableBasedKey];
@@ -372,7 +391,7 @@ function findEntityDecision(rawEntity, entitiesDecisions) {
     }
   }
 
-  // 3. Match by name override in decision value
+  // 4. Match by name override in decision value
   for (const [, decVal] of Object.entries(entitiesDecisions)) {
     if (decVal.name === rawEntity.name) return decVal;
   }
@@ -443,12 +462,22 @@ export async function resolveCurated(schemaRaw, rulesRaw, decisions) {
       return buildCuratedField(rawField, fieldDecision, discardPatterns);
     });
 
+    // Apply explicit field ordering from decisions (order: number on individual fields)
+    const hasOrderOverrides = Object.values(fieldsDecisions).some(d => d.order != null);
+    const orderedFields = hasOrderOverrides
+      ? curatedFields.slice().sort((a, b) => {
+          const oa = fieldsDecisions[a.name]?.order ?? fieldsDecisions[a.columnName]?.order ?? Infinity;
+          const ob = fieldsDecisions[b.name]?.order ?? fieldsDecisions[b.columnName]?.order ?? Infinity;
+          return oa - ob;
+        })
+      : curatedFields;
+
     const entity = {
       name: simplifiedName,
       tableName: rawEntity.tableName,
       tabId: rawEntity.tabId,
       tabName: rawEntity.tabName,
-      fields: curatedFields,
+      fields: orderedFields,
     };
 
     // Propagate javaQualifier from decisions (e.g., FactAcctHandler for Accounting tabs)
@@ -464,6 +493,10 @@ export async function resolveCurated(schemaRaw, rulesRaw, decisions) {
         processValue: entityDecision.draftMode.processValue || 'CO',
         label: entityDecision.draftMode.label || 'Process',
       };
+    }
+
+    if (entityDecision.formCols != null) {
+      entity.formCols = entityDecision.formCols;
     }
 
     curatedEntities.push(entity);
@@ -487,6 +520,9 @@ export async function resolveCurated(schemaRaw, rulesRaw, decisions) {
   if (windowDecisions.layoutType) {
     schema.window.layoutType = windowDecisions.layoutType;
   }
+  if (windowDecisions.sidebarLayout) {
+    schema.window.sidebarLayout = windowDecisions.sidebarLayout;
+  }
   if (windowDecisions.templateConfig) {
     schema.window.templateConfig = windowDecisions.templateConfig;
   }
@@ -503,11 +539,20 @@ export async function resolveCurated(schemaRaw, rulesRaw, decisions) {
   if (windowDecisions.hideDeleteWhenComplete) {
     schema.window.hideDeleteWhenComplete = true;
   }
+  if (windowDecisions.hidePrint) {
+    schema.window.hidePrint = true;
+  }
+  if (windowDecisions.breadcrumb !== undefined) {
+    schema.window.breadcrumb = windowDecisions.breadcrumb;
+  }
   if (windowDecisions.customComponents) {
     schema.window.customComponents = windowDecisions.customComponents;
   }
   if (windowDecisions.menuActions) {
     schema.window.menuActions = windowDecisions.menuActions;
+  }
+  if (windowDecisions.processOverrides) {
+    schema.window.processOverrides = windowDecisions.processOverrides;
   }
   // Forward secondary tab config and label overrides from decisions
   if (windowDecisions.entityLabel) {
@@ -522,16 +567,42 @@ export async function resolveCurated(schemaRaw, rulesRaw, decisions) {
   if (windowDecisions.secondaryTabs) {
     schema.window.secondaryTabs = windowDecisions.secondaryTabs;
   }
-  if (windowDecisions.detailEntity) {
+  if ('detailEntity' in windowDecisions) {
     schema.window.detailEntity = windowDecisions.detailEntity;
   }
   if (windowDecisions.statusBar) {
     schema.window.statusBar = windowDecisions.statusBar;
   }
+  if (windowDecisions.statusField) {
+    schema.window.statusField = windowDecisions.statusField;
+  }
+  if (Array.isArray(windowDecisions.summaryFields)) {
+    schema.window.summaryFields = windowDecisions.summaryFields;
+  }
   if (windowDecisions.detailSortBy) {
     schema.window.detailSortBy = windowDecisions.detailSortBy;
   }
-
+  if (windowDecisions.salesTheme != null) {
+    schema.window.salesTheme = windowDecisions.salesTheme;
+  }
+  if (windowDecisions.listKpiCards) {
+    schema.window.listKpiCards = windowDecisions.listKpiCards;
+  }
+  if (windowDecisions.headerExtra) {
+    schema.window.headerExtra = windowDecisions.headerExtra;
+  }
+  if (windowDecisions.labelOverrides) {
+    schema.window.labelOverrides = windowDecisions.labelOverrides;
+  }
+  if (windowDecisions.primaryTabs) {
+    schema.window.primaryTabs = windowDecisions.primaryTabs;
+  }
+  if (windowDecisions.othersLabel) {
+    schema.window.othersLabel = windowDecisions.othersLabel;
+  }
+  if (windowDecisions.disableProcessedLock) {
+    schema.window.disableProcessedLock = true;
+  }
   const rules = resolveRules(rulesRaw, decisions);
 
   return { schema, rules };

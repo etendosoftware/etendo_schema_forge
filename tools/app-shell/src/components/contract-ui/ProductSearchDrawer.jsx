@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, X, Loader2 } from 'lucide-react';
+import { Search, X, Loader2, Check } from 'lucide-react';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 
 const PAGE_SIZE = 30;
@@ -63,10 +63,13 @@ export default function ProductSearchDrawer({
   open,
   onClose,
   onSelect,
+  onDeselect,
   selectorUrl,
   token,
   title = 'Search Product',
   imageEntityUrl,
+  keepOpenOnSelect = false,
+  selectedIds = [],
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
@@ -79,6 +82,7 @@ export default function ProductSearchDrawer({
   const [imageMap, setImageMap] = useState({});
   const inputRef = useRef(null);
   const listRef = useRef(null);
+  const activeItemRef = useRef(null);
   const fetchTimer = useRef(null);
   const abortRef = useRef(null);
   // Tracks the raw server-side offset (total rows consumed), independent of dedup count.
@@ -89,7 +93,7 @@ export default function ProductSearchDrawer({
   const resolvedImageUrl = imageEntityUrl || (neoBaseUrl ? `${neoBaseUrl}/product/product` : null);
   const fetchAllImages = useCallback(() => {
     if (!resolvedImageUrl || !token) return;
-    fetch(`${resolvedImageUrl}?_limit=500`, {
+    fetch(`${resolvedImageUrl}?_startRow=0&_endRow=500`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     })
       .then(r => r.ok ? r.json() : null)
@@ -97,7 +101,10 @@ export default function ProductSearchDrawer({
         const rows = data?.response?.data || [];
         const map = {};
         for (const row of rows) {
-          if (row.searchKey && row.image) map[row.searchKey] = row.image;
+          if (row.image) {
+            if (row.searchKey) map[row.searchKey] = row.image;
+            if (row.id) map[row.id] = row.image;
+          }
         }
         setImageMap(map);
       })
@@ -128,15 +135,22 @@ export default function ProductSearchDrawer({
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           const raw = data?.items || [];
-          const seenKeys = new Set();
-          const items = raw.filter(item => {
-            // Deduplicate by searchKey (product code) — selectors may return one row per
-            // attribute set instance, all sharing the same product code.
+          // Deduplicate by searchKey (product code) — prefer warehouse-specific rows (with
+          // actual stock data) over generic rows (warehouse: null, _QTY: "0").
+          const seenKeys = new Map(); // key → index in items array
+          const items = [];
+          for (const item of raw) {
             const key = item.searchKey || item.id;
-            if (seenKeys.has(key)) return false;
-            seenKeys.add(key);
-            return true;
-          });
+            if (seenKeys.has(key)) {
+              const idx = seenKeys.get(key);
+              if (!items[idx].warehouse && item.warehouse) {
+                items[idx] = item; // Replace generic row with warehouse-specific row
+              }
+            } else {
+              seenKeys.set(key, items.length);
+              items.push(item);
+            }
+          }
           // Advance the raw server offset so scroll-based pagination is correct even after dedup.
           rawOffsetRef.current = offset + raw.length;
           if (append) {
@@ -187,6 +201,20 @@ export default function ProductSearchDrawer({
     if (abortRef.current) abortRef.current.abort();
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, onClose]);
+
+  // Scroll active item into view when navigating with arrow keys.
+  useEffect(() => {
+    if (activeIdx >= 0 && activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeIdx]);
+
   // Infinite scroll — uses rawOffsetRef so offset is correct even after dedup shrinks visible count.
   const handleScroll = useCallback(() => {
     const el = listRef.current;
@@ -197,14 +225,23 @@ export default function ProductSearchDrawer({
   }, [loadingMore, hasMore, query, doFetch]);
 
   const handleSelect = (item) => {
+    const alreadySelected = selectedIds.includes(item.id);
+    if (alreadySelected) {
+      setSelectedId(null);
+      onSelect(item);
+      return;
+    }
     setSelectedId(item.id);
-    setTimeout(() => { onSelect(item); onClose(); }, 120);
+    setTimeout(() => {
+      onSelect(item);
+      if (!keepOpenOnSelect) onClose();
+    }, 120);
   };
 
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-    if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(prev => Math.min(prev + 1, results.length - 1)); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(prev => Math.max(prev - 1, 0)); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); inputRef.current?.focus(); setActiveIdx(prev => Math.min(prev + 1, results.length - 1)); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); inputRef.current?.focus(); setActiveIdx(prev => Math.max(prev - 1, 0)); }
     if (e.key === 'Enter' && activeIdx >= 0 && results[activeIdx]) { e.preventDefault(); handleSelect(results[activeIdx]); }
   };
 
@@ -224,9 +261,11 @@ export default function ProductSearchDrawer({
     <>
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
 
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]">
+      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose}>
         <div
           className="w-full max-w-xl bg-background rounded-xl border border-border shadow-2xl flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={handleKeyDown}
           style={{ maxHeight: '65vh' }}
           role="dialog"
           aria-modal="true"
@@ -239,7 +278,6 @@ export default function ProductSearchDrawer({
               type="text"
               value={query}
               onChange={(e) => { setQuery(e.target.value); doFetch(e.target.value, 0); }}
-              onKeyDown={handleKeyDown}
               placeholder={`${title}...`}
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
             />
@@ -271,26 +309,29 @@ export default function ProductSearchDrawer({
                   const price = getPrice(item);
                   const image = getImage(item);
                   const isActive = i === activeIdx;
-                  const isSelected = selectedId === item.id;
+                  const isSelected = selectedId === item.id || selectedIds.includes(item.id);
 
                   return (
-                    <li key={item.id}>
+                    <li key={item.id} ref={isActive ? activeItemRef : null}>
                       <button
                         type="button"
                         onClick={() => handleSelect(item)}
-                        className={`w-full text-left px-4 py-2 transition-colors cursor-pointer flex items-center gap-3 ${
-                          isSelected ? 'bg-primary/10'
-                          : isActive ? 'bg-muted'
-                          : 'hover:bg-muted/50'
+                        className={`w-full text-left px-4 py-2 transition-colors cursor-pointer flex items-center gap-3 border-l-2 ${
+                          isActive
+                            ? `border-primary ${isSelected ? 'bg-primary/20' : 'bg-primary/10'}`
+                            : `border-transparent ${isSelected ? 'bg-primary/10' : 'hover:bg-muted/50'}`
                         }`}
                       >
-                        <Avatar name={name} id={item.id} imageUrl={image} imageId={getImageId(item) || imageMap[item.searchKey]} neoBaseUrl={neoBaseUrl} token={token} />
+                        <Avatar name={name} id={item.id} imageUrl={image} imageId={getImageId(item) || imageMap[item.searchKey] || imageMap[item.id]} neoBaseUrl={neoBaseUrl} token={token} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{name}</p>
                           {code && <p className="text-xs text-muted-foreground">{code}</p>}
                         </div>
                         {price && (
                           <span className="text-sm tabular-nums text-muted-foreground shrink-0">{price}</span>
+                        )}
+                        {isSelected && (
+                          <Check className="h-4 w-4 text-primary shrink-0" />
                         )}
                       </button>
                     </li>
@@ -308,7 +349,7 @@ export default function ProductSearchDrawer({
           {/* Footer */}
           {results.length > 0 && (
             <div className="px-4 py-1.5 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-              <span>{results.length}{totalCount > results.length ? ` of ${totalCount}` : ''} product{totalCount !== 1 ? 's' : ''}</span>
+              <span>{results.length} product{results.length !== 1 ? 's' : ''}</span>
               <span className="flex items-center gap-2">
                 <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">↑↓</kbd> navigate
                 <kbd className="px-1 py-0.5 rounded bg-muted border border-border text-[10px]">↵</kbd> select

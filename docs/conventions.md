@@ -128,6 +128,38 @@ A field can be `visibility: system` with `derivation.type: fromParent` (not comp
 { "name": "lineNetAmt", "visibility": "readOnly", "derivation": { "type": "computed", "formula": "qty * price" } }
 ```
 
+## 14. Callout aux-value hook pattern in generated forms
+
+When a callout returns aux fields (e.g., `SL_Inventory_Product` returning `_QTY` and `_UOM`), the
+generated form must translate them to actual form fields via a custom component (see `docs/ui-customization.md`).
+
+**Selector item field convention:**
+- `_aux._UOM` / `_aux._QTY` — raw values (IDs). Fired as `product_UOM`, `product_QTY`.
+- Top-level `item.uOM` — display name (e.g., `"Unit"`). Fired as `product_uOM` (camelCase suffix).
+
+The `_` prefix (all-caps) vs lowercase distinction is significant: all-caps = ID, lowercase = display name.
+
+**Standard hook template** (inside a custom component):
+
+```jsx
+const _rawOnChange = props.onChange;
+// eslint-disable-next-line no-param-reassign
+props = { ...props, onChange: (key, val, col) => {
+  _rawOnChange?.(key, val, col);
+  // Map _aux values → form fields
+  if (key === 'product_QTY') _rawOnChange?.('bookQuantity', val);       // ID value from _aux
+  else if (key === 'product_UOM') _rawOnChange?.('uOM', val);           // ID value from _aux
+  // Map top-level display name → identifier for display without catalog lookup
+  else if (key === 'product_uOM' || key === 'productuOM') _rawOnChange?.('uOM$_identifier', val);
+} };
+```
+
+**Why `$_identifier`?** FK fields use two slots: `fieldName` (the DB ID) and `fieldName$_identifier`
+(the display string). If only the ID is set and the catalog is empty, the UI shows the raw ID.
+Capturing the display name from the selector item's top-level field avoids this.
+
+**Why this is preserved on regeneration:** The hook lives in a custom component under `windows/custom/{window}/` which is never overwritten by the pipeline. The generated `*Page.jsx` imports it via a `decisions.json` config key (see `docs/ui-customization.md`).
+
 ## 13. Unique constraints naming
 
 Include both Java field names and DB column names.

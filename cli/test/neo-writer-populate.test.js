@@ -42,12 +42,12 @@ function createMockClient(data) {
       return { rows: spec ? [spec] : [] };
     }
 
-    // SELECT existing entities for spec
-    if (s.includes('SELECT etgo_sf_entity_id, ad_tab_id FROM etgo_sf_entity WHERE etgo_sf_spec_id')) {
+    // SELECT existing entities for spec (may include name column)
+    if (s.includes('etgo_sf_entity_id, ad_tab_id') && s.includes('FROM etgo_sf_entity WHERE etgo_sf_spec_id')) {
       const rows = [];
       for (const [id, ent] of store.entities) {
         if (ent.etgo_sf_spec_id === params[0]) {
-          rows.push({ etgo_sf_entity_id: id, ad_tab_id: ent.ad_tab_id });
+          rows.push({ etgo_sf_entity_id: id, ad_tab_id: ent.ad_tab_id, name: ent.name });
         }
       }
       return { rows };

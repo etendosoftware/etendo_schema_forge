@@ -2,7 +2,7 @@ import { DataTable } from '@/components/contract-ui';
 
 // @sf-generated-start columns:reversedInvoices
 const columns = [
-  { key: 'reversedInvoice', column: 'Reversed_C_Invoice_ID', type: 'string' },
+  { key: 'reversedInvoice', column: 'Reversed_C_Invoice_ID', type: 'string', label: 'Reversed Invoice' },
 ];
 // @sf-generated-end columns:reversedInvoices
 

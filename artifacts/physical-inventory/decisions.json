@@ -2,18 +2,18 @@
   "$schema": "decisions-v2",
   "window": {
     "category": "warehouse",
-    "name": "Physical Inventory"
+    "name": "Physical Inventory",
+    "statusField": "processed",
+    "processOverrides": {
+      "processNow": {
+        "requiresLines": true
+      }
+    }
   },
   "entities": {
     "header": {
       "name": "inventory",
       "fields": {
-        "documentNo": {
-          "visibility": "readOnly",
-          "grid": true,
-          "searchable": true,
-          "readOnlyLogic": null
-        },
         "warehouse": {
           "grid": true,
           "searchable": true,
@@ -33,17 +33,27 @@
           "grid": true
         },
         "description": {
-          "readOnlyLogic": null
-        },
-        "docStatus": {
-          "visibility": "readOnly",
-          "grid": true,
-          "searchable": true
+          "readOnlyLogic": null,
+          "section": "other"
         },
         "processed": {
           "visibility": "readOnly",
-          "grid": false,
-          "form": false
+          "label": "Status",
+          "grid": true,
+          "form": false,
+          "columnType": "status"
+        },
+        "project": {
+          "section": "other"
+        },
+        "processNow": {
+          "visibility": "editable"
+        },
+        "generateList": {
+          "visibility": "discarded"
+        },
+        "updateQuantities": {
+          "visibility": "discarded"
         },
         "asset": {
           "visibility": "discarded"
@@ -56,16 +66,13 @@
     "lines": {
       "name": "inventoryLine",
       "fields": {
-        "locator": {
-          "inputMode": "selector",
-          "dependsOn": {
-            "field": "warehouse",
-            "filterKey": "M_Warehouse_ID"
-          },
+        "storageBin": {
+          "form": false,
           "readOnlyLogic": null
         },
         "product": {
           "grid": true,
+          "lookup": true,
           "readOnlyLogic": null
         },
         "lineNo": {
@@ -161,9 +168,9 @@
     "PROCESS_ProcessInventoryCount": {
       "type": "process",
       "entity": "inventory",
-      "decision": "Omit",
-      "description": "Process Inventory Count classic button (Processing). Classic process — not applicable to simplified UI.",
-      "impactIfOmitted": "Inventory count processed through backend/workflow."
+      "decision": "Keep",
+      "description": "Process Inventory Count classic button (Processing). Confirms and posts the inventory count.",
+      "impactIfOmitted": "Users cannot confirm inventory counts from the UI."
     },
     "PROCESS_CreateInventoryCountList": {
       "type": "process",

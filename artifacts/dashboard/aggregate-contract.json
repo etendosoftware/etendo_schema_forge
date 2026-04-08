@@ -51,10 +51,9 @@
     ]
   },
   "actions": [
-    { "label": "+ Invoice", "route": "/sales-invoice", "icon": "FileText" },
-    { "label": "+ Order", "route": "/sales-order", "icon": "ShoppingCart" },
-    { "label": "+ Contact", "route": "/contacts", "icon": "Users" },
-    { "label": "+ Product", "route": "/product", "icon": "Box" }
+    { "label": "+ Invoice",  "route": "/sales-invoice", "icon": "FileText"     },
+    { "label": "+ Order",   "route": "/sales-order",   "icon": "ShoppingCart" },
+    { "label": "+ Contact", "route": "/contacts",      "icon": "Users"        }
   ],
   "mockData": {
     "kpi-revenue":  { "value": 48250, "trend": 12.5, "previousValue": 42889 },

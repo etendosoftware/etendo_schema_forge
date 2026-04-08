@@ -89,16 +89,16 @@ function printNextSteps({ pushToNeoRan, frontendGenerated }) {
   console.log('Next steps:');
 
   if (pushToNeoRan && frontendGenerated) {
-    console.log('  → Deploy UI, rebuild, and export config in one step:');
-    console.log('    make deploy');
+    console.log('  → UI is deployed in the separate container now; legacy copy flow only if needed:');
+    console.log('    make deploy LEGACY_DEPLOY=1');
     console.log('    cd <etendo_root> && ./gradlew smartbuild export.database --info');
     console.log('  → Restart Tomcat (if not using Docker — Docker auto-restarts after a few seconds)');
   } else if (pushToNeoRan) {
     console.log('  → Run export.database to persist NEO config to XML sourcedata:');
     console.log('    cd <etendo_root> && ./gradlew export.database --info');
   } else if (frontendGenerated) {
-    console.log('  → Deploy the UI and rebuild:');
-    console.log('    make deploy');
+    console.log('  → UI is deployed in the separate container now; legacy copy flow only if needed:');
+    console.log('    make deploy LEGACY_DEPLOY=1');
     console.log('    cd <etendo_root> && ./gradlew smartbuild --info');
     console.log('  → Restart Tomcat (if not using Docker — Docker auto-restarts after a few seconds)');
   }
@@ -403,14 +403,25 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
           const rules = pipelineContext.rules || [];
           const processes = JSON.parse(await readFile(processesPath, 'utf8'));
 
-          const contract = generateContract(schema, Array.isArray(rules) ? rules : rules.rules || [], processes.processes || []);
-          // Snapshot current contract as prev for version diffing
+          // Read existing version before overwriting, so the new contract preserves it
+          // and check-version can bump from the correct baseline.
+          let prevVersion = null;
           try {
-            const existingContract = await readFile(`artifacts/${windowName}/contract.json`, 'utf-8');
-            await writeFile(`artifacts/${windowName}/contract.prev.json`, existingContract, 'utf-8');
+            const existingRaw = await readFile(`artifacts/${windowName}/contract.json`, 'utf-8');
+            const existingContract = JSON.parse(existingRaw);
+            // Guard: version may be a nested object if a previous run had a bug.
+            // Drill down until we reach a string.
+            let rawVersion = existingContract.version ?? null;
+            while (rawVersion !== null && typeof rawVersion === 'object') {
+              rawVersion = rawVersion.version ?? null;
+            }
+            prevVersion = rawVersion;
+            // Snapshot for version diffing
+            await writeFile(`artifacts/${windowName}/contract.prev.json`, existingRaw, 'utf-8');
           } catch {
             // No existing contract — first generation, no prev needed
           }
+          const contract = generateContract(schema, Array.isArray(rules) ? rules : rules.rules || [], processes.processes || [], prevVersion);
           await writeFile(`artifacts/${windowName}/contract.json`, JSON.stringify(contract, null, 2));
           console.log(`  ✓ Contract generated (${contract.testManifest.summary.total} tests)`);
           // Version check
@@ -463,7 +474,6 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
         }
         case 'generate-frontend': {
           const { generateAll } = await import('./generate-frontend.js');
-          const { preserveAndRegenerate } = await import('./preserve-custom-sections.js');
           const { readFile, writeFile, mkdir, access } = await import('node:fs/promises');
           const { resolve: resolvePath, dirname: dirnamePath } = await import('node:path');
           const { fileURLToPath: fileURLToPathMod } = await import('node:url');
@@ -528,26 +538,11 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
           const outDir = `artifacts/${windowName}/generated/web/${windowName}`;
           await mkdir(outDir, { recursive: true });
 
-          let totalPreserved = 0;
-          let totalUnmatched = 0;
-
           for (const [filename, code] of Object.entries(files)) {
             // Skip internal marker keys
             if (filename.startsWith('__')) continue;
             const filePath = resolvePath(outDir, filename);
-
-            // Read existing content BEFORE overwriting (for .old backup)
-            const existingContent = await readFile(filePath, 'utf8').catch(() => null);
-
-            const { content, preserved, unmatched } = preserveAndRegenerate(filePath, code);
-            await writeFile(filePath, content, 'utf8');
-            totalPreserved += preserved.length;
-            totalUnmatched += unmatched.length;
-
-            // Save .old backup from the pre-overwrite content
-            if (unmatched.length > 0 && existingContent) {
-              await writeFile(`${filePath}.old`, existingContent, 'utf8');
-            }
+            await writeFile(filePath, code, 'utf8');
           }
 
           // Generate mockData.js (entity record data for local development)
@@ -555,15 +550,7 @@ async function runWindowPipeline({ windowId, windowName, skipTo, skipInteractive
           const mockDataPath = resolvePath(outDir, 'mockData.js');
           await writeFile(mockDataPath, generateMockDataFile(contract), 'utf8');
 
-          let summary = `  ✓ ${Object.keys(files).filter(k => !k.startsWith('__')).length} frontend components generated`;
-          if (totalPreserved > 0 || totalUnmatched > 0) {
-            summary += ` (preserved ${totalPreserved} custom sections`;
-            if (totalUnmatched > 0) {
-              summary += `, ${totalUnmatched} unmatched (saved to .old)`;
-            }
-            summary += ')';
-          }
-          console.log(summary);
+          console.log(`  ✓ ${Object.keys(files).filter(k => !k.startsWith('__')).length} frontend components generated`);
 
           // Scaffold customForm stubs for secondary tabs that declare a custom form
           const secondaryTabsDecl = contract.frontendContract?.window?.secondaryTabs;

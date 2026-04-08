@@ -1,0 +1,387 @@
+{
+  "$schema": "decisions-v1",
+  "window": {
+    "category": "purchases",
+    "name": "Payment Out"
+  },
+  "entities": {
+    "finPayment": {
+      "fields": {
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 10,
+          "readOnlyLogic": null
+        },
+        "businessPartner": {
+          "grid": true,
+          "searchable": true,
+          "reference": "BusinessPartner",
+          "section": "principal",
+          "seq": 20,
+          "readOnlyLogic": null
+        },
+        "account": {
+          "reference": "FinancialAccount",
+          "section": "principal",
+          "seq": 30,
+          "readOnlyLogic": null
+        },
+        "paymentDate": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 40,
+          "readOnlyLogic": null
+        },
+        "paymentMethod": {
+          "reference": "PaymentMethod",
+          "section": "principal",
+          "seq": 50,
+          "readOnlyLogic": null
+        },
+        "currency": {
+          "visibility": "editable",
+          "section": "principal",
+          "seq": 60,
+          "readOnlyLogic": null
+        },
+        "referenceNo": {
+          "searchable": true,
+          "section": "collapsed",
+          "seq": 70,
+          "readOnlyLogic": null
+        },
+        "description": {
+          "section": "collapsed",
+          "seq": 80,
+          "readOnlyLogic": null
+        },
+        "documentType": {
+          "visibility": "editable",
+          "form": false,
+          "section": "principal",
+          "reference": "DocumentType",
+          "readOnlyLogic": null
+        },
+        "financialTransactionAmount": {
+          "visibility": "editable",
+          "form": false,
+          "section": "other",
+          "readOnlyLogic": null
+        },
+        "financialTransactionConvertRate": {
+          "visibility": "editable",
+          "form": false,
+          "section": "other",
+          "readOnlyLogic": null
+        },
+        "generatedCredit": {
+          "visibility": "editable",
+          "form": false,
+          "section": "other",
+          "readOnlyLogic": null
+        },
+        "amount": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "section": "principal"
+        },
+        "status": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "form": false,
+          "section": "principal"
+        },
+        "usedCredit": {
+          "visibility": "readOnly",
+          "form": false,
+          "section": "other"
+        },
+        "writeoffAmount": {
+          "visibility": "readOnly",
+          "form": false,
+          "section": "other"
+        },
+        "reversedPayment": {
+          "visibility": "readOnly",
+          "form": false,
+          "section": "other",
+          "reference": "Payment",
+          "inputMode": "selector"
+        },
+        "project": {
+          "form": false,
+          "section": "other",
+          "readOnlyLogic": null
+        },
+        "costCenter": {
+          "reference": "CostCenter",
+          "form": false,
+          "section": "other",
+          "readOnlyLogic": null
+        },
+        "stDimension": {
+          "reference": "UserDimension1",
+          "form": false,
+          "section": "other",
+          "readOnlyLogic": null
+        },
+        "ndDimension": {
+          "reference": "UserDimension2",
+          "form": false,
+          "section": "other",
+          "readOnlyLogic": null
+        },
+        "aPRMProcessPayment": {
+          "visibility": "editable",
+          "form": false,
+          "section": "other"
+        },
+        "aprmExecutepayment": {
+          "visibility": "editable",
+          "form": false,
+          "section": "other"
+        },
+        "aPRMAddScheduledpayments": {
+          "visibility": "editable",
+          "form": false,
+          "section": "other"
+        }
+      }
+    },
+    "finPaymentScheduleDetail": {
+      "name": "lines",
+      "fields": {
+        "dueDate": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "principal",
+          "seq": 10
+        },
+        "amount": {
+          "grid": true,
+          "section": "principal",
+          "seq": 20,
+          "readOnlyLogic": null
+        },
+        "expected": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "principal",
+          "seq": 30
+        },
+        "invoicePaymentSchedule": {
+          "section": "principal",
+          "seq": 40,
+          "readOnlyLogic": null
+        },
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "name": "orderNo"
+        },
+        "documentNo2": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "name": "invoiceNo"
+        },
+        "invoiceAmount": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "orderPaymentSchedule": {
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "gLItem": {
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "canceled": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "businessPartner": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "reference": "BusinessPartner"
+        },
+        "activity": {
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "product": {
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "salesCampaign": {
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "project": {
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "salesRegion": {
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "costCenter": {
+          "reference": "CostCenter",
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "stDimension": {
+          "reference": "UserDimension1",
+          "form": false,
+          "readOnlyLogic": null
+        },
+        "ndDimension": {
+          "reference": "UserDimension2",
+          "form": false,
+          "readOnlyLogic": null
+        }
+      }
+    },
+    "finPaymentExecHistoryV": {
+      "name": "executionHistory",
+      "fields": {
+        "executionDate": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "paymentRunStatus": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "paymentExecutionResult": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "paymentExecutionMessage": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "paymentRun": {
+          "visibility": "readOnly"
+        },
+        "sourceOfTheExecution": {
+          "visibility": "readOnly"
+        },
+        "paymentRunMessage": {
+          "visibility": "readOnly"
+        }
+      }
+    },
+    "cConversionRateDocument": {
+      "name": "exchangeRates",
+      "fields": {
+        "currency": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "toCurrency": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "rate": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "foreignAmount": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "active": {
+          "visibility": "editable"
+        }
+      }
+    },
+    "finPaymentCredit": {
+      "name": "usedCreditSource",
+      "fields": {
+        "creditPaymentUsed": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "amount": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "currency": {
+          "grid": true,
+          "readOnlyLogic": null
+        }
+      }
+    },
+    "factAcct": {
+      "name": "accounting",
+      "fields": {
+        "accountingDate": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "account": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "debit": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "credit": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "period": {
+          "visibility": "readOnly",
+          "grid": true
+        },
+        "accountingSchema": {
+          "visibility": "readOnly"
+        },
+        "currency": {
+          "visibility": "readOnly"
+        },
+        "description": {
+          "visibility": "readOnly"
+        },
+        "businessPartner": {
+          "visibility": "readOnly"
+        },
+        "product": {
+          "visibility": "readOnly"
+        },
+        "project": {
+          "visibility": "readOnly"
+        },
+        "costcenter": {
+          "visibility": "readOnly"
+        },
+        "asset": {
+          "visibility": "readOnly"
+        },
+        "stDimension": {
+          "visibility": "readOnly"
+        },
+        "ndDimension": {
+          "visibility": "readOnly"
+        }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": [
+    "EM_APRM_ReversePayment",
+    "EM_APRM_Reconcile_Payment",
+    "CreatedByAlgorithm"
+  ]
+}

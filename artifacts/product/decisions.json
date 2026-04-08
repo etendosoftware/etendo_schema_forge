@@ -1,12 +1,22 @@
 {
-  "$schema": "decisions-v1",
+  "$schema": "decisions-v2",
   "window": {
     "category": "reference",
     "name": "Product",
-    "layoutType": "gallery"
+    "layoutType": "gallery",
+    "sidebarLayout": true,
+    "detailEntity": null,
+    "headerExtra": {
+      "customForm": "ProductPriceBar"
+    },
+    "primaryTabs": [
+      { "key": "general", "label": "General" },
+      { "key": "additionalInfo", "label": "Additional Info", "panel": "ProductAdditionalInfoPanel" }
+    ],
+    "secondaryTabs": {}
   },
   "entities": {
-    "mProduct": {
+    "product": {
       "fields": {
         "searchKey": {
           "grid": true,
@@ -21,6 +31,7 @@
           "seq": 2
         },
         "description": {
+          "type": "textarea",
           "section": "principal",
           "seq": 3
         },
@@ -41,6 +52,7 @@
           "seq": 5
         },
         "uOM": {
+          "grid": true,
           "section": "principal",
           "seq": 6
         },
@@ -65,12 +77,12 @@
           "displayLogic": null
         },
         "sale": {
-          "grid": true,
+          "grid": false,
           "section": "other",
           "displayLogic": null
         },
         "purchase": {
-          "grid": true,
+          "grid": false,
           "section": "other",
           "displayLogic": null
         },
@@ -90,10 +102,18 @@
         "characteristicDescription": {
           "visibility": "discarded"
         },
-        "manageVariants": { "visibility": "discarded" },
-        "isGeneric": { "visibility": "discarded" },
-        "genericProduct": { "visibility": "discarded" },
-        "billOfMaterials": { "visibility": "discarded" },
+        "manageVariants": {
+          "visibility": "discarded"
+        },
+        "isGeneric": {
+          "visibility": "discarded"
+        },
+        "genericProduct": {
+          "visibility": "discarded"
+        },
+        "billOfMaterials": {
+          "visibility": "discarded"
+        },
         "weight": {
           "visibility": "editable",
           "section": "other"
@@ -104,38 +124,96 @@
           "reference": "UOM",
           "inputMode": "selector"
         },
-        "useAttributeSetValueAs": { "visibility": "discarded" },
-        "attributeSetValue": { "visibility": "discarded" },
-        "production": { "visibility": "discarded" },
-        "processPlan": { "visibility": "discarded" },
-        "overdueReturnDays": { "visibility": "discarded" },
-        "deferredRevenue": { "visibility": "discarded" },
-        "isdeferredexpense": { "visibility": "discarded" },
-        "bookUsingPurchaseOrderPrice": { "visibility": "discarded" },
-        "revenuePlanType": { "visibility": "discarded" },
-        "periodNumber": { "visibility": "discarded" },
-        "defaultPeriod": { "visibility": "discarded" },
-        "expplantype": { "visibility": "discarded" },
-        "periodnumberExp": { "visibility": "discarded" },
-        "defaultPeriodExpense": { "visibility": "discarded" },
-        "createVariants": { "visibility": "discarded" },
-        "updateInvariants": { "visibility": "discarded" },
-        "linkedToProduct": { "visibility": "discarded" },
-        "includedProductCategories": { "visibility": "discarded" },
-        "includedProducts": { "visibility": "discarded" },
-        "ispricerulebased": { "visibility": "discarded" },
-        "quantityRule": { "visibility": "discarded" },
-        "printDescription": { "visibility": "discarded" },
-        "modifyTax": { "visibility": "discarded" },
-        "relateprodcattoservice": { "visibility": "discarded" },
-        "relateprodtoservice": { "visibility": "discarded" },
-        "allowDeferredSell": { "visibility": "discarded" },
-        "deferredSellMaxDays": { "visibility": "discarded" },
-        "relateprodcattaxtoservice": { "visibility": "discarded" },
-        "copyservicemodifytaxconfig": { "visibility": "discarded" }
+        "useAttributeSetValueAs": {
+          "visibility": "discarded"
+        },
+        "attributeSetValue": {
+          "visibility": "discarded"
+        },
+        "production": {
+          "visibility": "discarded"
+        },
+        "processPlan": {
+          "visibility": "discarded"
+        },
+        "overdueReturnDays": {
+          "visibility": "discarded"
+        },
+        "deferredRevenue": {
+          "visibility": "discarded"
+        },
+        "isdeferredexpense": {
+          "visibility": "discarded"
+        },
+        "bookUsingPurchaseOrderPrice": {
+          "visibility": "discarded"
+        },
+        "revenuePlanType": {
+          "visibility": "discarded"
+        },
+        "periodNumber": {
+          "visibility": "discarded"
+        },
+        "defaultPeriod": {
+          "visibility": "discarded"
+        },
+        "expplantype": {
+          "visibility": "discarded"
+        },
+        "periodnumberExp": {
+          "visibility": "discarded"
+        },
+        "defaultPeriodExpense": {
+          "visibility": "discarded"
+        },
+        "createVariants": {
+          "visibility": "discarded"
+        },
+        "updateInvariants": {
+          "visibility": "discarded"
+        },
+        "linkedToProduct": {
+          "visibility": "discarded"
+        },
+        "includedProductCategories": {
+          "visibility": "discarded"
+        },
+        "includedProducts": {
+          "visibility": "discarded"
+        },
+        "ispricerulebased": {
+          "visibility": "discarded"
+        },
+        "quantityRule": {
+          "visibility": "discarded"
+        },
+        "printDescription": {
+          "visibility": "discarded"
+        },
+        "modifyTax": {
+          "visibility": "discarded"
+        },
+        "relateprodcattoservice": {
+          "visibility": "discarded"
+        },
+        "relateprodtoservice": {
+          "visibility": "discarded"
+        },
+        "allowDeferredSell": {
+          "visibility": "discarded"
+        },
+        "deferredSellMaxDays": {
+          "visibility": "discarded"
+        },
+        "relateprodcattaxtoservice": {
+          "visibility": "discarded"
+        },
+        "copyservicemodifytaxconfig": {
+          "visibility": "discarded"
+        }
       }
     },
-    "mProductPrice": {
+    "price": {
       "fields": {
         "cost": {
           "visibility": "editable",
@@ -155,7 +233,7 @@
         }
       }
     },
-    "mProductBom": {
+    "billOfMaterials": {
       "fields": {
         "lineNo": {
           "grid": true,
@@ -178,10 +256,10 @@
         }
       }
     },
-    "mProductPo": {
+    "purchasing": {
       "exclude": true
     },
-    "mProductCh": {
+    "characteristics": {
       "name": "productCharacteristic",
       "fields": {
         "sequenceNumber": {
@@ -206,7 +284,7 @@
         }
       }
     },
-    "mStorageDetail": {
+    "stock": {
       "fields": {
         "storageBin": {
           "visibility": "readOnly",
@@ -237,7 +315,7 @@
         }
       }
     },
-    "mProductAum": {
+    "alternateUom": {
       "fields": {
         "uOM": {
           "grid": true
@@ -260,16 +338,16 @@
         }
       }
     },
-    "mServicePriceRuleVersion": {
+    "productPriceRuleVersion": {
       "exclude": true
     },
-    "mProductAcct": {
+    "accounting": {
       "exclude": true
     },
-    "mCostingRuleProductV": {
+    "costingRule": {
       "exclude": true
     },
-    "mCosting": {
+    "costing": {
       "fields": {
         "costType": {
           "visibility": "readOnly",
@@ -305,23 +383,39 @@
         "originalCost": {
           "visibility": "readOnly"
         },
-        "inventoryTransaction": { "visibility": "discarded" },
-        "totalMovementQuantity": { "visibility": "discarded" },
-        "price": { "visibility": "discarded" },
-        "manual": { "visibility": "discarded" },
-        "permanent": { "visibility": "discarded" },
-        "totalStockValuation": { "visibility": "discarded" },
-        "production": { "visibility": "discarded" },
-        "active": { "visibility": "discarded" }
+        "inventoryTransaction": {
+          "visibility": "discarded"
+        },
+        "totalMovementQuantity": {
+          "visibility": "discarded"
+        },
+        "price": {
+          "visibility": "discarded"
+        },
+        "manual": {
+          "visibility": "discarded"
+        },
+        "permanent": {
+          "visibility": "discarded"
+        },
+        "totalStockValuation": {
+          "visibility": "discarded"
+        },
+        "production": {
+          "visibility": "discarded"
+        },
+        "active": {
+          "visibility": "discarded"
+        }
       }
     },
-    "mCostingTransactionsHql": {
+    "averageCostTransactions": {
       "exclude": true
     },
-    "mTransactionCost": {
+    "transactionCosts": {
       "exclude": true
     },
-    "mTransaction": {
+    "transactions": {
       "fields": {
         "movementDate": {
           "visibility": "readOnly",
@@ -355,52 +449,97 @@
           "visibility": "readOnly",
           "grid": true
         },
-        "attributeSetValue": { "visibility": "discarded" },
-        "active": { "visibility": "discarded" },
-        "transactionProcessDate": { "visibility": "discarded" },
-        "goodsShipmentLine": { "visibility": "discarded" },
-        "physicalInventoryLine": { "visibility": "discarded" },
-        "movementLine": { "visibility": "discarded" },
-        "productionLine": { "visibility": "discarded" },
-        "projectIssue": { "visibility": "discarded" },
-        "isCostCalculated": { "visibility": "discarded" },
-        "costingStatus": { "visibility": "discarded" },
-        "transactionCost": { "visibility": "discarded" },
-        "unitCost": { "visibility": "discarded" },
-        "isCostPermanent": { "visibility": "discarded" },
-        "cCurrencyID": { "visibility": "discarded" },
-        "isProcessed": { "visibility": "discarded" },
-        "manualcostadjustment": { "visibility": "discarded" },
-        "costingAlgorithm": { "visibility": "discarded" },
-        "checkpricedifference": { "visibility": "discarded" },
-        "checkReservedQuantity": { "visibility": "discarded" },
-        "internalConsumptionLine": { "visibility": "discarded" },
-        "orderUOM": { "visibility": "discarded" },
-        "orderQuantity": { "visibility": "discarded" }
+        "attributeSetValue": {
+          "visibility": "discarded"
+        },
+        "active": {
+          "visibility": "discarded"
+        },
+        "transactionProcessDate": {
+          "visibility": "discarded"
+        },
+        "goodsShipmentLine": {
+          "visibility": "discarded"
+        },
+        "physicalInventoryLine": {
+          "visibility": "discarded"
+        },
+        "movementLine": {
+          "visibility": "discarded"
+        },
+        "productionLine": {
+          "visibility": "discarded"
+        },
+        "projectIssue": {
+          "visibility": "discarded"
+        },
+        "isCostCalculated": {
+          "visibility": "discarded"
+        },
+        "costingStatus": {
+          "visibility": "discarded"
+        },
+        "transactionCost": {
+          "visibility": "discarded"
+        },
+        "unitCost": {
+          "visibility": "discarded"
+        },
+        "isCostPermanent": {
+          "visibility": "discarded"
+        },
+        "cCurrencyID": {
+          "visibility": "discarded"
+        },
+        "isProcessed": {
+          "visibility": "discarded"
+        },
+        "manualcostadjustment": {
+          "visibility": "discarded"
+        },
+        "costingAlgorithm": {
+          "visibility": "discarded"
+        },
+        "checkpricedifference": {
+          "visibility": "discarded"
+        },
+        "checkReservedQuantity": {
+          "visibility": "discarded"
+        },
+        "internalConsumptionLine": {
+          "visibility": "discarded"
+        },
+        "orderUOM": {
+          "visibility": "discarded"
+        },
+        "orderQuantity": {
+          "visibility": "discarded"
+        }
       }
     },
-    "mProductOrg": {
+    "manufacturing": {
       "exclude": true
     },
-    "mProductTrl": {
+    "translation": {
       "exclude": true
     },
-    "mProductChConf": {
+    "characteristicConfiguration": {
       "exclude": true
     },
-    "mStockValuation": {
+    "unitCost": {
       "exclude": true
     },
-    "mProductCategory": {
+    "productCategories": {
       "exclude": true
     },
-    "mProductService": {
+    "products": {
       "exclude": true
     },
-    "mProductServicelinked": {
+    "modifyTaxesCategories": {
       "exclude": true
     }
   },
   "rules": {},
-  "discardPatterns": []
+  "discardPatterns": [],
+  "version": 2
 }

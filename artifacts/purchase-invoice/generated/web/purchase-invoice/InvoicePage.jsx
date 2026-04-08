@@ -11,29 +11,26 @@ import PaymentPlanTable from './PaymentPlanTable';
 import PaymentPlanForm from './PaymentPlanForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
-import ReversedInvoicesTable from './ReversedInvoicesTable';
-import ReversedInvoicesForm from './ReversedInvoicesForm';
 import catalogs from './mockCatalogs';
 
+
 const breadcrumb = 'Purchases / Purchase Invoice';
+
 
 // @sf-generated-start summary:invoice
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'salesOrder', column: 'C_Order_ID', type: 'string' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount' },
-  { key: 'paymentComplete', column: 'Ispaid', type: 'boolean' },
-  { key: 'totalPaid', column: 'Totalpaid', type: 'amount' },
-  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
-  { key: 'orderDate', column: 'DateOrdered', type: 'date' },
-  { key: 'dueAmount', column: 'DueAmt', type: 'amount' },
-  { key: 'withholdingAmount', column: 'Withholdingamount', type: 'amount' },
   { key: 'prepaymentAmount', column: 'Prepaymentamt', type: 'amount' },
 ];
 
 const statusField = 'documentStatus';
 // @sf-generated-end summary:invoice
+
+// @sf-custom-slot extraBadges:invoice
+// @sf-generated-start extraBadges:invoice
+const extraBadges = [];
+// @sf-generated-end extraBadges:invoice
 
 // @sf-generated-start processes:invoice
 const processes = [
@@ -41,26 +38,34 @@ const processes = [
 ];
 // @sf-generated-end processes:invoice
 
+// @sf-generated-start draftMode:invoice
+const draftMode = null;
+// @sf-generated-end draftMode:invoice
+
 // @sf-generated-start addLineFields:invoiceLine
 const addLineFields = {
   entry: [
-    { key: 'lineNo', column: 'Line', type: 'number', required: true, lookup: true },
-    { key: 'product', column: 'M_Product_ID', type: 'search', reference: 'Product', inputMode: 'search' },
-    { key: 'account', column: 'Account_ID', type: 'search', reference: 'GLAccount', inputMode: 'search' },
-    { key: 'operativeQuantity', column: 'Aumqty', type: 'text' },
-    { key: 'operativeUOM', column: 'C_Aum', type: 'selector', reference: 'UOM', inputMode: 'selector' },
-    { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'text', required: true },
-    { key: 'description', column: 'Description', type: 'textarea' },
-    { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID', type: 'text' },
-    { key: 'project', column: 'C_Project_ID', type: 'search', reference: 'Project', inputMode: 'search' },
-    { key: 'asset', column: 'A_Asset_ID', type: 'selector', reference: 'Asset', inputMode: 'selector' },
-    { key: 'stDimension', column: 'User1_ID', type: 'selector', reference: 'UserDimension1', inputMode: 'selector' },
-    { key: 'ndDimension', column: 'User2_ID', type: 'selector', reference: 'UserDimension2', inputMode: 'selector' },
+    { key: 'lineNo', column: 'Line', type: 'number', required: true, label: 'Line No.' },
+    { key: 'product', column: 'M_Product_ID', type: 'search', lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
+    { key: 'account', column: 'Account_ID', type: 'search', label: 'Account', reference: 'GLAccount', inputMode: 'search' },
+    { key: 'operativeQuantity', column: 'Aumqty', type: 'number', label: 'Operative Quantity' },
+    { key: 'operativeUOM', column: 'C_Aum', type: 'selector', label: 'Alternative UOM', reference: 'UOM', inputMode: 'selector' },
+    { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', required: true, label: 'Invoiced Quantity' },
+    { key: 'unitPrice', column: 'PriceActual', type: 'number', required: true, label: 'Net Unit Price' },
+    { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
+    { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', reference: 'Tax', inputMode: 'selector' },
+    { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID', type: 'text', label: 'Attribute Set Value' },
+    { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', reference: 'Project', inputMode: 'search' },
+    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', reference: 'CostCenter', inputMode: 'selector' },
+    { key: 'asset', column: 'A_Asset_ID', type: 'selector', label: 'Asset', reference: 'Asset', inputMode: 'selector' },
+    { key: 'stDimension', column: 'User1_ID', type: 'selector', label: '1st Dimension', reference: 'UserDimension1', inputMode: 'selector' },
+    { key: 'ndDimension', column: 'User2_ID', type: 'selector', label: '2nd Dimension', reference: 'UserDimension2', inputMode: 'selector' },
   ],
   derived: [
-    { key: 'unitPrice', column: 'PriceActual', type: 'text' },
-    { key: 'tax', column: 'C_Tax_ID', type: 'selector', reference: 'Tax', inputMode: 'selector' },
-    { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', reference: 'CostCenter', inputMode: 'selector' },
+
+  ],
+  hidden: [
+
   ],
 };
 // @sf-generated-end addLineFields:invoiceLine
@@ -128,6 +133,17 @@ const api = {
       "delete": true,
       "listUrl": "/sws/neo/purchase-invoice/paymentPlan",
       "detailUrl": "/sws/neo/purchase-invoice/paymentPlan/{id}",
+      "supportedFilters": []
+    },
+    "paymentDetails": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/purchase-invoice/paymentDetails",
+      "detailUrl": "/sws/neo/purchase-invoice/paymentDetails/{id}",
       "supportedFilters": []
     },
     "reversedInvoices": {
@@ -249,38 +265,6 @@ const api = {
       "reference": "Project",
       "inputMode": "search",
       "url": "/sws/neo/purchase-invoice/invoice/selectors/project"
-    },
-    {
-      "entity": "invoice",
-      "field": "costcenter",
-      "column": "C_Costcenter_ID",
-      "reference": "CostCenter",
-      "inputMode": "selector",
-      "url": "/sws/neo/purchase-invoice/invoice/selectors/costcenter"
-    },
-    {
-      "entity": "invoice",
-      "field": "asset",
-      "column": "A_Asset_ID",
-      "reference": "Asset",
-      "inputMode": "selector",
-      "url": "/sws/neo/purchase-invoice/invoice/selectors/asset"
-    },
-    {
-      "entity": "invoice",
-      "field": "stDimension",
-      "column": "User1_ID",
-      "reference": "UserDimension1",
-      "inputMode": "selector",
-      "url": "/sws/neo/purchase-invoice/invoice/selectors/stDimension"
-    },
-    {
-      "entity": "invoice",
-      "field": "ndDimension",
-      "column": "User2_ID",
-      "reference": "UserDimension2",
-      "inputMode": "selector",
-      "url": "/sws/neo/purchase-invoice/invoice/selectors/ndDimension"
     },
     {
       "entity": "invoiceLine",
@@ -411,6 +395,14 @@ const api = {
       "url": "/sws/neo/purchase-invoice/paymentPlan/selectors/currency"
     },
     {
+      "entity": "paymentDetails",
+      "field": "finPaymentID",
+      "column": "Fin_Payment_ID",
+      "reference": "Payment",
+      "inputMode": "selector",
+      "url": "/sws/neo/purchase-invoice/paymentDetails/selectors/finPaymentID"
+    },
+    {
       "entity": "reversedInvoices",
       "field": "reversedInvoice",
       "column": "Reversed_C_Invoice_ID",
@@ -510,13 +502,17 @@ const api = {
       "entity": "invoice",
       "field": "generateTo",
       "column": "GenerateTo",
-      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/generateTo"
+      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/generateTo",
+      "processId": "142",
+      "processType": "classic"
     },
     {
       "entity": "invoice",
       "field": "aPRMAddpayment",
       "column": "EM_APRM_Addpayment",
-      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/aPRMAddpayment"
+      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/aPRMAddpayment",
+      "processId": "9BED7889E1034FE68BD85D5D16857320",
+      "processType": "obuiapp"
     },
     {
       "entity": "invoice",
@@ -528,43 +524,57 @@ const api = {
       "entity": "invoice",
       "field": "aPRMProcessinvoice",
       "column": "EM_APRM_Processinvoice",
-      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/aPRMProcessinvoice"
+      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/aPRMProcessinvoice",
+      "processId": "B54318B49E984B9CB855AEFB1F474CD6",
+      "processType": "classic"
     },
     {
       "entity": "invoice",
       "field": "documentAction",
       "column": "DocAction",
-      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/documentAction"
+      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/documentAction",
+      "processId": "111",
+      "processType": "classic"
     },
     {
       "entity": "invoice",
       "field": "createLinesFromOrder",
       "column": "Createfromorders",
-      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/createLinesFromOrder"
+      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/createLinesFromOrder",
+      "processId": "AB2EFCAABB7B4EC0A9B30CFB82963FB6",
+      "processType": "obuiapp"
     },
     {
       "entity": "invoice",
       "field": "createLinesFromShipment",
       "column": "Createfrominouts",
-      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/createLinesFromShipment"
+      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/createLinesFromShipment",
+      "processId": "7737CA7330FD49FBA7EBC225E85F2BC9",
+      "processType": "obuiapp"
     },
     {
       "entity": "invoice",
       "field": "copyFrom",
       "column": "CopyFrom",
-      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/copyFrom"
+      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/copyFrom",
+      "processId": "210",
+      "processType": "classic"
     },
     {
       "entity": "invoice",
       "field": "calculatePromotions",
       "column": "Calculate_Promotions",
-      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/calculatePromotions"
+      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/calculatePromotions",
+      "processId": "9EB2228A60684C0DBEC12D5CD8D85218",
+      "processType": "classic"
     },
     {
       "entity": "invoice",
       "field": "processNow",
       "column": "Processing",
-      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/processNow"
+      "url": "/sws/neo/purchase-invoice/invoice/{id}/action/processNow",
+      "processId": "111",
+      "processType": "classic"
     },
     {
       "entity": "invoice",
@@ -576,31 +586,41 @@ const api = {
       "entity": "invoiceLine",
       "field": "explode",
       "column": "Explode",
-      "url": "/sws/neo/purchase-invoice/invoiceLine/{id}/action/explode"
+      "url": "/sws/neo/purchase-invoice/invoiceLine/{id}/action/explode",
+      "processId": "6E1ADD5C8B6B4ACB82237DAA8114451E",
+      "processType": "classic"
     },
     {
       "entity": "invoiceLine",
       "field": "matchLCCosts",
       "column": "Match_Lccosts",
-      "url": "/sws/neo/purchase-invoice/invoiceLine/{id}/action/matchLCCosts"
+      "url": "/sws/neo/purchase-invoice/invoiceLine/{id}/action/matchLCCosts",
+      "processId": "281FFDFAB31C4394A2EAA73A6F9F3A3F",
+      "processType": "obuiapp"
     },
     {
       "entity": "paymentPlan",
       "field": "updatePaymentPlan",
       "column": "Update_Payment_Plan",
-      "url": "/sws/neo/purchase-invoice/paymentPlan/{id}/action/updatePaymentPlan"
+      "url": "/sws/neo/purchase-invoice/paymentPlan/{id}/action/updatePaymentPlan",
+      "processId": "FB740AB61B0E42B198D2C88D3A0D0CE6",
+      "processType": "classic"
     },
     {
       "entity": "paymentPlan",
       "field": "aprmModifPaymentOUTPlan",
       "column": "EM_Aprm_Modif_Paym_Out_Sched",
-      "url": "/sws/neo/purchase-invoice/paymentPlan/{id}/action/aprmModifPaymentOUTPlan"
+      "url": "/sws/neo/purchase-invoice/paymentPlan/{id}/action/aprmModifPaymentOUTPlan",
+      "processId": "6F87442DF7BC43AB8A666BDED2F7D64E",
+      "processType": "obuiapp"
     },
     {
       "entity": "paymentPlan",
       "field": "aprmModifPaymentINPlan",
       "column": "EM_Aprm_Modif_Paym_Sched",
-      "url": "/sws/neo/purchase-invoice/paymentPlan/{id}/action/aprmModifPaymentINPlan"
+      "url": "/sws/neo/purchase-invoice/paymentPlan/{id}/action/aprmModifPaymentINPlan",
+      "processId": "4EEB3497082C4F2182E16A4371CD5D96",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -631,6 +651,7 @@ export default function InvoicePage({ windowName, recordId, ...props }) {
         DetailForm={InvoiceLineForm}
         summary={summary}
         statusField={statusField}
+        extraBadges={extraBadges}
         processes={processes}
         addLineFields={addLineFields}
         catalogs={catalogs}
@@ -645,7 +666,6 @@ export default function InvoicePage({ windowName, recordId, ...props }) {
           { key: 'basicDiscounts', label: 'Basic Discounts', Table: BasicDiscountsTable, Form: BasicDiscountsForm },
           { key: 'paymentPlan', label: 'Payment Plan', Table: PaymentPlanTable, Form: PaymentPlanForm },
           { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm },
-          { key: 'reversedInvoices', label: 'Reversed Invoices', Table: ReversedInvoicesTable, Form: ReversedInvoicesForm },
         ]}
         {...props}
       />
@@ -656,7 +676,7 @@ export default function InvoicePage({ windowName, recordId, ...props }) {
     <ListView
       entity="invoice"
       Table={InvoiceTable}
-      entityLabel="Invoices"
+      entityLabel="Purchase Invoice"
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}

@@ -46,3 +46,21 @@ function ifCond(v1, operator, v2, options) {
 }
 
 function eq(a, b) { return a === b; }
+
+function sumField(rows, field) {
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce(function(acc, row) {
+    var val = Number(row[field]);
+    return acc + (isNaN(val) ? 0 : val);
+  }, 0);
+}
+
+function formatDateDisplay(value) {
+  if (value == null || value === '') return '';
+  // Accepts YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    var parts = value.split('-');
+    return parts[2] + '-' + parts[1] + '-' + parts[0];
+  }
+  return String(value);
+}
