@@ -569,13 +569,16 @@ function RevenueChart({ labels = [], values = [], expenseValues = [] }) {
   const expPoints = hasExpenses ? expenseValues.map((v, i) => toPoint(v, i, expenseValues.length)) : [];
 
   const toPolyline = (pts) => pts.map((p) => `${p.x},${p.y}`).join(' ');
-  const toFillPath = (pts) => [
-    `M ${pts[0].x},${pts[0].y}`,
-    ...pts.slice(1).map((p) => `L ${p.x},${p.y}`),
-    `L ${pts[pts.length - 1].x},${PAD_Y + plotH}`,
-    `L ${pts[0].x},${PAD_Y + plotH}`,
-    'Z',
-  ].join(' ');
+  const toFillPath = (pts) => {
+    if (pts.length === 0) return '';
+    return [
+      `M ${pts[0].x},${pts[0].y}`,
+      ...pts.slice(1).map((p) => `L ${p.x},${p.y}`),
+      `L ${pts[pts.length - 1].x},${PAD_Y + plotH}`,
+      `L ${pts[0].x},${PAD_Y + plotH}`,
+      'Z',
+    ].join(' ');
+  };
 
   // Bar chart metrics — uses PAD_X for the left offset so bars align with the Y-axis labels
   const barPlotW = CHART_W - PAD_X - BAR_PAD_X;
