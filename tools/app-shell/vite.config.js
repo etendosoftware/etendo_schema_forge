@@ -20,33 +20,48 @@ function mcpWellKnownPlugin() {
   return {
     name: 'mcp-well-known',
     configureServer(server) {
-      const port = server.config.server.port || 3100;
       server.middlewares.use((req, res, next) => {
+        const host = req.headers.host || `localhost:${server.config.server.port || 3100}`;
+        const proto = req.headers['x-forwarded-proto'] || 'http';
+        const base = `${proto}://${host}`;
+
         if (req.url?.startsWith('/.well-known/oauth-protected-resource')) {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('Access-Control-Allow-Origin', '*');
           res.end(JSON.stringify({
-            resource: `http://localhost:${port}/mcp`,
-            authorization_servers: [`http://localhost:${port}/oauth2`],
+            resource: `${base}/mcp`,
+            authorization_servers: [`${base}/oauth2`],
             scopes_supported: ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'],
             bearer_methods_supported: ['header'],
           }));
           return;
         }
+
+        const oauthServerMeta = {
+          issuer: `${base}/oauth2`,
+          authorization_endpoint: `${base}/authorize`,
+          token_endpoint: `${base}/oauth2/token`,
+          registration_endpoint: `${base}/oauth2/register`,
+          scopes_supported: ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'],
+          response_types_supported: ['code'],
+          grant_types_supported: ['authorization_code', 'client_credentials', 'refresh_token'],
+          token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
+          code_challenge_methods_supported: ['S256'],
+        };
+
         if (req.url?.startsWith('/.well-known/oauth-authorization-server')) {
-          const base = `http://localhost:${port}`;
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.end(JSON.stringify(oauthServerMeta));
+          return;
+        }
+        if (req.url?.startsWith('/.well-known/openid-configuration')) {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('Access-Control-Allow-Origin', '*');
           res.end(JSON.stringify({
-            issuer: `${base}/oauth2`,
-            authorization_endpoint: `${base}/authorize`,
-            token_endpoint: `${base}/oauth2/token`,
-            registration_endpoint: `${base}/oauth2/register`,
-            scopes_supported: ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'],
-            response_types_supported: ['code'],
-            grant_types_supported: ['authorization_code', 'client_credentials', 'refresh_token'],
-            token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],
-            code_challenge_methods_supported: ['S256'],
+            ...oauthServerMeta,
+            userinfo_endpoint: `${base}/oauth2/userinfo`,
+            jwks_uri: `${base}/oauth2/jwks`,
           }));
           return;
         }
