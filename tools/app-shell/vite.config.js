@@ -22,7 +22,8 @@ function mcpWellKnownPlugin() {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const host = req.headers.host || `localhost:${server.config.server.port || 3100}`;
-        const proto = req.headers['x-forwarded-proto'] || 'http';
+        const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+        const proto = req.headers['x-forwarded-proto'] || (isLocalhost ? 'http' : 'https');
         const base = `${proto}://${host}`;
 
         if (req.url?.startsWith('/.well-known/oauth-protected-resource')) {
