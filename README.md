@@ -225,6 +225,69 @@ Apache handles SSL — jsreport does not need its own SSL configuration. The sam
 
 ---
 
+## Environment Variables for Deployment
+
+When deploying the application to a custom domain (e.g., `http://go.myproject.etendo.cloud/`), the following environment variables must be configured:
+
+### Backend (Etendo / Tomcat)
+
+| Variable | Where to set | Purpose |
+|---|---|---|
+| `etgo.app.url` | `Openbravo.properties` or `gradle.properties` | Frontend (PWA) base URL. Used by the OAuth2 `authorization_endpoint` to redirect users for login. |
+| `ETGO_APP_URL` | OS env var or Docker `.env` | Alternative to `etgo.app.url` (env var fallback). |
+| `ETGO_ALLOWED_ORIGINS` | OS env var or Docker `.env` | Comma-separated list of allowed CORS origins for the frontend. |
+| `etgo.allowed.origins` | JVM `-D` flag in `TOMCAT_CATALINA_OPTS` | Alternative to `ETGO_ALLOWED_ORIGINS` (system property, takes precedence). |
+
+**Resolution priority:**
+- App URL: `etgo.app.url` (properties) > `ETGO_APP_URL` (env var) > dynamic from HTTP request
+- CORS: `etgo.allowed.origins` (system property) > `ETGO_ALLOWED_ORIGINS` (env var) > hardcoded defaults (`localhost:3000`, `localhost:5173`)
+
+Example (`gradle.properties` or `Openbravo.properties`):
+```properties
+etgo.app.url=http://go.myproject.etendo.cloud
+```
+
+Example (Docker `.env` or OS environment):
+```env
+ETGO_APP_URL=http://go.myproject.etendo.cloud
+ETGO_ALLOWED_ORIGINS=http://go.myproject.etendo.cloud
+```
+
+Example (JVM flag in `TOMCAT_CATALINA_OPTS`):
+```
+-Detgo.allowed.origins=http://go.myproject.etendo.cloud
+```
+
+### Frontend (Vite / React)
+
+| Variable | Where to set | Purpose |
+|---|---|---|
+| `VITE_API_BASE` | `.env.production` | Backend base path for all API and auth calls (e.g., `/etendo`). |
+| `VITE_MOCK` | `.env.production` | Set to `false` for production (disables mock data). |
+| `ETENDO_URL` | `.env.local` (dev only) | Full backend URL for the Vite dev proxy (e.g., `http://localhost:8080/etendo`). |
+
+Example (`.env.production`):
+```env
+VITE_MOCK=false
+VITE_API_BASE=/etendo
+```
+
+> **Note:** `VITE_API_BASE` should match the Tomcat context name. If Tomcat uses `etendo_sf2` as context, set `VITE_API_BASE=/etendo_sf2`.
+
+### Minimal Configuration Checklist
+
+```bash
+# Backend
+etgo.app.url=http://go.myproject.etendo.cloud
+ETGO_ALLOWED_ORIGINS=http://go.myproject.etendo.cloud
+
+# Frontend (.env.production)
+VITE_MOCK=false
+VITE_API_BASE=/etendo
+```
+
+---
+
 ## First Steps (Claude Guided) (Recommended)
 This tool is designed to be used iteratively through the Claude Code interface, interacting with the agent.
 

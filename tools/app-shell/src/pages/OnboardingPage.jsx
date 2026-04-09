@@ -10,6 +10,15 @@ import {
   UserPlus, Mail, Lock, KeyRound,
 } from 'lucide-react';
 
+function detectBaseUrl() {
+  const path = window.location.pathname;
+  const webIdx = path.indexOf('/web/');
+  if (webIdx !== -1) return path.substring(0, webIdx);
+  return import.meta.env.VITE_API_BASE || '';
+}
+
+const BASE_URL = detectBaseUrl();
+
 const SETUP_STEPS = [
   { name: 'setup', label: 'Preparando contexto', icon: Settings, estimate: '1s' },
   { name: 'client', label: 'Crear empresa', icon: Briefcase, estimate: '2 min' },
@@ -155,7 +164,7 @@ export default function OnboardingPage() {
     const token = getPlatformToken();
     setLoadingEnvs(true);
     try {
-      const res = await fetch('/sws/go/environments', {
+      const res = await fetch(`${BASE_URL}/sws/go/environments`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
@@ -184,7 +193,7 @@ export default function OnboardingPage() {
       setView('register');
       return;
     }
-    fetch('/sws/go/me', {
+    fetch(`${BASE_URL}/sws/go/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => {
@@ -224,7 +233,7 @@ export default function OnboardingPage() {
     setRegisterError(null);
     setRegisterLoading(true);
     try {
-      const res = await fetch('/sws/go/register', {
+      const res = await fetch(`${BASE_URL}/sws/go/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(registerForm),
@@ -248,7 +257,7 @@ export default function OnboardingPage() {
     setLoginError(null);
     setLoginLoading(true);
     try {
-      const res = await fetch('/sws/go/login', {
+      const res = await fetch(`${BASE_URL}/sws/go/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginForm),
@@ -270,7 +279,7 @@ export default function OnboardingPage() {
     const token = getPlatformToken();
     setLoggingIn(env.clientId);
     try {
-      const res = await fetch(`/sws/go/login?userId=${env.adminUserId}`, {
+      const res = await fetch(`${BASE_URL}/sws/go/login?userId=${env.adminUserId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
@@ -310,7 +319,7 @@ export default function OnboardingPage() {
 
     let succeeded = false;
     try {
-      const res = await fetch('/sws/go/onboarding', {
+      const res = await fetch(`${BASE_URL}/sws/go/onboarding`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -367,7 +376,7 @@ export default function OnboardingPage() {
           for (let i = 0; i < attempts; i++) {
             await new Promise(r => setTimeout(r, delay));
             try {
-              const res = await fetch('/sws/go/environments', {
+              const res = await fetch(`${BASE_URL}/sws/go/environments`, {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
               });
               if (res.ok) {
