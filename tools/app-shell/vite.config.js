@@ -132,6 +132,7 @@ export default defineConfig(({ mode }) => {
     modules: [resolve(__dirname, 'node_modules'), 'node_modules'],
   },
   server: {
+    allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],
     port: 3100,
     proxy: {
       '/etendo_sf': {
