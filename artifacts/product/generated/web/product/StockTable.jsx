@@ -15,9 +15,6 @@ const filters = [];
 
 // @sf-generated-start component:StockTable
 export default function StockTable(props) {
-  // @sf-custom-slot hooks:StockTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:StockTable
-
-// @sf-custom-slot section:StockTable-custom

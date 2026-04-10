@@ -171,6 +171,7 @@ export function generateFrontendContract(schema, rules = []) {
       if (f.badgeLabels) mapped.badgeLabels = f.badgeLabels;
       if (f.summable) mapped.summable = true;
       if (f.display) mapped.display = f.display;
+      if (f.cellType) mapped.cellType = f.cellType;
 
       // Behavioral metadata: callout
       if (f.callout) {

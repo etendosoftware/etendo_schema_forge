@@ -1,6 +1,6 @@
 import FinPaymentPage from './FinPaymentPage';
 
-const windowMeta = { category: 'sales', name: 'Payment In' };
+const windowMeta = { category: 'finance', name: 'Payment In' };
 
 const api = {
   "specName": "payment-in",

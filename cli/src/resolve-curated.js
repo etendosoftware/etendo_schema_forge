@@ -217,6 +217,7 @@ function buildCuratedField(rawField, fieldDecision, discardPatterns) {
   if (fieldDecision.summable) field.summable = true;
   if (fieldDecision.columnType) field.columnType = fieldDecision.columnType;
   if (fieldDecision.display) field.display = fieldDecision.display;
+  if (fieldDecision.cellType) field.cellType = fieldDecision.cellType;
 
   const isVisible = visibility !== 'system' && visibility !== 'discarded';
 
@@ -542,6 +543,24 @@ export async function resolveCurated(schemaRaw, rulesRaw, decisions) {
   if (windowDecisions.hidePrint) {
     schema.window.hidePrint = true;
   }
+  if (windowDecisions.hideMoreMenu) {
+    schema.window.hideMoreMenu = true;
+  }
+  if (windowDecisions.hideMoreDetails) {
+    schema.window.hideMoreDetails = true;
+  }
+  if (windowDecisions.contentBg !== undefined) {
+    schema.window.contentBg = windowDecisions.contentBg;
+  }
+  if (windowDecisions.hideListFilters) {
+    schema.window.hideListFilters = true;
+  }
+  if (windowDecisions.hideLink) {
+    schema.window.hideLink = true;
+  }
+  if (windowDecisions.hideEyeCount) {
+    schema.window.hideEyeCount = true;
+  }
   if (windowDecisions.breadcrumb !== undefined) {
     schema.window.breadcrumb = windowDecisions.breadcrumb;
   }
@@ -602,6 +621,24 @@ export async function resolveCurated(schemaRaw, rulesRaw, decisions) {
   }
   if (windowDecisions.disableProcessedLock) {
     schema.window.disableProcessedLock = true;
+  }
+  if (windowDecisions.titleField) {
+    schema.window.titleField = windowDecisions.titleField;
+  }
+  if (windowDecisions.hideMoreMenu) {
+    schema.window.hideMoreMenu = true;
+  }
+  if (windowDecisions.listViewOptions) {
+    schema.window.listViewOptions = windowDecisions.listViewOptions;
+  }
+  if (windowDecisions.listBaseFilter) {
+    schema.window.listBaseFilter = windowDecisions.listBaseFilter;
+  }
+  if (windowDecisions.quickFilters) {
+    schema.window.quickFilters = windowDecisions.quickFilters;
+  }
+  if (windowDecisions.statusEnumLabels) {
+    schema.window.statusEnumLabels = windowDecisions.statusEnumLabels;
   }
   const rules = resolveRules(rulesRaw, decisions);
 

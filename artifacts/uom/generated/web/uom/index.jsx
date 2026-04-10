@@ -4,6 +4,7 @@ import UomForm from './UomForm';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'reference', name: 'UOM' };
+const breadcrumb = 'Settings / Unit of Measure';
 
 export default function App({ windowName, recordId, ...props }) {
   if (recordId) {
@@ -15,6 +16,7 @@ export default function App({ windowName, recordId, ...props }) {
         entityLabel="Uom"
         windowName={windowName}
         recordId={recordId}
+        breadcrumb={breadcrumb}
         window={windowMeta}
         {...props}
       />
@@ -27,6 +29,7 @@ export default function App({ windowName, recordId, ...props }) {
       Table={UomTable}
       entityLabel="Uom"
       windowName={windowName}
+      breadcrumb={breadcrumb}
       window={windowMeta}
       {...props}
     />

@@ -4,6 +4,8 @@ import PriceListForm from './PriceListForm';
 import PriceListLineTable from './PriceListLineTable';
 import catalogs from './mockCatalogs';
 
+const breadcrumb = 'Settings / Price List';
+
 const summary = [
   { key: 'isSalesPrice', column: 'IsSOPriceList', type: 'boolean' },
   { key: 'isActive', column: 'IsActive', type: 'boolean' },
@@ -41,6 +43,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         catalogs={catalogs}
         entityLabel="Price List"
         detailLabel="Price List Line"
+        breadcrumb={breadcrumb}
         windowName={windowName}
         recordId={recordId}
         {...props}
@@ -53,6 +56,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
       entity="priceList"
       Table={PriceListTable}
       entityLabel="Price List"
+      breadcrumb={breadcrumb}
       windowName={windowName}
       {...props}
     />

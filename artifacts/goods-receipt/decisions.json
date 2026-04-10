@@ -221,87 +221,13 @@
       }
     },
     "accounting": {
-      "name": "accounting",
-      "fields": {
-        "account": {
-          "grid": true,
-          "reference": null,
-          "inputMode": null
-        },
-        "accountingDate": {
-          "grid": true
-        },
-        "postingType": {
-          "visibility": "readOnly"
-        },
-        "debit": {
-          "grid": true
-        },
-        "credit": {
-          "grid": true
-        },
-        "description": {
-          "visibility": "readOnly"
-        },
-        "accountingFact": {
-          "name": "factAcct"
-        },
-        "table": {
-          "name": "adTable"
-        }
-      },
-      "javaQualifier": "factAcctHandler"
+      "exclude": true
     },
     "landedCost": {
-      "name": "landedCost",
-      "fields": {
-        "lineNo": {
-          "grid": true,
-          "readOnlyLogic": null
-        },
-        "landedCostType": {
-          "grid": true,
-          "reference": "LandedCostType",
-          "readOnlyLogic": null
-        },
-        "invoiceLine": {
-          "readOnlyLogic": null
-        },
-        "amount": {
-          "grid": true,
-          "readOnlyLogic": null
-        },
-        "currency": {
-          "grid": true,
-          "readOnlyLogic": null
-        },
-        "landedCostDistributionAlgorithm": {
-          "reference": "LandedCostDistributionAlgorithm",
-          "readOnlyLogic": null
-        },
-        "matched": {
-          "grid": true
-        },
-        "matchingAmount": {
-          "displayLogic": null
-        },
-        "landedCost": {
-          "reference": "LandedCost",
-          "readOnlyLogic": null
-        },
-        "matchingCostAdjustment": {
-          "inputMode": "selector",
-          "displayLogic": null
-        },
-        "isMatchingAdjusted": {
-          "readOnlyLogic": null,
-          "displayLogic": null
-        },
-        "cancelMatching": {
-          "visibility": "discarded",
-          "displayLogic": null
-        }
-      }
+      "exclude": true
+    },
+    "intrastat": {
+      "exclude": true
     }
   },
   "rules": {

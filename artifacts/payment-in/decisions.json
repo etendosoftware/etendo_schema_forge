@@ -1,7 +1,7 @@
 {
   "$schema": "decisions-v2",
   "window": {
-    "category": "sales",
+    "category": "finance",
     "name": "Payment In",
     "salesTheme": true,
     "documentPreview": { "titlePrefix": "Payment" },

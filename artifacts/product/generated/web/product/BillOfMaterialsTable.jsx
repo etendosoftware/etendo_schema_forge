@@ -12,9 +12,6 @@ const filters = [];
 
 // @sf-generated-start component:BillOfMaterialsTable
 export default function BillOfMaterialsTable(props) {
-  // @sf-custom-slot hooks:BillOfMaterialsTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:BillOfMaterialsTable
-
-// @sf-custom-slot section:BillOfMaterialsTable-custom

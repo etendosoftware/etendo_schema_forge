@@ -7,7 +7,7 @@ describe('buildMenuGroups', () => {
     const groups = buildMenuGroups();
     assert.ok(Array.isArray(groups));
     assert.ok(groups.length >= 4);
-    assert.equal(groups[0].group, 'Sales');
+    assert.equal(groups[0].group, 'Home');
     assert.ok(Array.isArray(groups[0].items));
     assert.ok(groups[0].icon);
   });
@@ -28,7 +28,7 @@ describe('getAllWindowNames', () => {
     const names = getAllWindowNames();
     assert.ok(names.includes('sales-order'));
     assert.ok(names.includes('business-partner'));
-    assert.ok(names.includes('uom'));
+    assert.ok(names.includes('unit-of-measure'));
     assert.ok(names.length >= 11);
   });
 });

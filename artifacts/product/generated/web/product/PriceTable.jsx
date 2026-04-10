@@ -12,9 +12,6 @@ const filters = [];
 
 // @sf-generated-start component:PriceTable
 export default function PriceTable(props) {
-  // @sf-custom-slot hooks:PriceTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:PriceTable
-
-// @sf-custom-slot section:PriceTable-custom

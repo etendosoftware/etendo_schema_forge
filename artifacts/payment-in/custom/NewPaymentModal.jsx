@@ -1,17 +1,18 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useUI } from '@/i18n';
 
 function fmtDate(raw) {
   if (!raw) return '-';
   const str = String(raw);
-  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
   const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(raw);
-  return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return Number.isNaN(d.getTime()) ? '-' : d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 function fmt(val, curr) {
-  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
+  const n = typeof val === 'string' ? Number.parseFloat(val) : (val ?? 0);
   if (curr) {
     try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: curr }).format(n); } catch { /* */ }
   }
@@ -20,6 +21,7 @@ function fmt(val, curr) {
 
 export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose }) {
   const navigate = useNavigate();
+  const ui = useUI();
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
@@ -44,8 +46,6 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
   const [invoices, setInvoices] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [invoiceId, setInvoiceId] = useState('');
-  const [selectedInvoice, setSelectedInvoice] = useState(null);
-
   // Credit mode
   const [description, setDescription] = useState('');
 
@@ -109,7 +109,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
         const res = await fetch(`${base}/sales-invoice/header?businessPartner=${customerId}&_startRow=0&_endRow=100`, { headers });
         if (res.ok && !cancelled) {
           const all = (await res.json())?.response?.data || [];
-          const pending = all.filter(inv => inv.documentStatus === 'CO' && parseFloat(inv.outstandingAmount) > 0);
+          const pending = all.filter(inv => inv.documentStatus === 'CO' && Number.parseFloat(inv.outstandingAmount) > 0);
           setInvoices(pending);
         }
       } catch { /* silent */ }
@@ -120,10 +120,9 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
 
   // When invoice is selected, set amount to outstanding
   useEffect(() => {
-    if (!invoiceId) { setSelectedInvoice(null); return; }
+    if (!invoiceId) return;
     const inv = invoices.find(i => i.id === invoiceId);
-    setSelectedInvoice(inv || null);
-    if (inv) setAmount(String(parseFloat(inv.outstandingAmount) || 0));
+    if (inv) setAmount(String(Number.parseFloat(inv.outstandingAmount) || 0));
   }, [invoiceId, invoices]);
 
   const handleClose = () => {
@@ -132,7 +131,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
   };
 
   const handleCreateLinked = async () => {
-    if (!customerId || !invoiceId || !amount || !accountId) { setError('Fill all required fields'); return; }
+    if (!customerId || !invoiceId || !amount || !accountId) { setError(ui('fillAllRequiredFields')); return; }
     setError(null);
     setSaving(true);
     try {
@@ -141,7 +140,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       let scheduleId = '';
       if (schedRes.ok) {
         const scheds = (await schedRes.json())?.response?.data || [];
-        const pending = scheds.find(s => parseFloat(s.outstandingAmount) > 0);
+        const pending = scheds.find(s => Number.parseFloat(s.outstandingAmount) > 0);
         scheduleId = pending?.finPaymentScheduleID || pending?.id || '';
       }
 
@@ -168,14 +167,14 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
   };
 
   const handleCreateCredit = async () => {
-    if (!customerId || !amount || !accountId) { setError('Fill all required fields'); return; }
+    if (!customerId || !amount || !accountId) { setError(ui('fillAllRequiredFields')); return; }
     setError(null);
     setSaving(true);
     try {
       // Create a payment directly via the payment-in entity
       const body = {
         businessPartner: customerId,
-        amount: parseFloat(amount),
+        amount: Number.parseFloat(amount),
         paymentDate: date,
         account: accountId,
         ...(paymentMethodId && { paymentMethod: paymentMethodId }),
@@ -211,8 +210,8 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
         <div style={{ padding: '12px 16px', borderBottom: '1px solid #E5E7EB' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>Finance &middot; Payments In</div>
-              <div style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>New payment</div>
+              <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>{ui('financeCollections')}</div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{ui('newPayment')}</div>
             </div>
             <button type="button" onClick={handleClose} style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, border: '0.5px solid #E5E7EB', background: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1 }}>&times;</button>
           </div>
@@ -230,9 +229,9 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={!isInvoiceMode ? '#2563eb' : '#6B7280'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
               </svg>
-              <span style={{ fontSize: 12, fontWeight: 500, color: !isInvoiceMode ? '#2563eb' : '#374151' }}>Credit / advance</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: !isInvoiceMode ? '#2563eb' : '#374151' }}>{ui('creditAdvance')}</span>
             </div>
-            <div style={{ fontSize: 10, color: '#9ca3af' }}>Adelanto o credito a favor sin factura</div>
+            <div style={{ fontSize: 10, color: '#9ca3af' }}>{ui('creditAdvanceDescription')}</div>
           </button>
           <button type="button" onClick={() => setMode('invoice')}
             style={{
@@ -244,9 +243,9 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isInvoiceMode ? '#2563eb' : '#6B7280'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
               </svg>
-              <span style={{ fontSize: 12, fontWeight: 500, color: isInvoiceMode ? '#2563eb' : '#374151' }}>Linked to invoice</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: isInvoiceMode ? '#2563eb' : '#374151' }}>{ui('linkedToInvoiceMode')}</span>
             </div>
-            <div style={{ fontSize: 10, color: '#9ca3af' }}>Aplica el cobro a una factura existente</div>
+            <div style={{ fontSize: 10, color: '#9ca3af' }}>{ui('linkedToInvoiceModeDescription')}</div>
           </button>
         </div>
 
@@ -257,7 +256,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
             <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: '#eff6ff', borderRadius: 8, marginBottom: 12, border: '0.5px solid #bfdbfe' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
               <span style={{ fontSize: 11, color: '#1e40af', lineHeight: 1.4 }}>
-                El credito quedara sin asignar. Podras aplicarlo desde el modal de pagos de cualquier factura del mismo cliente.
+                {ui('creditAdvanceDescription')}
               </span>
             </div>
           )}
@@ -265,12 +264,12 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {/* Customer */}
             <div>
-              <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>Customer</label>
+              <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('customer')}</label>
               {loadingCustomers ? (
-                <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>Loading...</div>
+                <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>{ui('loading')}</div>
               ) : (
                 <Select value={customerId} onValueChange={v => { setCustomerId(v); setInvoiceId(''); }} required>
-                  <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder="Select customer..." /></SelectTrigger>
+                  <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder={ui('selectCustomer')} /></SelectTrigger>
                   <SelectContent style={{ zIndex: 200 }}>
                     {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
@@ -281,20 +280,20 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
             {/* Invoice (only in invoice mode) */}
             {isInvoiceMode && (
               <div>
-                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>Invoice</label>
+                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('invoice')}</label>
                 {!customerId ? (
-                  <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px', border: '0.5px solid #E5E7EB', borderRadius: 6 }}>Select a customer first</div>
+                  <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px', border: '0.5px solid #E5E7EB', borderRadius: 6 }}>{ui('selectCustomerFirst')}</div>
                 ) : loadingInvoices ? (
-                  <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>Loading invoices...</div>
+                  <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>{ui('loadingInvoices')}</div>
                 ) : invoices.length === 0 ? (
-                  <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px', border: '0.5px solid #E5E7EB', borderRadius: 6 }}>No pending invoices</div>
+                  <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px', border: '0.5px solid #E5E7EB', borderRadius: 6 }}>{ui('noPendingInvoices')}</div>
                 ) : (
                   <Select value={invoiceId} onValueChange={setInvoiceId} required>
-                    <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder="Select invoice..." /></SelectTrigger>
+                    <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder={ui('selectInvoice')} /></SelectTrigger>
                     <SelectContent style={{ zIndex: 200 }}>
                       {invoices.map(inv => (
                         <SelectItem key={inv.id} value={inv.id}>
-                          #{inv.documentNo} &middot; {fmt(inv.grandTotalAmount, inv['currency$_identifier'])} &middot; Pending {fmt(inv.outstandingAmount, inv['currency$_identifier'])}
+                          #{inv.documentNo} &middot; {fmt(inv.grandTotalAmount, inv['currency$_identifier'])} &middot; {ui('pending')} {fmt(inv.outstandingAmount, inv['currency$_identifier'])}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -306,12 +305,12 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
             {/* Date + Amount */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div>
-                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>Date</label>
+                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('date')}</label>
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} className="text-sm tabular-nums"
                   style={{ width: '100%', border: '0.5px solid #E5E7EB', borderRadius: 6, padding: '7px 10px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>Amount (EUR)</label>
+                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('amount')}</label>
                 <input type="number" min={0} step="0.01" value={amount} onChange={e => setAmount(e.target.value)} className="text-sm tabular-nums"
                   style={{ width: '100%', border: '0.5px solid #E5E7EB', borderRadius: 6, padding: '7px 10px', outline: 'none', boxSizing: 'border-box' }} />
               </div>
@@ -319,12 +318,12 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
 
             {/* Payment Method */}
             <div>
-              <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>Payment Method</label>
+              <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('method')}</label>
               {loadingPaymentMethods ? (
-                <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>Loading...</div>
+                <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>{ui('loading')}</div>
               ) : (
                 <Select value={paymentMethodId} onValueChange={v => { setPaymentMethodId(v); }}>
-                  <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder="Select payment method..." /></SelectTrigger>
+                  <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder={ui('selectPaymentMethod')} /></SelectTrigger>
                   <SelectContent style={{ zIndex: 200 }}>
                     {paymentMethods.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
                   </SelectContent>
@@ -334,12 +333,12 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
 
             {/* Account */}
             <div>
-              <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>Account</label>
+              <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('account')}</label>
               {loadingAccounts ? (
-                <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>Loading...</div>
+                <div style={{ fontSize: 12, color: '#9ca3af', padding: '6px 10px' }}>{ui('loading')}</div>
               ) : (
                 <Select value={accountId} onValueChange={setAccountId} required>
-                  <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder="Select account..." /></SelectTrigger>
+                  <SelectTrigger style={{ height: 34, fontSize: 13 }}><SelectValue placeholder={ui('selectAccount')} /></SelectTrigger>
                   <SelectContent style={{ zIndex: 200 }}>
                     {accounts.map(acc => <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>)}
                   </SelectContent>
@@ -350,9 +349,9 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
             {/* Description (credit mode only) */}
             {!isInvoiceMode && (
               <div>
-                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>Description</label>
+                <label style={{ fontSize: 11, color: '#6B7280', display: 'block', marginBottom: 3 }}>{ui('description')}</label>
                 <input type="text" value={description} onChange={e => setDescription(e.target.value)}
-                  placeholder="Motivo del adelanto o credito..."
+                  placeholder={ui('creditDescriptionPlaceholder')}
                   style={{ width: '100%', fontSize: 13, border: '0.5px solid #E5E7EB', borderRadius: 6, padding: '7px 10px', outline: 'none', color: '#374151', boxSizing: 'border-box' }} />
               </div>
             )}
@@ -365,11 +364,11 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff', borderTop: '0.5px solid #d1d5db', padding: '10px 16px' }}>
           <button type="button" onClick={handleClose}
             style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '0.5px solid #E5E7EB', background: 'transparent', color: '#6B7280', cursor: 'pointer' }}>
-            Cancel
+            {ui('cancel')}
           </button>
           <button type="button" onClick={isInvoiceMode ? handleCreateLinked : handleCreateCredit} disabled={saving}
             style={{ fontSize: 13, fontWeight: 500, padding: '6px 16px', borderRadius: 6, border: 'none', background: '#18181b', color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1 }}>
-            {saving ? 'Creating...' : (isInvoiceMode ? 'Create payment \u2192' : 'Create credit \u2192')}
+            {saving ? ui('creating') : (isInvoiceMode ? ui('createPayment') : ui('createCredit'))}
           </button>
         </div>
       </div>

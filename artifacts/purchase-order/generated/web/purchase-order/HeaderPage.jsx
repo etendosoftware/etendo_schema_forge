@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import HeaderTable from './HeaderTable';
 import HeaderForm from './HeaderForm';
@@ -37,7 +38,12 @@ const processes = [
 // @sf-generated-end processes:header
 
 // @sf-generated-start draftMode:header
-const draftMode = null;
+const draftMode = {
+  "enabled": true,
+  "processField": "documentAction",
+  "processValue": "CO",
+  "label": "Confirmar"
+};
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start addLineFields:lines
@@ -666,6 +672,7 @@ const api = {
 // @sf-generated-start component:HeaderPage
 export default function HeaderPage({ windowName, recordId, ...props }) {
   // @sf-custom-slot hooks:HeaderPage
+  
   if (recordId) {
     return (
       <DetailView
@@ -692,6 +699,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
           { key: 'lineTax', label: 'Line Tax', Table: LineTaxTable, Form: LineTaxForm },
           { key: 'reservedStock', label: 'Prereserved Qty', Table: ReservedStockTable, Form: ReservedStockForm },
         ]}
+        draftMode={draftMode}
         {...props}
       />
     );

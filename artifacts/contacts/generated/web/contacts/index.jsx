@@ -1,6 +1,6 @@
 import BusinessPartnerPage from './BusinessPartnerPage';
 
-const windowMeta = { category: 'people', name: 'Contacts' };
+const windowMeta = { category: 'contact', name: 'Contacts' };
 
 const api = {
   "specName": "contacts",
@@ -42,6 +42,17 @@ const api = {
       "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
       "supportedFilters": []
     },
+    "intrastatShipments": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/contacts/intrastatShipments",
+      "detailUrl": "/sws/neo/contacts/intrastatShipments/{id}",
+      "supportedFilters": []
+    },
     "vendorCreditor": {
       "get": true,
       "getById": true,
@@ -62,6 +73,17 @@ const api = {
       "delete": true,
       "listUrl": "/sws/neo/contacts/vendorAccounting",
       "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
+      "supportedFilters": []
+    },
+    "intrastatAdquisitions": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/contacts/intrastatAdquisitions",
+      "detailUrl": "/sws/neo/contacts/intrastatAdquisitions/{id}",
       "supportedFilters": []
     },
     "employee": {
@@ -142,8 +164,8 @@ const api = {
       "listUrl": "/sws/neo/contacts/contact",
       "detailUrl": "/sws/neo/contacts/contact/{id}",
       "supportedFilters": [
-        "email",
-        "name"
+        "name",
+        "email"
       ]
     },
     "basicDiscount": {
@@ -336,6 +358,14 @@ const api = {
       "url": "/sws/neo/contacts/customerAccounting/selectors/customerPrepayment"
     },
     {
+      "entity": "intrastatShipments",
+      "field": "businessPartner",
+      "column": "C_Bpartner_ID",
+      "reference": "BPartner",
+      "inputMode": "search",
+      "url": "/sws/neo/contacts/intrastatShipments/selectors/businessPartner"
+    },
+    {
       "entity": "vendorCreditor",
       "field": "purchasePricelist",
       "column": "PO_PriceList_ID",
@@ -398,6 +428,22 @@ const api = {
       "reference": "ValidCombination",
       "inputMode": "selector",
       "url": "/sws/neo/contacts/vendorAccounting/selectors/vendorPrepayment"
+    },
+    {
+      "entity": "intrastatAdquisitions",
+      "field": "businessPartner",
+      "column": "C_Bpartner_ID",
+      "reference": "BPartner",
+      "inputMode": "search",
+      "url": "/sws/neo/contacts/intrastatAdquisitions/selectors/businessPartner"
+    },
+    {
+      "entity": "intrastatAdquisitions",
+      "field": "country",
+      "column": "C_Country_ID",
+      "reference": "Country",
+      "inputMode": "selector",
+      "url": "/sws/neo/contacts/intrastatAdquisitions/selectors/country"
     },
     {
       "entity": "employee",

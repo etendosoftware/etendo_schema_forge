@@ -78,7 +78,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
   return (
     <div data-testid={`field-${fieldKey}`} className="flex flex-col gap-2">
       {/* Image preview */}
-      <div className="relative w-full h-40 rounded-md border bg-muted/30 flex items-center justify-center overflow-hidden">
+      <div className="relative w-full h-44 rounded-2xl border border-gray-200/70 bg-gray-50/50 flex items-center justify-center overflow-hidden">
         {blobUrl ? (
           <img src={blobUrl} alt="Product" className="max-w-full max-h-full object-contain" />
         ) : (
@@ -107,9 +107,9 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
             disabled={uploading}
             onClick={() => inputRef.current?.click()}
             className={[
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-input',
-              'bg-background text-sm font-medium shadow-sm cursor-pointer',
-              'hover:bg-accent hover:text-accent-foreground',
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
+              'text-sm font-medium text-gray-500 cursor-pointer',
+              'hover:text-gray-700',
               'disabled:opacity-50 disabled:cursor-not-allowed',
             ].join(' ')}
           >

@@ -552,5 +552,51 @@
     ],
     "author": "pipeline",
     "date": "2026-03-31"
+  },
+  {
+    "from": "0.1.0",
+    "to": "0.2.0",
+    "level": "additive",
+    "reasons": [
+      "Entity \"intrastat\" added to frontend",
+      "Entity \"intrastat\" added to backend",
+      "Endpoint GET /intrastat added",
+      "Endpoint GET /intrastat/:id added",
+      "Endpoint POST /intrastat added",
+      "Endpoint PUT /intrastat/:id added",
+      "Endpoint DELETE /intrastat/:id added"
+    ],
+    "author": "pipeline",
+    "date": "2026-04-08"
+  },
+  {
+    "from": "0.2.0",
+    "to": "0.3.0",
+    "level": "breaking",
+    "reasons": [
+      "Entity \"intrastat\" removed from frontend",
+      "Entity \"accounting\" removed from frontend",
+      "Entity \"landedCost\" removed from frontend",
+      "Entity \"intrastat\" removed from backend",
+      "Entity \"accounting\" removed from backend",
+      "Entity \"landedCost\" removed from backend",
+      "Endpoint GET /intrastat removed",
+      "Endpoint GET /intrastat/:id removed",
+      "Endpoint POST /intrastat removed",
+      "Endpoint PUT /intrastat/:id removed",
+      "Endpoint DELETE /intrastat/:id removed",
+      "Endpoint GET /accounting removed",
+      "Endpoint GET /accounting/:id removed",
+      "Endpoint POST /accounting removed",
+      "Endpoint PUT /accounting/:id removed",
+      "Endpoint DELETE /accounting/:id removed",
+      "Endpoint GET /landedCost removed",
+      "Endpoint GET /landedCost/:id removed",
+      "Endpoint POST /landedCost removed",
+      "Endpoint PUT /landedCost/:id removed",
+      "Endpoint DELETE /landedCost/:id removed"
+    ],
+    "author": "pipeline",
+    "date": "2026-04-08"
   }
 ]

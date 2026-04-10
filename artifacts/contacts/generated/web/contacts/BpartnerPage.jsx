@@ -15,7 +15,7 @@ import ContactsKpiCards from '@/windows/custom/contacts/ContactsKpiCards';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'People / Contacts';
+const breadcrumb = 'Contact / Contacts';
 
 
 // @sf-generated-start summary:bpartner

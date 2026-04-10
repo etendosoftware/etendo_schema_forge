@@ -1,0 +1,379 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "window": {
+    "category": "configuracion",
+    "name": "User"
+  },
+  "discardPatterns": ["EM_*"],
+  "entities": {
+    "user": {
+      "fields": {
+        "name": {
+          "visibility": "editable",
+          "grid": true,
+          "searchable": true,
+          "section": "principal"
+        },
+        "username": {
+          "visibility": "editable",
+          "grid": true,
+          "searchable": true,
+          "section": "principal"
+        },
+        "firstName": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "lastName": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "email": {
+          "visibility": "editable",
+          "grid": true,
+          "searchable": true,
+          "section": "principal"
+        },
+        "password": {
+          "visibility": "editable",
+          "section": "security",
+          "displayLogic": null,
+          "reason": "Password field, always visible in config window (suppress raw displayLogic that depends on autosave)"
+        },
+        "isPasswordExpired": {
+          "visibility": "readOnly",
+          "section": "security",
+          "reason": "Display-only flag indicating if password needs reset"
+        },
+        "lastPasswordUpdate": {
+          "visibility": "readOnly",
+          "section": "security",
+          "reason": "System-computed date, display-only"
+        },
+        "locked": {
+          "visibility": "readOnly",
+          "grid": true,
+          "section": "security",
+          "reason": "Account lock status, typically system-managed but visible for admin review"
+        },
+        "description": {
+          "visibility": "editable",
+          "section": "details"
+        },
+        "businessPartner": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "details",
+          "inputMode": "search",
+          "reference": "BusinessPartner"
+        },
+        "phone": {
+          "visibility": "editable",
+          "section": "details"
+        },
+        "position": {
+          "visibility": "editable",
+          "section": "details",
+          "reason": "Job title/position, useful for user identification"
+        },
+        "supervisor": {
+          "visibility": "editable",
+          "section": "details",
+          "inputMode": "search",
+          "reference": "User",
+          "reason": "Supervisor for escalation workflows"
+        },
+        "defaultRole": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "defaults",
+          "inputMode": "selector",
+          "reference": "Role",
+          "reason": "Default role at login, essential config field"
+        },
+        "defaultLanguage": {
+          "visibility": "editable",
+          "section": "defaults",
+          "inputMode": "selector",
+          "reference": "Language",
+          "reason": "Default UI language at login"
+        },
+        "defaultClient": {
+          "visibility": "editable",
+          "section": "defaults",
+          "inputMode": "selector",
+          "reference": "Client",
+          "dependsOn": { "field": "defaultRole", "filterKey": "Default_AD_Role_ID" },
+          "reason": "Default client on login, cascades from defaultRole"
+        },
+        "defaultOrganization": {
+          "visibility": "editable",
+          "section": "defaults",
+          "inputMode": "selector",
+          "reference": "Organization",
+          "dependsOn": { "field": "defaultRole", "filterKey": "Default_AD_Role_ID" },
+          "reason": "Default organization for new transactions, cascades from defaultRole"
+        },
+        "defaultWarehouse": {
+          "visibility": "editable",
+          "section": "defaults",
+          "inputMode": "selector",
+          "reference": "Warehouse",
+          "dependsOn": { "field": "defaultClient", "filterKey": "Default_AD_Client_ID" },
+          "reason": "Default warehouse for logistics, cascades from defaultClient"
+        },
+        "image": {
+          "visibility": "discarded",
+          "reason": "Image/avatar field, not critical for initial version"
+        },
+        "birthday": {
+          "visibility": "discarded",
+          "reason": "Low value for configuration window, not essential"
+        },
+        "alternativePhone": {
+          "visibility": "discarded",
+          "reason": "Secondary phone rarely used in simplified UI"
+        },
+        "fax": {
+          "visibility": "discarded",
+          "reason": "Fax is obsolete, not needed in simplified UI"
+        },
+        "emailServerUsername": {
+          "visibility": "discarded",
+          "reason": "Email server config is handled in the Email Configuration subtab"
+        },
+        "emailServerPassword": {
+          "visibility": "discarded",
+          "reason": "Email server config is handled in the Email Configuration subtab"
+        },
+        "partnerAddress": {
+          "visibility": "discarded",
+          "reason": "Address detail rarely needed for user config, low priority"
+        },
+        "comments": {
+          "visibility": "discarded",
+          "reason": "Already system in raw, low value for simplified UI"
+        }
+      }
+    },
+    "userRoles": {
+      "fields": {
+        "role": {
+          "visibility": "editable",
+          "grid": true,
+          "searchable": true,
+          "inputMode": "selector",
+          "reference": "Role"
+        },
+        "roleAdmin": {
+          "visibility": "editable",
+          "grid": true,
+          "reason": "Controls whether user can administer the role"
+        }
+      }
+    },
+    "emailConfiguration": {
+      "fields": {
+        "smtpServer": {
+          "visibility": "editable",
+          "grid": true,
+          "searchable": true,
+          "section": "server"
+        },
+        "sMTPAuthentification": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "server",
+          "reason": "Controls whether auth fields are relevant"
+        },
+        "smtpServerAccount": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "auth"
+        },
+        "smtpServerPassword": {
+          "visibility": "editable",
+          "section": "auth"
+        },
+        "smtpServerSenderAddress": {
+          "visibility": "editable",
+          "section": "sender"
+        },
+        "smtpConnectionSecurity": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "server"
+        },
+        "smtpPort": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "server"
+        },
+        "smtpConnectionTimeout": {
+          "visibility": "editable",
+          "section": "server",
+          "reason": "Advanced setting, form-only"
+        },
+        "fromName": {
+          "visibility": "editable",
+          "section": "sender"
+        },
+        "replyToAddress": {
+          "visibility": "editable",
+          "section": "sender"
+        },
+        "testSuccessful": {
+          "visibility": "readOnly",
+          "grid": true,
+          "reason": "Status flag from last SMTP test"
+        },
+        "lastTestDate": {
+          "visibility": "readOnly",
+          "reason": "Timestamp of last SMTP test"
+        },
+        "active": {
+          "visibility": "editable",
+          "grid": true
+        },
+        "defaultConfiguration": {
+          "visibility": "editable",
+          "grid": true,
+          "reason": "Marks this as the default SMTP config"
+        }
+      }
+    }
+  },
+  "rules": {
+    "SL_User_Name_Lastname": {
+      "type": "callout",
+      "entity": "user",
+      "decision": "Keep",
+      "description": "Auto-composes full Name from First Name and Last Name when Last Name changes",
+      "impactIfOmitted": "Users must manually type the full name even after entering first/last name",
+      "reason": "Simple name concatenation, core UX improvement"
+    },
+    "SL_User_Name_Firstname": {
+      "type": "callout",
+      "entity": "user",
+      "decision": "Keep",
+      "description": "Auto-composes full Name from First Name and Last Name when First Name changes",
+      "impactIfOmitted": "Users must manually type the full name even after entering first/last name",
+      "reason": "Simple name concatenation, core UX improvement"
+    },
+    "SL_User_Name_Name": {
+      "type": "callout",
+      "entity": "user",
+      "decision": "Omit",
+      "description": "Callout triggered when Name field changes directly (reverse of above)",
+      "impactIfOmitted": "No impact since Name is auto-derived from first/last name",
+      "reason": "Reverse direction (Name -> first/last) creates circular dependency, unnecessary"
+    },
+    "EmailConfiguration_Port_Smtpconnectionsecurity": {
+      "type": "callout",
+      "entity": "emailConfiguration",
+      "decision": "Keep",
+      "description": "Auto-sets SMTP port based on connection security selection (25/465/587)",
+      "impactIfOmitted": "Users must know which port to use for each security type",
+      "reason": "Simple port assignment, prevents common misconfiguration"
+    },
+    "AD_Client_Security_validation": {
+      "type": "validation",
+      "entity": "user",
+      "decision": "Keep",
+      "description": "Restricts client selection to user's accessible clients",
+      "impactIfOmitted": "Users could see clients they don't have access to",
+      "reason": "Security constraint, must be kept"
+    },
+    "C_BPartner_Location": {
+      "type": "validation",
+      "entity": "user",
+      "decision": "Omit",
+      "description": "Filters partner address by selected business partner",
+      "impactIfOmitted": "No impact since partnerAddress field is discarded",
+      "reason": "partnerAddress is discarded in simplified UI"
+    },
+    "AD_Role_of_User": {
+      "type": "validation",
+      "entity": "user",
+      "decision": "Keep",
+      "description": "Restricts default role selection to roles assigned to this user",
+      "impactIfOmitted": "Users could select a role they don't have access to",
+      "reason": "Data integrity constraint for role-based cascade"
+    },
+    "AD_Client_of_Role": {
+      "type": "validation",
+      "entity": "user",
+      "decision": "Keep",
+      "description": "Restricts default client to clients accessible via the selected default role",
+      "impactIfOmitted": "Users could select a client not reachable from their default role",
+      "reason": "Cascade validation for role -> client -> org -> warehouse"
+    },
+    "AD_Org_of_Role": {
+      "type": "validation",
+      "entity": "user",
+      "decision": "Keep",
+      "description": "Restricts default org to orgs accessible via the selected default role",
+      "impactIfOmitted": "Users could select an organization not accessible from their default role",
+      "reason": "Cascade validation for role -> org"
+    },
+    "M_Warehouse_of_Role": {
+      "type": "validation",
+      "entity": "user",
+      "decision": "Keep",
+      "description": "Restricts default warehouse to warehouses belonging to the selected default client",
+      "impactIfOmitted": "Users could select a warehouse from a different client",
+      "reason": "Cascade validation for client -> warehouse"
+    },
+    "AD_Role_of_Client": {
+      "type": "validation",
+      "entity": "userRoles",
+      "decision": "Keep",
+      "description": "Restricts role selection in User Roles subtab to roles of the current client",
+      "impactIfOmitted": "Users could assign roles from other clients",
+      "reason": "Security constraint"
+    },
+    "Display_Password": {
+      "type": "displayLogic",
+      "entity": "user",
+      "decision": "Omit",
+      "description": "Shows password field only after record is saved (AD_USER_ID is not empty) or on autosave",
+      "impactIfOmitted": "Password field is always visible (simpler UX for admin config)",
+      "reason": "Suppressed via displayLogic: null in field decision, password is always visible in simplified UI"
+    },
+    "Display_EmailServerPassword": {
+      "type": "displayLogic",
+      "entity": "user",
+      "decision": "Omit",
+      "description": "Shows email server password only after record is saved",
+      "impactIfOmitted": "No impact since emailServerPassword field is discarded",
+      "reason": "Field is discarded in simplified UI"
+    },
+    "Processing": {
+      "type": "process",
+      "entity": "user",
+      "decision": "Omit",
+      "description": "Legacy hardcoded process button",
+      "impactIfOmitted": "No functional impact, legacy mechanism",
+      "reason": "Hardcoded process, not applicable to simplified UI"
+    },
+    "Grant_Portal_Access": {
+      "type": "process",
+      "entity": "user",
+      "decision": "Omit",
+      "description": "Grants portal role access and resets password for external users",
+      "impactIfOmitted": "Admin must manually configure portal access (rarely used feature)",
+      "reason": "Portal-specific feature, not needed in initial simplified version"
+    },
+    "Test_SMTP_Connection": {
+      "type": "process",
+      "entity": "emailConfiguration",
+      "decision": "Keep",
+      "description": "Tests SMTP server connection and updates test result fields",
+      "impactIfOmitted": "Admins cannot verify SMTP config before sending real emails",
+      "reason": "Essential diagnostic tool for email configuration"
+    }
+  }
+}

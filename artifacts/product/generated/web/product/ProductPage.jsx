@@ -8,7 +8,7 @@ import catalogs from './mockCatalogs';
 import ProductGallery from '@/windows/custom/product/ProductGallery';
 import ProductSidebar from '@/windows/custom/product/ProductSidebar';
 
-const breadcrumb = 'Reference / Product';
+const breadcrumb = 'Inventory / Product';
 
 
 // @sf-generated-start summary:product
@@ -19,7 +19,6 @@ const summary = [
 const statusField = null;
 // @sf-generated-end summary:product
 
-// @sf-custom-slot extraBadges:product
 // @sf-generated-start extraBadges:product
 const extraBadges = [];
 // @sf-generated-end extraBadges:product
@@ -445,7 +444,6 @@ const api = {
 
 // @sf-generated-start component:ProductPage
 export default function ProductPage({ windowName, recordId, ...props }) {
-  // @sf-custom-slot hooks:ProductPage
   
   if (recordId) {
     return (
@@ -467,6 +465,9 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           { key: 'general', label: 'General' },
           { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
         ]}
+        hidePrint
+        hideMoreMenu
+        contentBg="bg-slate-50"
         {...props}
         sidebarContent={(data) => (
           <ProductSidebar
@@ -494,5 +495,3 @@ export default function ProductPage({ windowName, recordId, ...props }) {
   );
 }
 // @sf-generated-end component:ProductPage
-
-// @sf-custom-slot section:ProductPage-custom

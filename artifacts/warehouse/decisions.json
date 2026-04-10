@@ -1,0 +1,75 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "warehouse",
+    "name": "Warehouse",
+    "breadcrumb": "Inventory / Warehouse",
+    "detailEntity": null,
+    "secondaryTabs": {
+      "productTransactions": {
+        "label": "Transactions",
+        "customPanel": "WarehouseTransactionsTable"
+      }
+    }
+  },
+  "entities": {
+    "header": {
+      "name": "warehouse",
+      "fields": {
+        "searchKey": {
+          "searchable": true,
+          "grid": true
+        },
+        "name": {
+          "searchable": true,
+          "grid": true
+        },
+        "description": {
+          "grid": false
+        },
+        "locationAddress": {
+          "grid": false
+        },
+        "warehouseRule": {
+          "grid": false
+        },
+        "storageBinSeparator": {
+          "visibility": "discarded"
+        },
+        "shipmentVehicle": {
+          "visibility": "discarded"
+        },
+        "shipperCode": {
+          "visibility": "discarded"
+        },
+        "fromDocumentNo": {
+          "visibility": "discarded"
+        },
+        "toDocumentNo": {
+          "visibility": "discarded"
+        },
+        "mReturnlocatorID": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "storageBin": {
+      "name": "storageBin"
+    },
+    "productTransactions": {
+      "name": "productTransactions"
+    },
+    "binContents": {
+      "name": "binContents"
+    },
+    "accounting": {
+      "name": "accounting",
+      "exclude": true
+    }
+  },
+  "rules": {},
+  "discardPatterns": [
+    "EM_*"
+  ],
+  "version": 2
+}

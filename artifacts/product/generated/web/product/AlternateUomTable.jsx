@@ -14,9 +14,6 @@ const filters = [];
 
 // @sf-generated-start component:AlternateUomTable
 export default function AlternateUomTable(props) {
-  // @sf-custom-slot hooks:AlternateUomTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:AlternateUomTable
-
-// @sf-custom-slot section:AlternateUomTable-custom

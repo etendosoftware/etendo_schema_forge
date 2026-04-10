@@ -80,18 +80,18 @@ const api = {
     },
     {
       "entity": "goodsShipment",
-      "field": "documentAction",
-      "column": "DocAction",
-      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/documentAction",
-      "processId": "109",
-      "processType": "classic"
-    },
-    {
-      "entity": "goodsShipment",
       "field": "processGoodsJava",
       "column": "Process_Goods_Java",
       "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/processGoodsJava",
       "processId": "49DEE812BF0545269781FCEBF2235924",
+      "processType": "classic"
+    },
+    {
+      "entity": "goodsShipment",
+      "field": "documentAction",
+      "column": "DocAction",
+      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/documentAction",
+      "processId": "109",
       "processType": "classic"
     },
     {
@@ -118,11 +118,11 @@ const api = {
     },
     {
       "entity": "goodsShipment",
-      "field": "receiveMaterials",
-      "column": "RM_Receipt_PickEdit",
-      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/receiveMaterials",
-      "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
-      "processType": "obuiapp"
+      "field": "generateTo",
+      "column": "GenerateTo",
+      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/generateTo",
+      "processId": "154",
+      "processType": "classic"
     },
     {
       "entity": "goodsShipment",
@@ -134,18 +134,18 @@ const api = {
     },
     {
       "entity": "goodsShipment",
-      "field": "generateTo",
-      "column": "GenerateTo",
-      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/generateTo",
-      "processId": "154",
-      "processType": "classic"
-    },
-    {
-      "entity": "goodsShipment",
       "field": "sendMaterials",
       "column": "RM_Shipment_Pickedit",
       "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/sendMaterials",
       "processId": "4AD70293357245AB96E59C2CDB43A35D",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "goodsShipment",
+      "field": "receiveMaterials",
+      "column": "RM_Receipt_PickEdit",
+      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/receiveMaterials",
+      "processId": "5E9F9D7EECC24E4FBB2C60840FF613BE",
       "processType": "obuiapp"
     },
     {

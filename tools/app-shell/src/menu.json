@@ -10,6 +10,22 @@
       ]
     },
     {
+      "group": "People",
+      "icon": "Users",
+      "section": "Commercial",
+      "items": [
+        { "name": "contacts", "label": "Contacts" },
+        { "name": "business-partner", "label": "Business Partners", "hidden": true },
+        { "name": "crm", "label": "CRM", "hidden": true },
+        { "name": "deal", "label": "Deals", "hidden": true },
+        { "name": "activity", "label": "Activities", "hidden": true },
+        { "name": "lead", "label": "Leads", "hidden": true },
+        { "name": "hr", "label": "HR", "hidden": true },
+        { "name": "employee", "label": "Employees", "hidden": true },
+        { "name": "absence", "label": "Absences", "hidden": true }
+      ]
+    },
+    {
       "group": "Sales",
       "icon": "ShoppingCart",
       "section": "Commercial",
@@ -18,7 +34,8 @@
         { "name": "sales-order", "label": "Sales Orders" },
         { "name": "goods-shipment", "label": "Shipments" },
         { "name": "sales-invoice", "label": "Invoices" },
-        { "name": "return-from-customer", "label": "Returns" }
+        { "name": "return-from-customer", "label": "Returns" },
+        { "name": "return-material-receipt", "label": "Return Material Receipts" }
       ]
     },
     {
@@ -55,22 +72,8 @@
         { "name": "physical-inventory", "label": "Physical Inventory" },
         { "name": "goods-movements", "label": "Goods Movements" },
         { "name": "warehouse", "label": "Warehouses" },
+        { "name": "report-viewer-inventory", "label": "Reports", "path": "report-viewer?category=inventory" },
         { "name": "warehouse-storage-bins", "label": "Storage Bins", "hidden": true }
-      ]
-    },
-    {
-      "group": "People",
-      "icon": "Users",
-      "items": [
-        { "name": "contacts", "label": "Contacts" },
-        { "name": "business-partner", "label": "Business Partners", "hidden": true },
-        { "name": "crm", "label": "CRM", "hidden": true },
-        { "name": "deal", "label": "Deals", "hidden": true },
-        { "name": "activity", "label": "Activities", "hidden": true },
-        { "name": "lead", "label": "Leads", "hidden": true },
-        { "name": "hr", "label": "HR", "hidden": true },
-        { "name": "employee", "label": "Employees", "hidden": true },
-        { "name": "absence", "label": "Absences", "hidden": true }
       ]
     },
     {
@@ -98,7 +101,7 @@
         { "name": "payment-term", "label": "Payment Terms" },
         { "name": "payment-method", "label": "Payment Methods" },
         { "name": "tax", "label": "Taxes" },
-        { "name": "uom", "label": "Units of Measure" },
+        { "name": "unit-of-measure", "label": "Units of Measure" },
         { "name": "user", "label": "Users" },
         { "name": "smart-scan", "label": "Smart Scan" },
         { "name": "oauth2-clients", "label": "OAuth2 Clients", "icon": "Shield" }

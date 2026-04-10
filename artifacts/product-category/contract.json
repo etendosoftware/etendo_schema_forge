@@ -1,131 +1,1329 @@
 {
-  "version": "0.1.0",
-  "generatedAt": "2026-03-06T17:26:29.880Z",
-  "checksum": "9b91127aa4af67d4",
+  "version": "0.2.0",
+  "generatedAt": "2026-04-09T12:40:29.761Z",
+  "checksum": "3f910b853879b98f",
   "frontendContract": {
     "window": {
-      "id": "210",
+      "id": "144",
       "name": "Product Category",
       "primaryEntity": "productCategory",
-      "category": "reference"
+      "category": "inventory",
+      "detailEntity": "assignedProducts",
+      "layoutType": "default"
     },
     "entities": {
       "productCategory": {
+        "tableName": "M_Product_Category",
+        "tabId": "189",
+        "tabName": "Product Category",
+        "uiPattern": "STD",
         "fields": [
           {
-            "name": "name",
-            "column": "Name",
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "label": "Search Key",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 1
           },
           {
-            "name": "searchKey",
-            "column": "Value",
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 2
           },
           {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
-            "type": "string",
+            "label": "Description",
+            "type": "textarea",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 3
           },
           {
-            "name": "isActive",
-            "column": "IsActive",
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "label": "Default",
             "type": "boolean",
             "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 4
+          },
+          {
+            "name": "summaryLevel",
+            "apiKey": "summaryLevel",
+            "column": "Issummary",
+            "label": "Summary Level",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "principal",
+            "seq": 5
+          },
+          {
+            "name": "image",
+            "apiKey": "image",
+            "column": "AD_Image_ID",
+            "label": "Image",
+            "type": "image",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "other",
+            "seq": 6
+          }
+        ],
+        "searchableFields": [
+          "searchKey",
+          "name"
+        ],
+        "computedFields": [
+          {
+            "name": "summaryLevel",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          }
+        ]
+      },
+      "assignedProducts": {
+        "tableName": "M_Product",
+        "tabId": "407",
+        "tabName": "Assigned Products",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "label": "Search Key",
+            "type": "string",
+            "tsType": "string",
             "visibility": "readOnly",
             "required": true,
             "grid": true,
             "form": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "productType",
+            "apiKey": "productType",
+            "column": "ProductType",
+            "label": "Product Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "E",
+                "name": "Expense type"
+              },
+              {
+                "value": "I",
+                "name": "Item"
+              },
+              {
+                "value": "R",
+                "name": "Resource"
+              },
+              {
+                "value": "S",
+                "name": "Service"
+              }
+            ],
+            "defaultValue": "I",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Product_Type"
+            }
           }
         ],
         "searchableFields": [
+          "searchKey",
           "name",
-          "searchKey"
+          "productType"
         ],
-        "computedFields": []
+        "computedFields": [
+          {
+            "name": "productType",
+            "derivation": {
+              "type": "computed",
+              "source": "I"
+            }
+          }
+        ]
       }
     }
   },
   "backendContract": {
     "window": {
-      "id": "210",
+      "id": "144",
       "name": "Product Category",
       "primaryEntity": "productCategory",
-      "category": "reference"
+      "category": "inventory",
+      "detailEntity": "assignedProducts"
     },
     "entities": {
       "productCategory": {
+        "tableName": "M_Product_Category",
+        "tabId": "189",
+        "tabName": "Product Category",
         "fields": [
           {
-            "name": "name",
-            "column": "Name",
-            "type": "string",
-            "visibility": "editable",
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": true
           },
           {
             "name": "searchKey",
+            "apiKey": "searchKey",
             "column": "Value",
             "type": "string",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "description",
-            "column": "Description",
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
             "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "textarea",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "isActive",
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
             "column": "IsActive",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
-            "name": "adClientId",
+            "name": "summaryLevel",
+            "apiKey": "summaryLevel",
+            "column": "Issummary",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "image",
+            "apiKey": "image",
+            "column": "AD_Image_ID",
+            "type": "image",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "plannedMargin",
+            "apiKey": "plannedMargin",
+            "column": "PlannedMargin",
+            "type": "decimal",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "assetCategory",
+            "apiKey": "assetCategory",
+            "column": "A_Asset_Group_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Product_Category_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
             "column": "AD_Client_ID",
-            "type": "id",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "adOrgId",
-            "column": "AD_Org_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "created",
+            "name": "creationDate",
+            "apiKey": "creationDate",
             "column": "Created",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
             "name": "updated",
+            "apiKey": "updated",
             "column": "Updated",
-            "type": "datetime",
+            "type": "dateTime",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "assignedProducts": {
+        "tableName": "M_Product",
+        "tabId": "407",
+        "tabName": "Assigned Products",
+        "fields": [
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "productType",
+            "apiKey": "productType",
+            "column": "ProductType",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "summaryLevel",
+            "apiKey": "summaryLevel",
+            "column": "IsSummary",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "discontinued",
+            "apiKey": "discontinued",
+            "column": "Discontinued",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "expenseType",
+            "apiKey": "expenseType",
+            "column": "S_ExpenseType_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "resource",
+            "apiKey": "resource",
+            "column": "S_Resource_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "storageBin",
+            "apiKey": "storageBin",
+            "column": "M_Locator_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Product_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "stocked",
+            "apiKey": "stocked",
+            "column": "IsStocked",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "purchase",
+            "apiKey": "purchase",
+            "column": "IsPurchased",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "productCategory",
+            "apiKey": "productCategory",
+            "column": "M_Product_Category_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "taxCategory",
+            "apiKey": "taxCategory",
+            "column": "C_TaxCategory_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "sale",
+            "apiKey": "sale",
+            "column": "IsSold",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "volume",
+            "apiKey": "volume",
+            "column": "Volume",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "weight",
+            "apiKey": "weight",
+            "column": "Weight",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uPCEAN",
+            "apiKey": "uPCEAN",
+            "column": "UPC",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "sKU",
+            "apiKey": "sKU",
+            "column": "SKU",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "shelfWidth",
+            "apiKey": "shelfWidth",
+            "column": "ShelfWidth",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "shelfHeight",
+            "apiKey": "shelfHeight",
+            "column": "ShelfHeight",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "shelfDepth",
+            "apiKey": "shelfDepth",
+            "column": "ShelfDepth",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "unitsPerPallet",
+            "apiKey": "unitsPerPallet",
+            "column": "UnitsPerPallet",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "discontinuedBy",
+            "apiKey": "discontinuedBy",
+            "column": "DiscontinuedBy",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "comments",
+            "apiKey": "comments",
+            "column": "DocumentNote",
+            "type": "text",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "helpComment",
+            "apiKey": "helpComment",
+            "column": "Help",
+            "type": "text",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "classification",
+            "apiKey": "classification",
+            "column": "Classification",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesRepresentative",
+            "apiKey": "salesRepresentative",
+            "column": "SalesRep_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "billOfMaterials",
+            "apiKey": "billOfMaterials",
+            "column": "IsBOM",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "printDetailsOnInvoice",
+            "apiKey": "printDetailsOnInvoice",
+            "column": "IsInvoicePrintDetails",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "printDetailsOnPickList",
+            "apiKey": "printDetailsOnPickList",
+            "column": "IsPickListPrintDetails",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "bOMVerified",
+            "apiKey": "bOMVerified",
+            "column": "IsVerified",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "imageURL",
+            "apiKey": "imageURL",
+            "column": "ImageURL",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "descriptionURL",
+            "apiKey": "descriptionURL",
+            "column": "DescriptionURL",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "versionNo",
+            "apiKey": "versionNo",
+            "column": "VersionNo",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "guaranteedDays",
+            "apiKey": "guaranteedDays",
+            "column": "GuaranteeDays",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "attributeSet",
+            "apiKey": "attributeSet",
+            "column": "M_AttributeSet_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "attributeSetValue",
+            "apiKey": "attributeSetValue",
+            "column": "M_AttributeSetInstance_ID",
+            "type": "productAttribute",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "downloadURL",
+            "apiKey": "downloadURL",
+            "column": "DownloadURL",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "freightCategory",
+            "apiKey": "freightCategory",
+            "column": "M_FreightCategory_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "image",
+            "apiKey": "image",
+            "column": "AD_Image_ID",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "allowDeferredSell",
+            "apiKey": "allowDeferredSell",
+            "column": "Allow_Deferred_Sell",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "useAttributeSetValueAs",
+            "apiKey": "useAttributeSetValueAs",
+            "column": "Attrsetvaluetype",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "bookUsingPurchaseOrderPrice",
+            "apiKey": "bookUsingPurchaseOrderPrice",
+            "column": "Bookusingpoprice",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "calculated",
+            "apiKey": "calculated",
+            "column": "Calculated",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "capacity",
+            "apiKey": "capacity",
+            "column": "Capacity",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "characteristicDescription",
+            "apiKey": "characteristicDescription",
+            "column": "Characteristic_Desc",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "copyservicemodifytaxconfig",
+            "apiKey": "copyservicemodifytaxconfig",
+            "column": "Copyservicemodifytaxconfig",
+            "type": "button",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createVariants",
+            "apiKey": "createVariants",
+            "column": "CreateVariants",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uOMForWeight",
+            "apiKey": "uOMForWeight",
+            "column": "C_Uom_Weight_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "defaultPeriod",
+            "apiKey": "defaultPeriod",
+            "column": "DefaultPeriod",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "defaultPeriodExpense",
+            "apiKey": "defaultPeriodExpense",
+            "column": "DefaultPeriod_Exp",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "deferredSellMaxDays",
+            "apiKey": "deferredSellMaxDays",
+            "column": "Deferred_Sell_Max_Days",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "minimumLeadTime",
+            "apiKey": "minimumLeadTime",
+            "column": "Delaymin",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "aeat347Apartment",
+            "apiKey": "aeat347Apartment",
+            "column": "EM_Aeat347_Apartment",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Building",
+            "apiKey": "aeat347Building",
+            "column": "EM_Aeat347_Building",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Complement",
+            "apiKey": "aeat347Complement",
+            "column": "EM_Aeat347_Complement",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347County",
+            "apiKey": "aeat347County",
+            "column": "EM_Aeat347_County",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Countycode",
+            "apiKey": "aeat347Countycode",
+            "column": "EM_Aeat347_Countycode",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Floor",
+            "apiKey": "aeat347Floor",
+            "column": "EM_Aeat347_Floor",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Hall",
+            "apiKey": "aeat347Hall",
+            "column": "EM_Aeat347_Hall",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Hallway",
+            "apiKey": "aeat347Hallway",
+            "column": "EM_Aeat347_Hallway",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Isleasebusiness",
+            "apiKey": "aeat347Isleasebusiness",
+            "column": "EM_Aeat347_Isleasebusiness",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Location",
+            "apiKey": "aeat347Location",
+            "column": "EM_Aeat347_Location",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Locationtype",
+            "apiKey": "aeat347Locationtype",
+            "column": "EM_Aeat347_Locationtype",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Referenceid",
+            "apiKey": "aeat347Referenceid",
+            "column": "EM_Aeat347_Referenceid",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Regioncode",
+            "apiKey": "aeat347Regioncode",
+            "column": "EM_Aeat347_Regioncode",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Situation",
+            "apiKey": "aeat347Situation",
+            "column": "EM_Aeat347_Situation",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Streetname",
+            "apiKey": "aeat347Streetname",
+            "column": "EM_Aeat347_Streetname",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Streetnumber",
+            "apiKey": "aeat347Streetnumber",
+            "column": "EM_Aeat347_Streetnumber",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Streetnumberqua",
+            "apiKey": "aeat347Streetnumberqua",
+            "column": "EM_Aeat347_Streetnumberqua",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Streetnumbertype",
+            "apiKey": "aeat347Streetnumbertype",
+            "column": "EM_Aeat347_Streetnumbertype",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aeat347Zipcode",
+            "apiKey": "aeat347Zipcode",
+            "column": "EM_Aeat347_Zipcode",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "enforceAttribute",
+            "apiKey": "enforceAttribute",
+            "column": "Enforce_Attribute",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "expplantype",
+            "apiKey": "expplantype",
+            "column": "Expplantype",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "genericProduct",
+            "apiKey": "genericProduct",
+            "column": "Generic_Product_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "isdeferredexpense",
+            "apiKey": "isdeferredexpense",
+            "column": "Isdeferredexpense",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "deferredRevenue",
+            "apiKey": "deferredRevenue",
+            "column": "Isdeferredrevenue",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "isGeneric",
+            "apiKey": "isGeneric",
+            "column": "IsGeneric",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "linkedToProduct",
+            "apiKey": "linkedToProduct",
+            "column": "Islinkedtoproduct",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "modifyTax",
+            "apiKey": "modifyTax",
+            "column": "Ismodifytax",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "printPrice",
+            "apiKey": "printPrice",
+            "column": "Ispriceprinted",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "ispricerulebased",
+            "apiKey": "ispricerulebased",
+            "column": "Ispricerulebased",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "isquantityvariable",
+            "apiKey": "isquantityvariable",
+            "column": "Isquantityvariable",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "manageVariants",
+            "apiKey": "manageVariants",
+            "column": "ManageVariants",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "processPlan",
+            "apiKey": "processPlan",
+            "column": "MA_Processplan_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "brand",
+            "apiKey": "brand",
+            "column": "M_Brand_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "mProductStatusID",
+            "apiKey": "mProductStatusID",
+            "column": "M_Product_Status_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "planner",
+            "apiKey": "planner",
+            "column": "MRP_Planner_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "planningMethod",
+            "apiKey": "planningMethod",
+            "column": "MRP_Planningmethod_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "name2",
+            "apiKey": "name2",
+            "column": "Name2",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "overdueReturnDays",
+            "apiKey": "overdueReturnDays",
+            "column": "Overdue_Return_Days",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "periodNumber",
+            "apiKey": "periodNumber",
+            "column": "Periodnumber",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "periodnumberExp",
+            "apiKey": "periodnumberExp",
+            "column": "Periodnumber_Exp",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "printDescription",
+            "apiKey": "printDescription",
+            "column": "Print_Description",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "includedProductCategories",
+            "apiKey": "includedProductCategories",
+            "column": "Prod_Cat_Selection",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "production",
+            "apiKey": "production",
+            "column": "Production",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "includedProducts",
+            "apiKey": "includedProducts",
+            "column": "Product_Selection",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "maxQuantity",
+            "apiKey": "maxQuantity",
+            "column": "Qtymax",
+            "type": "quantity",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "minQuantity",
+            "apiKey": "minQuantity",
+            "column": "Qtymin",
+            "type": "quantity",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "standardQuantity",
+            "apiKey": "standardQuantity",
+            "column": "Qtystd",
+            "type": "quantity",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "quantityType",
+            "apiKey": "quantityType",
+            "column": "Qtytype",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "quantityRule",
+            "apiKey": "quantityRule",
+            "column": "Quantity_Rule",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "relateprodcattaxtoservice",
+            "apiKey": "relateprodcattaxtoservice",
+            "column": "Relateprodcattaxtoservice",
+            "type": "button",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "relateprodcattoservice",
+            "apiKey": "relateprodcattoservice",
+            "column": "Relateprodcattoservice",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "relateprodtoservice",
+            "apiKey": "relateprodtoservice",
+            "column": "Relateprodtoservice",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "returnable",
+            "apiKey": "returnable",
+            "column": "Returnable",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "revenuePlanType",
+            "apiKey": "revenuePlanType",
+            "column": "Revplantype",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "safetyStock",
+            "apiKey": "safetyStock",
+            "column": "Stockmin",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "minimumStock",
+            "apiKey": "minimumStock",
+            "column": "Stock_Min",
+            "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "uniquePerDocument",
+            "apiKey": "uniquePerDocument",
+            "column": "Unique_Per_Document",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updateInvariants",
+            "apiKey": "updateInvariants",
+            "column": "Updateinvariants",
+            "type": "button",
+            "visibility": "system",
+            "required": false
           }
         ]
       }
@@ -136,8 +1334,8 @@
         "path": "/productCategory",
         "entity": "productCategory",
         "supportedFilters": [
-          "name",
-          "searchKey"
+          "searchKey",
+          "name"
         ]
       },
       {
@@ -163,9 +1361,158 @@
         "path": "/productCategory/:id",
         "entity": "productCategory",
         "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/assignedProducts",
+        "entity": "assignedProducts",
+        "supportedFilters": [
+          "searchKey",
+          "name",
+          "productType"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/assignedProducts/:id",
+        "entity": "assignedProducts",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/assignedProducts",
+        "entity": "assignedProducts",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/assignedProducts/:id",
+        "entity": "assignedProducts",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/assignedProducts/:id",
+        "entity": "assignedProducts",
+        "supportedFilters": []
       }
     ],
     "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "product-category",
+    "baseUrl": "/sws/neo/product-category",
+    "crud": {
+      "productCategory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product-category/productCategory",
+        "detailUrl": "/sws/neo/product-category/productCategory/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      },
+      "assignedProducts": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/product-category/assignedProducts",
+        "detailUrl": "/sws/neo/product-category/assignedProducts/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name",
+          "productType"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [
+      {
+        "entity": "assignedProducts",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/product-category/assignedProducts/{id}/action/processNow",
+        "processId": "136",
+        "processType": "classic"
+      },
+      {
+        "entity": "assignedProducts",
+        "field": "copyservicemodifytaxconfig",
+        "column": "Copyservicemodifytaxconfig",
+        "url": "/sws/neo/product-category/assignedProducts/{id}/action/copyservicemodifytaxconfig",
+        "processId": "CBBD7BB6BDFE4705B68DD3D9FF788D4E",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "assignedProducts",
+        "field": "createVariants",
+        "column": "CreateVariants",
+        "url": "/sws/neo/product-category/assignedProducts/{id}/action/createVariants",
+        "processId": "3C386BC12832466790E50F2F8C5EBD85",
+        "processType": "classic"
+      },
+      {
+        "entity": "assignedProducts",
+        "field": "manageVariants",
+        "column": "ManageVariants",
+        "url": "/sws/neo/product-category/assignedProducts/{id}/action/manageVariants",
+        "processId": "FE3A8C134D41488DB3A69837BD54B56A",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "assignedProducts",
+        "field": "relateprodcattaxtoservice",
+        "column": "Relateprodcattaxtoservice",
+        "url": "/sws/neo/product-category/assignedProducts/{id}/action/relateprodcattaxtoservice",
+        "processId": "E0870062F05F4DC88E589ABC6A45DF4C",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "assignedProducts",
+        "field": "relateprodcattoservice",
+        "column": "Relateprodcattoservice",
+        "url": "/sws/neo/product-category/assignedProducts/{id}/action/relateprodcattoservice",
+        "processId": "8E5996F1F3154B498468938B5341A0CB",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "assignedProducts",
+        "field": "relateprodtoservice",
+        "column": "Relateprodtoservice",
+        "url": "/sws/neo/product-category/assignedProducts/{id}/action/relateprodtoservice",
+        "processId": "E66C669B0B01498C8EB3F99CD371CF9A",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "assignedProducts",
+        "field": "updateInvariants",
+        "column": "Updateinvariants",
+        "url": "/sws/neo/product-category/assignedProducts/{id}/action/updateInvariants",
+        "processId": "7DC2C8DC186B4C1DB18E147911950861",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=product-categoryDate"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    }
   },
   "testManifest": {
     "tests": [
@@ -173,17 +1520,17 @@
         "id": "t-1",
         "category": "field-presence",
         "entity": "productCategory",
-        "field": "name",
+        "field": "searchKey",
         "runner": "node",
-        "description": "Field 'name' should be present in productCategory"
+        "description": "Field 'searchKey' should be present in productCategory"
       },
       {
         "id": "t-2",
         "category": "field-presence",
         "entity": "productCategory",
-        "field": "searchKey",
+        "field": "name",
         "runner": "node",
-        "description": "Field 'searchKey' should be present in productCategory"
+        "description": "Field 'name' should be present in productCategory"
       },
       {
         "id": "t-3",
@@ -197,20 +1544,28 @@
         "id": "t-4",
         "category": "field-presence",
         "entity": "productCategory",
-        "field": "isActive",
+        "field": "default",
         "runner": "node",
-        "description": "Field 'isActive' should be present in productCategory"
+        "description": "Field 'default' should be present in productCategory"
       },
       {
         "id": "t-5",
-        "category": "field-type",
+        "category": "field-presence",
         "entity": "productCategory",
-        "field": "name",
+        "field": "summaryLevel",
         "runner": "node",
-        "description": "Field 'name' should have type 'string' in productCategory"
+        "description": "Field 'summaryLevel' should be present in productCategory"
       },
       {
         "id": "t-6",
+        "category": "field-presence",
+        "entity": "productCategory",
+        "field": "image",
+        "runner": "node",
+        "description": "Field 'image' should be present in productCategory"
+      },
+      {
+        "id": "t-7",
         "category": "field-type",
         "entity": "productCategory",
         "field": "searchKey",
@@ -218,7 +1573,15 @@
         "description": "Field 'searchKey' should have type 'string' in productCategory"
       },
       {
-        "id": "t-7",
+        "id": "t-8",
+        "category": "field-type",
+        "entity": "productCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in productCategory"
+      },
+      {
+        "id": "t-9",
         "category": "field-type",
         "entity": "productCategory",
         "field": "description",
@@ -226,23 +1589,31 @@
         "description": "Field 'description' should have type 'string' in productCategory"
       },
       {
-        "id": "t-8",
+        "id": "t-10",
         "category": "field-type",
         "entity": "productCategory",
-        "field": "isActive",
+        "field": "default",
         "runner": "node",
-        "description": "Field 'isActive' should have type 'boolean' in productCategory"
+        "description": "Field 'default' should have type 'boolean' in productCategory"
       },
       {
-        "id": "t-9",
-        "category": "searchable-filters",
+        "id": "t-11",
+        "category": "field-type",
         "entity": "productCategory",
-        "field": "name",
+        "field": "summaryLevel",
         "runner": "node",
-        "description": "Field 'name' should be a supported filter for productCategory"
+        "description": "Field 'summaryLevel' should have type 'boolean' in productCategory"
       },
       {
-        "id": "t-10",
+        "id": "t-12",
+        "category": "field-type",
+        "entity": "productCategory",
+        "field": "image",
+        "runner": "node",
+        "description": "Field 'image' should have type 'string' in productCategory"
+      },
+      {
+        "id": "t-13",
         "category": "searchable-filters",
         "entity": "productCategory",
         "field": "searchKey",
@@ -250,56 +1621,1331 @@
         "description": "Field 'searchKey' should be a supported filter for productCategory"
       },
       {
-        "id": "t-11",
+        "id": "t-14",
+        "category": "searchable-filters",
+        "entity": "productCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for productCategory"
+      },
+      {
+        "id": "t-15",
         "category": "visibility",
         "entity": "productCategory",
         "runner": "node",
         "description": "Entity 'productCategory' should only expose visible fields in frontend"
       },
       {
-        "id": "t-12",
-        "category": "system-field",
+        "id": "t-16",
+        "category": "default-value-type",
         "entity": "productCategory",
-        "field": "adClientId",
+        "field": "summaryLevel",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for productCategory"
+        "description": "Default value for 'summaryLevel' in productCategory should be a string"
       },
       {
-        "id": "t-13",
-        "category": "system-field",
-        "entity": "productCategory",
-        "field": "adOrgId",
+        "id": "t-17",
+        "category": "field-presence",
+        "entity": "assignedProducts",
+        "field": "searchKey",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for productCategory"
+        "description": "Field 'searchKey' should be present in assignedProducts"
       },
       {
-        "id": "t-14",
-        "category": "system-field",
-        "entity": "productCategory",
-        "field": "created",
+        "id": "t-18",
+        "category": "field-presence",
+        "entity": "assignedProducts",
+        "field": "name",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for productCategory"
+        "description": "Field 'name' should be present in assignedProducts"
       },
       {
-        "id": "t-15",
+        "id": "t-19",
+        "category": "field-presence",
+        "entity": "assignedProducts",
+        "field": "productType",
+        "runner": "node",
+        "description": "Field 'productType' should be present in assignedProducts"
+      },
+      {
+        "id": "t-20",
+        "category": "field-type",
+        "entity": "assignedProducts",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should have type 'string' in assignedProducts"
+      },
+      {
+        "id": "t-21",
+        "category": "field-type",
+        "entity": "assignedProducts",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in assignedProducts"
+      },
+      {
+        "id": "t-22",
+        "category": "field-type",
+        "entity": "assignedProducts",
+        "field": "productType",
+        "runner": "node",
+        "description": "Field 'productType' should have type 'string' in assignedProducts"
+      },
+      {
+        "id": "t-23",
+        "category": "searchable-filters",
+        "entity": "assignedProducts",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be a supported filter for assignedProducts"
+      },
+      {
+        "id": "t-24",
+        "category": "searchable-filters",
+        "entity": "assignedProducts",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for assignedProducts"
+      },
+      {
+        "id": "t-25",
+        "category": "searchable-filters",
+        "entity": "assignedProducts",
+        "field": "productType",
+        "runner": "node",
+        "description": "Field 'productType' should be a supported filter for assignedProducts"
+      },
+      {
+        "id": "t-26",
+        "category": "visibility",
+        "entity": "assignedProducts",
+        "runner": "node",
+        "description": "Entity 'assignedProducts' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-27",
+        "category": "default-value-type",
+        "entity": "assignedProducts",
+        "field": "productType",
+        "runner": "node",
+        "description": "Default value for 'productType' in assignedProducts should be a string"
+      },
+      {
+        "id": "t-28",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-29",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-30",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "plannedMargin",
+        "runner": "node",
+        "description": "System field 'plannedMargin' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-31",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "assetCategory",
+        "runner": "node",
+        "description": "System field 'assetCategory' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-32",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-33",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-34",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-35",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-36",
         "category": "system-field",
         "entity": "productCategory",
         "field": "updated",
         "runner": "node",
         "description": "System field 'updated' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-37",
+        "category": "system-field",
+        "entity": "productCategory",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for productCategory"
+      },
+      {
+        "id": "t-38",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "summaryLevel",
+        "runner": "node",
+        "description": "System field 'summaryLevel' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-39",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "discontinued",
+        "runner": "node",
+        "description": "System field 'discontinued' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-40",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "expenseType",
+        "runner": "node",
+        "description": "System field 'expenseType' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-41",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "resource",
+        "runner": "node",
+        "description": "System field 'resource' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-42",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "storageBin",
+        "runner": "node",
+        "description": "System field 'storageBin' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-43",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "description",
+        "runner": "node",
+        "description": "System field 'description' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-44",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-45",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-46",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-47",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "uOM",
+        "runner": "node",
+        "description": "System field 'uOM' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-48",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "stocked",
+        "runner": "node",
+        "description": "System field 'stocked' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-49",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "purchase",
+        "runner": "node",
+        "description": "System field 'purchase' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-50",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "productCategory",
+        "runner": "node",
+        "description": "System field 'productCategory' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-51",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "taxCategory",
+        "runner": "node",
+        "description": "System field 'taxCategory' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-52",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "sale",
+        "runner": "node",
+        "description": "System field 'sale' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-53",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "volume",
+        "runner": "node",
+        "description": "System field 'volume' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-54",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "weight",
+        "runner": "node",
+        "description": "System field 'weight' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-55",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "uPCEAN",
+        "runner": "node",
+        "description": "System field 'uPCEAN' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-56",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "sKU",
+        "runner": "node",
+        "description": "System field 'sKU' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-57",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "shelfWidth",
+        "runner": "node",
+        "description": "System field 'shelfWidth' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-58",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "shelfHeight",
+        "runner": "node",
+        "description": "System field 'shelfHeight' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-59",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "shelfDepth",
+        "runner": "node",
+        "description": "System field 'shelfDepth' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-60",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "unitsPerPallet",
+        "runner": "node",
+        "description": "System field 'unitsPerPallet' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-61",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "discontinuedBy",
+        "runner": "node",
+        "description": "System field 'discontinuedBy' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-62",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "comments",
+        "runner": "node",
+        "description": "System field 'comments' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-63",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "helpComment",
+        "runner": "node",
+        "description": "System field 'helpComment' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-64",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "classification",
+        "runner": "node",
+        "description": "System field 'classification' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-65",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "salesRepresentative",
+        "runner": "node",
+        "description": "System field 'salesRepresentative' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-66",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "billOfMaterials",
+        "runner": "node",
+        "description": "System field 'billOfMaterials' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-67",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "printDetailsOnInvoice",
+        "runner": "node",
+        "description": "System field 'printDetailsOnInvoice' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-68",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "printDetailsOnPickList",
+        "runner": "node",
+        "description": "System field 'printDetailsOnPickList' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-69",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "bOMVerified",
+        "runner": "node",
+        "description": "System field 'bOMVerified' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-70",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-71",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-72",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "imageURL",
+        "runner": "node",
+        "description": "System field 'imageURL' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-73",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "descriptionURL",
+        "runner": "node",
+        "description": "System field 'descriptionURL' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-74",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "versionNo",
+        "runner": "node",
+        "description": "System field 'versionNo' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-75",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "guaranteedDays",
+        "runner": "node",
+        "description": "System field 'guaranteedDays' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-76",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "attributeSet",
+        "runner": "node",
+        "description": "System field 'attributeSet' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-77",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "attributeSetValue",
+        "runner": "node",
+        "description": "System field 'attributeSetValue' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-78",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "downloadURL",
+        "runner": "node",
+        "description": "System field 'downloadURL' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-79",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "freightCategory",
+        "runner": "node",
+        "description": "System field 'freightCategory' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-80",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "image",
+        "runner": "node",
+        "description": "System field 'image' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-81",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "allowDeferredSell",
+        "runner": "node",
+        "description": "System field 'allowDeferredSell' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-82",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "useAttributeSetValueAs",
+        "runner": "node",
+        "description": "System field 'useAttributeSetValueAs' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-83",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "bookUsingPurchaseOrderPrice",
+        "runner": "node",
+        "description": "System field 'bookUsingPurchaseOrderPrice' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-84",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "calculated",
+        "runner": "node",
+        "description": "System field 'calculated' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-85",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "capacity",
+        "runner": "node",
+        "description": "System field 'capacity' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-86",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "System field 'businessPartner' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-87",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "characteristicDescription",
+        "runner": "node",
+        "description": "System field 'characteristicDescription' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-88",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "copyservicemodifytaxconfig",
+        "runner": "node",
+        "description": "System field 'copyservicemodifytaxconfig' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-89",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-90",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-91",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "createVariants",
+        "runner": "node",
+        "description": "System field 'createVariants' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-92",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "uOMForWeight",
+        "runner": "node",
+        "description": "System field 'uOMForWeight' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-93",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "defaultPeriod",
+        "runner": "node",
+        "description": "System field 'defaultPeriod' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-94",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "defaultPeriodExpense",
+        "runner": "node",
+        "description": "System field 'defaultPeriodExpense' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-95",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "deferredSellMaxDays",
+        "runner": "node",
+        "description": "System field 'deferredSellMaxDays' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-96",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "minimumLeadTime",
+        "runner": "node",
+        "description": "System field 'minimumLeadTime' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-97",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Apartment",
+        "runner": "node",
+        "description": "System field 'aeat347Apartment' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-98",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Building",
+        "runner": "node",
+        "description": "System field 'aeat347Building' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-99",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Complement",
+        "runner": "node",
+        "description": "System field 'aeat347Complement' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-100",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347County",
+        "runner": "node",
+        "description": "System field 'aeat347County' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-101",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Countycode",
+        "runner": "node",
+        "description": "System field 'aeat347Countycode' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-102",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Floor",
+        "runner": "node",
+        "description": "System field 'aeat347Floor' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-103",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Hall",
+        "runner": "node",
+        "description": "System field 'aeat347Hall' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-104",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Hallway",
+        "runner": "node",
+        "description": "System field 'aeat347Hallway' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-105",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Isleasebusiness",
+        "runner": "node",
+        "description": "System field 'aeat347Isleasebusiness' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-106",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Location",
+        "runner": "node",
+        "description": "System field 'aeat347Location' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-107",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Locationtype",
+        "runner": "node",
+        "description": "System field 'aeat347Locationtype' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-108",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Referenceid",
+        "runner": "node",
+        "description": "System field 'aeat347Referenceid' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-109",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Regioncode",
+        "runner": "node",
+        "description": "System field 'aeat347Regioncode' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-110",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Situation",
+        "runner": "node",
+        "description": "System field 'aeat347Situation' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-111",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Streetname",
+        "runner": "node",
+        "description": "System field 'aeat347Streetname' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-112",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Streetnumber",
+        "runner": "node",
+        "description": "System field 'aeat347Streetnumber' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-113",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Streetnumberqua",
+        "runner": "node",
+        "description": "System field 'aeat347Streetnumberqua' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-114",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Streetnumbertype",
+        "runner": "node",
+        "description": "System field 'aeat347Streetnumbertype' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-115",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "aeat347Zipcode",
+        "runner": "node",
+        "description": "System field 'aeat347Zipcode' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-116",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "enforceAttribute",
+        "runner": "node",
+        "description": "System field 'enforceAttribute' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-117",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "expplantype",
+        "runner": "node",
+        "description": "System field 'expplantype' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-118",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "genericProduct",
+        "runner": "node",
+        "description": "System field 'genericProduct' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-119",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "isdeferredexpense",
+        "runner": "node",
+        "description": "System field 'isdeferredexpense' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-120",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "deferredRevenue",
+        "runner": "node",
+        "description": "System field 'deferredRevenue' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-121",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "isGeneric",
+        "runner": "node",
+        "description": "System field 'isGeneric' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-122",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "linkedToProduct",
+        "runner": "node",
+        "description": "System field 'linkedToProduct' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-123",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "modifyTax",
+        "runner": "node",
+        "description": "System field 'modifyTax' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-124",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "printPrice",
+        "runner": "node",
+        "description": "System field 'printPrice' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-125",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "ispricerulebased",
+        "runner": "node",
+        "description": "System field 'ispricerulebased' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-126",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "isquantityvariable",
+        "runner": "node",
+        "description": "System field 'isquantityvariable' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-127",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "manageVariants",
+        "runner": "node",
+        "description": "System field 'manageVariants' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-128",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "processPlan",
+        "runner": "node",
+        "description": "System field 'processPlan' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-129",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "brand",
+        "runner": "node",
+        "description": "System field 'brand' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-130",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "mProductStatusID",
+        "runner": "node",
+        "description": "System field 'mProductStatusID' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-131",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "planner",
+        "runner": "node",
+        "description": "System field 'planner' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-132",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "planningMethod",
+        "runner": "node",
+        "description": "System field 'planningMethod' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-133",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "name2",
+        "runner": "node",
+        "description": "System field 'name2' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-134",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "overdueReturnDays",
+        "runner": "node",
+        "description": "System field 'overdueReturnDays' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-135",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "periodNumber",
+        "runner": "node",
+        "description": "System field 'periodNumber' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-136",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "periodnumberExp",
+        "runner": "node",
+        "description": "System field 'periodnumberExp' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-137",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "printDescription",
+        "runner": "node",
+        "description": "System field 'printDescription' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-138",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "includedProductCategories",
+        "runner": "node",
+        "description": "System field 'includedProductCategories' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-139",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "production",
+        "runner": "node",
+        "description": "System field 'production' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-140",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "includedProducts",
+        "runner": "node",
+        "description": "System field 'includedProducts' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-141",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "maxQuantity",
+        "runner": "node",
+        "description": "System field 'maxQuantity' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-142",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "minQuantity",
+        "runner": "node",
+        "description": "System field 'minQuantity' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-143",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "standardQuantity",
+        "runner": "node",
+        "description": "System field 'standardQuantity' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-144",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "quantityType",
+        "runner": "node",
+        "description": "System field 'quantityType' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-145",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "quantityRule",
+        "runner": "node",
+        "description": "System field 'quantityRule' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-146",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "relateprodcattaxtoservice",
+        "runner": "node",
+        "description": "System field 'relateprodcattaxtoservice' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-147",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "relateprodcattoservice",
+        "runner": "node",
+        "description": "System field 'relateprodcattoservice' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-148",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "relateprodtoservice",
+        "runner": "node",
+        "description": "System field 'relateprodtoservice' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-149",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "returnable",
+        "runner": "node",
+        "description": "System field 'returnable' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-150",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "revenuePlanType",
+        "runner": "node",
+        "description": "System field 'revenuePlanType' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-151",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "safetyStock",
+        "runner": "node",
+        "description": "System field 'safetyStock' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-152",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "minimumStock",
+        "runner": "node",
+        "description": "System field 'minimumStock' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-153",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "uniquePerDocument",
+        "runner": "node",
+        "description": "System field 'uniquePerDocument' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-154",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-155",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-156",
+        "category": "system-field",
+        "entity": "assignedProducts",
+        "field": "updateInvariants",
+        "runner": "node",
+        "description": "System field 'updateInvariants' should exist in backend but not frontend for assignedProducts"
+      },
+      {
+        "id": "t-157",
+        "category": "rule-declared",
+        "rule": "SL_Product_Type_ProductType",
+        "runner": "node",
+        "description": "Rule 'SL_Product_Type_ProductType' (callout) should be declared"
+      },
+      {
+        "id": "t-158",
+        "category": "rule-declared",
+        "rule": "SL_TaxCategory_Org_AD_Org_ID",
+        "runner": "node",
+        "description": "Rule 'SL_TaxCategory_Org_AD_Org_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-159",
+        "category": "rule-declared",
+        "rule": "M_ProductCategory(Only Leaf)",
+        "runner": "node",
+        "description": "Rule 'M_ProductCategory(Only Leaf)' (validation) should be declared"
+      },
+      {
+        "id": "t-160",
+        "category": "rule-declared",
+        "runner": "node",
+        "description": "Rule 'undefined' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-161",
+        "category": "rule-declared",
+        "rule": "Copy Accounts",
+        "runner": "node",
+        "description": "Rule 'Copy Accounts' (process) should be declared"
+      },
+      {
+        "id": "t-162",
+        "category": "rule-declared",
+        "rule": "Create Variants",
+        "runner": "node",
+        "description": "Rule 'Create Variants' (process) should be declared"
+      },
+      {
+        "id": "t-163",
+        "category": "rule-declared",
+        "rule": "Verify BOM",
+        "runner": "node",
+        "description": "Rule 'Verify BOM' (process) should be declared"
+      },
+      {
+        "id": "t-164",
+        "category": "rule-declared",
+        "rule": "Copy Service Modify Tax Configuration",
+        "runner": "node",
+        "description": "Rule 'Copy Service Modify Tax Configuration' (process) should be declared"
+      },
+      {
+        "id": "t-165",
+        "category": "rule-declared",
+        "rule": "Manage Variants",
+        "runner": "node",
+        "description": "Rule 'Manage Variants' (process) should be declared"
+      },
+      {
+        "id": "t-166",
+        "category": "rule-declared",
+        "rule": "Relate Product Category and new tax to a Service Product",
+        "runner": "node",
+        "description": "Rule 'Relate Product Category and new tax to a Service Product' (process) should be declared"
+      },
+      {
+        "id": "t-167",
+        "category": "rule-declared",
+        "rule": "Relate Product Cat to a Service Product",
+        "runner": "node",
+        "description": "Rule 'Relate Product Cat to a Service Product' (process) should be declared"
+      },
+      {
+        "id": "t-168",
+        "category": "rule-declared",
+        "rule": "Relate Products to a Service Product",
+        "runner": "node",
+        "description": "Rule 'Relate Products to a Service Product' (process) should be declared"
+      },
+      {
+        "id": "t-169",
+        "category": "rule-declared",
+        "rule": "UpdateInvariants",
+        "runner": "node",
+        "description": "Rule 'UpdateInvariants' (process) should be declared"
+      },
+      {
+        "id": "t-170",
+        "category": "crud-flags",
+        "entity": "productCategory",
+        "runner": "node",
+        "description": "CRUD flags for 'productCategory' should all be booleans"
+      },
+      {
+        "id": "t-171",
+        "category": "crud-flags",
+        "entity": "assignedProducts",
+        "runner": "node",
+        "description": "CRUD flags for 'assignedProducts' should all be booleans"
+      },
+      {
+        "id": "t-172",
+        "category": "action-endpoint",
+        "entity": "assignedProducts",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in assignedProducts should exist"
+      },
+      {
+        "id": "t-173",
+        "category": "action-endpoint",
+        "entity": "assignedProducts",
+        "field": "copyservicemodifytaxconfig",
+        "runner": "node",
+        "description": "Action endpoint for 'copyservicemodifytaxconfig' in assignedProducts should exist"
+      },
+      {
+        "id": "t-174",
+        "category": "action-endpoint",
+        "entity": "assignedProducts",
+        "field": "createVariants",
+        "runner": "node",
+        "description": "Action endpoint for 'createVariants' in assignedProducts should exist"
+      },
+      {
+        "id": "t-175",
+        "category": "action-endpoint",
+        "entity": "assignedProducts",
+        "field": "manageVariants",
+        "runner": "node",
+        "description": "Action endpoint for 'manageVariants' in assignedProducts should exist"
+      },
+      {
+        "id": "t-176",
+        "category": "action-endpoint",
+        "entity": "assignedProducts",
+        "field": "relateprodcattaxtoservice",
+        "runner": "node",
+        "description": "Action endpoint for 'relateprodcattaxtoservice' in assignedProducts should exist"
+      },
+      {
+        "id": "t-177",
+        "category": "action-endpoint",
+        "entity": "assignedProducts",
+        "field": "relateprodcattoservice",
+        "runner": "node",
+        "description": "Action endpoint for 'relateprodcattoservice' in assignedProducts should exist"
+      },
+      {
+        "id": "t-178",
+        "category": "action-endpoint",
+        "entity": "assignedProducts",
+        "field": "relateprodtoservice",
+        "runner": "node",
+        "description": "Action endpoint for 'relateprodtoservice' in assignedProducts should exist"
+      },
+      {
+        "id": "t-179",
+        "category": "action-endpoint",
+        "entity": "assignedProducts",
+        "field": "updateInvariants",
+        "runner": "node",
+        "description": "Action endpoint for 'updateInvariants' in assignedProducts should exist"
       }
     ],
     "summary": {
-      "total": 15,
+      "total": 179,
       "byCategory": {
-        "field-presence": 4,
-        "field-type": 4,
-        "searchable-filters": 2,
-        "visibility": 1,
-        "system-field": 4
+        "field-presence": 9,
+        "field-type": 9,
+        "searchable-filters": 5,
+        "visibility": 2,
+        "default-value-type": 2,
+        "system-field": 129,
+        "rule-declared": 13,
+        "crud-flags": 2,
+        "action-endpoint": 8
       },
       "byRunner": {
-        "node": 15,
+        "node": 179,
         "junit": 0
       }
     }

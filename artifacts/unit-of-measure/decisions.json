@@ -1,0 +1,122 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "configuracion",
+    "name": "Unit of Measure",
+    "detailEntity": "conversion"
+  },
+  "entities": {
+    "unitOfMeasure": {
+      "fields": {
+        "eDICode": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 1
+        },
+        "name": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 2
+        },
+        "symbol": {
+          "grid": true,
+          "section": "principal",
+          "seq": 3
+        },
+        "uOMType": {
+          "grid": true,
+          "section": "principal",
+          "seq": 4
+        },
+        "standardPrecision": {
+          "section": "principal",
+          "seq": 5
+        },
+        "costingPrecision": {
+          "section": "principal",
+          "seq": 6
+        },
+        "default": {
+          "section": "principal",
+          "seq": 7
+        },
+        "description": {
+          "visibility": "editable",
+          "section": "other",
+          "seq": 8
+        },
+        "breakdown": {
+          "visibility": "editable",
+          "section": "other",
+          "seq": 9
+        },
+        "useinproduction": {
+          "section": "other",
+          "seq": 10
+        }
+      }
+    },
+    "translation": {
+      "exclude": true
+    },
+    "conversion": {
+      "fields": {
+        "toUOM": {
+          "visibility": "editable",
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 1,
+          "reference": "UOM",
+          "inputMode": "selector"
+        },
+        "multipleRateBy": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal",
+          "seq": 2
+        },
+        "divideRateBy": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal",
+          "seq": 3
+        }
+      }
+    }
+  },
+  "rules": {
+    "SL_Conversion_Rate_DivideRate": {
+      "type": "callout",
+      "entity": "conversion",
+      "decision": "Keep",
+      "description": "Auto-calculates multiply rate when divide rate is entered",
+      "impactIfOmitted": "Users must manually calculate conversion rates"
+    },
+    "SL_Conversion_Rate_MultiplyRate": {
+      "type": "callout",
+      "entity": "conversion",
+      "decision": "Keep",
+      "description": "Auto-calculates divide rate when multiply rate is entered",
+      "impactIfOmitted": "Users must manually calculate conversion rates"
+    },
+    "AD_Client_Security_validation": {
+      "type": "validation",
+      "entity": "unitOfMeasure",
+      "decision": "Keep",
+      "description": "Standard client security validation",
+      "impactIfOmitted": "Cross-client data leakage"
+    },
+    "C_UOM_Validation": {
+      "type": "validation",
+      "entity": "conversion",
+      "decision": "Keep",
+      "description": "Ensures target UOM has compatible type and is not the same as source",
+      "impactIfOmitted": "Users could create invalid self-referencing conversions"
+    }
+  },
+  "discardPatterns": ["EM_*"],
+  "version": 2
+}

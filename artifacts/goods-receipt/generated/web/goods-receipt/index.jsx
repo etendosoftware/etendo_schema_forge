@@ -33,28 +33,6 @@ const api = {
       "listUrl": "/sws/neo/goods-receipt/goodsReceiptLine",
       "detailUrl": "/sws/neo/goods-receipt/goodsReceiptLine/{id}",
       "supportedFilters": []
-    },
-    "accounting": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/goods-receipt/accounting",
-      "detailUrl": "/sws/neo/goods-receipt/accounting/{id}",
-      "supportedFilters": []
-    },
-    "landedCost": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/goods-receipt/landedCost",
-      "detailUrl": "/sws/neo/goods-receipt/landedCost/{id}",
-      "supportedFilters": []
     }
   },
   "selectors": [
@@ -217,140 +195,6 @@ const api = {
       "reference": "UserDimension2",
       "inputMode": "selector",
       "url": "/sws/neo/goods-receipt/goodsReceiptLine/selectors/ndDimension"
-    },
-    {
-      "entity": "accounting",
-      "field": "accountingSchema",
-      "column": "C_AcctSchema_ID",
-      "reference": "AcctSchema",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/accountingSchema"
-    },
-    {
-      "entity": "accounting",
-      "field": "currency",
-      "column": "C_Currency_ID",
-      "reference": "Currency",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/currency"
-    },
-    {
-      "entity": "accounting",
-      "field": "period",
-      "column": "C_Period_ID",
-      "reference": "Period",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/period"
-    },
-    {
-      "entity": "accounting",
-      "field": "account",
-      "column": "Account_ID",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/account"
-    },
-    {
-      "entity": "accounting",
-      "field": "businessPartner",
-      "column": "C_BPartner_ID",
-      "reference": "BPartner",
-      "inputMode": "search",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/businessPartner"
-    },
-    {
-      "entity": "accounting",
-      "field": "product",
-      "column": "M_Product_ID",
-      "reference": "Product",
-      "inputMode": "search",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/product"
-    },
-    {
-      "entity": "accounting",
-      "field": "project",
-      "column": "C_Project_ID",
-      "reference": "Project",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/project"
-    },
-    {
-      "entity": "accounting",
-      "field": "costcenter",
-      "column": "C_Costcenter_ID",
-      "reference": "Costcenter",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/costcenter"
-    },
-    {
-      "entity": "accounting",
-      "field": "asset",
-      "column": "A_Asset_ID",
-      "reference": "Asset",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/asset"
-    },
-    {
-      "entity": "accounting",
-      "field": "stDimension",
-      "column": "User1_ID",
-      "reference": "User1",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/stDimension"
-    },
-    {
-      "entity": "accounting",
-      "field": "ndDimension",
-      "column": "User2_ID",
-      "reference": "User2",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/accounting/selectors/ndDimension"
-    },
-    {
-      "entity": "landedCost",
-      "field": "landedCostType",
-      "column": "M_Lc_Type_ID",
-      "reference": "LandedCostType",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/landedCost/selectors/landedCostType"
-    },
-    {
-      "entity": "landedCost",
-      "field": "invoiceLine",
-      "column": "C_Invoiceline_ID",
-      "reference": "InvoiceLine",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/landedCost/selectors/invoiceLine"
-    },
-    {
-      "entity": "landedCost",
-      "field": "currency",
-      "column": "C_Currency_ID",
-      "reference": "Currency",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/landedCost/selectors/currency"
-    },
-    {
-      "entity": "landedCost",
-      "field": "landedCostDistributionAlgorithm",
-      "column": "M_Lc_Distribution_Alg_ID",
-      "reference": "LandedCostDistributionAlgorithm",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/landedCost/selectors/landedCostDistributionAlgorithm"
-    },
-    {
-      "entity": "landedCost",
-      "field": "landedCost",
-      "column": "M_Landedcost_ID",
-      "reference": "LandedCost",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/landedCost/selectors/landedCost"
-    },
-    {
-      "entity": "landedCost",
-      "field": "matchingCostAdjustment",
-      "column": "Matching_Costadjustment_ID",
-      "reference": "CostAdjustment",
-      "inputMode": "selector",
-      "url": "/sws/neo/goods-receipt/landedCost/selectors/matchingCostAdjustment"
     }
   ],
   "actions": [
@@ -445,36 +289,6 @@ const api = {
       "url": "/sws/neo/goods-receipt/goodsReceiptLine/{id}/action/explode",
       "processId": "DAE719940FE9463F8A3E3C401BBAFC53",
       "processType": "classic"
-    },
-    {
-      "entity": "landedCost",
-      "field": "processMatching",
-      "column": "Process_Matching",
-      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/processMatching",
-      "processId": "24E052E6FEB64295B64E683B5196230B",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "landedCost",
-      "field": "cancelMatching",
-      "column": "Cancel_Matching",
-      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/cancelMatching",
-      "processId": "DDB20065809843FF92835E59ADB2234C",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "landedCost",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/posted",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "landedCost",
-      "field": "processNow",
-      "column": "Processing",
-      "url": "/sws/neo/goods-receipt/landedCost/{id}/action/processNow"
     }
   ],
   "queryParams": {

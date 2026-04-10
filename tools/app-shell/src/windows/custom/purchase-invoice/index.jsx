@@ -1,9 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Plus } from 'lucide-react';
-import { useMenuLabel } from '@/i18n';
-import { Button } from '@/components/ui/button.jsx';
-import { useEntity } from '@/hooks/useEntity';
+import { ListView } from '@/components/contract-ui';
+import { useUI } from '@/i18n';
 import HeaderTable from '@generated/purchase-invoice/generated/web/purchase-invoice/HeaderTable';
 import HeaderPage from '@generated/purchase-invoice/generated/web/purchase-invoice/HeaderPage';
 import TaxTable from '@generated/purchase-invoice/generated/web/purchase-invoice/TaxTable';
@@ -13,106 +11,28 @@ import InvoicePreviewModal from './InvoicePreviewModal.jsx';
 import PurchaseInvoiceTopbar from './PurchaseInvoiceTopbar.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 
-// Secondary tabs: Tax, Payment Details (removed Basic Discounts, Payment Plan, Reversed Invoices, Accounting)
-const SECONDARY_TABS = [
-  { key: 'tax', label: 'Tax', Table: TaxTable },
-  { key: 'paymentDetails', label: 'Payment Details', Panel: PaymentDetailsPanelCustom },
-];
+/* eslint-disable react/prop-types */
 
-
-// Summary bar: only the four relevant totals
-const SUMMARY = [
-  { key: 'summedLineAmount', column: 'TotalLines', type: 'amount', label: 'Total Net Amount' },
-  { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount' },
-  { key: 'totalPaid', column: 'Totalpaid', type: 'amount', label: 'Paid Amount' },
-  { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', label: 'Outstanding Amount' },
-];
-
-// List view columns: simplified to essentials only
 const LIST_COLUMNS = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string', label: 'Document No.' },
   { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string', label: 'Business Partner' },
-  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Status' },
+  { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status' },
   { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount' },
 ];
 
+let previewRowSetterRef = null;
+
 /**
- * PurchaseInvoiceListView — custom list view with Holded-style preview modal.
- *
- * Clicking a row opens a preview modal instead of navigating away.
- * The "+ New" button navigates to the create route as usual.
+ * PurchaseInvoiceTable — generated table wrapper that opens the preview modal.
  */
-function PurchaseInvoiceListView({ windowName, token, apiBaseUrl, api, ...rest }) {
-  const navigate = useNavigate();
-  const hook = useEntity('header', null, { token, apiBaseUrl });
-  const [previewRow, setPreviewRow] = useState(null);
-  const tMenu = useMenuLabel();
-
-  const count = hook.items?.length ?? 0;
-
+function PurchaseInvoiceTable(props) {
   return (
-    <div className="flex flex-col h-full">
-      {/* List header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-gray-900">{tMenu('Purchase Invoice')}</h1>
-          {count > 0 && (
-            <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-0.5 rounded-full">
-              {count}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Search placeholder */}
-          <input
-            type="text"
-            placeholder="Search invoices..."
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
-            disabled
-          />
-          <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => navigate(`/${windowName}/new`)}
-          >
-            <Plus size={14} />
-            New
-          </Button>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="flex-1 overflow-auto">
-        <HeaderTable
-          columns={LIST_COLUMNS}
-          data={hook.items}
-          loading={hook.loading}
-          loadingMore={hook.loadingMore}
-          sortColumn={hook.sortColumn}
-          sortDirection={hook.sortDirection}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          windowName={windowName}
-          onNavigate={(row) => setPreviewRow(row)}
-        />
-      </div>
-
-      {/* Preview modal */}
-      {previewRow && (
-        <InvoicePreviewModal
-          invoice={previewRow}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          windowName={windowName}
-          onClose={() => setPreviewRow(null)}
-          onEdit={(id) => {
-            setPreviewRow(null);
-            navigate(`/${windowName}/${id}`);
-          }}
-        />
-      )}
-    </div>
+    <HeaderTable
+      columns={LIST_COLUMNS}
+      {...props}
+      onNavigate={(row) => previewRowSetterRef?.(row)}
+    />
   );
 }
 
@@ -127,7 +47,25 @@ export default function PurchaseInvoiceWindow(props) {
   const { recordId, token, apiBaseUrl, windowName } = props;
   const navigate = useNavigate();
   const location = useLocation();
+  const ui = useUI();
   const [savedRecord, setSavedRecord] = useState(null);
+  const [previewRow, setPreviewRow] = useState(null);
+  const breadcrumb = 'Purchases / Purchase Invoice';
+  previewRowSetterRef = setPreviewRow;
+
+  const secondaryTabs = [
+    { key: 'tax', label: ui('tax'), Table: TaxTable },
+    { key: 'paymentDetails', label: ui('paymentDetails'), Panel: PaymentDetailsPanelCustom },
+  ];
+
+  const summary = [
+    { key: 'summedLineAmount', column: 'TotalLines', type: 'amount', label: ui('totalNetAmount') },
+    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: ui('totalGrossAmount') },
+    { key: 'totalPaid', column: 'Totalpaid', type: 'amount', label: ui('paidAmount') },
+    { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount', label: ui('outstandingAmount') },
+  ];
+
+  const customTabs = [{ key: 'related', label: ui('relatedDocuments'), Component: RelatedDocuments }];
 
   // Pick up the saved record from navigation state when arriving at the list view
   const effectiveRecord = savedRecord ?? location.state?.savedRecord ?? null;
@@ -145,28 +83,39 @@ export default function PurchaseInvoiceWindow(props) {
       <HeaderPage
         {...props}
         DetailTable={InvoiceLineTableCustom}
-        secondaryTabs={SECONDARY_TABS}
-        summary={SUMMARY}
+        secondaryTabs={secondaryTabs}
+        summary={summary}
         extraBadges={[]}
         topbarRight={PurchaseInvoiceTopbar}
         notesField="description"
-        customTabs={[{ key: 'related', label: 'Related Documents', Component: RelatedDocuments }]}
+        customTabs={customTabs}
         onAfterSave={true}
+        breadcrumb={breadcrumb}
       />
     );
   }
 
   return (
     <>
-      <PurchaseInvoiceListView {...props} />
-      {effectiveRecord && (
+      <ListView
+        {...props}
+        entity="header"
+        Table={PurchaseInvoiceTable}
+        entityLabel="Purchase Invoice"
+        breadcrumb={breadcrumb}
+      />
+      {(previewRow || effectiveRecord) && (
         <InvoicePreviewModal
-          invoice={effectiveRecord}
+          invoice={previewRow || effectiveRecord}
           token={token}
           apiBaseUrl={apiBaseUrl}
           windowName={windowName}
-          onClose={clearSavedRecord}
+          onClose={() => {
+            setPreviewRow(null);
+            clearSavedRecord();
+          }}
           onEdit={(id) => {
+            setPreviewRow(null);
             clearSavedRecord();
             navigate(`/${windowName}/${id}`);
           }}

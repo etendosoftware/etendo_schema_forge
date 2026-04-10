@@ -11,6 +11,7 @@ export default function EmployeeAccountingForm(props) {
   // @sf-custom-slot hooks:EmployeeAccountingForm
   return <EntityForm fields={fields} {...props} />;
 }
+EmployeeAccountingForm.hasCollapsedFields = false;
 // @sf-generated-end component:EmployeeAccountingForm
 
 // @sf-custom-slot section:EmployeeAccountingForm-custom

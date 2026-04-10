@@ -7,7 +7,7 @@ import InventoryLineForm from './InventoryLineForm';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Warehouse / Physical Inventory';
+const breadcrumb = 'Inventory / Physical Inventory';
 
 
 // @sf-generated-start summary:inventory

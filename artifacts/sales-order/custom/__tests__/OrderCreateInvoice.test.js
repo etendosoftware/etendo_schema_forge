@@ -16,48 +16,83 @@ describe('OrderCreateInvoice', () => {
     assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl\s*\}/);
   });
 
-  it('only shows Create Invoice button when document is completed', () => {
+  it('renders Confirmar button for draft orders', () => {
+    assert.match(src, /isDraft/);
+    assert.match(src, /documentStatus\s*===\s*'DR'/);
+    assert.match(src, /Confirmar/);
+  });
+
+  it('uses createPortal for modal rendering', () => {
+    assert.match(src, /createPortal/);
+    assert.match(src, /document\.body/);
+  });
+
+  it('ConfirmModal has three radio options', () => {
+    assert.match(src, /Solo confirmar/);
+    assert.match(src, /Confirmar y crear albarán/);
+    assert.match(src, /Confirmar y facturar/);
+  });
+
+  it('confirms order via documentAction endpoint', () => {
+    assert.match(src, /action\/documentAction/);
+    assert.match(src, /action:\s*['"]CO['"]/);
+    assert.match(src, /method:\s*'POST'/);
+  });
+
+  it('creates shipment via createShipment action', () => {
+    assert.match(src, /action\/createShipment/);
+  });
+
+  it('creates draft invoice via createDraftInvoice action', () => {
+    assert.match(src, /action\/createDraftInvoice/);
+  });
+
+  it('fetches all linked invoices via listInvoices action', () => {
+    assert.match(src, /listInvoices/);
+    assert.match(src, /action\/listInvoices/);
+  });
+
+  it('only shows completed-order UI when document is completed', () => {
     assert.match(src, /isCompleted/);
     assert.match(src, /documentStatus\s*===\s*'CO'/);
   });
 
-  it('creates draft invoice via POST to sales-order action endpoint', () => {
-    assert.match(src, /sales-order\/header\/.*\/action\/createDraftInvoice/);
-    assert.match(src, /method:\s*'POST'/);
+  it('shows DraftChip pills for pending draft documents', () => {
+    assert.match(src, /DraftChip/);
+    assert.match(src, /shipmentsDraft/);
+    assert.match(src, /invoiceDraft/);
   });
 
-  it('includes a SendDocumentButton for sending orders', () => {
-    assert.match(src, /SendDocumentButton/);
-    assert.match(src, /SendDocumentModal/);
+  it('calculates pending quantity and amount', () => {
+    assert.match(src, /qtyOrdered/);
+    assert.match(src, /qtyDelivered/);
+    assert.match(src, /qtyPending/);
+    assert.match(src, /totalPending/);
   });
 
-  it('renders InvoicePreviewModal via createPortal', () => {
-    assert.match(src, /createPortal/);
-    assert.match(src, /InvoicePreviewModal/);
+  it('shows dynamic Gestionar button — draft-aware (needsShip/needsInvoice)', () => {
+    // Button only appears when pending AND no existing draft covers the action
+    assert.match(src, /needsShip/);
+    assert.match(src, /needsInvoice/);
+    assert.match(src, /shipmentsDraft\.length === 0/);
+    assert.match(src, /!invoiceDraft/);
+    assert.match(src, /Gestionar envío y factura/);
+    assert.match(src, /Gestionar envío/);
+    assert.match(src, /Gestionar factura/);
   });
 
-  it('passes documentType Order to SendDocumentModal', () => {
-    assert.match(src, /documentType="Order"/);
+  it('dispatches document-created event after creating a doc', () => {
+    assert.match(src, /sales-order:document-created/);
+    assert.match(src, /dispatchEvent/);
   });
 
-  it('checks for existing draft invoices in preview modal', () => {
-    assert.match(src, /checkDraftInvoice/);
-    assert.match(src, /existingDraft/);
+  it('navigates to shipment and invoice detail after creation', () => {
+    assert.match(src, /\/goods-shipment\//);
+    assert.match(src, /\/sales-invoice\//);
   });
 
-  it('calculates invoiceable quantities (delivered/ordered minus invoiced)', () => {
-    assert.match(src, /orderedQuantity/);
-    assert.match(src, /deliveredQuantity/);
-    assert.match(src, /invoicedQuantity/);
-    assert.match(src, /qtyToInvoice/);
-  });
-
-  it('uses toast for invoice creation feedback', () => {
-    assert.match(src, /toast\.custom|toast\.success|toast\.error/);
-  });
-
-  it('navigates to invoice detail after creation', () => {
-    assert.match(src, /sales-invoice\//);
-    assert.match(src, /View Invoice/);
+  it('scrolls ActionsModal to the relevant section when opened from a chip', () => {
+    assert.match(src, /actionsScroll|scrollTo/);
+    assert.match(src, /scrollIntoView/);
   });
 });

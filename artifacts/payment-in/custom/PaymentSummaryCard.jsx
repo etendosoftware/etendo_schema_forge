@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useUI } from '@/i18n';
 
 const STATUS_MAP = {
-  RPPC: { label: 'Payment Cleared', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
-  DR:   { label: 'Draft',           bg: 'bg-gray-50',    text: 'text-gray-600',    border: 'border-gray-200',    dot: 'bg-gray-400' },
-  RPAP: { label: 'Awaiting Payment', bg: 'bg-amber-50',  text: 'text-amber-700',   border: 'border-amber-200',   dot: 'bg-amber-500' },
-  RPR:  { label: 'Received',        bg: 'bg-emerald-50', text: 'text-emerald-700',  border: 'border-emerald-200', dot: 'bg-emerald-500' },
-  RDNC: { label: 'Not Cleared',     bg: 'bg-orange-50',  text: 'text-orange-700',   border: 'border-orange-200',  dot: 'bg-orange-500' },
-  RPVD: { label: 'Voided',          bg: 'bg-gray-50',    text: 'text-gray-500',     border: 'border-gray-200',    dot: 'bg-gray-400' },
+  RPPC: { labelKey: 'statusCleared', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+  DR:   { labelKey: 'statusDraft', bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' },
+  RPAP: { labelKey: 'statusAwaiting', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
+  RPR:  { labelKey: 'statusReceived', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', dot: 'bg-emerald-500' },
+  RDNC: { labelKey: 'statusNotCleared', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
+  RPVD: { labelKey: 'statusVoided', bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200', dot: 'bg-gray-400' },
 };
 
 function fmtAmount(amount, currencyId) {
-  const n = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0);
+  const n = typeof amount === 'string' ? Number.parseFloat(amount) : (amount ?? 0);
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency: currencyId || 'EUR',
@@ -20,6 +21,7 @@ function fmtAmount(amount, currencyId) {
 }
 
 export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
+  const ui = useUI();
   if (!data) return null;
 
   const [appliedAmount, setAppliedAmount] = useState(null);
@@ -39,7 +41,7 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
         const details = (await res.json())?.response?.data || [];
         const total = details
           .filter(d => d.invoicePaymentSchedule)
-          .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+          .reduce((sum, d) => sum + (Number.parseFloat(d.amount) || 0), 0);
         setAppliedAmount(total);
       } catch {
         setAppliedAmount(0);
@@ -48,9 +50,9 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
   }, [data?.id, token, apiBaseUrl]);
 
   const status = data.status || data.documentStatus;
-  const badge = STATUS_MAP[status] || { label: status || 'Unknown', bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' };
+  const badge = STATUS_MAP[status] || { labelKey: status || 'statusUnknown', bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' };
   const currency = data['currency$_identifier'] || 'EUR';
-  const totalAmount = parseFloat(data.amount) || 0;
+  const totalAmount = Number.parseFloat(data.amount) || 0;
   const applied = appliedAmount ?? 0;
   const remaining = totalAmount - applied;
 
@@ -70,7 +72,7 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
       <div className="mb-4">
         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${badge.bg} ${badge.text} border ${badge.border}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
-          {badge.label}
+          {ui(badge.labelKey)}
         </span>
       </div>
 
@@ -79,7 +81,7 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
         {/* Total Amount */}
         <div>
           <span className="block text-[11px] font-medium uppercase tracking-wide mb-1" style={{ color: '#9ca3af', letterSpacing: '0.05em' }}>
-            Total Amount
+            {ui('totalAmount')}
           </span>
           <span className="block text-2xl font-bold tabular-nums leading-tight" style={{ color: '#111827' }}>
             {fmtAmount(totalAmount, currency)}
@@ -89,7 +91,7 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
         {/* Applied to Invoices */}
         <div>
           <span className="block text-[11px] font-medium uppercase tracking-wide mb-1" style={{ color: '#9ca3af', letterSpacing: '0.05em' }}>
-            Applied to Invoices
+            {ui('appliedToInvoices')}
           </span>
           {appliedAmount === null ? (
             <span className="block text-lg" style={{ color: '#d1d5db' }}>...</span>
@@ -100,7 +102,7 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
           ) : (
             <span className="block text-lg tabular-nums leading-tight" style={{ color: '#9ca3af' }}>
               {fmtAmount(0, currency)}
-              <span className="ml-1.5 text-xs font-medium" style={{ color: '#d1d5db' }}>Unallocated</span>
+                <span className="ml-1.5 text-xs font-medium" style={{ color: '#d1d5db' }}>{ui('unallocated')}</span>
             </span>
           )}
         </div>
@@ -108,7 +110,7 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
         {/* Remaining Credit */}
         <div>
           <span className="block text-[11px] font-medium uppercase tracking-wide mb-1" style={{ color: '#9ca3af', letterSpacing: '0.05em' }}>
-            Remaining Credit
+            {ui('remainingCredit')}
           </span>
           {remaining === 0 ? (
             <span className="block text-lg tabular-nums leading-tight" style={{ color: '#d1d5db' }}>

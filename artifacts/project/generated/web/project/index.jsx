@@ -4,6 +4,7 @@ import ProjectForm from './ProjectForm';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'projects', name: 'Project' };
+const breadcrumb = 'Projects / Project';
 
 export default function App({ windowName, recordId, ...props }) {
   if (recordId) {
@@ -15,6 +16,7 @@ export default function App({ windowName, recordId, ...props }) {
         entityLabel="Project"
         windowName={windowName}
         recordId={recordId}
+        breadcrumb={breadcrumb}
         window={windowMeta}
         {...props}
       />
@@ -27,6 +29,7 @@ export default function App({ windowName, recordId, ...props }) {
       Table={ProjectTable}
       entityLabel="Project"
       windowName={windowName}
+      breadcrumb={breadcrumb}
       window={windowMeta}
       {...props}
     />

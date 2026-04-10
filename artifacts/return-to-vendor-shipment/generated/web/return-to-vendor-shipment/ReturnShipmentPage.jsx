@@ -4,6 +4,8 @@ import ReturnShipmentForm from './ReturnShipmentForm';
 import ReturnShipmentLineTable from './ReturnShipmentLineTable';
 import catalogs from './mockCatalogs';
 
+const breadcrumb = 'Purchases / Return to Vendor Shipment';
+
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
 ];
@@ -44,6 +46,7 @@ export default function ReturnShipmentPage({ windowName, recordId, ...props }) {
         catalogs={catalogs}
         entityLabel="Return Shipment"
         detailLabel="Return Shipment Line"
+        breadcrumb={breadcrumb}
         windowName={windowName}
         recordId={recordId}
         {...props}
@@ -56,6 +59,7 @@ export default function ReturnShipmentPage({ windowName, recordId, ...props }) {
       entity="returnShipment"
       Table={ReturnShipmentTable}
       entityLabel="Return Shipment"
+      breadcrumb={breadcrumb}
       windowName={windowName}
       {...props}
     />

@@ -222,6 +222,10 @@ See `docs/window-templates.md` for layout types (kanban, calendar, custom), conf
 
 **NEVER manually edit generated output files** (e.g., files in `artifacts/*/generated/`). All fixes must be made at the **pipeline level** — generators (`cli/src/generate-*.js`), extractors (`cli/src/extract-*.js`), or shared components (`tools/app-shell/src/`) — so they apply to ALL windows, not just the current one. Generated files are outputs, not sources.
 
+## Internationalization (i18n)
+
+**Every user-visible string MUST be translated.** The app is primarily used in Spanish by real clients. Hardcoded English strings are treated as bugs. See `docs/i18n-guide.md` for the full reference (hooks, locale JSON structure, rules for adding keys). Key hooks: `useUI()` for generic labels, `useLabel()` for AD fields, `useMenuLabel()` for menus/tabs. All new keys must be added to BOTH `en_US.json` and `es_ES.json`.
+
 ## Testing
 
 Contract tests (Node.js), Unit tests (JUnit in Etendo Go), Integration tests (OBBaseTest), E2E (Playwright).

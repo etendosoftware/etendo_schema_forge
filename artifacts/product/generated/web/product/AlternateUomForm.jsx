@@ -2,10 +2,8 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:alternateUom
 const fields = [
-  // @sf-custom-slot callout:AUM_ConversionRate
   { key: 'uOM', column: 'C_Uom_ID', type: 'selector', label: 'UOM', required: true, section: 'principal', reference: 'UOM', inputMode: 'selector' },
   { key: 'conversionRate', column: 'Conversionrate', type: 'number', label: 'Conversion Rate', required: true, section: 'principal' },
-  // @sf-custom-slot callout:GtinFormat
   { key: 'gtin', column: 'Gtin', type: 'text', label: 'Gtin', section: 'principal' },
   { key: 'sales', column: 'Sales', type: 'select', label: 'Sales', required: true, section: 'principal', options: [{ value: 'P', label: 'Primary' }, { value: 'S', label: 'Secondary' }, { value: 'NA', label: 'Not Applicable' }], defaultValue: 'S' },
   { key: 'purchase', column: 'Purchase', type: 'select', label: 'Purchase', required: true, section: 'other', options: [{ value: 'P', label: 'Primary' }, { value: 'S', label: 'Secondary' }, { value: 'NA', label: 'Not Applicable' }], defaultValue: 'S' },
@@ -15,9 +13,6 @@ const fields = [
 
 // @sf-generated-start component:AlternateUomForm
 export default function AlternateUomForm(props) {
-  // @sf-custom-slot hooks:AlternateUomForm
   return <EntityForm fields={fields} {...props} />;
 }
 // @sf-generated-end component:AlternateUomForm
-
-// @sf-custom-slot section:AlternateUomForm-custom

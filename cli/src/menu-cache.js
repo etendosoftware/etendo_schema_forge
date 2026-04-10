@@ -158,7 +158,7 @@ function formatTable(entries) {
   const lines = entries.map(e => {
     const t = typeColors[e.type] || '?';
     const refId = e.windowId || e.processId || '-';
-    return `  [${t}] ${e.name.padEnd(45)} ${e.id.toString().padEnd(40)} ref:${refId}`;
+    return `  [${t}] ${e.name.padEnd(45)} ${refId}`;
   });
   return lines.join('\n');
 }

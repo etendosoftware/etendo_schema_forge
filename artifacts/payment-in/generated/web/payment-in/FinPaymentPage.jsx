@@ -9,7 +9,7 @@ import NewPaymentModal from '../../../custom/NewPaymentModal';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Sales / Payment In';
+const breadcrumb = 'Finance / Payment In';
 
 
 // @sf-generated-start summary:finPayment

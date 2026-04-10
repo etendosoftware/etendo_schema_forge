@@ -23,6 +23,8 @@ const fields = [
   { key: 'maturityDate3', column: 'Fixmonthday3', type: 'number', label: 'Maturity Date 3', section: 'other' },
   { key: 'birthDay', column: 'Birthday', type: 'date', label: 'Birthdate', section: 'other' },
   { key: 'birthPlace', column: 'Birthplace', type: 'text', label: 'Birthplace', section: 'other' },
+  { key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey', type: 'checkbox', label: 'Default Key', required: true, section: 'other', defaultValue: 'N' },
+  { key: 'aeatsiiSiikeylist', column: 'EM_Aeatsii_Siikeylist', type: 'select', label: 'Invoice type key', section: 'other', options: [{ value: 'R', label: 'Corrective invoice' }, { value: 'F1', label: 'Invoice' }, { value: 'F2', label: 'Simplified invoice' }, { value: 'F4', label: 'Simplified invoices summary' }], defaultValue: 'F1' },
 ];
 // @sf-generated-end fields:customer
 
@@ -31,6 +33,7 @@ export default function CustomerForm(props) {
   // @sf-custom-slot hooks:CustomerForm
   return <EntityForm fields={fields} {...props} />;
 }
+CustomerForm.hasCollapsedFields = false;
 // @sf-generated-end component:CustomerForm
 
 // @sf-custom-slot section:CustomerForm-custom

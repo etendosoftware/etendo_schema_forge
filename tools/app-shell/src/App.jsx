@@ -65,7 +65,7 @@ async function loadAllMockData() {
     import('@generated/product/generated/web/product/mockData.js'),
     import('@generated/product-category/generated/web/product-category/mockData.js'),
     import('@generated/tax/generated/web/tax/mockData.js'),
-    import('@generated/uom/generated/web/uom/mockData.js'),
+    import('@generated/unit-of-measure/generated/web/unit-of-measure/mockData.js'),
     import('@generated/user/generated/web/user/mockData.js'),
     import('@generated/purchase-order/generated/web/purchase-order/mockData.js'),
     import('@generated/goods-receipt/generated/web/goods-receipt/mockData.js'),

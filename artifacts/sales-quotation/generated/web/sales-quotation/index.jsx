@@ -152,14 +152,6 @@ const api = {
     },
     {
       "entity": "quotation",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/sales-quotation/quotation/{id}/action/posted",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "quotation",
       "field": "generateTemplate",
       "column": "Generatetemplate",
       "url": "/sws/neo/sales-quotation/quotation/{id}/action/generateTemplate",
@@ -173,6 +165,14 @@ const api = {
       "url": "/sws/neo/sales-quotation/quotation/{id}/action/processNow",
       "processId": "104",
       "processType": "classic"
+    },
+    {
+      "entity": "quotation",
+      "field": "posted",
+      "column": "Posted",
+      "url": "/sws/neo/sales-quotation/quotation/{id}/action/posted",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
     },
     {
       "entity": "quotation",
@@ -272,9 +272,6 @@ const api = {
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {
-  // @sf-custom-slot hooks:App
   return <QuotationPage windowName={windowName} recordId={recordId} token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta} api={api} {...rest} />;
 }
 // @sf-generated-end component:App
-
-// @sf-custom-slot section:App-custom

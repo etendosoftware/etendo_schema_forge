@@ -70,6 +70,10 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `relatedDocuments` | boolean | `false` | — | Enables the Related Documents footer in the detail view. Requires a hand-written `RelatedDocuments.jsx` in `artifacts/{window}/custom/`. The generator emits the import and `customTabs` prop automatically. |
 | `notesField` | string | `null` | Any entity field name | Field to display as a notes/description panel in the detail view footer (e.g., `"description"`). Rendered as an expandable text input. |
 | `documentPreview` | object | `null` | `{ titlePrefix: string }` | Enables the document preview button in the detail header. `titlePrefix` is shown in the preview drawer title (e.g., `"Order"`, `"Invoice"`). |
+| `breadcrumb` | string | `"{category} / {name}"` | Any string | Overrides the auto-generated breadcrumb path shown in the topbar. Useful when the default category/name combination is too verbose (e.g., `"Product"` instead of `"Reference / Product"`). |
+| `hidePrint` | boolean | `false` | — | Hides the print button in the detail view action bar. |
+| `hideMoreMenu` | boolean | `false` | — | Hides the triple-dot "more" menu in the detail view action bar. |
+| `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. |
 | `customComponents` | object | `null` | See below | Override generated components with custom ones from `artifacts/{window}/custom/`. The generator emits the correct imports and props automatically. |
 | `menuActions` | array | `[]` | See below | Additional actions in the detail view's "more" menu (triple dot). Each action can have visibility conditions based on document status. |

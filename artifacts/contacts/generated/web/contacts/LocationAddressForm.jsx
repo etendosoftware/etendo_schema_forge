@@ -21,6 +21,7 @@ export default function LocationAddressForm(props) {
   // @sf-custom-slot hooks:LocationAddressForm
   return <EntityForm fields={fields} {...props} />;
 }
+LocationAddressForm.hasCollapsedFields = false;
 // @sf-generated-end component:LocationAddressForm
 
 // @sf-custom-slot section:LocationAddressForm-custom

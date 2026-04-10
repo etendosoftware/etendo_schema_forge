@@ -1,7 +1,7 @@
 {
   "$schema": "decisions-v1",
   "window": {
-    "category": "purchases",
+    "category": "finance",
     "name": "Payment Out"
   },
   "entities": {

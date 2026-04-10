@@ -12,9 +12,6 @@ const fields = [
 
 // @sf-generated-start component:BillOfMaterialsForm
 export default function BillOfMaterialsForm(props) {
-  // @sf-custom-slot hooks:BillOfMaterialsForm
   return <EntityForm fields={fields} {...props} />;
 }
 // @sf-generated-end component:BillOfMaterialsForm
-
-// @sf-custom-slot section:BillOfMaterialsForm-custom

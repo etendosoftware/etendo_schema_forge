@@ -201,11 +201,15 @@ export default function AppSidebar({ menuGroups, expanded, onToggle }) {
                         {tMenu(g.group)}
                       </p>
                       {g.items.map((item) => {
-                        const isItemActive = item.name === currentPath;
+                        const itemPath = item.path || item.name;
+                        const currentFull = currentPath + location.search;
+                        const isItemActive = item.path?.includes('?')
+                          ? currentFull === itemPath
+                          : currentPath === item.name;
                         return (
                           <NavLink
                             key={item.name}
-                            to={`/${item.name}`}
+                            to={`/${itemPath}`}
                             className={cn(
                               'block px-2 py-1.5 text-sm rounded-md transition-colors',
                               isItemActive

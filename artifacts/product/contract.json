@@ -25,7 +25,11 @@
           "label": "Additional Info",
           "panel": "ProductAdditionalInfoPanel"
         }
-      ]
+      ],
+      "breadcrumb": "Inventory / Product",
+      "hidePrint": true,
+      "hideMoreMenu": true,
+      "contentBg": "bg-slate-50"
     },
     "entities": {
       "product": {

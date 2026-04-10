@@ -13,9 +13,6 @@ const fields = [
 
 // @sf-generated-start component:StockForm
 export default function StockForm(props) {
-  // @sf-custom-slot hooks:StockForm
   return <EntityForm fields={fields} {...props} />;
 }
 // @sf-generated-end component:StockForm
-
-// @sf-custom-slot section:StockForm-custom

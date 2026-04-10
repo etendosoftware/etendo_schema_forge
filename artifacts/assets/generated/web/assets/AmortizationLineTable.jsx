@@ -14,9 +14,6 @@ const filters = [];
 
 // @sf-generated-start component:AmortizationLineTable
 export default function AmortizationLineTable(props) {
-  // @sf-custom-slot hooks:AmortizationLineTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:AmortizationLineTable
-
-// @sf-custom-slot section:AmortizationLineTable-custom

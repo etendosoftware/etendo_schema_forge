@@ -3,6 +3,8 @@ import { DataTable } from '@/components/contract-ui';
 // @sf-generated-start columns:businessPartner
 const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Commercial Name' },
+  { key: 'customer', column: 'IsCustomer', type: 'boolean', label: 'Customer' },
+  { key: 'vendor', column: 'IsVendor', type: 'boolean', label: 'Vendor' },
 ];
 // @sf-generated-end columns:businessPartner
 

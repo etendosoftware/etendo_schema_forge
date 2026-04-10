@@ -1,10 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import {
-  kpis as mockKpiValues,
-  revenueTrend as mockRevenueTrend,
-  pendingTasks as mockPendingTasks,
-  recentMessages as mockRecentMessages,
-} from '@generated/dashboard/generated/mockData';
 import { kpisConfig, actions } from '@generated/dashboard/generated/config';
 import { useAuth } from '@/auth/AuthContext';
 
@@ -96,9 +90,24 @@ function mapKpis(handlerData) {
 function mapTrends(handlerData) {
   if (!handlerData || handlerData.length === 0) return null;
   const trend = handlerData[0];
+
+  const toNumberArray = (arr) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.map((value) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : 0;
+    });
+  };
+
+  const values = toNumberArray(trend.values);
+  const rawExpenseValues = toNumberArray(
+    trend.expenseValues ?? trend.expenses ?? trend.expenseTrend ?? []
+  );
+
   return {
-    labels: trend.labels || [],
-    values: trend.values || [],
+    labels: Array.isArray(trend.labels) ? trend.labels : [],
+    values,
+    expenseValues: values.map((_, idx) => rawExpenseValues[idx] ?? 0),
   };
 }
 
@@ -158,19 +167,52 @@ function mapActivity(handlerData) {
   return handlerData;
 }
 
+const COMPLETED_INVOICE_STATUSES = new Set(['CO', 'CL']);
+
+function parseInvoiceDate(input) {
+  if (!input) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(input)) {
+    const parsed = new Date(input);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const ddmmyyyy = String(input).match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!ddmmyyyy) return null;
+
+  const day = Number(ddmmyyyy[1]);
+  const month = Number(ddmmyyyy[2]);
+  const year = Number(ddmmyyyy[3]);
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isWithinLastDays(input, days) {
+  const parsed = parseInvoiceDate(input);
+  if (!parsed) return false;
+
+  const now = new Date();
+  const threshold = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+  return parsed >= threshold;
+}
+
 /**
  * Map recent invoices handler response.
  * Handler returns: [{id, client, date, amount, status}]
  */
 function mapRecentInvoices(handlerData) {
   if (!handlerData || handlerData.length === 0) return null;
-  return handlerData.map((inv) => ({
-    id: inv.id || '',
-    client: inv.client || '',
-    date: inv.date || '',
-    amount: inv.amount || 0,
-    status: inv.status || '',
-  }));
+
+  return handlerData
+    .filter((inv) => COMPLETED_INVOICE_STATUSES.has(inv?.status))
+    .filter((inv) => isWithinLastDays(inv?.date, 7))
+    .map((inv) => ({
+      id: inv.id || '',
+      client: inv.client || '',
+      date: inv.date || '',
+      amount: inv.amount || 0,
+      status: inv.status || '',
+    }));
 }
 
 /**
@@ -234,60 +276,31 @@ function mapPendingAmounts(handlerData) {
 }
 
 /* ------------------------------------------------------------------
- * Mock fallback
+ * Empty fallback — used when no token or all endpoints fail
  * ----------------------------------------------------------------*/
 
-const MOCK_RECENT_INVOICES = [
-  { id: '1', client: 'Empresa ABC', date: '09-03-2026', amount: 8500, status: 'CO' },
-  { id: '2', client: 'Restaurantes Luna', date: '08-03-2026', amount: 3200, status: 'DR' },
-  { id: '3', client: 'Grupo XYZ', date: '07-03-2026', amount: 15600, status: 'CO' },
-  { id: '4', client: 'Comercial Norte', date: '06-03-2026', amount: 4750, status: 'CO' },
-  { id: '5', client: 'Distribuciones Sur', date: '05-03-2026', amount: 9200, status: 'DR' },
-];
-
-const MOCK_BEST_PRODUCTS = [
-  { name: 'Cola 0,5L', qty: 10161, amount: 18290 },
-  { name: 'Bebida Energética 0,5L', qty: 8009, amount: 14416 },
-  { name: 'Zumo de Piña 0,5L', qty: 7970, amount: 11955 },
-  { name: 'Agua Mineral 1L', qty: 6500, amount: 7800 },
-  { name: 'Refresco Limón 0,33L', qty: 5200, amount: 6240 },
-];
-
-const MOCK_BEST_SELLERS = [
-  { name: 'Cola 0,5L', qty: 10161, uom: 'Unit' },
-  { name: 'Bebida Energética 0,5L', qty: 8009, uom: 'Unit' },
-  { name: 'Zumo de Piña 0,5L', qty: 7970, uom: 'Unit' },
-  { name: 'Agua sin Gas 1L', qty: 7331, uom: 'Unit' },
-  { name: 'Limonada 0,5L', qty: 7329, uom: 'Unit' },
-  { name: 'Vino Tinto 0,75L', qty: 7310, uom: 'Unit' },
-  { name: 'Zumo de Pera 0,5L', qty: 7207, uom: 'Unit' },
-  { name: 'Vino Blanco 0,75L', qty: 7155, uom: 'Unit' },
-  { name: 'Vino Rosado 0,75L', qty: 7117, uom: 'Unit' },
-  { name: 'Cola de Cereza 0,5L', qty: 6831, uom: 'Unit' },
-];
-
-const MOCK_PENDING_AMOUNTS = {
-  toCollect: { count: 5, amount: 24900 },
-  toPay: { count: 3, amount: 14650 },
+const EMPTY_PENDING_AMOUNTS = {
+  toCollect: { count: 0, amount: 0 },
+  toPay: { count: 0, amount: 0 },
 };
 
-function buildMockFallback() {
+function buildEmptyFallback() {
   const kpis = kpisConfig.map((cfg) => ({
     ...cfg,
-    ...mockKpiValues[cfg.key],
-    previousValue: Math.round(
-      mockKpiValues[cfg.key].value / (1 + mockKpiValues[cfg.key].trend / 100)
-    ),
+    value: 0,
+    trend: 0,
+    previousValue: 0,
   }));
   return {
     kpis,
-    revenueTrend: mockRevenueTrend,
+    revenueTrend: { labels: Array(12).fill(''), values: Array(12).fill(0) },
     pendingTasks: [],
-    recentMessages: mockRecentMessages,
-    recentInvoices: MOCK_RECENT_INVOICES,
-    bestProducts: MOCK_BEST_PRODUCTS,
-    bestSellers: MOCK_BEST_SELLERS,
-    pendingAmounts: MOCK_PENDING_AMOUNTS,
+    recentMessages: [],
+    recentInvoices: [],
+    bestProducts: [],
+    bestSellers: [],
+    pendingAmounts: EMPTY_PENDING_AMOUNTS,
+    topClients: [],
   };
 }
 
@@ -298,7 +311,7 @@ function buildMockFallback() {
 /**
  * Hook that provides all dashboard data.
  * Fetches from 4 dedicated widget handler endpoints in parallel,
- * falls back to mock on error.
+ * falls back to empty state (zeros) on error or when unauthenticated.
  */
 export function useDashboardData() {
   const { token } = useAuth();
@@ -309,7 +322,7 @@ export function useDashboardData() {
 
   const fetchData = useCallback(async () => {
     if (!token) {
-      setData(buildMockFallback());
+      setData(buildEmptyFallback());
       setLoading(false);
       return;
     }
@@ -354,36 +367,36 @@ export function useDashboardData() {
         topClients: topClientsData?.length ?? 'FAILED',
       });
 
-      // If ALL handlers failed, fall back to full mock
+      // If ALL handlers failed, fall back to empty state
       const allFailed = !kpisData && !trendsData && !pendingData && !activityData
         && !invoicesData && !bestProductsData && !bestSellersData && !pendingAmountsData
         && !topClientsData;
       if (allFailed) {
-        console.warn('[dashboard] All widget endpoints failed — using mock data');
-        setData(buildMockFallback());
+        console.warn('[dashboard] All widget endpoints failed — showing empty state');
+        setData(buildEmptyFallback());
         setLoading(false);
         return;
       }
 
-      const mock = buildMockFallback();
+      const empty = buildEmptyFallback();
       const mappedKpis = mapKpis(kpisData);
       const mappedTrends = mapTrends(trendsData);
 
       setData({
-        kpis: mappedKpis ?? mock.kpis,
-        revenueTrend: mappedTrends ?? mock.revenueTrend,
-        expenseTrend: mock.revenueTrend.values.map(() => 0),
+        kpis: mappedKpis ?? empty.kpis,
+        revenueTrend: mappedTrends ?? empty.revenueTrend,
+        expenseTrend: mappedTrends?.expenseValues ?? [],
         topClients: mapTopClients(topClientsData) ?? [],
         pendingTasks: mapPendingTasks(pendingData),
-        recentMessages: mapActivity(activityData) || mock.recentMessages,
-        recentInvoices: mapRecentInvoices(invoicesData) ?? mock.recentInvoices,
-        bestProducts: mapBestProducts(bestProductsData) ?? mock.bestProducts,
-        bestSellers: mapBestSellers(bestSellersData) ?? mock.bestSellers,
-        pendingAmounts: mapPendingAmounts(pendingAmountsData) ?? mock.pendingAmounts,
+        recentMessages: mapActivity(activityData) || [],
+        recentInvoices: mapRecentInvoices(invoicesData) ?? [],
+        bestProducts: mapBestProducts(bestProductsData) ?? [],
+        bestSellers: mapBestSellers(bestSellersData) ?? [],
+        pendingAmounts: mapPendingAmounts(pendingAmountsData) ?? EMPTY_PENDING_AMOUNTS,
       });
     } catch (err) {
-      console.warn('[dashboard] Unexpected error, using mock data:', err.message);
-      setData(buildMockFallback());
+      console.warn('[dashboard] Unexpected error, showing empty state:', err.message);
+      setData(buildEmptyFallback());
     } finally {
       setLoading(false);
     }
@@ -393,7 +406,7 @@ export function useDashboardData() {
     fetchData();
   }, [fetchData]);
 
-  const resolved = data ?? buildMockFallback();
+  const resolved = data ?? buildEmptyFallback();
 
   return {
     kpis: resolved.kpis,
@@ -405,7 +418,7 @@ export function useDashboardData() {
     recentInvoices: resolved.recentInvoices ?? [],
     bestProducts: resolved.bestProducts ?? [],
     bestSellers: resolved.bestSellers ?? [],
-    pendingAmounts: resolved.pendingAmounts ?? MOCK_PENDING_AMOUNTS,
+    pendingAmounts: resolved.pendingAmounts ?? EMPTY_PENDING_AMOUNTS,
     actions,
     loading,
     refresh: fetchData,

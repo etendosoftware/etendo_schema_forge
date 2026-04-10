@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PackageOpen } from 'lucide-react';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
+import { useUI } from '@/i18n';
 
 function ProductCard({ row, onNavigate, token, apiBaseUrl }) {
   const [imgSrc, setImgSrc] = useState(null);
@@ -53,11 +54,12 @@ function ProductCard({ row, onNavigate, token, apiBaseUrl }) {
 }
 
 export default function ProductGallery({ data, onNavigate, token, apiBaseUrl }) {
+  const ui = useUI();
   if (!data || data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <PackageOpen size={48} className="mb-3 text-gray-300" />
-        <p className="text-sm">No products found</p>
+        <p className="text-sm">{ui('noProductsFound')}</p>
       </div>
     );
   }

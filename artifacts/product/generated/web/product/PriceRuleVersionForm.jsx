@@ -10,9 +10,6 @@ const fields = [
 
 // @sf-generated-start component:PriceRuleVersionForm
 export default function PriceRuleVersionForm(props) {
-  // @sf-custom-slot hooks:PriceRuleVersionForm
   return <EntityForm fields={fields} {...props} />;
 }
 // @sf-generated-end component:PriceRuleVersionForm
-
-// @sf-custom-slot section:PriceRuleVersionForm-custom

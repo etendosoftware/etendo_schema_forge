@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import QuotationConfirmModal from './QuotationConfirmModal';
+import { useUI } from '@/i18n';
 
 export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl }) {
+  const ui = useUI();
   const [showSend, setShowSend] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -23,7 +25,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
             background: '#185FA5', color: '#fff', fontWeight: 500, cursor: 'pointer',
           }}
         >
-          Confirm
+          {ui('soConfirmBtn')}
         </button>
       )}
 

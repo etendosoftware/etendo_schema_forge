@@ -2,33 +2,30 @@ import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import AssetsTable from './AssetsTable';
 import AssetsForm from './AssetsForm';
-import AmortizationLineTable from './AmortizationLineTable';
-import AmortizationLineForm from './AmortizationLineForm';
-import AssetAcctTable from './AssetAcctTable';
-import AssetAcctForm from './AssetAcctForm';
+import AssetsAmortizationPanel from '@/windows/custom/assets/AssetsAmortizationPanel';
+import AssetsConfigPanel from '@/windows/custom/assets/AssetsConfigPanel';
 import catalogs from './mockCatalogs';
 
 import AssetsSidebar from '@/windows/custom/assets/AssetsSidebar';
 
-const breadcrumb = 'Accounting / Assets';
+const breadcrumb = 'Finance / Assets';
 
 
 // @sf-generated-start summary:assets
 const summary = [
-  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
+
 ];
 
 const statusField = null;
 // @sf-generated-end summary:assets
 
-// @sf-custom-slot extraBadges:assets
 // @sf-generated-start extraBadges:assets
 const extraBadges = [];
 // @sf-generated-end extraBadges:assets
 
 // @sf-generated-start processes:assets
 const processes = [
-
+  { name: 'processed', label: 'Create Amortization', style: 'positive', columnName: 'Processed' },
 ];
 // @sf-generated-end processes:assets
 
@@ -36,20 +33,7 @@ const processes = [
 const draftMode = null;
 // @sf-generated-end draftMode:assets
 
-// @sf-generated-start addLineFields:amortizationLine
-const addLineFields = {
-  entry: [
-    { key: 'amortizationPercentage', column: 'Amortization_Percentage', type: 'number', label: 'Amortization Percentage' },
-    { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', reference: 'Currency', inputMode: 'selector' },
-  ],
-  derived: [
-    { key: 'amortizationAmount', column: 'Amortizationamt', type: 'number', label: 'Amortization Amount' },
-  ],
-  hidden: [
 
-  ],
-};
-// @sf-generated-end addLineFields:amortizationLine
 
 const api = {
   "specName": "assets",
@@ -111,22 +95,6 @@ const api = {
       "reference": "Currency",
       "inputMode": "selector",
       "url": "/sws/neo/assets/assets/selectors/currency"
-    },
-    {
-      "entity": "assets",
-      "field": "product",
-      "column": "M_Product_ID",
-      "reference": "Product",
-      "inputMode": "search",
-      "url": "/sws/neo/assets/assets/selectors/product"
-    },
-    {
-      "entity": "assets",
-      "field": "project",
-      "column": "C_Project_ID",
-      "reference": "Project",
-      "inputMode": "search",
-      "url": "/sws/neo/assets/assets/selectors/project"
     },
     {
       "entity": "amortizationLine",
@@ -204,32 +172,33 @@ const api = {
 
 // @sf-generated-start component:AssetsPage
 export default function AssetsPage({ windowName, recordId, ...props }) {
-  // @sf-custom-slot hooks:AssetsPage
   
   if (recordId) {
     return (
       <DetailView
         entity="assets"
-        detailEntity="amortizationLine"
         Form={AssetsForm}
-        DetailTable={AmortizationLineTable}
-        DetailForm={AmortizationLineForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Assets"
-        detailLabel="Asset Amortization"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        secondaryTabs={[
-          { key: 'assetAcct', label: 'Accounting', Table: AssetAcctTable, Form: AssetAcctForm },
+        formFooter={AssetsAmortizationPanel}
+        primaryTabs={[
+          { key: 'general', label: 'Overview' },
+          { key: 'configuration', label: 'Configuration', Panel: AssetsConfigPanel },
         ]}
+        hidePrint
+        hideMoreMenu
+        hideMoreDetails
+        contentBg="bg-slate-50"
         detailSortBy="sEQNoAsset asc"
+        titleField="name"
         lockWhenProcessed={false}
         {...props}
         sidebarContent={(data) => (
@@ -252,10 +221,13 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hidePrint
+      hideMoreMenu
+      hideListFilters
+      hideLink
+      hideEyeCount
       {...props}
     />
   );
 }
 // @sf-generated-end component:AssetsPage
-
-// @sf-custom-slot section:AssetsPage-custom

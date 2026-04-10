@@ -39,6 +39,9 @@ jobs:
         run: npm run build --workspace=tools/app-shell
         # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
 
+      - name: Generate reports manifest
+        run: node cli/src/generate-reports-manifest.js
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -62,6 +65,13 @@ jobs:
             --include "registerSW.js" \
             --include "manifest.webmanifest" \
             --include "sw.js" \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Upload reports manifest (${{ steps.target.outputs.env_label }})
+        run: |
+          aws s3 cp tools/app-shell/dist/api/reports \
+            s3://${{ steps.target.outputs.s3_bucket }}/api/reports \
+            --content-type "application/json" \
             --cache-control "no-cache, no-store, must-revalidate"
 
       - name: Invalidate CloudFront cache (${{ steps.target.outputs.env_label }})

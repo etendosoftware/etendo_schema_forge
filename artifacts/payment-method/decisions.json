@@ -1,0 +1,125 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "configuracion",
+    "name": "Payment Method",
+    "detailEntity": null
+  },
+  "entities": {
+    "paymentMethod": {
+      "fields": {
+        "name": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 1
+        },
+        "description": {
+          "type": "textarea",
+          "section": "principal",
+          "seq": 2
+        },
+        "active": {
+          "grid": true,
+          "section": "principal",
+          "seq": 3
+        },
+        "obpmtType": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 4
+        },
+        "eTAFCashPaymentMethod": {
+          "section": "principal",
+          "seq": 5
+        },
+        "payinAllow": {
+          "grid": true,
+          "section": "paymentIn",
+          "seq": 10
+        },
+        "automaticReceipt": {
+          "section": "paymentIn",
+          "seq": 11
+        },
+        "payinIsMulticurrency": {
+          "section": "paymentIn",
+          "seq": 12
+        },
+        "automaticDeposit": {
+          "section": "paymentIn",
+          "seq": 13
+        },
+        "payinExecutionType": {
+          "section": "paymentIn",
+          "seq": 14
+        },
+        "payinExecutionProcessID": {
+          "section": "paymentIn",
+          "seq": 15
+        },
+        "payinDeferred": {
+          "section": "paymentIn",
+          "seq": 16
+        },
+        "uponReceiptUse": {
+          "section": "paymentIn",
+          "seq": 17
+        },
+        "uponDepositUse": {
+          "section": "paymentIn",
+          "seq": 18
+        },
+        "iNUponClearingUse": {
+          "section": "paymentIn",
+          "seq": 19
+        },
+        "payoutAllow": {
+          "grid": true,
+          "section": "paymentOut",
+          "seq": 20
+        },
+        "automaticPayment": {
+          "section": "paymentOut",
+          "seq": 21
+        },
+        "payoutIsMulticurrency": {
+          "section": "paymentOut",
+          "seq": 22
+        },
+        "automaticWithdrawn": {
+          "section": "paymentOut",
+          "seq": 23
+        },
+        "payoutExecutionType": {
+          "section": "paymentOut",
+          "seq": 24
+        },
+        "payoutExecutionProcessID": {
+          "section": "paymentOut",
+          "seq": 25
+        },
+        "payoutDeferred": {
+          "section": "paymentOut",
+          "seq": 26
+        },
+        "uponPaymentUse": {
+          "section": "paymentOut",
+          "seq": 27
+        },
+        "uponWithdrawalUse": {
+          "section": "paymentOut",
+          "seq": 28
+        },
+        "oUTUponClearingUse": {
+          "section": "paymentOut",
+          "seq": 29
+        }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"],
+  "version": 2
+}

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal.jsx';
+import { useUI } from '@/i18n';
 
 function ReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBaseUrl, onRefresh }) {
+  const ui = useUI();
   const [showImportModal, setShowImportModal] = useState(false);
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
@@ -19,13 +21,13 @@ function ReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBaseUrl, 
           <line x1="8" y1="17" x2="13" y2="17" />
         </svg>
       </div>
-      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>No lines yet</span>
-      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>Add lines manually or import from a purchase order</span>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noLinesYet')}</span>
+      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('addLinesManuallyOrImportFromPurchaseOrder')}</span>
 
       {isDraft && (
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" onClick={onAddLine} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: '#18181b', color: '#fff', border: 'none', cursor: 'pointer' }}>
-            + Add Lines
+            + {ui('addLines')}
           </button>
           {bpId && (
             <button type="button" onClick={() => setShowImportModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}>
@@ -34,7 +36,7 @@ function ReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBaseUrl, 
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
-              Import from Purchase Order
+              {ui('importFromPurchaseOrder')}
             </button>
           )}
         </div>
@@ -59,6 +61,7 @@ function ReceiptLinesEmptyState({ data, onAddLine, recordId, token, apiBaseUrl, 
 }
 
 function ReceiptLineActions({ data, recordId, token, apiBaseUrl, onRefresh }) {
+  const ui = useUI();
   const [showImportModal, setShowImportModal] = useState(false);
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
@@ -79,7 +82,7 @@ function ReceiptLineActions({ data, recordId, token, apiBaseUrl, onRefresh }) {
           <polyline points="17 8 12 3 7 8" />
           <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
-        Import from Purchase Order
+        {ui('importFromPurchaseOrder')}
       </button>
 
       {showImportModal && createPortal(

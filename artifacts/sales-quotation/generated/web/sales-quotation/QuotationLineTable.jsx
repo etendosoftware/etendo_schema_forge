@@ -15,9 +15,6 @@ const filters = ['product'];
 
 // @sf-generated-start component:QuotationLineTable
 export default function QuotationLineTable(props) {
-  // @sf-custom-slot hooks:QuotationLineTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:QuotationLineTable
-
-// @sf-custom-slot section:QuotationLineTable-custom

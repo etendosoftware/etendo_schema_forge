@@ -485,8 +485,8 @@
       "description": "Especifica si el widget puede ser maximizado"
     },
     "Title": {
-      "label": "Título del Widget",
-      "description": "Título del Widget"
+      "label": "Posición",
+      "description": "Posición del contacto"
     },
     "Showfieldtitle": {
       "label": "Mostrar Título de Campo",
@@ -661,7 +661,7 @@
       "description": ""
     },
     "Value": {
-      "label": "Clave de búsqueda",
+      "label": "Identificador",
       "description": ""
     },
     "Getapikey": {
@@ -1189,8 +1189,8 @@
       "description": "Fecha factura"
     },
     "FIN_Financial_Account_ID": {
-      "label": "Bank",
-      "description": "Financial account used to deposit / withdrawal money such as bank accounts or petty cash"
+      "label": "Cuenta",
+      "description": "Cuenta financiera utilizada para depósitos/retiros, como cuentas bancarias o caja chica"
     },
     "Amount": {
       "label": "Importe cobrado/pagado",
@@ -1829,7 +1829,7 @@
       "description": "Código de identificación compuesto por un número individual de cuenta y dimensiones adicionales, como organización, producto y tercero."
     },
     "AD_User_ID": {
-      "label": "Solicitante",
+      "label": "Usuario/Contacto",
       "description": "Referente que puede aportar información sobre un tercero."
     },
     "CheckDate": {
@@ -7693,7 +7693,7 @@
       "description": "Nombre del contacto"
     },
     "Lastname": {
-      "label": "Apellidos",
+      "label": "Apellido",
       "description": "Apellido del contacto"
     },
     "FixMonthDay2": {
@@ -8871,6 +8871,10 @@
     "Depreciatedvalue": {
       "label": "Amortizado real",
       "description": "Amortizado real"
+    },
+    "depreciation": {
+      "label": "Amortización",
+      "description": "Estado y progreso de la amortización"
     },
     "C_Budget_ID": {
       "label": "Presupuesto",
@@ -16061,21 +16065,51 @@
     }
   },
   "ui": {
-    "invoice.status": { "label": "Estado" },
-    "invoice.filter.all": { "label": "Todas" },
-    "invoice.filter.invoices": { "label": "Facturas" },
-    "invoice.filter.credit-notes": { "label": "Abonos" },
-    "invoice.payment.all": { "label": "Todos los pagos" },
-    "invoice.payment.paid": { "label": "Pagadas" },
-    "invoice.payment.pending": { "label": "Pendientes" },
-    "invoice.payment.partial": { "label": "Parciales" },
-    "invoice.docstatus.draft": { "label": "Borrador" },
-    "invoice.docstatus.paid": { "label": "Pagada" },
-    "invoice.docstatus.partial": { "label": "Parcial" },
-    "invoice.docstatus.pending": { "label": "Pendiente" },
-    "invoice.docstatus.overdue": { "label": "Vencida" },
-    "invoice.docstatus.voided": { "label": "Anulada" },
-    "invoice.docstatus.closed": { "label": "Cerrada" },
+    "invoice.status": {
+      "label": "Estado"
+    },
+    "invoice.filter.all": {
+      "label": "Todas"
+    },
+    "invoice.filter.invoices": {
+      "label": "Facturas"
+    },
+    "invoice.filter.credit-notes": {
+      "label": "Abonos"
+    },
+    "invoice.payment.all": {
+      "label": "Todos los pagos"
+    },
+    "invoice.payment.paid": {
+      "label": "Pagadas"
+    },
+    "invoice.payment.pending": {
+      "label": "Pendientes"
+    },
+    "invoice.payment.partial": {
+      "label": "Parciales"
+    },
+    "invoice.docstatus.draft": {
+      "label": "Borrador"
+    },
+    "invoice.docstatus.paid": {
+      "label": "Pagada"
+    },
+    "invoice.docstatus.partial": {
+      "label": "Parcial"
+    },
+    "invoice.docstatus.pending": {
+      "label": "Pendiente"
+    },
+    "invoice.docstatus.overdue": {
+      "label": "Vencida"
+    },
+    "invoice.docstatus.voided": {
+      "label": "Anulada"
+    },
+    "invoice.docstatus.closed": {
+      "label": "Cerrada"
+    },
     "Customer Return": {
       "label": "Devolución"
     },
@@ -16095,7 +16129,7 @@
       "label": "Factura"
     },
     "Warehouses": {
-      "label": "Almacén"
+      "label": "Almacenes"
     },
     "Account": {
       "label": "Plan de cuentas"
@@ -16238,14 +16272,11 @@
     "Physical Inventory": {
       "label": "Inventario físico"
     },
-    "Warehouses": {
-      "label": "Almacenes"
-    },
     "Storage Bins": {
       "label": "Ubicaciones"
     },
     "Contacts": {
-      "label": "Contacto"
+      "label": "Contactos"
     },
     "Business Partners": {
       "label": "Terceros"
@@ -16270,9 +16301,6 @@
     },
     "Absences": {
       "label": "Ausencias"
-    },
-    "Projects": {
-      "label": "Proyectos"
     },
     "Time Tracking": {
       "label": "Control de horas"
@@ -16467,13 +16495,148 @@
     "deleteConfirmMessage": "¿Estás seguro de que deseas eliminar este registro? Esta acción no se puede deshacer.",
     "edit": "Editar",
     "print": "Imprimir",
-    "preview": "Vista previa",
+    "preview": "Vista Previa",
     "sendPreview": "Enviar / Vista previa",
     "send": "Enviar",
     "sendDownload": "Enviar / Descargar",
     "sending": "Enviando...",
     "clear": "Limpiar",
     "clearSort": "Quitar orden",
+    "refresh": "Actualizar",
+    "newPayment": "Nuevo pago",
+    "paymentRecordedLocally": "Pago registrado localmente — se sincronizará cuando el endpoint esté disponible",
+    "financeCollections": "Finanzas · Cobros",
+    "activity": "Actividad",
+    "closeActivityPanel": "Cerrar panel de actividad",
+    "paymentCreated": "Cobro creado",
+    "linkedToInvoice": "Vinculado a la factura #{number}",
+    "statusChangedTo": "Estado → {status}",
+    "noActivityYet": "Sin actividad todavía",
+    "add": "Agregar",
+    "unallocatedCredit": "crédito no asignado",
+    "invoice": "Factura",
+    "paid": "Pagado",
+    "pending": "Pendiente",
+    "you": "Tú",
+    "customer": "Cliente",
+    "paymentDate": "Fecha de pago",
+    "method": "Método",
+    "depositTo": "Depositar en",
+    "statusCleared": "Conciliado",
+    "statusDraft": "Borrador",
+    "statusAwaiting": "Pendiente",
+    "statusVoided": "Anulado",
+    "statusNotCleared": "No conciliado",
+    "creditAdvance": "Anticipo / crédito",
+    "creditAdvanceDescription": "Anticipo o crédito sin aplicar",
+    "linkedToInvoiceMode": "Vinculado a factura",
+    "linkedToInvoiceModeDescription": "Aplica el cobro a una factura existente",
+    "selectCustomer": "Selecciona un cliente...",
+    "selectCustomerFirst": "Selecciona primero un cliente",
+    "selectInvoice": "Selecciona una factura...",
+    "selectPaymentMethod": "Selecciona un método de pago...",
+    "selectAccount": "Selecciona una cuenta...",
+    "loadingInvoices": "Cargando facturas...",
+    "noPendingInvoices": "No hay facturas pendientes",
+    "account": "Cuenta",
+    "date": "Fecha",
+    "amount": "Importe",
+    "description": "Descripción",
+    "fillAllRequiredFields": "Completa todos los campos obligatorios",
+    "createPayment": "Crear cobro →",
+    "createCredit": "Crear anticipo →",
+    "creating": "Creando...",
+    "selectBusinessPartnerToViewPendingInvoices": "Selecciona un socio comercial para ver las facturas pendientes.",
+    "noInvoicesAppliedToThisPayment": "No hay facturas aplicadas a este cobro.",
+    "noPendingInvoicesFoundForThisBusinessPartner": "No se encontraron facturas pendientes para este socio comercial.",
+    "invoiceNumber": "Factura #",
+    "dueDate": "Vencimiento",
+    "totalAmount": "Total",
+    "outstanding": "Pendiente",
+    "selectAll": "Seleccionar todo",
+    "deselectAll": "Deseleccionar todo",
+    "totalToApply": "Total a aplicar:",
+    "processing": "Procesando...",
+    "applyAndProcessPayment": "Aplicar y procesar cobro",
+    "selectAtLeastOneInvoiceToApply": "Selecciona al menos una factura para aplicar.",
+    "totalAppliedExceedsPaymentAmount": "El total aplicado supera el importe del cobro.",
+    "paymentRegisteredSuccessfully": "Cobro registrado correctamente",
+    "creditDescriptionPlaceholder": "Motivo del anticipo o crédito...",
+    "appliedToInvoices": "Aplicado a facturas",
+    "unallocated": "Sin asignar",
+    "remainingCredit": "Crédito restante",
+    "statusUnknown": "Desconocido",
+    "testAccount": "Cuenta de prueba",
+    "mainAccount": "Cuenta principal",
+    "pettyCash": "Caja chica",
+    "stockMovement": "Movimiento de stock",
+    "stockByWarehouse": "Stock por almacén",
+    "onHand": "Disponible",
+    "reserved": "Reservado",
+    "locations": "ubicaciones",
+    "unitsHeld": "unidades retenidas",
+    "units": "unidades",
+    "viewLarger": "Ver en grande",
+    "inventoryOverview": "Resumen de inventario",
+    "summary": "Resumen",
+    "warehouses": "Almacenes",
+    "available": "Disponible",
+    "commercial": "Comercial",
+    "logistics": "Logística",
+    "pricing": "Precios",
+    "main": "Principal",
+    "commercialDescription": "Configuración comercial secundaria del producto.",
+    "logisticsDescription": "Datos operativos de stock, peso y comportamiento logístico.",
+    "principalPrice": "Precio principal",
+    "saveProductFirstPricing": "Guarda primero el producto. Luego podrás definir precios de venta y compra en una versión de tarifa predeterminada.",
+    "configureMainSaleAndPurchasePrice": "Configura un precio principal de venta y compra. Si todavía no existe un precio, se crea automáticamente una línea de tarifa predeterminada.",
+    "savePricing": "Guardar precios",
+    "editPricing": "Editar precios",
+    "setPricing": "Establecer precios",
+    "noPricingConfigured": "Todavía no hay precios configurados para este producto.",
+    "loadingPricing": "Cargando precios...",
+    "mainPriceUsedForSales": "Precio principal utilizado para ventas.",
+    "usesListPriceFromSameRow": "Usa el precio de lista de la misma línea cuando no existe una línea de compra dedicada.",
+    "mainPriceUsedForPurchasing": "Precio principal utilizado para compras.",
+    "enterAtLeastOneValueCreatePricing": "Introduce al menos un valor para crear el precio.",
+    "enterAtLeastOneValueUpdatePricing": "Introduce al menos un valor para actualizar el precio.",
+    "pricingCreatedUsingDefaultValues": "Precio creado usando valores predeterminados.",
+    "unableToSavePricing": "No se pudo guardar el precio.",
+    "addEntity": "+ Agregar {label}",
+    "entityDetail": "Detalle de {label}",
+    "saveHeaderFirst": "Guarda el encabezado primero para agregar líneas.",
+    "documentStatus": "Estado del documento",
+    "subtotal": "Subtotal",
+    "tax": "Impuesto",
+    "total": "Total",
+    "docs": "Documentos",
+    "notes": "Notas",
+    "noRelatedDocuments": "Sin documentos relacionados",
+    "Complete": "Completar",
+    "Confirm & Send": "Confirmar y enviar",
+    "Process Payment": "Procesar pago",
+    "Process  Receipt": "Procesar recibo",
+    "Complete Return": "Completar devolución",
+    "Process Inventory Count": "Procesar conteo de inventario",
+    "Set New Currency": "Establecer nueva moneda",
+    "Doc Action": "Acción de documento",
+    "Create P O From Requisition": "Crear OC desde requisición",
+    "Doc Action_ Process": "Acción de documento",
+    "Complete Cost Adjustment": "Completar ajuste de costo",
+    "Void Cost Adjustment": "Anular ajuste de costo",
+    "Void": "Anular",
+    "Reactivate": "Reactivar",
+    "shipmentDoc": "Envío #{number}",
+    "invoiceDoc": "Factura #{number}",
+    "paymentDoc": "Pago #{number}",
+    "quotationDoc": "Presupuesto #{number}",
+    "quotation": "Presupuesto",
+    "receiptDoc": "Recibo #{number}",
+    "returnDoc": "Devolución #{number}",
+    "orderDoc": "Pedido #{number}",
+    "creditNoteDoc": "Nota de crédito #{number}",
+    "statusReceived": "Recibido",
+    "statusDeposited": "Depositado",
     "clearAll": "Limpiar todo",
     "newRecord": "Nuevo",
     "newScan": "Nuevo escaneo",
@@ -16483,6 +16646,39 @@
     "loadingMore": "Cargando más...",
     "allRecordsLoaded": "Todos los registros cargados",
     "loading": "Cargando...",
+    "of": "de",
+    "view": "Ver",
+    "invoicePreviewStats": "Estadísticas",
+    "invoicePreviewMessages": "Mensajes",
+    "invoicePreviewHistory": "Historial",
+    "invoicePreviewPdf": "PDF",
+    "invoicePreviewAddPayment": "Añadir pago",
+    "invoicePreviewEdit": "Editar",
+    "invoicePreviewClose": "Cerrar",
+    "invoicePreviewGeneral": "General",
+    "invoicePreviewPayments": "Pagos",
+    "invoicePreviewFiles": "Archivos",
+    "invoicePreviewTotal": "Total",
+    "invoicePreviewDocumentNumber": "Número de documento",
+    "invoicePreviewContact": "Contacto",
+    "invoicePreviewDate": "Fecha",
+    "invoicePreviewDueDate": "Fecha de vencimiento",
+    "invoicePreviewStatus": "Estado",
+    "invoicePreviewNoPaymentsRecorded": "No hay pagos registrados",
+    "invoicePreviewPendingSync": "pendiente de sincronización",
+    "invoicePreviewDropFileHere": "Suelta el archivo aquí",
+    "invoicePreviewUploadYourDocument": "Sube tu documento",
+    "invoicePreviewClickHereToUploadYourFile": "Haz clic aquí para subir tu archivo",
+    "invoicePreviewAcceptedDocumentTypes": "PDF, JPG, PNG, WebP, GIF",
+    "invoicePreviewNoMessagesYet": "Aún no hay mensajes",
+    "invoicePreviewNoActivityRecorded": "No hay actividad registrada",
+    "invoicePreviewCannotAddPaymentsToDraftInvoice": "No se pueden añadir pagos a una factura en borrador",
+    "invoicePreviewInvoiceIsFullyPaid": "La factura está totalmente pagada",
+    "invoicePreviewInvoiceMustBeCompletedToAddPayments": "La factura debe estar completada para añadir pagos",
+    "invoicePreviewAddAttachment": "Añadir adjunto",
+    "depreciatedValue": "Amortizado real",
+    "depreciatedPlan": "Amortizado planificado",
+    "depreciation": "Amortización",
     "Grouped Report": "Informe agrupado",
     "Listing Report": "Informe de listado",
     "Landscape": "Horizontal",
@@ -16519,8 +16715,6 @@
     "refineDimensions": "Refinar por Dimensiones",
     "displayOptions": "Opciones de Visualización",
     "runReport": "Ejecutar Informe",
-    "preview": "Vista Previa",
-    "print": "Imprimir",
     "running": "Ejecutando...",
     "selectPlaceholder": "Seleccionar...",
     "recordsFound": "{count} registros encontrados",
@@ -16530,11 +16724,9 @@
     "filter": "Filtrar...",
     "clearAllFilters": "Limpiar todos los filtros",
     "cancelEsc": "Cancelar (Esc)",
-    "statusDraft": "Borrador",
     "statusComplete": "Completado",
     "statusCompleted": "Completado",
     "statusVoid": "Anulado",
-    "statusVoided": "Anulado",
     "statusInProcess": "En proceso",
     "statusClosed": "Cerrado",
     "statusPaid": "Pagado",
@@ -16553,6 +16745,29 @@
     "commercialName": "Nombre comercial",
     "locationColumn": "Ubicación",
     "emailColumn": "Correo electrónico",
+    "typeColumn": "Tipo",
+    "phoneColumn": "Teléfono",
+    "detail": "Detalle",
+    "basicDiscount": "Descuento",
+    "locationAddress": "Dirección",
+    "billingPreferences": "Preferencias de facturación",
+    "billingPreferencesDesc": "Configuración de facturación de cliente y proveedor.",
+    "All": "Todos",
+    "Customers": "Clientes",
+    "Vendors": "Proveedores",
+    "Customer": "Cliente",
+    "Vendor": "Proveedor",
+    "Both": "Ambos",
+    "bpRevenueThisMonth": "Ingresos del mes",
+    "bpExpensesThisMonth": "Gastos del mes",
+    "bpSalesPurchases": "Ventas y compras",
+    "bpLast6Months": "Últimos 6 meses",
+    "bpRevenue": "Ingresos",
+    "bpExpenses": "Gastos",
+    "General": "General",
+    "Financial": "Financiero",
+    "Contact Person": "Persona de contacto",
+    "Contact Bank Account": "Cuenta bancaria del contacto",
     "statusUnderEvaluation": "En evaluación",
     "statusCancelled": "Cancelado",
     "statusPaymentReceived": "Pago recibido",
@@ -16640,6 +16855,39 @@
     "back": "Atrás",
     "next": "Siguiente",
     "launch": "Lanzar",
+    "warehouseSummaryTab": "Resumen",
+    "warehouseProductsTab": "Productos",
+    "warehouseProducts": "Productos",
+    "warehouseTotalUnits": "Unidades totales",
+    "warehouseStockTrend": "Tendencia de stock",
+    "warehouseNoMovementData": "Sin datos de movimiento para este período",
+    "warehouseLoadingStock": "Cargando datos de stock…",
+    "warehouseStockError": "No se pudieron cargar los datos de stock.",
+    "warehouseTooltipUnits": "{label}: {n} unidades",
+    "warehouseTransactionsTab": "Transacciones",
+    "warehouseFilterPlaceholder": "Filtrar por producto o tipo…",
+    "warehouseDate": "Fecha",
+    "warehouseProduct": "Producto",
+    "warehouseType": "Tipo",
+    "warehouseQty": "Cant.",
+    "warehouseUom": "Unidad",
+    "warehouseQtyOnHand": "Cantidad disponible",
+    "warehouseLoadingProducts": "Cargando productos\u2026",
+    "warehouseProductsError": "No se pudieron cargar los productos: {error}",
+    "warehouseNoStock": "No hay stock para este almac\u00e9n.",
+    "warehouseLoadingTransactions": "Cargando transacciones…",
+    "warehouseTransactionsError": "No se pudieron cargar las transacciones: {error}",
+    "warehouseNoTransactions": "No se encontraron transacciones para este almacén.",
+    "warehouseNoFilterResults": "Ningún resultado coincide con el filtro.",
+    "movTypeVendorReceipt": "Recepción de proveedor",
+    "movTypeInventoryIn": "Inventario entrante",
+    "movTypeInventoryOut": "Inventario saliente",
+    "movTypeMovementTo": "Movimiento entrada",
+    "movTypeMovementFrom": "Movimiento salida",
+    "movTypeProductionIn": "Producción +",
+    "movTypeProductionOut": "Producción -",
+    "movTypeCustomerShipment": "Envío a cliente",
+    "movTypeInternalConsumption": "Consumo interno",
     "moduleSales": "Ventas",
     "moduleSalesDesc": "Cotizaciones, pedidos, facturas",
     "modulePurchases": "Compras",
@@ -16662,14 +16910,14 @@
     "revenueThisMonth": "Ingresos del mes",
     "expensesThisMonth": "Gastos del mes",
     "netProfit": "Beneficio neto",
-    "pendingInvoices": "Facturas pendientes",
     "revenueVsExpenses": "Ingresos vs Gastos",
     "pendingTasks": "Tareas pendientes",
     "topClients": "Clientes principales",
     "quickActions": "Acciones rápidas",
     "cashFlow": "Flujo de caja",
     "collectionsPayments": "Cobros y pagos",
-    "recentInvoices": "Facturas recientes",
+    "recentInvoices": "Ventas recientes",
+    "recentInvoicesSubtitle": "Facturas de ventas completadas de los últimos 7 días",
     "bestProducts": "Mejores productos",
     "bestSellers": "Más vendidos",
     "income": "Ingresos",
@@ -16679,7 +16927,6 @@
     "toPay": "Por pagar",
     "done": "Completado",
     "draft": "Borrador",
-    "invoice": "Factura",
     "order": "Pedido",
     "contact": "Contacto",
     "product": "Producto",
@@ -16687,7 +16934,6 @@
     "qty": "Cant.",
     "revenue": "Ingresos",
     "revenueVsExpenses12m": "Ingresos vs Gastos (12 meses)",
-    "revenue12m": "Ingresos (12 meses)",
     "topClients12m": "Clientes principales (12 meses)",
     "months12ByRevenue": "12 meses · por ingresos",
     "months12ByQty": "12 meses · por cantidad",
@@ -16696,7 +16942,6 @@
     "dragCardsToReorder": "Arrastra las tarjetas para reordenarlas. Alterna para mostrar/ocultar.",
     "dragToReorder": "Arrastra para reordenar",
     "changesSavedAutomatically": "Los cambios se guardan automáticamente.",
-    "units": "unidades",
     "invoicePending": "{count} factura pendiente",
     "invoicesPending": "{count} facturas pendientes",
     "pendingSalesInvoices": "{count} Factura de venta pendiente",
@@ -16724,7 +16969,74 @@
     "password": "Contraseña",
     "yourPassword": "Tu contraseña...",
     "noRole": "Sin rol",
-    "noOrg": "Sin organización"
+    "noOrg": "Sin organización",
+    "creditTax": "Crédito e impuestos",
+    "creditTaxDescription": "Límites de crédito e identificación fiscal para este contacto.",
+    "vendor": "Proveedor",
+    "searchAddress": "Buscar dirección…",
+    "typeToSearch": "Escribe para buscar…",
+    "searching": "Buscando…",
+    "typeAtLeast2Characters": "Escribe al menos 2 caracteres",
+    "none": "— Ninguno —",
+    "soConfirmBtn": "Confirmar",
+    "soConfirmTitle": "Confirmar pedido #{number}",
+    "soConfirmWarning": "Una vez confirmado no podrás editar el pedido",
+    "soConfirmOnly": "Solo confirmar",
+    "soConfirmOnlyDesc": "El pedido queda confirmado sin generar documentos",
+    "soConfirmWithShipment": "Confirmar y crear albarán",
+    "soConfirmWithShipmentDesc": "Se generará un envío en borrador",
+    "soConfirmWithInvoice": "Confirmar y facturar",
+    "soConfirmWithInvoiceDesc": "Se generará una factura en borrador",
+    "soProcessing": "Procesando...",
+    "soConfirmAction": "Confirmar →",
+    "soErrorOccurred": "Ocurrió un error",
+    "soManageShipmentAndInvoice": "Gestionar envío y factura ▾",
+    "soManageShipment": "Gestionar envío ▾",
+    "soManageInvoice": "Gestionar factura ▾",
+    "soShipmentSection": "Envío",
+    "soInvoiceSection": "Factura",
+    "soQtyDeliveredOf": "{delivered} / {total} uds. entregadas · {pending} pendientes",
+    "soQtyPendingDelivery": "{pending} uds. pendientes de entrega",
+    "soAmountInvoicedOf": "{invoiced} / {total} facturados · {pending} pendientes",
+    "soAmountPendingInvoice": "{pending} pendientes de facturar",
+    "soCreateShipment": "+ Crear albarán",
+    "soCreateInvoice": "+ Crear factura",
+    "soCreating": "Creando...",
+    "soAllDelivered": "Entregado",
+    "soAllInvoiced": "Facturado",
+    "soNShipments": "{count} envíos",
+    "soInDraft": "En borrador",
+    "soWhatToDo": "¿Qué querés hacer?",
+    "soCreateShipmentTitle": "Crear albarán",
+    "soCreateShipmentDesc": "Genera el albarán en borrador para gestionar la entrega. Desde ahí podés facturar.",
+    "soRecommended": "Recomendado",
+    "soInvoiceDirectly": "Facturar directamente",
+    "soInvoiceDirectlyDesc": "Para servicios o ventas sin entrega física. Sin albarán.",
+    "soOnlyConfirmDesc": "Confirma el pedido sin crear ningún documento adicional ahora.",
+    "soLines": "{count} líneas",
+    "soSubtotal": "Subtotal",
+    "soConfirmActionShipment": "Confirmar → Albarán",
+    "soConfirmActionInvoice": "Confirmar → Factura",
+    "soConfirmActionOnly": "Confirmar pedido",
+    "soOrderConfirmed": "Pedido confirmado",
+    "soOrderConfirmedDesc": "Order #{number} listo para facturar o generar albarán.",
+    "soShipmentCreated": "Albarán creado",
+    "soInvoiceCreated": "Factura creada",
+    "soShipmentCreatedNote": "Revisá las cantidades antes de procesar la entrega.",
+    "soClose": "Cerrar",
+    "soViewShipment": "Ver albarán →",
+    "soViewInvoice": "Ver factura →",
+    "soOrderConfirmedShipmentError": "El pedido fue procesado pero no se pudo crear el albarán. ",
+    "soOrderConfirmedInvoiceError": "El pedido fue procesado pero no se pudo crear la factura. ",
+    "sqWhatToDo": "¿Cómo querés confirmar?",
+    "sqCreateOrder": "Crear pedido de venta",
+    "sqCreateOrderDesc": "Para productos con stock, entregas o pedidos con múltiples envíos.",
+    "sqInvoiceDirectlyDesc": "Próximamente — por ahora, creá el pedido y facturá desde ahí.",
+    "sqConfirmActionOrder": "Confirmar → Pedido de venta",
+    "sqOrderCreated": "Pedido creado",
+    "sqViewOrder": "Ver pedido →",
+    "sqOrderConfirmedError": "El presupuesto fue procesado pero no se pudo crear el pedido. ",
+    "sqOrderConfirmedInvoiceError": "El presupuesto fue procesado pero no se pudo crear la factura. "
   },
   "menus": {
     "Tax": {
@@ -18003,6 +18315,105 @@
     },
     "VO": {
       "label": "Anulada"
+    },
+    "basicDiscount": {
+      "label": "Descuento básico"
+    },
+    "locationAddress": {
+      "label": "Ubicación / Dirección"
+    },
+    "importFromPurchaseOrder": {
+      "label": "Importar desde pedido de compra"
+    },
+    "searchPurchaseOrder": {
+      "label": "Buscar pedido de compra..."
+    },
+    "loadingLines": {
+      "label": "Cargando líneas..."
+    },
+    "noLinesFound": {
+      "label": "No se encontraron líneas"
+    },
+    "importQty": {
+      "label": "Cant. a importar"
+    },
+    "alreadyFullyReceived": {
+      "label": "ya recibido completamente"
+    },
+    "selectedLinesCount": {
+      "label": "{count} línea(s) seleccionada(s)"
+    },
+    "selectLinesToImport": {
+      "label": "Selecciona líneas para importar"
+    },
+    "importing": {
+      "label": "Importando..."
+    },
+    "importSelected": {
+      "label": "Importar seleccionadas{count}"
+    },
+    "importedLinesWithErrors": {
+      "label": "Se importaron {count} línea(s) con {errors} error(es)"
+    },
+    "linesImportedFromPurchaseOrder": {
+      "label": "Se importaron {count} línea(s) desde el pedido de compra"
+    },
+    "couldNotImportSelectedLines": {
+      "label": "No se pudieron importar las líneas seleccionadas"
+    },
+    "noLinesWereImported": {
+      "label": "No se importó ninguna línea"
+    },
+    "failedToImportLines": {
+      "label": "No se pudieron importar las líneas"
+    },
+    "noCompletedPurchaseOrdersWithPendingQuantitiesForThisVendor": {
+      "label": "No hay pedidos de compra completados con cantidades pendientes para este proveedor."
+    },
+    "noOrdersMatchYourSearch": {
+      "label": "Ningún pedido coincide con tu búsqueda."
+    },
+    "noLinesYet": {
+      "label": "Aún no hay líneas"
+    },
+    "addLinesManuallyOrImportFromPurchaseOrder": {
+      "label": "Añade líneas manualmente o impórtalas desde un pedido de compra"
+    },
+    "addLines": {
+      "label": "Añadir líneas"
+    },
+    "noPaymentDetailsFound": {
+      "label": "No se encontraron detalles de pago"
+    },
+    "financialAccount": {
+      "label": "Cuenta financiera"
+    },
+    "receivedAmount": {
+      "label": "Importe recibido"
+    },
+    "tax": {
+      "label": "Impuestos"
+    },
+    "paymentDetails": {
+      "label": "Detalles de pago"
+    },
+    "totalNetAmount": {
+      "label": "Importe neto total"
+    },
+    "totalGrossAmount": {
+      "label": "Importe bruto total"
+    },
+    "paidAmount": {
+      "label": "Importe pagado"
+    },
+    "businessPartner": {
+      "label": "Tercero"
+    },
+    "invoiceDate": {
+      "label": "Fecha de factura"
+    },
+    "noProductsFound": {
+      "label": "No se encontraron productos"
     }
   }
 }

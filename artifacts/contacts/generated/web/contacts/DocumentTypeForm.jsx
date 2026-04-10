@@ -16,6 +16,7 @@ export default function DocumentTypeForm(props) {
   // @sf-custom-slot hooks:DocumentTypeForm
   return <EntityForm fields={fields} {...props} />;
 }
+DocumentTypeForm.hasCollapsedFields = false;
 // @sf-generated-end component:DocumentTypeForm
 
 // @sf-custom-slot section:DocumentTypeForm-custom

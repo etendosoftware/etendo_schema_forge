@@ -1,6 +1,6 @@
 import ProductPage from './ProductPage';
 
-const windowMeta = { category: 'reference', name: 'Product' };
+const windowMeta = { category: 'inventory', name: 'Product' };
 
 const api = {
   "specName": "product",
@@ -411,9 +411,6 @@ const api = {
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {
-  // @sf-custom-slot hooks:App
   return <ProductPage windowName={windowName} recordId={recordId} token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta} api={api} {...rest} />;
 }
 // @sf-generated-end component:App
-
-// @sf-custom-slot section:App-custom

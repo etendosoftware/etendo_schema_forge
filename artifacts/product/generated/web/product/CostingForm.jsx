@@ -15,9 +15,6 @@ const fields = [
 
 // @sf-generated-start component:CostingForm
 export default function CostingForm(props) {
-  // @sf-custom-slot hooks:CostingForm
   return <EntityForm fields={fields} {...props} />;
 }
 // @sf-generated-end component:CostingForm
-
-// @sf-custom-slot section:CostingForm-custom

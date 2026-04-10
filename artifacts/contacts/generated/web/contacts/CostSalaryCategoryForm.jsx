@@ -12,6 +12,7 @@ export default function CostSalaryCategoryForm(props) {
   // @sf-custom-slot hooks:CostSalaryCategoryForm
   return <EntityForm fields={fields} {...props} />;
 }
+CostSalaryCategoryForm.hasCollapsedFields = false;
 // @sf-generated-end component:CostSalaryCategoryForm
 
 // @sf-custom-slot section:CostSalaryCategoryForm-custom

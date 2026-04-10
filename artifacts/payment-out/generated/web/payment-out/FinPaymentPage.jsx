@@ -10,7 +10,7 @@ import ExecutionHistoryForm from './ExecutionHistoryForm';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Purchases / Payment Out';
+const breadcrumb = 'Finance / Payment Out';
 
 
 // @sf-generated-start summary:finPayment

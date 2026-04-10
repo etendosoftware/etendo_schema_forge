@@ -1,0 +1,146 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "configuracion",
+    "name": "Payment Term",
+    "detailEntity": "lines"
+  },
+  "entities": {
+    "header": {
+      "fields": {
+        "searchKey": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 1
+        },
+        "name": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 2
+        },
+        "description": {
+          "type": "textarea",
+          "section": "principal",
+          "seq": 3
+        },
+        "default": {
+          "section": "principal",
+          "seq": 4
+        },
+        "overduePaymentDaysRule": {
+          "grid": true,
+          "section": "principal",
+          "seq": 5
+        },
+        "offsetMonthDue": {
+          "section": "principal",
+          "seq": 6
+        },
+        "fixedDueDate": {
+          "section": "principal",
+          "seq": 7
+        },
+        "maturityDate1": {
+          "section": "principal",
+          "seq": 8
+        },
+        "maturityDate2": {
+          "section": "principal",
+          "seq": 9
+        },
+        "maturityDate3": {
+          "section": "principal",
+          "seq": 10
+        },
+        "overduePaymentDayRule": {
+          "section": "principal",
+          "seq": 11
+        },
+        "nextBusinessDay": {
+          "section": "principal",
+          "seq": 12
+        },
+        "comments": {
+          "visibility": "discarded"
+        },
+        "valid": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "translation": {
+      "exclude": true
+    },
+    "lines": {
+      "fields": {
+        "lineNo": {
+          "grid": true,
+          "section": "principal",
+          "seq": 1
+        },
+        "percentageDue": {
+          "grid": true,
+          "section": "principal",
+          "seq": 2
+        },
+        "overduePaymentDaysRule": {
+          "grid": true,
+          "section": "principal",
+          "seq": 3
+        },
+        "offsetMonthDue": {
+          "section": "principal",
+          "seq": 4
+        },
+        "fixedDueDate": {
+          "section": "principal",
+          "seq": 5
+        },
+        "maturityDate1": {
+          "section": "principal",
+          "seq": 6
+        },
+        "maturityDate2": {
+          "section": "principal",
+          "seq": 7
+        },
+        "maturityDate3": {
+          "section": "principal",
+          "seq": 8
+        },
+        "paymentMethod": {
+          "grid": true,
+          "section": "principal",
+          "seq": 9
+        },
+        "rest": {
+          "section": "principal",
+          "seq": 10
+        },
+        "excludeTax": {
+          "section": "principal",
+          "seq": 11
+        },
+        "overduePaymentDayRule": {
+          "section": "principal",
+          "seq": 12
+        },
+        "nextBusinessDay": {
+          "section": "principal",
+          "seq": 13
+        },
+        "lastDayCutoff": {
+          "visibility": "discarded"
+        },
+        "formOfPayment": {
+          "visibility": "discarded"
+        }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"],
+  "version": 2
+}

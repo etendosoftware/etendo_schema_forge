@@ -1,10 +1,14 @@
 {
   "$schema": "decisions-v2",
   "window": {
-    "category": "reference",
+    "category": "inventory",
     "name": "Product",
+    "breadcrumb": "Inventory / Product",
     "layoutType": "gallery",
     "sidebarLayout": true,
+    "hidePrint": true,
+    "hideMoreMenu": true,
+    "contentBg": "bg-slate-50",
     "detailEntity": null,
     "headerExtra": {
       "customForm": "ProductPriceBar"

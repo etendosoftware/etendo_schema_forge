@@ -1,22 +1,49 @@
 {
-  "version": "0.5.0",
-  "generatedAt": "2026-04-06T17:36:30.403Z",
-  "checksum": "87c2dfdb59d16ecc",
+  "version": "0.1.0",
+  "generatedAt": "2026-04-09T15:27:21.063Z",
+  "checksum": "aaed77a2c22f4ef2",
   "frontendContract": {
     "window": {
       "id": "800027",
       "name": "Assets",
       "primaryEntity": "assets",
-      "category": "accounting",
+      "category": "finance",
       "sidebarLayout": true,
-      "secondaryTabs": {
-        "assetAcct": {
-          "label": "Accounting",
-          "tabOrder": 1
+      "hidePrint": true,
+      "hideMoreMenu": true,
+      "hideMoreDetails": true,
+      "contentBg": "bg-slate-50",
+      "hideListFilters": true,
+      "hideLink": true,
+      "hideEyeCount": true,
+      "breadcrumb": "Finance / Assets",
+      "processOverrides": {
+        "processed": {
+          "add": true,
+          "label": "Create Amortization",
+          "style": "positive",
+          "columnName": "Processed"
         }
       },
+      "secondaryTabs": {},
+      "detailEntity": null,
       "detailSortBy": "sEQNoAsset asc",
+      "headerExtra": {
+        "customForm": "AssetsAmortizationPanel"
+      },
+      "primaryTabs": [
+        {
+          "key": "general",
+          "label": "Overview"
+        },
+        {
+          "key": "configuration",
+          "label": "Configuration",
+          "panel": "AssetsConfigPanel"
+        }
+      ],
       "disableProcessedLock": true,
+      "titleField": "name",
       "layoutType": "default"
     },
     "entities": {
@@ -68,18 +95,6 @@
             }
           },
           {
-            "name": "documentNo",
-            "apiKey": "documentNo",
-            "column": "DocumentNo",
-            "label": "Document No.",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true
-          },
-          {
             "name": "description",
             "apiKey": "description",
             "column": "Description",
@@ -101,7 +116,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
@@ -109,24 +124,6 @@
               "raw": "@existAmortizationLines@ = 'Y'",
               "evaluable": true,
               "js": "Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0"
-            }
-          },
-          {
-            "name": "product",
-            "apiKey": "product",
-            "column": "M_Product_ID",
-            "label": "Product",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Product",
-            "inputMode": "search",
-            "popup": true,
-            "callout": {
-              "className": "org.openbravo.erpCommon.ad_callouts.SL_Asset_Product"
             }
           },
           {
@@ -139,7 +136,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true
+            "form": false
           },
           {
             "name": "depreciationType",
@@ -151,7 +148,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "enumValues": [
               {
                 "value": "LI",
@@ -174,7 +171,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "enumValues": [
               {
                 "value": "PE",
@@ -201,7 +198,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@!'TI'",
               "evaluable": true,
@@ -218,7 +215,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "enumValues": [
               {
                 "value": "MO",
@@ -245,7 +242,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'  & @Amortizationcalctype@ = 'TI' & @Assetschedule@='YE'",
               "evaluable": true,
@@ -262,7 +259,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & @Assetschedule@!'YE'",
               "evaluable": true,
@@ -279,7 +276,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": true,
+            "form": false,
             "defaultValue": "Y",
             "displayLogic": {
               "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & (@Assetschedule@='YE' | @Assetschedule@='MO')",
@@ -297,7 +294,7 @@
             "visibility": "editable",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -314,7 +311,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -331,7 +328,7 @@
             "visibility": "editable",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -348,7 +345,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -365,7 +362,7 @@
             "visibility": "editable",
             "required": false,
             "grid": true,
-            "form": true,
+            "form": false,
             "summable": true,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
@@ -386,7 +383,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
             },
@@ -406,7 +403,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Assets"
             },
@@ -426,7 +423,7 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true,
+            "form": false,
             "defaultValue": "0",
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
@@ -498,30 +495,10 @@
             "grid": true,
             "form": false,
             "defaultValue": "N",
-            "badge": true,
+            "cellType": "depreciationProgress",
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true
-            }
-          },
-          {
-            "name": "project",
-            "apiKey": "project",
-            "column": "C_Project_ID",
-            "label": "Project",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Project",
-            "inputMode": "search",
-            "displayLogic": {
-              "raw": "@$Element_PJ@='Y' & @IsDepreciated@='Y'",
-              "evaluable": false,
-              "reason": "accounting-dimension",
-              "js": null
             }
           },
           {
@@ -550,13 +527,6 @@
           "fullyDepreciated"
         ],
         "computedFields": [
-          {
-            "name": "documentNo",
-            "derivation": {
-              "type": "sequence",
-              "source": "documentType.sequence"
-            }
-          },
           {
             "name": "currency",
             "derivation": {
@@ -772,16 +742,43 @@
       "id": "800027",
       "name": "Assets",
       "primaryEntity": "assets",
-      "category": "accounting",
+      "category": "finance",
       "sidebarLayout": true,
-      "secondaryTabs": {
-        "assetAcct": {
-          "label": "Accounting",
-          "tabOrder": 1
+      "hidePrint": true,
+      "hideMoreMenu": true,
+      "hideMoreDetails": true,
+      "contentBg": "bg-slate-50",
+      "hideListFilters": true,
+      "hideLink": true,
+      "hideEyeCount": true,
+      "breadcrumb": "Finance / Assets",
+      "processOverrides": {
+        "processed": {
+          "add": true,
+          "label": "Create Amortization",
+          "style": "positive",
+          "columnName": "Processed"
         }
       },
+      "secondaryTabs": {},
+      "detailEntity": null,
       "detailSortBy": "sEQNoAsset asc",
-      "disableProcessedLock": true
+      "headerExtra": {
+        "customForm": "AssetsAmortizationPanel"
+      },
+      "primaryTabs": [
+        {
+          "key": "general",
+          "label": "Overview"
+        },
+        {
+          "key": "configuration",
+          "label": "Configuration",
+          "panel": "AssetsConfigPanel"
+        }
+      ],
+      "disableProcessedLock": true,
+      "titleField": "name"
     },
     "entities": {
       "assets": {
@@ -826,7 +823,7 @@
             "apiKey": "documentNo",
             "column": "DocumentNo",
             "type": "string",
-            "visibility": "readOnly",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -850,7 +847,7 @@
             "apiKey": "product",
             "column": "M_Product_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1058,7 +1055,7 @@
             "apiKey": "project",
             "column": "C_Project_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1728,22 +1725,6 @@
         "url": "/sws/neo/assets/assets/selectors/currency"
       },
       {
-        "entity": "assets",
-        "field": "product",
-        "column": "M_Product_ID",
-        "reference": "Product",
-        "inputMode": "search",
-        "url": "/sws/neo/assets/assets/selectors/product"
-      },
-      {
-        "entity": "assets",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "search",
-        "url": "/sws/neo/assets/assets/selectors/project"
-      },
-      {
         "entity": "amortizationLine",
         "field": "amortization",
         "column": "A_Amortization_ID",
@@ -1846,20 +1827,12 @@
         "id": "t-4",
         "category": "field-presence",
         "entity": "assets",
-        "field": "documentNo",
-        "runner": "node",
-        "description": "Field 'documentNo' should be present in assets"
-      },
-      {
-        "id": "t-5",
-        "category": "field-presence",
-        "entity": "assets",
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should be present in assets"
       },
       {
-        "id": "t-6",
+        "id": "t-5",
         "category": "field-presence",
         "entity": "assets",
         "field": "currency",
@@ -1867,15 +1840,7 @@
         "description": "Field 'currency' should be present in assets"
       },
       {
-        "id": "t-7",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "product",
-        "runner": "node",
-        "description": "Field 'product' should be present in assets"
-      },
-      {
-        "id": "t-8",
+        "id": "t-6",
         "category": "field-presence",
         "entity": "assets",
         "field": "depreciate",
@@ -1883,7 +1848,7 @@
         "description": "Field 'depreciate' should be present in assets"
       },
       {
-        "id": "t-9",
+        "id": "t-7",
         "category": "field-presence",
         "entity": "assets",
         "field": "depreciationType",
@@ -1891,7 +1856,7 @@
         "description": "Field 'depreciationType' should be present in assets"
       },
       {
-        "id": "t-10",
+        "id": "t-8",
         "category": "field-presence",
         "entity": "assets",
         "field": "calculateType",
@@ -1899,7 +1864,7 @@
         "description": "Field 'calculateType' should be present in assets"
       },
       {
-        "id": "t-11",
+        "id": "t-9",
         "category": "field-presence",
         "entity": "assets",
         "field": "annualDepreciation",
@@ -1907,7 +1872,7 @@
         "description": "Field 'annualDepreciation' should be present in assets"
       },
       {
-        "id": "t-12",
+        "id": "t-10",
         "category": "field-presence",
         "entity": "assets",
         "field": "amortize",
@@ -1915,7 +1880,7 @@
         "description": "Field 'amortize' should be present in assets"
       },
       {
-        "id": "t-13",
+        "id": "t-11",
         "category": "field-presence",
         "entity": "assets",
         "field": "usableLifeYears",
@@ -1923,7 +1888,7 @@
         "description": "Field 'usableLifeYears' should be present in assets"
       },
       {
-        "id": "t-14",
+        "id": "t-12",
         "category": "field-presence",
         "entity": "assets",
         "field": "usableLifeMonths",
@@ -1931,7 +1896,7 @@
         "description": "Field 'usableLifeMonths' should be present in assets"
       },
       {
-        "id": "t-15",
+        "id": "t-13",
         "category": "field-presence",
         "entity": "assets",
         "field": "everyMonthIs30Days",
@@ -1939,7 +1904,7 @@
         "description": "Field 'everyMonthIs30Days' should be present in assets"
       },
       {
-        "id": "t-16",
+        "id": "t-14",
         "category": "field-presence",
         "entity": "assets",
         "field": "purchaseDate",
@@ -1947,7 +1912,7 @@
         "description": "Field 'purchaseDate' should be present in assets"
       },
       {
-        "id": "t-17",
+        "id": "t-15",
         "category": "field-presence",
         "entity": "assets",
         "field": "cancellationDate",
@@ -1955,7 +1920,7 @@
         "description": "Field 'cancellationDate' should be present in assets"
       },
       {
-        "id": "t-18",
+        "id": "t-16",
         "category": "field-presence",
         "entity": "assets",
         "field": "depreciationStartDate",
@@ -1963,7 +1928,7 @@
         "description": "Field 'depreciationStartDate' should be present in assets"
       },
       {
-        "id": "t-19",
+        "id": "t-17",
         "category": "field-presence",
         "entity": "assets",
         "field": "depreciationEndDate",
@@ -1971,7 +1936,7 @@
         "description": "Field 'depreciationEndDate' should be present in assets"
       },
       {
-        "id": "t-20",
+        "id": "t-18",
         "category": "field-presence",
         "entity": "assets",
         "field": "assetValue",
@@ -1979,7 +1944,7 @@
         "description": "Field 'assetValue' should be present in assets"
       },
       {
-        "id": "t-21",
+        "id": "t-19",
         "category": "field-presence",
         "entity": "assets",
         "field": "residualAssetValue",
@@ -1987,7 +1952,7 @@
         "description": "Field 'residualAssetValue' should be present in assets"
       },
       {
-        "id": "t-22",
+        "id": "t-20",
         "category": "field-presence",
         "entity": "assets",
         "field": "depreciationAmt",
@@ -1995,7 +1960,7 @@
         "description": "Field 'depreciationAmt' should be present in assets"
       },
       {
-        "id": "t-23",
+        "id": "t-21",
         "category": "field-presence",
         "entity": "assets",
         "field": "previouslyDepreciatedAmt",
@@ -2003,7 +1968,7 @@
         "description": "Field 'previouslyDepreciatedAmt' should be present in assets"
       },
       {
-        "id": "t-24",
+        "id": "t-22",
         "category": "field-presence",
         "entity": "assets",
         "field": "processed",
@@ -2011,7 +1976,7 @@
         "description": "Field 'processed' should be present in assets"
       },
       {
-        "id": "t-25",
+        "id": "t-23",
         "category": "field-presence",
         "entity": "assets",
         "field": "depreciatedValue",
@@ -2019,7 +1984,7 @@
         "description": "Field 'depreciatedValue' should be present in assets"
       },
       {
-        "id": "t-26",
+        "id": "t-24",
         "category": "field-presence",
         "entity": "assets",
         "field": "depreciatedPlan",
@@ -2027,7 +1992,7 @@
         "description": "Field 'depreciatedPlan' should be present in assets"
       },
       {
-        "id": "t-27",
+        "id": "t-25",
         "category": "field-presence",
         "entity": "assets",
         "field": "fullyDepreciated",
@@ -2035,15 +2000,7 @@
         "description": "Field 'fullyDepreciated' should be present in assets"
       },
       {
-        "id": "t-28",
-        "category": "field-presence",
-        "entity": "assets",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should be present in assets"
-      },
-      {
-        "id": "t-29",
+        "id": "t-26",
         "category": "field-presence",
         "entity": "assets",
         "field": "processAsset",
@@ -2051,7 +2008,7 @@
         "description": "Field 'processAsset' should be present in assets"
       },
       {
-        "id": "t-30",
+        "id": "t-27",
         "category": "field-type",
         "entity": "assets",
         "field": "searchKey",
@@ -2059,7 +2016,7 @@
         "description": "Field 'searchKey' should have type 'string' in assets"
       },
       {
-        "id": "t-31",
+        "id": "t-28",
         "category": "field-type",
         "entity": "assets",
         "field": "name",
@@ -2067,7 +2024,7 @@
         "description": "Field 'name' should have type 'string' in assets"
       },
       {
-        "id": "t-32",
+        "id": "t-29",
         "category": "field-type",
         "entity": "assets",
         "field": "assetCategory",
@@ -2075,15 +2032,7 @@
         "description": "Field 'assetCategory' should have type 'string' in assets"
       },
       {
-        "id": "t-33",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "documentNo",
-        "runner": "node",
-        "description": "Field 'documentNo' should have type 'string' in assets"
-      },
-      {
-        "id": "t-34",
+        "id": "t-30",
         "category": "field-type",
         "entity": "assets",
         "field": "description",
@@ -2091,7 +2040,7 @@
         "description": "Field 'description' should have type 'string' in assets"
       },
       {
-        "id": "t-35",
+        "id": "t-31",
         "category": "field-type",
         "entity": "assets",
         "field": "currency",
@@ -2099,15 +2048,7 @@
         "description": "Field 'currency' should have type 'string' in assets"
       },
       {
-        "id": "t-36",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "product",
-        "runner": "node",
-        "description": "Field 'product' should have type 'string' in assets"
-      },
-      {
-        "id": "t-37",
+        "id": "t-32",
         "category": "field-type",
         "entity": "assets",
         "field": "depreciate",
@@ -2115,7 +2056,7 @@
         "description": "Field 'depreciate' should have type 'boolean' in assets"
       },
       {
-        "id": "t-38",
+        "id": "t-33",
         "category": "field-type",
         "entity": "assets",
         "field": "depreciationType",
@@ -2123,7 +2064,7 @@
         "description": "Field 'depreciationType' should have type 'string' in assets"
       },
       {
-        "id": "t-39",
+        "id": "t-34",
         "category": "field-type",
         "entity": "assets",
         "field": "calculateType",
@@ -2131,7 +2072,7 @@
         "description": "Field 'calculateType' should have type 'string' in assets"
       },
       {
-        "id": "t-40",
+        "id": "t-35",
         "category": "field-type",
         "entity": "assets",
         "field": "annualDepreciation",
@@ -2139,7 +2080,7 @@
         "description": "Field 'annualDepreciation' should have type 'number' in assets"
       },
       {
-        "id": "t-41",
+        "id": "t-36",
         "category": "field-type",
         "entity": "assets",
         "field": "amortize",
@@ -2147,7 +2088,7 @@
         "description": "Field 'amortize' should have type 'string' in assets"
       },
       {
-        "id": "t-42",
+        "id": "t-37",
         "category": "field-type",
         "entity": "assets",
         "field": "usableLifeYears",
@@ -2155,7 +2096,7 @@
         "description": "Field 'usableLifeYears' should have type 'number' in assets"
       },
       {
-        "id": "t-43",
+        "id": "t-38",
         "category": "field-type",
         "entity": "assets",
         "field": "usableLifeMonths",
@@ -2163,7 +2104,7 @@
         "description": "Field 'usableLifeMonths' should have type 'number' in assets"
       },
       {
-        "id": "t-44",
+        "id": "t-39",
         "category": "field-type",
         "entity": "assets",
         "field": "everyMonthIs30Days",
@@ -2171,7 +2112,7 @@
         "description": "Field 'everyMonthIs30Days' should have type 'boolean' in assets"
       },
       {
-        "id": "t-45",
+        "id": "t-40",
         "category": "field-type",
         "entity": "assets",
         "field": "purchaseDate",
@@ -2179,7 +2120,7 @@
         "description": "Field 'purchaseDate' should have type 'string' in assets"
       },
       {
-        "id": "t-46",
+        "id": "t-41",
         "category": "field-type",
         "entity": "assets",
         "field": "cancellationDate",
@@ -2187,7 +2128,7 @@
         "description": "Field 'cancellationDate' should have type 'string' in assets"
       },
       {
-        "id": "t-47",
+        "id": "t-42",
         "category": "field-type",
         "entity": "assets",
         "field": "depreciationStartDate",
@@ -2195,7 +2136,7 @@
         "description": "Field 'depreciationStartDate' should have type 'string' in assets"
       },
       {
-        "id": "t-48",
+        "id": "t-43",
         "category": "field-type",
         "entity": "assets",
         "field": "depreciationEndDate",
@@ -2203,7 +2144,7 @@
         "description": "Field 'depreciationEndDate' should have type 'string' in assets"
       },
       {
-        "id": "t-49",
+        "id": "t-44",
         "category": "field-type",
         "entity": "assets",
         "field": "assetValue",
@@ -2211,7 +2152,7 @@
         "description": "Field 'assetValue' should have type 'number' in assets"
       },
       {
-        "id": "t-50",
+        "id": "t-45",
         "category": "field-type",
         "entity": "assets",
         "field": "residualAssetValue",
@@ -2219,7 +2160,7 @@
         "description": "Field 'residualAssetValue' should have type 'number' in assets"
       },
       {
-        "id": "t-51",
+        "id": "t-46",
         "category": "field-type",
         "entity": "assets",
         "field": "depreciationAmt",
@@ -2227,7 +2168,7 @@
         "description": "Field 'depreciationAmt' should have type 'number' in assets"
       },
       {
-        "id": "t-52",
+        "id": "t-47",
         "category": "field-type",
         "entity": "assets",
         "field": "previouslyDepreciatedAmt",
@@ -2235,7 +2176,7 @@
         "description": "Field 'previouslyDepreciatedAmt' should have type 'number' in assets"
       },
       {
-        "id": "t-53",
+        "id": "t-48",
         "category": "field-type",
         "entity": "assets",
         "field": "processed",
@@ -2243,7 +2184,7 @@
         "description": "Field 'processed' should have type 'string' in assets"
       },
       {
-        "id": "t-54",
+        "id": "t-49",
         "category": "field-type",
         "entity": "assets",
         "field": "depreciatedValue",
@@ -2251,7 +2192,7 @@
         "description": "Field 'depreciatedValue' should have type 'number' in assets"
       },
       {
-        "id": "t-55",
+        "id": "t-50",
         "category": "field-type",
         "entity": "assets",
         "field": "depreciatedPlan",
@@ -2259,7 +2200,7 @@
         "description": "Field 'depreciatedPlan' should have type 'number' in assets"
       },
       {
-        "id": "t-56",
+        "id": "t-51",
         "category": "field-type",
         "entity": "assets",
         "field": "fullyDepreciated",
@@ -2267,15 +2208,7 @@
         "description": "Field 'fullyDepreciated' should have type 'boolean' in assets"
       },
       {
-        "id": "t-57",
-        "category": "field-type",
-        "entity": "assets",
-        "field": "project",
-        "runner": "node",
-        "description": "Field 'project' should have type 'string' in assets"
-      },
-      {
-        "id": "t-58",
+        "id": "t-52",
         "category": "field-type",
         "entity": "assets",
         "field": "processAsset",
@@ -2283,7 +2216,7 @@
         "description": "Field 'processAsset' should have type 'string' in assets"
       },
       {
-        "id": "t-59",
+        "id": "t-53",
         "category": "searchable-filters",
         "entity": "assets",
         "field": "searchKey",
@@ -2291,7 +2224,7 @@
         "description": "Field 'searchKey' should be a supported filter for assets"
       },
       {
-        "id": "t-60",
+        "id": "t-54",
         "category": "searchable-filters",
         "entity": "assets",
         "field": "name",
@@ -2299,7 +2232,7 @@
         "description": "Field 'name' should be a supported filter for assets"
       },
       {
-        "id": "t-61",
+        "id": "t-55",
         "category": "searchable-filters",
         "entity": "assets",
         "field": "assetCategory",
@@ -2307,7 +2240,7 @@
         "description": "Field 'assetCategory' should be a supported filter for assets"
       },
       {
-        "id": "t-62",
+        "id": "t-56",
         "category": "searchable-filters",
         "entity": "assets",
         "field": "depreciate",
@@ -2315,7 +2248,7 @@
         "description": "Field 'depreciate' should be a supported filter for assets"
       },
       {
-        "id": "t-63",
+        "id": "t-57",
         "category": "searchable-filters",
         "entity": "assets",
         "field": "fullyDepreciated",
@@ -2323,14 +2256,14 @@
         "description": "Field 'fullyDepreciated' should be a supported filter for assets"
       },
       {
-        "id": "t-64",
+        "id": "t-58",
         "category": "visibility",
         "entity": "assets",
         "runner": "node",
         "description": "Entity 'assets' should only expose visible fields in frontend"
       },
       {
-        "id": "t-65",
+        "id": "t-59",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "depreciationType",
@@ -2338,7 +2271,7 @@
         "description": "Display logic for 'depreciationType' in assets should be valid JS"
       },
       {
-        "id": "t-66",
+        "id": "t-60",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "calculateType",
@@ -2346,7 +2279,7 @@
         "description": "Display logic for 'calculateType' in assets should be valid JS"
       },
       {
-        "id": "t-67",
+        "id": "t-61",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "annualDepreciation",
@@ -2354,7 +2287,7 @@
         "description": "Display logic for 'annualDepreciation' in assets should be valid JS"
       },
       {
-        "id": "t-68",
+        "id": "t-62",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "amortize",
@@ -2362,7 +2295,7 @@
         "description": "Display logic for 'amortize' in assets should be valid JS"
       },
       {
-        "id": "t-69",
+        "id": "t-63",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "usableLifeYears",
@@ -2370,7 +2303,7 @@
         "description": "Display logic for 'usableLifeYears' in assets should be valid JS"
       },
       {
-        "id": "t-70",
+        "id": "t-64",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "usableLifeMonths",
@@ -2378,7 +2311,7 @@
         "description": "Display logic for 'usableLifeMonths' in assets should be valid JS"
       },
       {
-        "id": "t-71",
+        "id": "t-65",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "everyMonthIs30Days",
@@ -2386,7 +2319,7 @@
         "description": "Display logic for 'everyMonthIs30Days' in assets should be valid JS"
       },
       {
-        "id": "t-72",
+        "id": "t-66",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "purchaseDate",
@@ -2394,7 +2327,7 @@
         "description": "Display logic for 'purchaseDate' in assets should be valid JS"
       },
       {
-        "id": "t-73",
+        "id": "t-67",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "cancellationDate",
@@ -2402,7 +2335,7 @@
         "description": "Display logic for 'cancellationDate' in assets should be valid JS"
       },
       {
-        "id": "t-74",
+        "id": "t-68",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "depreciationStartDate",
@@ -2410,7 +2343,7 @@
         "description": "Display logic for 'depreciationStartDate' in assets should be valid JS"
       },
       {
-        "id": "t-75",
+        "id": "t-69",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "depreciationEndDate",
@@ -2418,7 +2351,7 @@
         "description": "Display logic for 'depreciationEndDate' in assets should be valid JS"
       },
       {
-        "id": "t-76",
+        "id": "t-70",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "assetValue",
@@ -2426,7 +2359,7 @@
         "description": "Display logic for 'assetValue' in assets should be valid JS"
       },
       {
-        "id": "t-77",
+        "id": "t-71",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "residualAssetValue",
@@ -2434,7 +2367,7 @@
         "description": "Display logic for 'residualAssetValue' in assets should be valid JS"
       },
       {
-        "id": "t-78",
+        "id": "t-72",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "depreciationAmt",
@@ -2442,7 +2375,7 @@
         "description": "Display logic for 'depreciationAmt' in assets should be valid JS"
       },
       {
-        "id": "t-79",
+        "id": "t-73",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "previouslyDepreciatedAmt",
@@ -2450,7 +2383,7 @@
         "description": "Display logic for 'previouslyDepreciatedAmt' in assets should be valid JS"
       },
       {
-        "id": "t-80",
+        "id": "t-74",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "processed",
@@ -2458,7 +2391,7 @@
         "description": "Display logic for 'processed' in assets should be valid JS"
       },
       {
-        "id": "t-81",
+        "id": "t-75",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "depreciatedValue",
@@ -2466,7 +2399,7 @@
         "description": "Display logic for 'depreciatedValue' in assets should be valid JS"
       },
       {
-        "id": "t-82",
+        "id": "t-76",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "depreciatedPlan",
@@ -2474,7 +2407,7 @@
         "description": "Display logic for 'depreciatedPlan' in assets should be valid JS"
       },
       {
-        "id": "t-83",
+        "id": "t-77",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "fullyDepreciated",
@@ -2482,15 +2415,7 @@
         "description": "Display logic for 'fullyDepreciated' in assets should be valid JS"
       },
       {
-        "id": "t-84",
-        "category": "displaylogic-valid",
-        "entity": "assets",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in assets should be valid JS"
-      },
-      {
-        "id": "t-85",
+        "id": "t-78",
         "category": "displaylogic-valid",
         "entity": "assets",
         "field": "processAsset",
@@ -2498,7 +2423,7 @@
         "description": "Display logic for 'processAsset' in assets should be valid JS"
       },
       {
-        "id": "t-86",
+        "id": "t-79",
         "category": "readonlylogic-valid",
         "entity": "assets",
         "field": "currency",
@@ -2506,7 +2431,7 @@
         "description": "Read-only logic for 'currency' in assets should be valid JS"
       },
       {
-        "id": "t-87",
+        "id": "t-80",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "depreciationType",
@@ -2514,7 +2439,7 @@
         "description": "Display logic for 'depreciationType' in assets should have evaluable flag"
       },
       {
-        "id": "t-88",
+        "id": "t-81",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "calculateType",
@@ -2522,7 +2447,7 @@
         "description": "Display logic for 'calculateType' in assets should have evaluable flag"
       },
       {
-        "id": "t-89",
+        "id": "t-82",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "annualDepreciation",
@@ -2530,7 +2455,7 @@
         "description": "Display logic for 'annualDepreciation' in assets should have evaluable flag"
       },
       {
-        "id": "t-90",
+        "id": "t-83",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "amortize",
@@ -2538,7 +2463,7 @@
         "description": "Display logic for 'amortize' in assets should have evaluable flag"
       },
       {
-        "id": "t-91",
+        "id": "t-84",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "usableLifeYears",
@@ -2546,7 +2471,7 @@
         "description": "Display logic for 'usableLifeYears' in assets should have evaluable flag"
       },
       {
-        "id": "t-92",
+        "id": "t-85",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "usableLifeMonths",
@@ -2554,7 +2479,7 @@
         "description": "Display logic for 'usableLifeMonths' in assets should have evaluable flag"
       },
       {
-        "id": "t-93",
+        "id": "t-86",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "everyMonthIs30Days",
@@ -2562,7 +2487,7 @@
         "description": "Display logic for 'everyMonthIs30Days' in assets should have evaluable flag"
       },
       {
-        "id": "t-94",
+        "id": "t-87",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "purchaseDate",
@@ -2570,7 +2495,7 @@
         "description": "Display logic for 'purchaseDate' in assets should have evaluable flag"
       },
       {
-        "id": "t-95",
+        "id": "t-88",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "cancellationDate",
@@ -2578,7 +2503,7 @@
         "description": "Display logic for 'cancellationDate' in assets should have evaluable flag"
       },
       {
-        "id": "t-96",
+        "id": "t-89",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "depreciationStartDate",
@@ -2586,7 +2511,7 @@
         "description": "Display logic for 'depreciationStartDate' in assets should have evaluable flag"
       },
       {
-        "id": "t-97",
+        "id": "t-90",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "depreciationEndDate",
@@ -2594,7 +2519,7 @@
         "description": "Display logic for 'depreciationEndDate' in assets should have evaluable flag"
       },
       {
-        "id": "t-98",
+        "id": "t-91",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "assetValue",
@@ -2602,7 +2527,7 @@
         "description": "Display logic for 'assetValue' in assets should have evaluable flag"
       },
       {
-        "id": "t-99",
+        "id": "t-92",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "residualAssetValue",
@@ -2610,7 +2535,7 @@
         "description": "Display logic for 'residualAssetValue' in assets should have evaluable flag"
       },
       {
-        "id": "t-100",
+        "id": "t-93",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "depreciationAmt",
@@ -2618,7 +2543,7 @@
         "description": "Display logic for 'depreciationAmt' in assets should have evaluable flag"
       },
       {
-        "id": "t-101",
+        "id": "t-94",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "previouslyDepreciatedAmt",
@@ -2626,7 +2551,7 @@
         "description": "Display logic for 'previouslyDepreciatedAmt' in assets should have evaluable flag"
       },
       {
-        "id": "t-102",
+        "id": "t-95",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "processed",
@@ -2634,7 +2559,7 @@
         "description": "Display logic for 'processed' in assets should have evaluable flag"
       },
       {
-        "id": "t-103",
+        "id": "t-96",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "depreciatedValue",
@@ -2642,7 +2567,7 @@
         "description": "Display logic for 'depreciatedValue' in assets should have evaluable flag"
       },
       {
-        "id": "t-104",
+        "id": "t-97",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "depreciatedPlan",
@@ -2650,7 +2575,7 @@
         "description": "Display logic for 'depreciatedPlan' in assets should have evaluable flag"
       },
       {
-        "id": "t-105",
+        "id": "t-98",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "fullyDepreciated",
@@ -2658,15 +2583,7 @@
         "description": "Display logic for 'fullyDepreciated' in assets should have evaluable flag"
       },
       {
-        "id": "t-106",
-        "category": "displaylogic-evaluable",
-        "entity": "assets",
-        "field": "project",
-        "runner": "node",
-        "description": "Display logic for 'project' in assets should have evaluable flag"
-      },
-      {
-        "id": "t-107",
+        "id": "t-99",
         "category": "displaylogic-evaluable",
         "entity": "assets",
         "field": "processAsset",
@@ -2674,7 +2591,7 @@
         "description": "Display logic for 'processAsset' in assets should have evaluable flag"
       },
       {
-        "id": "t-108",
+        "id": "t-100",
         "category": "readonlylogic-evaluable",
         "entity": "assets",
         "field": "currency",
@@ -2682,7 +2599,7 @@
         "description": "Read-only logic for 'currency' in assets should have evaluable flag"
       },
       {
-        "id": "t-109",
+        "id": "t-101",
         "category": "default-value-type",
         "entity": "assets",
         "field": "currency",
@@ -2690,7 +2607,7 @@
         "description": "Default value for 'currency' in assets should be a string"
       },
       {
-        "id": "t-110",
+        "id": "t-102",
         "category": "default-value-type",
         "entity": "assets",
         "field": "everyMonthIs30Days",
@@ -2698,7 +2615,7 @@
         "description": "Default value for 'everyMonthIs30Days' in assets should be a string"
       },
       {
-        "id": "t-111",
+        "id": "t-103",
         "category": "default-value-type",
         "entity": "assets",
         "field": "previouslyDepreciatedAmt",
@@ -2706,7 +2623,7 @@
         "description": "Default value for 'previouslyDepreciatedAmt' in assets should be a string"
       },
       {
-        "id": "t-112",
+        "id": "t-104",
         "category": "default-value-type",
         "entity": "assets",
         "field": "processed",
@@ -2714,7 +2631,7 @@
         "description": "Default value for 'processed' in assets should be a string"
       },
       {
-        "id": "t-113",
+        "id": "t-105",
         "category": "default-value-type",
         "entity": "assets",
         "field": "depreciatedValue",
@@ -2722,7 +2639,7 @@
         "description": "Default value for 'depreciatedValue' in assets should be a string"
       },
       {
-        "id": "t-114",
+        "id": "t-106",
         "category": "default-value-type",
         "entity": "assets",
         "field": "depreciatedPlan",
@@ -2730,7 +2647,7 @@
         "description": "Default value for 'depreciatedPlan' in assets should be a string"
       },
       {
-        "id": "t-115",
+        "id": "t-107",
         "category": "default-value-type",
         "entity": "assets",
         "field": "fullyDepreciated",
@@ -2738,7 +2655,7 @@
         "description": "Default value for 'fullyDepreciated' in assets should be a string"
       },
       {
-        "id": "t-116",
+        "id": "t-108",
         "category": "default-value-type",
         "entity": "assets",
         "field": "processAsset",
@@ -2746,7 +2663,7 @@
         "description": "Default value for 'processAsset' in assets should be a string"
       },
       {
-        "id": "t-117",
+        "id": "t-109",
         "category": "field-presence",
         "entity": "amortizationLine",
         "field": "sEQNoAsset",
@@ -2754,7 +2671,7 @@
         "description": "Field 'sEQNoAsset' should be present in amortizationLine"
       },
       {
-        "id": "t-118",
+        "id": "t-110",
         "category": "field-presence",
         "entity": "amortizationLine",
         "field": "amortization",
@@ -2762,7 +2679,7 @@
         "description": "Field 'amortization' should be present in amortizationLine"
       },
       {
-        "id": "t-119",
+        "id": "t-111",
         "category": "field-presence",
         "entity": "amortizationLine",
         "field": "amortizationPercentage",
@@ -2770,7 +2687,7 @@
         "description": "Field 'amortizationPercentage' should be present in amortizationLine"
       },
       {
-        "id": "t-120",
+        "id": "t-112",
         "category": "field-presence",
         "entity": "amortizationLine",
         "field": "amortizationAmount",
@@ -2778,7 +2695,7 @@
         "description": "Field 'amortizationAmount' should be present in amortizationLine"
       },
       {
-        "id": "t-121",
+        "id": "t-113",
         "category": "field-presence",
         "entity": "amortizationLine",
         "field": "currency",
@@ -2786,7 +2703,7 @@
         "description": "Field 'currency' should be present in amortizationLine"
       },
       {
-        "id": "t-122",
+        "id": "t-114",
         "category": "field-type",
         "entity": "amortizationLine",
         "field": "sEQNoAsset",
@@ -2794,7 +2711,7 @@
         "description": "Field 'sEQNoAsset' should have type 'number' in amortizationLine"
       },
       {
-        "id": "t-123",
+        "id": "t-115",
         "category": "field-type",
         "entity": "amortizationLine",
         "field": "amortization",
@@ -2802,7 +2719,7 @@
         "description": "Field 'amortization' should have type 'string' in amortizationLine"
       },
       {
-        "id": "t-124",
+        "id": "t-116",
         "category": "field-type",
         "entity": "amortizationLine",
         "field": "amortizationPercentage",
@@ -2810,7 +2727,7 @@
         "description": "Field 'amortizationPercentage' should have type 'number' in amortizationLine"
       },
       {
-        "id": "t-125",
+        "id": "t-117",
         "category": "field-type",
         "entity": "amortizationLine",
         "field": "amortizationAmount",
@@ -2818,7 +2735,7 @@
         "description": "Field 'amortizationAmount' should have type 'number' in amortizationLine"
       },
       {
-        "id": "t-126",
+        "id": "t-118",
         "category": "field-type",
         "entity": "amortizationLine",
         "field": "currency",
@@ -2826,14 +2743,14 @@
         "description": "Field 'currency' should have type 'string' in amortizationLine"
       },
       {
-        "id": "t-127",
+        "id": "t-119",
         "category": "visibility",
         "entity": "amortizationLine",
         "runner": "node",
         "description": "Entity 'amortizationLine' should only expose visible fields in frontend"
       },
       {
-        "id": "t-128",
+        "id": "t-120",
         "category": "readonlylogic-valid",
         "entity": "amortizationLine",
         "field": "amortizationPercentage",
@@ -2841,7 +2758,7 @@
         "description": "Read-only logic for 'amortizationPercentage' in amortizationLine should be valid JS"
       },
       {
-        "id": "t-129",
+        "id": "t-121",
         "category": "readonlylogic-valid",
         "entity": "amortizationLine",
         "field": "amortizationAmount",
@@ -2849,7 +2766,7 @@
         "description": "Read-only logic for 'amortizationAmount' in amortizationLine should be valid JS"
       },
       {
-        "id": "t-130",
+        "id": "t-122",
         "category": "readonlylogic-valid",
         "entity": "amortizationLine",
         "field": "currency",
@@ -2857,7 +2774,7 @@
         "description": "Read-only logic for 'currency' in amortizationLine should be valid JS"
       },
       {
-        "id": "t-131",
+        "id": "t-123",
         "category": "readonlylogic-evaluable",
         "entity": "amortizationLine",
         "field": "amortizationPercentage",
@@ -2865,7 +2782,7 @@
         "description": "Read-only logic for 'amortizationPercentage' in amortizationLine should have evaluable flag"
       },
       {
-        "id": "t-132",
+        "id": "t-124",
         "category": "readonlylogic-evaluable",
         "entity": "amortizationLine",
         "field": "amortizationAmount",
@@ -2873,7 +2790,7 @@
         "description": "Read-only logic for 'amortizationAmount' in amortizationLine should have evaluable flag"
       },
       {
-        "id": "t-133",
+        "id": "t-125",
         "category": "readonlylogic-evaluable",
         "entity": "amortizationLine",
         "field": "currency",
@@ -2881,7 +2798,7 @@
         "description": "Read-only logic for 'currency' in amortizationLine should have evaluable flag"
       },
       {
-        "id": "t-134",
+        "id": "t-126",
         "category": "default-value-type",
         "entity": "amortizationLine",
         "field": "sEQNoAsset",
@@ -2889,7 +2806,7 @@
         "description": "Default value for 'sEQNoAsset' in amortizationLine should be a string"
       },
       {
-        "id": "t-135",
+        "id": "t-127",
         "category": "field-presence",
         "entity": "assetAcct",
         "field": "accountingSchema",
@@ -2897,7 +2814,7 @@
         "description": "Field 'accountingSchema' should be present in assetAcct"
       },
       {
-        "id": "t-136",
+        "id": "t-128",
         "category": "field-presence",
         "entity": "assetAcct",
         "field": "accumulatedDepreciation",
@@ -2905,7 +2822,7 @@
         "description": "Field 'accumulatedDepreciation' should be present in assetAcct"
       },
       {
-        "id": "t-137",
+        "id": "t-129",
         "category": "field-presence",
         "entity": "assetAcct",
         "field": "depreciation",
@@ -2913,7 +2830,7 @@
         "description": "Field 'depreciation' should be present in assetAcct"
       },
       {
-        "id": "t-138",
+        "id": "t-130",
         "category": "field-type",
         "entity": "assetAcct",
         "field": "accountingSchema",
@@ -2921,7 +2838,7 @@
         "description": "Field 'accountingSchema' should have type 'string' in assetAcct"
       },
       {
-        "id": "t-139",
+        "id": "t-131",
         "category": "field-type",
         "entity": "assetAcct",
         "field": "accumulatedDepreciation",
@@ -2929,7 +2846,7 @@
         "description": "Field 'accumulatedDepreciation' should have type 'string' in assetAcct"
       },
       {
-        "id": "t-140",
+        "id": "t-132",
         "category": "field-type",
         "entity": "assetAcct",
         "field": "depreciation",
@@ -2937,14 +2854,14 @@
         "description": "Field 'depreciation' should have type 'string' in assetAcct"
       },
       {
-        "id": "t-141",
+        "id": "t-133",
         "category": "visibility",
         "entity": "assetAcct",
         "runner": "node",
         "description": "Entity 'assetAcct' should only expose visible fields in frontend"
       },
       {
-        "id": "t-142",
+        "id": "t-134",
         "category": "system-field",
         "entity": "assets",
         "field": "organization",
@@ -2952,7 +2869,23 @@
         "description": "System field 'organization' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-143",
+        "id": "t-135",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "System field 'documentNo' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-136",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "product",
+        "runner": "node",
+        "description": "System field 'product' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-137",
         "category": "system-field",
         "entity": "assets",
         "field": "summaryLevel",
@@ -2960,7 +2893,7 @@
         "description": "System field 'summaryLevel' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-144",
+        "id": "t-138",
         "category": "system-field",
         "entity": "assets",
         "field": "static",
@@ -2968,7 +2901,7 @@
         "description": "System field 'static' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-145",
+        "id": "t-139",
         "category": "system-field",
         "entity": "assets",
         "field": "attributeSetValue",
@@ -2976,7 +2909,7 @@
         "description": "System field 'attributeSetValue' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-146",
+        "id": "t-140",
         "category": "system-field",
         "entity": "assets",
         "field": "active",
@@ -2984,7 +2917,7 @@
         "description": "System field 'active' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-147",
+        "id": "t-141",
         "category": "system-field",
         "entity": "assets",
         "field": "quantity",
@@ -2992,7 +2925,15 @@
         "description": "System field 'quantity' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-148",
+        "id": "t-142",
+        "category": "system-field",
+        "entity": "assets",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for assets"
+      },
+      {
+        "id": "t-143",
         "category": "system-field",
         "entity": "assets",
         "field": "client",
@@ -3000,7 +2941,7 @@
         "description": "System field 'client' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-149",
+        "id": "t-144",
         "category": "system-field",
         "entity": "assets",
         "field": "inPossession",
@@ -3008,7 +2949,7 @@
         "description": "System field 'inPossession' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-150",
+        "id": "t-145",
         "category": "system-field",
         "entity": "assets",
         "field": "id",
@@ -3016,7 +2957,7 @@
         "description": "System field 'id' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-151",
+        "id": "t-146",
         "category": "system-field",
         "entity": "assets",
         "field": "partnerAddress",
@@ -3024,7 +2965,7 @@
         "description": "System field 'partnerAddress' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-152",
+        "id": "t-147",
         "category": "system-field",
         "entity": "assets",
         "field": "locationAddress",
@@ -3032,7 +2973,7 @@
         "description": "System field 'locationAddress' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-153",
+        "id": "t-148",
         "category": "system-field",
         "entity": "assets",
         "field": "disposed",
@@ -3040,7 +2981,7 @@
         "description": "System field 'disposed' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-154",
+        "id": "t-149",
         "category": "system-field",
         "entity": "assets",
         "field": "inServiceDate",
@@ -3048,7 +2989,7 @@
         "description": "System field 'inServiceDate' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-155",
+        "id": "t-150",
         "category": "system-field",
         "entity": "assets",
         "field": "userContact",
@@ -3056,7 +2997,7 @@
         "description": "System field 'userContact' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-156",
+        "id": "t-151",
         "category": "system-field",
         "entity": "assets",
         "field": "storageBin",
@@ -3064,7 +3005,7 @@
         "description": "System field 'storageBin' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-157",
+        "id": "t-152",
         "category": "system-field",
         "entity": "assets",
         "field": "assetDepreciationDate",
@@ -3072,7 +3013,7 @@
         "description": "System field 'assetDepreciationDate' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-158",
+        "id": "t-153",
         "category": "system-field",
         "entity": "assets",
         "field": "businessPartner",
@@ -3080,7 +3021,7 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-159",
+        "id": "t-154",
         "category": "system-field",
         "entity": "assets",
         "field": "lifeUse",
@@ -3088,7 +3029,7 @@
         "description": "System field 'lifeUse' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-160",
+        "id": "t-155",
         "category": "system-field",
         "entity": "assets",
         "field": "useUnits",
@@ -3096,7 +3037,7 @@
         "description": "System field 'useUnits' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-161",
+        "id": "t-156",
         "category": "system-field",
         "entity": "assets",
         "field": "assetDisposalDate",
@@ -3104,7 +3045,7 @@
         "description": "System field 'assetDisposalDate' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-162",
+        "id": "t-157",
         "category": "system-field",
         "entity": "assets",
         "field": "expirationDate",
@@ -3112,7 +3053,7 @@
         "description": "System field 'expirationDate' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-163",
+        "id": "t-158",
         "category": "system-field",
         "entity": "assets",
         "field": "owned",
@@ -3120,7 +3061,7 @@
         "description": "System field 'owned' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-164",
+        "id": "t-159",
         "category": "system-field",
         "entity": "assets",
         "field": "helpComment",
@@ -3128,7 +3069,7 @@
         "description": "System field 'helpComment' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-165",
+        "id": "t-160",
         "category": "system-field",
         "entity": "assets",
         "field": "locationComment",
@@ -3136,7 +3077,7 @@
         "description": "System field 'locationComment' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-166",
+        "id": "t-161",
         "category": "system-field",
         "entity": "assets",
         "field": "versionNo",
@@ -3144,7 +3085,7 @@
         "description": "System field 'versionNo' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-167",
+        "id": "t-162",
         "category": "system-field",
         "entity": "assets",
         "field": "serialNo",
@@ -3152,7 +3093,7 @@
         "description": "System field 'serialNo' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-168",
+        "id": "t-163",
         "category": "system-field",
         "entity": "assets",
         "field": "acctvalueamt",
@@ -3160,7 +3101,7 @@
         "description": "System field 'acctvalueamt' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-169",
+        "id": "t-164",
         "category": "system-field",
         "entity": "assets",
         "field": "profit",
@@ -3168,7 +3109,7 @@
         "description": "System field 'profit' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-170",
+        "id": "t-165",
         "category": "system-field",
         "entity": "assets",
         "field": "lotName",
@@ -3176,7 +3117,7 @@
         "description": "System field 'lotName' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-171",
+        "id": "t-166",
         "category": "system-field",
         "entity": "assets",
         "field": "creationDate",
@@ -3184,7 +3125,7 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-172",
+        "id": "t-167",
         "category": "system-field",
         "entity": "assets",
         "field": "createdBy",
@@ -3192,7 +3133,7 @@
         "description": "System field 'createdBy' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-173",
+        "id": "t-168",
         "category": "system-field",
         "entity": "assets",
         "field": "updated",
@@ -3200,7 +3141,7 @@
         "description": "System field 'updated' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-174",
+        "id": "t-169",
         "category": "system-field",
         "entity": "assets",
         "field": "updatedBy",
@@ -3208,7 +3149,7 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for assets"
       },
       {
-        "id": "t-175",
+        "id": "t-170",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "active",
@@ -3216,7 +3157,7 @@
         "description": "System field 'active' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-176",
+        "id": "t-171",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "id",
@@ -3224,7 +3165,7 @@
         "description": "System field 'id' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-177",
+        "id": "t-172",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "client",
@@ -3232,7 +3173,7 @@
         "description": "System field 'client' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-178",
+        "id": "t-173",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "organization",
@@ -3240,7 +3181,7 @@
         "description": "System field 'organization' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-179",
+        "id": "t-174",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "lineNo",
@@ -3248,7 +3189,7 @@
         "description": "System field 'lineNo' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-180",
+        "id": "t-175",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "asset",
@@ -3256,7 +3197,7 @@
         "description": "System field 'asset' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-181",
+        "id": "t-176",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "costcenter",
@@ -3264,7 +3205,7 @@
         "description": "System field 'costcenter' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-182",
+        "id": "t-177",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "project",
@@ -3272,7 +3213,7 @@
         "description": "System field 'project' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-183",
+        "id": "t-178",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "creationDate",
@@ -3280,7 +3221,7 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-184",
+        "id": "t-179",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "createdBy",
@@ -3288,7 +3229,7 @@
         "description": "System field 'createdBy' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-185",
+        "id": "t-180",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "updated",
@@ -3296,7 +3237,7 @@
         "description": "System field 'updated' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-186",
+        "id": "t-181",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "updatedBy",
@@ -3304,7 +3245,7 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-187",
+        "id": "t-182",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "stDimension",
@@ -3312,7 +3253,7 @@
         "description": "System field 'stDimension' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-188",
+        "id": "t-183",
         "category": "system-field",
         "entity": "amortizationLine",
         "field": "ndDimension",
@@ -3320,7 +3261,7 @@
         "description": "System field 'ndDimension' should exist in backend but not frontend for amortizationLine"
       },
       {
-        "id": "t-189",
+        "id": "t-184",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "active",
@@ -3328,7 +3269,7 @@
         "description": "System field 'active' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-190",
+        "id": "t-185",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "disposalGain",
@@ -3336,7 +3277,7 @@
         "description": "System field 'disposalGain' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-191",
+        "id": "t-186",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "disposalLoss",
@@ -3344,7 +3285,7 @@
         "description": "System field 'disposalLoss' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-192",
+        "id": "t-187",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "organization",
@@ -3352,7 +3293,7 @@
         "description": "System field 'organization' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-193",
+        "id": "t-188",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "asset",
@@ -3360,7 +3301,7 @@
         "description": "System field 'asset' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-194",
+        "id": "t-189",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "id",
@@ -3368,7 +3309,7 @@
         "description": "System field 'id' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-195",
+        "id": "t-190",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "client",
@@ -3376,7 +3317,7 @@
         "description": "System field 'client' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-196",
+        "id": "t-191",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "creationDate",
@@ -3384,7 +3325,7 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-197",
+        "id": "t-192",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "createdBy",
@@ -3392,7 +3333,7 @@
         "description": "System field 'createdBy' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-198",
+        "id": "t-193",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "updated",
@@ -3400,7 +3341,7 @@
         "description": "System field 'updated' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-199",
+        "id": "t-194",
         "category": "system-field",
         "entity": "assetAcct",
         "field": "updatedBy",
@@ -3408,119 +3349,119 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for assetAcct"
       },
       {
-        "id": "t-200",
+        "id": "t-195",
         "category": "rule-declared",
         "rule": "SL_Assets_Amortizationvalueamt",
         "runner": "node",
         "description": "Rule 'SL_Assets_Amortizationvalueamt' (callout) should be declared"
       },
       {
-        "id": "t-201",
+        "id": "t-196",
         "category": "rule-declared",
         "rule": "SL_Assets_Residualassetvalueamt",
         "runner": "node",
         "description": "Rule 'SL_Assets_Residualassetvalueamt' (callout) should be declared"
       },
       {
-        "id": "t-202",
+        "id": "t-197",
         "category": "rule-declared",
         "rule": "SL_Assets_AssetValueAmt",
         "runner": "node",
         "description": "Rule 'SL_Assets_AssetValueAmt' (callout) should be declared"
       },
       {
-        "id": "t-203",
+        "id": "t-198",
         "category": "rule-declared",
         "rule": "SL_Asset_Product_M_Product_ID",
         "runner": "node",
         "description": "Rule 'SL_Asset_Product_M_Product_ID' (callout) should be declared"
       },
       {
-        "id": "t-204",
+        "id": "t-199",
         "category": "rule-declared",
         "rule": "SL_Depreciate_A_Asset_Group_ID",
         "runner": "node",
         "description": "Rule 'SL_Depreciate_A_Asset_Group_ID' (callout) should be declared"
       },
       {
-        "id": "t-205",
+        "id": "t-200",
         "category": "rule-declared",
         "rule": "AD_User_C_BPartner_User_Contacts",
         "runner": "node",
         "description": "Rule 'AD_User_C_BPartner_User_Contacts' (validation) should be declared"
       },
       {
-        "id": "t-206",
+        "id": "t-201",
         "category": "rule-declared",
         "rule": "C_BPartner_Location",
         "runner": "node",
         "description": "Rule 'C_BPartner_Location' (validation) should be declared"
       },
       {
-        "id": "t-207",
+        "id": "t-202",
         "category": "rule-declared",
         "rule": "AD_Org_show_child_organizations",
         "runner": "node",
         "description": "Rule 'AD_Org_show_child_organizations' (validation) should be declared"
       },
       {
-        "id": "t-208",
+        "id": "t-203",
         "category": "rule-declared",
         "rule": "readOnlyLogic_Currency_existAmortizationLines",
         "runner": "node",
         "description": "Rule 'readOnlyLogic_Currency_existAmortizationLines' (readOnlyLogic) should be declared"
       },
       {
-        "id": "t-209",
+        "id": "t-204",
         "category": "rule-declared",
         "rule": "readOnlyLogic_Processed_AmortizationLine",
         "runner": "node",
         "description": "Rule 'readOnlyLogic_Processed_AmortizationLine' (readOnlyLogic) should be declared"
       },
       {
-        "id": "t-210",
+        "id": "t-205",
         "category": "rule-declared",
         "rule": "process_CreateAmortization",
         "runner": "node",
         "description": "Rule 'process_CreateAmortization' (process) should be declared"
       },
       {
-        "id": "t-211",
+        "id": "t-206",
         "category": "rule-declared",
         "rule": "process_GenerateAmortizationPlan",
         "runner": "node",
         "description": "Rule 'process_GenerateAmortizationPlan' (process) should be declared"
       },
       {
-        "id": "t-212",
+        "id": "t-207",
         "category": "rule-declared",
         "rule": "process_Processing",
         "runner": "node",
         "description": "Rule 'process_Processing' (process) should be declared"
       },
       {
-        "id": "t-213",
+        "id": "t-208",
         "category": "crud-flags",
         "entity": "assets",
         "runner": "node",
         "description": "CRUD flags for 'assets' should all be booleans"
       },
       {
-        "id": "t-214",
+        "id": "t-209",
         "category": "crud-flags",
         "entity": "amortizationLine",
         "runner": "node",
         "description": "CRUD flags for 'amortizationLine' should all be booleans"
       },
       {
-        "id": "t-215",
+        "id": "t-210",
         "category": "crud-flags",
         "entity": "assetAcct",
         "runner": "node",
         "description": "CRUD flags for 'assetAcct' should all be booleans"
       },
       {
-        "id": "t-216",
+        "id": "t-211",
         "category": "selector-endpoint",
         "entity": "assets",
         "field": "assetCategory",
@@ -3528,7 +3469,7 @@
         "description": "Selector endpoint for 'assetCategory' in assets should exist"
       },
       {
-        "id": "t-217",
+        "id": "t-212",
         "category": "selector-endpoint",
         "entity": "assets",
         "field": "currency",
@@ -3536,23 +3477,7 @@
         "description": "Selector endpoint for 'currency' in assets should exist"
       },
       {
-        "id": "t-218",
-        "category": "selector-endpoint",
-        "entity": "assets",
-        "field": "product",
-        "runner": "node",
-        "description": "Selector endpoint for 'product' in assets should exist"
-      },
-      {
-        "id": "t-219",
-        "category": "selector-endpoint",
-        "entity": "assets",
-        "field": "project",
-        "runner": "node",
-        "description": "Selector endpoint for 'project' in assets should exist"
-      },
-      {
-        "id": "t-220",
+        "id": "t-213",
         "category": "selector-endpoint",
         "entity": "amortizationLine",
         "field": "amortization",
@@ -3560,7 +3485,7 @@
         "description": "Selector endpoint for 'amortization' in amortizationLine should exist"
       },
       {
-        "id": "t-221",
+        "id": "t-214",
         "category": "selector-endpoint",
         "entity": "amortizationLine",
         "field": "currency",
@@ -3568,7 +3493,7 @@
         "description": "Selector endpoint for 'currency' in amortizationLine should exist"
       },
       {
-        "id": "t-222",
+        "id": "t-215",
         "category": "selector-endpoint",
         "entity": "assetAcct",
         "field": "accountingSchema",
@@ -3576,7 +3501,7 @@
         "description": "Selector endpoint for 'accountingSchema' in assetAcct should exist"
       },
       {
-        "id": "t-223",
+        "id": "t-216",
         "category": "selector-endpoint",
         "entity": "assetAcct",
         "field": "accumulatedDepreciation",
@@ -3584,7 +3509,7 @@
         "description": "Selector endpoint for 'accumulatedDepreciation' in assetAcct should exist"
       },
       {
-        "id": "t-224",
+        "id": "t-217",
         "category": "selector-endpoint",
         "entity": "assetAcct",
         "field": "depreciation",
@@ -3592,7 +3517,7 @@
         "description": "Selector endpoint for 'depreciation' in assetAcct should exist"
       },
       {
-        "id": "t-225",
+        "id": "t-218",
         "category": "action-endpoint",
         "entity": "assets",
         "field": "processed",
@@ -3600,7 +3525,7 @@
         "description": "Action endpoint for 'processed' in assets should exist"
       },
       {
-        "id": "t-226",
+        "id": "t-219",
         "category": "action-endpoint",
         "entity": "assets",
         "field": "processAsset",
@@ -3609,25 +3534,25 @@
       }
     ],
     "summary": {
-      "total": 226,
+      "total": 219,
       "byCategory": {
-        "field-presence": 37,
-        "field-type": 37,
+        "field-presence": 34,
+        "field-type": 34,
         "searchable-filters": 5,
         "visibility": 3,
-        "displaylogic-valid": 21,
+        "displaylogic-valid": 20,
         "readonlylogic-valid": 4,
-        "displaylogic-evaluable": 21,
+        "displaylogic-evaluable": 20,
         "readonlylogic-evaluable": 4,
         "default-value-type": 9,
-        "system-field": 58,
+        "system-field": 61,
         "rule-declared": 13,
         "crud-flags": 3,
-        "selector-endpoint": 9,
+        "selector-endpoint": 7,
         "action-endpoint": 2
       },
       "byRunner": {
-        "node": 226,
+        "node": 219,
         "junit": 0
       }
     }

@@ -1,0 +1,1115 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-04-09T12:55:14.868Z",
+  "checksum": "0015252aba22f84d",
+  "frontendContract": {
+    "window": {
+      "id": "120",
+      "name": "Unit of Measure",
+      "primaryEntity": "unitOfMeasure",
+      "category": "configuracion",
+      "detailEntity": "conversion",
+      "layoutType": "default"
+    },
+    "entities": {
+      "unitOfMeasure": {
+        "tableName": "C_UOM",
+        "tabId": "133",
+        "tabName": "Unit of Measure",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "eDICode",
+            "apiKey": "eDICode",
+            "column": "X12DE355",
+            "label": "EDI Code",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "seq": 1
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "seq": 2
+          },
+          {
+            "name": "standardPrecision",
+            "apiKey": "standardPrecision",
+            "column": "StdPrecision",
+            "label": "Standard Precision",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 5
+          },
+          {
+            "name": "costingPrecision",
+            "apiKey": "costingPrecision",
+            "column": "CostingPrecision",
+            "label": "Costing Precision",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 6
+          },
+          {
+            "name": "symbol",
+            "apiKey": "symbol",
+            "column": "UOMSymbol",
+            "label": "Symbol",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "seq": 3
+          },
+          {
+            "name": "uOMType",
+            "apiKey": "uOMType",
+            "column": "UOM_Type",
+            "label": "UOM Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "A",
+                "name": "Area"
+              },
+              {
+                "value": "L",
+                "name": "Length"
+              },
+              {
+                "value": "T",
+                "name": "Time"
+              },
+              {
+                "value": "V",
+                "name": "Volume"
+              },
+              {
+                "value": "W",
+                "name": "Weight"
+              }
+            ],
+            "section": "principal",
+            "seq": 4
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "label": "Default",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 7
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "other",
+            "seq": 8
+          },
+          {
+            "name": "breakdown",
+            "apiKey": "breakdown",
+            "column": "Breakdown",
+            "label": "Breakdown",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "other",
+            "seq": 9
+          },
+          {
+            "name": "useinproduction",
+            "apiKey": "useinproduction",
+            "column": "Useinproduction",
+            "label": "Use In Production",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "other",
+            "seq": 10
+          }
+        ],
+        "searchableFields": [
+          "eDICode",
+          "name"
+        ],
+        "computedFields": [
+          {
+            "name": "useinproduction",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          }
+        ]
+      },
+      "conversion": {
+        "tableName": "C_UOM_Conversion",
+        "tabId": "134",
+        "tabName": "Conversion",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "toUOM",
+            "apiKey": "toUOM",
+            "column": "C_UOM_To_ID",
+            "label": "To UOM",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "UOM",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 1
+          },
+          {
+            "name": "multipleRateBy",
+            "apiKey": "multipleRateBy",
+            "column": "MultiplyRate",
+            "label": "Multiple Rate By",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "seq": 2,
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Conversion_Rate"
+            }
+          },
+          {
+            "name": "divideRateBy",
+            "apiKey": "divideRateBy",
+            "column": "DivideRate",
+            "label": "Divide Rate By",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "seq": 3,
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Conversion_Rate"
+            }
+          }
+        ],
+        "searchableFields": [
+          "toUOM"
+        ],
+        "computedFields": []
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "120",
+      "name": "Unit of Measure",
+      "primaryEntity": "unitOfMeasure",
+      "category": "configuracion",
+      "detailEntity": "conversion"
+    },
+    "entities": {
+      "unitOfMeasure": {
+        "tableName": "C_UOM",
+        "tabId": "133",
+        "tabName": "Unit of Measure",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eDICode",
+            "apiKey": "eDICode",
+            "column": "X12DE355",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "standardPrecision",
+            "apiKey": "standardPrecision",
+            "column": "StdPrecision",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "costingPrecision",
+            "apiKey": "costingPrecision",
+            "column": "CostingPrecision",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "symbol",
+            "apiKey": "symbol",
+            "column": "UOMSymbol",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "uOMType",
+            "apiKey": "uOMType",
+            "column": "UOM_Type",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "breakdown",
+            "apiKey": "breakdown",
+            "column": "Breakdown",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "useinproduction",
+            "apiKey": "useinproduction",
+            "column": "Useinproduction",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_UOM_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "conversion": {
+        "tableName": "C_UOM_Conversion",
+        "tabId": "134",
+        "tabName": "Conversion",
+        "fields": [
+          {
+            "name": "toUOM",
+            "apiKey": "toUOM",
+            "column": "C_UOM_To_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_UOM_Conversion_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "multipleRateBy",
+            "apiKey": "multipleRateBy",
+            "column": "MultiplyRate",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "divideRateBy",
+            "apiKey": "divideRateBy",
+            "column": "DivideRate",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/unitOfMeasure",
+        "entity": "unitOfMeasure",
+        "supportedFilters": [
+          "eDICode",
+          "name"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/unitOfMeasure/:id",
+        "entity": "unitOfMeasure",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/unitOfMeasure",
+        "entity": "unitOfMeasure",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/unitOfMeasure/:id",
+        "entity": "unitOfMeasure",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/unitOfMeasure/:id",
+        "entity": "unitOfMeasure",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/conversion",
+        "entity": "conversion",
+        "supportedFilters": [
+          "toUOM"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/conversion/:id",
+        "entity": "conversion",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/conversion",
+        "entity": "conversion",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/conversion/:id",
+        "entity": "conversion",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/conversion/:id",
+        "entity": "conversion",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "unit-of-measure",
+    "baseUrl": "/sws/neo/unit-of-measure",
+    "crud": {
+      "unitOfMeasure": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/unit-of-measure/unitOfMeasure",
+        "detailUrl": "/sws/neo/unit-of-measure/unitOfMeasure/{id}",
+        "supportedFilters": [
+          "eDICode",
+          "name"
+        ]
+      },
+      "conversion": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/unit-of-measure/conversion",
+        "detailUrl": "/sws/neo/unit-of-measure/conversion/{id}",
+        "supportedFilters": [
+          "toUOM"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "conversion",
+        "field": "toUOM",
+        "column": "C_UOM_To_ID",
+        "reference": "UOM",
+        "inputMode": "selector",
+        "url": "/sws/neo/unit-of-measure/conversion/selectors/toUOM"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=unit-of-measureDate"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-1",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "eDICode",
+        "runner": "node",
+        "description": "Field 'eDICode' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-2",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-3",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "standardPrecision",
+        "runner": "node",
+        "description": "Field 'standardPrecision' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-4",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "costingPrecision",
+        "runner": "node",
+        "description": "Field 'costingPrecision' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-5",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "symbol",
+        "runner": "node",
+        "description": "Field 'symbol' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-6",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "uOMType",
+        "runner": "node",
+        "description": "Field 'uOMType' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-7",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-8",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-9",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "breakdown",
+        "runner": "node",
+        "description": "Field 'breakdown' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-10",
+        "category": "field-presence",
+        "entity": "unitOfMeasure",
+        "field": "useinproduction",
+        "runner": "node",
+        "description": "Field 'useinproduction' should be present in unitOfMeasure"
+      },
+      {
+        "id": "t-11",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "eDICode",
+        "runner": "node",
+        "description": "Field 'eDICode' should have type 'string' in unitOfMeasure"
+      },
+      {
+        "id": "t-12",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in unitOfMeasure"
+      },
+      {
+        "id": "t-13",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "standardPrecision",
+        "runner": "node",
+        "description": "Field 'standardPrecision' should have type 'number' in unitOfMeasure"
+      },
+      {
+        "id": "t-14",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "costingPrecision",
+        "runner": "node",
+        "description": "Field 'costingPrecision' should have type 'number' in unitOfMeasure"
+      },
+      {
+        "id": "t-15",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "symbol",
+        "runner": "node",
+        "description": "Field 'symbol' should have type 'string' in unitOfMeasure"
+      },
+      {
+        "id": "t-16",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "uOMType",
+        "runner": "node",
+        "description": "Field 'uOMType' should have type 'string' in unitOfMeasure"
+      },
+      {
+        "id": "t-17",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should have type 'boolean' in unitOfMeasure"
+      },
+      {
+        "id": "t-18",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in unitOfMeasure"
+      },
+      {
+        "id": "t-19",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "breakdown",
+        "runner": "node",
+        "description": "Field 'breakdown' should have type 'boolean' in unitOfMeasure"
+      },
+      {
+        "id": "t-20",
+        "category": "field-type",
+        "entity": "unitOfMeasure",
+        "field": "useinproduction",
+        "runner": "node",
+        "description": "Field 'useinproduction' should have type 'boolean' in unitOfMeasure"
+      },
+      {
+        "id": "t-21",
+        "category": "searchable-filters",
+        "entity": "unitOfMeasure",
+        "field": "eDICode",
+        "runner": "node",
+        "description": "Field 'eDICode' should be a supported filter for unitOfMeasure"
+      },
+      {
+        "id": "t-22",
+        "category": "searchable-filters",
+        "entity": "unitOfMeasure",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for unitOfMeasure"
+      },
+      {
+        "id": "t-23",
+        "category": "visibility",
+        "entity": "unitOfMeasure",
+        "runner": "node",
+        "description": "Entity 'unitOfMeasure' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-24",
+        "category": "default-value-type",
+        "entity": "unitOfMeasure",
+        "field": "useinproduction",
+        "runner": "node",
+        "description": "Default value for 'useinproduction' in unitOfMeasure should be a string"
+      },
+      {
+        "id": "t-25",
+        "category": "field-presence",
+        "entity": "conversion",
+        "field": "toUOM",
+        "runner": "node",
+        "description": "Field 'toUOM' should be present in conversion"
+      },
+      {
+        "id": "t-26",
+        "category": "field-presence",
+        "entity": "conversion",
+        "field": "multipleRateBy",
+        "runner": "node",
+        "description": "Field 'multipleRateBy' should be present in conversion"
+      },
+      {
+        "id": "t-27",
+        "category": "field-presence",
+        "entity": "conversion",
+        "field": "divideRateBy",
+        "runner": "node",
+        "description": "Field 'divideRateBy' should be present in conversion"
+      },
+      {
+        "id": "t-28",
+        "category": "field-type",
+        "entity": "conversion",
+        "field": "toUOM",
+        "runner": "node",
+        "description": "Field 'toUOM' should have type 'string' in conversion"
+      },
+      {
+        "id": "t-29",
+        "category": "field-type",
+        "entity": "conversion",
+        "field": "multipleRateBy",
+        "runner": "node",
+        "description": "Field 'multipleRateBy' should have type 'string' in conversion"
+      },
+      {
+        "id": "t-30",
+        "category": "field-type",
+        "entity": "conversion",
+        "field": "divideRateBy",
+        "runner": "node",
+        "description": "Field 'divideRateBy' should have type 'string' in conversion"
+      },
+      {
+        "id": "t-31",
+        "category": "searchable-filters",
+        "entity": "conversion",
+        "field": "toUOM",
+        "runner": "node",
+        "description": "Field 'toUOM' should be a supported filter for conversion"
+      },
+      {
+        "id": "t-32",
+        "category": "visibility",
+        "entity": "conversion",
+        "runner": "node",
+        "description": "Entity 'conversion' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-33",
+        "category": "system-field",
+        "entity": "unitOfMeasure",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for unitOfMeasure"
+      },
+      {
+        "id": "t-34",
+        "category": "system-field",
+        "entity": "unitOfMeasure",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for unitOfMeasure"
+      },
+      {
+        "id": "t-35",
+        "category": "system-field",
+        "entity": "unitOfMeasure",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for unitOfMeasure"
+      },
+      {
+        "id": "t-36",
+        "category": "system-field",
+        "entity": "unitOfMeasure",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for unitOfMeasure"
+      },
+      {
+        "id": "t-37",
+        "category": "system-field",
+        "entity": "unitOfMeasure",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for unitOfMeasure"
+      },
+      {
+        "id": "t-38",
+        "category": "system-field",
+        "entity": "unitOfMeasure",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for unitOfMeasure"
+      },
+      {
+        "id": "t-39",
+        "category": "system-field",
+        "entity": "unitOfMeasure",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for unitOfMeasure"
+      },
+      {
+        "id": "t-40",
+        "category": "system-field",
+        "entity": "unitOfMeasure",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for unitOfMeasure"
+      },
+      {
+        "id": "t-41",
+        "category": "system-field",
+        "entity": "conversion",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for conversion"
+      },
+      {
+        "id": "t-42",
+        "category": "system-field",
+        "entity": "conversion",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for conversion"
+      },
+      {
+        "id": "t-43",
+        "category": "system-field",
+        "entity": "conversion",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for conversion"
+      },
+      {
+        "id": "t-44",
+        "category": "system-field",
+        "entity": "conversion",
+        "field": "uOM",
+        "runner": "node",
+        "description": "System field 'uOM' should exist in backend but not frontend for conversion"
+      },
+      {
+        "id": "t-45",
+        "category": "system-field",
+        "entity": "conversion",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for conversion"
+      },
+      {
+        "id": "t-46",
+        "category": "system-field",
+        "entity": "conversion",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for conversion"
+      },
+      {
+        "id": "t-47",
+        "category": "system-field",
+        "entity": "conversion",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for conversion"
+      },
+      {
+        "id": "t-48",
+        "category": "system-field",
+        "entity": "conversion",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for conversion"
+      },
+      {
+        "id": "t-49",
+        "category": "system-field",
+        "entity": "conversion",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for conversion"
+      },
+      {
+        "id": "t-50",
+        "category": "rule-declared",
+        "rule": "SL_Conversion_Rate_DivideRate",
+        "runner": "node",
+        "description": "Rule 'SL_Conversion_Rate_DivideRate' (callout) should be declared"
+      },
+      {
+        "id": "t-51",
+        "category": "rule-declared",
+        "rule": "SL_Conversion_Rate_MultiplyRate",
+        "runner": "node",
+        "description": "Rule 'SL_Conversion_Rate_MultiplyRate' (callout) should be declared"
+      },
+      {
+        "id": "t-52",
+        "category": "rule-declared",
+        "rule": "AD_Client_Security_validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client_Security_validation' (validation) should be declared"
+      },
+      {
+        "id": "t-53",
+        "category": "rule-declared",
+        "rule": "C_UOM_Validation",
+        "runner": "node",
+        "description": "Rule 'C_UOM_Validation' (validation) should be declared"
+      },
+      {
+        "id": "t-54",
+        "category": "crud-flags",
+        "entity": "unitOfMeasure",
+        "runner": "node",
+        "description": "CRUD flags for 'unitOfMeasure' should all be booleans"
+      },
+      {
+        "id": "t-55",
+        "category": "crud-flags",
+        "entity": "conversion",
+        "runner": "node",
+        "description": "CRUD flags for 'conversion' should all be booleans"
+      },
+      {
+        "id": "t-56",
+        "category": "selector-endpoint",
+        "entity": "conversion",
+        "field": "toUOM",
+        "runner": "node",
+        "description": "Selector endpoint for 'toUOM' in conversion should exist"
+      }
+    ],
+    "summary": {
+      "total": 56,
+      "byCategory": {
+        "field-presence": 13,
+        "field-type": 13,
+        "searchable-filters": 3,
+        "visibility": 2,
+        "default-value-type": 1,
+        "system-field": 17,
+        "rule-declared": 4,
+        "crud-flags": 2,
+        "selector-endpoint": 1
+      },
+      "byRunner": {
+        "node": 56,
+        "junit": 0
+      }
+    }
+  }
+}

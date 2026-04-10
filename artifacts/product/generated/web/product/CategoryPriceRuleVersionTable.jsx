@@ -10,9 +10,6 @@ const filters = [];
 
 // @sf-generated-start component:CategoryPriceRuleVersionTable
 export default function CategoryPriceRuleVersionTable(props) {
-  // @sf-custom-slot hooks:CategoryPriceRuleVersionTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:CategoryPriceRuleVersionTable
-
-// @sf-custom-slot section:CategoryPriceRuleVersionTable-custom

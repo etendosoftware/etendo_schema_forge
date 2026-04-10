@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { formatAmount } from '@/lib/formatAmount.js';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useUI } from '@/i18n';
 
 const PAYMENT_STATUS = {
   E:      'Executed',
@@ -30,6 +31,7 @@ const PAYMENT_STATUS = {
  * (documentNo, paymentDate, paymentMethod, account, status) via OBDal traversal.
  */
 export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl }) {
+  const ui = useUI();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -59,24 +61,24 @@ export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl 
   }, [parentId, apiBaseUrl, token]);
 
   if (loading) {
-    return <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>;
+    return <p className="text-sm text-muted-foreground py-4 text-center">{ui('loading')}</p>;
   }
 
   if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground py-4 text-center">No payment details found</p>;
+    return <p className="text-sm text-muted-foreground py-4 text-center">{ui('noPaymentDetailsFound')}</p>;
   }
 
   return (
     <Table>
       <TableHeader>
         <TableRow className="border-b border-border/40">
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">Document No.</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">Payment Date</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">Payment Method</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">Financial Account</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide text-right">Received Amount</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">Status</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">Payment</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('documentNo')}</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('paymentDate')}</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('paymentMethod')}</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('financialAccount')}</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide text-right">{ui('receivedAmount')}</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('status')}</TableHead>
+          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('payment')}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

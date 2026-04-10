@@ -4,6 +4,8 @@ import ReturnReceiptForm from './ReturnReceiptForm';
 import ReturnReceiptLineTable from './ReturnReceiptLineTable';
 import catalogs from './mockCatalogs';
 
+const breadcrumb = 'Sales / Return Material Receipt';
+
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
 ];
@@ -44,6 +46,7 @@ export default function ReturnReceiptPage({ windowName, recordId, ...props }) {
         catalogs={catalogs}
         entityLabel="Return Receipt"
         detailLabel="Return Receipt Line"
+        breadcrumb={breadcrumb}
         windowName={windowName}
         recordId={recordId}
         {...props}
@@ -56,6 +59,7 @@ export default function ReturnReceiptPage({ windowName, recordId, ...props }) {
       entity="returnReceipt"
       Table={ReturnReceiptTable}
       entityLabel="Return Receipt"
+      breadcrumb={breadcrumb}
       windowName={windowName}
       {...props}
     />

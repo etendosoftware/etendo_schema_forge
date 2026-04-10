@@ -19,6 +19,7 @@ export default function ContactForm(props) {
   // @sf-custom-slot hooks:ContactForm
   return <EntityForm fields={fields} {...props} />;
 }
+ContactForm.hasCollapsedFields = false;
 // @sf-generated-end component:ContactForm
 
 // @sf-custom-slot section:ContactForm-custom

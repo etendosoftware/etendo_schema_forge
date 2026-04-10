@@ -15,9 +15,6 @@ const filters = [];
 
 // @sf-generated-start component:CostingTable
 export default function CostingTable(props) {
-  // @sf-custom-slot hooks:CostingTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:CostingTable
-
-// @sf-custom-slot section:CostingTable-custom

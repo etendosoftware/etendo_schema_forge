@@ -1,6 +1,6 @@
 import AssetsPage from './AssetsPage';
 
-const windowMeta = { category: 'accounting', name: 'Assets' };
+const windowMeta = { category: 'finance', name: 'Assets' };
 
 const api = {
   "specName": "assets",
@@ -62,22 +62,6 @@ const api = {
       "reference": "Currency",
       "inputMode": "selector",
       "url": "/sws/neo/assets/assets/selectors/currency"
-    },
-    {
-      "entity": "assets",
-      "field": "product",
-      "column": "M_Product_ID",
-      "reference": "Product",
-      "inputMode": "search",
-      "url": "/sws/neo/assets/assets/selectors/product"
-    },
-    {
-      "entity": "assets",
-      "field": "project",
-      "column": "C_Project_ID",
-      "reference": "Project",
-      "inputMode": "search",
-      "url": "/sws/neo/assets/assets/selectors/project"
     },
     {
       "entity": "amortizationLine",
@@ -155,9 +139,6 @@ const api = {
 
 // @sf-generated-start component:App
 export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {
-  // @sf-custom-slot hooks:App
   return <AssetsPage windowName={windowName} recordId={recordId} token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta} api={api} {...rest} />;
 }
 // @sf-generated-end component:App
-
-// @sf-custom-slot section:App-custom

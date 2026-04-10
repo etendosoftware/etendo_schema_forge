@@ -1,180 +1,917 @@
 {
-  "version": "0.1.0",
-  "generatedAt": "2026-03-06T17:20:28.664Z",
-  "checksum": "f1d08d5ff2f81f73",
+  "version": "0.2.0",
+  "generatedAt": "2026-04-09T12:47:46.470Z",
+  "checksum": "77b868629ea8db77",
   "frontendContract": {
     "window": {
-      "id": "204",
+      "id": "141",
       "name": "Payment Term",
-      "primaryEntity": "paymentTerm",
-      "category": "reference"
+      "primaryEntity": "header",
+      "category": "configuracion",
+      "detailEntity": "lines",
+      "layoutType": "default"
     },
     "entities": {
-      "paymentTerm": {
+      "header": {
+        "tableName": "C_PaymentTerm",
+        "tabId": "184",
+        "tabName": "Header",
+        "uiPattern": "STD",
         "fields": [
           {
-            "name": "name",
-            "column": "Name",
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "label": "Search Key",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 1
           },
           {
-            "name": "searchKey",
-            "column": "Value",
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 2
           },
           {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
-            "type": "string",
+            "label": "Description",
+            "type": "textarea",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 3
           },
           {
-            "name": "netDays",
+            "name": "offsetMonthDue",
+            "apiKey": "offsetMonthDue",
+            "column": "FixMonthOffset",
+            "label": "Offset Month Due",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 6
+          },
+          {
+            "name": "overduePaymentDaysRule",
+            "apiKey": "overduePaymentDaysRule",
             "column": "NetDays",
+            "label": "Overdue Payment Days Rule",
             "type": "integer",
             "tsType": "number",
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 5
           },
           {
-            "name": "discountDays",
-            "column": "DiscountDays",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "discount",
-            "column": "Discount",
-            "type": "number",
-            "tsType": "number",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true
-          },
-          {
-            "name": "isActive",
-            "column": "IsActive",
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "label": "Default",
             "type": "boolean",
             "tsType": "boolean",
-            "visibility": "readOnly",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 4
+          },
+          {
+            "name": "fixedDueDate",
+            "apiKey": "fixedDueDate",
+            "column": "IsDueFixed",
+            "label": "Fixed Due Date",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
             "required": true,
-            "grid": true,
-            "form": true
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 7
+          },
+          {
+            "name": "maturityDate1",
+            "apiKey": "maturityDate1",
+            "column": "FixMonthDay",
+            "label": "Maturity Date 1",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 8,
+            "displayLogic": {
+              "raw": "@IsDueFixed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "maturityDate2",
+            "apiKey": "maturityDate2",
+            "column": "FixMonthDay2",
+            "label": "Maturity Date 2",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 9,
+            "displayLogic": {
+              "raw": "@IsDueFixed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "maturityDate3",
+            "apiKey": "maturityDate3",
+            "column": "Fixmonthday3",
+            "label": "Maturity Date 3",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 10,
+            "displayLogic": {
+              "raw": "@IsDueFixed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "nextBusinessDay",
+            "apiKey": "nextBusinessDay",
+            "column": "IsNextBusinessDay",
+            "label": "Next Business Day",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 12
+          },
+          {
+            "name": "overduePaymentDayRule",
+            "apiKey": "overduePaymentDayRule",
+            "column": "NetDay",
+            "label": "Fixed Week Day",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "1",
+                "name": "Monday"
+              },
+              {
+                "value": "2",
+                "name": "Tuesday"
+              },
+              {
+                "value": "3",
+                "name": "Wednesday"
+              },
+              {
+                "value": "4",
+                "name": "Thursday"
+              },
+              {
+                "value": "5",
+                "name": "Friday"
+              },
+              {
+                "value": "6",
+                "name": "Saturday"
+              },
+              {
+                "value": "7",
+                "name": "Sunday"
+              }
+            ],
+            "section": "principal",
+            "seq": 11,
+            "displayLogic": {
+              "raw": "@IsDueFixed@='N'",
+              "evaluable": true
+            }
           }
         ],
         "searchableFields": [
-          "name",
-          "searchKey"
+          "searchKey",
+          "name"
         ],
         "computedFields": []
+      },
+      "lines": {
+        "tableName": "C_Paymenttermline",
+        "tabId": "800074",
+        "tabName": "Lines",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "lineNo",
+            "apiKey": "lineNo",
+            "column": "Line",
+            "label": "Line No.",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_PAYMENTTERMLINE WHERE C_PAYMENTTERM_ID=@C_PAYMENTTERM_ID@",
+            "section": "principal",
+            "seq": 1
+          },
+          {
+            "name": "percentageDue",
+            "apiKey": "percentageDue",
+            "column": "Percentage",
+            "label": "Percentage Due",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "100",
+            "section": "principal",
+            "seq": 2
+          },
+          {
+            "name": "offsetMonthDue",
+            "apiKey": "offsetMonthDue",
+            "column": "FixMonthOffset",
+            "label": "Offset Month Due",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 4
+          },
+          {
+            "name": "overduePaymentDaysRule",
+            "apiKey": "overduePaymentDaysRule",
+            "column": "NetDays",
+            "label": "Overdue Payment Days Rule",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "seq": 3
+          },
+          {
+            "name": "fixedDueDate",
+            "apiKey": "fixedDueDate",
+            "column": "IsDueFixed",
+            "label": "Fixed Due Date",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "principal",
+            "seq": 5
+          },
+          {
+            "name": "maturityDate1",
+            "apiKey": "maturityDate1",
+            "column": "FixMonthDay",
+            "label": "Maturity Date 1",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 6,
+            "displayLogic": {
+              "raw": "@IsDueFixed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "maturityDate2",
+            "apiKey": "maturityDate2",
+            "column": "FixMonthDay2",
+            "label": "Maturity Date 2",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 7,
+            "displayLogic": {
+              "raw": "@IsDueFixed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "maturityDate3",
+            "apiKey": "maturityDate3",
+            "column": "Fixmonthday3",
+            "label": "Maturity Date 3",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 8,
+            "displayLogic": {
+              "raw": "@IsDueFixed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "paymentMethod",
+            "apiKey": "paymentMethod",
+            "column": "FIN_Paymentmethod_ID",
+            "label": "Payment Method",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "Paymentmethod",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 9
+          },
+          {
+            "name": "rest",
+            "apiKey": "rest",
+            "column": "Onremainder",
+            "label": "Rest",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "Y",
+            "section": "principal",
+            "seq": 10
+          },
+          {
+            "name": "excludeTax",
+            "apiKey": "excludeTax",
+            "column": "Excludetax",
+            "label": "Exclude Tax",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "principal",
+            "seq": 11
+          },
+          {
+            "name": "overduePaymentDayRule",
+            "apiKey": "overduePaymentDayRule",
+            "column": "NetDay",
+            "label": "Fixed Week Day",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "1",
+                "name": "Monday"
+              },
+              {
+                "value": "2",
+                "name": "Tuesday"
+              },
+              {
+                "value": "3",
+                "name": "Wednesday"
+              },
+              {
+                "value": "4",
+                "name": "Thursday"
+              },
+              {
+                "value": "5",
+                "name": "Friday"
+              },
+              {
+                "value": "6",
+                "name": "Saturday"
+              },
+              {
+                "value": "7",
+                "name": "Sunday"
+              }
+            ],
+            "section": "principal",
+            "seq": 12
+          },
+          {
+            "name": "nextBusinessDay",
+            "apiKey": "nextBusinessDay",
+            "column": "IsNextBusinessDay",
+            "label": "Next Business Day",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "defaultValue": "Y",
+            "section": "principal",
+            "seq": 13
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "lineNo",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE(MAX(LINE),0)+10 AS DefaultValue FROM C_PAYMENTTERMLINE WHERE C_PAYMENTTERM_ID=@C_PAYMENTTERM_ID@"
+            }
+          },
+          {
+            "name": "percentageDue",
+            "derivation": {
+              "type": "computed",
+              "source": "100"
+            }
+          },
+          {
+            "name": "fixedDueDate",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "rest",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          },
+          {
+            "name": "excludeTax",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "nextBusinessDay",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          }
+        ]
       }
     }
   },
   "backendContract": {
     "window": {
-      "id": "204",
+      "id": "141",
       "name": "Payment Term",
-      "primaryEntity": "paymentTerm",
-      "category": "reference"
+      "primaryEntity": "header",
+      "category": "configuracion",
+      "detailEntity": "lines"
     },
     "entities": {
-      "paymentTerm": {
+      "header": {
+        "tableName": "C_PaymentTerm",
+        "tabId": "184",
+        "tabName": "Header",
         "fields": [
           {
-            "name": "name",
-            "column": "Name",
-            "type": "string",
-            "visibility": "editable",
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": true
           },
           {
             "name": "searchKey",
+            "apiKey": "searchKey",
             "column": "Value",
             "type": "string",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "description",
-            "column": "Description",
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
             "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "textarea",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "netDays",
+            "name": "offsetMonthDue",
+            "apiKey": "offsetMonthDue",
+            "column": "FixMonthOffset",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "overduePaymentDaysRule",
+            "apiKey": "overduePaymentDaysRule",
             "column": "NetDays",
             "type": "integer",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "discountDays",
-            "column": "DiscountDays",
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "fixedDueDate",
+            "apiKey": "fixedDueDate",
+            "column": "IsDueFixed",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "maturityDate1",
+            "apiKey": "maturityDate1",
+            "column": "FixMonthDay",
             "type": "integer",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "discount",
-            "column": "Discount",
-            "type": "number",
+            "name": "maturityDate2",
+            "apiKey": "maturityDate2",
+            "column": "FixMonthDay2",
+            "type": "integer",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "isActive",
-            "column": "IsActive",
+            "name": "maturityDate3",
+            "apiKey": "maturityDate3",
+            "column": "Fixmonthday3",
+            "type": "integer",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "nextBusinessDay",
+            "apiKey": "nextBusinessDay",
+            "column": "IsNextBusinessDay",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "overduePaymentDayRule",
+            "apiKey": "overduePaymentDayRule",
+            "column": "NetDay",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "comments",
+            "apiKey": "comments",
+            "column": "DocumentNote",
+            "type": "text",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "valid",
+            "apiKey": "valid",
+            "column": "IsValid",
+            "type": "boolean",
+            "visibility": "discarded",
             "required": true
           },
           {
-            "name": "adClientId",
+            "name": "client",
+            "apiKey": "client",
             "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_PaymentTerm_ID",
             "type": "id",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "adOrgId",
-            "column": "AD_Org_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "created",
+            "name": "creationDate",
+            "apiKey": "creationDate",
             "column": "Created",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
             "name": "updated",
+            "apiKey": "updated",
             "column": "Updated",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "lines": {
+        "tableName": "C_Paymenttermline",
+        "tabId": "800074",
+        "tabName": "Lines",
+        "fields": [
+          {
+            "name": "lineNo",
+            "apiKey": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "percentageDue",
+            "apiKey": "percentageDue",
+            "column": "Percentage",
+            "type": "decimal",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "offsetMonthDue",
+            "apiKey": "offsetMonthDue",
+            "column": "FixMonthOffset",
+            "type": "integer",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "overduePaymentDaysRule",
+            "apiKey": "overduePaymentDaysRule",
+            "column": "NetDays",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "fixedDueDate",
+            "apiKey": "fixedDueDate",
+            "column": "IsDueFixed",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "maturityDate1",
+            "apiKey": "maturityDate1",
+            "column": "FixMonthDay",
+            "type": "integer",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "maturityDate2",
+            "apiKey": "maturityDate2",
+            "column": "FixMonthDay2",
+            "type": "integer",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "maturityDate3",
+            "apiKey": "maturityDate3",
+            "column": "Fixmonthday3",
+            "type": "integer",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "paymentMethod",
+            "apiKey": "paymentMethod",
+            "column": "FIN_Paymentmethod_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "rest",
+            "apiKey": "rest",
+            "column": "Onremainder",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "excludeTax",
+            "apiKey": "excludeTax",
+            "column": "Excludetax",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "lastDayCutoff",
+            "apiKey": "lastDayCutoff",
+            "column": "FixMonthCutoff",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "overduePaymentDayRule",
+            "apiKey": "overduePaymentDayRule",
+            "column": "NetDay",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "nextBusinessDay",
+            "apiKey": "nextBusinessDay",
+            "column": "IsNextBusinessDay",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Paymenttermline_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "paymentTerms",
+            "apiKey": "paymentTerms",
+            "column": "C_PaymentTerm_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "formOfPayment",
+            "apiKey": "formOfPayment",
+            "column": "PaymentRule",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           }
@@ -184,221 +921,938 @@
     "endpoints": [
       {
         "method": "GET",
-        "path": "/paymentTerm",
-        "entity": "paymentTerm",
+        "path": "/header",
+        "entity": "header",
         "supportedFilters": [
-          "name",
-          "searchKey"
+          "searchKey",
+          "name"
         ]
       },
       {
         "method": "GET",
-        "path": "/paymentTerm/:id",
-        "entity": "paymentTerm",
+        "path": "/header/:id",
+        "entity": "header",
         "supportedFilters": []
       },
       {
         "method": "POST",
-        "path": "/paymentTerm",
-        "entity": "paymentTerm",
+        "path": "/header",
+        "entity": "header",
         "supportedFilters": []
       },
       {
         "method": "PUT",
-        "path": "/paymentTerm/:id",
-        "entity": "paymentTerm",
+        "path": "/header/:id",
+        "entity": "header",
         "supportedFilters": []
       },
       {
         "method": "DELETE",
-        "path": "/paymentTerm/:id",
-        "entity": "paymentTerm",
+        "path": "/header/:id",
+        "entity": "header",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/lines",
+        "entity": "lines",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/lines/:id",
+        "entity": "lines",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/lines",
+        "entity": "lines",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/lines/:id",
+        "entity": "lines",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/lines/:id",
+        "entity": "lines",
         "supportedFilters": []
       }
     ],
     "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "payment-term",
+    "baseUrl": "/sws/neo/payment-term",
+    "crud": {
+      "header": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/payment-term/header",
+        "detailUrl": "/sws/neo/payment-term/header/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      },
+      "lines": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/payment-term/lines",
+        "detailUrl": "/sws/neo/payment-term/lines/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "lines",
+        "field": "paymentMethod",
+        "column": "FIN_Paymentmethod_ID",
+        "reference": "Paymentmethod",
+        "inputMode": "selector",
+        "url": "/sws/neo/payment-term/lines/selectors/paymentMethod"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=payment-termDate"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    }
   },
   "testManifest": {
     "tests": [
       {
         "id": "t-1",
         "category": "field-presence",
-        "entity": "paymentTerm",
-        "field": "name",
+        "entity": "header",
+        "field": "searchKey",
         "runner": "node",
-        "description": "Field 'name' should be present in paymentTerm"
+        "description": "Field 'searchKey' should be present in header"
       },
       {
         "id": "t-2",
         "category": "field-presence",
-        "entity": "paymentTerm",
-        "field": "searchKey",
+        "entity": "header",
+        "field": "name",
         "runner": "node",
-        "description": "Field 'searchKey' should be present in paymentTerm"
+        "description": "Field 'name' should be present in header"
       },
       {
         "id": "t-3",
         "category": "field-presence",
-        "entity": "paymentTerm",
+        "entity": "header",
         "field": "description",
         "runner": "node",
-        "description": "Field 'description' should be present in paymentTerm"
+        "description": "Field 'description' should be present in header"
       },
       {
         "id": "t-4",
         "category": "field-presence",
-        "entity": "paymentTerm",
-        "field": "netDays",
+        "entity": "header",
+        "field": "offsetMonthDue",
         "runner": "node",
-        "description": "Field 'netDays' should be present in paymentTerm"
+        "description": "Field 'offsetMonthDue' should be present in header"
       },
       {
         "id": "t-5",
         "category": "field-presence",
-        "entity": "paymentTerm",
-        "field": "discountDays",
+        "entity": "header",
+        "field": "overduePaymentDaysRule",
         "runner": "node",
-        "description": "Field 'discountDays' should be present in paymentTerm"
+        "description": "Field 'overduePaymentDaysRule' should be present in header"
       },
       {
         "id": "t-6",
         "category": "field-presence",
-        "entity": "paymentTerm",
-        "field": "discount",
+        "entity": "header",
+        "field": "default",
         "runner": "node",
-        "description": "Field 'discount' should be present in paymentTerm"
+        "description": "Field 'default' should be present in header"
       },
       {
         "id": "t-7",
         "category": "field-presence",
-        "entity": "paymentTerm",
-        "field": "isActive",
+        "entity": "header",
+        "field": "fixedDueDate",
         "runner": "node",
-        "description": "Field 'isActive' should be present in paymentTerm"
+        "description": "Field 'fixedDueDate' should be present in header"
       },
       {
         "id": "t-8",
-        "category": "field-type",
-        "entity": "paymentTerm",
-        "field": "name",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "maturityDate1",
         "runner": "node",
-        "description": "Field 'name' should have type 'string' in paymentTerm"
+        "description": "Field 'maturityDate1' should be present in header"
       },
       {
         "id": "t-9",
-        "category": "field-type",
-        "entity": "paymentTerm",
-        "field": "searchKey",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "maturityDate2",
         "runner": "node",
-        "description": "Field 'searchKey' should have type 'string' in paymentTerm"
+        "description": "Field 'maturityDate2' should be present in header"
       },
       {
         "id": "t-10",
-        "category": "field-type",
-        "entity": "paymentTerm",
-        "field": "description",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "maturityDate3",
         "runner": "node",
-        "description": "Field 'description' should have type 'string' in paymentTerm"
+        "description": "Field 'maturityDate3' should be present in header"
       },
       {
         "id": "t-11",
-        "category": "field-type",
-        "entity": "paymentTerm",
-        "field": "netDays",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "nextBusinessDay",
         "runner": "node",
-        "description": "Field 'netDays' should have type 'number' in paymentTerm"
+        "description": "Field 'nextBusinessDay' should be present in header"
       },
       {
         "id": "t-12",
-        "category": "field-type",
-        "entity": "paymentTerm",
-        "field": "discountDays",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "overduePaymentDayRule",
         "runner": "node",
-        "description": "Field 'discountDays' should have type 'number' in paymentTerm"
+        "description": "Field 'overduePaymentDayRule' should be present in header"
       },
       {
         "id": "t-13",
         "category": "field-type",
-        "entity": "paymentTerm",
-        "field": "discount",
+        "entity": "header",
+        "field": "searchKey",
         "runner": "node",
-        "description": "Field 'discount' should have type 'number' in paymentTerm"
+        "description": "Field 'searchKey' should have type 'string' in header"
       },
       {
         "id": "t-14",
         "category": "field-type",
-        "entity": "paymentTerm",
-        "field": "isActive",
+        "entity": "header",
+        "field": "name",
         "runner": "node",
-        "description": "Field 'isActive' should have type 'boolean' in paymentTerm"
+        "description": "Field 'name' should have type 'string' in header"
       },
       {
         "id": "t-15",
-        "category": "searchable-filters",
-        "entity": "paymentTerm",
-        "field": "name",
+        "category": "field-type",
+        "entity": "header",
+        "field": "description",
         "runner": "node",
-        "description": "Field 'name' should be a supported filter for paymentTerm"
+        "description": "Field 'description' should have type 'string' in header"
       },
       {
         "id": "t-16",
-        "category": "searchable-filters",
-        "entity": "paymentTerm",
-        "field": "searchKey",
+        "category": "field-type",
+        "entity": "header",
+        "field": "offsetMonthDue",
         "runner": "node",
-        "description": "Field 'searchKey' should be a supported filter for paymentTerm"
+        "description": "Field 'offsetMonthDue' should have type 'number' in header"
       },
       {
         "id": "t-17",
-        "category": "visibility",
-        "entity": "paymentTerm",
+        "category": "field-type",
+        "entity": "header",
+        "field": "overduePaymentDaysRule",
         "runner": "node",
-        "description": "Entity 'paymentTerm' should only expose visible fields in frontend"
+        "description": "Field 'overduePaymentDaysRule' should have type 'number' in header"
       },
       {
         "id": "t-18",
-        "category": "system-field",
-        "entity": "paymentTerm",
-        "field": "adClientId",
+        "category": "field-type",
+        "entity": "header",
+        "field": "default",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for paymentTerm"
+        "description": "Field 'default' should have type 'boolean' in header"
       },
       {
         "id": "t-19",
-        "category": "system-field",
-        "entity": "paymentTerm",
-        "field": "adOrgId",
+        "category": "field-type",
+        "entity": "header",
+        "field": "fixedDueDate",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for paymentTerm"
+        "description": "Field 'fixedDueDate' should have type 'boolean' in header"
       },
       {
         "id": "t-20",
-        "category": "system-field",
-        "entity": "paymentTerm",
-        "field": "created",
+        "category": "field-type",
+        "entity": "header",
+        "field": "maturityDate1",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for paymentTerm"
+        "description": "Field 'maturityDate1' should have type 'number' in header"
       },
       {
         "id": "t-21",
+        "category": "field-type",
+        "entity": "header",
+        "field": "maturityDate2",
+        "runner": "node",
+        "description": "Field 'maturityDate2' should have type 'number' in header"
+      },
+      {
+        "id": "t-22",
+        "category": "field-type",
+        "entity": "header",
+        "field": "maturityDate3",
+        "runner": "node",
+        "description": "Field 'maturityDate3' should have type 'number' in header"
+      },
+      {
+        "id": "t-23",
+        "category": "field-type",
+        "entity": "header",
+        "field": "nextBusinessDay",
+        "runner": "node",
+        "description": "Field 'nextBusinessDay' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-24",
+        "category": "field-type",
+        "entity": "header",
+        "field": "overduePaymentDayRule",
+        "runner": "node",
+        "description": "Field 'overduePaymentDayRule' should have type 'string' in header"
+      },
+      {
+        "id": "t-25",
+        "category": "searchable-filters",
+        "entity": "header",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be a supported filter for header"
+      },
+      {
+        "id": "t-26",
+        "category": "searchable-filters",
+        "entity": "header",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for header"
+      },
+      {
+        "id": "t-27",
+        "category": "visibility",
+        "entity": "header",
+        "runner": "node",
+        "description": "Entity 'header' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-28",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "maturityDate1",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate1' in header should be valid JS"
+      },
+      {
+        "id": "t-29",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "maturityDate2",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate2' in header should be valid JS"
+      },
+      {
+        "id": "t-30",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "maturityDate3",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate3' in header should be valid JS"
+      },
+      {
+        "id": "t-31",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "overduePaymentDayRule",
+        "runner": "node",
+        "description": "Display logic for 'overduePaymentDayRule' in header should be valid JS"
+      },
+      {
+        "id": "t-32",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "maturityDate1",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate1' in header should have evaluable flag"
+      },
+      {
+        "id": "t-33",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "maturityDate2",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate2' in header should have evaluable flag"
+      },
+      {
+        "id": "t-34",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "maturityDate3",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate3' in header should have evaluable flag"
+      },
+      {
+        "id": "t-35",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "overduePaymentDayRule",
+        "runner": "node",
+        "description": "Display logic for 'overduePaymentDayRule' in header should have evaluable flag"
+      },
+      {
+        "id": "t-36",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should be present in lines"
+      },
+      {
+        "id": "t-37",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "percentageDue",
+        "runner": "node",
+        "description": "Field 'percentageDue' should be present in lines"
+      },
+      {
+        "id": "t-38",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "offsetMonthDue",
+        "runner": "node",
+        "description": "Field 'offsetMonthDue' should be present in lines"
+      },
+      {
+        "id": "t-39",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "overduePaymentDaysRule",
+        "runner": "node",
+        "description": "Field 'overduePaymentDaysRule' should be present in lines"
+      },
+      {
+        "id": "t-40",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "fixedDueDate",
+        "runner": "node",
+        "description": "Field 'fixedDueDate' should be present in lines"
+      },
+      {
+        "id": "t-41",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "maturityDate1",
+        "runner": "node",
+        "description": "Field 'maturityDate1' should be present in lines"
+      },
+      {
+        "id": "t-42",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "maturityDate2",
+        "runner": "node",
+        "description": "Field 'maturityDate2' should be present in lines"
+      },
+      {
+        "id": "t-43",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "maturityDate3",
+        "runner": "node",
+        "description": "Field 'maturityDate3' should be present in lines"
+      },
+      {
+        "id": "t-44",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "paymentMethod",
+        "runner": "node",
+        "description": "Field 'paymentMethod' should be present in lines"
+      },
+      {
+        "id": "t-45",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "rest",
+        "runner": "node",
+        "description": "Field 'rest' should be present in lines"
+      },
+      {
+        "id": "t-46",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "excludeTax",
+        "runner": "node",
+        "description": "Field 'excludeTax' should be present in lines"
+      },
+      {
+        "id": "t-47",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "overduePaymentDayRule",
+        "runner": "node",
+        "description": "Field 'overduePaymentDayRule' should be present in lines"
+      },
+      {
+        "id": "t-48",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "nextBusinessDay",
+        "runner": "node",
+        "description": "Field 'nextBusinessDay' should be present in lines"
+      },
+      {
+        "id": "t-49",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should have type 'number' in lines"
+      },
+      {
+        "id": "t-50",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "percentageDue",
+        "runner": "node",
+        "description": "Field 'percentageDue' should have type 'number' in lines"
+      },
+      {
+        "id": "t-51",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "offsetMonthDue",
+        "runner": "node",
+        "description": "Field 'offsetMonthDue' should have type 'number' in lines"
+      },
+      {
+        "id": "t-52",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "overduePaymentDaysRule",
+        "runner": "node",
+        "description": "Field 'overduePaymentDaysRule' should have type 'number' in lines"
+      },
+      {
+        "id": "t-53",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "fixedDueDate",
+        "runner": "node",
+        "description": "Field 'fixedDueDate' should have type 'boolean' in lines"
+      },
+      {
+        "id": "t-54",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "maturityDate1",
+        "runner": "node",
+        "description": "Field 'maturityDate1' should have type 'number' in lines"
+      },
+      {
+        "id": "t-55",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "maturityDate2",
+        "runner": "node",
+        "description": "Field 'maturityDate2' should have type 'number' in lines"
+      },
+      {
+        "id": "t-56",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "maturityDate3",
+        "runner": "node",
+        "description": "Field 'maturityDate3' should have type 'number' in lines"
+      },
+      {
+        "id": "t-57",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "paymentMethod",
+        "runner": "node",
+        "description": "Field 'paymentMethod' should have type 'string' in lines"
+      },
+      {
+        "id": "t-58",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "rest",
+        "runner": "node",
+        "description": "Field 'rest' should have type 'boolean' in lines"
+      },
+      {
+        "id": "t-59",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "excludeTax",
+        "runner": "node",
+        "description": "Field 'excludeTax' should have type 'boolean' in lines"
+      },
+      {
+        "id": "t-60",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "overduePaymentDayRule",
+        "runner": "node",
+        "description": "Field 'overduePaymentDayRule' should have type 'string' in lines"
+      },
+      {
+        "id": "t-61",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "nextBusinessDay",
+        "runner": "node",
+        "description": "Field 'nextBusinessDay' should have type 'boolean' in lines"
+      },
+      {
+        "id": "t-62",
+        "category": "visibility",
+        "entity": "lines",
+        "runner": "node",
+        "description": "Entity 'lines' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-63",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "maturityDate1",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate1' in lines should be valid JS"
+      },
+      {
+        "id": "t-64",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "maturityDate2",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate2' in lines should be valid JS"
+      },
+      {
+        "id": "t-65",
+        "category": "displaylogic-valid",
+        "entity": "lines",
+        "field": "maturityDate3",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate3' in lines should be valid JS"
+      },
+      {
+        "id": "t-66",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "maturityDate1",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate1' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-67",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "maturityDate2",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate2' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-68",
+        "category": "displaylogic-evaluable",
+        "entity": "lines",
+        "field": "maturityDate3",
+        "runner": "node",
+        "description": "Display logic for 'maturityDate3' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-69",
+        "category": "default-value-type",
+        "entity": "lines",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Default value for 'lineNo' in lines should be a string"
+      },
+      {
+        "id": "t-70",
+        "category": "default-value-type",
+        "entity": "lines",
+        "field": "percentageDue",
+        "runner": "node",
+        "description": "Default value for 'percentageDue' in lines should be a string"
+      },
+      {
+        "id": "t-71",
+        "category": "default-value-type",
+        "entity": "lines",
+        "field": "fixedDueDate",
+        "runner": "node",
+        "description": "Default value for 'fixedDueDate' in lines should be a string"
+      },
+      {
+        "id": "t-72",
+        "category": "default-value-type",
+        "entity": "lines",
+        "field": "rest",
+        "runner": "node",
+        "description": "Default value for 'rest' in lines should be a string"
+      },
+      {
+        "id": "t-73",
+        "category": "default-value-type",
+        "entity": "lines",
+        "field": "excludeTax",
+        "runner": "node",
+        "description": "Default value for 'excludeTax' in lines should be a string"
+      },
+      {
+        "id": "t-74",
+        "category": "default-value-type",
+        "entity": "lines",
+        "field": "nextBusinessDay",
+        "runner": "node",
+        "description": "Default value for 'nextBusinessDay' in lines should be a string"
+      },
+      {
+        "id": "t-75",
         "category": "system-field",
-        "entity": "paymentTerm",
+        "entity": "header",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-76",
+        "category": "system-field",
+        "entity": "header",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-77",
+        "category": "system-field",
+        "entity": "header",
+        "field": "comments",
+        "runner": "node",
+        "description": "System field 'comments' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-78",
+        "category": "system-field",
+        "entity": "header",
+        "field": "valid",
+        "runner": "node",
+        "description": "System field 'valid' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-79",
+        "category": "system-field",
+        "entity": "header",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-80",
+        "category": "system-field",
+        "entity": "header",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-81",
+        "category": "system-field",
+        "entity": "header",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-82",
+        "category": "system-field",
+        "entity": "header",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-83",
+        "category": "system-field",
+        "entity": "header",
         "field": "updated",
         "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for paymentTerm"
+        "description": "System field 'updated' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-84",
+        "category": "system-field",
+        "entity": "header",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-85",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "lastDayCutoff",
+        "runner": "node",
+        "description": "System field 'lastDayCutoff' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-86",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-87",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-88",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "paymentTerms",
+        "runner": "node",
+        "description": "System field 'paymentTerms' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-89",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-90",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-91",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "formOfPayment",
+        "runner": "node",
+        "description": "System field 'formOfPayment' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-92",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-93",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-94",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-95",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-96",
+        "category": "rule-declared",
+        "rule": "FIN_PaymentMethodsWithAccount",
+        "runner": "node",
+        "description": "Rule 'FIN_PaymentMethodsWithAccount' (validation) should be declared"
+      },
+      {
+        "id": "t-97",
+        "category": "rule-declared",
+        "runner": "node",
+        "description": "Rule 'undefined' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-98",
+        "category": "crud-flags",
+        "entity": "header",
+        "runner": "node",
+        "description": "CRUD flags for 'header' should all be booleans"
+      },
+      {
+        "id": "t-99",
+        "category": "crud-flags",
+        "entity": "lines",
+        "runner": "node",
+        "description": "CRUD flags for 'lines' should all be booleans"
+      },
+      {
+        "id": "t-100",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "paymentMethod",
+        "runner": "node",
+        "description": "Selector endpoint for 'paymentMethod' in lines should exist"
       }
     ],
     "summary": {
-      "total": 21,
+      "total": 100,
       "byCategory": {
-        "field-presence": 7,
-        "field-type": 7,
+        "field-presence": 25,
+        "field-type": 25,
         "searchable-filters": 2,
-        "visibility": 1,
-        "system-field": 4
+        "visibility": 2,
+        "displaylogic-valid": 7,
+        "displaylogic-evaluable": 7,
+        "default-value-type": 6,
+        "system-field": 21,
+        "rule-declared": 2,
+        "crud-flags": 2,
+        "selector-endpoint": 1
       },
       "byRunner": {
-        "node": 21,
+        "node": 100,
         "junit": 0
       }
     }

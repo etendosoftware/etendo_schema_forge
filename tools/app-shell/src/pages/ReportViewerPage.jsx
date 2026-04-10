@@ -162,6 +162,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
 // minLength=0 → shows all options on focus (used for small catalogs like org, accounting schema).
 // minLength=2 (default) → search-as-you-type (used for accounts, etc.).
 function SearchInput({ selector, value, displayValue, onChange, multi, minLength = 2, fullWidth = false, hasError = false, token, label, selectedOrgId, roleOrgIds, selectedWarehouseId, extraParams = {} }) {
+  const ui = useUI();
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState([]);
   const [open, setOpen] = useState(false);
@@ -353,7 +354,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
           value={multi ? query : (query || displayValue || '')}
           onChange={handleChange}
           onFocus={handleFocus}
-          placeholder={`${ui('searchPlaceholder')}`}
+          placeholder={label ? `Search ${label}…` : ui('searchPlaceholder')}
           className={`h-8 px-2 text-sm rounded-md bg-white focus:outline-none focus:ring-1 w-full border ${hasError ? 'border-destructive ring-destructive/30' : 'border-border focus:ring-primary/30'} ${showDropdownArrow ? 'pr-7' : ''}`}
         />
         {showDropdownArrow && (

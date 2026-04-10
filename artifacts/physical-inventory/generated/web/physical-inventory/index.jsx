@@ -1,6 +1,6 @@
 import InventoryPage from './InventoryPage';
 
-const windowMeta = { category: 'warehouse', name: 'Physical Inventory' };
+const windowMeta = { category: 'inventory', name: 'Physical Inventory' };
 
 const api = {
   "specName": "physical-inventory",

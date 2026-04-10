@@ -1,0 +1,240 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "inventory",
+    "name": "Goods Movements",
+    "statusField": "processed",
+    "processOverrides": {
+      "processNow": {
+        "requiresLines": true
+      }
+    }
+  },
+  "entities": {
+    "header": {
+      "name": "movement",
+      "fields": {
+        "name": {
+          "grid": true,
+          "searchable": true
+        },
+        "movementDate": {
+          "grid": true,
+          "searchable": true,
+          "readOnlyLogic": null
+        },
+        "description": {
+          "section": "other",
+          "readOnlyLogic": null
+        },
+        "moveBetweenLocators": {
+          "visibility": "discarded",
+          "reason": "Storage Bin Move process button — not applicable to simplified UI"
+        },
+        "processed": {
+          "visibility": "readOnly",
+          "label": "Status",
+          "grid": true,
+          "form": false,
+          "columnType": "status"
+        },
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "processNow": {
+          "visibility": "editable"
+        },
+        "project": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+        },
+        "costCenter": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+        },
+        "asset": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+        },
+        "activity": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+        },
+        "salesCampaign": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+        },
+        "stDimension": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+        },
+        "ndDimension": {
+          "visibility": "discarded",
+          "reason": "Accounting dimension — not relevant for simplified inventory movements"
+        }
+      }
+    },
+    "lines": {
+      "name": "movementLine",
+      "fields": {
+        "lineNo": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "product": {
+          "grid": true,
+          "searchable": true,
+          "lookup": true,
+          "readOnlyLogic": null
+        },
+        "storageBin": {
+          "grid": true,
+          "readOnlyLogic": null,
+          "reason": "Source storage bin — key field for movement lines"
+        },
+        "newStorageBin": {
+          "grid": true,
+          "readOnlyLogic": null,
+          "reason": "Destination storage bin — key field for movement lines"
+        },
+        "movementQuantity": {
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "uOM": {
+          "visibility": "readOnly",
+          "grid": true,
+          "readOnlyLogic": null
+        },
+        "description": {
+          "readOnlyLogic": null,
+          "section": "other"
+        },
+        "attributeSetValue": {
+          "visibility": "discarded",
+          "reason": "Attribute set values are complex and rarely needed in simplified UI"
+        },
+        "operativeQuantity": {
+          "visibility": "discarded",
+          "reason": "Alternative UOM quantity — advanced feature, not needed for initial version"
+        },
+        "alternativeUOM": {
+          "visibility": "discarded",
+          "reason": "Alternative UOM selector — advanced feature, not needed for initial version"
+        },
+        "orderUOM": {
+          "visibility": "discarded",
+          "reason": "Second UOM for product — advanced feature, not needed for initial version"
+        },
+        "orderQuantity": {
+          "visibility": "discarded",
+          "reason": "Second UOM quantity — advanced feature, not needed for initial version"
+        },
+        "stockReservation": {
+          "visibility": "discarded",
+          "reason": "Stock reservation link — advanced feature, not needed for initial version"
+        },
+        "mAttributeSetInstanceToID": {
+          "visibility": "discarded",
+          "reason": "New attribute set instance — advanced feature, not needed for initial version"
+        }
+      }
+    },
+    "accounting": {
+      "name": "accounting",
+      "exclude": true
+    }
+  },
+  "rules": {
+    "SL_Movement_Conversion_QuantityOrder": {
+      "type": "callout",
+      "entity": "movementLine",
+      "decision": "Omit",
+      "description": "UOM conversion callout triggered on QuantityOrder. Source not found — classic UI only.",
+      "impactIfOmitted": "UOM conversion not auto-calculated; backend handles on save."
+    },
+    "SL_Movement_Conversion_M_Product_Uom_Id": {
+      "type": "callout",
+      "entity": "movementLine",
+      "decision": "Omit",
+      "description": "UOM conversion callout triggered on Order UOM change. Source not found — classic UI only.",
+      "impactIfOmitted": "UOM conversion not auto-calculated; backend handles on save."
+    },
+    "SL_Movement_Product": {
+      "type": "callout",
+      "entity": "movementLine",
+      "decision": "Omit",
+      "description": "Auto-fill UOM and storage bin from product selection. Source not found — classic UI only.",
+      "impactIfOmitted": "Users must manually set UOM after selecting product. Backend fills UOM on save."
+    },
+    "OperativeQuantity_To_BaseQuantity_C_Aum": {
+      "type": "callout",
+      "entity": "movementLine",
+      "decision": "Omit",
+      "description": "Convert operative quantity to base quantity when AUM changes. Source not found — classic UI only.",
+      "impactIfOmitted": "No auto-conversion between UOMs; backend handles conversion on save."
+    },
+    "OperativeQuantity_To_BaseQuantity_Aumqty": {
+      "type": "callout",
+      "entity": "movementLine",
+      "decision": "Omit",
+      "description": "Convert operative quantity to base quantity when operative qty changes. Source not found — classic UI only.",
+      "impactIfOmitted": "No auto-conversion between UOMs; backend handles conversion on save."
+    },
+    "AD_Org show child organizations": {
+      "type": "validation",
+      "entity": "movementLine",
+      "decision": "Keep",
+      "description": "Filters organization selector to child organizations in the hierarchy.",
+      "impactIfOmitted": "Users could select organizations outside their accessible tree."
+    },
+    "Available UOM's for Product for Logistics flow": {
+      "type": "validation",
+      "entity": "movementLine",
+      "decision": "Omit",
+      "description": "Filters AUM selector to UOMs valid for the product in logistics flow.",
+      "impactIfOmitted": "AUM field is discarded in simplified UI, so not needed."
+    },
+    "READONLY_Processed_Header": {
+      "type": "readOnlyLogic",
+      "entity": "movement",
+      "decision": "Keep",
+      "description": "Header fields (movementDate, description) become read-only when document is processed (Processed=Y).",
+      "impactIfOmitted": "Users could edit fields on completed movements, breaking data integrity."
+    },
+    "READONLY_Processed_Lines": {
+      "type": "readOnlyLogic",
+      "entity": "movementLine",
+      "decision": "Keep",
+      "description": "Line fields (product, locator, quantity, lineNo) become read-only when document is processed.",
+      "impactIfOmitted": "Users could edit lines on completed movements."
+    },
+    "PROCESS_ProcessMovements": {
+      "type": "process",
+      "entity": "movement",
+      "decision": "Keep",
+      "description": "Process Movements button (Processing). Confirms and processes the inventory movement.",
+      "impactIfOmitted": "Users cannot confirm movements from the UI."
+    },
+    "PROCESS_MoveStorageBin": {
+      "type": "process",
+      "entity": "movement",
+      "decision": "Omit",
+      "description": "Move a Storage Bin process button. Bulk move between locators — discarded from simplified UI.",
+      "impactIfOmitted": "Users move products line by line; no bulk locator swap."
+    },
+    "PROCESS_Posted": {
+      "type": "process",
+      "entity": "movement",
+      "decision": "Omit",
+      "description": "Posted hardcoded button. Not applicable to simplified UI.",
+      "impactIfOmitted": "Accounting posting handled through backend."
+    }
+  },
+  "discardPatterns": [
+    "EM_*"
+  ],
+  "version": 2
+}

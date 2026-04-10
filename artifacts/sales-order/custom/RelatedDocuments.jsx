@@ -117,10 +117,9 @@ async function fetchPayments(orderId, token, apiBaseUrl) {
   const detailResults = await Promise.all(
     plans.map(plan => fetchChild('sales-order', 'Payment Details', plan.id, token, apiBaseUrl))
   );
-  const seen = new Set();
-  const paymentIds = detailResults.flat()
-    .filter(d => d.payment && !seen.has(d.payment))
-    .map(d => { seen.add(d.payment); return d.payment; });
+  const paymentIds = [...new Set(
+    detailResults.flat().filter(d => d.payment).map(d => d.payment)
+  )];
   if (paymentIds.length === 0) return [];
   const base = neoBase(apiBaseUrl);
   const results = await Promise.all(paymentIds.map(id =>
@@ -168,24 +167,40 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const [related, setRelated] = useState({});
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
+
+  // Listen for doc creation events from OrderCreateInvoice
+  useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('sales-order:document-created', handler);
+    return () => window.removeEventListener('sales-order:document-created', handler);
+  }, []);
 
   useEffect(() => {
     if (!recordId) return;
     setLoading(true);
-    const specPromises = RELATED_SPECS.map(s =>
-      fetchByCriteria(s.specName, s.entityName, s.filterColumn, recordId, token, apiBaseUrl)
-        .then(rows => ({ key: s.key, rows }))
-    );
-    Promise.all([Promise.all(specPromises), fetchPayments(recordId, token, apiBaseUrl)])
-      .then(([specResults, paymentResults]) => {
-        const map = {};
-        for (const r of specResults) map[r.key] = r.rows;
-        setRelated(map);
+
+    // Shipments via criteria; invoices via listInvoices action (finds all, even when C_Order_ID is null)
+    const shipmentPromise = fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', recordId, token, apiBaseUrl);
+    const invoicePromise = fetch(
+      `${apiBaseUrl}/header/${recordId}/action/listInvoices`,
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
+    )
+      .then(r => r.ok ? r.json() : null)
+      .then(j => j?.response?.data ?? [])
+      .catch(() => []);
+
+    Promise.all([shipmentPromise, invoicePromise, fetchPayments(recordId, token, apiBaseUrl)])
+      .then(([shipments, invoices, paymentResults]) => {
+        setRelated({
+          'goods-shipment': shipments,
+          'sales-invoice': invoices,
+        });
         setPayments(paymentResults);
         setLoading(false);
       });
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, token, apiBaseUrl, refreshKey]);
 
   if (loading) {
     return <span className="text-xs text-muted-foreground">Loading...</span>;
@@ -253,13 +268,33 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     );
   }
 
+  const refreshBtn = (
+    <button
+      type="button"
+      onClick={() => setRefreshKey(k => k + 1)}
+      title="Refresh"
+      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}>
+        <path d="M23 4v6h-6" /><path d="M1 20v-6h6" />
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+      </svg>
+    </button>
+  );
+
   if (chips.length === 0) {
-    return <span className="text-xs text-muted-foreground/50">No related documents</span>;
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground/50">No related documents</span>
+        {refreshBtn}
+      </div>
+    );
   }
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {chips}
+      {refreshBtn}
     </div>
   );
 }

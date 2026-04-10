@@ -26,6 +26,14 @@ Each widget = **1 Spec** + **1 Entity** + **1 Handler**.
 | `widget-pending-tasks` | `GET /sws/neo/widget-pending-tasks/data` | `widgetPendingTasksHandler` | Pending tasks and alerts |
 | `widget-activity` | `GET /sws/neo/widget-activity/data` | `widgetActivityHandler` | Recent activity feed |
 
+## Dashboard Entity Endpoints
+
+Dashboard pages can also consume entity endpoints under `/sws/neo/dashboard/{entity}`.
+
+| Entity | URL | Handler | Description |
+|--------|-----|---------|-------------|
+| `recent-invoices` | `GET /sws/neo/dashboard/recent-invoices` | `widgetRecentInvoicesHandler` | Completed sales invoices (`CO`, `CL`) from the last 7 days, max 10 records |
+
 ## Response Format
 
 All widgets follow the standard NEO Headless response wrapper:
@@ -257,6 +265,27 @@ Fields: `type` (`warning`|`info`), `text` (description), `link` (route path), `a
 ```
 
 Fields: `id` (unique), `author` (display name), `text` (message), `timestamp` (ISO 8601), `type` (`system`|`note`).
+
+### dashboard/recent-invoices
+
+```json
+{
+  "response": {
+    "data": [
+      {
+        "id": "A1B2C3",
+        "client": "Hotel Buenas Noches",
+        "date": "09-04-2026",
+        "amount": 2468.9,
+        "status": "CO"
+      }
+    ],
+    "count": 1
+  }
+}
+```
+
+Data is filtered to sales invoices (`issotrx = 'Y'`) in completed statuses (`CO`, `CL`) with `dateinvoiced` in the last 7 days, sorted by newest first, limited to 10 rows.
 
 ## Transitioning to Real Data
 

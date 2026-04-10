@@ -71,6 +71,7 @@ export default function SmartScanPage() {
   const translatedDate = ui('smartScanDate');
   const translatedConfidence = ui('smartScanConfidence');
   const translatedTitle = tMenu('Smart Scan');
+  const breadcrumb = `${tMenu('Settings')} / ${translatedTitle}`;
 
   return (
     <div className="h-full flex flex-col" data-testid="smartscan-page">
@@ -79,11 +80,14 @@ export default function SmartScanPage() {
         {/* Row 1: Title + Global search + action icons */}
         <div className="flex items-center gap-4">
           {/* Left: title */}
-          <div className="shrink-0 flex items-center gap-2">
-            <h1 className="text-xl font-bold text-foreground">{translatedTitle}</h1>
-            <button className="text-muted-foreground hover:text-foreground">
-              <MoreVertical className="h-4 w-4" />
-            </button>
+          <div className="shrink-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-foreground">{translatedTitle}</h1>
+              <button className="text-muted-foreground hover:text-foreground">
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5">{breadcrumb}</p>
           </div>
 
           {/* Center: global search */}

@@ -12,9 +12,6 @@ const filters = [];
 
 // @sf-generated-start component:ProductCharacteristicTable
 export default function ProductCharacteristicTable(props) {
-  // @sf-custom-slot hooks:ProductCharacteristicTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:ProductCharacteristicTable
-
-// @sf-custom-slot section:ProductCharacteristicTable-custom

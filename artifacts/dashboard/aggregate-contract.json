@@ -11,7 +11,6 @@
     { "id": "kpi-revenue",   "type": "kpi-single", "key": "revenueThisMonth",   "label": "Revenue this month",   "format": "currency", "icon": "DollarSign"  },
     { "id": "kpi-expenses",  "type": "kpi-single", "key": "expensesThisMonth",  "label": "Expenses this month",  "format": "currency", "icon": "CreditCard"  },
     { "id": "kpi-profit",    "type": "kpi-single", "key": "netProfit",          "label": "Net Profit",           "format": "currency", "icon": "TrendingUp"  },
-    { "id": "kpi-pending",   "type": "kpi-single", "key": "pendingInvoices",    "label": "Pending Invoices",     "format": "number",   "icon": "Clock"       },
     {
       "id": "revenue-trend",
       "type": "chart",
@@ -40,14 +39,13 @@
   ],
   "layout": {
     "areas": [
-      { "section": "kpi-revenue",  "span": "1/4" },
-      { "section": "kpi-expenses", "span": "1/4" },
-      { "section": "kpi-profit",   "span": "1/4" },
-      { "section": "kpi-pending",  "span": "1/4" },
-      { "section": "revenue-trend", "span": "2/3" },
-      { "section": "quick-actions", "span": "2/3" },
-      { "section": "pending-tasks", "span": "1/3" },
-      { "section": "recent-messages", "span": "1/3" }
+      { "section": "kpi-revenue",    "span": "1/4" },
+      { "section": "kpi-expenses",   "span": "1/4" },
+      { "section": "kpi-profit",     "span": "1/4" },
+      { "section": "quick-actions",  "span": "1/4" },
+      { "section": "revenue-trend",  "span": "2/4" },
+      { "section": "pending-tasks",  "span": "1/4" },
+      { "section": "recent-messages", "span": "1/4" }
     ]
   },
   "actions": [
@@ -59,7 +57,6 @@
     "kpi-revenue":  { "value": 48250, "trend": 12.5, "previousValue": 42889 },
     "kpi-expenses": { "value": 31800, "trend": 3.2,  "previousValue": 30814 },
     "kpi-profit":   { "value": 16450, "trend": 28.7, "previousValue": 12782 },
-    "kpi-pending":  { "value": 7,     "trend": -2,   "previousValue": 7     },
     "revenue-trend": {
       "labels": ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"],
       "values": [32000, 35000, 28000, 41000, 38000, 45000, 42000, 39000, 44000, 47000, 43000, 48250]

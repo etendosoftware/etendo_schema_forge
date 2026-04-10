@@ -43,6 +43,7 @@ dev: ## Start app-shell dev server (http://localhost:3100)
 
 build: ## Build app-shell for production
 	cd tools/app-shell && npm run build
+	node cli/src/generate-reports-manifest.js
 
 # --- Setup ---
 

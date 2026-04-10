@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Check, ChevronsUpDown, Search, X } from 'lucide-react';
-import { useLabel } from '@/i18n';
+import { useLabel, useLocaleSwitch } from '@/i18n';
 import { FieldHighlight } from '@/components/inspector/FieldHighlight.jsx';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
@@ -448,6 +448,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, token, resol
  */
 export function EntityForm({ entity, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false }) {
   const t = useLabel();
+  const { locale } = useLocaleSwitch();
   let displayFields;
   if (section) {
     // When filtering by section, include all fields (editable + readOnly) for that section
@@ -493,7 +494,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
 
   const renderField = (f) => {
     // Resolution order: per-window AD_Field label (most specific) → global locale by column → camelCase key
-    const label = f.label ?? t(f.column) ?? f.key;
+    const label = t(f.column) ?? f.label ?? f.key;
     // Field is read-only if statically declared, dynamically set by evaluate-display, or readOnlyLogic evaluates to true
     const isReadOnly = formReadOnly
       || f.readOnly

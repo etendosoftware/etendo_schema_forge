@@ -1,36 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { EntityForm } from '@/components/contract-ui';
 import { ChevronDown, MapPin, Tag, Loader2 } from 'lucide-react';
-
-// ─── Billing fields ────────────────────────────────────────────────────────
-
-const customerCheckboxField = [
-  { key: 'customer', column: 'IsCustomer', type: 'checkbox', label: 'Customer', required: true, section: 'principal' },
-];
-
-const customerBillingFields = [
-  { key: 'priceList', column: 'M_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-  { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-  { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-  { key: 'account', column: 'FIN_Financial_Account_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-  { key: 'customerBlocking', column: 'Customer_Blocking', type: 'checkbox', section: 'principal' },
-];
-
-const vendorCheckboxField = [
-  { key: 'vendor', column: 'IsVendor', type: 'checkbox', label: 'Vendor', required: true, section: 'principal' },
-];
-
-const vendorBillingFields = [
-  { key: 'purchasePricelist', column: 'PO_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-  { key: 'pOPaymentMethod', column: 'PO_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-  { key: 'pOPaymentTerms', column: 'PO_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-  { key: 'pOFinancialAccount', column: 'PO_Financial_Account_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-  { key: 'vendorBlocking', column: 'Vendor_Blocking', type: 'checkbox', section: 'principal' },
-];
+import { useUI } from '@/i18n';
 
 // ─── Address search dropdown ────────────────────────────────────────────────
 
 function AddressSearch({ value, onChange, apiBase, token }) {
+  const ui = useUI();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -69,7 +45,7 @@ function AddressSearch({ value, onChange, apiBase, token }) {
       >
         <MapPin size={13} className="text-muted-foreground shrink-0" />
         <span className={`flex-1 truncate ${displayLabel ? '' : 'text-muted-foreground'}`}>
-          {displayLabel || 'Search address…'}
+          {displayLabel || ui('searchAddress')}
         </span>
         <ChevronDown size={13} className="text-muted-foreground shrink-0" />
       </div>
@@ -80,7 +56,7 @@ function AddressSearch({ value, onChange, apiBase, token }) {
             <input
               autoFocus
               className="w-full text-sm px-2 py-1 rounded border border-input bg-background outline-none"
-              placeholder="Type to search…"
+              placeholder={ui('typeToSearch')}
               value={query}
               onChange={e => setQuery(e.target.value)}
             />
@@ -88,14 +64,14 @@ function AddressSearch({ value, onChange, apiBase, token }) {
           <div className="max-h-48 overflow-y-auto">
             {loading && (
               <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 size={13} className="animate-spin" /> Searching…
+                <Loader2 size={13} className="animate-spin" /> {ui('searching')}
               </div>
             )}
             {!loading && results.length === 0 && query.length >= 2 && (
-              <div className="px-3 py-2 text-sm text-muted-foreground">No results</div>
+              <div className="px-3 py-2 text-sm text-muted-foreground">{ui('noResults')}</div>
             )}
             {!loading && query.length < 2 && (
-              <div className="px-3 py-2 text-sm text-muted-foreground">Type at least 2 characters</div>
+              <div className="px-3 py-2 text-sm text-muted-foreground">{ui('typeAtLeast2Characters')}</div>
             )}
             {results.map(r => (
               <button
@@ -116,6 +92,7 @@ function AddressSearch({ value, onChange, apiBase, token }) {
 // ─── Discount select ────────────────────────────────────────────────────────
 
 function DiscountSelect({ value, options, onChange, loading }) {
+  const ui = useUI();
   return (
     <div className="relative">
       <div className="flex items-center gap-1.5 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none z-10">
@@ -127,7 +104,7 @@ function DiscountSelect({ value, options, onChange, loading }) {
         onChange={e => onChange(e.target.value || null)}
         disabled={loading}
       >
-        <option value="">— None —</option>
+        <option value="">{ui('none')}</option>
         {options.map(o => (
           <option key={o.id} value={o.id}>{o._identifier}</option>
         ))}
@@ -140,6 +117,7 @@ function DiscountSelect({ value, options, onChange, loading }) {
 // ─── Main component ─────────────────────────────────────────────────────────
 
 export default function BillingPreferencesForm(props) {
+  const ui = useUI();
   const { data, api, token } = props;
   const bpId = data?.id;
   const apiBase = api?.baseUrl ?? '';
@@ -260,6 +238,30 @@ export default function BillingPreferencesForm(props) {
     ? { id: addressRecord.locationAddress, _identifier: addressRecord['locationAddress$_identifier'] ?? '' }
     : null;
 
+  const customerCheckboxField = [
+    { key: 'customer', column: 'IsCustomer', type: 'checkbox', label: ui('customer'), required: true, section: 'principal' },
+  ];
+
+  const customerBillingFields = [
+    { key: 'priceList', column: 'M_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    { key: 'account', column: 'FIN_Financial_Account_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    { key: 'customerBlocking', column: 'Customer_Blocking', type: 'checkbox', section: 'principal' },
+  ];
+
+  const vendorCheckboxField = [
+    { key: 'vendor', column: 'IsVendor', type: 'checkbox', label: ui('vendor'), required: true, section: 'principal' },
+  ];
+
+  const vendorBillingFields = [
+    { key: 'purchasePricelist', column: 'PO_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    { key: 'pOPaymentMethod', column: 'PO_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    { key: 'pOPaymentTerms', column: 'PO_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    { key: 'pOFinancialAccount', column: 'PO_Financial_Account_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+    { key: 'vendorBlocking', column: 'Vendor_Blocking', type: 'checkbox', section: 'principal' },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
 
@@ -269,7 +271,7 @@ export default function BillingPreferencesForm(props) {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {/* Basic Discount */}
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">Basic Discount</span>
+              <span className="text-xs font-medium text-muted-foreground">{ui('basicDiscount')}</span>
               <DiscountSelect
                 value={currentDiscountId}
                 options={discountOptions}
@@ -280,7 +282,7 @@ export default function BillingPreferencesForm(props) {
 
             {/* Location / Address */}
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground">Location / Address</span>
+              <span className="text-xs font-medium text-muted-foreground">{ui('locationAddress')}</span>
               {addressLoading
                 ? <div className="h-9 rounded-md bg-muted animate-pulse" />
                 : (

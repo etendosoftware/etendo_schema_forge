@@ -4,6 +4,7 @@ import RecurringInvoiceForm from './RecurringInvoiceForm';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'finance', name: 'Recurring Invoice' };
+const breadcrumb = 'Finance / Recurring Invoice';
 
 export default function App({ windowName, recordId, ...props }) {
   if (recordId) {
@@ -15,6 +16,7 @@ export default function App({ windowName, recordId, ...props }) {
         entityLabel="Recurring Invoice"
         windowName={windowName}
         recordId={recordId}
+        breadcrumb={breadcrumb}
         window={windowMeta}
         {...props}
       />
@@ -27,6 +29,7 @@ export default function App({ windowName, recordId, ...props }) {
       Table={RecurringInvoiceTable}
       entityLabel="Recurring Invoice"
       windowName={windowName}
+      breadcrumb={breadcrumb}
       window={windowMeta}
       {...props}
     />

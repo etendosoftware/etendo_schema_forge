@@ -7,17 +7,16 @@ import ContactForm from './ContactForm';
 import BankAccountTable from './BankAccountTable';
 import BankAccountForm from './BankAccountForm';
 import ContactsFinancialPanel from '@/windows/custom/contacts/ContactsFinancialPanel';
-import ContactsKpiCards from '@/windows/custom/contacts/ContactsKpiCards';
 import catalogs from './mockCatalogs';
 
 import BusinessPartnerSidebar from '@/windows/custom/businessPartner/BusinessPartnerSidebar';
 
-const breadcrumb = '';
+const breadcrumb = 'Contact';
 
 
 // @sf-generated-start summary:businessPartner
 const summary = [
-
+  { key: 'creditLimit', column: 'SO_CreditLimit', type: 'amount' },
 ];
 
 const statusField = null;
@@ -30,7 +29,7 @@ const extraBadges = [];
 
 // @sf-generated-start processes:businessPartner
 const processes = [
-  { name: 'setNewCurrency', label: 'Set New Currency', style: 'positive' },
+
 ];
 // @sf-generated-end processes:businessPartner
 
@@ -80,6 +79,17 @@ const api = {
       "detailUrl": "/sws/neo/contacts/customerAccounting/{id}",
       "supportedFilters": []
     },
+    "intrastatShipments": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/contacts/intrastatShipments",
+      "detailUrl": "/sws/neo/contacts/intrastatShipments/{id}",
+      "supportedFilters": []
+    },
     "vendorCreditor": {
       "get": true,
       "getById": true,
@@ -100,6 +110,17 @@ const api = {
       "delete": true,
       "listUrl": "/sws/neo/contacts/vendorAccounting",
       "detailUrl": "/sws/neo/contacts/vendorAccounting/{id}",
+      "supportedFilters": []
+    },
+    "intrastatAdquisitions": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/contacts/intrastatAdquisitions",
+      "detailUrl": "/sws/neo/contacts/intrastatAdquisitions/{id}",
       "supportedFilters": []
     },
     "employee": {
@@ -180,8 +201,8 @@ const api = {
       "listUrl": "/sws/neo/contacts/contact",
       "detailUrl": "/sws/neo/contacts/contact/{id}",
       "supportedFilters": [
-        "email",
-        "name"
+        "name",
+        "email"
       ]
     },
     "basicDiscount": {
@@ -374,6 +395,14 @@ const api = {
       "url": "/sws/neo/contacts/customerAccounting/selectors/customerPrepayment"
     },
     {
+      "entity": "intrastatShipments",
+      "field": "businessPartner",
+      "column": "C_Bpartner_ID",
+      "reference": "BPartner",
+      "inputMode": "search",
+      "url": "/sws/neo/contacts/intrastatShipments/selectors/businessPartner"
+    },
+    {
       "entity": "vendorCreditor",
       "field": "purchasePricelist",
       "column": "PO_PriceList_ID",
@@ -436,6 +465,22 @@ const api = {
       "reference": "ValidCombination",
       "inputMode": "selector",
       "url": "/sws/neo/contacts/vendorAccounting/selectors/vendorPrepayment"
+    },
+    {
+      "entity": "intrastatAdquisitions",
+      "field": "businessPartner",
+      "column": "C_Bpartner_ID",
+      "reference": "BPartner",
+      "inputMode": "search",
+      "url": "/sws/neo/contacts/intrastatAdquisitions/selectors/businessPartner"
+    },
+    {
+      "entity": "intrastatAdquisitions",
+      "field": "country",
+      "column": "C_Country_ID",
+      "reference": "Country",
+      "inputMode": "selector",
+      "url": "/sws/neo/contacts/intrastatAdquisitions/selectors/country"
     },
     {
       "entity": "employee",
@@ -592,7 +637,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           { key: 'phone', column: 'Phone', type: 'text', label: 'Phone' },
           { key: 'position', column: 'Title', type: 'text', label: 'Position' },
           ], derived: [], hidden: [] } },
-          { key: 'bankAccount', label: 'Bank Account', Table: BankAccountTable, Form: BankAccountForm, addLineFields: { entry: [
+          { key: 'bankAccount', label: 'Contact Bank Account', Table: BankAccountTable, Form: BankAccountForm, addLineFields: { entry: [
           { key: 'bankName', column: 'Bank_Name', type: 'text', label: 'Bank Name' },
           { key: 'bankFormat', column: 'BankFormat', type: 'select', required: true, label: 'Bank Account Format', options: [{ value: 'GENERIC', label: 'Use Generic Account No.' }, { value: 'IBAN', label: 'Use IBAN' }, { value: 'SWIFT', label: 'Use SWIFT + Generic Account No.' }, { value: 'SPANISH', label: 'Use Spanish' }] },
           { key: 'accountNo', column: 'AccountNo', type: 'text', label: 'Generic Account No.' },
@@ -603,6 +648,8 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           { key: 'general', label: 'General' },
           { key: 'financial', label: 'Financial', Panel: ContactsFinancialPanel },
         ]}
+        hidePrint
+        hideMoreMenu
         {...props}
         sidebarContent={(data) => (
           <BusinessPartnerSidebar
@@ -624,7 +671,9 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      headerContent={(p) => <ContactsKpiCards {...p} />}
+      listViewOptions={{"hidePrint":true,"hideEye":true,"hideCounter":true,"hideLink":true,"hideFilters":true}}
+      baseFilter="_neoWhere=(e.customer%3D'Y'+or+e.vendor%3D'Y')"
+      quickFilters={[{"label":"All","filter":null},{"label":"Customers","filter":"_neoWhere=e.customer%3D'Y'"},{"label":"Vendors","filter":"_neoWhere=e.vendor%3D'Y'"}]}
       {...props}
     />
   );

@@ -12,9 +12,6 @@ const filters = [];
 
 // @sf-generated-start component:AssetAcctTable
 export default function AssetAcctTable(props) {
-  // @sf-custom-slot hooks:AssetAcctTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:AssetAcctTable
-
-// @sf-custom-slot section:AssetAcctTable-custom

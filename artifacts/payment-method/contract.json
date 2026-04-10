@@ -1,67 +1,687 @@
 {
-  "version": "0.1.0",
-  "generatedAt": "2026-03-06T17:20:28.911Z",
-  "checksum": "0a287d587a2d80df",
+  "version": "0.2.0",
+  "generatedAt": "2026-04-09T12:47:49.082Z",
+  "checksum": "3edd3514994ab042",
   "frontendContract": {
     "window": {
-      "id": "205",
+      "id": "3CAAC7D54593489384452416ACF356DD",
       "name": "Payment Method",
       "primaryEntity": "paymentMethod",
-      "category": "reference"
+      "category": "configuracion",
+      "detailEntity": null,
+      "layoutType": "default"
     },
     "entities": {
       "paymentMethod": {
+        "tableName": "FIN_PaymentMethod",
+        "tabId": "A4A463FA34F946BFA3F687DC8754ED93",
+        "tabName": "Payment Method",
+        "uiPattern": "STD",
         "fields": [
           {
             "name": "name",
+            "apiKey": "name",
             "column": "Name",
+            "label": "Name",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 1
           },
           {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
-            "type": "string",
+            "label": "Description",
+            "type": "textarea",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "seq": 2
           },
           {
-            "name": "isActive",
-            "column": "IsActive",
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "label": "Active",
             "type": "boolean",
             "tsType": "boolean",
-            "visibility": "readOnly",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "defaultValue": "Y",
+            "section": "principal",
+            "seq": 3
+          },
+          {
+            "name": "payinAllow",
+            "apiKey": "payinAllow",
+            "column": "Payin_Allow",
+            "label": "Payment In Allowed",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "defaultValue": "Y",
+            "section": "paymentIn",
+            "seq": 10
+          },
+          {
+            "name": "automaticReceipt",
+            "apiKey": "automaticReceipt",
+            "column": "Automatic_Receipt",
+            "label": "Automatic Receipt",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "paymentIn",
+            "seq": 11,
+            "displayLogic": {
+              "raw": "@Payin_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "payinIsMulticurrency",
+            "apiKey": "payinIsMulticurrency",
+            "column": "Payin_IsMulticurrency",
+            "label": "Receive Payments in Multiple Currencies",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "paymentIn",
+            "seq": 12,
+            "displayLogic": {
+              "raw": "@Payin_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "automaticDeposit",
+            "apiKey": "automaticDeposit",
+            "column": "Automatic_Deposit",
+            "label": "Automatic Deposit",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "paymentIn",
+            "seq": 13,
+            "displayLogic": {
+              "raw": "@Payin_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "payinExecutionType",
+            "apiKey": "payinExecutionType",
+            "column": "Payin_Execution_Type",
+            "label": "Execution Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "A",
+                "name": "Automatic"
+              },
+              {
+                "value": "M",
+                "name": "Manual"
+              }
+            ],
+            "defaultValue": "M",
+            "section": "paymentIn",
+            "seq": 14,
+            "displayLogic": {
+              "raw": "@Payin_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "payinExecutionProcessID",
+            "apiKey": "payinExecutionProcessID",
+            "column": "Payin_Execution_Process_ID",
+            "label": "Execution Process",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Pay_Exec_Process",
+            "inputMode": "search",
+            "section": "paymentIn",
+            "seq": 15,
+            "displayLogic": {
+              "raw": "@Payin_Allow@='Y'&@Payin_Execution_Type@='A'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "payinDeferred",
+            "apiKey": "payinDeferred",
+            "column": "Payin_Deferred",
+            "label": "Deferred",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "paymentIn",
+            "seq": 16,
+            "displayLogic": {
+              "raw": "@Payin_Allow@='Y'&@Payin_Execution_Type@='A'&@Payin_Execution_Process_ID@!''",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "uponReceiptUse",
+            "apiKey": "uponReceiptUse",
+            "column": "Uponreceiptuse",
+            "label": "Upon Receipt Use",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "CLE",
+                "name": "Cleared Payment Account"
+              },
+              {
+                "value": "DEP",
+                "name": "Deposited Payment Account"
+              },
+              {
+                "value": "INT",
+                "name": "In Transit Payment Account"
+              },
+              {
+                "value": "WIT",
+                "name": "Withdrawn Payment Account"
+              }
+            ],
+            "section": "paymentIn",
+            "seq": 17,
+            "displayLogic": {
+              "raw": "@Payin_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "uponDepositUse",
+            "apiKey": "uponDepositUse",
+            "column": "Upondeposituse",
+            "label": "Upon Deposit Use",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "CLE",
+                "name": "Cleared Payment Account"
+              },
+              {
+                "value": "DEP",
+                "name": "Deposited Payment Account"
+              },
+              {
+                "value": "INT",
+                "name": "In Transit Payment Account"
+              },
+              {
+                "value": "WIT",
+                "name": "Withdrawn Payment Account"
+              }
+            ],
+            "section": "paymentIn",
+            "seq": 18,
+            "displayLogic": {
+              "raw": "@Payin_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "iNUponClearingUse",
+            "apiKey": "iNUponClearingUse",
+            "column": "Inuponclearinguse",
+            "label": "Upon Reconciliation Use",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "CLE",
+                "name": "Cleared Payment Account"
+              },
+              {
+                "value": "DEP",
+                "name": "Deposited Payment Account"
+              },
+              {
+                "value": "INT",
+                "name": "In Transit Payment Account"
+              },
+              {
+                "value": "WIT",
+                "name": "Withdrawn Payment Account"
+              }
+            ],
+            "section": "paymentIn",
+            "seq": 19,
+            "displayLogic": {
+              "raw": "@Payin_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "payoutAllow",
+            "apiKey": "payoutAllow",
+            "column": "Payout_Allow",
+            "label": "Payment Out Allowed",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "Y",
+            "section": "paymentOut",
+            "seq": 20
+          },
+          {
+            "name": "automaticPayment",
+            "apiKey": "automaticPayment",
+            "column": "Automatic_Payment",
+            "label": "Automatic Payment",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "paymentOut",
+            "seq": 21,
+            "displayLogic": {
+              "raw": "@Payout_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "payoutIsMulticurrency",
+            "apiKey": "payoutIsMulticurrency",
+            "column": "Payout_IsMulticurrency",
+            "label": "Make Payments in Multiple Currencies",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "paymentOut",
+            "seq": 22,
+            "displayLogic": {
+              "raw": "@Payout_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "automaticWithdrawn",
+            "apiKey": "automaticWithdrawn",
+            "column": "Automatic_Withdrawn",
+            "label": "Automatic Withdrawn",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "paymentOut",
+            "seq": 23,
+            "displayLogic": {
+              "raw": "@Payout_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "payoutExecutionType",
+            "apiKey": "payoutExecutionType",
+            "column": "Payout_Execution_Type",
+            "label": "Execution Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "A",
+                "name": "Automatic"
+              },
+              {
+                "value": "M",
+                "name": "Manual"
+              }
+            ],
+            "defaultValue": "M",
+            "section": "paymentOut",
+            "seq": 24,
+            "displayLogic": {
+              "raw": "@Payout_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "payoutExecutionProcessID",
+            "apiKey": "payoutExecutionProcessID",
+            "column": "Payout_Execution_Process_ID",
+            "label": "Execution Process",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Pay_Exec_Process",
+            "inputMode": "search",
+            "section": "paymentOut",
+            "seq": 25,
+            "displayLogic": {
+              "raw": "@Payout_Allow@='Y'&@Payout_Execution_Type@='A'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "payoutDeferred",
+            "apiKey": "payoutDeferred",
+            "column": "Payout_Deferred",
+            "label": "Deferred",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "paymentOut",
+            "seq": 26,
+            "displayLogic": {
+              "raw": "@Payout_Allow@='Y'&@Payout_Execution_Type@='A'&@Payout_Execution_Process_ID@!''",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "uponPaymentUse",
+            "apiKey": "uponPaymentUse",
+            "column": "Uponpaymentuse",
+            "label": "Upon Payment Use",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "CLE",
+                "name": "Cleared Payment Account"
+              },
+              {
+                "value": "DEP",
+                "name": "Deposited Payment Account"
+              },
+              {
+                "value": "INT",
+                "name": "In Transit Payment Account"
+              },
+              {
+                "value": "WIT",
+                "name": "Withdrawn Payment Account"
+              }
+            ],
+            "section": "paymentOut",
+            "seq": 27,
+            "displayLogic": {
+              "raw": "@Payout_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "uponWithdrawalUse",
+            "apiKey": "uponWithdrawalUse",
+            "column": "Uponwithdrawaluse",
+            "label": "Upon Withdrawal Use",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "CLE",
+                "name": "Cleared Payment Account"
+              },
+              {
+                "value": "DEP",
+                "name": "Deposited Payment Account"
+              },
+              {
+                "value": "INT",
+                "name": "In Transit Payment Account"
+              },
+              {
+                "value": "WIT",
+                "name": "Withdrawn Payment Account"
+              }
+            ],
+            "section": "paymentOut",
+            "seq": 28,
+            "displayLogic": {
+              "raw": "@Payout_Allow@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "oUTUponClearingUse",
+            "apiKey": "oUTUponClearingUse",
+            "column": "Outuponclearinguse",
+            "label": "Upon Reconciliation Use",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "CLE",
+                "name": "Cleared Payment Account"
+              },
+              {
+                "value": "DEP",
+                "name": "Deposited Payment Account"
+              },
+              {
+                "value": "INT",
+                "name": "In Transit Payment Account"
+              },
+              {
+                "value": "WIT",
+                "name": "Withdrawn Payment Account"
+              }
+            ],
+            "section": "paymentOut",
+            "seq": 29,
+            "displayLogic": {
+              "raw": "@Payout_Allow@='Y'",
+              "evaluable": true
+            }
           }
         ],
         "searchableFields": [
           "name"
         ],
-        "computedFields": []
+        "computedFields": [
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          },
+          {
+            "name": "payinAllow",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          },
+          {
+            "name": "automaticReceipt",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "payinIsMulticurrency",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "automaticDeposit",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "payinExecutionType",
+            "derivation": {
+              "type": "computed",
+              "source": "M"
+            }
+          },
+          {
+            "name": "payinDeferred",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "payoutAllow",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          },
+          {
+            "name": "automaticPayment",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "payoutIsMulticurrency",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "automaticWithdrawn",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "payoutExecutionType",
+            "derivation": {
+              "type": "computed",
+              "source": "M"
+            }
+          },
+          {
+            "name": "payoutDeferred",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          }
+        ]
       }
     }
   },
   "backendContract": {
     "window": {
-      "id": "205",
+      "id": "3CAAC7D54593489384452416ACF356DD",
       "name": "Payment Method",
       "primaryEntity": "paymentMethod",
-      "category": "reference"
+      "category": "configuracion",
+      "detailEntity": null
     },
     "entities": {
       "paymentMethod": {
+        "tableName": "FIN_PaymentMethod",
+        "tabId": "A4A463FA34F946BFA3F687DC8754ED93",
+        "tabName": "Payment Method",
         "fields": [
           {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "name",
+            "apiKey": "name",
             "column": "Name",
             "type": "string",
             "visibility": "editable",
@@ -69,43 +689,241 @@
           },
           {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
-            "type": "string",
+            "type": "textarea",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "isActive",
-            "column": "IsActive",
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "obpmtType",
+            "apiKey": "obpmtType",
+            "column": "EM_Obpmt_Type",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTAFCashPaymentMethod",
+            "apiKey": "eTAFCashPaymentMethod",
+            "column": "EM_Etaf_Iscash",
+            "type": "boolean",
+            "visibility": "discarded",
             "required": true
           },
           {
-            "name": "adClientId",
+            "name": "payinAllow",
+            "apiKey": "payinAllow",
+            "column": "Payin_Allow",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "automaticReceipt",
+            "apiKey": "automaticReceipt",
+            "column": "Automatic_Receipt",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "payinIsMulticurrency",
+            "apiKey": "payinIsMulticurrency",
+            "column": "Payin_IsMulticurrency",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "automaticDeposit",
+            "apiKey": "automaticDeposit",
+            "column": "Automatic_Deposit",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "payinExecutionType",
+            "apiKey": "payinExecutionType",
+            "column": "Payin_Execution_Type",
+            "type": "enum",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "payinExecutionProcessID",
+            "apiKey": "payinExecutionProcessID",
+            "column": "Payin_Execution_Process_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "payinDeferred",
+            "apiKey": "payinDeferred",
+            "column": "Payin_Deferred",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "uponReceiptUse",
+            "apiKey": "uponReceiptUse",
+            "column": "Uponreceiptuse",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "uponDepositUse",
+            "apiKey": "uponDepositUse",
+            "column": "Upondeposituse",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "iNUponClearingUse",
+            "apiKey": "iNUponClearingUse",
+            "column": "Inuponclearinguse",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "payoutAllow",
+            "apiKey": "payoutAllow",
+            "column": "Payout_Allow",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "automaticPayment",
+            "apiKey": "automaticPayment",
+            "column": "Automatic_Payment",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "payoutIsMulticurrency",
+            "apiKey": "payoutIsMulticurrency",
+            "column": "Payout_IsMulticurrency",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "automaticWithdrawn",
+            "apiKey": "automaticWithdrawn",
+            "column": "Automatic_Withdrawn",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "payoutExecutionType",
+            "apiKey": "payoutExecutionType",
+            "column": "Payout_Execution_Type",
+            "type": "enum",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "payoutExecutionProcessID",
+            "apiKey": "payoutExecutionProcessID",
+            "column": "Payout_Execution_Process_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "payoutDeferred",
+            "apiKey": "payoutDeferred",
+            "column": "Payout_Deferred",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "uponPaymentUse",
+            "apiKey": "uponPaymentUse",
+            "column": "Uponpaymentuse",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "uponWithdrawalUse",
+            "apiKey": "uponWithdrawalUse",
+            "column": "Uponwithdrawaluse",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "oUTUponClearingUse",
+            "apiKey": "oUTUponClearingUse",
+            "column": "Outuponclearinguse",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
             "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "paymentMethod",
+            "apiKey": "paymentMethod",
+            "column": "Fin_Paymentmethod_ID",
             "type": "id",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "adOrgId",
-            "column": "AD_Org_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "created",
+            "name": "creationDate",
+            "apiKey": "creationDate",
             "column": "Created",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           },
           {
             "name": "updated",
+            "apiKey": "updated",
             "column": "Updated",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           }
@@ -118,7 +936,8 @@
         "path": "/paymentMethod",
         "entity": "paymentMethod",
         "supportedFilters": [
-          "name"
+          "name",
+          "obpmtType"
         ]
       },
       {
@@ -148,6 +967,57 @@
     ],
     "processEndpoints": []
   },
+  "apiPrediction": {
+    "specName": "payment-method",
+    "baseUrl": "/sws/neo/payment-method",
+    "crud": {
+      "paymentMethod": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/payment-method/paymentMethod",
+        "detailUrl": "/sws/neo/payment-method/paymentMethod/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "paymentMethod",
+        "field": "payinExecutionProcessID",
+        "column": "Payin_Execution_Process_ID",
+        "reference": "Pay_Exec_Process",
+        "inputMode": "search",
+        "url": "/sws/neo/payment-method/paymentMethod/selectors/payinExecutionProcessID"
+      },
+      {
+        "entity": "paymentMethod",
+        "field": "payoutExecutionProcessID",
+        "column": "Payout_Execution_Process_ID",
+        "reference": "Pay_Exec_Process",
+        "inputMode": "search",
+        "url": "/sws/neo/payment-method/paymentMethod/selectors/payoutExecutionProcessID"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=payment-methodDate"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    }
+  },
   "testManifest": {
     "tests": [
       {
@@ -170,12 +1040,172 @@
         "id": "t-3",
         "category": "field-presence",
         "entity": "paymentMethod",
-        "field": "isActive",
+        "field": "active",
         "runner": "node",
-        "description": "Field 'isActive' should be present in paymentMethod"
+        "description": "Field 'active' should be present in paymentMethod"
       },
       {
         "id": "t-4",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payinAllow",
+        "runner": "node",
+        "description": "Field 'payinAllow' should be present in paymentMethod"
+      },
+      {
+        "id": "t-5",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "automaticReceipt",
+        "runner": "node",
+        "description": "Field 'automaticReceipt' should be present in paymentMethod"
+      },
+      {
+        "id": "t-6",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payinIsMulticurrency",
+        "runner": "node",
+        "description": "Field 'payinIsMulticurrency' should be present in paymentMethod"
+      },
+      {
+        "id": "t-7",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "automaticDeposit",
+        "runner": "node",
+        "description": "Field 'automaticDeposit' should be present in paymentMethod"
+      },
+      {
+        "id": "t-8",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payinExecutionType",
+        "runner": "node",
+        "description": "Field 'payinExecutionType' should be present in paymentMethod"
+      },
+      {
+        "id": "t-9",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payinExecutionProcessID",
+        "runner": "node",
+        "description": "Field 'payinExecutionProcessID' should be present in paymentMethod"
+      },
+      {
+        "id": "t-10",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payinDeferred",
+        "runner": "node",
+        "description": "Field 'payinDeferred' should be present in paymentMethod"
+      },
+      {
+        "id": "t-11",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "uponReceiptUse",
+        "runner": "node",
+        "description": "Field 'uponReceiptUse' should be present in paymentMethod"
+      },
+      {
+        "id": "t-12",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "uponDepositUse",
+        "runner": "node",
+        "description": "Field 'uponDepositUse' should be present in paymentMethod"
+      },
+      {
+        "id": "t-13",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "iNUponClearingUse",
+        "runner": "node",
+        "description": "Field 'iNUponClearingUse' should be present in paymentMethod"
+      },
+      {
+        "id": "t-14",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payoutAllow",
+        "runner": "node",
+        "description": "Field 'payoutAllow' should be present in paymentMethod"
+      },
+      {
+        "id": "t-15",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "automaticPayment",
+        "runner": "node",
+        "description": "Field 'automaticPayment' should be present in paymentMethod"
+      },
+      {
+        "id": "t-16",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payoutIsMulticurrency",
+        "runner": "node",
+        "description": "Field 'payoutIsMulticurrency' should be present in paymentMethod"
+      },
+      {
+        "id": "t-17",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "automaticWithdrawn",
+        "runner": "node",
+        "description": "Field 'automaticWithdrawn' should be present in paymentMethod"
+      },
+      {
+        "id": "t-18",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionType",
+        "runner": "node",
+        "description": "Field 'payoutExecutionType' should be present in paymentMethod"
+      },
+      {
+        "id": "t-19",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionProcessID",
+        "runner": "node",
+        "description": "Field 'payoutExecutionProcessID' should be present in paymentMethod"
+      },
+      {
+        "id": "t-20",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "payoutDeferred",
+        "runner": "node",
+        "description": "Field 'payoutDeferred' should be present in paymentMethod"
+      },
+      {
+        "id": "t-21",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "uponPaymentUse",
+        "runner": "node",
+        "description": "Field 'uponPaymentUse' should be present in paymentMethod"
+      },
+      {
+        "id": "t-22",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "uponWithdrawalUse",
+        "runner": "node",
+        "description": "Field 'uponWithdrawalUse' should be present in paymentMethod"
+      },
+      {
+        "id": "t-23",
+        "category": "field-presence",
+        "entity": "paymentMethod",
+        "field": "oUTUponClearingUse",
+        "runner": "node",
+        "description": "Field 'oUTUponClearingUse' should be present in paymentMethod"
+      },
+      {
+        "id": "t-24",
         "category": "field-type",
         "entity": "paymentMethod",
         "field": "name",
@@ -183,7 +1213,7 @@
         "description": "Field 'name' should have type 'string' in paymentMethod"
       },
       {
-        "id": "t-5",
+        "id": "t-25",
         "category": "field-type",
         "entity": "paymentMethod",
         "field": "description",
@@ -191,15 +1221,175 @@
         "description": "Field 'description' should have type 'string' in paymentMethod"
       },
       {
-        "id": "t-6",
+        "id": "t-26",
         "category": "field-type",
         "entity": "paymentMethod",
-        "field": "isActive",
+        "field": "active",
         "runner": "node",
-        "description": "Field 'isActive' should have type 'boolean' in paymentMethod"
+        "description": "Field 'active' should have type 'boolean' in paymentMethod"
       },
       {
-        "id": "t-7",
+        "id": "t-27",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payinAllow",
+        "runner": "node",
+        "description": "Field 'payinAllow' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-28",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "automaticReceipt",
+        "runner": "node",
+        "description": "Field 'automaticReceipt' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-29",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payinIsMulticurrency",
+        "runner": "node",
+        "description": "Field 'payinIsMulticurrency' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-30",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "automaticDeposit",
+        "runner": "node",
+        "description": "Field 'automaticDeposit' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-31",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payinExecutionType",
+        "runner": "node",
+        "description": "Field 'payinExecutionType' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-32",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payinExecutionProcessID",
+        "runner": "node",
+        "description": "Field 'payinExecutionProcessID' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-33",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payinDeferred",
+        "runner": "node",
+        "description": "Field 'payinDeferred' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-34",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "uponReceiptUse",
+        "runner": "node",
+        "description": "Field 'uponReceiptUse' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-35",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "uponDepositUse",
+        "runner": "node",
+        "description": "Field 'uponDepositUse' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-36",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "iNUponClearingUse",
+        "runner": "node",
+        "description": "Field 'iNUponClearingUse' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-37",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payoutAllow",
+        "runner": "node",
+        "description": "Field 'payoutAllow' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-38",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "automaticPayment",
+        "runner": "node",
+        "description": "Field 'automaticPayment' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-39",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payoutIsMulticurrency",
+        "runner": "node",
+        "description": "Field 'payoutIsMulticurrency' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-40",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "automaticWithdrawn",
+        "runner": "node",
+        "description": "Field 'automaticWithdrawn' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-41",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionType",
+        "runner": "node",
+        "description": "Field 'payoutExecutionType' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-42",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionProcessID",
+        "runner": "node",
+        "description": "Field 'payoutExecutionProcessID' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-43",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "payoutDeferred",
+        "runner": "node",
+        "description": "Field 'payoutDeferred' should have type 'boolean' in paymentMethod"
+      },
+      {
+        "id": "t-44",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "uponPaymentUse",
+        "runner": "node",
+        "description": "Field 'uponPaymentUse' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-45",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "uponWithdrawalUse",
+        "runner": "node",
+        "description": "Field 'uponWithdrawalUse' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-46",
+        "category": "field-type",
+        "entity": "paymentMethod",
+        "field": "oUTUponClearingUse",
+        "runner": "node",
+        "description": "Field 'oUTUponClearingUse' should have type 'string' in paymentMethod"
+      },
+      {
+        "id": "t-47",
         "category": "searchable-filters",
         "entity": "paymentMethod",
         "field": "name",
@@ -207,56 +1397,572 @@
         "description": "Field 'name' should be a supported filter for paymentMethod"
       },
       {
-        "id": "t-8",
+        "id": "t-48",
         "category": "visibility",
         "entity": "paymentMethod",
         "runner": "node",
         "description": "Entity 'paymentMethod' should only expose visible fields in frontend"
       },
       {
-        "id": "t-9",
-        "category": "system-field",
+        "id": "t-49",
+        "category": "displaylogic-valid",
         "entity": "paymentMethod",
-        "field": "adClientId",
+        "field": "automaticReceipt",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for paymentMethod"
+        "description": "Display logic for 'automaticReceipt' in paymentMethod should be valid JS"
       },
       {
-        "id": "t-10",
-        "category": "system-field",
+        "id": "t-50",
+        "category": "displaylogic-valid",
         "entity": "paymentMethod",
-        "field": "adOrgId",
+        "field": "payinIsMulticurrency",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for paymentMethod"
+        "description": "Display logic for 'payinIsMulticurrency' in paymentMethod should be valid JS"
       },
       {
-        "id": "t-11",
-        "category": "system-field",
+        "id": "t-51",
+        "category": "displaylogic-valid",
         "entity": "paymentMethod",
-        "field": "created",
+        "field": "automaticDeposit",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for paymentMethod"
+        "description": "Display logic for 'automaticDeposit' in paymentMethod should be valid JS"
       },
       {
-        "id": "t-12",
+        "id": "t-52",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "payinExecutionType",
+        "runner": "node",
+        "description": "Display logic for 'payinExecutionType' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-53",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "payinExecutionProcessID",
+        "runner": "node",
+        "description": "Display logic for 'payinExecutionProcessID' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-54",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "payinDeferred",
+        "runner": "node",
+        "description": "Display logic for 'payinDeferred' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-55",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "uponReceiptUse",
+        "runner": "node",
+        "description": "Display logic for 'uponReceiptUse' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-56",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "uponDepositUse",
+        "runner": "node",
+        "description": "Display logic for 'uponDepositUse' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-57",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "iNUponClearingUse",
+        "runner": "node",
+        "description": "Display logic for 'iNUponClearingUse' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-58",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "automaticPayment",
+        "runner": "node",
+        "description": "Display logic for 'automaticPayment' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-59",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "payoutIsMulticurrency",
+        "runner": "node",
+        "description": "Display logic for 'payoutIsMulticurrency' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-60",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "automaticWithdrawn",
+        "runner": "node",
+        "description": "Display logic for 'automaticWithdrawn' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-61",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionType",
+        "runner": "node",
+        "description": "Display logic for 'payoutExecutionType' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-62",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionProcessID",
+        "runner": "node",
+        "description": "Display logic for 'payoutExecutionProcessID' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-63",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "payoutDeferred",
+        "runner": "node",
+        "description": "Display logic for 'payoutDeferred' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-64",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "uponPaymentUse",
+        "runner": "node",
+        "description": "Display logic for 'uponPaymentUse' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-65",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "uponWithdrawalUse",
+        "runner": "node",
+        "description": "Display logic for 'uponWithdrawalUse' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-66",
+        "category": "displaylogic-valid",
+        "entity": "paymentMethod",
+        "field": "oUTUponClearingUse",
+        "runner": "node",
+        "description": "Display logic for 'oUTUponClearingUse' in paymentMethod should be valid JS"
+      },
+      {
+        "id": "t-67",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "automaticReceipt",
+        "runner": "node",
+        "description": "Display logic for 'automaticReceipt' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-68",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "payinIsMulticurrency",
+        "runner": "node",
+        "description": "Display logic for 'payinIsMulticurrency' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-69",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "automaticDeposit",
+        "runner": "node",
+        "description": "Display logic for 'automaticDeposit' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-70",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "payinExecutionType",
+        "runner": "node",
+        "description": "Display logic for 'payinExecutionType' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-71",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "payinExecutionProcessID",
+        "runner": "node",
+        "description": "Display logic for 'payinExecutionProcessID' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-72",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "payinDeferred",
+        "runner": "node",
+        "description": "Display logic for 'payinDeferred' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-73",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "uponReceiptUse",
+        "runner": "node",
+        "description": "Display logic for 'uponReceiptUse' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-74",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "uponDepositUse",
+        "runner": "node",
+        "description": "Display logic for 'uponDepositUse' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-75",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "iNUponClearingUse",
+        "runner": "node",
+        "description": "Display logic for 'iNUponClearingUse' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-76",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "automaticPayment",
+        "runner": "node",
+        "description": "Display logic for 'automaticPayment' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-77",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "payoutIsMulticurrency",
+        "runner": "node",
+        "description": "Display logic for 'payoutIsMulticurrency' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-78",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "automaticWithdrawn",
+        "runner": "node",
+        "description": "Display logic for 'automaticWithdrawn' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-79",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionType",
+        "runner": "node",
+        "description": "Display logic for 'payoutExecutionType' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-80",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionProcessID",
+        "runner": "node",
+        "description": "Display logic for 'payoutExecutionProcessID' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-81",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "payoutDeferred",
+        "runner": "node",
+        "description": "Display logic for 'payoutDeferred' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-82",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "uponPaymentUse",
+        "runner": "node",
+        "description": "Display logic for 'uponPaymentUse' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-83",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "uponWithdrawalUse",
+        "runner": "node",
+        "description": "Display logic for 'uponWithdrawalUse' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-84",
+        "category": "displaylogic-evaluable",
+        "entity": "paymentMethod",
+        "field": "oUTUponClearingUse",
+        "runner": "node",
+        "description": "Display logic for 'oUTUponClearingUse' in paymentMethod should have evaluable flag"
+      },
+      {
+        "id": "t-85",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "active",
+        "runner": "node",
+        "description": "Default value for 'active' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-86",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "payinAllow",
+        "runner": "node",
+        "description": "Default value for 'payinAllow' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-87",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "automaticReceipt",
+        "runner": "node",
+        "description": "Default value for 'automaticReceipt' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-88",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "payinIsMulticurrency",
+        "runner": "node",
+        "description": "Default value for 'payinIsMulticurrency' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-89",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "automaticDeposit",
+        "runner": "node",
+        "description": "Default value for 'automaticDeposit' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-90",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "payinExecutionType",
+        "runner": "node",
+        "description": "Default value for 'payinExecutionType' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-91",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "payinDeferred",
+        "runner": "node",
+        "description": "Default value for 'payinDeferred' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-92",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "payoutAllow",
+        "runner": "node",
+        "description": "Default value for 'payoutAllow' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-93",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "automaticPayment",
+        "runner": "node",
+        "description": "Default value for 'automaticPayment' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-94",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "payoutIsMulticurrency",
+        "runner": "node",
+        "description": "Default value for 'payoutIsMulticurrency' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-95",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "automaticWithdrawn",
+        "runner": "node",
+        "description": "Default value for 'automaticWithdrawn' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-96",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionType",
+        "runner": "node",
+        "description": "Default value for 'payoutExecutionType' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-97",
+        "category": "default-value-type",
+        "entity": "paymentMethod",
+        "field": "payoutDeferred",
+        "runner": "node",
+        "description": "Default value for 'payoutDeferred' in paymentMethod should be a string"
+      },
+      {
+        "id": "t-98",
+        "category": "system-field",
+        "entity": "paymentMethod",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for paymentMethod"
+      },
+      {
+        "id": "t-99",
+        "category": "system-field",
+        "entity": "paymentMethod",
+        "field": "obpmtType",
+        "runner": "node",
+        "description": "System field 'obpmtType' should exist in backend but not frontend for paymentMethod"
+      },
+      {
+        "id": "t-100",
+        "category": "system-field",
+        "entity": "paymentMethod",
+        "field": "eTAFCashPaymentMethod",
+        "runner": "node",
+        "description": "System field 'eTAFCashPaymentMethod' should exist in backend but not frontend for paymentMethod"
+      },
+      {
+        "id": "t-101",
+        "category": "system-field",
+        "entity": "paymentMethod",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for paymentMethod"
+      },
+      {
+        "id": "t-102",
+        "category": "system-field",
+        "entity": "paymentMethod",
+        "field": "paymentMethod",
+        "runner": "node",
+        "description": "System field 'paymentMethod' should exist in backend but not frontend for paymentMethod"
+      },
+      {
+        "id": "t-103",
+        "category": "system-field",
+        "entity": "paymentMethod",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for paymentMethod"
+      },
+      {
+        "id": "t-104",
+        "category": "system-field",
+        "entity": "paymentMethod",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for paymentMethod"
+      },
+      {
+        "id": "t-105",
         "category": "system-field",
         "entity": "paymentMethod",
         "field": "updated",
         "runner": "node",
         "description": "System field 'updated' should exist in backend but not frontend for paymentMethod"
+      },
+      {
+        "id": "t-106",
+        "category": "system-field",
+        "entity": "paymentMethod",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for paymentMethod"
+      },
+      {
+        "id": "t-107",
+        "category": "rule-declared",
+        "rule": "SE_PaymentMethod_FIN_Paymentmethod_ID",
+        "runner": "node",
+        "description": "Rule 'SE_PaymentMethod_FIN_Paymentmethod_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-108",
+        "category": "rule-declared",
+        "rule": "Payment OUT Accounts",
+        "runner": "node",
+        "description": "Rule 'Payment OUT Accounts' (validation) should be declared"
+      },
+      {
+        "id": "t-109",
+        "category": "rule-declared",
+        "rule": "Payment IN Accounts",
+        "runner": "node",
+        "description": "Rule 'Payment IN Accounts' (validation) should be declared"
+      },
+      {
+        "id": "t-110",
+        "category": "rule-declared",
+        "rule": "FIN_Payment Out status validation",
+        "runner": "node",
+        "description": "Rule 'FIN_Payment Out status validation' (validation) should be declared"
+      },
+      {
+        "id": "t-111",
+        "category": "rule-declared",
+        "rule": "AD_Client Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-112",
+        "category": "rule-declared",
+        "rule": "FIN_Payment In status validation",
+        "runner": "node",
+        "description": "Rule 'FIN_Payment In status validation' (validation) should be declared"
+      },
+      {
+        "id": "t-113",
+        "category": "rule-declared",
+        "rule": "AD_Org Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Org Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-114",
+        "category": "rule-declared",
+        "runner": "node",
+        "description": "Rule 'undefined' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-115",
+        "category": "crud-flags",
+        "entity": "paymentMethod",
+        "runner": "node",
+        "description": "CRUD flags for 'paymentMethod' should all be booleans"
+      },
+      {
+        "id": "t-116",
+        "category": "selector-endpoint",
+        "entity": "paymentMethod",
+        "field": "payinExecutionProcessID",
+        "runner": "node",
+        "description": "Selector endpoint for 'payinExecutionProcessID' in paymentMethod should exist"
+      },
+      {
+        "id": "t-117",
+        "category": "selector-endpoint",
+        "entity": "paymentMethod",
+        "field": "payoutExecutionProcessID",
+        "runner": "node",
+        "description": "Selector endpoint for 'payoutExecutionProcessID' in paymentMethod should exist"
       }
     ],
     "summary": {
-      "total": 12,
+      "total": 117,
       "byCategory": {
-        "field-presence": 3,
-        "field-type": 3,
+        "field-presence": 23,
+        "field-type": 23,
         "searchable-filters": 1,
         "visibility": 1,
-        "system-field": 4
+        "displaylogic-valid": 18,
+        "displaylogic-evaluable": 18,
+        "default-value-type": 13,
+        "system-field": 9,
+        "rule-declared": 8,
+        "crud-flags": 1,
+        "selector-endpoint": 2
       },
       "byRunner": {
-        "node": 12,
+        "node": 117,
         "junit": 0
       }
     }

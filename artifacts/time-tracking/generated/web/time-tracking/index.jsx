@@ -4,6 +4,7 @@ import TimeTrackingForm from './TimeTrackingForm';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'hr', name: 'Time Tracking' };
+const breadcrumb = 'Projects / Time Tracking';
 
 export default function App({ windowName, recordId, ...props }) {
   if (recordId) {
@@ -15,6 +16,7 @@ export default function App({ windowName, recordId, ...props }) {
         entityLabel="Time Tracking"
         windowName={windowName}
         recordId={recordId}
+        breadcrumb={breadcrumb}
         window={windowMeta}
         {...props}
       />
@@ -27,6 +29,7 @@ export default function App({ windowName, recordId, ...props }) {
       Table={TimeTrackingTable}
       entityLabel="Time Tracking"
       windowName={windowName}
+      breadcrumb={breadcrumb}
       window={windowMeta}
       {...props}
     />

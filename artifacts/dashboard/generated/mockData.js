@@ -15,11 +15,6 @@ export const kpis = {
     "value": 16450,
     "trend": 28.7,
     "previousValue": 12782
-  },
-  "pendingInvoices": {
-    "value": 7,
-    "trend": -2,
-    "previousValue": 7
   }
 };
 

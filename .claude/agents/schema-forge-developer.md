@@ -184,6 +184,35 @@ Comment when:
 - Fixing a rejection: "Addressing review feedback: ..."
 </github_tracking>
 
+<i18n_rules>
+## Internationalization (MANDATORY)
+
+**Every user-visible string MUST be translated.** The app is primarily used in Spanish by real clients. Hardcoded English strings are bugs.
+
+Full reference: `docs/i18n-guide.md`
+
+### Quick Reference
+
+| What | Hook | Example |
+|------|------|---------|
+| Custom UI strings | `useUI()` | `ui('save')`, `ui('orderDoc', { number: n })` |
+| AD field labels | `useLabel()` | `t('C_BPartner_ID')` |
+| Menu/tab/window names | `useMenuLabel()` | `tMenu(tab.label)` |
+
+### When Writing Shared Components (`tools/app-shell/src/`)
+
+1. **Never hardcode user-visible strings** — always use `useUI()` or `useMenuLabel()`
+2. **Add keys to BOTH** `en_US.json` AND `es_ES.json` under `genericLabels`
+3. **Use camelCase** for key names: `noResultsFound`, not `no-results-found`
+4. **Use interpolation** over concatenation: `ui('orderDoc', { number })` not `ui('order') + ' #' + n`
+5. **Reuse existing keys** — check `genericLabels` before adding new ones (400+ keys already exist)
+6. **Pure functions** outside React: use `resolveUI(dictionary, key)` from `@/i18n`
+
+### When Extending Generators
+
+If `generate-frontend.js` emits user-visible text, it must emit `ui('key')` calls, not raw strings. The generated component must import `useUI` from `@/i18n`.
+</i18n_rules>
+
 <decision_heuristics>
 - Make it work first, make it right second
 - Read the existing pipeline before adding to it — patterns matter

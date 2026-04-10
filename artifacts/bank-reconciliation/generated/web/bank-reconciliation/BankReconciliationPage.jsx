@@ -4,6 +4,8 @@ import BankReconciliationForm from './BankReconciliationForm';
 import BankReconciliationLineTable from './BankReconciliationLineTable';
 import catalogs from './mockCatalogs';
 
+const breadcrumb = 'Finance / Bank Reconciliation';
+
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'startingBalance', column: 'StartingBalance', type: 'amount' },
@@ -42,6 +44,7 @@ export default function BankReconciliationPage({ windowName, recordId, ...props 
         catalogs={catalogs}
         entityLabel="Bank Reconciliation"
         detailLabel="Bank Reconciliation Line"
+        breadcrumb={breadcrumb}
         windowName={windowName}
         recordId={recordId}
         {...props}
@@ -54,6 +57,7 @@ export default function BankReconciliationPage({ windowName, recordId, ...props 
       entity="bankReconciliation"
       Table={BankReconciliationTable}
       entityLabel="Bank Reconciliation"
+      breadcrumb={breadcrumb}
       windowName={windowName}
       {...props}
     />

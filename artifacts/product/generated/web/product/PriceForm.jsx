@@ -10,9 +10,6 @@ const fields = [
 
 // @sf-generated-start component:PriceForm
 export default function PriceForm(props) {
-  // @sf-custom-slot hooks:PriceForm
   return <EntityForm fields={fields} {...props} />;
 }
 // @sf-generated-end component:PriceForm
-
-// @sf-custom-slot section:PriceForm-custom

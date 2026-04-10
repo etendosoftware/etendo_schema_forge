@@ -196,9 +196,12 @@
           "visibility": "discarded"
         },
         "documentAction": {
-          "visibility": "discarded"
+          "visibility": "system"
         },
         "createOrder": {
+          "visibility": "system"
+        },
+        "cashVAT": {
           "visibility": "discarded"
         }
       }

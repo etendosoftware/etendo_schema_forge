@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useUI } from '@/i18n';
 import PaymentActivityPanel from './PaymentActivityPanel';
 
 /**
@@ -12,6 +13,7 @@ import PaymentActivityPanel from './PaymentActivityPanel';
  */
 export default function PaymentActivityToggle({ data, recordId, token, apiBaseUrl, api }) {
   const [open, setOpen] = useState(false);
+  const ui = useUI();
 
   const toggle = useCallback(() => setOpen(prev => !prev), []);
   const close = useCallback(() => setOpen(false), []);
@@ -31,7 +33,7 @@ export default function PaymentActivityToggle({ data, recordId, token, apiBaseUr
       <button
         type="button"
         onClick={toggle}
-        title="Activity"
+        title={ui('activity')}
         className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
       >
         {/* Clock icon (SVG) */}
@@ -97,7 +99,7 @@ export default function PaymentActivityToggle({ data, recordId, token, apiBaseUr
           <button
             type="button"
             onClick={close}
-            title="Close Activity panel"
+            title={ui('closeActivityPanel')}
             className="transition-colors"
             style={{
               width: 28,

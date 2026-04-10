@@ -1,6 +1,6 @@
 import FinPaymentPage from './FinPaymentPage';
 
-const windowMeta = { category: 'purchases', name: 'Payment Out' };
+const windowMeta = { category: 'finance', name: 'Payment Out' };
 
 const api = {
   "specName": "payment-out",

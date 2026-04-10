@@ -46,6 +46,12 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | [etendo-ad/process-mechanisms.md](etendo-ad/process-mechanisms.md) | The 3 process mechanisms: tab_process, classic_process, obuiapp_process |
 | [etendo-ad/display-logic-variables.md](etendo-ad/display-logic-variables.md) | The 6 types of variables in DisplayLogic: fields, auxiliary inputs, session, preferences, acct dimensions |
 
+## Internationalization
+
+| File | Description |
+|------|-------------|
+| [i18n-guide.md](i18n-guide.md) | **i18n reference**: hooks (`useUI`, `useLabel`, `useMenuLabel`), locale JSON structure, rules for adding translations, decision tree |
+
 ## Guides
 
 | File | Description |

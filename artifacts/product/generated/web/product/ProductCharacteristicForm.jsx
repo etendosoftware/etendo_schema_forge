@@ -3,7 +3,6 @@ import { EntityForm } from '@/components/contract-ui';
 // @sf-generated-start fields:productCharacteristic
 const fields = [
   { key: 'sequenceNumber', column: 'Seqno', type: 'number', label: 'Sequence Number', required: true, section: 'principal', defaultValue: '@SQL=SELECT COALESCE(MAX(SEQNO),0)+10 AS DefaultValue FROM M_PRODUCT_CH WHERE m_product_id=@m_product_id@' },
-  // @sf-custom-slot callout:SL_ProductCh_Characteristic
   { key: 'characteristic', column: 'M_Characteristic_ID', type: 'selector', label: 'Characteristic', required: true, section: 'principal', reference: 'Characteristic', inputMode: 'selector' },
   { key: 'variant', column: 'Isvariant', type: 'checkbox', label: 'Variant', required: true, section: 'principal', defaultValue: 'N' },
   { key: 'explodeConfigurationTab', column: 'IsExplodeConf', type: 'checkbox', label: 'Explode Configuration Tab', required: true, section: 'principal', defaultValue: 'Y' },
@@ -17,9 +16,6 @@ const fields = [
 
 // @sf-generated-start component:ProductCharacteristicForm
 export default function ProductCharacteristicForm(props) {
-  // @sf-custom-slot hooks:ProductCharacteristicForm
   return <EntityForm fields={fields} {...props} />;
 }
 // @sf-generated-end component:ProductCharacteristicForm
-
-// @sf-custom-slot section:ProductCharacteristicForm-custom

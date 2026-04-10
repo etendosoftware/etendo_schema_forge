@@ -19,7 +19,7 @@ const windowLoaders = {
   'product': () => import('@generated/product/generated/web/product/index.jsx'),
   'product-category': () => import('@generated/product-category/generated/web/product-category/index.jsx'),
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
-  'uom': () => import('@generated/uom/generated/web/uom/index.jsx'),
+  'unit-of-measure': () => import('@generated/unit-of-measure/generated/web/unit-of-measure/index.jsx'),
   'user': () => import('@generated/user/generated/web/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
@@ -81,6 +81,8 @@ const customLoaders = {
   'purchase-order': () => import('./custom/purchase-order/index.jsx'),
   'goods-receipt': () => import('./custom/goods-receipt/index.jsx'),
   'payment-out': () => import('./custom/payment-out/index.jsx'),
+  'sales-invoice': () => import('./custom/sales-invoice/index.jsx'),
+  'warehouse': () => import('./custom/warehouse/index.jsx'),
 };
 
 /**

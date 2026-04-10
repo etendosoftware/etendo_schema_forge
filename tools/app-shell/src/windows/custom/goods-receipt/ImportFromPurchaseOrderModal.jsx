@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useUI } from '@/i18n';
 
 export default function ImportFromPurchaseOrderModal({ receiptId, bpId, base, headers, onClose, onSuccess }) {
+  const ui = useUI();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(new Set());
@@ -208,16 +210,16 @@ export default function ImportFromPurchaseOrderModal({ receiptId, bpId, base, he
       }
 
       if (importedCount > 0) {
-        if (errors > 0) toast.warning(`Imported ${importedCount} line(s) with ${errors} error(s)`);
-        else toast.success(`${importedCount} line(s) imported from purchase order`);
+        if (errors > 0) toast.warning(ui('importedLinesWithErrors').replace('{count}', String(importedCount)).replace('{errors}', String(errors)));
+        else toast.success(ui('linesImportedFromPurchaseOrder').replace('{count}', String(importedCount)));
         onSuccess();
         return;
       }
 
-      if (errors > 0) toast.error('Could not import selected lines');
-      else toast.info('No lines were imported');
+      if (errors > 0) toast.error(ui('couldNotImportSelectedLines'));
+      else toast.info(ui('noLinesWereImported'));
     } catch (err) {
-      toast.error(err.message || 'Failed to import lines');
+      toast.error(err.message || ui('failedToImportLines'));
     } finally {
       setImporting(false);
     }
@@ -231,7 +233,7 @@ export default function ImportFromPurchaseOrderModal({ receiptId, bpId, base, he
       <div onClick={(e) => e.stopPropagation()} style={{ width: 620, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,0.12)', border: '0.5px solid #E5E7EB' }}>
         <div style={{ padding: '14px 16px', borderBottom: '2px solid #E5E7EB' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Import from Purchase Order</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{ui('importFromPurchaseOrder')}</span>
             <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280' }}>&times;</button>
           </div>
           {bpName && <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>{bpName}</div>}
@@ -242,17 +244,17 @@ export default function ImportFromPurchaseOrderModal({ receiptId, bpId, base, he
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search purchase order..."
+            placeholder={ui('searchPurchaseOrder')}
             style={{ width: '100%', fontSize: 13, padding: '7px 10px', border: '0.5px solid #E5E7EB', borderRadius: 6, outline: 'none', color: '#111827' }}
           />
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>
           {loading ? (
-            <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>Loading...</p>
+            <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>
           ) : filtered.length === 0 ? (
             <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>
-              {orders.length === 0 ? 'No completed purchase orders with pending quantities for this vendor.' : 'No orders match your search.'}
+              {orders.length === 0 ? ui('noCompletedPurchaseOrdersWithPendingQuantitiesForThisVendor') : ui('noOrdersMatchYourSearch')}
             </p>
           ) : (
             filtered.map((order) => {
@@ -303,15 +305,15 @@ export default function ImportFromPurchaseOrderModal({ receiptId, bpId, base, he
                   {isExpanded && (
                     <div style={{ background: 'var(--color-background-secondary, #F9FAFB)' }}>
                       {isLoadingLines ? (
-                        <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: '#9ca3af' }}>Loading lines...</div>
+                        <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: '#9ca3af' }}>{ui('loadingLines')}</div>
                       ) : lines.length === 0 ? (
-                        <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: '#9ca3af' }}>No lines found</div>
+                        <div style={{ padding: '8px 12px 8px 48px', fontSize: 12, color: '#9ca3af' }}>{ui('noLinesFound')}</div>
                       ) : (
                         <>
                           <div style={{ display: 'flex', padding: '4px 12px 4px 48px', fontSize: 11, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '0.5px solid #E5E7EB' }}>
-                            <span style={{ flex: 1 }}>Product</span>
-                            <span style={{ width: 90, textAlign: 'right' }}>Pending</span>
-                            <span style={{ width: 90, textAlign: 'right' }}>Import Qty</span>
+                            <span style={{ flex: 1 }}>{ui('product')}</span>
+                            <span style={{ width: 90, textAlign: 'right' }}>{ui('pending')}</span>
+                            <span style={{ width: 90, textAlign: 'right' }}>{ui('importQty')}</span>
                           </div>
                           {lines.map((line) => {
                             const selectable = line._selectable;
@@ -344,7 +346,7 @@ export default function ImportFromPurchaseOrderModal({ receiptId, bpId, base, he
                                 />
                                 <span style={{ fontSize: 13, color: selectable ? (lineSelected ? '#2563eb' : '#111827') : '#9ca3af', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: lineSelected ? 500 : 400 }}>
                                   {productName}
-                                  {!selectable && <span style={{ fontSize: 11, marginLeft: 6, color: '#9ca3af' }}>already fully received</span>}
+                                  {!selectable && <span style={{ fontSize: 11, marginLeft: 6, color: '#9ca3af' }}>{ui('alreadyFullyReceived')}</span>}
                                 </span>
                                 <span style={{ width: 90, fontSize: 12, color: '#6B7280', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
                                   {fmtNum(line._availableQty)}
@@ -389,17 +391,17 @@ export default function ImportFromPurchaseOrderModal({ receiptId, bpId, base, he
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8F9FA', borderTop: '1px solid #E5E7EB', padding: '10px 16px' }}>
           <span style={{ fontSize: 12, color: selected.size > 0 ? 'var(--color-text-info, #2563eb)' : '#6B7280', fontWeight: selected.size > 0 ? 500 : 400 }}>
-            {selected.size > 0 ? `${selected.size} line${selected.size > 1 ? 's' : ''} selected` : 'Select lines to import'}
+            {selected.size > 0 ? ui('selectedLinesCount').replace('{count}', String(selected.size)) : ui('selectLinesToImport')}
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '1px solid #E5E7EB', background: 'transparent', color: '#6B7280', cursor: 'pointer' }}>Cancel</button>
+            <button type="button" onClick={onClose} style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '1px solid #E5E7EB', background: 'transparent', color: '#6B7280', cursor: 'pointer' }}>{ui('cancel')}</button>
             <button
               type="button"
               onClick={handleImport}
               disabled={selected.size === 0 || importing}
               style={{ fontSize: 13, fontWeight: 500, padding: '5px 14px', borderRadius: 6, border: 'none', background: '#18181b', color: '#fff', cursor: (selected.size === 0 || importing) ? 'not-allowed' : 'pointer', opacity: (selected.size === 0 || importing) ? 0.4 : 1 }}
             >
-              {importing ? 'Importing...' : `Import selected${selected.size > 0 ? ` (${selected.size})` : ''}`}
+              {importing ? ui('importing') : ui('importSelected').replace('{count}', selected.size > 0 ? ` (${selected.size})` : '')}
             </button>
           </div>
         </div>

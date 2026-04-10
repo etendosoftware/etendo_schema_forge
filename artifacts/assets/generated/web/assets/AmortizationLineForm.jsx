@@ -12,9 +12,7 @@ const fields = [
 
 // @sf-generated-start component:AmortizationLineForm
 export default function AmortizationLineForm(props) {
-  // @sf-custom-slot hooks:AmortizationLineForm
   return <EntityForm fields={fields} {...props} />;
 }
+AmortizationLineForm.hasCollapsedFields = false;
 // @sf-generated-end component:AmortizationLineForm
-
-// @sf-custom-slot section:AmortizationLineForm-custom

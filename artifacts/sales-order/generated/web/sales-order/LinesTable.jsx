@@ -15,9 +15,6 @@ const filters = ['product'];
 
 // @sf-generated-start component:LinesTable
 export default function LinesTable(props) {
-  // @sf-custom-slot hooks:LinesTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:LinesTable
-
-// @sf-custom-slot section:LinesTable-custom

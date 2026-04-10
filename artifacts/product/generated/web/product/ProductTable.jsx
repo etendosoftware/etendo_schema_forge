@@ -14,9 +14,6 @@ const filters = ['searchKey', 'name', 'productCategory', 'productType', 'uPCEAN'
 
 // @sf-generated-start component:ProductTable
 export default function ProductTable(props) {
-  // @sf-custom-slot hooks:ProductTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:ProductTable
-
-// @sf-custom-slot section:ProductTable-custom

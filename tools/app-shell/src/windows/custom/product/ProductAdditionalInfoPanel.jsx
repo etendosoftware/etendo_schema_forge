@@ -1,4 +1,5 @@
 import { EntityForm } from '@/components/contract-ui';
+import { useUI } from '@/i18n';
 
 const commercialFields = ['taxCategory', 'sale', 'purchase'];
 const logisticsFields = ['stocked', 'returnable', 'weight', 'uOMForWeight'];
@@ -18,11 +19,12 @@ function FieldGroup({ title, description, children }) {
 }
 
 export default function ProductAdditionalInfoPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange }) {
+  const ui = useUI();
   return (
-    <div className="space-y-4 pt-5 pb-6">
+    <div className="space-y-4 pt-0 pb-6">
       <FieldGroup
-        title="Commercial"
-        description="Secondary commercial configuration for the product."
+        title={ui('commercial')}
+        description={ui('commercialDescription')}
       >
         <EntityForm
           fields={[
@@ -42,8 +44,8 @@ export default function ProductAdditionalInfoPanel({ data, token, apiBaseUrl, ca
       </FieldGroup>
 
       <FieldGroup
-        title="Logistics"
-        description="Operational data for stock, weight, and logistics behavior."
+        title={ui('logistics')}
+        description={ui('logisticsDescription')}
       >
         <EntityForm
           fields={[

@@ -1,146 +1,1326 @@
 {
-  "version": "0.1.0",
-  "generatedAt": "2026-03-06T17:20:29.658Z",
-  "checksum": "84478a965453e5dc",
+  "version": "0.2.0",
+  "generatedAt": "2026-04-09T13:07:25.208Z",
+  "checksum": "942166893d0a3359",
   "frontendContract": {
     "window": {
-      "id": "209",
+      "id": "108",
       "name": "User",
       "primaryEntity": "user",
-      "category": "reference"
+      "category": "configuracion",
+      "layoutType": "default"
     },
     "entities": {
       "user": {
+        "tableName": "AD_User",
+        "tabId": "118",
+        "tabName": "User",
+        "uiPattern": "STD",
         "fields": [
           {
             "name": "name",
+            "apiKey": "name",
             "column": "Name",
+            "label": "Name",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
+            }
           },
           {
-            "name": "email",
-            "column": "EMail",
+            "name": "username",
+            "apiKey": "username",
+            "column": "UserName",
+            "label": "Username",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "principal"
+          },
+          {
+            "name": "firstName",
+            "apiKey": "firstName",
+            "column": "Firstname",
+            "label": "First Name",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": true,
-            "form": true
+            "form": true,
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
+            }
           },
           {
-            "name": "phone",
-            "column": "Phone",
+            "name": "lastName",
+            "apiKey": "lastName",
+            "column": "Lastname",
+            "label": "Last Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_User_Name"
+            }
+          },
+          {
+            "name": "password",
+            "apiKey": "password",
+            "column": "Password",
+            "label": "Password",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "section": "security"
+          },
+          {
+            "name": "isPasswordExpired",
+            "apiKey": "isPasswordExpired",
+            "column": "Isexpiredpassword",
+            "label": "Expired Password",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N",
+            "section": "security"
           },
           {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
+            "label": "Description",
             "type": "string",
             "tsType": "string",
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "section": "details"
           },
           {
-            "name": "isActive",
-            "column": "IsActive",
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "label": "Business Partner",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "BusinessPartner",
+            "inputMode": "search",
+            "section": "details"
+          },
+          {
+            "name": "email",
+            "apiKey": "email",
+            "column": "Email",
+            "label": "Email",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "principal"
+          },
+          {
+            "name": "locked",
+            "apiKey": "locked",
+            "column": "IsLocked",
+            "label": "Locked",
             "type": "boolean",
             "tsType": "boolean",
             "visibility": "readOnly",
             "required": true,
             "grid": true,
-            "form": true
+            "form": true,
+            "defaultValue": "N",
+            "section": "security"
+          },
+          {
+            "name": "position",
+            "apiKey": "position",
+            "column": "Title",
+            "label": "Position",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "details"
+          },
+          {
+            "name": "phone",
+            "apiKey": "phone",
+            "column": "Phone",
+            "label": "Phone",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "details"
+          },
+          {
+            "name": "supervisor",
+            "apiKey": "supervisor",
+            "column": "Supervisor_ID",
+            "label": "Supervisor",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "User",
+            "inputMode": "search",
+            "section": "details"
+          },
+          {
+            "name": "defaultRole",
+            "apiKey": "defaultRole",
+            "column": "Default_Ad_Role_ID",
+            "label": "Default Role",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "Role",
+            "inputMode": "selector",
+            "section": "defaults"
+          },
+          {
+            "name": "defaultLanguage",
+            "apiKey": "defaultLanguage",
+            "column": "Default_Ad_Language",
+            "label": "Default Language",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Language",
+            "inputMode": "selector",
+            "section": "defaults"
+          },
+          {
+            "name": "defaultClient",
+            "apiKey": "defaultClient",
+            "column": "Default_Ad_Client_ID",
+            "label": "Default Client",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Client",
+            "inputMode": "dependent",
+            "dependsOn": {
+              "field": "defaultRole",
+              "filterKey": "Default_AD_Role_ID"
+            },
+            "section": "defaults"
+          },
+          {
+            "name": "defaultOrganization",
+            "apiKey": "defaultOrganization",
+            "column": "Default_Ad_Org_ID",
+            "label": "Default Organization",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Organization",
+            "inputMode": "dependent",
+            "dependsOn": {
+              "field": "defaultRole",
+              "filterKey": "Default_AD_Role_ID"
+            },
+            "section": "defaults"
+          },
+          {
+            "name": "defaultWarehouse",
+            "apiKey": "defaultWarehouse",
+            "column": "Default_M_Warehouse_ID",
+            "label": "Default Warehouse",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Warehouse",
+            "inputMode": "dependent",
+            "dependsOn": {
+              "field": "defaultClient",
+              "filterKey": "Default_AD_Client_ID"
+            },
+            "section": "defaults"
+          },
+          {
+            "name": "lastPasswordUpdate",
+            "apiKey": "lastPasswordUpdate",
+            "column": "LastPasswordUpdate",
+            "label": "Last Password Update",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "@#Date@",
+            "section": "security"
           }
         ],
         "searchableFields": [
           "name",
+          "username",
           "email"
         ],
-        "computedFields": []
+        "computedFields": [
+          {
+            "name": "isPasswordExpired",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "locked",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "lastPasswordUpdate",
+            "derivation": {
+              "type": "computed",
+              "source": "@#Date@"
+            }
+          }
+        ]
+      },
+      "userRoles": {
+        "tableName": "AD_User_Roles",
+        "tabId": "121",
+        "tabName": "User Roles",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "role",
+            "apiKey": "role",
+            "column": "AD_Role_ID",
+            "label": "Role",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "Role",
+            "inputMode": "selector"
+          },
+          {
+            "name": "roleAdmin",
+            "apiKey": "roleAdmin",
+            "column": "Is_Role_Admin",
+            "label": "Role Administrator",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "N"
+          }
+        ],
+        "searchableFields": [
+          "role"
+        ],
+        "computedFields": [
+          {
+            "name": "roleAdmin",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          }
+        ]
+      },
+      "emailConfiguration": {
+        "tableName": "C_POC_CONFIGURATION",
+        "tabId": "9F5F8C2271F248FB856833C1D257CD03",
+        "tabName": "Email Configuration",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true
+          },
+          {
+            "name": "smtpServer",
+            "apiKey": "smtpServer",
+            "column": "Smtpserver",
+            "label": "Smtp Server",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "server"
+          },
+          {
+            "name": "sMTPAuthentification",
+            "apiKey": "sMTPAuthentification",
+            "column": "IsSmtpAuthorization",
+            "label": "SMTP Authentification",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "section": "server"
+          },
+          {
+            "name": "smtpServerAccount",
+            "apiKey": "smtpServerAccount",
+            "column": "Smtpserveraccount",
+            "label": "Smtp Server Account",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "auth"
+          },
+          {
+            "name": "smtpServerPassword",
+            "apiKey": "smtpServerPassword",
+            "column": "Smtpserverpassword",
+            "label": "Smtp Server Password",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "auth"
+          },
+          {
+            "name": "smtpServerSenderAddress",
+            "apiKey": "smtpServerSenderAddress",
+            "column": "Smtpserversenderaddress",
+            "label": "Smtp Server Sender Address",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "sender"
+          },
+          {
+            "name": "smtpConnectionSecurity",
+            "apiKey": "smtpConnectionSecurity",
+            "column": "Smtpconnectionsecurity",
+            "label": "SMTP Connection Security",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "N",
+                "name": "None"
+              },
+              {
+                "value": "STARTTLS",
+                "name": "STARTTLS"
+              },
+              {
+                "value": "SSL",
+                "name": "SSL"
+              }
+            ],
+            "section": "server",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.EmailConfiguration_Port"
+            }
+          },
+          {
+            "name": "smtpPort",
+            "apiKey": "smtpPort",
+            "column": "Smtpport",
+            "label": "Smtp Port",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "25",
+            "section": "server"
+          },
+          {
+            "name": "smtpConnectionTimeout",
+            "apiKey": "smtpConnectionTimeout",
+            "column": "SmtpTimeout",
+            "label": "Smtp Connection Timeout",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "defaultValue": "600",
+            "section": "server"
+          },
+          {
+            "name": "fromName",
+            "apiKey": "fromName",
+            "column": "Smtpserverfromname",
+            "label": "From Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "sender"
+          },
+          {
+            "name": "replyToAddress",
+            "apiKey": "replyToAddress",
+            "column": "Smtpreplytoaddress",
+            "label": "Reply-To Address",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "sender"
+          },
+          {
+            "name": "testSuccessful",
+            "apiKey": "testSuccessful",
+            "column": "Istestsuccessful",
+            "label": "Test Successful",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "N"
+          },
+          {
+            "name": "lastTestDate",
+            "apiKey": "lastTestDate",
+            "column": "Lasttestdate",
+            "label": "Last Test Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true
+          },
+          {
+            "name": "smtpconnectiontest",
+            "apiKey": "smtpconnectiontest",
+            "column": "Smtpconnectiontest",
+            "label": "Test SMTP Connection",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "defaultValue": "N"
+          },
+          {
+            "name": "defaultConfiguration",
+            "apiKey": "defaultConfiguration",
+            "column": "Isdefaultconfig",
+            "label": "Default",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "defaultValue": "N"
+          }
+        ],
+        "searchableFields": [
+          "smtpServer"
+        ],
+        "computedFields": [
+          {
+            "name": "smtpPort",
+            "derivation": {
+              "type": "computed",
+              "source": "25"
+            }
+          },
+          {
+            "name": "smtpConnectionTimeout",
+            "derivation": {
+              "type": "computed",
+              "source": "600"
+            }
+          },
+          {
+            "name": "testSuccessful",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "smtpconnectiontest",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "defaultConfiguration",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          }
+        ]
       }
     }
   },
   "backendContract": {
     "window": {
-      "id": "209",
+      "id": "108",
       "name": "User",
       "primaryEntity": "user",
-      "category": "reference"
+      "category": "configuracion"
     },
     "entities": {
       "user": {
+        "tableName": "AD_User",
+        "tabId": "118",
+        "tabName": "User",
         "fields": [
           {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "name",
+            "apiKey": "name",
             "column": "Name",
             "type": "string",
             "visibility": "editable",
             "required": true
           },
           {
-            "name": "email",
-            "column": "EMail",
+            "name": "username",
+            "apiKey": "username",
+            "column": "UserName",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "firstName",
+            "apiKey": "firstName",
+            "column": "Firstname",
             "type": "string",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "phone",
-            "column": "Phone",
+            "name": "lastName",
+            "apiKey": "lastName",
+            "column": "Lastname",
             "type": "string",
             "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "comments",
+            "apiKey": "comments",
+            "column": "Comments",
+            "type": "text",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "password",
+            "apiKey": "password",
+            "column": "Password",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "isPasswordExpired",
+            "apiKey": "isPasswordExpired",
+            "column": "Isexpiredpassword",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": false
           },
           {
             "name": "description",
+            "apiKey": "description",
             "column": "Description",
             "type": "string",
             "visibility": "editable",
             "required": false
           },
           {
-            "name": "isActive",
+            "name": "active",
+            "apiKey": "active",
             "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "partnerAddress",
+            "apiKey": "partnerAddress",
+            "column": "C_BPartner_Location_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "email",
+            "apiKey": "email",
+            "column": "Email",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "locked",
+            "apiKey": "locked",
+            "column": "IsLocked",
             "type": "boolean",
             "visibility": "readOnly",
             "required": true
           },
           {
-            "name": "adClientId",
-            "column": "AD_Client_ID",
+            "name": "position",
+            "apiKey": "position",
+            "column": "Title",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "birthday",
+            "apiKey": "birthday",
+            "column": "Birthday",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "phone",
+            "apiKey": "phone",
+            "column": "Phone",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "alternativePhone",
+            "apiKey": "alternativePhone",
+            "column": "Phone2",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "fax",
+            "apiKey": "fax",
+            "column": "Fax",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "emailServerUsername",
+            "apiKey": "emailServerUsername",
+            "column": "EmailUser",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "emailServerPassword",
+            "apiKey": "emailServerPassword",
+            "column": "EmailUserPW",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "supervisor",
+            "apiKey": "supervisor",
+            "column": "Supervisor_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "defaultRole",
+            "apiKey": "defaultRole",
+            "column": "Default_Ad_Role_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "smfswsDefaultWsRole",
+            "apiKey": "smfswsDefaultWsRole",
+            "column": "EM_Smfsws_Default_Ws_Role_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "defaultLanguage",
+            "apiKey": "defaultLanguage",
+            "column": "Default_Ad_Language",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "greeting",
+            "apiKey": "greeting",
+            "column": "C_Greeting_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "defaultClient",
+            "apiKey": "defaultClient",
+            "column": "Default_Ad_Client_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "defaultOrganization",
+            "apiKey": "defaultOrganization",
+            "column": "Default_Ad_Org_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "lastContactDate",
+            "apiKey": "lastContactDate",
+            "column": "LastContact",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "lastContactResult",
+            "apiKey": "lastContactResult",
+            "column": "LastResult",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "defaultWarehouse",
+            "apiKey": "defaultWarehouse",
+            "column": "Default_M_Warehouse_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "trxOrganization",
+            "apiKey": "trxOrganization",
+            "column": "AD_OrgTrx_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "image",
+            "apiKey": "image",
+            "column": "AD_Image_ID",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "lastPasswordUpdate",
+            "apiKey": "lastPasswordUpdate",
+            "column": "LastPasswordUpdate",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "AD_User_ID",
             "type": "id",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "adOrgId",
-            "column": "AD_Org_ID",
-            "type": "id",
+            "name": "commercialauth",
+            "apiKey": "commercialauth",
+            "column": "Commercialauth",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "created",
+            "name": "creationDate",
+            "apiKey": "creationDate",
             "column": "Created",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "grantPortalAccess",
+            "apiKey": "grantPortalAccess",
+            "column": "Grant_Portal_Access",
+            "type": "button",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "isdefaultfordocs",
+            "apiKey": "isdefaultfordocs",
+            "column": "Isdefaultfordocs",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
             "name": "updated",
+            "apiKey": "updated",
             "column": "Updated",
-            "type": "datetime",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "viaemail",
+            "apiKey": "viaemail",
+            "column": "Viaemail",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "viasms",
+            "apiKey": "viasms",
+            "column": "Viasms",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "userRoles": {
+        "tableName": "AD_User_Roles",
+        "tabId": "121",
+        "tabName": "User Roles",
+        "fields": [
+          {
+            "name": "role",
+            "apiKey": "role",
+            "column": "AD_Role_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "roleAdmin",
+            "apiKey": "roleAdmin",
+            "column": "Is_Role_Admin",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "userContact",
+            "apiKey": "userContact",
+            "column": "AD_User_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "AD_User_Roles_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "emailConfiguration": {
+        "tableName": "C_POC_CONFIGURATION",
+        "tabId": "9F5F8C2271F248FB856833C1D257CD03",
+        "tabName": "Email Configuration",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "emailConfigOrganization",
+            "apiKey": "emailConfigOrganization",
+            "column": "Email_Conf_AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "smtpServer",
+            "apiKey": "smtpServer",
+            "column": "Smtpserver",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "sMTPAuthentification",
+            "apiKey": "sMTPAuthentification",
+            "column": "IsSmtpAuthorization",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "smtpServerAccount",
+            "apiKey": "smtpServerAccount",
+            "column": "Smtpserveraccount",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "smtpServerPassword",
+            "apiKey": "smtpServerPassword",
+            "column": "Smtpserverpassword",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "smtpServerSenderAddress",
+            "apiKey": "smtpServerSenderAddress",
+            "column": "Smtpserversenderaddress",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "smtpConnectionSecurity",
+            "apiKey": "smtpConnectionSecurity",
+            "column": "Smtpconnectionsecurity",
+            "type": "enum",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "smtpPort",
+            "apiKey": "smtpPort",
+            "column": "Smtpport",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "smtpConnectionTimeout",
+            "apiKey": "smtpConnectionTimeout",
+            "column": "SmtpTimeout",
+            "type": "integer",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "fromName",
+            "apiKey": "fromName",
+            "column": "Smtpserverfromname",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "replyToAddress",
+            "apiKey": "replyToAddress",
+            "column": "Smtpreplytoaddress",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "testSuccessful",
+            "apiKey": "testSuccessful",
+            "column": "Istestsuccessful",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "lastTestDate",
+            "apiKey": "lastTestDate",
+            "column": "Lasttestdate",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "smtpconnectiontest",
+            "apiKey": "smtpconnectiontest",
+            "column": "Smtpconnectiontest",
+            "type": "button",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "userContact",
+            "apiKey": "userContact",
+            "column": "Email_Conf_AD_User_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "defaultConfiguration",
+            "apiKey": "defaultConfiguration",
+            "column": "Isdefaultconfig",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "emailConfigClient",
+            "apiKey": "emailConfigClient",
+            "column": "Email_Conf_AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "cPocConfigurationID",
+            "apiKey": "cPocConfigurationID",
+            "column": "C_Poc_Configuration_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
             "visibility": "system",
             "required": true
           }
@@ -154,6 +1334,7 @@
         "entity": "user",
         "supportedFilters": [
           "name",
+          "username",
           "email"
         ]
       },
@@ -180,9 +1361,223 @@
         "path": "/user/:id",
         "entity": "user",
         "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/userRoles",
+        "entity": "userRoles",
+        "supportedFilters": [
+          "role"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/userRoles/:id",
+        "entity": "userRoles",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/userRoles",
+        "entity": "userRoles",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/userRoles/:id",
+        "entity": "userRoles",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/userRoles/:id",
+        "entity": "userRoles",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/emailConfiguration",
+        "entity": "emailConfiguration",
+        "supportedFilters": [
+          "smtpServer"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/emailConfiguration/:id",
+        "entity": "emailConfiguration",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/emailConfiguration",
+        "entity": "emailConfiguration",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/emailConfiguration/:id",
+        "entity": "emailConfiguration",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/emailConfiguration/:id",
+        "entity": "emailConfiguration",
+        "supportedFilters": []
       }
     ],
     "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "user",
+    "baseUrl": "/sws/neo/user",
+    "crud": {
+      "user": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/user/user",
+        "detailUrl": "/sws/neo/user/user/{id}",
+        "supportedFilters": [
+          "name",
+          "username",
+          "email"
+        ]
+      },
+      "userRoles": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/user/userRoles",
+        "detailUrl": "/sws/neo/user/userRoles/{id}",
+        "supportedFilters": [
+          "role"
+        ]
+      },
+      "emailConfiguration": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/user/emailConfiguration",
+        "detailUrl": "/sws/neo/user/emailConfiguration/{id}",
+        "supportedFilters": [
+          "smtpServer"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "user",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BusinessPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/user/user/selectors/businessPartner"
+      },
+      {
+        "entity": "user",
+        "field": "supervisor",
+        "column": "Supervisor_ID",
+        "reference": "User",
+        "inputMode": "search",
+        "url": "/sws/neo/user/user/selectors/supervisor"
+      },
+      {
+        "entity": "user",
+        "field": "defaultRole",
+        "column": "Default_Ad_Role_ID",
+        "reference": "Role",
+        "inputMode": "selector",
+        "url": "/sws/neo/user/user/selectors/defaultRole"
+      },
+      {
+        "entity": "user",
+        "field": "defaultLanguage",
+        "column": "Default_Ad_Language",
+        "reference": "Language",
+        "inputMode": "selector",
+        "url": "/sws/neo/user/user/selectors/defaultLanguage"
+      },
+      {
+        "entity": "user",
+        "field": "defaultClient",
+        "column": "Default_Ad_Client_ID",
+        "reference": "Client",
+        "inputMode": "dependent",
+        "url": "/sws/neo/user/user/selectors/defaultClient"
+      },
+      {
+        "entity": "user",
+        "field": "defaultOrganization",
+        "column": "Default_Ad_Org_ID",
+        "reference": "Organization",
+        "inputMode": "dependent",
+        "url": "/sws/neo/user/user/selectors/defaultOrganization"
+      },
+      {
+        "entity": "user",
+        "field": "defaultWarehouse",
+        "column": "Default_M_Warehouse_ID",
+        "reference": "Warehouse",
+        "inputMode": "dependent",
+        "url": "/sws/neo/user/user/selectors/defaultWarehouse"
+      },
+      {
+        "entity": "userRoles",
+        "field": "role",
+        "column": "AD_Role_ID",
+        "reference": "Role",
+        "inputMode": "selector",
+        "url": "/sws/neo/user/userRoles/selectors/role"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "user",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/user/user/{id}/action/processNow"
+      },
+      {
+        "entity": "user",
+        "field": "grantPortalAccess",
+        "column": "Grant_Portal_Access",
+        "url": "/sws/neo/user/user/{id}/action/grantPortalAccess",
+        "processId": "97FFD59B991D49BFB5153C309B009272",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "emailConfiguration",
+        "field": "smtpconnectiontest",
+        "column": "Smtpconnectiontest",
+        "url": "/sws/neo/user/emailConfiguration/{id}/action/smtpconnectiontest",
+        "processId": "9AB8A39485BD4FB1B6BB38B27E707668",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=userDate"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    }
   },
   "testManifest": {
     "tests": [
@@ -198,20 +1593,44 @@
         "id": "t-2",
         "category": "field-presence",
         "entity": "user",
-        "field": "email",
+        "field": "username",
         "runner": "node",
-        "description": "Field 'email' should be present in user"
+        "description": "Field 'username' should be present in user"
       },
       {
         "id": "t-3",
         "category": "field-presence",
         "entity": "user",
-        "field": "phone",
+        "field": "firstName",
         "runner": "node",
-        "description": "Field 'phone' should be present in user"
+        "description": "Field 'firstName' should be present in user"
       },
       {
         "id": "t-4",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "lastName",
+        "runner": "node",
+        "description": "Field 'lastName' should be present in user"
+      },
+      {
+        "id": "t-5",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "password",
+        "runner": "node",
+        "description": "Field 'password' should be present in user"
+      },
+      {
+        "id": "t-6",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "isPasswordExpired",
+        "runner": "node",
+        "description": "Field 'isPasswordExpired' should be present in user"
+      },
+      {
+        "id": "t-7",
         "category": "field-presence",
         "entity": "user",
         "field": "description",
@@ -219,15 +1638,103 @@
         "description": "Field 'description' should be present in user"
       },
       {
-        "id": "t-5",
+        "id": "t-8",
         "category": "field-presence",
         "entity": "user",
-        "field": "isActive",
+        "field": "businessPartner",
         "runner": "node",
-        "description": "Field 'isActive' should be present in user"
+        "description": "Field 'businessPartner' should be present in user"
       },
       {
-        "id": "t-6",
+        "id": "t-9",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "email",
+        "runner": "node",
+        "description": "Field 'email' should be present in user"
+      },
+      {
+        "id": "t-10",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "locked",
+        "runner": "node",
+        "description": "Field 'locked' should be present in user"
+      },
+      {
+        "id": "t-11",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "position",
+        "runner": "node",
+        "description": "Field 'position' should be present in user"
+      },
+      {
+        "id": "t-12",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "phone",
+        "runner": "node",
+        "description": "Field 'phone' should be present in user"
+      },
+      {
+        "id": "t-13",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "supervisor",
+        "runner": "node",
+        "description": "Field 'supervisor' should be present in user"
+      },
+      {
+        "id": "t-14",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "defaultRole",
+        "runner": "node",
+        "description": "Field 'defaultRole' should be present in user"
+      },
+      {
+        "id": "t-15",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "defaultLanguage",
+        "runner": "node",
+        "description": "Field 'defaultLanguage' should be present in user"
+      },
+      {
+        "id": "t-16",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "defaultClient",
+        "runner": "node",
+        "description": "Field 'defaultClient' should be present in user"
+      },
+      {
+        "id": "t-17",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "defaultOrganization",
+        "runner": "node",
+        "description": "Field 'defaultOrganization' should be present in user"
+      },
+      {
+        "id": "t-18",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "defaultWarehouse",
+        "runner": "node",
+        "description": "Field 'defaultWarehouse' should be present in user"
+      },
+      {
+        "id": "t-19",
+        "category": "field-presence",
+        "entity": "user",
+        "field": "lastPasswordUpdate",
+        "runner": "node",
+        "description": "Field 'lastPasswordUpdate' should be present in user"
+      },
+      {
+        "id": "t-20",
         "category": "field-type",
         "entity": "user",
         "field": "name",
@@ -235,23 +1742,47 @@
         "description": "Field 'name' should have type 'string' in user"
       },
       {
-        "id": "t-7",
+        "id": "t-21",
         "category": "field-type",
         "entity": "user",
-        "field": "email",
+        "field": "username",
         "runner": "node",
-        "description": "Field 'email' should have type 'string' in user"
+        "description": "Field 'username' should have type 'string' in user"
       },
       {
-        "id": "t-8",
+        "id": "t-22",
         "category": "field-type",
         "entity": "user",
-        "field": "phone",
+        "field": "firstName",
         "runner": "node",
-        "description": "Field 'phone' should have type 'string' in user"
+        "description": "Field 'firstName' should have type 'string' in user"
       },
       {
-        "id": "t-9",
+        "id": "t-23",
+        "category": "field-type",
+        "entity": "user",
+        "field": "lastName",
+        "runner": "node",
+        "description": "Field 'lastName' should have type 'string' in user"
+      },
+      {
+        "id": "t-24",
+        "category": "field-type",
+        "entity": "user",
+        "field": "password",
+        "runner": "node",
+        "description": "Field 'password' should have type 'string' in user"
+      },
+      {
+        "id": "t-25",
+        "category": "field-type",
+        "entity": "user",
+        "field": "isPasswordExpired",
+        "runner": "node",
+        "description": "Field 'isPasswordExpired' should have type 'boolean' in user"
+      },
+      {
+        "id": "t-26",
         "category": "field-type",
         "entity": "user",
         "field": "description",
@@ -259,15 +1790,103 @@
         "description": "Field 'description' should have type 'string' in user"
       },
       {
-        "id": "t-10",
+        "id": "t-27",
         "category": "field-type",
         "entity": "user",
-        "field": "isActive",
+        "field": "businessPartner",
         "runner": "node",
-        "description": "Field 'isActive' should have type 'boolean' in user"
+        "description": "Field 'businessPartner' should have type 'string' in user"
       },
       {
-        "id": "t-11",
+        "id": "t-28",
+        "category": "field-type",
+        "entity": "user",
+        "field": "email",
+        "runner": "node",
+        "description": "Field 'email' should have type 'string' in user"
+      },
+      {
+        "id": "t-29",
+        "category": "field-type",
+        "entity": "user",
+        "field": "locked",
+        "runner": "node",
+        "description": "Field 'locked' should have type 'boolean' in user"
+      },
+      {
+        "id": "t-30",
+        "category": "field-type",
+        "entity": "user",
+        "field": "position",
+        "runner": "node",
+        "description": "Field 'position' should have type 'string' in user"
+      },
+      {
+        "id": "t-31",
+        "category": "field-type",
+        "entity": "user",
+        "field": "phone",
+        "runner": "node",
+        "description": "Field 'phone' should have type 'string' in user"
+      },
+      {
+        "id": "t-32",
+        "category": "field-type",
+        "entity": "user",
+        "field": "supervisor",
+        "runner": "node",
+        "description": "Field 'supervisor' should have type 'string' in user"
+      },
+      {
+        "id": "t-33",
+        "category": "field-type",
+        "entity": "user",
+        "field": "defaultRole",
+        "runner": "node",
+        "description": "Field 'defaultRole' should have type 'string' in user"
+      },
+      {
+        "id": "t-34",
+        "category": "field-type",
+        "entity": "user",
+        "field": "defaultLanguage",
+        "runner": "node",
+        "description": "Field 'defaultLanguage' should have type 'string' in user"
+      },
+      {
+        "id": "t-35",
+        "category": "field-type",
+        "entity": "user",
+        "field": "defaultClient",
+        "runner": "node",
+        "description": "Field 'defaultClient' should have type 'string' in user"
+      },
+      {
+        "id": "t-36",
+        "category": "field-type",
+        "entity": "user",
+        "field": "defaultOrganization",
+        "runner": "node",
+        "description": "Field 'defaultOrganization' should have type 'string' in user"
+      },
+      {
+        "id": "t-37",
+        "category": "field-type",
+        "entity": "user",
+        "field": "defaultWarehouse",
+        "runner": "node",
+        "description": "Field 'defaultWarehouse' should have type 'string' in user"
+      },
+      {
+        "id": "t-38",
+        "category": "field-type",
+        "entity": "user",
+        "field": "lastPasswordUpdate",
+        "runner": "node",
+        "description": "Field 'lastPasswordUpdate' should have type 'string' in user"
+      },
+      {
+        "id": "t-39",
         "category": "searchable-filters",
         "entity": "user",
         "field": "name",
@@ -275,7 +1894,15 @@
         "description": "Field 'name' should be a supported filter for user"
       },
       {
-        "id": "t-12",
+        "id": "t-40",
+        "category": "searchable-filters",
+        "entity": "user",
+        "field": "username",
+        "runner": "node",
+        "description": "Field 'username' should be a supported filter for user"
+      },
+      {
+        "id": "t-41",
         "category": "searchable-filters",
         "entity": "user",
         "field": "email",
@@ -283,56 +1910,992 @@
         "description": "Field 'email' should be a supported filter for user"
       },
       {
-        "id": "t-13",
+        "id": "t-42",
         "category": "visibility",
         "entity": "user",
         "runner": "node",
         "description": "Entity 'user' should only expose visible fields in frontend"
       },
       {
-        "id": "t-14",
-        "category": "system-field",
+        "id": "t-43",
+        "category": "default-value-type",
         "entity": "user",
-        "field": "adClientId",
+        "field": "isPasswordExpired",
         "runner": "node",
-        "description": "System field 'adClientId' should exist in backend but not frontend for user"
+        "description": "Default value for 'isPasswordExpired' in user should be a string"
       },
       {
-        "id": "t-15",
-        "category": "system-field",
+        "id": "t-44",
+        "category": "default-value-type",
         "entity": "user",
-        "field": "adOrgId",
+        "field": "locked",
         "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for user"
+        "description": "Default value for 'locked' in user should be a string"
       },
       {
-        "id": "t-16",
-        "category": "system-field",
+        "id": "t-45",
+        "category": "default-value-type",
         "entity": "user",
-        "field": "created",
+        "field": "lastPasswordUpdate",
         "runner": "node",
-        "description": "System field 'created' should exist in backend but not frontend for user"
+        "description": "Default value for 'lastPasswordUpdate' in user should be a string"
       },
       {
-        "id": "t-17",
+        "id": "t-46",
+        "category": "field-presence",
+        "entity": "userRoles",
+        "field": "role",
+        "runner": "node",
+        "description": "Field 'role' should be present in userRoles"
+      },
+      {
+        "id": "t-47",
+        "category": "field-presence",
+        "entity": "userRoles",
+        "field": "roleAdmin",
+        "runner": "node",
+        "description": "Field 'roleAdmin' should be present in userRoles"
+      },
+      {
+        "id": "t-48",
+        "category": "field-type",
+        "entity": "userRoles",
+        "field": "role",
+        "runner": "node",
+        "description": "Field 'role' should have type 'string' in userRoles"
+      },
+      {
+        "id": "t-49",
+        "category": "field-type",
+        "entity": "userRoles",
+        "field": "roleAdmin",
+        "runner": "node",
+        "description": "Field 'roleAdmin' should have type 'boolean' in userRoles"
+      },
+      {
+        "id": "t-50",
+        "category": "searchable-filters",
+        "entity": "userRoles",
+        "field": "role",
+        "runner": "node",
+        "description": "Field 'role' should be a supported filter for userRoles"
+      },
+      {
+        "id": "t-51",
+        "category": "visibility",
+        "entity": "userRoles",
+        "runner": "node",
+        "description": "Entity 'userRoles' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-52",
+        "category": "default-value-type",
+        "entity": "userRoles",
+        "field": "roleAdmin",
+        "runner": "node",
+        "description": "Default value for 'roleAdmin' in userRoles should be a string"
+      },
+      {
+        "id": "t-53",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-54",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "smtpServer",
+        "runner": "node",
+        "description": "Field 'smtpServer' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-55",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "sMTPAuthentification",
+        "runner": "node",
+        "description": "Field 'sMTPAuthentification' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-56",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "smtpServerAccount",
+        "runner": "node",
+        "description": "Field 'smtpServerAccount' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-57",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "smtpServerPassword",
+        "runner": "node",
+        "description": "Field 'smtpServerPassword' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-58",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "smtpServerSenderAddress",
+        "runner": "node",
+        "description": "Field 'smtpServerSenderAddress' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-59",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "smtpConnectionSecurity",
+        "runner": "node",
+        "description": "Field 'smtpConnectionSecurity' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-60",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "smtpPort",
+        "runner": "node",
+        "description": "Field 'smtpPort' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-61",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "smtpConnectionTimeout",
+        "runner": "node",
+        "description": "Field 'smtpConnectionTimeout' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-62",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "fromName",
+        "runner": "node",
+        "description": "Field 'fromName' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-63",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "replyToAddress",
+        "runner": "node",
+        "description": "Field 'replyToAddress' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-64",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "testSuccessful",
+        "runner": "node",
+        "description": "Field 'testSuccessful' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-65",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "lastTestDate",
+        "runner": "node",
+        "description": "Field 'lastTestDate' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-66",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "smtpconnectiontest",
+        "runner": "node",
+        "description": "Field 'smtpconnectiontest' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-67",
+        "category": "field-presence",
+        "entity": "emailConfiguration",
+        "field": "defaultConfiguration",
+        "runner": "node",
+        "description": "Field 'defaultConfiguration' should be present in emailConfiguration"
+      },
+      {
+        "id": "t-68",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in emailConfiguration"
+      },
+      {
+        "id": "t-69",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "smtpServer",
+        "runner": "node",
+        "description": "Field 'smtpServer' should have type 'string' in emailConfiguration"
+      },
+      {
+        "id": "t-70",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "sMTPAuthentification",
+        "runner": "node",
+        "description": "Field 'sMTPAuthentification' should have type 'boolean' in emailConfiguration"
+      },
+      {
+        "id": "t-71",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "smtpServerAccount",
+        "runner": "node",
+        "description": "Field 'smtpServerAccount' should have type 'string' in emailConfiguration"
+      },
+      {
+        "id": "t-72",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "smtpServerPassword",
+        "runner": "node",
+        "description": "Field 'smtpServerPassword' should have type 'string' in emailConfiguration"
+      },
+      {
+        "id": "t-73",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "smtpServerSenderAddress",
+        "runner": "node",
+        "description": "Field 'smtpServerSenderAddress' should have type 'string' in emailConfiguration"
+      },
+      {
+        "id": "t-74",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "smtpConnectionSecurity",
+        "runner": "node",
+        "description": "Field 'smtpConnectionSecurity' should have type 'string' in emailConfiguration"
+      },
+      {
+        "id": "t-75",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "smtpPort",
+        "runner": "node",
+        "description": "Field 'smtpPort' should have type 'number' in emailConfiguration"
+      },
+      {
+        "id": "t-76",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "smtpConnectionTimeout",
+        "runner": "node",
+        "description": "Field 'smtpConnectionTimeout' should have type 'number' in emailConfiguration"
+      },
+      {
+        "id": "t-77",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "fromName",
+        "runner": "node",
+        "description": "Field 'fromName' should have type 'string' in emailConfiguration"
+      },
+      {
+        "id": "t-78",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "replyToAddress",
+        "runner": "node",
+        "description": "Field 'replyToAddress' should have type 'string' in emailConfiguration"
+      },
+      {
+        "id": "t-79",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "testSuccessful",
+        "runner": "node",
+        "description": "Field 'testSuccessful' should have type 'boolean' in emailConfiguration"
+      },
+      {
+        "id": "t-80",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "lastTestDate",
+        "runner": "node",
+        "description": "Field 'lastTestDate' should have type 'string' in emailConfiguration"
+      },
+      {
+        "id": "t-81",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "smtpconnectiontest",
+        "runner": "node",
+        "description": "Field 'smtpconnectiontest' should have type 'string' in emailConfiguration"
+      },
+      {
+        "id": "t-82",
+        "category": "field-type",
+        "entity": "emailConfiguration",
+        "field": "defaultConfiguration",
+        "runner": "node",
+        "description": "Field 'defaultConfiguration' should have type 'boolean' in emailConfiguration"
+      },
+      {
+        "id": "t-83",
+        "category": "searchable-filters",
+        "entity": "emailConfiguration",
+        "field": "smtpServer",
+        "runner": "node",
+        "description": "Field 'smtpServer' should be a supported filter for emailConfiguration"
+      },
+      {
+        "id": "t-84",
+        "category": "visibility",
+        "entity": "emailConfiguration",
+        "runner": "node",
+        "description": "Entity 'emailConfiguration' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-85",
+        "category": "default-value-type",
+        "entity": "emailConfiguration",
+        "field": "smtpPort",
+        "runner": "node",
+        "description": "Default value for 'smtpPort' in emailConfiguration should be a string"
+      },
+      {
+        "id": "t-86",
+        "category": "default-value-type",
+        "entity": "emailConfiguration",
+        "field": "smtpConnectionTimeout",
+        "runner": "node",
+        "description": "Default value for 'smtpConnectionTimeout' in emailConfiguration should be a string"
+      },
+      {
+        "id": "t-87",
+        "category": "default-value-type",
+        "entity": "emailConfiguration",
+        "field": "testSuccessful",
+        "runner": "node",
+        "description": "Default value for 'testSuccessful' in emailConfiguration should be a string"
+      },
+      {
+        "id": "t-88",
+        "category": "default-value-type",
+        "entity": "emailConfiguration",
+        "field": "smtpconnectiontest",
+        "runner": "node",
+        "description": "Default value for 'smtpconnectiontest' in emailConfiguration should be a string"
+      },
+      {
+        "id": "t-89",
+        "category": "default-value-type",
+        "entity": "emailConfiguration",
+        "field": "defaultConfiguration",
+        "runner": "node",
+        "description": "Default value for 'defaultConfiguration' in emailConfiguration should be a string"
+      },
+      {
+        "id": "t-90",
+        "category": "system-field",
+        "entity": "user",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-91",
+        "category": "system-field",
+        "entity": "user",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-92",
+        "category": "system-field",
+        "entity": "user",
+        "field": "comments",
+        "runner": "node",
+        "description": "System field 'comments' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-93",
+        "category": "system-field",
+        "entity": "user",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-94",
+        "category": "system-field",
+        "entity": "user",
+        "field": "partnerAddress",
+        "runner": "node",
+        "description": "System field 'partnerAddress' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-95",
+        "category": "system-field",
+        "entity": "user",
+        "field": "birthday",
+        "runner": "node",
+        "description": "System field 'birthday' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-96",
+        "category": "system-field",
+        "entity": "user",
+        "field": "alternativePhone",
+        "runner": "node",
+        "description": "System field 'alternativePhone' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-97",
+        "category": "system-field",
+        "entity": "user",
+        "field": "fax",
+        "runner": "node",
+        "description": "System field 'fax' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-98",
+        "category": "system-field",
+        "entity": "user",
+        "field": "emailServerUsername",
+        "runner": "node",
+        "description": "System field 'emailServerUsername' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-99",
+        "category": "system-field",
+        "entity": "user",
+        "field": "emailServerPassword",
+        "runner": "node",
+        "description": "System field 'emailServerPassword' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-100",
+        "category": "system-field",
+        "entity": "user",
+        "field": "smfswsDefaultWsRole",
+        "runner": "node",
+        "description": "System field 'smfswsDefaultWsRole' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-101",
+        "category": "system-field",
+        "entity": "user",
+        "field": "greeting",
+        "runner": "node",
+        "description": "System field 'greeting' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-102",
+        "category": "system-field",
+        "entity": "user",
+        "field": "lastContactDate",
+        "runner": "node",
+        "description": "System field 'lastContactDate' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-103",
+        "category": "system-field",
+        "entity": "user",
+        "field": "lastContactResult",
+        "runner": "node",
+        "description": "System field 'lastContactResult' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-104",
+        "category": "system-field",
+        "entity": "user",
+        "field": "trxOrganization",
+        "runner": "node",
+        "description": "System field 'trxOrganization' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-105",
+        "category": "system-field",
+        "entity": "user",
+        "field": "image",
+        "runner": "node",
+        "description": "System field 'image' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-106",
+        "category": "system-field",
+        "entity": "user",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-107",
+        "category": "system-field",
+        "entity": "user",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-108",
+        "category": "system-field",
+        "entity": "user",
+        "field": "commercialauth",
+        "runner": "node",
+        "description": "System field 'commercialauth' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-109",
+        "category": "system-field",
+        "entity": "user",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-110",
+        "category": "system-field",
+        "entity": "user",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-111",
+        "category": "system-field",
+        "entity": "user",
+        "field": "grantPortalAccess",
+        "runner": "node",
+        "description": "System field 'grantPortalAccess' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-112",
+        "category": "system-field",
+        "entity": "user",
+        "field": "isdefaultfordocs",
+        "runner": "node",
+        "description": "System field 'isdefaultfordocs' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-113",
         "category": "system-field",
         "entity": "user",
         "field": "updated",
         "runner": "node",
         "description": "System field 'updated' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-114",
+        "category": "system-field",
+        "entity": "user",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-115",
+        "category": "system-field",
+        "entity": "user",
+        "field": "viaemail",
+        "runner": "node",
+        "description": "System field 'viaemail' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-116",
+        "category": "system-field",
+        "entity": "user",
+        "field": "viasms",
+        "runner": "node",
+        "description": "System field 'viasms' should exist in backend but not frontend for user"
+      },
+      {
+        "id": "t-117",
+        "category": "system-field",
+        "entity": "userRoles",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for userRoles"
+      },
+      {
+        "id": "t-118",
+        "category": "system-field",
+        "entity": "userRoles",
+        "field": "userContact",
+        "runner": "node",
+        "description": "System field 'userContact' should exist in backend but not frontend for userRoles"
+      },
+      {
+        "id": "t-119",
+        "category": "system-field",
+        "entity": "userRoles",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for userRoles"
+      },
+      {
+        "id": "t-120",
+        "category": "system-field",
+        "entity": "userRoles",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for userRoles"
+      },
+      {
+        "id": "t-121",
+        "category": "system-field",
+        "entity": "userRoles",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for userRoles"
+      },
+      {
+        "id": "t-122",
+        "category": "system-field",
+        "entity": "userRoles",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for userRoles"
+      },
+      {
+        "id": "t-123",
+        "category": "system-field",
+        "entity": "userRoles",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for userRoles"
+      },
+      {
+        "id": "t-124",
+        "category": "system-field",
+        "entity": "userRoles",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for userRoles"
+      },
+      {
+        "id": "t-125",
+        "category": "system-field",
+        "entity": "userRoles",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for userRoles"
+      },
+      {
+        "id": "t-126",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-127",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "emailConfigOrganization",
+        "runner": "node",
+        "description": "System field 'emailConfigOrganization' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-128",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "userContact",
+        "runner": "node",
+        "description": "System field 'userContact' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-129",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "emailConfigClient",
+        "runner": "node",
+        "description": "System field 'emailConfigClient' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-130",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "cPocConfigurationID",
+        "runner": "node",
+        "description": "System field 'cPocConfigurationID' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-131",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-132",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-133",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-134",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-135",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-136",
+        "category": "rule-declared",
+        "rule": "SL_User_Name_Lastname",
+        "runner": "node",
+        "description": "Rule 'SL_User_Name_Lastname' (callout) should be declared"
+      },
+      {
+        "id": "t-137",
+        "category": "rule-declared",
+        "rule": "SL_User_Name_Firstname",
+        "runner": "node",
+        "description": "Rule 'SL_User_Name_Firstname' (callout) should be declared"
+      },
+      {
+        "id": "t-138",
+        "category": "rule-declared",
+        "rule": "SL_User_Name_Name",
+        "runner": "node",
+        "description": "Rule 'SL_User_Name_Name' (callout) should be declared"
+      },
+      {
+        "id": "t-139",
+        "category": "rule-declared",
+        "rule": "EmailConfiguration_Port_Smtpconnectionsecurity",
+        "runner": "node",
+        "description": "Rule 'EmailConfiguration_Port_Smtpconnectionsecurity' (callout) should be declared"
+      },
+      {
+        "id": "t-140",
+        "category": "rule-declared",
+        "rule": "AD_Client_Security_validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client_Security_validation' (validation) should be declared"
+      },
+      {
+        "id": "t-141",
+        "category": "rule-declared",
+        "rule": "C_BPartner_Location",
+        "runner": "node",
+        "description": "Rule 'C_BPartner_Location' (validation) should be declared"
+      },
+      {
+        "id": "t-142",
+        "category": "rule-declared",
+        "rule": "AD_Role_of_User",
+        "runner": "node",
+        "description": "Rule 'AD_Role_of_User' (validation) should be declared"
+      },
+      {
+        "id": "t-143",
+        "category": "rule-declared",
+        "rule": "AD_Client_of_Role",
+        "runner": "node",
+        "description": "Rule 'AD_Client_of_Role' (validation) should be declared"
+      },
+      {
+        "id": "t-144",
+        "category": "rule-declared",
+        "rule": "AD_Org_of_Role",
+        "runner": "node",
+        "description": "Rule 'AD_Org_of_Role' (validation) should be declared"
+      },
+      {
+        "id": "t-145",
+        "category": "rule-declared",
+        "rule": "M_Warehouse_of_Role",
+        "runner": "node",
+        "description": "Rule 'M_Warehouse_of_Role' (validation) should be declared"
+      },
+      {
+        "id": "t-146",
+        "category": "rule-declared",
+        "rule": "AD_Role_of_Client",
+        "runner": "node",
+        "description": "Rule 'AD_Role_of_Client' (validation) should be declared"
+      },
+      {
+        "id": "t-147",
+        "category": "rule-declared",
+        "rule": "Display_Password",
+        "runner": "node",
+        "description": "Rule 'Display_Password' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-148",
+        "category": "rule-declared",
+        "rule": "Display_EmailServerPassword",
+        "runner": "node",
+        "description": "Rule 'Display_EmailServerPassword' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-149",
+        "category": "rule-declared",
+        "rule": "Processing",
+        "runner": "node",
+        "description": "Rule 'Processing' (process) should be declared"
+      },
+      {
+        "id": "t-150",
+        "category": "rule-declared",
+        "rule": "Grant_Portal_Access",
+        "runner": "node",
+        "description": "Rule 'Grant_Portal_Access' (process) should be declared"
+      },
+      {
+        "id": "t-151",
+        "category": "rule-declared",
+        "rule": "Test_SMTP_Connection",
+        "runner": "node",
+        "description": "Rule 'Test_SMTP_Connection' (process) should be declared"
+      },
+      {
+        "id": "t-152",
+        "category": "crud-flags",
+        "entity": "user",
+        "runner": "node",
+        "description": "CRUD flags for 'user' should all be booleans"
+      },
+      {
+        "id": "t-153",
+        "category": "crud-flags",
+        "entity": "userRoles",
+        "runner": "node",
+        "description": "CRUD flags for 'userRoles' should all be booleans"
+      },
+      {
+        "id": "t-154",
+        "category": "crud-flags",
+        "entity": "emailConfiguration",
+        "runner": "node",
+        "description": "CRUD flags for 'emailConfiguration' should all be booleans"
+      },
+      {
+        "id": "t-155",
+        "category": "selector-endpoint",
+        "entity": "user",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Selector endpoint for 'businessPartner' in user should exist"
+      },
+      {
+        "id": "t-156",
+        "category": "selector-endpoint",
+        "entity": "user",
+        "field": "supervisor",
+        "runner": "node",
+        "description": "Selector endpoint for 'supervisor' in user should exist"
+      },
+      {
+        "id": "t-157",
+        "category": "selector-endpoint",
+        "entity": "user",
+        "field": "defaultRole",
+        "runner": "node",
+        "description": "Selector endpoint for 'defaultRole' in user should exist"
+      },
+      {
+        "id": "t-158",
+        "category": "selector-endpoint",
+        "entity": "user",
+        "field": "defaultLanguage",
+        "runner": "node",
+        "description": "Selector endpoint for 'defaultLanguage' in user should exist"
+      },
+      {
+        "id": "t-159",
+        "category": "selector-endpoint",
+        "entity": "user",
+        "field": "defaultClient",
+        "runner": "node",
+        "description": "Selector endpoint for 'defaultClient' in user should exist"
+      },
+      {
+        "id": "t-160",
+        "category": "selector-endpoint",
+        "entity": "user",
+        "field": "defaultOrganization",
+        "runner": "node",
+        "description": "Selector endpoint for 'defaultOrganization' in user should exist"
+      },
+      {
+        "id": "t-161",
+        "category": "selector-endpoint",
+        "entity": "user",
+        "field": "defaultWarehouse",
+        "runner": "node",
+        "description": "Selector endpoint for 'defaultWarehouse' in user should exist"
+      },
+      {
+        "id": "t-162",
+        "category": "selector-endpoint",
+        "entity": "userRoles",
+        "field": "role",
+        "runner": "node",
+        "description": "Selector endpoint for 'role' in userRoles should exist"
+      },
+      {
+        "id": "t-163",
+        "category": "action-endpoint",
+        "entity": "user",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in user should exist"
+      },
+      {
+        "id": "t-164",
+        "category": "action-endpoint",
+        "entity": "user",
+        "field": "grantPortalAccess",
+        "runner": "node",
+        "description": "Action endpoint for 'grantPortalAccess' in user should exist"
+      },
+      {
+        "id": "t-165",
+        "category": "action-endpoint",
+        "entity": "emailConfiguration",
+        "field": "smtpconnectiontest",
+        "runner": "node",
+        "description": "Action endpoint for 'smtpconnectiontest' in emailConfiguration should exist"
       }
     ],
     "summary": {
-      "total": 17,
+      "total": 165,
       "byCategory": {
-        "field-presence": 5,
-        "field-type": 5,
-        "searchable-filters": 2,
-        "visibility": 1,
-        "system-field": 4
+        "field-presence": 36,
+        "field-type": 36,
+        "searchable-filters": 5,
+        "visibility": 3,
+        "default-value-type": 9,
+        "system-field": 46,
+        "rule-declared": 16,
+        "crud-flags": 3,
+        "selector-endpoint": 8,
+        "action-endpoint": 3
       },
       "byRunner": {
-        "node": 17,
+        "node": 165,
         "junit": 0
       }
     }

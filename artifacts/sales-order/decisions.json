@@ -12,15 +12,25 @@
       { "key": "duplicate", "label": "Duplicate" },
       { "key": "cancel", "label": "Cancel", "destructive": true, "visibleWhenStatus": "CO" }
     ],
-    "processOverrides": {
-      "Complete": { "add": true, "label": "Complete", "columnName": "DocAction", "displayLogicRaw": "@documentStatus@='DR'" }
-    },
+    "processOverrides": {},
     "customComponents": {
-      "topbarRight": "OrderCreateInvoice"
+      "topbarRight": "OrderCreateInvoice",
+      "topbarExtra": "OrderDraftChips"
+    },
+    "statusEnumLabels": {
+      "DR": "Draft",
+      "CO": "Completado",
+      "CL": "Cerrado",
+      "VO": "Anulado"
     }
   },
   "entities": {
     "header": {
+      "javaQualifier": "salesOrderHeaderHandler",
+      "draftMode": {
+        "enabled": true,
+        "label": "Confirmar"
+      },
       "fields": {
         "documentNo": {
           "visibility": "readOnly",
@@ -142,9 +152,7 @@
           "visibility": "discarded"
         },
         "orderReference": {
-          "grid": false,
-          "searchable": true,
-          "section": "collapsed"
+          "visibility": "discarded"
         },
         "cancelandreplace": {
           "visibility": "discarded",
@@ -659,6 +667,9 @@
           "name": "replacementOrder"
         }
       },
+      "exclude": true
+    },
+    "intrastat": {
       "exclude": true
     }
   },

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useUI } from '@/i18n';
 
 const CURRENCY_SYMBOLS = {
   USD: '$', EUR: '\u20ac', GBP: '\u00a3', JPY: '\u00a5',
@@ -8,7 +9,7 @@ const CURRENCY_SYMBOLS = {
 };
 
 function formatAmount(value, currency) {
-  const num = typeof value === 'string' ? parseFloat(value) : (value ?? 0);
+  const num = typeof value === 'string' ? Number.parseFloat(value) : (value ?? 0);
   const symbol = CURRENCY_SYMBOLS[currency] || currency || '';
   const formatted = num.toLocaleString(undefined, {
     minimumFractionDigits: 2,
@@ -46,6 +47,7 @@ export default function ApplyToInvoices({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const ui = useUI();
 
   const businessPartnerId = data?.businessPartner;
   const paymentAmount = data?.amount;
@@ -139,7 +141,7 @@ export default function ApplyToInvoices({
 
   const currency = invoices[0]?.currency || '';
   const paymentNum = typeof paymentAmount === 'string'
-    ? parseFloat(paymentAmount) : (paymentAmount ?? 0);
+    ? Number.parseFloat(paymentAmount) : (paymentAmount ?? 0);
 
   // Apply to invoices + Process Payment
   const handleApplyAndProcess = useCallback(async () => {
@@ -151,12 +153,12 @@ export default function ApplyToInvoices({
       }));
 
     if (selectedInvoices.length === 0) {
-      toast.error('Select at least one invoice to apply.');
+      toast.error(ui('selectAtLeastOneInvoiceToApply'));
       return;
     }
 
     if (totalApplied > paymentNum) {
-      toast.error('Total applied exceeds the payment amount.');
+      toast.error(ui('totalAppliedExceedsPaymentAmount'));
       return;
     }
 
@@ -194,7 +196,7 @@ export default function ApplyToInvoices({
         throw new Error(errJson?.response?.message || errJson?.message || `Process failed (${processRes.status})`);
       }
 
-      toast.success('Payment registered successfully');
+      toast.success(ui('paymentRegisteredSuccessfully'));
       onRefresh?.();
     } catch (err) {
       setError(err.message);
@@ -208,7 +210,7 @@ export default function ApplyToInvoices({
   if (!businessPartnerId) {
     return (
       <div className="px-1 py-6 text-sm text-muted-foreground text-center">
-        Select a business partner to view pending invoices.
+        {ui('selectBusinessPartnerToViewPendingInvoices')}
       </div>
     );
   }
@@ -216,7 +218,7 @@ export default function ApplyToInvoices({
   if (loading) {
     return (
       <div className="px-1 py-6 text-sm text-muted-foreground text-center">
-        Loading invoices...
+        {ui('loadingInvoices')}
       </div>
     );
   }
@@ -233,8 +235,8 @@ export default function ApplyToInvoices({
     return (
       <div className="px-1 py-6 text-sm text-muted-foreground text-center">
         {isReadOnly
-          ? 'No invoices applied to this payment.'
-          : 'No pending invoices found for this business partner.'}
+          ? ui('noInvoicesAppliedToThisPayment')
+          : ui('noPendingInvoicesFoundForThisBusinessPartner')}
       </div>
     );
   }
@@ -247,10 +249,10 @@ export default function ApplyToInvoices({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-muted-foreground">
-                <th className="text-left py-2 px-3 font-medium" style={headerCellStyle}>Invoice #</th>
-                <th className="text-left py-2 px-3 font-medium" style={headerCellStyle}>Due Date</th>
-                <th className="text-right py-2 px-3 font-medium" style={headerCellStyle}>Total</th>
-                <th className="text-right py-2 px-3 font-medium" style={headerCellStyle}>Outstanding</th>
+                <th className="text-left py-2 px-3 font-medium" style={headerCellStyle}>{ui('invoiceNumber')}</th>
+                <th className="text-left py-2 px-3 font-medium" style={headerCellStyle}>{ui('dueDate')}</th>
+                <th className="text-right py-2 px-3 font-medium" style={headerCellStyle}>{ui('totalAmount')}</th>
+                <th className="text-right py-2 px-3 font-medium" style={headerCellStyle}>{ui('outstanding')}</th>
               </tr>
             </thead>
             <tbody>
@@ -293,7 +295,7 @@ export default function ApplyToInvoices({
           className="text-primary hover:underline cursor-pointer bg-transparent border-none p-0"
           onClick={selectAll}
         >
-          Select all
+          {ui('selectAll')}
         </button>
         <span className="text-muted-foreground/40">|</span>
         <button
@@ -301,7 +303,7 @@ export default function ApplyToInvoices({
           className="text-primary hover:underline cursor-pointer bg-transparent border-none p-0"
           onClick={deselectAll}
         >
-          Deselect all
+          {ui('deselectAll')}
         </button>
       </div>
 
@@ -310,11 +312,11 @@ export default function ApplyToInvoices({
           <thead>
             <tr className="text-xs text-muted-foreground">
               <th className="text-left py-2 px-1 font-medium w-8" style={headerCellStyle} />
-              <th className="text-left py-2 px-3 font-medium" style={headerCellStyle}>Invoice #</th>
-              <th className="text-left py-2 px-3 font-medium w-24" style={headerCellStyle}>Due Date</th>
-              <th className="text-right py-2 px-3 font-medium w-28" style={headerCellStyle}>Total</th>
-              <th className="text-right py-2 px-3 font-medium w-28" style={headerCellStyle}>Outstanding</th>
-              <th className="text-right py-2 px-3 font-medium w-32" style={headerCellStyle}>Apply</th>
+              <th className="text-left py-2 px-3 font-medium" style={headerCellStyle}>{ui('invoiceNumber')}</th>
+              <th className="text-left py-2 px-3 font-medium w-24" style={headerCellStyle}>{ui('dueDate')}</th>
+              <th className="text-right py-2 px-3 font-medium w-28" style={headerCellStyle}>{ui('totalAmount')}</th>
+              <th className="text-right py-2 px-3 font-medium w-28" style={headerCellStyle}>{ui('outstanding')}</th>
+              <th className="text-right py-2 px-3 font-medium w-32" style={headerCellStyle}>{ui('apply')}</th>
             </tr>
           </thead>
           <tbody>
@@ -369,7 +371,7 @@ export default function ApplyToInvoices({
           <tfoot>
             <tr className="font-medium text-sm">
               <td colSpan={5} className="py-2 px-3 text-right text-muted-foreground">
-                Total to apply:
+                {ui('totalToApply')}
               </td>
               <td className="py-2 px-3 text-right tabular-nums">
                 <span className={totalApplied > paymentNum ? 'text-destructive' : ''}>
@@ -388,7 +390,7 @@ export default function ApplyToInvoices({
       {/* Over-allocation warning */}
       {totalApplied > paymentNum && (
         <div className="mt-2 px-1 text-xs text-destructive">
-          Total applied exceeds the payment amount.
+          {ui('totalAppliedExceedsPaymentAmount')}
         </div>
       )}
 
@@ -400,7 +402,7 @@ export default function ApplyToInvoices({
           disabled={saving || selected.size === 0 || totalApplied > paymentNum}
           className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          {saving ? 'Processing...' : 'Apply & Process Payment'}
+          {saving ? ui('processing') : ui('applyAndProcessPayment')}
         </button>
       </div>
 

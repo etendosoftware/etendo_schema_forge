@@ -13,9 +13,6 @@ const fields = [
 
 // @sf-generated-start component:TransactionAdjustmentsForm
 export default function TransactionAdjustmentsForm(props) {
-  // @sf-custom-slot hooks:TransactionAdjustmentsForm
   return <EntityForm fields={fields} {...props} />;
 }
 // @sf-generated-end component:TransactionAdjustmentsForm
-
-// @sf-custom-slot section:TransactionAdjustmentsForm-custom

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useMenuLabel, useLabel, useUI } from '@/i18n';
-import { Search, ArrowUpDown, SlidersHorizontal, Eye, ChevronDown, MoreVertical, Plus, CalendarDays, Link2, Sparkles, Bell, Mic, Printer, LayoutGrid, LayoutList } from 'lucide-react';
+import { Search, ArrowUpDown, SlidersHorizontal, Eye, ChevronDown, MoreVertical, Plus, CalendarDays, Link2, Sparkles, Bell, Mic, Printer, LayoutGrid, LayoutList, RefreshCw } from 'lucide-react';
 import LocaleSwitcher from '@/components/LocaleSwitcher.jsx';
 import { UserAvatarButton, UserContextSwitcher } from '@/components/UserContextSwitcher.jsx';
 import ReportDrawer from './ReportDrawer.jsx';
@@ -23,12 +23,24 @@ export function ListView({
   breadcrumb,
   galleryRenderer,
   hideCreate = false,
+  hidePrint = false,
+  hideMoreMenu = false,
+  hideListFilters = false,
+  hideLink = false,
+  hideEyeCount = false,
   headerContent = null,
   api = null,
   bulkActions = null,
   isRowSelectable = null,
+  listViewOptions = {},
+  baseFilter = null,
+  quickFilters = null,
 }) {
-  const hook = useEntity(entity, null, { token, apiBaseUrl });
+  const [activeFilterIndex, setActiveFilterIndex] = useState(0);
+  const effectiveFilter = quickFilters
+    ? (quickFilters[activeFilterIndex]?.filter ?? baseFilter)
+    : baseFilter;
+  const hook = useEntity(entity, null, { token, apiBaseUrl, baseFilter: effectiveFilter });
   const navigate = useNavigate();
   const tMenu = useMenuLabel();
   const t = useLabel();
@@ -101,14 +113,16 @@ export function ListView({
           <div className="shrink-0">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-foreground">{label}</h1>
-              {!hook.loading && (
+              {!hideEyeCount && !hook.loading && (
                 <span className="inline-flex items-center justify-center h-6 min-w-[1.5rem] px-2 text-xs font-medium text-muted-foreground bg-white/60 rounded-full">
                   {hook.items.length}
                 </span>
               )}
-              <button className="text-muted-foreground hover:text-foreground">
-                <MoreVertical className="h-4 w-4" />
-              </button>
+              {!hideMoreMenu && (
+                <button className="text-muted-foreground hover:text-foreground">
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              )}
             </div>
             {breadcrumb && (
               <p className="text-sm text-muted-foreground mt-0.5">{breadcrumb.split(' / ').map(s => tMenu(s.trim())).join(' / ')}</p>
@@ -183,26 +197,50 @@ export function ListView({
         ) : (
           <div className="flex items-center justify-between px-6 py-3">
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white">
-                {ui('allStatuses')}
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white">
-                <CalendarDays className="h-3.5 w-3.5" />
-                {ui('lastYear')}
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-              <button className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
-                <SlidersHorizontal className="h-4 w-4" />
-              </button>
+              {quickFilters && (
+                <div className="flex items-center gap-1">
+                  {quickFilters.map((qf, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveFilterIndex(i)}
+                      className={[
+                        'h-9 px-4 text-sm rounded-lg border transition-colors',
+                        activeFilterIndex === i
+                          ? 'border-primary text-primary bg-primary/5 font-medium'
+                          : 'border-border text-muted-foreground hover:text-foreground',
+                      ].join(' ')}
+                    >
+                      {ui(qf.label)}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!(listViewOptions?.hideFilters ?? hideListFilters) && (
+                <>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white">
+                    {ui('allStatuses')}
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {ui('lastYear')}
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                  <button className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </button>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
                 <Search className="h-4 w-4" />
               </button>
-              <button className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
-                <Link2 className="h-4 w-4" />
-              </button>
+              {!(listViewOptions?.hideLink ?? hideLink) && (
+                <button className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
+                  <Link2 className="h-4 w-4" />
+                </button>
+              )}
               <div className="relative" ref={sortBtnRef}>
                 <button
                   onClick={() => setShowSortPopover(v => !v)}
@@ -254,25 +292,36 @@ export function ListView({
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 ml-1">
-                <button className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
-                  <Eye className="h-4 w-4" />
-                </button>
-                {!hook.loading && (
-                  <span className="text-sm text-muted-foreground tabular-nums">
-                    {hook.items.length}
-                  </span>
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
-                onClick={() => setShowReport(true)}
+              <button
+                onClick={() => hook.refresh()}
+                className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
+                title={ui('refresh') || 'Refresh'}
               >
-                <Printer className="h-3.5 w-3.5" />
-                {ui('print')}
-              </Button>
+                <RefreshCw className="h-4 w-4" />
+              </button>
+              {!(listViewOptions?.hideEye ?? hideEyeCount) && (
+                <div className="flex items-center gap-1.5 ml-1">
+                  <button className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  {!(listViewOptions?.hideCounter ?? hideEyeCount) && !hook.loading && (
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                      {hook.items.length}
+                    </span>
+                  )}
+                </div>
+              )}
+              {!(listViewOptions?.hidePrint ?? hidePrint) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
+                  onClick={() => setShowReport(true)}
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  {ui('print')}
+                </Button>
+              )}
               {/* View toggle */}
               {galleryRenderer && (
                 <div className="inline-flex items-center border border-border rounded-lg overflow-hidden">

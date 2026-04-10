@@ -10,9 +10,7 @@ const fields = [
 
 // @sf-generated-start component:AssetAcctForm
 export default function AssetAcctForm(props) {
-  // @sf-custom-slot hooks:AssetAcctForm
   return <EntityForm fields={fields} {...props} />;
 }
+AssetAcctForm.hasCollapsedFields = false;
 // @sf-generated-end component:AssetAcctForm
-
-// @sf-custom-slot section:AssetAcctForm-custom

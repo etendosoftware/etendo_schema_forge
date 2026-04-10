@@ -595,6 +595,9 @@
           "grid": true
         }
       }
+    },
+    "intrastat": {
+      "exclude": true
     }
   },
   "rules": {},

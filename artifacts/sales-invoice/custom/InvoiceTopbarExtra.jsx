@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useUI } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 
 const STATUS_LABELS = {
@@ -58,6 +59,7 @@ const BADGE_STYLES = {
  * The badge is the ONLY entry point. Clicking it opens the payments modal.
  */
 export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api }) {
+  const ui = useUI();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [installments, setInstallments] = useState([]);
@@ -132,23 +134,23 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     const sumTotal = classified.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
 
     if (allPaid) {
-      return { type: 'paid', label: `Paid · ${fmt(sumTotal, currency)}`, style: BADGE_STYLES.paid };
+      return { type: 'paid', label: `${ui('statusPaid')} · ${fmt(sumTotal, currency)}`, style: BADGE_STYLES.paid };
     }
     if (anyOverdue) {
       return {
         type: 'overdue',
-        label: `Overdue · ${fmt(sumOutstanding, currency)}`,
+        label: `${ui('statusOverdue')} · ${fmt(sumOutstanding, currency)}`,
         style: BADGE_STYLES.overdue,
       };
     }
     if (hasSomePaid) {
       return {
         type: 'partial',
-        label: `Partial · ${fmt(sumPaid, currency)} of ${fmt(sumTotal, currency)}`,
+        label: `${ui('statusPartial')} · ${fmt(sumPaid, currency)} ${ui('of')} ${fmt(sumTotal, currency)}`,
         style: BADGE_STYLES.partial,
       };
     }
-    return { type: 'pending', label: `Pending · ${fmt(sumOutstanding, currency)}`, style: BADGE_STYLES.pending };
+    return { type: 'pending', label: `${ui('statusPending')} · ${fmt(sumOutstanding, currency)}`, style: BADGE_STYLES.pending };
   }, [installments, installmentsLoading, currency]);
 
   // Summary amounts from installments
@@ -188,7 +190,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   if (installmentsLoading) {
     return (
       <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground" style={{ padding: '4px 12px' }}>
-        Loading...
+        {ui('loading')}
       </span>
     );
   }
@@ -205,13 +207,13 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     let fallbackLabel = null;
     if (isPaid) {
       fallbackStyle = BADGE_STYLES.paid;
-      fallbackLabel = `Paid · ${fmt(grandTotal, currency)}`;
+      fallbackLabel = `${ui('statusPaid')} · ${fmt(grandTotal, currency)}`;
     } else if (isPartial) {
       fallbackStyle = BADGE_STYLES.partial;
-      fallbackLabel = `Partial · ${fmt(paid, currency)} of ${fmt(grandTotal, currency)}`;
+      fallbackLabel = `${ui('statusPartial')} · ${fmt(paid, currency)} ${ui('of')} ${fmt(grandTotal, currency)}`;
     } else if (isPending && isCompleted) {
       fallbackStyle = BADGE_STYLES.pending;
-      fallbackLabel = `Pending · ${fmt(outstanding, currency)}`;
+      fallbackLabel = `${ui('statusPending')} · ${fmt(outstanding, currency)}`;
     }
 
     if (!fallbackStyle) return null;
@@ -230,7 +232,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       >
         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: fallbackStyle.dot }} />
         {fallbackLabel}
-        <span style={{ opacity: 0.6, marginLeft: 4 }}>View &rarr;</span>
+        <span style={{ opacity: 0.6, marginLeft: 4 }}>{ui('view')} &rarr;</span>
       </button>
     );
   }
@@ -251,7 +253,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       >
         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: badgeInfo.style.dot }} />
         {badgeInfo.label}
-        <span style={{ opacity: 0.6, marginLeft: 4 }}>View &rarr;</span>
+        <span style={{ opacity: 0.6, marginLeft: 4 }}>{ui('view')} &rarr;</span>
       </button>
 
       <SendDocumentButton onClick={() => setShowSendModal(true)} />

@@ -4,6 +4,7 @@ import AccountForm from './AccountForm';
 import catalogs from './mockCatalogs';
 
 const windowMeta = { category: 'accounting', name: 'Chart of Accounts' };
+const breadcrumb = 'Finance / Chart of Accounts';
 
 export default function App({ windowName, recordId, ...props }) {
   if (recordId) {
@@ -15,6 +16,7 @@ export default function App({ windowName, recordId, ...props }) {
         entityLabel="Account"
         windowName={windowName}
         recordId={recordId}
+        breadcrumb={breadcrumb}
         window={windowMeta}
         {...props}
       />
@@ -27,6 +29,7 @@ export default function App({ windowName, recordId, ...props }) {
       Table={AccountTable}
       entityLabel="Account"
       windowName={windowName}
+      breadcrumb={breadcrumb}
       window={windowMeta}
       {...props}
     />

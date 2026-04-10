@@ -15,9 +15,6 @@ const filters = [];
 
 // @sf-generated-start component:TransactionsTable
 export default function TransactionsTable(props) {
-  // @sf-custom-slot hooks:TransactionsTable
   return <DataTable columns={columns} filters={filters} {...props} />;
 }
 // @sf-generated-end component:TransactionsTable
-
-// @sf-custom-slot section:TransactionsTable-custom

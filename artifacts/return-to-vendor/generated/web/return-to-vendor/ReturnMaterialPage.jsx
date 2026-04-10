@@ -4,6 +4,8 @@ import ReturnMaterialForm from './ReturnMaterialForm';
 import ReturnMaterialLineTable from './ReturnMaterialLineTable';
 import catalogs from './mockCatalogs';
 
+const breadcrumb = 'Purchases / Return to Vendor';
+
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'totalAmount', column: 'Amt', type: 'amount' },
@@ -43,6 +45,7 @@ export default function ReturnMaterialPage({ windowName, recordId, ...props }) {
         catalogs={catalogs}
         entityLabel="Return Material"
         detailLabel="Return Material Line"
+        breadcrumb={breadcrumb}
         windowName={windowName}
         recordId={recordId}
         {...props}
@@ -55,6 +58,7 @@ export default function ReturnMaterialPage({ windowName, recordId, ...props }) {
       entity="returnMaterial"
       Table={ReturnMaterialTable}
       entityLabel="Return Material"
+      breadcrumb={breadcrumb}
       windowName={windowName}
       {...props}
     />

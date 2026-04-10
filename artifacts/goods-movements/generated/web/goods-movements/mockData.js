@@ -1,86 +1,247 @@
 // Auto-generated mock data - do not edit manually
 
-export const goodsMovement = [
+export const movement = [
   {
-    "id": "mov-001",
-    "documentNo": "MOV-001",
-    "movementDate": "2025-06-10",
-    "description": "Transfer electronics to East DC for regional distribution",
-    "isActive": true,
-    "docStatus": "CO"
+    "id": "mock-movement-001",
+    "name": "Sample name",
+    "movementDate": "2026-01-15",
+    "description": "Standard order for Q1 delivery",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00001",
+    "processed": "Sample processed"
   },
   {
-    "id": "mov-002",
-    "documentNo": "MOV-002",
-    "movementDate": "2025-07-05",
-    "description": "Consolidate peripherals from West Hub to Main Warehouse",
-    "isActive": true,
-    "docStatus": "CO"
+    "id": "mock-movement-002",
+    "name": "Sample name",
+    "movementDate": "2026-01-16",
+    "description": "Rush order - priority shipping required",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00002",
+    "processed": "Sample processed"
   },
   {
-    "id": "mov-003",
-    "documentNo": "MOV-003",
-    "movementDate": "2025-08-18",
-    "description": "Relocate storage components to North Storage facility",
-    "isActive": true,
-    "docStatus": "DR"
+    "id": "mock-movement-003",
+    "name": "Sample name",
+    "movementDate": "2026-01-17",
+    "description": "Bulk purchase for warehouse restocking",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00003",
+    "processed": "Sample processed"
   },
   {
-    "id": "mov-004",
-    "documentNo": "MOV-004",
-    "movementDate": "2025-09-22",
-    "description": "Cross-warehouse transfer for year-end audit preparation",
-    "isActive": true,
-    "docStatus": "CO"
+    "id": "mock-movement-004",
+    "name": "Sample name",
+    "movementDate": "2026-01-18",
+    "description": "Sample order for client evaluation",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00004",
+    "processed": "Sample processed"
   },
   {
-    "id": "mov-005",
-    "documentNo": "MOV-005",
-    "movementDate": "2025-10-14",
-    "description": "Move networking equipment to new rack location",
-    "isActive": true,
-    "docStatus": "CO"
+    "id": "mock-movement-005",
+    "name": "Sample name",
+    "movementDate": "2026-01-19",
+    "description": "Recurring monthly supply order",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00005",
+    "processed": "Sample processed"
   },
   {
-    "id": "mov-006",
-    "documentNo": "MOV-006",
-    "movementDate": "2025-11-30",
-    "description": "Bin reorganization - displays section",
-    "isActive": true,
-    "docStatus": "VO"
+    "id": "mock-movement-006",
+    "name": "Sample name",
+    "movementDate": "2026-01-20",
+    "description": "Special pricing agreement applies",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00006",
+    "processed": "Sample processed"
   },
   {
-    "id": "mov-007",
-    "documentNo": "MOV-007",
-    "movementDate": "2026-01-08",
-    "description": "Q1 inventory rebalancing across warehouses",
-    "isActive": true,
-    "docStatus": "DR"
+    "id": "mock-movement-007",
+    "name": "Sample name",
+    "movementDate": "2026-01-21",
+    "description": "Consolidated order from multiple requests",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00007",
+    "processed": "Sample processed"
   },
   {
-    "id": "mov-008",
-    "documentNo": "MOV-008",
-    "movementDate": "2026-02-20",
-    "description": "Emergency transfer - fast-moving items to South Logistics",
-    "isActive": true,
-    "docStatus": "CO"
+    "id": "mock-movement-008",
+    "name": "Sample name",
+    "movementDate": "2026-01-22",
+    "description": "Trial order for new product line",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00008",
+    "processed": "Sample processed"
+  },
+  {
+    "id": "mock-movement-009",
+    "name": "Sample name",
+    "movementDate": "2026-01-23",
+    "description": "Replacement for damaged goods",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00009",
+    "processed": "Sample processed"
+  },
+  {
+    "id": "mock-movement-010",
+    "name": "Sample name",
+    "movementDate": "2026-01-24",
+    "description": "Pre-season inventory build-up",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00010",
+    "processed": "Sample processed"
+  },
+  {
+    "id": "mock-movement-011",
+    "name": "Sample name",
+    "movementDate": "2026-01-25",
+    "description": "Customer-specific configuration",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00011",
+    "processed": "Sample processed"
+  },
+  {
+    "id": "mock-movement-012",
+    "name": "Sample name",
+    "movementDate": "2026-01-26",
+    "description": "Government contract fulfillment",
+    "processNow": "Sample processNow",
+    "documentNo": "MO-00012",
+    "processed": "Sample processed"
   }
 ];
 
-export const goodsMovementLine = [
-  { "id": "ml-001", "goodsMovementId": "mov-001", "lineNo": 10, "product": "prod-001", "movementQty": 15, "locatorFrom": "loc-001", "locatorTo": "loc-002", "uom": "uom-001", "description": "Laptop Pro 15 to East DC" },
-  { "id": "ml-002", "goodsMovementId": "mov-001", "lineNo": 20, "product": "prod-002", "movementQty": 100, "locatorFrom": "loc-001", "locatorTo": "loc-002", "uom": "uom-001", "description": "USB-C cables bulk transfer" },
-  { "id": "ml-003", "goodsMovementId": "mov-002", "lineNo": 10, "product": "prod-003", "movementQty": 30, "locatorFrom": "loc-003", "locatorTo": "loc-001", "uom": "uom-001", "description": "Wireless mice consolidation" },
-  { "id": "ml-004", "goodsMovementId": "mov-002", "lineNo": 20, "product": "prod-004", "movementQty": 20, "locatorFrom": "loc-003", "locatorTo": "loc-001", "uom": "uom-001", "description": "Mechanical keyboards from West Hub" },
-  { "id": "ml-005", "goodsMovementId": "mov-003", "lineNo": 10, "product": "prod-009", "movementQty": 50, "locatorFrom": "loc-001", "locatorTo": "loc-004", "uom": "uom-001", "description": "SSD 1TB to North Storage" },
-  { "id": "ml-006", "goodsMovementId": "mov-003", "lineNo": 20, "product": "prod-010", "movementQty": 40, "locatorFrom": "loc-001", "locatorTo": "loc-004", "uom": "uom-001", "description": "RAM 16GB modules to North" },
-  { "id": "ml-007", "goodsMovementId": "mov-004", "lineNo": 10, "product": "prod-011", "movementQty": 25, "locatorFrom": "loc-002", "locatorTo": "loc-005", "uom": "uom-001", "description": "Power Supply units audit relocation" },
-  { "id": "ml-008", "goodsMovementId": "mov-004", "lineNo": 20, "product": "prod-012", "movementQty": 8, "locatorFrom": "loc-002", "locatorTo": "loc-005", "uom": "uom-001", "description": "Network switches to South" },
-  { "id": "ml-009", "goodsMovementId": "mov-005", "lineNo": 10, "product": "prod-017", "movementQty": 12, "locatorFrom": "loc-001", "locatorTo": "loc-001", "uom": "uom-001", "description": "Router Pro - rack A to rack B" },
-  { "id": "ml-010", "goodsMovementId": "mov-005", "lineNo": 20, "product": "prod-012", "movementQty": 6, "locatorFrom": "loc-001", "locatorTo": "loc-001", "uom": "uom-001", "description": "Network Switch - bin relocation" },
-  { "id": "ml-011", "goodsMovementId": "mov-006", "lineNo": 10, "product": "prod-005", "movementQty": 10, "locatorFrom": "loc-003", "locatorTo": "loc-001", "uom": "uom-001", "description": "Monitor 27 inch - voided move" },
-  { "id": "ml-012", "goodsMovementId": "mov-007", "lineNo": 10, "product": "prod-001", "movementQty": 20, "locatorFrom": "loc-001", "locatorTo": "loc-003", "uom": "uom-001", "description": "Laptop Pro rebalancing to West Hub" },
-  { "id": "ml-013", "goodsMovementId": "mov-007", "lineNo": 20, "product": "prod-006", "movementQty": 35, "locatorFrom": "loc-002", "locatorTo": "loc-004", "uom": "uom-001", "description": "Webcam HD to North Storage" },
-  { "id": "ml-014", "goodsMovementId": "mov-008", "lineNo": 10, "product": "prod-002", "movementQty": 200, "locatorFrom": "loc-001", "locatorTo": "loc-005", "uom": "uom-001", "description": "USB-C cables emergency to South" },
-  { "id": "ml-015", "goodsMovementId": "mov-008", "lineNo": 20, "product": "prod-007", "movementQty": 18, "locatorFrom": "loc-004", "locatorTo": "loc-005", "uom": "uom-001", "description": "Headset Pro fast-movers to South" }
+export const movementLine = [
+  {
+    "id": "mock-movementLine-001",
+    "lineNo": 10,
+    "product": "Laptop Pro 15",
+    "description": "Standard order for Q1 delivery",
+    "movementQuantity": 402,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-001"
+  },
+  {
+    "id": "mock-movementLine-002",
+    "lineNo": 20,
+    "product": "USB-C Cable",
+    "description": "Rush order - priority shipping required",
+    "movementQuantity": 54,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-002"
+  },
+  {
+    "id": "mock-movementLine-003",
+    "lineNo": 30,
+    "product": "Wireless Mouse",
+    "description": "Bulk purchase for warehouse restocking",
+    "movementQuantity": 150,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-003"
+  },
+  {
+    "id": "mock-movementLine-004",
+    "lineNo": 40,
+    "product": "Mechanical Keyboard",
+    "description": "Sample order for client evaluation",
+    "movementQuantity": 97,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-004"
+  },
+  {
+    "id": "mock-movementLine-005",
+    "lineNo": 50,
+    "product": "Monitor 27\"",
+    "description": "Recurring monthly supply order",
+    "movementQuantity": 311,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-005"
+  },
+  {
+    "id": "mock-movementLine-006",
+    "lineNo": 60,
+    "product": "Webcam HD",
+    "description": "Special pricing agreement applies",
+    "movementQuantity": 451,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-006"
+  },
+  {
+    "id": "mock-movementLine-007",
+    "lineNo": 70,
+    "product": "Headset Pro",
+    "description": "Consolidated order from multiple requests",
+    "movementQuantity": 496,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-007"
+  },
+  {
+    "id": "mock-movementLine-008",
+    "lineNo": 80,
+    "product": "Docking Station",
+    "description": "Trial order for new product line",
+    "movementQuantity": 284,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-008"
+  },
+  {
+    "id": "mock-movementLine-009",
+    "lineNo": 90,
+    "product": "SSD 1TB",
+    "description": "Replacement for damaged goods",
+    "movementQuantity": 225,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-009"
+  },
+  {
+    "id": "mock-movementLine-010",
+    "lineNo": 100,
+    "product": "RAM 16GB",
+    "description": "Pre-season inventory build-up",
+    "movementQuantity": 479,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-010"
+  },
+  {
+    "id": "mock-movementLine-011",
+    "lineNo": 110,
+    "product": "Power Supply 750W",
+    "description": "Customer-specific configuration",
+    "movementQuantity": 123,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-011"
+  },
+  {
+    "id": "mock-movementLine-012",
+    "lineNo": 120,
+    "product": "Network Switch",
+    "description": "Government contract fulfillment",
+    "movementQuantity": 337,
+    "uOM": "Sample uOM",
+    "storageBin": "Sample storageBin",
+    "newStorageBin": "Sample newStorageBin",
+    "movementId": "mock-movement-012"
+  }
 ];

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useUI } from '@/i18n';
 
 function fmtAmount(amount, currencyId) {
-  const n = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0);
+  const n = typeof amount === 'string' ? Number.parseFloat(amount) : (amount ?? 0);
   try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currencyId || 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); }
   catch { return n.toFixed(2); }
 }
@@ -11,39 +12,34 @@ function fmtDate(raw) {
   try {
     // Parse as local date to avoid UTC timezone shift (e.g. "2026-04-06" → Apr 5 in UTC-n)
     const str = String(raw);
-    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
     const d = match ? new Date(+match[1], +match[2] - 1, +match[3]) : new Date(raw);
-    return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
   } catch { return ''; }
 }
 
 function fmtInvoiceDate(raw) {
   if (!raw) return '';
   const d = new Date(raw);
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 const STATUS_MAP = {
-  RPPC: { label: 'Cleared', dot: '#059669', bg: '#d1fae5', color: '#065f46' },
-  RPR:  { label: 'Received', dot: '#059669', bg: '#d1fae5', color: '#065f46' },
-  RPAP: { label: 'Awaiting', dot: '#d97706', bg: '#fef3c7', color: '#92400e' },
-  RDNC: { label: 'Deposited', dot: '#2563eb', bg: '#dbeafe', color: '#1e40af' },
-  DR:   { label: 'Draft', dot: '#9ca3af', bg: '#f3f4f6', color: '#374151' },
-  RPVD: { label: 'Voided', dot: '#9ca3af', bg: '#f3f4f6', color: '#6b7280' },
-};
-
-const STATUS_LABELS = {
-  RPPC: 'Payment Cleared', DR: 'Draft', RPAP: 'Awaiting Payment',
-  RPR: 'Received', RDNC: 'Not Cleared', RPVD: 'Voided',
+  RPPC: { labelKey: 'statusCleared', dot: '#059669', bg: '#d1fae5', color: '#065f46' },
+  RPR:  { labelKey: 'statusReceived', dot: '#059669', bg: '#d1fae5', color: '#065f46' },
+  RPAP: { labelKey: 'statusAwaiting', dot: '#d97706', bg: '#fef3c7', color: '#92400e' },
+  RDNC: { labelKey: 'statusDeposited', dot: '#2563eb', bg: '#dbeafe', color: '#1e40af' },
+  DR:   { labelKey: 'statusDraft', dot: '#9ca3af', bg: '#f3f4f6', color: '#374151' },
+  RPVD: { labelKey: 'statusVoided', dot: '#9ca3af', bg: '#f3f4f6', color: '#6b7280' },
 };
 
 function fmtActivityDate(raw) {
   if (!raw) return '';
   try {
     const str = String(raw);
-    const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
     const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(raw);
-    return isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   } catch { return ''; }
 }
 
@@ -60,6 +56,7 @@ export default function PaymentBottomPanel({
 }) {
   const [remaining, setRemaining] = useState(0);
   const [linkedInvoices, setLinkedInvoices] = useState([]);
+  const ui = useUI();
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const hdrs = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
@@ -72,8 +69,8 @@ export default function PaymentBottomPanel({
         const res = await fetch(`${base}/payment-in/finPaymentScheduleDetail?parentId=${data.id}&_startRow=0&_endRow=100`, { headers: hdrs });
         if (!res.ok || cancelled) return;
         const details = (await res.json())?.response?.data || [];
-        const applied = details.filter(d => d.invoicePaymentSchedule).reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
-        if (!cancelled) setRemaining(Math.max(0, (parseFloat(data.amount) || 0) - applied));
+        const applied = details.filter(d => d.invoicePaymentSchedule).reduce((sum, d) => sum + (Number.parseFloat(d.amount) || 0), 0);
+        if (!cancelled) setRemaining(Math.max(0, (Number.parseFloat(data.amount) || 0) - applied));
         const scheduleIds = [...new Set(details.map(d => d.invoicePaymentSchedule).filter(Boolean))];
         const invoices = [];
         await Promise.all(scheduleIds.map(async (schedId) => {
@@ -82,7 +79,7 @@ export default function PaymentBottomPanel({
             if (!r.ok) return;
             const row = (await r.json())?.response?.data?.[0];
             if (row?.invoice && !invoices.some(i => i.id === row.invoice)) {
-              const outstanding = parseFloat(row.outstandingAmount) || 0;
+              const outstanding = Number.parseFloat(row.outstandingAmount) || 0;
               invoices.push({
                 id: row.invoice,
                 identifier: row['invoice$_identifier'] || '',
@@ -124,7 +121,7 @@ export default function PaymentBottomPanel({
       if (pipeIdx > 0 && pipeIdx < 30) {
         const maybeDateStr = line.slice(0, pipeIdx);
         const parsed = new Date(maybeDateStr);
-        if (!isNaN(parsed.getTime())) {
+        if (!Number.isNaN(parsed.getTime())) {
           notes.push({ key: `note-${idx}`, text: line.slice(pipeIdx + 1), date: fmtActivityDate(maybeDateStr), sortDate: parsed, isNote: true });
         }
       }
@@ -161,15 +158,15 @@ export default function PaymentBottomPanel({
     const sysDate = fmtActivityDate(data?.paymentDate || data?.creationDate);
     const sysSortDate = new Date(data?.paymentDate || data?.creationDate || 0);
     if (data?.paymentDate || data?.creationDate) {
-      events.push({ key: 'created', text: 'Payment created', date: sysDate, sortDate: sysSortDate, isNote: false });
+      events.push({ key: 'created', text: ui('paymentCreated'), date: sysDate, sortDate: sysSortDate, isNote: false });
     }
     for (const inv of linkedInvoices) {
       const docNo = (inv.identifier || '').split(' - ')[0] || '';
-      events.push({ key: `inv-${inv.id}`, text: `Linked to Invoice #${docNo}`, date: sysDate, sortDate: sysSortDate, isNote: false });
+      events.push({ key: `inv-${inv.id}`, text: ui('linkedToInvoice', { number: docNo }), date: sysDate, sortDate: sysSortDate, isNote: false });
     }
     const st = data?.status;
     if (st && st !== 'DR') {
-      events.push({ key: 'status', text: `Status → ${STATUS_LABELS[st] || st}`, date: sysDate, sortDate: sysSortDate, isNote: false });
+      events.push({ key: 'status', text: ui('statusChangedTo', { status: ui(STATUS_MAP[st]?.labelKey || st) }), date: sysDate, sortDate: sysSortDate, isNote: false });
     }
     events.sort((a, b) => a.sortDate - b.sortDate);
     return [...events, ...persistedNotes];
@@ -182,14 +179,14 @@ export default function PaymentBottomPanel({
 
   const documentNo = data?.documentNo || '';
   const fields = [
-    { label: 'Customer', value: bpName },
-    { label: 'Payment Date', value: paymentDate },
-    { label: 'Method', value: paymentMethod },
-    { label: 'Deposit to', value: financialAccount, isAccount: true },
+    { label: ui('customer'), value: bpName },
+    { label: ui('paymentDate'), value: paymentDate },
+    { label: ui('method'), value: paymentMethod },
+    { label: ui('depositTo'), value: financialAccount, isAccount: true },
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: -12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 0 }}>
 
       {/* Hero */}
       <div style={{ backgroundColor: '#F5F5F5', borderRadius: 10, padding: '14px 16px' }}>
@@ -200,7 +197,7 @@ export default function PaymentBottomPanel({
             <span style={{ fontSize: 32, fontWeight: 500, color: '#111827', lineHeight: 1 }}>{fmtAmount(data?.amount, currency)}</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 9999, backgroundColor: statusInfo.bg, color: statusInfo.color, fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap' }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: statusInfo.dot }} />
-              {statusInfo.label}
+              {ui(statusInfo.labelKey)}
             </span>
           </div>
           <div style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
@@ -229,14 +226,14 @@ export default function PaymentBottomPanel({
       {/* Unallocated credit */}
       {remaining > 0 && (
         <div style={{ backgroundColor: '#FFFBEB', borderLeft: '3px solid #F59E0B', borderRadius: '0 6px 6px 0', padding: '10px 14px' }}>
-          <span style={{ fontSize: 13, color: '#92400e' }}><strong>{fmtAmount(remaining, currency)}</strong> unallocated credit</span>
+          <span style={{ fontSize: 13, color: '#92400e' }}><strong>{fmtAmount(remaining, currency)}</strong> {ui('unallocatedCredit')}</span>
         </div>
       )}
 
       {/* Invoice cards */}
       {linkedInvoices.length > 0 && (
         <div>
-          <span style={{ display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9ca3af', marginBottom: 6 }}>Invoice</span>
+          <span style={{ display: 'block', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9ca3af', marginBottom: 6 }}>{ui('invoice')}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {linkedInvoices.map(inv => {
               const parts = (inv.identifier || '').split(' - ');
@@ -244,8 +241,8 @@ export default function PaymentBottomPanel({
               const dateStr = fmtInvoiceDate(parts[1]);
               const subtitle = [bpName, dateStr].filter(Boolean).join(' · ');
               const badgeColor = inv.isPaid
-                ? { bg: '#d1fae5', color: '#065f46', dot: '#059669', label: 'Paid' }
-                : { bg: '#fef3c7', color: '#92400e', dot: '#d97706', label: 'Pending' };
+                ? { bg: '#d1fae5', color: '#065f46', dot: '#059669', label: ui('paid') }
+                : { bg: '#fef3c7', color: '#92400e', dot: '#d97706', label: ui('pending') };
               return (
                 <button
                   key={inv.id}
@@ -259,7 +256,7 @@ export default function PaymentBottomPanel({
                     </svg>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: '#2563eb' }}>Invoice #{docNo}</div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: '#2563eb' }}>{ui('invoiceDoc', { number: docNo })}</div>
                     {subtitle && <div style={{ fontSize: 12, color: '#6B7280', marginTop: 1 }}>{subtitle}</div>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -281,7 +278,7 @@ export default function PaymentBottomPanel({
       <div style={{ border: '0.5px solid #d1d5db', borderRadius: 10, overflow: 'hidden' }}>
         {/* Card header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: '#F8F9FA', borderBottom: '0.5px solid #d1d5db' }}>
-          <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9ca3af' }}>Activity</span>
+          <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#9ca3af' }}>{ui('activity')}</span>
           {activityEvents.length > 0 && (
             <span style={{ fontSize: 10, fontWeight: 500, backgroundColor: '#e5e7eb', color: '#6B7280', padding: '1px 6px', borderRadius: 9999 }}>{activityEvents.length}</span>
           )}
@@ -296,7 +293,7 @@ export default function PaymentBottomPanel({
                 <span style={{ position: 'absolute', left: -20 + 1, top: 3, width: 8, height: 8, borderRadius: '50%', backgroundColor: ev.isNote ? '#EF9F27' : '#9ca3af' }} />
                 {ev.isNote ? (
                   <div>
-                    <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 3 }}>{ev.userName || 'You'} &middot; {ev.date}</div>
+                    <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 3 }}>{ev.userName || ui('you')} &middot; {ev.date}</div>
                     <div style={{ backgroundColor: '#F5F5F5', borderRadius: 8, padding: '8px 12px', maxWidth: '85%' }}>
                       <div style={{ fontSize: 13, color: '#111827' }}>{ev.text}</div>
                     </div>
@@ -319,7 +316,7 @@ export default function PaymentBottomPanel({
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddNote(); } }}
-            placeholder="Add a note..."
+            placeholder={ui('addNote')}
             disabled={saving}
             style={{ flex: 1, fontSize: 13, padding: '7px 10px', border: '0.5px solid #d1d5db', borderRadius: 6, outline: 'none', color: '#374151', backgroundColor: '#fff', boxSizing: 'border-box' }}
           />
@@ -329,7 +326,7 @@ export default function PaymentBottomPanel({
             disabled={!noteText.trim() || saving}
             style={{ fontSize: 13, fontWeight: 500, padding: '7px 14px', borderRadius: 6, border: 'none', backgroundColor: noteText.trim() ? '#18181b' : '#e5e7eb', color: noteText.trim() ? '#fff' : '#9ca3af', cursor: noteText.trim() && !saving ? 'pointer' : 'default', flexShrink: 0 }}
           >
-            {saving ? '...' : 'Add'}
+            {saving ? '...' : ui('add')}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { ClipboardList, FileText } from 'lucide-react';
+import { useUI } from '@/i18n';
 
 /**
  * Confirmation modal for Sales Quotation.
@@ -17,6 +18,7 @@ export default function QuotationConfirmModal({
   apiBaseUrl,
   onClose,
 }) {
+  const ui = useUI();
   const [selected, setSelected] = useState('order');
   const [loading, setLoading] = useState(false);
   const [createdDoc, setCreatedDoc] = useState(null);
@@ -99,7 +101,7 @@ export default function QuotationConfirmModal({
         if (!res.ok) {
           const err = await res.json().catch(() => null);
           throw new Error(
-            'El presupuesto fue procesado pero no se pudo crear el pedido. '
+            ui('sqOrderConfirmedError')
             + (err?.response?.message || err?.message || `Error (${res.status})`)
           );
         }
@@ -149,22 +151,22 @@ export default function QuotationConfirmModal({
         if (!res.ok) {
           const err = await res.json().catch(() => null);
           throw new Error(
-            'El presupuesto fue procesado pero no se pudo crear la factura. '
+            ui('sqOrderConfirmedInvoiceError')
             + (err?.response?.message || err?.message || `Error (${res.status})`)
           );
         }
         setCreatedDoc({ type: 'invoice', id: null, documentNo: '?', total: '', status: '' });
       }
     } catch (err) {
-      setError(err.message || 'Ocurrió un error');
+      setError(err.message || ui('soErrorOccurred'));
     } finally {
       setLoading(false);
     }
   };
 
   const primaryLabel = selected === 'order'
-    ? 'Confirmar → Pedido de venta'
-    : 'Confirmar → Factura';
+    ? ui('sqConfirmActionOrder')
+    : ui('soConfirmActionInvoice');
 
   const handleGoToDoc = () => {
     if (!createdDoc?.id) { handleCloseAfterCreate(); return; }
@@ -181,11 +183,11 @@ export default function QuotationConfirmModal({
 
   // ── Success state ──────────────────────────────────────────
   if (createdDoc) {
-    const docLabel = createdDoc.type === 'order' ? 'Pedido creado' : 'Factura creada';
-    const goLabel = createdDoc.type === 'order' ? 'Ver pedido →' : 'Ver factura →';
+    const docLabel = createdDoc.type === 'order' ? ui('sqOrderCreated') : ui('soInvoiceCreated');
+    const goLabel  = createdDoc.type === 'order' ? ui('sqViewOrder')    : ui('soViewInvoice');
     const isDraft = createdDoc.status === 'Draft';
     const badgeColor = isDraft ? { bg: '#FEF3C7', text: '#92400E' } : { bg: '#ECFDF5', text: '#059669' };
-    const badgeLabel = isDraft ? 'Draft' : 'Completed';
+    const badgeLabel = isDraft ? ui('statusDraft') : ui('statusCompleted');
 
     return (
       <div style={overlayStyle}>
@@ -204,7 +206,7 @@ export default function QuotationConfirmModal({
               {docLabel}
             </div>
             <div style={{ fontSize: 12, color: '#6B7280', marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              {createdDoc.documentNo && <span>Order #{createdDoc.documentNo}</span>}
+              {createdDoc.documentNo && <span>{ui('orderDoc', { number: createdDoc.documentNo })}</span>}
               {createdDoc.total && <><span style={{ color: '#D1D5DB' }}>·</span> <span>{createdDoc.total}</span></>}
               <span style={{
                 fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
@@ -219,7 +221,7 @@ export default function QuotationConfirmModal({
             padding: '12px 16px', borderTop: '0.5px solid #E5E7EB',
           }}>
             <button type="button" onClick={handleCloseAfterCreate} style={btnSecondary}>
-              Cerrar
+              {ui('soClose')}
             </button>
             {createdDoc.id && (
               <button type="button" onClick={handleGoToDoc} style={btnPrimary}>
@@ -264,7 +266,7 @@ export default function QuotationConfirmModal({
               {fmtNum(grandTotal)} {currency}
             </div>
             <div style={{ fontSize: 11, color: '#185FA5' }}>
-              {lineCount != null ? lineCount : '...'} líneas <span style={{ color: '#85B7EB' }}>·</span> Subtotal <span style={{ fontWeight: 500, color: '#042C53' }}>{fmtNum(totalLines)} {currency}</span>
+              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: '#85B7EB' }}>·</span> {ui('soSubtotal')} <span style={{ fontWeight: 500, color: '#042C53' }}>{fmtNum(totalLines)} {currency}</span>
             </div>
           </div>
         </div>
@@ -272,22 +274,22 @@ export default function QuotationConfirmModal({
         {/* Options */}
         <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '0.5px solid #E5E7EB' }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: '#6B7280', marginBottom: 2 }}>
-            ¿Cómo querés confirmar?
+            {ui('sqWhatToDo')}
           </div>
           <OptionCard
             selected={selected === 'order'}
             onClick={() => setSelected('order')}
             icon={<ClipboardList size={16} />}
-            title="Crear pedido de venta"
-            badge="Recomendado"
-            subtitle="Para productos con stock, entregas o pedidos con múltiples envíos."
+            title={ui('sqCreateOrder')}
+            badge={ui('soRecommended')}
+            subtitle={ui('sqCreateOrderDesc')}
           />
           <OptionCard
             selected={false}
             onClick={() => {}}
             icon={<FileText size={16} />}
-            title="Facturar directamente"
-            subtitle="Próximamente — por ahora, creá el pedido y facturá desde ahí."
+            title={ui('soInvoiceDirectly')}
+            subtitle={ui('sqInvoiceDirectlyDesc')}
             disabled
           />
         </div>
@@ -303,7 +305,7 @@ export default function QuotationConfirmModal({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '12px 16px' }}>
           <button type="button" onClick={onClose} disabled={loading}
             style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
-            Cancelar
+            {ui('cancel')}
           </button>
           <button type="button" onClick={handleConfirm} disabled={loading}
             style={{
@@ -317,7 +319,7 @@ export default function QuotationConfirmModal({
                 <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
               </svg>
             )}
-            {loading ? 'Procesando...' : primaryLabel}
+            {loading ? ui('soProcessing') : primaryLabel}
           </button>
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>

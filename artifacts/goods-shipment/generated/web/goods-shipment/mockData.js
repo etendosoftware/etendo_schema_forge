@@ -10,6 +10,7 @@ export const goodsShipment = [
     "description": "Standard order for Q1 delivery",
     "movementDate": "2026-01-15",
     "documentStatus": "DR",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -21,6 +22,7 @@ export const goodsShipment = [
     "description": "Rush order - priority shipping required",
     "movementDate": "2026-01-16",
     "documentStatus": "CO",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -32,6 +34,7 @@ export const goodsShipment = [
     "description": "Bulk purchase for warehouse restocking",
     "movementDate": "2026-01-17",
     "documentStatus": "VO",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -43,6 +46,7 @@ export const goodsShipment = [
     "description": "Sample order for client evaluation",
     "movementDate": "2026-01-18",
     "documentStatus": "IP",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -54,6 +58,7 @@ export const goodsShipment = [
     "description": "Recurring monthly supply order",
     "movementDate": "2026-01-19",
     "documentStatus": "DR",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -65,6 +70,7 @@ export const goodsShipment = [
     "description": "Special pricing agreement applies",
     "movementDate": "2026-01-20",
     "documentStatus": "CO",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -76,6 +82,7 @@ export const goodsShipment = [
     "description": "Consolidated order from multiple requests",
     "movementDate": "2026-01-21",
     "documentStatus": "VO",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -87,6 +94,7 @@ export const goodsShipment = [
     "description": "Trial order for new product line",
     "movementDate": "2026-01-22",
     "documentStatus": "IP",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -98,6 +106,7 @@ export const goodsShipment = [
     "description": "Replacement for damaged goods",
     "movementDate": "2026-01-23",
     "documentStatus": "DR",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -109,6 +118,7 @@ export const goodsShipment = [
     "description": "Pre-season inventory build-up",
     "movementDate": "2026-01-24",
     "documentStatus": "CO",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -120,6 +130,7 @@ export const goodsShipment = [
     "description": "Customer-specific configuration",
     "movementDate": "2026-01-25",
     "documentStatus": "VO",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   },
   {
@@ -131,6 +142,7 @@ export const goodsShipment = [
     "description": "Government contract fulfillment",
     "movementDate": "2026-01-26",
     "documentStatus": "IP",
+    "invoiced": "Sample invoiced",
     "processed": "Sample processed"
   }
 ];

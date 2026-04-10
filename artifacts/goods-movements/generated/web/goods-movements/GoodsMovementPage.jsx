@@ -4,6 +4,8 @@ import GoodsMovementForm from './GoodsMovementForm';
 import GoodsMovementLineTable from './GoodsMovementLineTable';
 import catalogs from './mockCatalogs';
 
+const breadcrumb = 'Inventory / Goods Movements';
+
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
 ];
@@ -45,6 +47,7 @@ export default function GoodsMovementPage({ windowName, recordId, ...props }) {
         detailLabel="Goods Movement Line"
         windowName={windowName}
         recordId={recordId}
+        breadcrumb={breadcrumb}
         {...props}
       />
     );
@@ -56,6 +59,7 @@ export default function GoodsMovementPage({ windowName, recordId, ...props }) {
       Table={GoodsMovementTable}
       entityLabel="Goods Movement"
       windowName={windowName}
+      breadcrumb={breadcrumb}
       {...props}
     />
   );

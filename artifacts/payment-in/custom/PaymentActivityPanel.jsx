@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useUI } from '@/i18n';
 
 const STATUS_LABELS = {
-  RPPC: 'Payment Cleared',
-  DR: 'Draft',
-  RPAP: 'Awaiting Payment',
-  RPR: 'Received',
-  RDNC: 'Not Cleared',
-  RPVD: 'Voided',
+  RPPC: 'statusCleared',
+  DR: 'statusDraft',
+  RPAP: 'statusAwaiting',
+  RPR: 'statusReceived',
+  RDNC: 'statusDeposited',
+  RPVD: 'statusVoided',
 };
 
 function fmtDate(dateStr) {
@@ -37,6 +38,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
   const [noteText, setNoteText] = useState('');
   const [saving, setSaving] = useState(false);
   const descriptionRef = useRef(data?.description || '');
+  const ui = useUI();
 
   useEffect(() => {
     descriptionRef.current = data?.description || '';
@@ -60,7 +62,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
       if (pipeIdx > 0 && pipeIdx < 30) {
         const maybeDateStr = line.slice(0, pipeIdx);
         const parsed = new Date(maybeDateStr);
-        if (!isNaN(parsed.getTime())) {
+        if (!Number.isNaN(parsed.getTime())) {
           notes.push({
             key: `persisted-${idx}`,
             text: line.slice(pipeIdx + 1),
@@ -155,19 +157,19 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
 
   // "Payment created" uses paymentDate as the reference date
   if (data.paymentDate || data.creationDate) {
-    events.push({
-      key: 'created',
-      text: 'Payment created',
-      date: fmtDate(data.paymentDate || data.creationDate),
-      sortDate: new Date(data.paymentDate || data.creationDate || 0),
-      isNote: false,
-    });
+      events.push({
+        key: 'created',
+        text: ui('paymentCreated'),
+        date: fmtDate(data.paymentDate || data.creationDate),
+        sortDate: new Date(data.paymentDate || data.creationDate || 0),
+        isNote: false,
+      });
   }
 
   for (const inv of linkedInvoices) {
     events.push({
       key: `inv-${inv.id}`,
-      text: `Linked to Invoice #${inv.docNo}`,
+      text: ui('linkedToInvoice', { number: inv.docNo }),
       date: systemDate,
       sortDate: systemSortDate,
       isNote: false,
@@ -176,10 +178,10 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
 
   const status = data.status || data.documentStatus;
   if (status && status !== 'DR') {
-    const label = STATUS_LABELS[status] || status;
+    const label = ui(STATUS_LABELS[status] || status);
     events.push({
       key: 'status',
-      text: `Status \u2192 ${label}`,
+      text: ui('statusChangedTo', { status: label }),
       date: systemDate,
       sortDate: systemSortDate,
       isNote: false,
@@ -218,7 +220,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
         className="block text-[11px] font-medium uppercase tracking-wide mb-4"
         style={{ color: '#111827', flexShrink: 0 }}
       >
-        Activity
+        {ui('activity')}
       </span>
 
       {/* Timeline — grows to fill available space; scrolls when overflowing */}
@@ -274,7 +276,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
             ))}
           </div>
         ) : (
-          <span className="text-sm" style={{ color: '#d1d5db' }}>No activity yet</span>
+          <span className="text-sm" style={{ color: '#d1d5db' }}>{ui('noActivityYet')}</span>
         )}
       </div>
 
@@ -288,7 +290,7 @@ export default function PaymentActivityPanel({ data, recordId, token, apiBaseUrl
           value={noteText}
           onChange={(e) => setNoteText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddNote(); } }}
-          placeholder="Add a note..."
+          placeholder={ui('addNote')}
           disabled={saving}
           className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-60"
         />

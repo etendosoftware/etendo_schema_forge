@@ -1,18 +1,25 @@
+import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import WarehouseTable from './WarehouseTable';
 import WarehouseForm from './WarehouseForm';
-import StorageBinTable from './StorageBinTable';
+import WarehouseTransactionsTable from '@/windows/custom/warehouse/WarehouseTransactionsTable';
 import catalogs from './mockCatalogs';
 
-const breadcrumb = 'Inventory / Warehouse and Storage Bins';
+
+const breadcrumb = 'Inventory / Warehouse';
+
 
 // @sf-generated-start summary:warehouse
 const summary = [
-  { key: 'allocated', column: 'Isallocated', type: 'boolean' },
+
 ];
 
 const statusField = null;
 // @sf-generated-end summary:warehouse
+
+// @sf-generated-start extraBadges:warehouse
+const extraBadges = [];
+// @sf-generated-end extraBadges:warehouse
 
 // @sf-generated-start processes:warehouse
 const processes = [
@@ -20,27 +27,15 @@ const processes = [
 ];
 // @sf-generated-end processes:warehouse
 
-// @sf-generated-start addLineFields:storageBin
-const addLineFields = {
-  entry: [
-    { key: 'searchKey', column: 'Value', type: 'text', required: true, lookup: true },
-    { key: 'row', column: 'X', type: 'text', required: true },
-    { key: 'stack', column: 'Y', type: 'text', required: true },
-    { key: 'level', column: 'Z', type: 'text', required: true },
-    { key: 'priority', column: 'PriorityNo', type: 'number', required: true },
-    { key: 'barcode', column: 'Barcode', type: 'text' },
-    { key: 'default', column: 'IsDefault', type: 'checkbox', required: true },
-    { key: 'changeStatus', column: 'Change_Status', type: 'text', required: true },
-  ],
-  derived: [
+// @sf-generated-start draftMode:warehouse
+const draftMode = null;
+// @sf-generated-end draftMode:warehouse
 
-  ],
-};
-// @sf-generated-end addLineFields:storageBin
+
 
 const api = {
-  "specName": "warehouse-and-storage-bins",
-  "baseUrl": "/sws/neo/warehouse-and-storage-bins",
+  "specName": "warehouse",
+  "baseUrl": "/sws/neo/warehouse",
   "crud": {
     "warehouse": {
       "get": true,
@@ -49,8 +44,8 @@ const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/warehouse-and-storage-bins/warehouse",
-      "detailUrl": "/sws/neo/warehouse-and-storage-bins/warehouse/{id}",
+      "listUrl": "/sws/neo/warehouse/warehouse",
+      "detailUrl": "/sws/neo/warehouse/warehouse/{id}",
       "supportedFilters": [
         "searchKey",
         "name"
@@ -63,143 +58,157 @@ const api = {
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/warehouse-and-storage-bins/storageBin",
-      "detailUrl": "/sws/neo/warehouse-and-storage-bins/storageBin/{id}",
-      "supportedFilters": [
-        "searchKey",
-        "barcode"
-      ]
+      "listUrl": "/sws/neo/warehouse/storageBin",
+      "detailUrl": "/sws/neo/warehouse/storageBin/{id}",
+      "supportedFilters": []
     },
-    "productTransaction": {
+    "productTransactions": {
       "get": true,
       "getById": true,
       "post": true,
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/warehouse-and-storage-bins/productTransaction",
-      "detailUrl": "/sws/neo/warehouse-and-storage-bins/productTransaction/{id}",
-      "supportedFilters": [
-        "product",
-        "movementDate",
-        "movementType"
-      ]
+      "listUrl": "/sws/neo/warehouse/productTransactions",
+      "detailUrl": "/sws/neo/warehouse/productTransactions/{id}",
+      "supportedFilters": []
     },
-    "binContent": {
+    "binContents": {
       "get": true,
       "getById": true,
       "post": true,
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/warehouse-and-storage-bins/binContent",
-      "detailUrl": "/sws/neo/warehouse-and-storage-bins/binContent/{id}",
-      "supportedFilters": [
-        "product"
-      ]
+      "listUrl": "/sws/neo/warehouse/binContents",
+      "detailUrl": "/sws/neo/warehouse/binContents/{id}",
+      "supportedFilters": []
     }
   },
   "selectors": [
     {
       "entity": "warehouse",
-      "field": "location",
+      "field": "locationAddress",
       "column": "C_Location_ID",
       "reference": "Location",
-      "url": "/sws/neo/warehouse-and-storage-bins/warehouse/selectors/location"
-    },
-    {
-      "entity": "warehouse",
-      "field": "returnLocator",
-      "column": "M_Returnlocator_ID",
-      "reference": "Locator",
-      "url": "/sws/neo/warehouse-and-storage-bins/warehouse/selectors/returnLocator"
+      "inputMode": "search",
+      "url": "/sws/neo/warehouse/warehouse/selectors/locationAddress"
     },
     {
       "entity": "warehouse",
       "field": "warehouseRule",
       "column": "M_Warehouse_Rule_ID",
-      "reference": "WarehouseRule",
-      "url": "/sws/neo/warehouse-and-storage-bins/warehouse/selectors/warehouseRule"
+      "reference": "Warehouse_Rule",
+      "inputMode": "selector",
+      "url": "/sws/neo/warehouse/warehouse/selectors/warehouseRule"
     },
     {
       "entity": "storageBin",
       "field": "inventoryStatus",
       "column": "M_InventoryStatus_ID",
       "reference": "InventoryStatus",
-      "url": "/sws/neo/warehouse-and-storage-bins/storageBin/selectors/inventoryStatus"
+      "inputMode": "selector",
+      "url": "/sws/neo/warehouse/storageBin/selectors/inventoryStatus"
     },
     {
-      "entity": "productTransaction",
+      "entity": "productTransactions",
       "field": "product",
       "column": "M_Product_ID",
       "reference": "Product",
-      "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/product"
+      "inputMode": "search",
+      "url": "/sws/neo/warehouse/productTransactions/selectors/product"
     },
     {
-      "entity": "productTransaction",
+      "entity": "productTransactions",
       "field": "goodsShipmentLine",
       "column": "M_InOutLine_ID",
-      "reference": "GoodsShipmentLine",
-      "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/goodsShipmentLine"
+      "reference": "InOutLine",
+      "inputMode": "search",
+      "url": "/sws/neo/warehouse/productTransactions/selectors/goodsShipmentLine"
     },
     {
-      "entity": "productTransaction",
-      "field": "inventoryLine",
+      "entity": "productTransactions",
+      "field": "physicalInventoryLine",
       "column": "M_InventoryLine_ID",
       "reference": "InventoryLine",
-      "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/inventoryLine"
+      "inputMode": "search",
+      "url": "/sws/neo/warehouse/productTransactions/selectors/physicalInventoryLine"
     },
     {
-      "entity": "productTransaction",
+      "entity": "productTransactions",
       "field": "movementLine",
       "column": "M_MovementLine_ID",
       "reference": "MovementLine",
-      "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/movementLine"
+      "inputMode": "search",
+      "url": "/sws/neo/warehouse/productTransactions/selectors/movementLine"
     },
     {
-      "entity": "productTransaction",
+      "entity": "productTransactions",
       "field": "productionLine",
       "column": "M_ProductionLine_ID",
       "reference": "ProductionLine",
-      "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/productionLine"
+      "inputMode": "search",
+      "url": "/sws/neo/warehouse/productTransactions/selectors/productionLine"
     },
     {
-      "entity": "productTransaction",
+      "entity": "productTransactions",
       "field": "projectIssue",
       "column": "C_ProjectIssue_ID",
       "reference": "ProjectIssue",
-      "url": "/sws/neo/warehouse-and-storage-bins/productTransaction/selectors/projectIssue"
+      "inputMode": "search",
+      "url": "/sws/neo/warehouse/productTransactions/selectors/projectIssue"
     },
     {
-      "entity": "binContent",
+      "entity": "binContents",
       "field": "product",
       "column": "M_Product_ID",
       "reference": "Product",
-      "url": "/sws/neo/warehouse-and-storage-bins/binContent/selectors/product"
+      "inputMode": "search",
+      "url": "/sws/neo/warehouse/binContents/selectors/product"
     },
     {
-      "entity": "binContent",
-      "field": "uom",
+      "entity": "binContents",
+      "field": "uOM",
       "column": "C_UOM_ID",
       "reference": "UOM",
-      "url": "/sws/neo/warehouse-and-storage-bins/binContent/selectors/uom"
+      "inputMode": "selector",
+      "url": "/sws/neo/warehouse/binContents/selectors/uOM"
     },
     {
-      "entity": "binContent",
-      "field": "productUom",
+      "entity": "binContents",
+      "field": "orderUOM",
       "column": "M_Product_Uom_Id",
-      "reference": "ProductUOM",
-      "url": "/sws/neo/warehouse-and-storage-bins/binContent/selectors/productUom"
+      "reference": "Product_Uom",
+      "inputMode": "selector",
+      "url": "/sws/neo/warehouse/binContents/selectors/orderUOM"
     },
     {
-      "entity": "binContent",
-      "field": "referenceInventory",
+      "entity": "binContents",
+      "field": "referencedInventory",
       "column": "M_RefInventory_ID",
-      "reference": "ReferenceInventory",
-      "url": "/sws/neo/warehouse-and-storage-bins/binContent/selectors/referenceInventory"
+      "reference": "RefInventory",
+      "inputMode": "selector",
+      "url": "/sws/neo/warehouse/binContents/selectors/referencedInventory"
     }
   ],
-  "actions": [],
+  "actions": [
+    {
+      "entity": "storageBin",
+      "field": "changeStatus",
+      "column": "Change_Status",
+      "url": "/sws/neo/warehouse/storageBin/{id}/action/changeStatus",
+      "processId": "3A4E13B0AB764F188CB062DDE2A9B685",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "productTransactions",
+      "field": "manualcostadjustment",
+      "column": "Manualcostadjustment",
+      "url": "/sws/neo/warehouse/productTransactions/{id}/action/manualcostadjustment",
+      "processId": "D395B727675C45C98320F8A40E0768E7",
+      "processType": "obuiapp"
+    }
+  ],
   "queryParams": {
     "pagination": {
       "startRow": "_startRow",
@@ -208,7 +217,7 @@ const api = {
     },
     "sorting": {
       "param": "_sortBy",
-      "example": "_sortBy=warehouse-and-storage-binsDate"
+      "example": "_sortBy=warehouseDate"
     },
     "filtering": "Use field name as query param: ?fieldName=value",
     "parentFilter": "parentId={id} for child entities"
@@ -217,25 +226,25 @@ const api = {
 
 // @sf-generated-start component:WarehousePage
 export default function WarehousePage({ windowName, recordId, ...props }) {
-  // @sf-custom-slot hooks:WarehousePage
+  
   if (recordId) {
     return (
       <DetailView
         entity="warehouse"
-        detailEntity="storageBin"
         Form={WarehouseForm}
-        DetailTable={StorageBinTable}
         summary={summary}
         statusField={statusField}
+        extraBadges={extraBadges}
         processes={processes}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Warehouse"
-        detailLabel="Storage Bin"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        secondaryTabs={[
+          { key: 'productTransactions', label: 'Transactions', Panel: WarehouseTransactionsTable },
+        ]}
         {...props}
       />
     );
@@ -245,13 +254,12 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
     <ListView
       entity="warehouse"
       Table={WarehouseTable}
-      entityLabel="Warehouses"
+      entityLabel="Warehouse"
       windowName={windowName}
       breadcrumb={breadcrumb}
+      api={api}
       {...props}
     />
   );
 }
 // @sf-generated-end component:WarehousePage
-
-// @sf-custom-slot section:WarehousePage-custom

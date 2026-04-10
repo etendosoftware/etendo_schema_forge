@@ -4,6 +4,8 @@ import WarehouseForm from './WarehouseForm';
 import LocatorTable from './LocatorTable';
 import catalogs from './mockCatalogs';
 
+const breadcrumb = 'Inventory / Storage Bin';
+
 const summary = [
   { key: 'isActive', column: 'IsActive', type: 'boolean' },
 ];
@@ -43,6 +45,7 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
         catalogs={catalogs}
         entityLabel="Warehouse"
         detailLabel="Locator"
+        breadcrumb={breadcrumb}
         windowName={windowName}
         recordId={recordId}
         {...props}
@@ -55,6 +58,7 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
       entity="warehouse"
       Table={WarehouseTable}
       entityLabel="Warehouse"
+      breadcrumb={breadcrumb}
       windowName={windowName}
       {...props}
     />

@@ -1,0 +1,80 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "inventory",
+    "name": "Product Category",
+    "detailEntity": "assignedProducts"
+  },
+  "entities": {
+    "productCategory": {
+      "fields": {
+        "searchKey": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 1
+        },
+        "name": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 2
+        },
+        "description": {
+          "type": "textarea",
+          "section": "principal",
+          "seq": 3
+        },
+        "default": {
+          "section": "principal",
+          "seq": 4
+        },
+        "summaryLevel": {
+          "section": "principal",
+          "seq": 5
+        },
+        "image": {
+          "type": "image",
+          "section": "other",
+          "seq": 6
+        },
+        "plannedMargin": {
+          "visibility": "discarded"
+        },
+        "assetCategory": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "accounting": {
+      "exclude": true
+    },
+    "assignedProducts": {
+      "fields": {
+        "searchKey": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true
+        },
+        "name": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true
+        },
+        "productType": {
+          "visibility": "readOnly",
+          "grid": true,
+          "searchable": true,
+          "reference": "ProductType",
+          "inputMode": "selector"
+        }
+      }
+    },
+    "translation": {
+      "exclude": true
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"],
+  "version": 2
+}
