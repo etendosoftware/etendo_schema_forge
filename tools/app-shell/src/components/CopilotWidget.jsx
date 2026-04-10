@@ -6,8 +6,11 @@ import { Badge } from '@/components/ui/badge.jsx';
 import { Separator } from '@/components/ui/separator.jsx';
 import { cn } from '@/lib/utils';
 import { Bot, X, Send, Sparkles } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useCopilot } from './CopilotContext';
 import { useUI } from '@/i18n';
+
+const LEFT_SIDE_ROUTES = ['/quick-sales-order', '/quick-purchase-order'];
 
 function getResponse(text, responses) {
   const lower = text.toLowerCase();
@@ -21,7 +24,11 @@ function getResponse(text, responses) {
 
 export function CopilotWidget() {
   const { isOpen: open, close: closePanel, toggle } = useCopilot();
+  const location = useLocation();
   const ui = useUI();
+  const isLeftSide = LEFT_SIDE_ROUTES.includes(location.pathname);
+  const dockShift = isLeftSide ? '0px' : 'calc(100vw - 100% - 3rem)';
+
   const mockResponses = React.useMemo(() => ({
     invoice: ui('copilotInvoiceResponse'),
     stock: ui('copilotStockResponse'),
@@ -111,11 +118,12 @@ export function CopilotWidget() {
       {/* Chat panel */}
       <div
         className={cn(
-          'fixed bottom-20 right-6 z-50 w-full max-w-sm transition-all duration-300 ease-out',
+          'fixed bottom-20 left-6 z-50 w-full max-w-sm translate-x-[var(--copilot-shift)] transition-[transform,opacity] duration-300 ease-out',
           open
             ? 'translate-y-0 opacity-100 pointer-events-auto'
             : 'translate-y-4 opacity-0 pointer-events-none'
         )}
+        style={{ '--copilot-shift': dockShift }}
       >
         <Card className="flex flex-col shadow-2xl border-border/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
@@ -231,9 +239,10 @@ export function CopilotWidget() {
         onClick={toggle}
         size="icon"
         className={cn(
-          'fixed bottom-6 right-6 z-50 h-12 w-12 rounded-full shadow-lg transition-all duration-200',
+          'fixed bottom-6 left-6 z-50 h-12 w-12 rounded-full shadow-lg translate-x-[var(--copilot-shift)] transition-transform duration-300 ease-out',
           !open && 'animate-pulse shadow-primary/25 shadow-xl'
         )}
+        style={{ '--copilot-shift': dockShift }}
         aria-label={open ? ui('closeCopilot') : ui('openCopilot')}
       >
         {open ? (

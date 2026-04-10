@@ -106,6 +106,14 @@
         { "name": "smart-scan", "label": "Smart Scan" },
         { "name": "oauth2-clients", "label": "OAuth2 Clients", "icon": "Shield" }
       ]
+    },
+    {
+      "group": "Proof of Concept",
+      "icon": "FlaskConical",
+      "items": [
+        { "name": "quick-sales-order", "label": "Quick Sales Order" },
+        { "name": "quick-purchase-order", "label": "Quick Purchase Order" }
+      ]
     }
   ]
 }
