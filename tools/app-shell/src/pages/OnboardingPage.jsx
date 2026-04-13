@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Loader2, Check, ChevronRight, ChevronDown,
-  Plus, LogIn, Building2, RefreshCw,
-  Briefcase, Users, Database, FileText, Rocket, Settings,
-  UserPlus, Mail, Lock, KeyRound,
+  Plus, Building2, RefreshCw,
+  Briefcase, Rocket, Settings,
+  UserPlus, Mail, Lock, Eye, EyeOff, Sparkles,
+  ArrowRight, User, MessageCircle,
 } from 'lucide-react';
 
 function detectBaseUrl() {
@@ -34,6 +34,24 @@ const LANGUAGES = [
 const COUNTRIES = [
   { value: 'ES', label: 'España' },
 ];
+const SECTORS = [
+  { value: 'technology', label: 'Tecnología' },
+  { value: 'services', label: 'Servicios' },
+  { value: 'commerce', label: 'Comercio' },
+  { value: 'manufacturing', label: 'Industria' },
+];
+const DEFAULT_ONBOARDING_FORM = {
+  fullName: '',
+  businessType: 'company',
+  clientName: '',
+  currency: 'EUR',
+  language: 'es_ES',
+  countryCode: 'ES',
+  fiscalIdType: 'NIF',
+  fiscalIdValue: '',
+  address: '',
+  sector: 'technology',
+};
 
 function formatMs(ms) {
   if (ms == null) return null;
@@ -95,7 +113,273 @@ function SelectField({ id, value, onChange, disabled, children, label }) {
   );
 }
 
-// Shared page header — shown in all views
+const AUTH_FEATURES = ['Sin tarjeta de crédito', 'Prueba gratuita', 'Acceso inmediato'];
+
+function AuthBrand() {
+  return (
+    <div className="flex items-center gap-3">
+      <img
+        src="/favicon.png"
+        alt="Etendo"
+        className="h-14 w-14 rounded-2xl border border-white/80 bg-white object-contain p-1 shadow-[0_12px_30px_rgba(250,204,21,0.45)]"
+      />
+      <span className="text-xl font-semibold tracking-[-0.03em] text-slate-900 sm:text-2xl">
+        Etendo
+      </span>
+    </div>
+  );
+}
+
+function AuthFeaturePill({ children }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white/70 px-4 py-2 text-xs font-medium text-slate-600 shadow-sm backdrop-blur sm:text-sm">
+      <Check className="h-4 w-4 text-slate-500" strokeWidth={2.5} />
+      {children}
+    </span>
+  );
+}
+
+function AuthPreviewMockup() {
+  return (
+    <div className="relative mt-12 flex w-full flex-1 items-end justify-end pb-2 pl-8">
+      <div className="absolute inset-x-16 bottom-6 h-12 rounded-full bg-white/70 blur-3xl" />
+      <img
+        src={`${import.meta.env.BASE_URL}auth-dashboard-preview.png`}
+        alt="Etendo dashboard preview"
+        className="relative z-10 block h-auto w-full max-w-[1000px] select-none pointer-events-none object-contain drop-shadow-[0_28px_56px_rgba(15,23,42,0.16)]"
+      />
+    </div>
+  );
+}
+
+function AuthShell({ switchPrompt, switchAction, onSwitch, children }) {
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="flex min-h-screen w-full bg-white lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(420px,0.88fr)]">
+        <section className="flex min-h-[720px] flex-col bg-white px-6 py-6 sm:px-8 lg:px-10 xl:px-12">
+          <div className="flex flex-col gap-5 border-b border-slate-100 pb-6 sm:flex-row sm:items-center sm:justify-between lg:border-b-0 lg:pb-0">
+            <AuthBrand />
+            <p className="text-xs text-slate-700 sm:text-sm">
+              {switchPrompt}{' '}
+              <button
+                type="button"
+                onClick={onSwitch}
+                className="font-medium text-slate-900 underline underline-offset-4 transition hover:text-slate-700"
+              >
+                {switchAction}
+              </button>
+            </p>
+          </div>
+
+          <div className="flex flex-1 items-center justify-center py-10 lg:py-16">
+            <div className="w-full max-w-[34.75rem]">{children}</div>
+          </div>
+        </section>
+
+        <aside className="relative hidden overflow-hidden bg-[#f4f6fa] px-10 py-12 lg:flex lg:flex-col xl:px-12">
+          <div className="relative flex h-full flex-col">
+            <div className="max-w-xl">
+              <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <Sparkles className="h-6 w-6 text-slate-500" />
+              </div>
+              <h2 className="max-w-xl text-3xl font-semibold tracking-[-0.05em] text-slate-900 xl:text-[2.5rem] xl:leading-[1.08]">
+                Gestiona tu negocio con ayuda de Copilot
+              </h2>
+              <p className="mt-4 max-w-2xl text-lg leading-7 text-slate-600">
+                Factura, registra gastos y obtén reportes en segundos, con una interfaz simple y guiada
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                {AUTH_FEATURES.map((feature) => (
+                  <AuthFeaturePill key={feature}>{feature}</AuthFeaturePill>
+                ))}
+              </div>
+            </div>
+
+            <AuthPreviewMockup />
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function AuthField({ id, label, required = false, icon: Icon, trailing, className = '', inputClassName = '', ...props }) {
+  return (
+    <div className={className}>
+      <Label htmlFor={id} className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+        {label}
+        {required && <span className="ml-1 text-rose-500">*</span>}
+      </Label>
+      <div className="relative">
+        {Icon && (
+          <Icon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+        )}
+        <Input
+          id={id}
+          className={`h-12 rounded-2xl border border-slate-300 bg-white text-base text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-slate-400 focus-visible:border-slate-400 focus-visible:ring-4 focus-visible:ring-slate-900/5 ${Icon ? 'pl-12' : 'pl-4'} ${trailing ? 'pr-14' : 'pr-4'} ${inputClassName}`}
+          {...props}
+        />
+        {trailing && <div className="absolute inset-y-0 right-3 flex items-center">{trailing}</div>}
+      </div>
+    </div>
+  );
+}
+
+function SetupShell({ progressLabel, progressValue, children }) {
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="flex min-h-screen w-full bg-white lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(420px,0.88fr)]">
+        <section className="flex min-h-screen flex-col bg-white px-6 py-6 sm:px-8 lg:px-10 xl:px-12">
+          <div className="flex items-start justify-between gap-6">
+            <AuthBrand />
+            <div className="w-full max-w-[22rem] pt-1">
+              <p className="text-right text-xs font-medium text-slate-500 sm:text-sm">
+                {progressLabel}
+              </p>
+              <div className="mt-3 h-2.5 rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-slate-900 transition-all duration-300"
+                  style={{ width: `${progressValue}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-1 items-center justify-center py-10 lg:py-16">
+            <div className="w-full max-w-[34.75rem]">{children}</div>
+          </div>
+        </section>
+
+        <aside className="relative hidden overflow-hidden bg-[#f4f6fa] lg:flex lg:flex-col">
+          <div className="flex h-full items-center justify-end overflow-hidden pl-12 pt-24">
+            <img
+              src={`${import.meta.env.BASE_URL}auth-dashboard-preview.png`}
+              alt="Etendo app preview"
+              className="h-auto w-[1300px] max-w-none translate-x-[14%] object-contain opacity-30 blur-[1.5px]"
+            />
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function SetupField({ id, label, required = false, trailingLabel, className = '', ...props }) {
+  return (
+    <div className={className}>
+      <Label htmlFor={id} className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+        {label}
+        {required && <span className="ml-1 text-rose-500">*</span>}
+        {trailingLabel && <span className="ml-2 font-normal text-slate-500">{trailingLabel}</span>}
+      </Label>
+      <Input
+        id={id}
+        className="h-12 rounded-2xl border border-slate-300 bg-white px-4 text-base text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-visible:border-slate-400 focus-visible:ring-4 focus-visible:ring-slate-900/5"
+        {...props}
+      />
+    </div>
+  );
+}
+
+function SetupSelect({ id, label, required = false, value, onChange, children, className = '' }) {
+  return (
+    <div className={className}>
+      <Label htmlFor={id} className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+        {label}
+        {required && <span className="ml-1 text-rose-500">*</span>}
+      </Label>
+      <select
+        id={id}
+        value={value}
+        onChange={onChange}
+        className="h-12 w-full rounded-2xl border border-slate-300 bg-white px-4 text-base text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus:outline-none focus:ring-4 focus:ring-slate-900/5"
+      >
+        {children}
+      </select>
+    </div>
+  );
+}
+
+function BusinessTypeCard({ icon: Icon, label, selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative rounded-[1.5rem] border bg-white p-4 text-left shadow-sm transition ${selected ? 'border-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.10)]' : 'border-slate-200 hover:border-slate-300'}`}
+    >
+      <span className={`absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full border ${selected ? 'border-slate-900 text-slate-900' : 'border-slate-300 text-transparent'}`}>
+        <span className={`h-3 w-3 rounded-full ${selected ? 'bg-slate-900' : 'bg-transparent'}`} />
+      </span>
+      <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <Icon className="h-6 w-6 text-slate-500" />
+      </div>
+      <p className="text-lg font-medium tracking-[-0.02em] text-slate-900 sm:text-xl">{label}</p>
+    </button>
+  );
+}
+
+function SetupProgressCard({ progress, title, description, leading, success = false }) {
+  const ringColor = success ? '#54b56a' : '#171923';
+  const trackColor = success ? '#d9f2df' : '#e6eaf2';
+  const barColor = success ? '#54b56a' : '#171923';
+
+  return (
+    <div className="mx-auto w-full max-w-[980px] rounded-[1.75rem] border border-slate-200 bg-white px-8 py-10 shadow-[0_24px_70px_rgba(15,23,42,0.10)] sm:px-12 sm:py-14">
+      <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
+        <div
+          className="flex h-20 w-20 items-center justify-center rounded-full"
+          style={{
+            background: `conic-gradient(${ringColor} 0deg ${progress * 3.6}deg, ${trackColor} ${progress * 3.6}deg 360deg)`,
+          }}
+        >
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-2xl">
+            {typeof leading === 'string' ? leading : leading}
+          </div>
+        </div>
+
+        <h2 className="mt-6 text-3xl font-semibold tracking-[-0.04em] text-slate-900 sm:text-[2.2rem]">
+          {title}
+        </h2>
+        <p className="mt-2 text-base text-slate-700 sm:text-lg">{description}</p>
+      </div>
+
+      <div className="mx-auto max-w-[460px]">
+        <div className="mb-3 flex items-center justify-between text-sm text-slate-500">
+          <span>{success ? 'Completado' : 'Cargando...'}</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="h-2 rounded-full" style={{ backgroundColor: trackColor }}>
+          <div
+            className="h-full rounded-full transition-all duration-300"
+            style={{ width: `${progress}%`, backgroundColor: barColor }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SetupProgressShell({ children }) {
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-[#f5f7fb]">
+      <div className="absolute inset-y-0 left-0 w-[150px] overflow-hidden border-r border-white/30 bg-white/10 md:w-[170px]">
+        <img
+          src={`${import.meta.env.BASE_URL}auth-dashboard-preview.png`}
+          alt="Etendo dashboard background"
+          className="absolute left-0 top-1/2 h-[120vh] max-w-none -translate-y-1/2 object-contain opacity-45 blur-[1.5px]"
+        />
+      </div>
+      <div className="absolute inset-0 bg-[#f5f7fb]/88" />
+      <div className="absolute inset-y-0 left-0 z-[1] w-[150px] bg-transparent md:w-[170px]" />
+
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-6 py-10">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Shared page header — shown in post-auth views
 function PageHeader({ accountName, onLogout, isAuthenticated }) {
   return (
     <header className="bg-white border-b border-gray-100 px-6 py-4">
@@ -125,7 +409,6 @@ function PageHeader({ accountName, onLogout, isAuthenticated }) {
 }
 
 export default function OnboardingPage() {
-  const navigate = useNavigate();
   const [view, setView] = useState(null); // null = loading initial state
   const [accountName, setAccountName] = useState(null);
 
@@ -141,6 +424,8 @@ export default function OnboardingPage() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState(null);
   const [loginLoading, setLoginLoading] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Environments state
   const [environments, setEnvironments] = useState([]);
@@ -148,10 +433,8 @@ export default function OnboardingPage() {
   const [loggingIn, setLoggingIn] = useState(null);
 
   // Create form
-  const [form, setForm] = useState({
-    clientName: '',
-    currency: 'EUR', language: 'es_ES', countryCode: 'ES',
-  });
+  const [createStep, setCreateStep] = useState(1);
+  const [form, setForm] = useState(DEFAULT_ONBOARDING_FORM);
   const [steps, setSteps] = useState(
     SETUP_STEPS.map(s => ({ ...s, status: 'pending', ms: null, error: null }))
   );
@@ -172,6 +455,7 @@ export default function OnboardingPage() {
         const envs = data.environments || [];
         setEnvironments(envs);
         if (envs.length === 0) {
+          setCreateStep(1);
           setView('create');
         } else {
           loginToEnvironment(envs[0]);
@@ -210,11 +494,37 @@ export default function OnboardingPage() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!accountName) return;
+    setForm(prev => (prev.fullName ? prev : { ...prev, fullName: accountName }));
+  }, [accountName]);
+
   // Save token + account name and route by environments
   const handleAuthSuccess = (token, account) => {
     localStorage.setItem('sf_platform_token', token);
     setAccountName(account?.name || account?.email || null);
+    setShowRegisterPassword(false);
+    setShowLoginPassword(false);
     routeByEnvironments();
+  };
+
+  const handleRegisterSuccess = (token, account) => {
+    localStorage.setItem('sf_platform_token', token);
+    setAccountName(account?.name || account?.email || null);
+    setShowRegisterPassword(false);
+    setShowLoginPassword(false);
+    setRegisterError(null);
+    setLoginError(null);
+    setResult(null);
+    setFormSubmitted(false);
+    setRunning(false);
+    setCreateStep(1);
+    setSteps(SETUP_STEPS.map(s => ({ ...s, status: 'pending', ms: null, error: null })));
+    setForm({
+      ...DEFAULT_ONBOARDING_FORM,
+      fullName: account?.name || account?.email || '',
+    });
+    setView('create');
   };
 
   const handleLogout = () => {
@@ -222,8 +532,12 @@ export default function OnboardingPage() {
     setAccountName(null);
     setRegisterForm({ name: '', email: '', password: '' });
     setLoginForm({ email: '', password: '' });
+    setForm(DEFAULT_ONBOARDING_FORM);
+    setCreateStep(1);
     setRegisterError(null);
     setLoginError(null);
+    setShowRegisterPassword(false);
+    setShowLoginPassword(false);
     setView('register');
   };
 
@@ -240,7 +554,7 @@ export default function OnboardingPage() {
       });
       const data = await res.json();
       if (res.ok && data.token) {
-        handleAuthSuccess(data.token, data.account);
+        handleRegisterSuccess(data.token, data.account);
       } else {
         setRegisterError(data?.error?.message || 'No se pudo crear la cuenta.');
       }
@@ -334,7 +648,12 @@ export default function OnboardingPage() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          clientName: form.clientName,
+          currency: form.currency,
+          language: form.language,
+          countryCode: form.countryCode,
+        }),
       });
 
       const reader = res.body.getReader();
@@ -375,7 +694,7 @@ export default function OnboardingPage() {
         if (done) break;
       }
     } catch (err) {
-      setResult({ result: 'failed', error: err.message });
+      setResult({ status: 'failed', error: err.message });
     } finally {
       setRunning(false);
       if (succeeded) {
@@ -408,7 +727,46 @@ export default function OnboardingPage() {
   }, [form]);
 
   const updateField = (field, value) => setForm(f => ({ ...f, [field]: value }));
-  const isFormValid = form.clientName;
+  const businessTypeOptions = [
+    { value: 'company', label: 'Empresa', icon: Building2 },
+    { value: 'freelancer', label: 'Autónomo', icon: User },
+    { value: 'advisory', label: 'Asesoría', icon: MessageCircle },
+  ];
+  const isStepOneValid = form.fullName.trim() && form.countryCode;
+  const isStepTwoValid = form.clientName.trim() && form.fiscalIdValue.trim();
+  const setupGreetingName = (form.fullName || accountName || 'Jhon').trim().split(/\s+/)[0];
+  const activeSetupStep = steps.find((step) => step.status === 'running')?.name;
+  const setupProgressState = result?.status === 'success'
+    ? {
+      progress: 100,
+      title: 'Tu cuenta ya está en marcha',
+      description: 'Ya puedes empezar a gestionar tu negocio',
+      leading: <Check className="h-8 w-8 text-[#54b56a]" strokeWidth={3} />,
+      success: true,
+    }
+    : activeSetupStep === 'client'
+      ? {
+        progress: 50,
+        title: 'Estamos preparando tu espacio',
+        description: 'Activando tus módulos...',
+        leading: <Sparkles className="h-8 w-8 text-slate-400" />,
+        success: false,
+      }
+      : activeSetupStep === 'organization' || activeSetupStep === 'finalize'
+        ? {
+          progress: 80,
+          title: 'Estamos preparando tu espacio',
+          description: 'Dejando todo listo...',
+          leading: <Check className="h-8 w-8 text-slate-400" strokeWidth={3} />,
+          success: false,
+        }
+        : {
+          progress: 20,
+          title: 'Estamos preparando tu espacio',
+          description: 'Configurando impuestos según tu país...',
+          leading: form.countryCode === 'ES' ? '🇪🇸' : '🌍',
+          success: false,
+        };
 
   // Calculate progress
   const completedCount = steps.filter(s => s.status === 'done').length;
@@ -429,193 +787,173 @@ export default function OnboardingPage() {
   // ── REGISTER VIEW ──
   if (view === 'register') {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <PageHeader isAuthenticated={false} />
-
-        <div className="max-w-md mx-auto p-6 pt-12">
-          <div className="text-center mb-8">
-            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <UserPlus className="h-6 w-6 text-amber-500" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Crear cuenta</h1>
-            <p className="text-gray-500 text-sm">Ingresa tus datos para empezar</p>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-100 p-6">
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <Label htmlFor="reg-name" className="text-sm text-gray-600">
-                  Nombre <span className="text-red-400">*</span>
-                </Label>
-                <div className="relative mt-1">
-                  <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  <Input
-                    id="reg-name"
-                    type="text"
-                    value={registerForm.name}
-                    onChange={e => setRegisterForm(f => ({ ...f, name: e.target.value }))}
-                    disabled={registerLoading}
-                    placeholder="Tu nombre"
-                    required
-                    className="h-11 pl-9 rounded-lg border-gray-200 focus:ring-amber-400 focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="reg-email" className="text-sm text-gray-600">
-                  Email <span className="text-red-400">*</span>
-                </Label>
-                <div className="relative mt-1">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  <Input
-                    id="reg-email"
-                    type="email"
-                    value={registerForm.email}
-                    onChange={e => setRegisterForm(f => ({ ...f, email: e.target.value }))}
-                    disabled={registerLoading}
-                    placeholder="tu@email.com"
-                    required
-                    className="h-11 pl-9 rounded-lg border-gray-200 focus:ring-amber-400 focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="reg-password" className="text-sm text-gray-600">
-                  Contrasena <span className="text-red-400">*</span>
-                </Label>
-                <div className="relative mt-1">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  <Input
-                    id="reg-password"
-                    type="password"
-                    value={registerForm.password}
-                    onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))}
-                    disabled={registerLoading}
-                    placeholder="********"
-                    required
-                    className="h-11 pl-9 rounded-lg border-gray-200 focus:ring-amber-400 focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              {registerError && (
-                <p className="text-sm text-red-500">{registerError}</p>
-              )}
-
-              <Button
-                type="submit"
-                disabled={registerLoading}
-                className="w-full h-11 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-medium"
-              >
-                {registerLoading
-                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creando cuenta...</>
-                  : 'Crear cuenta'
-                }
-              </Button>
-            </form>
-          </div>
-
-          <p className="text-center text-sm text-gray-500 mt-5">
-            Ya tenes cuenta?{' '}
-            <button
-              type="button"
-              onClick={() => { setLoginError(null); setView('login'); }}
-              className="text-amber-600 hover:text-amber-700 font-medium"
-            >
-              Iniciar sesion
-            </button>
+      <AuthShell
+        switchPrompt="¿Ya tienes una cuenta?"
+        switchAction="Iniciar sesión"
+        onSwitch={() => {
+          setRegisterError(null);
+          setLoginError(null);
+          setShowRegisterPassword(false);
+          setShowLoginPassword(false);
+          setView('login');
+        }}
+      >
+        <div className="mb-10">
+          <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]">
+            Crea tu cuenta gratis
+          </h1>
+          <p className="mt-3 text-base text-slate-600 sm:text-xl">
+            Empieza en menos de 1 minuto
           </p>
         </div>
-      </div>
+
+        <form onSubmit={handleRegister} className="space-y-5">
+          <AuthField
+            id="reg-name"
+            type="text"
+            label="Nombre"
+            icon={UserPlus}
+            value={registerForm.name}
+            onChange={e => setRegisterForm(f => ({ ...f, name: e.target.value }))}
+            disabled={registerLoading}
+            placeholder="Tu nombre"
+            autoComplete="name"
+            required
+          />
+
+          <AuthField
+            id="reg-email"
+            type="email"
+            label="Correo electrónico"
+            icon={Mail}
+            value={registerForm.email}
+            onChange={e => setRegisterForm(f => ({ ...f, email: e.target.value }))}
+            disabled={registerLoading}
+            placeholder="tu@email.com"
+            autoComplete="email"
+            required
+          />
+
+          <AuthField
+            id="reg-password"
+            type={showRegisterPassword ? 'text' : 'password'}
+            label="Contraseña"
+            icon={Lock}
+            value={registerForm.password}
+            onChange={e => setRegisterForm(f => ({ ...f, password: e.target.value }))}
+            disabled={registerLoading}
+            placeholder="********"
+            autoComplete="new-password"
+            required
+            trailing={(
+              <button
+                type="button"
+                aria-label={showRegisterPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                onClick={() => setShowRegisterPassword(value => !value)}
+                className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              >
+                {showRegisterPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            )}
+          />
+
+          {registerError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+              {registerError}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            disabled={registerLoading}
+            className="h-12 w-full rounded-2xl bg-gray-900 text-base font-medium text-white hover:bg-gray-800"
+          >
+            {registerLoading
+              ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Creando cuenta...</>
+              : 'Crear cuenta'}
+          </Button>
+        </form>
+      </AuthShell>
     );
   }
 
   // ── LOGIN VIEW ──
   if (view === 'login') {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <PageHeader isAuthenticated={false} />
-
-        <div className="max-w-md mx-auto p-6 pt-12">
-          <div className="text-center mb-8">
-            <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <KeyRound className="h-6 w-6 text-amber-500" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Iniciar sesion</h1>
-            <p className="text-gray-500 text-sm">Bienvenido de nuevo</p>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-100 p-6">
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Label htmlFor="login-email" className="text-sm text-gray-600">
-                  Email <span className="text-red-400">*</span>
-                </Label>
-                <div className="relative mt-1">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  <Input
-                    id="login-email"
-                    type="email"
-                    value={loginForm.email}
-                    onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))}
-                    disabled={loginLoading}
-                    placeholder="tu@email.com"
-                    required
-                    className="h-11 pl-9 rounded-lg border-gray-200 focus:ring-amber-400 focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label htmlFor="login-password" className="text-sm text-gray-600">
-                  Contrasena <span className="text-red-400">*</span>
-                </Label>
-                <div className="relative mt-1">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                  <Input
-                    id="login-password"
-                    type="password"
-                    value={loginForm.password}
-                    onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
-                    disabled={loginLoading}
-                    placeholder="********"
-                    required
-                    className="h-11 pl-9 rounded-lg border-gray-200 focus:ring-amber-400 focus:border-amber-400"
-                  />
-                </div>
-              </div>
-
-              {loginError && (
-                <p className="text-sm text-red-500">{loginError}</p>
-              )}
-
-              <Button
-                type="submit"
-                disabled={loginLoading}
-                className="w-full h-11 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-medium"
-              >
-                {loginLoading
-                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Iniciando sesion...</>
-                  : 'Iniciar sesion'
-                }
-              </Button>
-            </form>
-          </div>
-
-          <p className="text-center text-sm text-gray-500 mt-5">
-            No tenes cuenta?{' '}
-            <button
-              type="button"
-              onClick={() => { setRegisterError(null); setView('register'); }}
-              className="text-amber-600 hover:text-amber-700 font-medium"
-            >
-              Crear una
-            </button>
+      <AuthShell
+        switchPrompt="¿Aún no tienes una cuenta?"
+        switchAction="Crear cuenta"
+        onSwitch={() => {
+          setRegisterError(null);
+          setLoginError(null);
+          setShowRegisterPassword(false);
+          setShowLoginPassword(false);
+          setView('register');
+        }}
+      >
+        <div className="mb-10">
+          <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]">
+            Inicia sesión en tu cuenta
+          </h1>
+          <p className="mt-3 text-base text-slate-600 sm:text-xl">
+            Continúa donde lo dejaste
           </p>
         </div>
-      </div>
+
+        <form onSubmit={handleLogin} className="space-y-5">
+          <AuthField
+            id="login-email"
+            type="email"
+            label="Correo electrónico"
+            icon={Mail}
+            value={loginForm.email}
+            onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))}
+            disabled={loginLoading}
+            placeholder="tu@email.com"
+            autoComplete="email"
+            required
+          />
+
+          <AuthField
+            id="login-password"
+            type={showLoginPassword ? 'text' : 'password'}
+            label="Contraseña"
+            icon={Lock}
+            value={loginForm.password}
+            onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))}
+            disabled={loginLoading}
+            placeholder="********"
+            autoComplete="current-password"
+            required
+            trailing={(
+              <button
+                type="button"
+                aria-label={showLoginPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                onClick={() => setShowLoginPassword(value => !value)}
+                className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              >
+                {showLoginPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            )}
+          />
+
+          {loginError && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+              {loginError}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            disabled={loginLoading}
+            className="h-12 w-full rounded-2xl bg-gray-900 text-base font-medium text-white hover:bg-gray-800"
+          >
+            {loginLoading
+              ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />Iniciando sesión...</>
+              : 'Iniciar sesión'}
+          </Button>
+        </form>
+      </AuthShell>
     );
   }
 
@@ -644,7 +982,7 @@ export default function OnboardingPage() {
                 <RefreshCw className={`h-4 w-4 ${loadingEnvs ? 'animate-spin' : ''}`} />
               </Button>
               <Button
-                onClick={() => setView('create')}
+                onClick={() => { setCreateStep(1); setResult(null); setView('create'); }}
                 className="bg-amber-400 hover:bg-amber-500 text-white"
               >
                 <Plus className="h-4 w-4 mr-1" /> Nuevo entorno
@@ -671,7 +1009,7 @@ export default function OnboardingPage() {
               <p className="text-lg font-medium text-gray-900 mb-1">Sin entornos</p>
               <p className="text-gray-500 text-sm mb-6">Crea tu primer entorno para comenzar.</p>
               <Button
-                onClick={() => setView('create')}
+                onClick={() => { setCreateStep(1); setResult(null); setView('create'); }}
                 className="bg-amber-400 hover:bg-amber-500 text-white"
               >
                 <Plus className="h-4 w-4 mr-1" /> Crear entorno
@@ -717,230 +1055,174 @@ export default function OnboardingPage() {
     );
   }
 
-  // ── CREATE VIEW (matches "Primeros pasos" design) ──
+  // ── CREATE VIEW ──
+  if (running || result?.status === 'success') {
+    return (
+      <SetupProgressShell>
+        <SetupProgressCard {...setupProgressState} />
+      </SetupProgressShell>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <PageHeader
-        isAuthenticated
-        accountName={accountName}
-        onLogout={handleLogout}
-      />
+    <SetupShell
+      progressLabel={createStep === 1 ? 'Un paso más' : 'Casi listo'}
+      progressValue={createStep === 1 ? 50 : 90}
+    >
+      {createStep === 1 ? (
+        <div>
+          <div className="mb-10">
+            <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]">
+              Hola {setupGreetingName} 👋
+            </h1>
+            <p className="mt-3 text-base text-slate-700 sm:text-xl">
+              Vamos a dejar todo listo en menos de 1 minuto
+            </p>
+          </div>
 
-      {/* Back link + progress bar */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-2xl mx-auto px-6 py-3 flex items-center gap-3">
-          {!running && environments.length > 1 && (
-            <button
-              type="button"
-              onClick={() => { setView('list'); setResult(null); setFormSubmitted(false); }}
-              className="text-sm text-gray-500 hover:text-gray-700 mr-2"
-            >
-              Mis entornos
-            </button>
-          )}
-          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gray-900 rounded-full transition-all duration-700 ease-out"
-              style={{ width: `${progressPercent}%` }}
+          <div className="space-y-6">
+            <SetupField
+              id="fullName"
+              label="Nombre completo"
+              required
+              value={form.fullName}
+              onChange={e => updateField('fullName', e.target.value)}
+              placeholder="Jhon Doe"
             />
+
+            <SetupSelect
+              id="countryCode"
+              label="País"
+              required
+              value={form.countryCode}
+              onChange={e => updateField('countryCode', e.target.value)}
+            >
+              {COUNTRIES.map((country) => (
+                <option key={country.value} value={country.value}>{country.label}</option>
+              ))}
+            </SetupSelect>
+
+            <div>
+              <Label className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+                Tipo de negocio:
+              </Label>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {businessTypeOptions.map((option) => (
+                  <BusinessTypeCard
+                    key={option.value}
+                    icon={option.icon}
+                    label={option.label}
+                    selected={form.businessType === option.value}
+                    onClick={() => updateField('businessType', option.value)}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
-          <span className="text-xs text-gray-400 whitespace-nowrap">
-            {result?.status === 'success'
-              ? 'Listo'
-              : completedCount === 0 && !formSubmitted
-                ? 'Primeros pasos'
-                : `Paso ${completedCount + (formSubmitted ? 1 : 0)} de ${totalSteps}`
-            }
-          </span>
+
+          <div className="mt-8 flex justify-end">
+            <Button
+              type="button"
+              onClick={() => setCreateStep(2)}
+              disabled={!isStepOneValid}
+              className="h-12 rounded-2xl bg-gray-900 px-6 text-base font-medium text-white hover:bg-gray-800"
+            >
+              Continuar <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div>
+          <div className="mb-10">
+            <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]">
+              Datos para empezar a facturar
+            </h1>
+            <p className="mt-3 text-base text-slate-700 sm:text-xl">
+              Puedes editarlos más adelante
+            </p>
+          </div>
 
-      <div className="max-w-2xl mx-auto p-6">
-        {/* Title */}
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-          Vamos a preparar tu cuenta
-        </h1>
-        <p className="text-gray-500 text-sm mb-6">
-          Completa los datos y en menos de 10 minutos tendras todo listo para empezar.
-        </p>
+          <div className="space-y-6">
+            <SetupField
+              id="clientName"
+              label="Nombre de la empresa"
+              required
+              value={form.clientName}
+              onChange={e => updateField('clientName', e.target.value)}
+              placeholder="Mi empresa"
+            />
 
-        {/* Steps list */}
-        <div className="bg-white rounded-xl border border-gray-100">
+            <div>
+              <Label htmlFor="fiscalIdValue" className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+                Identificación fiscal <span className="ml-1 text-rose-500">*</span>
+              </Label>
+              <div className="flex overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-within:ring-4 focus-within:ring-slate-900/5">
+                <div className="flex min-w-[88px] items-center justify-center border-r border-slate-300 px-4 text-base text-slate-500">
+                  {form.fiscalIdType}
+                </div>
+                <input
+                  id="fiscalIdValue"
+                  type="text"
+                  value={form.fiscalIdValue}
+                  onChange={e => updateField('fiscalIdValue', e.target.value)}
+                  placeholder="12345678Z"
+                  className="h-12 w-full border-0 px-4 text-base text-slate-900 outline-none placeholder:text-slate-400"
+                />
+              </div>
+            </div>
 
-          {/* Step 0: Configuration form */}
-          <div className="border-b border-gray-50">
+            <SetupField
+              id="address"
+              label="Dirección"
+              trailingLabel="(opcional)"
+              value={form.address}
+              onChange={e => updateField('address', e.target.value)}
+              placeholder="Av. Corrientes 1234"
+            />
+
+            <SetupSelect
+              id="sector"
+              label="Sector"
+              value={form.sector}
+              onChange={e => updateField('sector', e.target.value)}
+            >
+              {SECTORS.map((sector) => (
+                <option key={sector.value} value={sector.value}>{sector.label}</option>
+              ))}
+            </SetupSelect>
+          </div>
+
+          {result?.status === 'failed' && (
+            <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+              {result.error}
+            </div>
+          )}
+
+          <div className="mt-8 flex items-center justify-between gap-4">
             <button
               type="button"
-              className="w-full flex items-center gap-4 px-5 py-4 text-left"
-              onClick={() => !running && setFormSubmitted(false)}
+              onClick={() => !running && setCreateStep(1)}
               disabled={running}
+              className="text-base font-medium tracking-[-0.02em] text-slate-900 transition hover:text-slate-600 disabled:opacity-50 sm:text-lg"
             >
-              <StepIcon
-                status={formSubmitted ? 'done' : 'active'}
-                Icon={Settings}
-              />
-              <div className="flex-1 min-w-0">
-                <p className={`text-lg font-semibold ${formSubmitted ? 'text-gray-500' : 'text-gray-900'}`}>
-                  Datos de tu empresa
-                </p>
-                {formSubmitted && !running && (
-                  <p className="text-xs text-gray-400 mt-0.5">{form.clientName}</p>
-                )}
-              </div>
-              {!formSubmitted && (
-                <ChevronDown className="h-4 w-4 text-gray-400" />
-              )}
+              Atrás
             </button>
 
-            {/* Inline form (shown when not submitted) */}
-            {!formSubmitted && (
-              <div className="px-5 pb-5 pt-1 space-y-4">
-                <div>
-                  <Label htmlFor="clientName" className="text-sm text-gray-600">
-                    Nombre de la empresa <span className="text-red-400">*</span>
-                  </Label>
-                  <Input
-                    id="clientName"
-                    value={form.clientName}
-                    onChange={e => updateField('clientName', e.target.value)}
-                    disabled={running}
-                    placeholder="Mi Empresa S.A."
-                    className="mt-1 h-11 rounded-lg border-gray-200 focus:ring-amber-400 focus:border-amber-400"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <SelectField
-                    id="currency"
-                    value={form.currency}
-                    onChange={e => updateField('currency', e.target.value)}
-                    disabled={running}
-                    label="Moneda"
-                  >
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </SelectField>
-                  <SelectField
-                    id="language"
-                    value={form.language}
-                    onChange={e => updateField('language', e.target.value)}
-                    disabled={running}
-                    label="Idioma"
-                  >
-                    {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                  </SelectField>
-                  <SelectField
-                    id="countryCode"
-                    value={form.countryCode}
-                    onChange={e => updateField('countryCode', e.target.value)}
-                    disabled={running}
-                    label="Pais"
-                  >
-                    {COUNTRIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                  </SelectField>
-                </div>
-                <div className="pt-2">
-                  <Button
-                    onClick={runOnboarding}
-                    disabled={running || !isFormValid}
-                    className="w-full h-11 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-medium"
-                  >
-                    {running
-                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creando...</>
-                      : <><ChevronRight className="mr-1 h-4 w-4" />Crear entorno</>
-                    }
-                  </Button>
-                </div>
-              </div>
-            )}
+            <Button
+              type="button"
+              onClick={runOnboarding}
+              disabled={running || !isStepTwoValid}
+              className="h-12 rounded-2xl bg-gray-900 px-6 text-base font-medium text-white hover:bg-gray-800 disabled:bg-slate-200 disabled:text-slate-500"
+            >
+              {running ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Empezando...</>
+              ) : (
+                <><ArrowRight className="mr-2 h-4 w-4" />Empezar</>
+              )}
+            </Button>
           </div>
-
-          {/* Automated steps */}
-          {steps.map((step, i) => {
-            const isPending = step.status === 'pending';
-            const isDone = step.status === 'done';
-
-            return (
-              <div
-                key={step.name}
-                className={`${i < steps.length - 1 ? 'border-b border-gray-50' : ''}`}
-              >
-                <div className="flex items-center gap-4 px-5 py-4">
-                  <StepIcon status={step.status} Icon={step.icon} />
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-lg font-semibold ${
-                      isDone ? 'text-gray-500' :
-                      step.status === 'running' ? 'text-gray-900' :
-                      step.status === 'failed' ? 'text-red-600' :
-                      'text-gray-400'
-                    }`}>
-                      {step.label}
-                    </p>
-                    {step.status === 'running' && (
-                      <p className="text-xs text-amber-600 mt-0.5">Procesando...</p>
-                    )}
-                    {step.status === 'failed' && (
-                      <p className="text-xs text-red-500 mt-0.5 break-all">{step.error}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {isDone && step.ms != null && (
-                      <span className="text-xs text-gray-400">{formatMs(step.ms)}</span>
-                    )}
-                    {isPending && (
-                      <span className="text-xs text-gray-300">{step.estimate}</span>
-                    )}
-                    {step.status === 'running' && (
-                      <Loader2 className="h-3 w-3 animate-spin text-amber-400" />
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
-
-        {/* Result message */}
-        {result && (
-          <div className={`mt-4 rounded-xl border p-5 ${
-            result.status === 'success'
-              ? 'bg-green-50 border-green-200'
-              : 'bg-red-50 border-red-200'
-          }`}>
-            {result.status === 'success' ? (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Loader2 className="h-5 w-5 text-white animate-spin" />
-                </div>
-                <div>
-                  <p className="font-medium text-green-900">Entorno creado</p>
-                  <p className="text-sm text-green-700">
-                    Entrando a tu entorno...
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div>
-                <p className="font-medium text-red-900 mb-1">No se pudo crear el entorno</p>
-                <p className="text-sm text-red-700 mb-3">{result.error}</p>
-                {result.rolledBack && (
-                  <p className="text-xs text-red-500 mb-3">Todos los cambios fueron revertidos.</p>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setResult(null);
-                    setFormSubmitted(false);
-                    setSteps(SETUP_STEPS.map(s => ({ ...s, status: 'pending', ms: null, error: null })));
-                  }}
-                  className="border-red-200 text-red-700 hover:bg-red-100"
-                >
-                  Intentar de nuevo
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </SetupShell>
   );
 }

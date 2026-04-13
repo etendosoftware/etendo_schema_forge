@@ -58,6 +58,19 @@ On mount, `AuthContext` reads the Etendo auth token from localStorage to restore
 /*           -->  AuthGuard  -->  AppLayout  -->  Routes
 ```
 
+### Onboarding UX States
+
+`OnboardingPage.jsx` currently handles four public auth/onboarding states before the protected app loads:
+
+1. **Register** -- create the platform account.
+2. **Login** -- sign in with an existing platform account.
+3. **Pre-create setup** -- a two-step onboarding wizard collects the user profile and initial company data before environment creation starts.
+4. **Creation progress modal** -- while `/sws/go/onboarding` runs, the UI switches to a centered modal-style progress state (20% / 50% / 80% / 100%) over a blurred application background until the new environment is ready.
+
+After a successful platform login or registration, `routeByEnvironments()` decides whether to:
+- open the setup wizard when the account has no environments yet, or
+- auto-login to the first available environment and redirect to `/dashboard`.
+
 ### API Call Authentication
 
 `createApiFetch()` wraps `fetch()` with:
