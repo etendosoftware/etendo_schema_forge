@@ -37,17 +37,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-        - name: Build app-shell
-          run: npm run build --workspace=tools/app-shell
-          env:
-            # VITE_PUBLIC_ORIGIN is consumed by mcpWellKnownPlugin (vite.config.js)
-            # to emit static RFC 9728 / RFC 8414 discovery docs at /.well-known/*
-            # with absolute URLs per environment. See docs/ops/cloudfront-alb-routing.md.
-            VITE_PUBLIC_ORIGIN: ${{ steps.target.outputs.public_origin }}
-            VITE_BUILD_ID: ${{ github.run_id }}
+      - name: Build app-shell
+        run: npm run build --workspace=tools/app-shell
+        env:
+          # VITE_PUBLIC_ORIGIN is consumed by mcpWellKnownPlugin (vite.config.js)
+          # to emit static RFC 9728 / RFC 8414 discovery docs at /.well-known/*
+          # with absolute URLs per environment. See docs/ops/cloudfront-alb-routing.md.
+          VITE_PUBLIC_ORIGIN: ${{ steps.target.outputs.public_origin }}
+          # VITE_BUILD_ID is unique per workflow run (even same commit) — ensures sw.js
+          # always differs between deploys so the service worker updates on every redeploy
+          VITE_BUILD_ID: ${{ github.run_id }}
         # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
-        # VITE_BUILD_ID is unique per workflow run (even same commit) — ensures sw.js
-        # always differs between deploys so the service worker updates on every redeploy
 
       - name: Generate reports manifest
         run: node cli/src/generate-reports-manifest.js
