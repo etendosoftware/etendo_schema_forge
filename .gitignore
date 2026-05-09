@@ -51,3 +51,7 @@ review-report.md
 coverage/
 tools/app-shell/coverage/
 sonar-reports/
+reports/react-doctor/*
+!reports/react-doctor/current.md
+!reports/react-doctor/current.json
+!reports/react-doctor/history.csv

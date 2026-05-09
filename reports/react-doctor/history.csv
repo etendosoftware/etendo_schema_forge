@@ -1,0 +1,7 @@
+timestamp,workspace,score,files,errors,warnings
+2026-05-09T00:24:47.193Z,@schema-forge/app-shell,45,416,15,2010
+2026-05-09T00:24:47.193Z,@schema-forge/decision-panel,95,6,0,11
+2026-05-09T00:24:47.193Z,@schema-forge/quick-order-app,95,13,0,7
+2026-05-09T00:24:47.193Z,@schema-forge/spike-hello-app,98,7,0,4
+2026-05-09T00:24:47.193Z,@schema-forge/ui-preview,98,3,1,2
+2026-05-09T00:24:47.193Z,__average__,86,,16,2034
