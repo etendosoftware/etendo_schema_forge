@@ -49,7 +49,8 @@
           "grid": false,
           "form": false,
           "searchable": true,
-          "readOnlyLogic": null
+          "readOnlyLogic": null,
+          "seq": 20
         },
         "transactionDocument": {
           "visibility": "editable",
@@ -120,15 +121,17 @@
           "section": "principal",
           "reference": "PriceList",
           "inputMode": "selector",
-          "readOnlyLogic": "@Processed@='Y'"
+          "readOnlyLogic": "@Processed@='Y'",
+          "seq": 70
         },
         "orderReference": {
           "visibility": "editable",
           "section": "principal",
           "grid": true,
           "gridOrder": 2,
+          "form": true,
           "searchable": true,
-          "readOnlyLogic": "@Processed@='Y'",
+          "readOnlyLogic": null,
           "seq": 20
         },
         "taxDate": {
@@ -329,6 +332,82 @@
         },
         "etgoTotalDiscount": {
           "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiClaveTipoFc": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiPurDescription": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiDescripcionSii": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiCauseExemption": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiIsauthorization": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiIssent": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiEstado": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etsgDateOperation": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiFechaRegCont": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiEjercicio": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiPeriodo": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "tbaiIssent": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etvfacInvoiceStatus": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etvfacSentToVerifac": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etvfacDateIssue": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etvfacHash": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etvfacQRURL": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etvfacIssueDescription": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "cdigoCSV": {
+          "visibility": "readOnly",
           "form": false
         }
       }

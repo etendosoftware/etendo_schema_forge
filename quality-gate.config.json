@@ -37,6 +37,9 @@
       "hiddenContainsGrossUnitPriceAndPriceList": true
     },
     "draftModeReadOnlyLogic": true,
+    "draftModeReadOnlyLogicAllowlist": [
+      "purchase-invoice.header.orderReference"
+    ],
     "notNullRequiresRequired": true,
     "customFormPathRoot": "@/windows/custom/"
   }

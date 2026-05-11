@@ -80,6 +80,12 @@ function findQuantityEntrySource(addLineFieldsSource) {
   return objectMatches.find((objectSource) => /key:\s*['"][^'"]*(quantity|qty)[^'"]*['"]/i.test(objectSource)) ?? null;
 }
 
+function isDraftModeReadOnlyLogicAllowed(windowName, primaryEntity, fieldName, allowlist = []) {
+  const fullKey = `${windowName}.${primaryEntity}.${fieldName}`;
+  const localKey = `${primaryEntity}.${fieldName}`;
+  return allowlist.includes(fullKey) || allowlist.includes(localKey);
+}
+
 export async function runInvariantsCheck(windowName, { rootDir, windowDir, config }) {
   const contract = readContract(windowDir);
   if (!contract?.frontendContract) {
@@ -91,10 +97,14 @@ export async function runInvariantsCheck(windowName, { rootDir, windowDir, confi
   const primaryEntity = contract.frontendContract.window?.primaryEntity ?? Object.keys(entities)[0] ?? null;
   const headerEntity = primaryEntity ? entities[primaryEntity] : null;
   const anyDraftMode = Object.values(entities).some((entity) => entity?.draftMode?.enabled === true);
+  const draftModeReadOnlyLogicAllowlist = config?.invariants?.draftModeReadOnlyLogicAllowlist ?? [];
 
   if (config?.invariants?.draftModeReadOnlyLogic && anyDraftMode && headerEntity?.fields) {
     for (const field of headerEntity.fields) {
       if (!field.form || NON_EDITABLE_VISIBILITIES.has(field.visibility)) {
+        continue;
+      }
+      if (isDraftModeReadOnlyLogicAllowed(windowName, primaryEntity, field.name, draftModeReadOnlyLogicAllowlist)) {
         continue;
       }
       if (!field.readOnlyLogic) {

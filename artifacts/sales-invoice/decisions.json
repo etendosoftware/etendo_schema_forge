@@ -240,7 +240,9 @@
           "name": "adClientId"
         },
         "organization": {
-          "name": "adOrgId"
+          "name": "adOrgId",
+          "visibility": "readOnly",
+          "form": false
         },
         "transactionDocument": {
           "name": "cDocTypeTargetId"
@@ -283,6 +285,62 @@
         },
         "etgoTotalDiscount": {
           "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiClaveTipo": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiDescription": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiDescripcionSii": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiCauseExemption": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiIsauthorization": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiIssent": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiEstado": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "tbaiIssent": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etsgDateOperation": {
+          "visibility": "editable",
+          "form": false
+        },
+        "aeatsiiEjercicio": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "aeatsiiPeriodo": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "tbaiSequence": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "tbaiInvoicenum": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "tbaiInvoiceseq": {
+          "visibility": "readOnly",
           "form": false
         }
       }

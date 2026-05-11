@@ -1,5 +1,6 @@
 import { useUI } from '@/i18n';
 import RelatedDocuments from './RelatedDocuments.jsx';
+import SifDataTabs from '@/windows/custom/shared/SifDataTabs.jsx';
 import { formatCurrency } from '@/lib/formatCurrency';
 import DocumentTotalsPanel from '@/components/contract-ui/DocumentTotalsPanel.jsx';
 
@@ -90,6 +91,7 @@ export default function PurchaseInvoiceBottomPanel({
               </div>
             </div>
           )}
+          <SifDataTabs data={data} recordId={recordId} token={token} apiBaseUrl={apiBaseUrl} />
         </div>
 
         {/* ── Vertical separator ── */}

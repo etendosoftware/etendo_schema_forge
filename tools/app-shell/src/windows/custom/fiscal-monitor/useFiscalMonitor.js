@@ -44,27 +44,44 @@ async function fetchConfigRecord(base, spec, entity, orgId, token) {
   return resp.data?.[0] ?? null;
 }
 
-async function fetchCount(base, spec, entity, orgId, token) {
-  const resp = await get(base, spec, entity, { organization: orgId, _limit: '1' }, token);
+async function fetchCount(base, spec, entity, params, token) {
+  const resp = await get(base, spec, entity, { ...params, _limit: '1' }, token);
   return { totalCount: resp.totalRows ?? 0 };
 }
 
+async function fetchSiiParentId(base, orgId, token) {
+  // The sii-monitor spec's child entities (issuedInvoices, receivedInvoices, etc.) are
+  // child tabs of the "organizations" (aeatsii_config) entity. NEO Headless requires
+  // a parentId (the aeatsii_config record PK) to correctly resolve the tab HQL tokens.
+  const resp = await get(base, SII_SPEC, 'organizations', { organization: orgId, _limit: '1' }, token);
+  return resp.data?.[0]?.id ?? null;
+}
+
 async function fetchSiiMonitorData(base, orgId, token) {
+  const parentId = await fetchSiiParentId(base, orgId, token);
+  if (!parentId) {
+    return { counts: { issued: { totalCount: 0 }, received: { totalCount: 0 }, issuedPrevious: { totalCount: 0 }, receivedPrevious: { totalCount: 0 } }, parentId: null };
+  }
+  const siiParams = { parentId };
   const [emitidas, recibidas, emitidasAnt, recibidasAnt] = await Promise.all([
-    fetchCount(base, SII_SPEC, SII_EMITIDAS_ENTITY,      orgId, token),
-    fetchCount(base, SII_SPEC, SII_RECIBIDAS_ENTITY,     orgId, token),
-    fetchCount(base, SII_SPEC, SII_EMITIDAS_ANT_ENTITY,  orgId, token),
-    fetchCount(base, SII_SPEC, SII_RECIBIDAS_ANT_ENTITY, orgId, token),
+    fetchCount(base, SII_SPEC, SII_EMITIDAS_ENTITY,      siiParams, token),
+    fetchCount(base, SII_SPEC, SII_RECIBIDAS_ENTITY,     siiParams, token),
+    fetchCount(base, SII_SPEC, SII_EMITIDAS_ANT_ENTITY,  siiParams, token),
+    fetchCount(base, SII_SPEC, SII_RECIBIDAS_ANT_ENTITY, siiParams, token),
   ]);
-  return { issued: emitidas, received: recibidas, issuedPrevious: emitidasAnt, receivedPrevious: recibidasAnt };
+  return {
+    counts: { issued: emitidas, received: recibidas, issuedPrevious: emitidasAnt, receivedPrevious: recibidasAnt },
+    parentId,
+  };
 }
 
 async function fetchVerifactuMonitorData(base, orgId, token) {
+  const orgParams = { organization: orgId };
   const [accepted, partial, rejected, invalid] = await Promise.all([
-    fetchCount(base, VF_SPEC, VF_ACEPTADAS_ENTITY,  orgId, token),
-    fetchCount(base, VF_SPEC, VF_PARCIAL_ENTITY,    orgId, token),
-    fetchCount(base, VF_SPEC, VF_RECHAZADAS_ENTITY, orgId, token),
-    fetchCount(base, VF_SPEC, VF_INVALIDAS_ENTITY,  orgId, token),
+    fetchCount(base, VF_SPEC, VF_ACEPTADAS_ENTITY,  orgParams, token),
+    fetchCount(base, VF_SPEC, VF_PARCIAL_ENTITY,    orgParams, token),
+    fetchCount(base, VF_SPEC, VF_RECHAZADAS_ENTITY, orgParams, token),
+    fetchCount(base, VF_SPEC, VF_INVALIDAS_ENTITY,  orgParams, token),
   ]);
   return { accepted, partiallyAccepted: partial, rejected, invalid };
 }
@@ -97,11 +114,12 @@ export function useFiscalMonitor(orgId, token, apiBaseUrl) {
     profile: null,
     monitorData: {},
     kpis: {},
+    siiParentId: null,
   });
 
   const load = useCallback(async () => {
     if (!orgId) {
-      setState({ loading: false, error: null, profile: 'unconfigured', monitorData: {}, kpis: {} });
+      setState({ loading: false, error: null, profile: 'unconfigured', monitorData: {}, kpis: {}, siiParentId: null });
       return;
     }
     setState(s => ({ ...s, loading: true, error: null }));
@@ -115,8 +133,11 @@ export function useFiscalMonitor(orgId, token, apiBaseUrl) {
       const profile = detectProfile(siiCfg, tbaiCfg, vfCfg);
 
       let monitorData = {};
+      let siiParentId = null;
       if (profile === 'sii' || profile === 'sii-navarra' || profile === 'sii+tbai') {
-        monitorData.sii = await fetchSiiMonitorData(base, orgId, token);
+        const siiResult = await fetchSiiMonitorData(base, orgId, token);
+        monitorData.sii = siiResult.counts;
+        siiParentId = siiResult.parentId;
       }
       if (profile === 'tbai' || profile === 'sii+tbai') {
         monitorData.tbai = await fetchTbaiData(base, orgId, token);
@@ -131,6 +152,7 @@ export function useFiscalMonitor(orgId, token, apiBaseUrl) {
         profile,
         monitorData,
         kpis: computeKpis(profile, monitorData),
+        siiParentId,
       });
     } catch (err) {
       setState(s => ({ ...s, loading: false, error: err.message }));

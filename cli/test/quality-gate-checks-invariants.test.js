@@ -213,4 +213,37 @@ describe('runInvariantsCheck', () => {
       rmSync(rootDir, { recursive: true, force: true });
     }
   });
+
+  it('allows explicit draftMode readOnlyLogic exceptions for intentionally editable fields', async () => {
+    const { rootDir, windowDir } = buildFixture({ withViolations: true });
+
+    try {
+      const result = await runInvariantsCheck('sales-order', {
+        rootDir,
+        windowDir,
+        config: {
+          invariants: {
+            addLineFields: {
+              requiredProductLookup: true,
+              quantityDefaultOne: true,
+              hiddenContainsGrossUnitPriceAndPriceList: true,
+            },
+            draftModeReadOnlyLogic: true,
+            draftModeReadOnlyLogicAllowlist: ['sales-order.header.documentNo'],
+            notNullRequiresRequired: true,
+            customFormPathRoot: '@/windows/custom/',
+          },
+        },
+      });
+
+      assert.equal(result.status, 'fail');
+      assert.doesNotMatch(result.detail, /documentNo/);
+      assert.match(result.detail, /product/);
+      assert.match(result.detail, /quantity field/);
+      assert.match(result.detail, /priceList/);
+      assert.match(result.detail, /MissingPanel/);
+    } finally {
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
 });

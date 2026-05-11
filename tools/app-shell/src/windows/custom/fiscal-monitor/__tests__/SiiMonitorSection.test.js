@@ -87,8 +87,8 @@ describe('SiiMonitorSection — data fetching', () => {
     assert.match(src, /setPage\(1\)/);
   });
 
-  it('fetches from the sii-monitor NEO endpoint with organization param', () => {
-    assert.match(src, /organization.*orgId/);
+  it('fetches from the sii-monitor NEO endpoint with parentId param', () => {
+    assert.match(src, /parentId/);
     assert.match(src, /_startRow/);
     assert.match(src, /_endRow/);
   });

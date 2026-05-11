@@ -1,8 +1,8 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-05-07T18:27:54.772Z",
-  "checksum": "0680520629a18531",
+  "updatedAt": "2026-05-11T11:52:33.346Z",
+  "checksum": "d9bc02604ffd915b",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1778,20 +1778,20 @@
                 "name": "MURCIA AEROPUERTO"
               },
               {
-                "value": "INTRES_1711",
-                "name": "PALAMOS MARITIMA"
-              },
-              {
-                "value": "INTRES_2011",
-                "name": "PASAJES MARITIMA"
+                "value": "INTRES_0711",
+                "name": "P . MALLORCA MARITIMA"
               },
               {
                 "value": "INTRES_0701",
                 "name": "P. MALLORCA AEROPUERTO"
               },
               {
-                "value": "INTRES_0711",
-                "name": "P . MALLORCA MARITIMA"
+                "value": "INTRES_1711",
+                "name": "PALAMOS MARITIMA"
+              },
+              {
+                "value": "INTRES_2011",
+                "name": "PASAJES MARITIMA"
               },
               {
                 "value": "INTRES_1121",
@@ -2562,20 +2562,20 @@
                 "name": "MURCIA AEROPUERTO"
               },
               {
-                "value": "INTRES_1711",
-                "name": "PALAMOS MARITIMA"
-              },
-              {
-                "value": "INTRES_2011",
-                "name": "PASAJES MARITIMA"
+                "value": "INTRES_0711",
+                "name": "P . MALLORCA MARITIMA"
               },
               {
                 "value": "INTRES_0701",
                 "name": "P. MALLORCA AEROPUERTO"
               },
               {
-                "value": "INTRES_0711",
-                "name": "P . MALLORCA MARITIMA"
+                "value": "INTRES_1711",
+                "name": "PALAMOS MARITIMA"
+              },
+              {
+                "value": "INTRES_2011",
+                "name": "PASAJES MARITIMA"
               },
               {
                 "value": "INTRES_1121",

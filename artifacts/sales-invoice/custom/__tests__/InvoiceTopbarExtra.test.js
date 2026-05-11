@@ -125,4 +125,17 @@ describe('InvoiceTopbarExtra', () => {
     assert.match(src, /sessionStorage/);
     assert.match(src, /invoice:sendAfterConfirm/);
   });
+
+  // ── SendToSifButton integration ────────────────────────────────────────────
+
+  it('imports SendToSifButton from the custom directory', () => {
+    assert.match(src, /import SendToSifButton from ['"]\.\/SendToSifButton['"]/);
+  });
+
+  it('renders SendToSifButton with data, recordId, token, apiBaseUrl, and status props', () => {
+    assert.match(src, /<SendToSifButton/);
+    assert.match(src, /recordId=\{recordId\}/);
+    assert.match(src, /token=\{token\}/);
+    assert.match(src, /apiBaseUrl=\{apiBaseUrl\}/);
+  });
 });

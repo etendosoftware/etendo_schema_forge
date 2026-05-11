@@ -1,8 +1,8 @@
 {
-  "version": "0.20.0",
+  "version": "0.24.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-05-07T18:28:19.946Z",
-  "checksum": "e076f9ae129c5eab",
+  "updatedAt": "2026-05-08T11:14:41.858Z",
+  "checksum": "1a0649f317a65706",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -54,6 +54,45 @@
         "tabName": "Header",
         "uiPattern": "STD",
         "fields": [
+          {
+            "name": "adOrgId",
+            "apiKey": "adOrgId",
+            "column": "AD_Org_ID",
+            "label": "Organization",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.organization"
+            },
+            "reference": "Org",
+            "inputMode": "selector",
+            "defaultValue": "@#AD_Org_ID@",
+            "validationRule": {
+              "code": "AD_ORG_ID <> '0'",
+              "contextParams": [],
+              "cascadeParams": []
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SE_Invoice_Organization"
+            },
+            "displayLogic": {
+              "raw": "@ACCT_DIMENSION_DISPLAY@",
+              "evaluable": false,
+              "reason": "server-macro",
+              "js": null
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
           {
             "name": "documentNo",
             "apiKey": "documentNo",
@@ -449,6 +488,369 @@
             }
           },
           {
+            "name": "etsgDateOperation",
+            "apiKey": "etsgDateOperation",
+            "column": "EM_Etsg_Date_Operation",
+            "label": "Fecha operación",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.dateInvoiced"
+            },
+            "defaultValue": "@DateInvoiced@",
+            "displayLogic": {
+              "raw": "@etvfac_has_configuration@='Y' | @TBAI_ExistTBAIConfig@=1 | @AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "tbaiSequence",
+            "apiKey": "tbaiSequence",
+            "column": "EM_Tbai_Sequence",
+            "label": "Secuencia de encadenamiento",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "displayLogic": {
+              "raw": "@TBAI_ExistTBAIConfig@=1",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "tbaiInvoicenum",
+            "apiKey": "tbaiInvoicenum",
+            "column": "EM_Tbai_Invoicenum",
+            "label": "Serie Factura",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "displayLogic": {
+              "raw": "@TBAI_ExistTBAIConfig@=1",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "tbaiInvoiceseq",
+            "apiKey": "tbaiInvoiceseq",
+            "column": "EM_Tbai_Invoiceseq",
+            "label": "Secuencia Factura",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "displayLogic": {
+              "raw": "@TBAI_ExistTBAIConfig@=1",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "tbaiIssent",
+            "apiKey": "tbaiIssent",
+            "column": "EM_Tbai_Issent",
+            "label": "Enviada a TBAI",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "displayLogic": {
+              "raw": "@TBAI_ExistTBAIConfig@=1",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeatsiiIssent",
+            "apiKey": "aeatsiiIssent",
+            "column": "EM_Aeatsii_Issent",
+            "label": "Sent to SII",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
+            }
+          },
+          {
+            "name": "aeatsiiClaveTipo",
+            "apiKey": "aeatsiiClaveTipo",
+            "column": "EM_Aeatsii_Clave_Tipo",
+            "label": "Invoice type key",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+            },
+            "enumValues": [
+              {
+                "value": "R",
+                "name": "Corrective invoice"
+              },
+              {
+                "value": "F1",
+                "name": "Invoice"
+              },
+              {
+                "value": "F2",
+                "name": "Simplified invoice"
+              },
+              {
+                "value": "F4",
+                "name": "Simplified invoices summary"
+              }
+            ],
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | @DocStatus@='VO') & @Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || record['documentStatus'] === 'VO') && record['processed'] === true"
+            }
+          },
+          {
+            "name": "aeatsiiDescription",
+            "apiKey": "aeatsiiDescription",
+            "column": "EM_Aeatsii_Description_ID",
+            "label": "SII description master",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "lookup",
+              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN ('Y' = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (null)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
+            },
+            "reference": "aeatsii_description",
+            "inputMode": "selector",
+            "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN ('Y' = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (null)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual",
+            "callout": {
+              "className": "org.openbravo.module.sii.callouts.SiiDescriptionCallout"
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='Y')) & @Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || (record['documentStatus'] === 'VO' && record['em_aeatsii_issent'] === 'Y')) && record['processed'] === true"
+            }
+          },
+          {
+            "name": "aeatsiiDescripcionSii",
+            "apiKey": "aeatsiiDescripcionSii",
+            "column": "EM_Aeatsii_Descripcion_Sii",
+            "label": "SII Description",
+            "type": "text",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "lookup",
+              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
+            },
+            "defaultValue": "@SQL=\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual",
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "(@em_aeatsii_estado@='CO' | @em_aeatsii_estado@='AE' | (@DocStatus@='VO' & @em_aeatsii_issent@='Y')) & @Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['em_aeatsii_estado'] === 'CO' || record['em_aeatsii_estado'] === 'AE' || (record['documentStatus'] === 'VO' && record['em_aeatsii_issent'] === 'Y')) && record['processed'] === true"
+            }
+          },
+          {
+            "name": "aeatsiiEstado",
+            "apiKey": "aeatsiiEstado",
+            "column": "EM_Aeatsii_Estado",
+            "label": "SII Registration Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+            },
+            "enumValues": [
+              {
+                "value": "AE",
+                "name": "Accepted with errors"
+              },
+              {
+                "value": "AN",
+                "name": "Annulled"
+              },
+              {
+                "value": "IN",
+                "name": "Incorrect"
+              },
+              {
+                "value": "NR",
+                "name": "Not Registrable to SII"
+              },
+              {
+                "value": "PE",
+                "name": "Pending to send to SII"
+              },
+              {
+                "value": "CO",
+                "name": "Right"
+              },
+              {
+                "value": "EE",
+                "name": "Sending error"
+              },
+              {
+                "value": "BA",
+                "name": "Unsubscribed"
+              }
+            ],
+            "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
+            }
+          },
+          {
+            "name": "aeatsiiEjercicio",
+            "apiKey": "aeatsiiEjercicio",
+            "column": "EM_Aeatsii_Ejercicio",
+            "label": "SII exercise",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
+            }
+          },
+          {
+            "name": "aeatsiiPeriodo",
+            "apiKey": "aeatsiiPeriodo",
+            "column": "EM_Aeatsii_Periodo",
+            "label": "SII period",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "true",
+              "evaluable": true,
+              "js": "true"
+            }
+          },
+          {
+            "name": "aeatsiiCauseExemption",
+            "apiKey": "aeatsiiCauseExemption",
+            "column": "EM_Aeatsii_Cause_Exemption_ID",
+            "label": "SII - Cause Exemption",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "reference": "aeatsii_cause_exemption",
+            "inputMode": "selector",
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "aeatsiiIsauthorization",
+            "apiKey": "aeatsiiIsauthorization",
+            "column": "EM_Aeatsii_Isauthorization",
+            "label": "Authorization",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "callout": {
+              "className": "org.openbravo.module.sii.callouts.SiiAuthorizationCallout"
+            },
+            "displayLogic": {
+              "raw": "@AEATSII_AcogidaSII@='Y'",
+              "evaluable": true
+            }
+          },
+          {
             "name": "processed",
             "apiKey": "processed",
             "column": "Processed",
@@ -513,6 +915,13 @@
         ],
         "computedFields": [
           {
+            "name": "adOrgId",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.organization"
+            }
+          },
+          {
             "name": "documentNo",
             "derivation": {
               "type": "sequence",
@@ -559,6 +968,55 @@
             "derivation": {
               "type": "computed",
               "source": "0"
+            }
+          },
+          {
+            "name": "etsgDateOperation",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.dateInvoiced"
+            }
+          },
+          {
+            "name": "aeatsiiIssent",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "aeatsiiClaveTipo",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual"
+            }
+          },
+          {
+            "name": "aeatsiiDescription",
+            "derivation": {
+              "type": "lookup",
+              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN ('Y' = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT aeatsii_description_id\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (null)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
+            }
+          },
+          {
+            "name": "aeatsiiDescripcionSii",
+            "derivation": {
+              "type": "lookup",
+              "source": "\n\tSELECT\n\t\tCASE\n\t\t\tWHEN\n\t\t\t\t(\n\t\t\t\t\t(\n\t\t\t\t\t\tSELECT c.insiisystem\n\t\t\t\t\t\tFROM aeatsii_config c\n\t\t\t\t\t\tWHERE c.ad_org_id = (\n\t\t\t\t\t\t\tSELECT ad_get_org_le_bu(@AD_Org_ID@,'LE')\n\t\t\t\t\t\t\tFROM dual\n\t\t\t\t\t\t)\n\t\t\t\t\t)='Y'\n\t\t\t\t)\n\t\t\tTHEN\n\t\t\t\t(\n\t\t\t\t\tSELECT\n\t\t\t\t\t\t(\n\t\t\t\t\t\t\tCASE\n\t\t\t\t\t\t\t\tWHEN(@issotrx@ = 'Y')\n\t\t\t\t\t\t\t\tTHEN (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND issales = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t) ELSE (\n\t\t\t\t\t\t\t\t\tSELECT description\n\t\t\t\t\t\t\t\t\tFROM aeatsii_description\n\t\t\t\t\t\t\t\t\tWHERE isdefault = 'Y'\n\t\t\t\t\t\t\t\t\tAND ispurchase = 'Y'\n\t\t\t\t\t\t\t\t\tAND ad_org_id = @AD_Org_ID@\n\t\t\t\t\t\t\t\t\tAND ad_client_id = @ad_client_id@\n\t\t\t\t\t\t\t\t)\n\t\t\t\t\t\t\tEND\n\t\t\t\t\t\t)\n\t\t\t\t\tFROM dual\n\t\t\t\t)\n\t\t\tELSE null\n\t\tEND\n\tFROM dual"
+            }
+          },
+          {
+            "name": "aeatsiiEstado",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual"
+            }
+          },
+          {
+            "name": "aeatsiiIsauthorization",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           },
           {
@@ -1132,7 +1590,7 @@
             "apiKey": "adOrgId",
             "column": "AD_Org_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1556,7 +2014,7 @@
             "apiKey": "etsgDateOperation",
             "column": "EM_Etsg_Date_Operation",
             "type": "date",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1716,7 +2174,7 @@
             "apiKey": "tbaiSequence",
             "column": "EM_Tbai_Sequence",
             "type": "integer",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1724,7 +2182,7 @@
             "apiKey": "tbaiInvoicenum",
             "column": "EM_Tbai_Invoicenum",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1732,7 +2190,7 @@
             "apiKey": "tbaiInvoiceseq",
             "column": "EM_Tbai_Invoiceseq",
             "type": "string",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1764,7 +2222,7 @@
             "apiKey": "tbaiIssent",
             "column": "EM_Tbai_Issent",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1796,7 +2254,7 @@
             "apiKey": "aeatsiiIssent",
             "column": "EM_Aeatsii_Issent",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1812,7 +2270,7 @@
             "apiKey": "aeatsiiClaveTipo",
             "column": "EM_Aeatsii_Clave_Tipo",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1836,7 +2294,7 @@
             "apiKey": "aeatsiiDescription",
             "column": "EM_Aeatsii_Description_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1844,7 +2302,7 @@
             "apiKey": "aeatsiiDescripcionSii",
             "column": "EM_Aeatsii_Descripcion_Sii",
             "type": "text",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1852,7 +2310,7 @@
             "apiKey": "aeatsiiEstado",
             "column": "EM_Aeatsii_Estado",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1868,7 +2326,7 @@
             "apiKey": "aeatsiiEjercicio",
             "column": "EM_Aeatsii_Ejercicio",
             "type": "integer",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1876,7 +2334,7 @@
             "apiKey": "aeatsiiPeriodo",
             "column": "EM_Aeatsii_Periodo",
             "type": "integer",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1884,7 +2342,7 @@
             "apiKey": "aeatsiiCauseExemption",
             "column": "EM_Aeatsii_Cause_Exemption_ID",
             "type": "foreignKey",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1892,7 +2350,7 @@
             "apiKey": "aeatsiiIsauthorization",
             "column": "EM_Aeatsii_Isauthorization",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -3249,6 +3707,14 @@
     "selectors": [
       {
         "entity": "header",
+        "field": "adOrgId",
+        "column": "AD_Org_ID",
+        "reference": "Org",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/adOrgId"
+      },
+      {
+        "entity": "header",
         "field": "businessPartner",
         "column": "C_BPartner_ID",
         "reference": "BusinessPartner",
@@ -3294,6 +3760,22 @@
         "reference": "PriceList",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/priceList"
+      },
+      {
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "column": "EM_Aeatsii_Description_ID",
+        "reference": "aeatsii_description",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiDescription"
+      },
+      {
+        "entity": "header",
+        "field": "aeatsiiCauseExemption",
+        "column": "EM_Aeatsii_Cause_Exemption_ID",
+        "reference": "aeatsii_cause_exemption",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
       },
       {
         "entity": "lines",
@@ -3763,6 +4245,62 @@
         "description": "CRUD flags for 'paymentPlan' should all be booleans"
       },
       {
+        "id": "t-default-value-type-header-adOrgId",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Default value for 'adOrgId' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-aeatsiiClaveTipo",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiClaveTipo",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiClaveTipo' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-aeatsiiDescripcionSii",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiDescripcionSii",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiDescripcionSii' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-aeatsiiDescription",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiDescription' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-aeatsiiEstado",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiEstado",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiEstado' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-aeatsiiIsauthorization",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiIsauthorization",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiIsauthorization' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-aeatsiiIssent",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "aeatsiiIssent",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiIssent' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-currency",
         "category": "default-value-type",
         "entity": "header",
@@ -3777,6 +4315,14 @@
         "field": "documentStatus",
         "runner": "node",
         "description": "Default value for 'documentStatus' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-etsgDateOperation",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "etsgDateOperation",
+        "runner": "node",
+        "description": "Default value for 'etsgDateOperation' in header should be a string"
       },
       {
         "id": "t-default-value-type-header-invoiceDate",
@@ -3875,6 +4421,94 @@
         "description": "Default value for 'totalDebtAmount' in paymentPlan should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-header-adOrgId",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Display logic for 'adOrgId' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiCauseExemption",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiCauseExemption",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiCauseExemption' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiClaveTipo",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiClaveTipo",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiClaveTipo' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiDescripcionSii",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiDescripcionSii",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiDescription",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiDescription' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiEjercicio",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiEjercicio",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiEjercicio' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiEstado",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiEstado",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiEstado' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiIsauthorization",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiIsauthorization",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiIsauthorization' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiIssent",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiIssent",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiIssent' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-aeatsiiPeriodo",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiPeriodo' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-etsgDateOperation",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "etsgDateOperation",
+        "runner": "node",
+        "description": "Display logic for 'etsgDateOperation' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-outstandingAmount",
         "category": "displaylogic-evaluable",
         "entity": "header",
@@ -3899,6 +4533,38 @@
         "description": "Display logic for 'posted' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-tbaiInvoicenum",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiInvoicenum",
+        "runner": "node",
+        "description": "Display logic for 'tbaiInvoicenum' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-tbaiInvoiceseq",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiInvoiceseq",
+        "runner": "node",
+        "description": "Display logic for 'tbaiInvoiceseq' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-tbaiIssent",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "Display logic for 'tbaiIssent' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-tbaiSequence",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "tbaiSequence",
+        "runner": "node",
+        "description": "Display logic for 'tbaiSequence' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-lines-grossUnitPrice",
         "category": "displaylogic-evaluable",
         "entity": "lines",
@@ -3913,6 +4579,94 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-header-adOrgId",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Display logic for 'adOrgId' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiCauseExemption",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiCauseExemption",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiCauseExemption' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiClaveTipo",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiClaveTipo",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiClaveTipo' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiDescripcionSii",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiDescripcionSii",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiDescripcionSii' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiDescription",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiDescription' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiEjercicio",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiEjercicio",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiEjercicio' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiEstado",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiEstado",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiEstado' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiIsauthorization",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiIsauthorization",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiIsauthorization' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiIssent",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiIssent",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiIssent' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-aeatsiiPeriodo",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Display logic for 'aeatsiiPeriodo' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-etsgDateOperation",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "etsgDateOperation",
+        "runner": "node",
+        "description": "Display logic for 'etsgDateOperation' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-outstandingAmount",
@@ -3939,6 +4693,38 @@
         "description": "Display logic for 'posted' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-tbaiInvoicenum",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "tbaiInvoicenum",
+        "runner": "node",
+        "description": "Display logic for 'tbaiInvoicenum' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-tbaiInvoiceseq",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "tbaiInvoiceseq",
+        "runner": "node",
+        "description": "Display logic for 'tbaiInvoiceseq' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-tbaiIssent",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "Display logic for 'tbaiIssent' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-tbaiSequence",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "tbaiSequence",
+        "runner": "node",
+        "description": "Display logic for 'tbaiSequence' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-lines-grossUnitPrice",
         "category": "displaylogic-valid",
         "entity": "lines",
@@ -3953,6 +4739,86 @@
         "field": "listPrice",
         "runner": "node",
         "description": "Display logic for 'listPrice' in lines should be valid JS"
+      },
+      {
+        "id": "t-field-presence-header-adOrgId",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Field 'adOrgId' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiCauseExemption",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiCauseExemption",
+        "runner": "node",
+        "description": "Field 'aeatsiiCauseExemption' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiClaveTipo",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiClaveTipo",
+        "runner": "node",
+        "description": "Field 'aeatsiiClaveTipo' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiDescripcionSii",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiDescripcionSii",
+        "runner": "node",
+        "description": "Field 'aeatsiiDescripcionSii' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiDescription",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "runner": "node",
+        "description": "Field 'aeatsiiDescription' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiEjercicio",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiEjercicio",
+        "runner": "node",
+        "description": "Field 'aeatsiiEjercicio' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiEstado",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiEstado",
+        "runner": "node",
+        "description": "Field 'aeatsiiEstado' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiIsauthorization",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiIsauthorization",
+        "runner": "node",
+        "description": "Field 'aeatsiiIsauthorization' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiIssent",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiIssent",
+        "runner": "node",
+        "description": "Field 'aeatsiiIssent' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-aeatsiiPeriodo",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Field 'aeatsiiPeriodo' should be present in header"
       },
       {
         "id": "t-field-presence-header-businessPartner",
@@ -4017,6 +4883,14 @@
         "field": "etgoTotalDiscount",
         "runner": "node",
         "description": "Field 'etgoTotalDiscount' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-etsgDateOperation",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "etsgDateOperation",
+        "runner": "node",
+        "description": "Field 'etsgDateOperation' should be present in header"
       },
       {
         "id": "t-field-presence-header-grandTotalAmount",
@@ -4105,6 +4979,38 @@
         "field": "summedLineAmount",
         "runner": "node",
         "description": "Field 'summedLineAmount' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-tbaiInvoicenum",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "tbaiInvoicenum",
+        "runner": "node",
+        "description": "Field 'tbaiInvoicenum' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-tbaiInvoiceseq",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "tbaiInvoiceseq",
+        "runner": "node",
+        "description": "Field 'tbaiInvoiceseq' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-tbaiIssent",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "Field 'tbaiIssent' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-tbaiSequence",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "tbaiSequence",
+        "runner": "node",
+        "description": "Field 'tbaiSequence' should be present in header"
       },
       {
         "id": "t-field-presence-lines-description",
@@ -4283,6 +5189,86 @@
         "description": "Field 'totalDebtAmount' should be present in paymentPlan"
       },
       {
+        "id": "t-field-type-header-adOrgId",
+        "category": "field-type",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Field 'adOrgId' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiCauseExemption",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiCauseExemption",
+        "runner": "node",
+        "description": "Field 'aeatsiiCauseExemption' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiClaveTipo",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiClaveTipo",
+        "runner": "node",
+        "description": "Field 'aeatsiiClaveTipo' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiDescripcionSii",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiDescripcionSii",
+        "runner": "node",
+        "description": "Field 'aeatsiiDescripcionSii' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiDescription",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "runner": "node",
+        "description": "Field 'aeatsiiDescription' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiEjercicio",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiEjercicio",
+        "runner": "node",
+        "description": "Field 'aeatsiiEjercicio' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiEstado",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiEstado",
+        "runner": "node",
+        "description": "Field 'aeatsiiEstado' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiIsauthorization",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiIsauthorization",
+        "runner": "node",
+        "description": "Field 'aeatsiiIsauthorization' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiIssent",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiIssent",
+        "runner": "node",
+        "description": "Field 'aeatsiiIssent' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-aeatsiiPeriodo",
+        "category": "field-type",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Field 'aeatsiiPeriodo' should have type 'number' in header"
+      },
+      {
         "id": "t-field-type-header-businessPartner",
         "category": "field-type",
         "entity": "header",
@@ -4345,6 +5331,14 @@
         "field": "etgoTotalDiscount",
         "runner": "node",
         "description": "Field 'etgoTotalDiscount' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-etsgDateOperation",
+        "category": "field-type",
+        "entity": "header",
+        "field": "etsgDateOperation",
+        "runner": "node",
+        "description": "Field 'etsgDateOperation' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-grandTotalAmount",
@@ -4433,6 +5427,38 @@
         "field": "summedLineAmount",
         "runner": "node",
         "description": "Field 'summedLineAmount' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-tbaiInvoicenum",
+        "category": "field-type",
+        "entity": "header",
+        "field": "tbaiInvoicenum",
+        "runner": "node",
+        "description": "Field 'tbaiInvoicenum' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-tbaiInvoiceseq",
+        "category": "field-type",
+        "entity": "header",
+        "field": "tbaiInvoiceseq",
+        "runner": "node",
+        "description": "Field 'tbaiInvoiceseq' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-tbaiIssent",
+        "category": "field-type",
+        "entity": "header",
+        "field": "tbaiIssent",
+        "runner": "node",
+        "description": "Field 'tbaiIssent' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-tbaiSequence",
+        "category": "field-type",
+        "entity": "header",
+        "field": "tbaiSequence",
+        "runner": "node",
+        "description": "Field 'tbaiSequence' should have type 'number' in header"
       },
       {
         "id": "t-field-type-lines-description",
@@ -4611,6 +5637,70 @@
         "description": "Field 'totalDebtAmount' should have type 'number' in paymentPlan"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-adOrgId",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Read-only logic for 'adOrgId' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiClaveTipo",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiClaveTipo",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiClaveTipo' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiDescripcionSii",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiDescripcionSii",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiDescription",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiDescription' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiEjercicio",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiEjercicio",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiEjercicio' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiEstado",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiEstado",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiEstado' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiIssent",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiIssent",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiIssent' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-aeatsiiPeriodo",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiPeriodo' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-businessPartner",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -4625,6 +5715,14 @@
         "field": "documentNo",
         "runner": "node",
         "description": "Read-only logic for 'documentNo' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-etsgDateOperation",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "etsgDateOperation",
+        "runner": "node",
+        "description": "Read-only logic for 'etsgDateOperation' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-invoiceDate",
@@ -4723,6 +5821,70 @@
         "description": "Read-only logic for 'unitPrice' in lines should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-valid-header-adOrgId",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Read-only logic for 'adOrgId' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiClaveTipo",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiClaveTipo",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiClaveTipo' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiDescripcionSii",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiDescripcionSii",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiDescripcionSii' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiDescription",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiDescription' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiEjercicio",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiEjercicio",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiEjercicio' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiEstado",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiEstado",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiEstado' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiIssent",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiIssent",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiIssent' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-aeatsiiPeriodo",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "aeatsiiPeriodo",
+        "runner": "node",
+        "description": "Read-only logic for 'aeatsiiPeriodo' in header should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-header-businessPartner",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -4737,6 +5899,14 @@
         "field": "documentNo",
         "runner": "node",
         "description": "Read-only logic for 'documentNo' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-etsgDateOperation",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "etsgDateOperation",
+        "runner": "node",
+        "description": "Read-only logic for 'etsgDateOperation' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-invoiceDate",
@@ -4939,6 +6109,30 @@
         "description": "Field 'product' should be a supported filter for lines"
       },
       {
+        "id": "t-selector-endpoint-header-adOrgId",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "adOrgId",
+        "runner": "node",
+        "description": "Selector endpoint for 'adOrgId' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-aeatsiiCauseExemption",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "aeatsiiCauseExemption",
+        "runner": "node",
+        "description": "Selector endpoint for 'aeatsiiCauseExemption' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-aeatsiiDescription",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "aeatsiiDescription",
+        "runner": "node",
+        "description": "Selector endpoint for 'aeatsiiDescription' in header should exist"
+      },
+      {
         "id": "t-selector-endpoint-header-businessPartner",
         "category": "selector-endpoint",
         "entity": "header",
@@ -5043,14 +6237,6 @@
         "description": "System field 'adClientId' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-adOrgId",
-        "category": "system-field",
-        "entity": "header",
-        "field": "adOrgId",
-        "runner": "node",
-        "description": "System field 'adOrgId' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-aeatsiiAuthorizationno",
         "category": "system-field",
         "entity": "header",
@@ -5065,22 +6251,6 @@
         "field": "aeatsiiAutofactura",
         "runner": "node",
         "description": "System field 'aeatsiiAutofactura' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiCauseExemption",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiCauseExemption",
-        "runner": "node",
-        "description": "System field 'aeatsiiCauseExemption' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiClaveTipo",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiClaveTipo",
-        "runner": "node",
-        "description": "System field 'aeatsiiClaveTipo' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiClaveTipoFc",
@@ -5099,22 +6269,6 @@
         "description": "System field 'aeatsiiDateIssue' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-aeatsiiDescripcionSii",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiDescripcionSii",
-        "runner": "node",
-        "description": "System field 'aeatsiiDescripcionSii' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiDescription",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiDescription",
-        "runner": "node",
-        "description": "System field 'aeatsiiDescription' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-aeatsiiDua",
         "category": "system-field",
         "entity": "header",
@@ -5129,14 +6283,6 @@
         "field": "aeatsiiDup",
         "runner": "node",
         "description": "System field 'aeatsiiDup' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiEjercicio",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiEjercicio",
-        "runner": "node",
-        "description": "System field 'aeatsiiEjercicio' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiErrorCode",
@@ -5161,14 +6307,6 @@
         "field": "aeatsiiErrorRegistral",
         "runner": "node",
         "description": "System field 'aeatsiiErrorRegistral' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiEstado",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiEstado",
-        "runner": "node",
-        "description": "System field 'aeatsiiEstado' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiFechaDua",
@@ -5219,22 +6357,6 @@
         "description": "System field 'aeatsiiInvoice' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-aeatsiiIsauthorization",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiIsauthorization",
-        "runner": "node",
-        "description": "System field 'aeatsiiIsauthorization' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiIssent",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiIssent",
-        "runner": "node",
-        "description": "System field 'aeatsiiIssent' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-aeatsiiModif",
         "category": "system-field",
         "entity": "header",
@@ -5265,14 +6387,6 @@
         "field": "aeatsiiMultiDua",
         "runner": "node",
         "description": "System field 'aeatsiiMultiDua' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-aeatsiiPeriodo",
-        "category": "system-field",
-        "entity": "header",
-        "field": "aeatsiiPeriodo",
-        "runner": "node",
-        "description": "System field 'aeatsiiPeriodo' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-aeatsiiPurDescription",
@@ -5481,14 +6595,6 @@
         "field": "etcopagCopilotFeedback",
         "runner": "node",
         "description": "System field 'etcopagCopilotFeedback' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-etsgDateOperation",
-        "category": "system-field",
-        "entity": "header",
-        "field": "etsgDateOperation",
-        "runner": "node",
-        "description": "System field 'etsgDateOperation' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-etsgIsF3",
@@ -5979,36 +7085,12 @@
         "description": "System field 'tbaiIdtbai' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-tbaiInvoicenum",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiInvoicenum",
-        "runner": "node",
-        "description": "System field 'tbaiInvoicenum' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-tbaiInvoiceseq",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiInvoiceseq",
-        "runner": "node",
-        "description": "System field 'tbaiInvoiceseq' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-tbaiIsreverseinvoice",
         "category": "system-field",
         "entity": "header",
         "field": "tbaiIsreverseinvoice",
         "runner": "node",
         "description": "System field 'tbaiIsreverseinvoice' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-tbaiIssent",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiIssent",
-        "runner": "node",
-        "description": "System field 'tbaiIssent' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-tbaiIssueDate",
@@ -6041,14 +7123,6 @@
         "field": "tbaiReverseinvoicetype",
         "runner": "node",
         "description": "System field 'tbaiReverseinvoicetype' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-tbaiSequence",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiSequence",
-        "runner": "node",
-        "description": "System field 'tbaiSequence' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-tbaiSignaturevalue",
@@ -6665,25 +7739,25 @@
       }
     ],
     "summary": {
-      "total": 391,
+      "total": 465,
       "byCategory": {
         "action-endpoint": 24,
         "crud-flags": 3,
-        "default-value-type": 14,
-        "displaylogic-evaluable": 5,
-        "displaylogic-valid": 5,
-        "field-presence": 41,
-        "field-type": 41,
-        "readonlylogic-evaluable": 14,
-        "readonlylogic-valid": 14,
+        "default-value-type": 22,
+        "displaylogic-evaluable": 20,
+        "displaylogic-valid": 20,
+        "field-presence": 56,
+        "field-type": 56,
+        "readonlylogic-evaluable": 23,
+        "readonlylogic-valid": 23,
         "rule-declared": 8,
         "searchable-filters": 6,
-        "selector-endpoint": 10,
-        "system-field": 203,
+        "selector-endpoint": 13,
+        "system-field": 188,
         "visibility": 3
       },
       "byRunner": {
-        "node": 391,
+        "node": 465,
         "junit": 0
       }
     }

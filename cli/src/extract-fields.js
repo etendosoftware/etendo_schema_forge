@@ -667,11 +667,14 @@ export async function main(windowId, windowName) {
     const enumValuesMap = {};
     if (listRefIds.length > 0) {
       const enumResult = await pool.query(
+        // Force C collation on Name + add Value as final tiebreaker so the
+        // option order is identical across DBs with different lc_collate
+        // (e.g. C vs es_ES.UTF-8, which treat punctuation differently).
         `SELECT rl.AD_Reference_ID, rl.Value, rl.Name
          FROM AD_Ref_List rl
          WHERE rl.AD_Reference_ID = ANY($1)
            AND rl.IsActive = 'Y'
-         ORDER BY rl.SeqNo, rl.Name`,
+         ORDER BY rl.SeqNo NULLS LAST, rl.Name COLLATE "C", rl.Value COLLATE "C"`,
         [listRefIds]
       );
       for (const row of enumResult.rows) {

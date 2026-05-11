@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
+import SendToSifButton from '../shared/SendToSifButton.jsx';
 import InvoicePaymentModal from '../shared/InvoicePaymentModal.jsx';
 import CloneButton from '../shared/CloneButton.jsx';
 import { useUI } from '@/i18n';
@@ -12,6 +13,16 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
   const ui = useUI();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showClone, setShowClone] = useState(false);
+
+  useEffect(() => {
+    const handleInvoiceUpdated = (event) => {
+      if (String(event.detail?.invoiceId) !== String(recordId)) return;
+      window.location.reload();
+    };
+
+    window.addEventListener('purchase-invoice:invoice-updated', handleInvoiceUpdated);
+    return () => window.removeEventListener('purchase-invoice:invoice-updated', handleInvoiceUpdated);
+  }, [recordId]);
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${token}`,
@@ -42,6 +53,13 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
       {recordId && (
         <>
           <CloneButton onClick={() => setShowClone(true)} title={ui('cloneOrderBtn')} />
+          <SendToSifButton
+            data={data}
+            recordId={recordId}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            status={data?.documentStatus}
+          />
           {showClone && createPortal(
             <CloneOrderModal
               recordId={recordId}

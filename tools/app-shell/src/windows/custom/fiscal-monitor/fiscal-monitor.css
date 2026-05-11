@@ -260,6 +260,7 @@
 .fm-pill.danger  { background: var(--fm-danger-bg);  color: var(--fm-danger-fg); }
 .fm-pill.pending { background: var(--fm-pending-bg); color: var(--fm-pending-fg); }
 .fm-pill.info    { background: var(--fm-info-bg);    color: var(--fm-info-fg); }
+.fm-pill.neutral { background: #F0F0F5; color: #6C6C89; }
 
 /* ── Pager ─────────────────────────────────────────────────────────────────── */
 .fm-pager {

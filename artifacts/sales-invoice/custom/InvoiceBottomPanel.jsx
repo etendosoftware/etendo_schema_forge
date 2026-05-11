@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import RelatedDocuments from './RelatedDocuments';
+import SifDataTabs from './SifDataTabs';
 import ImportFromShipmentModal from './ImportFromShipmentModal';
 import DocumentTotalsPanel from '@/components/contract-ui/DocumentTotalsPanel.jsx';
 
@@ -90,6 +91,7 @@ export default function InvoiceBottomPanel({
             </div>
           </div>
         )}
+        <SifDataTabs data={data} recordId={recordId} token={token} apiBaseUrl={apiBaseUrl} />
       </div>
 
       {/* ── Vertical separator ── */}

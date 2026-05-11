@@ -2,11 +2,15 @@
 import { useUI } from '@/i18n';
 
 const STATUS_CONFIG = {
-  // SII
-  Correcto:           { cls: 'success', labelKey: 'fiscalMonitor.status.sii.Correcto' },
-  AceptadoConErrores: { cls: 'warn',    labelKey: 'fiscalMonitor.status.sii.AceptadoConErrores' },
-  Incorrecto:         { cls: 'danger',  labelKey: 'fiscalMonitor.status.sii.Incorrecto' },
-  Pendiente:          { cls: 'pending', labelKey: 'fiscalMonitor.status.sii.Pendiente' },
+  // SII — API returns 2-letter codes from AD_Ref_List
+  CO: { cls: 'success', labelKey: 'fiscalMonitor.status.sii.CO' },
+  AE: { cls: 'warn',    labelKey: 'fiscalMonitor.status.sii.AE' },
+  IN: { cls: 'danger',  labelKey: 'fiscalMonitor.status.sii.IN' },
+  PE: { cls: 'pending', labelKey: 'fiscalMonitor.status.sii.PE' },
+  EE: { cls: 'danger',  labelKey: 'fiscalMonitor.status.sii.EE' },
+  AN: { cls: 'neutral', labelKey: 'fiscalMonitor.status.sii.AN' },
+  BA: { cls: 'neutral', labelKey: 'fiscalMonitor.status.sii.BA' },
+  NR: { cls: 'neutral', labelKey: 'fiscalMonitor.status.sii.NR' },
   // TBAI — reuse existing tbai.status.* keys
   Recibido:           { cls: 'success', labelKey: 'fiscalMonitor.tbai.status.Recibido' },
   Rechazado:          { cls: 'danger',  labelKey: 'fiscalMonitor.tbai.status.Rechazado' },

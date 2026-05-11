@@ -65,6 +65,10 @@
           "additionalProperties": false
         },
         "draftModeReadOnlyLogic": { "type": "boolean" },
+        "draftModeReadOnlyLogicAllowlist": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
         "notNullRequiresRequired": { "type": "boolean" },
         "customFormPathRoot": { "type": "string" }
       },

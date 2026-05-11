@@ -33,9 +33,9 @@ const DownloadIcon = () => (
   </svg>
 );
 
-async function fetchSubtab(base, entity, orgId, page, token) {
+async function fetchSubtab(base, entity, parentId, page, token) {
   const params = new URLSearchParams({
-    organization: orgId,
+    parentId,
     _startRow: String((page - 1) * PAGE_SIZE),
     _endRow:   String(page * PAGE_SIZE),
   });
@@ -47,7 +47,7 @@ async function fetchSubtab(base, entity, orgId, page, token) {
   return { data: json?.response?.data ?? [], totalRows: json?.response?.totalRows ?? 0 };
 }
 
-export default function SiiMonitorSection({ orgId, token, apiBaseUrl, initialTab = 'issued', mockRows, onTabChange }) {
+export default function SiiMonitorSection({ orgId, token, apiBaseUrl, parentId, initialTab = 'issued', mockRows, onTabChange }) {
   const ui = useUI();
   const [tab, setTab]       = useState('issued');
   const [period, setPeriod] = useState('current');
@@ -91,15 +91,15 @@ export default function SiiMonitorSection({ orgId, token, apiBaseUrl, initialTab
       setError(null);
       return;
     }
-    if (!orgId) return;
+    if (!parentId) return;
     setLoading(true);
     setError(null);
     const base = neoBase(apiBaseUrl);
-    fetchSubtab(base, SUBTAB_ENTITIES[entityKey], orgId, page, token)
+    fetchSubtab(base, SUBTAB_ENTITIES[entityKey], parentId, page, token)
       .then(({ data, totalRows }) => { setRows(data); setTotalRows(totalRows); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [orgId, entityKey, page, token, apiBaseUrl, mockRows]);
+  }, [parentId, entityKey, page, token, apiBaseUrl, mockRows]);
 
   useEffect(() => { setPage(1); }, [tab, period]);
 

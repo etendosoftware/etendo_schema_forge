@@ -13,7 +13,7 @@ const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
 // in sync with artifacts/purchase-invoice/decisions.json → window.labelOverrides.
 
 describe('PurchaseInvoiceWindow — LABEL_OVERRIDES', () => {
-  it('renames POReference to "Nº documento" / "Document No."', () => {
+  it('relabels POReference as "Nº documento" / "Document No." in the custom list wrapper', () => {
     assert.match(src, /es_ES:\s*\{[\s\S]*?POReference:\s*'Nº documento'/);
     assert.match(src, /en_US:\s*\{[\s\S]*?POReference:\s*'Document No\.'/);
   });

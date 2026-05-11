@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
 import InvoicePaymentModal from '@/windows/custom/shared/InvoicePaymentModal.jsx';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import SendToSifButton from './SendToSifButton';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -243,6 +244,14 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         {badgeInfo.label}
         <span style={{ opacity: 0.6, marginLeft: 4 }}>{ui('view')} &rarr;</span>
       </button>
+
+      <SendToSifButton
+        data={data}
+        recordId={recordId}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        status={data?.documentStatus}
+      />
 
       <SendDocumentButton onClick={() => setShowSendModal(true)} />
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
@@ -12,6 +12,16 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
   const navigate = useNavigate();
   const ui = useUI();
   const [showClone, setShowClone] = useState(false);
+
+  useEffect(() => {
+    const handleInvoiceUpdated = (event) => {
+      if (String(event.detail?.invoiceId) !== String(recordId)) return;
+      window.location.reload();
+    };
+
+    window.addEventListener('sales-invoice:invoice-updated', handleInvoiceUpdated);
+    return () => window.removeEventListener('sales-invoice:invoice-updated', handleInvoiceUpdated);
+  }, [recordId]);
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${token}`,

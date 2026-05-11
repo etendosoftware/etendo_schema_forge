@@ -84,7 +84,7 @@ function useDebugState(orgId, token, apiBaseUrl) {
   const [debugProfile, setDebugProfile] = useState(null);
   const [mockData,     setMockData]     = useState(false);
 
-  const { loading, error, profile: realProfile, kpis: realKpis } = useFiscalMonitor(orgId, token, apiBaseUrl);
+  const { loading, error, profile: realProfile, kpis: realKpis, siiParentId } = useFiscalMonitor(orgId, token, apiBaseUrl);
 
   const profile = (debugMode && debugProfile) ? debugProfile : realProfile;
 
@@ -103,7 +103,7 @@ function useDebugState(orgId, token, apiBaseUrl) {
   const debugOverrideActive = debugMode && !!debugProfile;
 
   return {
-    loading, error, profile, kpis,
+    loading, error, profile, kpis, siiParentId,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
     mockData, setMockData, debugOverrideActive,
@@ -137,7 +137,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
   const [veriInitialTab,    setVeriInitialTab]    = useState('accepted');
 
   const {
-    loading, error, profile, kpis,
+    loading, error, profile, kpis, siiParentId,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
     mockData, setMockData, debugOverrideActive,
@@ -237,6 +237,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
           />
           <SiiMonitorSection
             orgId={orgId} token={token} apiBaseUrl={apiBaseUrl}
+            parentId={siiParentId}
             initialTab={siiInitialTab}
             mockRows={siiMockRows}
             onTabChange={setSiiInitialTab}

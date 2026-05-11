@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Upload, Edit2, FileText, Image, Plus, Check, Trash2, Loader2, AlertCircle, Mail, Download, Ban, Wallet, MoreVertical } from 'lucide-react';
 import { Badge } from '@/components/ui/badge.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -11,6 +11,9 @@ import InvoicePaymentModal from './InvoicePaymentModal.jsx';
 import { useInvoicePdf } from './useInvoicePdf.js';
 import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
+import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { useAuth } from '@/auth/AuthContext.jsx';
+import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
 
 const ACCEPTED_TYPES = {
   'application/pdf': 'pdf',
@@ -52,15 +55,25 @@ function getCardClass(animState) {
  *
  * @param specName — "purchase-invoice" | "sales-invoice" (defaults to "purchase-invoice")
  */
-export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit }) {
+export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit, onInvoiceUpdated = null }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const [activeTab, setActiveTab] = useState('general');
+  const [invoiceData, setInvoiceData] = useState(invoice);
+  const [showSifModal, setShowSifModal] = useState(false);
+  const [sifPhase, setSifPhase] = useState('confirm');
+  const [sifResults, setSifResults] = useState({});
+  const { selectedOrg } = useAuth();
+  const orgId = selectedOrg?.id ?? null;
+  const { profile } = useFiscalConfig(orgId, token, apiBaseUrl);
+  const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  const updateEventName = `${specName}:invoice-updated`;
 
-  // For sales-invoice: auto-render invoice PDF instead of the drop zone
+  // Sales invoices render the generated PDF preview; purchase invoices keep the upload/drop zone.
   const isSalesInvoice = specName === 'sales-invoice';
   const { pdfUrl, loading: pdfLoading, error: pdfError } = useInvoicePdf(
-    isSalesInvoice ? invoice?.id : null,
+    isSalesInvoice ? invoiceData?.id : null,
     isSalesInvoice ? apiBaseUrl : null,
     token,
   );
@@ -70,9 +83,34 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
-  const displayInvoice = invoice;
+  const displayInvoice = invoiceData;
   const previewLoading = pdfLoading;
   const previewError = pdfError;
+
+  useEffect(() => {
+    setInvoiceData(invoice);
+  }, [invoice]);
+
+  const refetchInvoice = useCallback(async () => {
+    if (!invoice?.id || !apiBaseUrl || !token) return null;
+    try {
+      const res = await fetch(`${apiBaseUrl}/header/${invoice.id}`, { headers });
+      if (!res.ok) return null;
+      const json = await res.json();
+      const candidate = json?.response?.data?.[0] ?? json?.data?.[0] ?? null;
+      const refreshed = candidate && typeof candidate === 'object' && !Array.isArray(candidate) ? candidate : null;
+      if (refreshed?.id) {
+        setInvoiceData(refreshed);
+        window.dispatchEvent(new CustomEvent(updateEventName, {
+          detail: { invoiceId: refreshed.id, invoice: refreshed },
+        }));
+        onInvoiceUpdated?.(refreshed);
+      }
+      return refreshed;
+    } catch {
+      return null;
+    }
+  }, [apiBaseUrl, headers, invoice?.id, onInvoiceUpdated, token, updateEventName]);
 
   // Animation state: 'opening' → 'open' → 'closing' → 'closingUp'
   const [animState, setAnimState] = useState('opening');
@@ -158,16 +196,15 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
 
   // Parallel fetch: installment schedules (paymentPlan) + registered payments (invoicePayments)
   const fetchPayments = useCallback(() => {
-    if (!invoice?.id || !token) return;
+    if (!displayInvoice?.id || !token) return;
     setLoadingPayments(true);
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     Promise.all([
-      fetch(`${apiBaseUrl}/paymentPlan?parentId=${invoice.id}`, { headers })
+      fetch(`${apiBaseUrl}/paymentPlan?parentId=${displayInvoice.id}`, { headers })
         .then((r) => (r.ok ? r.json() : {}))
         .then((d) => d?.response?.data ?? d?.data ?? [])
         .catch(() => []),
-      fetch(`${apiBaseUrl}/header/${invoice.id}/action/invoicePayments`, {
+      fetch(`${apiBaseUrl}/header/${displayInvoice.id}/action/invoicePayments`, {
         method: 'POST', headers, body: '{}',
       })
         .then((r) => (r.ok ? r.json() : {}))
@@ -177,11 +214,69 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
       .then(([sched, pays]) => { setInstallments(sched); setPayments(pays); })
       .catch(() => { setInstallments([]); setPayments([]); })
       .finally(() => setLoadingPayments(false));
-  }, [invoice?.id, apiBaseUrl, token]);
+  }, [displayInvoice?.id, apiBaseUrl, headers, token]);
 
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
+
+  const pendingTargets = getPendingSifTargets(specName, profile, displayInvoice);
+  const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
+
+  const canSendToSif = displayInvoice?.documentStatus === 'CO'
+    && hasPendingTargets;
+
+  const sifBodyKey = getSifBodyKey(pendingTargets);
+
+  const callSifProcess = useCallback(async (columnName) => {
+    const res = await fetch(
+      `${base}/${specName}/header/${displayInvoice.id}/action/${columnName}`,
+      { method: 'POST', headers, body: '{}' },
+    );
+    if (!res.ok) {
+      const json = await res.json().catch(() => null);
+      throw new Error(json?.response?.message || json?.message || `HTTP ${res.status}`);
+    }
+    return res.json().catch(() => null);
+  }, [base, displayInvoice?.id, headers, specName]);
+
+  const closeSifModal = useCallback(() => {
+    setShowSifModal(false);
+    setSifPhase('confirm');
+    setSifResults({});
+  }, []);
+
+  const handleSendToSif = useCallback(async () => {
+    setSifPhase('sending');
+    const next = {};
+
+    if (pendingTargets.sendSii) {
+      try {
+        await callSifProcess('Em_aeatsii_send');
+        next.sii = { ok: true };
+      } catch (err) {
+        next.sii = { ok: false, error: err.message };
+      }
+    }
+
+    if (pendingTargets.sendTbai) {
+      try {
+        await callSifProcess('Em_Tbai_Xmlgenerator');
+        next.tbai = { ok: true };
+      } catch (err) {
+        next.tbai = { ok: false, error: err.message };
+      }
+    }
+
+    setSifResults(next);
+
+    if (Object.values(next).some(result => result?.ok)) {
+      await refetchInvoice();
+      fetchPayments();
+    }
+
+    setSifPhase('results');
+  }, [callSifProcess, fetchPayments, pendingTargets, refetchInvoice]);
 
   if (!invoice) return null;
 
@@ -370,6 +465,18 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
                     {ui('invoicePreviewSend')}
                   </Button>
 
+                  {canSendToSif && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
+                      onClick={() => setShowSifModal(true)}
+                    >
+                      <FileText className="text-[#828FA3]" />
+                      {ui('sendToSif')}
+                    </Button>
+                  )}
+
                   {/* Add Payment */}
                   <Button
                     size="sm"
@@ -486,6 +593,91 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
             fetchPayments();
           }}
         />
+      )}
+
+      {showSifModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="send-to-sif-preview-title"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 60,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div style={{ background: '#fff', borderRadius: '12px', padding: '24px', minWidth: '320px', maxWidth: '480px', width: '100%' }}>
+            <h3 id="send-to-sif-preview-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>
+              {ui('sendToSifTitle')}
+            </h3>
+
+            {sifPhase === 'confirm' && (
+              <>
+                <p style={{ fontSize: '14px', color: '#374151', marginBottom: '20px' }}>
+                  {ui(sifBodyKey)}
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={closeSifModal}
+                    style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', background: '#fff' }}
+                  >
+                    {ui('cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendToSif}
+                    style={{ padding: '8px 16px', borderRadius: '8px', background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer' }}
+                  >
+                    {ui('sendToSifConfirm')}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {sifPhase === 'sending' && (
+              <p style={{ fontSize: '14px', color: '#6b7280' }}>
+                {ui('sendToSifSending')}
+              </p>
+            )}
+
+            {sifPhase === 'results' && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
+                  {sifResults.sii && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                      <span style={{ color: sifResults.sii.ok ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                        {sifResults.sii.ok ? '✓' : '✗'}
+                      </span>
+                      <span>
+                        {sifResults.sii.ok ? ui('sendToSifSuccessSii') : (sifResults.sii.error || ui('sendToSifErrorSii'))}
+                      </span>
+                    </div>
+                  )}
+                  {sifResults.tbai && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
+                      <span style={{ color: sifResults.tbai.ok ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                        {sifResults.tbai.ok ? '✓' : '✗'}
+                      </span>
+                      <span>
+                        {sifResults.tbai.ok ? ui('sendToSifSuccessTbai') : (sifResults.tbai.error || ui('sendToSifErrorTbai'))}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={closeSifModal}
+                    style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', cursor: 'pointer', background: '#fff' }}
+                  >
+                    {ui('close')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Send email modal — rendered on top to preserve pdfUrl blob.

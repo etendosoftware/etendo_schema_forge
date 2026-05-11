@@ -61,6 +61,10 @@ describe('PurchaseInvoiceHeaderTable — due date column', () => {
     assert.doesNotMatch(src, /paymentPlan\?parentId/, 'payment-plan fetch was retired in ETP-3873');
   });
 
+  it('shows POReference as the list document number column', () => {
+    assert.match(src, /key: 'orderReference', column: 'POReference'/);
+  });
+
   it('feeds outstandingAmount into the due-date state', () => {
     assert.match(src, /getDueDateState\(d, row\.outstandingAmount\)/);
   });
