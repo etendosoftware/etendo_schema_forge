@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Shield, Plus, RefreshCw, Trash2, Key, MoreHorizontal, Copy, Ban, Pencil } from 'lucide-react';
+import { useUI } from '@/i18n';
 import { toast } from 'sonner';
 
 function detectBaseUrl() {
@@ -26,6 +27,7 @@ function detectBaseUrl() {
 
 export default function OAuth2ClientsPage() {
   const { token, logout } = useAuth();
+  const ui = useUI();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -84,8 +86,7 @@ export default function OAuth2ClientsPage() {
     setConfirmState({
       open: true,
       title: `Delete "${client.name}"?`,
-      description:
-        'This will permanently delete the client and revoke all its tokens. This action cannot be undone.',
+      description: ui('oauthDeleteDesc'),
       confirmLabel: 'Delete',
       variant: 'destructive',
       onConfirm: async () => {
@@ -108,8 +109,7 @@ export default function OAuth2ClientsPage() {
     setConfirmState({
       open: true,
       title: `Regenerate secret for "${client.name}"?`,
-      description:
-        'Are you sure? The current secret will be invalidated immediately. Any agents using the old secret will stop working.',
+      description: ui('oauthRegenerateDesc'),
       confirmLabel: 'Regenerate',
       variant: 'destructive',
       onConfirm: async () => {
@@ -138,8 +138,7 @@ export default function OAuth2ClientsPage() {
     setConfirmState({
       open: true,
       title: `Revoke tokens for "${client.name}"?`,
-      description:
-        'This will invalidate all active tokens for this client. Agents will need to re-authenticate.',
+      description: ui('oauthRevokeDesc'),
       confirmLabel: 'Revoke All',
       variant: 'destructive',
       onConfirm: async () => {
@@ -172,8 +171,8 @@ export default function OAuth2ClientsPage() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">OAuth2 Clients</h2>
-          <p className="text-muted-foreground">Manage MCP agent credentials</p>
+          <h2 className="text-2xl font-bold tracking-tight">{ui("oauth2Clients")}</h2>
+          <p className="text-muted-foreground">{ui("oauthClientManage")}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={fetchClients} disabled={loading}>
@@ -181,7 +180,7 @@ export default function OAuth2ClientsPage() {
           </Button>
           <Button onClick={handleCreate}>
             <Plus className="h-4 w-4 mr-2" />
-            New Client
+            {ui("oauthClientNew")}
           </Button>
         </div>
       </div>
@@ -191,30 +190,30 @@ export default function OAuth2ClientsPage() {
           {loading ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-              Loading clients...
+              {ui("loadingClients")}
             </div>
           ) : clients.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Shield className="h-12 w-12 text-muted-foreground/40 mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-1">No OAuth2 clients</h3>
+              <h3 className="text-lg font-medium text-foreground mb-1">{ui("oauthClientNoClients")}</h3>
               <p className="text-sm text-muted-foreground mb-4">
-                Create a client to allow MCP agents to authenticate with Etendo.
+                {ui("oauthClientNoClientsDesc")}
               </p>
               <Button onClick={handleCreate}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create First Client
+                {ui("oauthClientCreateFirst")}
               </Button>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Client ID</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Scopes</TableHead>
-                  <TableHead>Active</TableHead>
+                  <TableHead>{ui("name")}</TableHead>
+                  <TableHead>{ui("oauthClientId")}</TableHead>
+                  <TableHead>{ui("user")}</TableHead>
+                  <TableHead>{ui("role")}</TableHead>
+                  <TableHead>{ui("oauthScopes")}</TableHead>
+                  <TableHead>{ui("oauthActive")}</TableHead>
                   <TableHead className="w-[60px]" />
                 </TableRow>
               </TableHeader>
@@ -226,7 +225,7 @@ export default function OAuth2ClientsPage() {
                       <button
                         onClick={() => copyClientId(client.clientId)}
                         className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        title="Click to copy"
+                        title={ui("oauthClickToCopy")}
                       >
                         {client.clientId?.slice(0, 12)}...
                         <Copy className="h-3 w-3" />
@@ -252,7 +251,7 @@ export default function OAuth2ClientsPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={client.isActive ? 'default' : 'outline'}>
-                        {client.isActive ? 'Active' : 'Inactive'}
+                        {client.isActive ? ui('oauthActive') : ui('oauthInactive')}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -265,15 +264,15 @@ export default function OAuth2ClientsPage() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleEdit(client)}>
                             <Pencil className="h-4 w-4 mr-2" />
-                            Edit
+                            {ui("edit")}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleRegenerateSecret(client)}>
                             <Key className="h-4 w-4 mr-2" />
-                            Regenerate Secret
+                            {ui("oauthRegenerateSecret")}
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleRevokeTokens(client)}>
                             <Ban className="h-4 w-4 mr-2" />
-                            Revoke Tokens
+                            {ui("oauthRevokeTokens")}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -281,7 +280,7 @@ export default function OAuth2ClientsPage() {
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
+                            {ui("delete")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

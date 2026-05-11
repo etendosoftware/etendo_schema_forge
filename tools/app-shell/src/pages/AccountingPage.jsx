@@ -2,6 +2,7 @@ import React from 'react';
 import { KPIHeader, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { FileText, Receipt, Landmark, Scale } from 'lucide-react';
+import { useUI } from '@/i18n';
 
 import { kpisConfig, sections } from '@generated/accounting/generated/config';
 import * as mockData from '@generated/accounting/generated/mockData';
@@ -26,6 +27,7 @@ const TAX_SUMMARY_DATA = mockData.taxSummary;
 // -- Component -----------------------------------------------------------------
 
 export default function AccountingPage() {
+  const ui = useUI();
   return (
     <div className="space-y-6">
       {/* KPIs */}
@@ -38,7 +40,7 @@ export default function AccountingPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-muted-foreground" />
-                Recent Sales Invoices
+                {ui('recentSalesInvoices')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -52,7 +54,7 @@ export default function AccountingPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Receipt className="h-5 w-5 text-muted-foreground" />
-                Recent Purchase Invoices
+                {ui('recentPurchaseInvoices')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -69,7 +71,7 @@ export default function AccountingPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Landmark className="h-5 w-5 text-muted-foreground" />
-                Bank Accounts Summary
+                {ui('bankAccountsSummary')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -83,7 +85,7 @@ export default function AccountingPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Scale className="h-5 w-5 text-muted-foreground" />
-                Tax Obligations
+                {ui('taxObligations')}
               </CardTitle>
             </CardHeader>
             <CardContent>

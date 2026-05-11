@@ -1,4 +1,5 @@
 import React from 'react';
+import { useUI } from '@/i18n';
 import { KPIHeader, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +31,7 @@ const RECENT_MOVEMENTS = mockData.recentMovements;
 // -- Component -----------------------------------------------------------------
 
 export default function InventoryPage() {
+  const ui = useUI();
   return (
     <div className="space-y-6">
       {/* KPIs */}
@@ -43,7 +45,7 @@ export default function InventoryPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Search className="h-5 w-5 text-muted-foreground" />
-                Stock Levels
+                {ui('stockLevels')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -63,7 +65,7 @@ export default function InventoryPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <AlertTriangle className="h-5 w-5 text-amber-500" />
-                Low Stock Alerts
+                {ui('lowStockAlerts')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -74,7 +76,7 @@ export default function InventoryPage() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{alert.name}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {alert.current} / {alert.minimum} minimum
+                        {alert.current} / {alert.minimum} {ui('minimum')}
                       </p>
                     </div>
                     <Badge
@@ -96,7 +98,7 @@ export default function InventoryPage() {
           {/* Recent Movements */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Recent Movements</CardTitle>
+              <CardTitle className="text-base">{ui('recentMovements')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {RECENT_MOVEMENTS.map((movement, idx) => (
@@ -116,7 +118,7 @@ export default function InventoryPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{movement.product}</p>
                       <p className="text-xs text-muted-foreground">
-                        {movement.qty} units &middot; {movement.warehouse}
+                        {movement.qty} {ui('units')} · {movement.warehouse}
                       </p>
                     </div>
                     <span className="text-xs text-muted-foreground whitespace-nowrap">

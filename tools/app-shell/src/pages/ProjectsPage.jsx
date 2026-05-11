@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { KPIHeader, KanbanBoard, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { FolderKanban, Clock, PieChart, FileText } from 'lucide-react';
+import { useUI } from '@/i18n';
 
 import { sections } from '@generated/projects/generated/config';
 import * as mockData from '@generated/projects/generated/mockData';
@@ -35,6 +36,7 @@ const DOC_DATA = mockData.recentDocuments;
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
+  const ui = useUI();
   const [cards, setCards] = useState(INITIAL_CARDS);
 
   const handleDragEnd = useCallback((cardId, _fromColumnId, toColumnId) => {
@@ -71,7 +73,7 @@ export default function ProjectsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-muted-foreground" />
-              Recent Time Entries
+              {ui('recentTimeEntries')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -88,7 +90,7 @@ export default function ProjectsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-muted-foreground" />
-              Recent Documents
+              {ui('recentDocuments')}
             </CardTitle>
           </CardHeader>
           <CardContent>

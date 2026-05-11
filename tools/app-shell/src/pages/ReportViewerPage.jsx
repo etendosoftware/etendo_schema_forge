@@ -10,13 +10,6 @@ import ProductSearchDrawer from '@/components/contract-ui/ProductSearchDrawer.js
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 
-const FORMATS = [
-  { id: 'preview', label: 'Preview', icon: Eye },
-  { id: 'pdf', label: 'PDF', icon: FileDown },
-  { id: 'xlsx', label: 'Excel', icon: FileSpreadsheet },
-  { id: 'csv', label: 'CSV', icon: FileText },
-];
-
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
 function getEtendoBase() {
@@ -161,7 +154,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
             </button>
           ))}
           <div ref={sentinelRef} className="py-1 flex justify-center">
-            {loadingMore && <span className="text-xs text-muted-foreground">Loading more...</span>}
+            {loadingMore && <span className="text-xs text-muted-foreground">{ui('loadingMore')}</span>}
           </div>
         </div>
       </div>
@@ -496,7 +489,7 @@ function PopupMultiSelector({ selector, label, onChange }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="bg-white rounded-xl shadow-2xl w-[480px] max-h-[560px] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-              <h3 className="text-sm font-semibold">Select {label}</h3>
+              <h3 className="text-sm font-semibold">{ui('selectLabelPrefix')} {label}</h3>
               <button onClick={() => setOpen(false)} className="text-lg leading-none text-muted-foreground hover:text-foreground">&times;</button>
             </div>
             <div className="px-4 py-2 border-b border-border/30">
@@ -613,7 +606,7 @@ function SingleSelectModal({ selector, label, value, displayValue, onChange, has
                 type="text"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="Search..."
+                placeholder={ui('searchPlaceholder')}
                 className="w-full h-8 px-2 text-sm border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30"
               />
             </div>
@@ -642,9 +635,9 @@ function SingleSelectModal({ selector, label, value, displayValue, onChange, has
 }
 
 const SIDEBAR_SECTIONS = [
-  { key: 'primary', label: 'reportScope' },
-  { key: 'dimensions', label: 'refineDimensions' },
-  { key: 'options', label: 'displayOptions' },
+  { key: 'primary', labelKey: 'reportScope' },
+  { key: 'dimensions', labelKey: 'refineDimensions' },
+  { key: 'options', labelKey: 'displayOptions' },
 ];
 
 function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, resetKey, token, selectedOrgId, roleOrgIds }) {
@@ -737,7 +730,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
                 ><X className="h-3.5 w-3.5" /></button>
               )}
             </div>
-            {hasError && <p className="text-[10px] text-destructive mt-1">Required</p>}
+            {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
           </div>
         );
       }
@@ -765,7 +758,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
             roleOrgIds={roleOrgIds}
             selectedWarehouseId={params.M_Warehouse_ID || ''}
           />
-          {hasError && <p className="text-[10px] text-destructive mt-1">Required</p>}
+          {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
         </div>
       );
     }
@@ -824,7 +817,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
             onChange={(iso) => handleChange(p.name, iso)}
             className={errorBorder}
           />
-          {hasError && <p className="text-[10px] text-destructive mt-1">Required</p>}
+          {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
         </div>
       );
     }
@@ -839,7 +832,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
           onChange={e => handleChange(p.name, e.target.value)}
           className={`w-full h-9 px-2 text-sm rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-primary/30 border ${errorBorder}`}
         />
-        {hasError && <p className="text-[10px] text-destructive mt-1">Required</p>}
+        {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
       </div>
     );
   };
@@ -883,12 +876,12 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
 
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-4 space-y-6">
-          {SIDEBAR_SECTIONS.map(({ key, label }) => {
+          {SIDEBAR_SECTIONS.map(({ key, labelKey }) => {
             const sectionParams = grouped[key];
             if (!sectionParams?.length) return null;
             return (
               <div key={key}>
-                <h4 className="text-xs font-semibold text-foreground mb-3">{ui(label)}</h4>
+                <h4 className="text-xs font-semibold text-foreground mb-3">{ui(labelKey)}</h4>
                 {renderSection(key, sectionParams)}
               </div>
             );
@@ -966,23 +959,23 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
   return (
     <div className="flex flex-col flex-1 min-h-0 gap-2">
       <div className="flex items-center gap-2 px-1">
-        {[{ id: 'preview', label: 'Preview', icon: Eye }, { id: 'pdf', label: 'PDF', icon: FileDown }, { id: 'xlsx', label: 'Excel', icon: FileSpreadsheet }].map(f => (
+        {[{ id: 'preview', labelKey: 'preview', icon: Eye }, { id: 'pdf', labelKey: 'PDF', icon: FileDown }, { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet }].map(f => (
           <button key={f.id} onClick={() => fetchFormat(f.id)} disabled={loading}
             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-xs font-medium border border-border bg-background hover:bg-muted disabled:opacity-50">
-            <f.icon className="h-3.5 w-3.5" />{f.label}
+            <f.icon className="h-3.5 w-3.5" />{ui(f.labelKey)}
           </button>
         ))}
       </div>
       <div className="flex-1 bg-white rounded-lg border border-border/30 overflow-hidden relative">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" /><span>Loading details...</span>
+            <Loader2 className="h-5 w-5 animate-spin" /><span>{ui('loadingDetails')}</span>
           </div>
         )}
         {error && (
           <div className="absolute inset-0 flex items-center justify-center text-destructive text-sm px-8 text-center">{error}</div>
         )}
-        <iframe ref={iframeRef} title="Detail Report" className="w-full h-full border-0" />
+        <iframe ref={iframeRef} title={ui('detailReport')} className="w-full h-full border-0" />
       </div>
     </div>
   );
@@ -1151,10 +1144,10 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
   useSetPageMeta({ title, breadcrumb, onBack, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
 
   const DOWNLOAD_FORMATS = [
-    { id: 'html', label: 'preview', icon: Eye },
-    { id: 'pdf', label: 'PDF', icon: FileDown },
-    { id: 'xlsx', label: 'Excel', icon: FileSpreadsheet },
-    { id: 'csv', label: 'CSV', icon: FileText },
+    { id: 'html', labelKey: 'preview', icon: Eye },
+    { id: 'pdf', labelKey: 'PDF', icon: FileDown },
+    { id: 'xlsx', labelKey: 'Excel', icon: FileSpreadsheet },
+    { id: 'csv', labelKey: 'CSV', icon: FileText },
   ];
 
   return (
@@ -1192,7 +1185,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                   return (
                     <button key={fmt.id} onClick={() => renderReport(fmt.id)} disabled={loading}
                       className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-white text-foreground hover:bg-muted/50 disabled:opacity-40">
-                      <Icon className="h-3.5 w-3.5" />{ui(fmt.label)}
+                      <Icon className="h-3.5 w-3.5" />{ui(fmt.labelKey)}
                     </button>
                   );
                 })}
@@ -1209,7 +1202,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
             <div className="bg-white rounded-lg shadow-sm h-full overflow-hidden relative border border-border/30">
               {loading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" /><span>Rendering report...</span>
+                  <Loader2 className="h-5 w-5 animate-spin" /><span>{ui('renderingReport')}</span>
                 </div>
               )}
               {error && (
@@ -1244,7 +1237,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                   </div>
                 </div>
               )}
-              <iframe ref={iframeRef} title="Report" className="w-full h-full border-0" />
+              <iframe ref={iframeRef} title={ui('report')} className="w-full h-full border-0" />
             </div>
           </div>
         </div>
@@ -1255,7 +1248,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       <Dialog open={!!drillDownBp} onOpenChange={(o) => !o && setDrillDownBp(null)}>
         <DialogContent className="max-w-5xl w-[85vw] h-[70vh] flex flex-col gap-3 p-4">
           <DialogHeader className="shrink-0">
-            <DialogTitle>{drillDownBp?.name} — Details</DialogTitle>
+            <DialogTitle>{drillDownBp?.name}{ui('detailsSuffix')}</DialogTitle>
           </DialogHeader>
           {drillDownBp && (
             <DrillDownViewer

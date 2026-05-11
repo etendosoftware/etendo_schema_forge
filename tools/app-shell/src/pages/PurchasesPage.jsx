@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useUI } from '@/i18n';
 import { useNavigate } from 'react-router-dom';
 import { KPIHeader, KanbanBoard } from '@/components/contract-ui';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +47,7 @@ function formatCurrency(value) {
 
 export default function PurchasesPage() {
   const navigate = useNavigate();
+  const ui = useUI();
   const [activeTab, setActiveTab] = useState('kanban');
   const [cards, setCards] = useState(INITIAL_CARDS);
 
@@ -74,14 +76,14 @@ export default function PurchasesPage() {
           size="sm"
           onClick={() => setActiveTab('kanban')}
         >
-          Kanban
+          {ui("viewKanban")}
         </Button>
         <Button
           variant={activeTab === 'list' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setActiveTab('list')}
         >
-          List
+          {ui("viewList")}
         </Button>
       </div>
 
@@ -92,25 +94,25 @@ export default function PurchasesPage() {
           cards={cards}
           onDragEnd={handleDragEnd}
           onCardClick={handleCardClick}
-          emptyMessage="No purchase orders"
+          emptyMessage={ui("noResults")}
         />
       )}
 
       {activeTab === 'list' && (
         <Card>
           <CardHeader>
-            <CardTitle>Purchase Orders</CardTitle>
+            <CardTitle>{ui("purchaseOrders")}</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Doc No</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Vendor</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{ui("docNo")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{ui("vendor")}</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">{ui("amount")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{ui("statusColumn")}</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">{ui("date")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -128,6 +130,7 @@ export default function PurchasesPage() {
                           {STATUS_LABEL[card.columnId] || card.columnId}
                         </Badge>
                       </td>
+                      {/* i18n-allowlist: ["2026-03-09"] */}
                       <td className="px-4 py-3 text-muted-foreground">2026-03-09</td>
                     </tr>
                   ))}

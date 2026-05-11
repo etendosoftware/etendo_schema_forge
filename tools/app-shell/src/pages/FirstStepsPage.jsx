@@ -11,21 +11,22 @@ import {
   Users,
   Receipt,
 } from 'lucide-react';
+import { useUI } from '@/i18n';
 import TopBar from '@/components/layout/TopBar/TopBar.jsx';
 
 const STEPS = [
   {
     id: 1,
     icon: Users,
-    title: 'Crear cuenta',
+    titleKey: 'firstStepsCreateAccount',
     time: null,
     done: true,
   },
   {
     id: 2,
     icon: Building2,
-    title: 'Datos de tu empresa',
-    description: 'Añade la información básica para emitir documentos.',
+    titleKey: 'firstStepsCompanyData',
+    descKey: 'firstStepsCompanyDataDesc',
     time: 2,
     done: false,
     expanded: true,
@@ -33,35 +34,35 @@ const STEPS = [
   {
     id: 3,
     icon: FileText,
-    title: 'Personaliza tus facturas',
+    titleKey: 'firstStepsCustomizeInvoices',
     time: 3,
     done: false,
   },
   {
     id: 4,
     icon: Landmark,
-    title: 'Conecta tu banco',
+    titleKey: 'firstStepsConnectBank',
     time: 4,
     done: false,
   },
   {
     id: 5,
     icon: CreditCard,
-    title: 'Configura métodos de pago',
+    titleKey: 'firstStepsSetupPayments',
     time: 2,
     done: false,
   },
   {
     id: 6,
     icon: Users,
-    title: 'Invita a tu equipo',
+    titleKey: 'firstStepsInviteTeam',
     time: 2,
     done: false,
   },
   {
     id: 7,
     icon: Receipt,
-    title: 'Crea tu primera factura',
+    titleKey: 'firstStepsFirstInvoice',
     time: 2,
     done: false,
   },
@@ -71,9 +72,10 @@ const completed = STEPS.filter(s => s.done).length;
 const total = STEPS.length;
 
 export default function FirstStepsPage() {
+  const ui = useUI();
   return (
     <div className="flex flex-col h-full">
-      <TopBar title="Primeros pasos" />
+      <TopBar title={ui("firstStepsPageTitle")} />
 
       <div className="flex-1 overflow-auto bg-page-bg">
         <div className="mx-auto max-w-2xl px-6 py-8 space-y-6">
@@ -82,7 +84,7 @@ export default function FirstStepsPage() {
           <div className="flex items-center justify-between rounded-xl border bg-card px-5 py-3.5 shadow-sm">
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <Settings className="h-5 w-5 shrink-0" />
-              <span>Copilot puede ayudarte a configurarlo</span>
+              <span>{ui("firstStepsCopilotBanner")}</span>
             </div>
             <button
               type="button"
@@ -90,21 +92,21 @@ export default function FirstStepsPage() {
               className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground opacity-60 cursor-default"
             >
               <Sparkles className="h-4 w-4" />
-              Empezar
+              {ui("firstStepsStart")}
             </button>
           </div>
 
           {/* Header + progress */}
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-text-primary">
-              Vamos a preparar tu cuenta
+              {ui("firstStepsPrepareAccount")}
             </h1>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">
-                Sigue estos pasos y en menos de 10 minutos tendrás todo listo para empezar.
+                {ui("firstStepsSubtitle")}
               </span>
               <span className="shrink-0 ml-4 font-medium text-muted-foreground">
-                {completed}/{total} Completados
+                {completed}/{total} {ui("firstStepsCompleted")}
               </span>
             </div>
             <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
@@ -133,28 +135,28 @@ export default function FirstStepsPage() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-semibold ${step.done ? 'line-through text-muted-foreground' : 'text-text-primary'}`}>
-                        {step.title}
+                        {ui(step.titleKey)}
                       </p>
 
-                      {step.expanded && step.description && (
+                      {step.expanded && step.descKey && (
                         <div className="mt-1 space-y-3">
-                          <p className="text-xs text-muted-foreground">{step.description}</p>
+                          <p className="text-xs text-muted-foreground">{ui(step.descKey)}</p>
                           <div className="flex items-center gap-3">
                             <button
                               type="button"
                               disabled
                               className="rounded-md border px-3 py-1 text-xs font-medium text-foreground cursor-default hover:bg-muted/50"
                             >
-                              Configurar
+                              {ui("firstStepsConfigure")}
                             </button>
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Clock className="h-3.5 w-3.5" />
-                              {step.time} min
+                              {step.time} {ui("minutes")}
                             </span>
                           </div>
                           <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-default select-none">
                             <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border" />
-                            Marcar como completado
+                            {ui("markAsCompleted")}
                           </label>
                         </div>
                       )}
