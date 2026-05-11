@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SHARED_DOC_FILES = new Set(['INDEX', 'app-shell-functional-flows']);
 const NON_WINDOW_CUSTOM_DIRS = new Set(['shared']);
+const TEST_PATH_SEGMENTS = new Set(['__tests__', 'test', 'tests']);
+const TEST_FILE_PATTERN = /(?:^|[./-])(?:test|spec)\.[cm]?[jt]sx?$/;
 
 function git(args, { cwd = ROOT, allowFailure = false } = {}) {
   try {
@@ -28,9 +30,18 @@ export function toKebabCase(value) {
     .toLowerCase();
 }
 
+export function isTestingPath(path) {
+  const segments = path.split('/');
+  if (segments.some((segment) => TEST_PATH_SEGMENTS.has(segment))) {
+    return true;
+  }
+
+  const fileName = segments[segments.length - 1] || '';
+  return TEST_FILE_PATTERN.test(fileName);
+}
+
 export function windowFromChangedPath(path) {
-  // Test files do not affect window behavior — skip them
-  if (/__tests__\//.test(path) || /\.test\.[jt]sx?$/.test(path) || /\.spec\.[jt]sx?$/.test(path)) {
+  if (isTestingPath(path)) {
     return null;
   }
 

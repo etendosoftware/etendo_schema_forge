@@ -8,6 +8,7 @@ import {
   analyzeWindowDocChanges,
   formatWindowDocReport,
   getChangedFiles,
+  isTestingPath,
   toKebabCase,
   windowDocFromPath,
   windowFromChangedPath,
@@ -24,6 +25,15 @@ describe('check-window-docs path mapping', () => {
     assert.equal(windowFromChangedPath('artifacts/sales-order/decisions.json'), 'sales-order');
     assert.equal(windowFromChangedPath('tools/app-shell/src/windows/custom/shared/useInvoicePdf.js'), null);
     assert.equal(windowFromChangedPath('tools/app-shell/src/windows/custom/README.md'), null);
+  });
+
+  it('ignores test files under artifact and custom window directories', () => {
+    assert.equal(isTestingPath('artifacts/sales-order/custom/__tests__/OrderDraftChips.test.js'), true);
+    assert.equal(isTestingPath('tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseSummary.test.js'), true);
+    assert.equal(isTestingPath('artifacts/purchase-order/generated/web/purchase-order/HeaderPage.spec.jsx'), true);
+    assert.equal(windowFromChangedPath('artifacts/sales-order/custom/__tests__/OrderDraftChips.test.js'), null);
+    assert.equal(windowFromChangedPath('tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseSummary.test.js'), null);
+    assert.equal(windowFromChangedPath('artifacts/purchase-order/generated/web/purchase-order/HeaderPage.spec.jsx'), null);
   });
 
   it('only treats per-window generated-custom-windows docs as satisfying updates', () => {
@@ -85,6 +95,18 @@ describe('analyzeWindowDocChanges', () => {
     } finally {
       rmSync(repoDir, { recursive: true, force: true });
     }
+  });
+
+  it('does not require window docs when only window tests change', () => {
+    const analysis = analyzeWindowDocChanges([
+      'artifacts/sales-order/custom/__tests__/OrderDraftChips.test.js',
+      'artifacts/purchase-order/generated/web/purchase-order/__tests__/RelatedDocuments.test.js',
+      'tools/app-shell/src/windows/custom/warehouse/__tests__/WarehouseSummary.test.js',
+    ]);
+
+    assert.deepEqual(analysis.affectedWindows, []);
+    assert.deepEqual(analysis.updatedDocWindows, []);
+    assert.deepEqual(analysis.missingWindows, []);
   });
 });
 
