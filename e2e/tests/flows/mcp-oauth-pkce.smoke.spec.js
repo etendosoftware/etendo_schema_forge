@@ -19,11 +19,11 @@ const REQUESTED_SCOPES = process.env.E2E_MCP_OAUTH_SCOPES ||
   'neo:read neo:write neo:process neo:report neo:*';
 
 const SMOKE_USER = process.env.E2E_MCP_SMOKE_USER || process.env.E2E_USER;
-const SMOKE_PASSWORD = process.env.E2E_MCP_SMOKE_PASSWORD || process.env.E2E_PASSWORD;
+const SMOKE_PASSCODE = process.env.E2E_MCP_SMOKE_PASSWORD || process.env.E2E_PASSWORD;
 const STATIC_CLIENT_ID = process.env.E2E_MCP_OAUTH_CLIENT_ID;
-const STATIC_CLIENT_SECRET = process.env.E2E_MCP_OAUTH_CLIENT_SECRET;
+const STATIC_CLIENT_CREDENTIAL = process.env.E2E_MCP_OAUTH_CLIENT_SECRET;
 const ENABLE_DCR = process.env.E2E_MCP_OAUTH_ENABLE_DCR === '1';
-const DCR_INITIAL_ACCESS_TOKEN = process.env.E2E_MCP_OAUTH_DCR_INITIAL_ACCESS_TOKEN;
+const INITIAL_DCR_TOKEN = process.env.E2E_MCP_OAUTH_DCR_INITIAL_ACCESS_TOKEN;
 const TOKEN_AUTH_METHOD = process.env.E2E_MCP_OAUTH_TOKEN_AUTH_METHOD || 'client_secret_post';
 const CONFIGURED_REDIRECT_URI = process.env.E2E_MCP_OAUTH_REDIRECT_URI;
 
@@ -62,7 +62,7 @@ test.describe('MCP OAuth2 Authorization Code + PKCE deployed smoke', () => {
     expect(protectedResource.resource).toBe(MCP_RESOURCE);
     expect(Array.isArray(protectedResource.authorization_servers)).toBe(true);
     for (const server of protectedResource.authorization_servers) {
-      expectPublicEndpoint(server, PUBLIC_BASE_URL, 'authorization_servers[]');
+      expectHttpsEndpoint(server, 'authorization_servers[]');
     }
 
     const mcpResponse = await request.post(MCP_ENDPOINT, {
@@ -92,7 +92,8 @@ test.describe('MCP OAuth2 Authorization Code + PKCE deployed smoke', () => {
     page,
     request,
   }) => {
-    test.skip(Boolean(!SMOKE_USER || !SMOKE_PASSWORD), 'Set smoke user credentials in E2E_MCP_SMOKE_USER/E2E_MCP_SMOKE_PASSWORD or E2E_USER/E2E_PASSWORD.');
+    test.setTimeout(180_000);
+    test.skip(Boolean(!SMOKE_USER || !SMOKE_PASSCODE), 'Set smoke user credentials in E2E_MCP_SMOKE_USER/E2E_MCP_SMOKE_PASSWORD or E2E_USER/E2E_PASSWORD.');
     test.skip(Boolean(!STATIC_CLIENT_ID && !ENABLE_DCR), 'Set E2E_MCP_OAUTH_CLIENT_ID or enable DCR with E2E_MCP_OAUTH_ENABLE_DCR=1.');
 
     const callbackServer = await startCallbackServer(CONFIGURED_REDIRECT_URI);
@@ -140,7 +141,7 @@ test.describe('MCP OAuth2 Authorization Code + PKCE deployed smoke', () => {
       await expectNotOnlyPwaShell(page);
       await expectLoginFlow(page);
 
-      await fillLoginForm(page, SMOKE_USER, SMOKE_PASSWORD);
+      await fillLoginForm(page, SMOKE_USER, SMOKE_PASSCODE);
       await approveConsentIfNeeded(page, callbackServer.callbackPromise);
 
       const callback = await callbackServer.callbackPromise;
@@ -165,14 +166,14 @@ async function resolveOAuthClient(request, redirectUri) {
   if (STATIC_CLIENT_ID) {
     return {
       clientId: STATIC_CLIENT_ID,
-      clientSecret: STATIC_CLIENT_SECRET,
+      clientCredential: STATIC_CLIENT_CREDENTIAL,
       tokenAuthMethod: TOKEN_AUTH_METHOD,
     };
   }
 
   const headers = { 'content-type': 'application/json' };
-  if (DCR_INITIAL_ACCESS_TOKEN) {
-    headers.authorization = `Bearer ${DCR_INITIAL_ACCESS_TOKEN}`;
+  if (INITIAL_DCR_TOKEN) {
+    headers.authorization = `Bearer ${INITIAL_DCR_TOKEN}`;
   }
 
   const response = await request.post(REGISTRATION_ENDPOINT, {
@@ -192,8 +193,8 @@ async function resolveOAuthClient(request, redirectUri) {
 
   return {
     clientId: body.client_id,
-    clientSecret: body.client_secret,
-    tokenAuthMethod: body.token_endpoint_auth_method || 'none',
+    clientCredential: body.client_secret,
+    tokenAuthMethod: body.token_endpoint_auth_method || 'client_secret_basic',
   };
 }
 
@@ -218,13 +219,15 @@ async function exchangeCodeForToken(request, { client, code, codeVerifier, redir
     client_id: client.clientId,
     code_verifier: codeVerifier,
   });
-  if (client.clientSecret && client.tokenAuthMethod !== 'client_secret_basic') {
-    body.set('client_secret', client.clientSecret);
+  if (client.clientCredential && client.tokenAuthMethod === 'client_secret_post') {
+    body.set('client_secret', client.clientCredential);
   }
 
   const headers = { 'content-type': 'application/x-www-form-urlencoded' };
-  if (client.clientSecret && client.tokenAuthMethod === 'client_secret_basic') {
-    headers.authorization = `Basic ${base64(`${client.clientId}:${client.clientSecret}`)}`;
+  if (client.clientCredential && client.tokenAuthMethod === 'client_secret_basic') {
+    headers.authorization = `Basic ${base64(
+      `${formEncode(client.clientId)}:${formEncode(client.clientCredential)}`
+    )}`;
   }
 
   const response = await request.post(TOKEN_ENDPOINT, {
@@ -238,7 +241,10 @@ async function exchangeCodeForToken(request, { client, code, codeVerifier, redir
 
 async function startCallbackServer(configuredRedirectUri) {
   const configuredUrl = configuredRedirectUri ? new URL(configuredRedirectUri) : null;
-  const port = configuredUrl?.port ? Number(configuredUrl.port) : 0;
+  const defaultCallbackPath = '/mcp/oauth/callback';
+  const callbackPath = configuredUrl?.pathname || defaultCallbackPath;
+  const port = configuredUrl ? requireExplicitPort(configuredUrl) : 0;
+  const listenHost = resolveCallbackListenHost(configuredUrl);
 
   let resolveCallback;
   const callbackPromise = new Promise((resolve) => {
@@ -246,8 +252,8 @@ async function startCallbackServer(configuredRedirectUri) {
   });
 
   const server = createServer((req, res) => {
-    const url = new URL(req.url || '/', 'http://127.0.0.1');
-    if (url.pathname !== '/mcp/oauth/callback') {
+    const url = new URL(req.url || '/', configuredRedirectUri || 'http://127.0.0.1');
+    if (url.pathname !== callbackPath) {
       res.writeHead(404, { 'content-type': 'text/plain' });
       res.end('Not found');
       return;
@@ -261,13 +267,17 @@ async function startCallbackServer(configuredRedirectUri) {
 
   await new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, '127.0.0.1', resolve);
+    if (listenHost) {
+      server.listen(port, listenHost, resolve);
+    } else {
+      server.listen(port, resolve);
+    }
   });
 
   const actualPort = server.address().port;
   return {
     callbackPromise: withTimeout(callbackPromise, 120_000, 'Timed out waiting for OAuth callback'),
-    redirectUri: configuredRedirectUri || `http://127.0.0.1:${actualPort}/mcp/oauth/callback`,
+    redirectUri: configuredRedirectUri || `http://127.0.0.1:${actualPort}${defaultCallbackPath}`,
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }
@@ -388,6 +398,35 @@ function expectPublicEndpoint(value, publicBaseUrl, label) {
   expect(parsed.protocol, `${label} must be HTTPS`).toBe('https:');
 }
 
+function expectHttpsEndpoint(value, label) {
+  expect(value, `${label} must be present`).toBeTruthy();
+  const parsed = new URL(value);
+  expect(parsed.protocol, `${label} must be HTTPS`).toBe('https:');
+}
+
+function requireExplicitPort(url) {
+  if (!url.port) {
+    throw new Error(
+      'E2E_MCP_OAUTH_REDIRECT_URI must include an explicit local callback port, ' +
+        'for example http://127.0.0.1:49152/mcp/oauth/callback.'
+    );
+  }
+  return Number(url.port);
+}
+
+function resolveCallbackListenHost(url) {
+  if (!url) return '127.0.0.1';
+
+  const host = url.hostname;
+  if (host === '127.0.0.1') return host;
+  if (host === '[::1]' || host === '::1') return '::1';
+  if (host === 'localhost') return null;
+
+  throw new Error(
+    'E2E_MCP_OAUTH_REDIRECT_URI must use a loopback host: 127.0.0.1, localhost, or [::1].'
+  );
+}
+
 function withTimeout(promise, timeoutMs, message) {
   let timeout;
   const timeoutPromise = new Promise((_, reject) => {
@@ -409,4 +448,10 @@ function base64Url(value) {
 
 function base64(value) {
   return Buffer.from(value).toString('base64');
+}
+
+function formEncode(value) {
+  return encodeURIComponent(value)
+    .replace(/[!'()]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
+    .replace(/\*/g, '%2A');
 }

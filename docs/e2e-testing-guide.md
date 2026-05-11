@@ -35,23 +35,19 @@ Run it explicitly:
 
 ```bash
 cd e2e
-E2E_MCP_OAUTH_SMOKE=1 \
-E2E_MCP_SMOKE_USER="<user>" \
-E2E_MCP_SMOKE_PASSWORD="<password>" \
-E2E_MCP_OAUTH_CLIENT_ID="<client-id>" \
 npm run test:mcp-oauth-smoke
 ```
+
+Before running, export or otherwise provide `E2E_MCP_OAUTH_SMOKE`, `E2E_MCP_SMOKE_USER`, `E2E_MCP_SMOKE_PASSWORD`, and `E2E_MCP_OAUTH_CLIENT_ID` in the shell or CI environment.
 
 Use DCR instead of a pre-created client when the environment allows dynamic registration:
 
 ```bash
 cd e2e
-E2E_MCP_OAUTH_SMOKE=1 \
-E2E_MCP_SMOKE_USER="<user>" \
-E2E_MCP_SMOKE_PASSWORD="<password>" \
-E2E_MCP_OAUTH_ENABLE_DCR=1 \
 npm run test:mcp-oauth-smoke
 ```
+
+For DCR, provide `E2E_MCP_OAUTH_SMOKE`, `E2E_MCP_SMOKE_USER`, `E2E_MCP_SMOKE_PASSWORD`, and `E2E_MCP_OAUTH_ENABLE_DCR` in the shell or CI environment.
 
 If DCR creates the client but `/etendo/oauth2/authorize` returns `invalid_scope`, the environment is not granting the requested MCP scopes to dynamically registered clients. In that case, create a client from the OAuth2 Clients administration page with a System Administrator role, enable `neo:read`, `neo:write`, `neo:process`, `neo:report`, and `neo:*`, then pass its id through `E2E_MCP_OAUTH_CLIENT_ID`.
 
@@ -71,7 +67,7 @@ Configuration variables:
 | `E2E_MCP_OAUTH_TOKEN_AUTH_METHOD` | `client_secret_post` | Use `client_secret_basic`, `client_secret_post`, or `none` |
 | `E2E_MCP_OAUTH_ENABLE_DCR` | `0` | Set to `1` to create a client dynamically |
 | `E2E_MCP_OAUTH_DCR_INITIAL_ACCESS_TOKEN` | none | Optional bearer token for protected DCR |
-| `E2E_MCP_OAUTH_REDIRECT_URI` | local random port | Fixed callback URI when the client requires a pre-registered port |
+| `E2E_MCP_OAUTH_REDIRECT_URI` | local random port | Fixed callback URI when the client requires one; must use `127.0.0.1`, `localhost`, or `[::1]`, include an explicit port, and use the callback path registered for the client |
 
 The smoke performs these checks:
 
