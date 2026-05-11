@@ -28,6 +28,8 @@ const TOKEN_AUTH_METHOD = process.env.E2E_MCP_OAUTH_TOKEN_AUTH_METHOD || 'client
 const CONFIGURED_REDIRECT_URI = process.env.E2E_MCP_OAUTH_REDIRECT_URI;
 
 test.describe('MCP OAuth2 Authorization Code + PKCE deployed smoke', () => {
+  test.describe.configure({ timeout: 180_000 });
+
   test.skip(
     !RUN_DEPLOYED_SMOKE,
     'Set E2E_MCP_OAUTH_SMOKE=1 to run this deployed integration smoke.'
@@ -39,15 +41,15 @@ test.describe('MCP OAuth2 Authorization Code + PKCE deployed smoke', () => {
       `${PUBLIC_BASE_URL}/.well-known/oauth-authorization-server`,
       'OAuth authorization server metadata'
     );
-    expectPublicEndpoint(authorizationServer.issuer, PUBLIC_BASE_URL, 'issuer');
-    expectPublicEndpoint(
+    expectPublicOriginEndpoint(authorizationServer.issuer, PUBLIC_BASE_URL, 'issuer');
+    expectPublicOriginEndpoint(
       authorizationServer.authorization_endpoint,
       PUBLIC_BASE_URL,
       'authorization_endpoint'
     );
-    expectPublicEndpoint(authorizationServer.token_endpoint, PUBLIC_BASE_URL, 'token_endpoint');
+    expectPublicOriginEndpoint(authorizationServer.token_endpoint, PUBLIC_BASE_URL, 'token_endpoint');
     if (authorizationServer.registration_endpoint) {
-      expectPublicEndpoint(
+      expectPublicOriginEndpoint(
         authorizationServer.registration_endpoint,
         PUBLIC_BASE_URL,
         'registration_endpoint'
@@ -92,7 +94,6 @@ test.describe('MCP OAuth2 Authorization Code + PKCE deployed smoke', () => {
     page,
     request,
   }) => {
-    test.setTimeout(180_000);
     test.skip(Boolean(!SMOKE_USER || !SMOKE_PASSCODE), 'Set smoke user credentials in E2E_MCP_SMOKE_USER/E2E_MCP_SMOKE_PASSWORD or E2E_USER/E2E_PASSWORD.');
     test.skip(Boolean(!STATIC_CLIENT_ID && !ENABLE_DCR), 'Set E2E_MCP_OAUTH_CLIENT_ID or enable DCR with E2E_MCP_OAUTH_ENABLE_DCR=1.');
 
@@ -265,14 +266,7 @@ async function startCallbackServer(configuredRedirectUri) {
     resolveCallback(params);
   });
 
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    if (listenHost) {
-      server.listen(port, listenHost, resolve);
-    } else {
-      server.listen(port, resolve);
-    }
-  });
+  await listenForCallback(server, port, listenHost);
 
   const actualPort = server.address().port;
   return {
@@ -390,7 +384,7 @@ async function firstVisibleLocator(page, factories, timeout) {
   throw new Error(`Could not find a visible login control within ${timeout}ms`);
 }
 
-function expectPublicEndpoint(value, publicBaseUrl, label) {
+function expectPublicOriginEndpoint(value, publicBaseUrl, label) {
   expect(value, `${label} must be present`).toBeTruthy();
   const parsed = new URL(value);
   const publicOrigin = new URL(publicBaseUrl).origin;
@@ -425,6 +419,17 @@ function resolveCallbackListenHost(url) {
   throw new Error(
     'E2E_MCP_OAUTH_REDIRECT_URI must use a loopback host: 127.0.0.1, localhost, or [::1].'
   );
+}
+
+function listenForCallback(server, port, host) {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    if (host) {
+      server.listen(port, host, resolve);
+      return;
+    }
+    server.listen(port, resolve);
+  });
 }
 
 function withTimeout(promise, timeoutMs, message) {
