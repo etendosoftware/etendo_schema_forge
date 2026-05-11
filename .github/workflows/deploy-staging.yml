@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - epic/ETP-3504
+  workflow_dispatch:
 
 jobs:
   deploy:
