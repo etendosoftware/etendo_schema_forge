@@ -7,6 +7,7 @@
     "test:headed": "npx playwright test --headed",
     "test:ui": "npx playwright test --ui",
     "test:debug": "npx playwright test --debug",
+    "test:mcp-oauth-smoke": "npx playwright test tests/flows/mcp-oauth-pkce.smoke.spec.js",
     "report": "npx playwright show-report"
   },
   "devDependencies": {
