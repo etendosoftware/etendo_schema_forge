@@ -1,6 +1,8 @@
 import { createRoot } from 'react-dom/client';
+import { initSentry } from './lib/sentry.js';
 import { initRum } from './lib/rum.js';
 
+initSentry();
 initRum();
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';

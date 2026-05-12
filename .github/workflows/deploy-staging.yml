@@ -4,7 +4,19 @@ on:
   push:
     branches:
       - develop
+      - main
       - epic/ETP-3504
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+          - experimental
 
 jobs:
   deploy:
@@ -17,17 +29,36 @@ jobs:
       - name: Resolve deployment target
         id: target
         run: |
-          if [[ "${{ github.ref_name }}" == "develop" ]]; then
-            echo "s3_bucket=${{ vars.S3_BUCKET_STAGING }}" >> $GITHUB_OUTPUT
-            echo "cf_distribution=${{ vars.CF_DISTRIBUTION_STAGING }}" >> $GITHUB_OUTPUT
-            echo "env_label=staging" >> $GITHUB_OUTPUT
-            echo "public_origin=https://go.staging.etendo.cloud" >> $GITHUB_OUTPUT
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TARGET="${{ inputs.environment }}"
+          elif [[ "${{ github.ref_name }}" == "develop" ]]; then
+            TARGET="staging"
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            TARGET="production"
           else
-            echo "s3_bucket=${{ vars.S3_BUCKET_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
-            echo "cf_distribution=${{ vars.CF_DISTRIBUTION_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
-            echo "env_label=experimental" >> $GITHUB_OUTPUT
-            echo "public_origin=https://go.experimental.etendo.cloud" >> $GITHUB_OUTPUT
+            TARGET="experimental"
           fi
+
+          case "$TARGET" in
+            production)
+              echo "s3_bucket=${{ vars.S3_BUCKET_PRODUCTION }}" >> $GITHUB_OUTPUT
+              echo "cf_distribution=${{ vars.CF_DISTRIBUTION_PRODUCTION }}" >> $GITHUB_OUTPUT
+              echo "env_label=production" >> $GITHUB_OUTPUT
+              echo "public_origin=https://go.etendo.cloud" >> $GITHUB_OUTPUT
+              ;;
+            staging)
+              echo "s3_bucket=${{ vars.S3_BUCKET_STAGING }}" >> $GITHUB_OUTPUT
+              echo "cf_distribution=${{ vars.CF_DISTRIBUTION_STAGING }}" >> $GITHUB_OUTPUT
+              echo "env_label=staging" >> $GITHUB_OUTPUT
+              echo "public_origin=https://go.staging.etendo.cloud" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "s3_bucket=${{ vars.S3_BUCKET_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
+              echo "cf_distribution=${{ vars.CF_DISTRIBUTION_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
+              echo "env_label=experimental" >> $GITHUB_OUTPUT
+              echo "public_origin=https://go.experimental.etendo.cloud" >> $GITHUB_OUTPUT
+              ;;
+          esac
 
       - uses: actions/setup-node@v4
         with:
@@ -52,7 +83,10 @@ jobs:
           VITE_RUM_IDENTITY_POOL_ID_STAGING: ${{ vars.RUM_IDENTITY_POOL_ID_STAGING }}
           VITE_RUM_APP_MONITOR_ID_EXPERIMENTAL: ${{ vars.RUM_APP_MONITOR_ID_EXPERIMENTAL }}
           VITE_RUM_IDENTITY_POOL_ID_EXPERIMENTAL: ${{ vars.RUM_IDENTITY_POOL_ID_EXPERIMENTAL }}
-        # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
+          VITE_RUM_APP_MONITOR_ID_PRODUCTION: ${{ vars.RUM_APP_MONITOR_ID_PRODUCTION }}
+          VITE_RUM_IDENTITY_POOL_ID_PRODUCTION: ${{ vars.RUM_IDENTITY_POOL_ID_PRODUCTION }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        # .env.production (committed) provides VITE_MOCK=false, VITE_API_BASE=/etendo, VITE_SENTRY_DSN
 
       - name: Generate reports manifest
         run: node cli/src/generate-reports-manifest.js
