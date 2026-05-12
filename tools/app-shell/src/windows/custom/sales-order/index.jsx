@@ -72,7 +72,6 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
           apiBaseUrl={apiBaseUrl}
           draftMode={draftModeWithModal}
           linesEmptyState={LinesEmptyState}
-          addLineGuard={(d) => !!d?.businessPartner}
           {...rest}
         />
         {createContactState && createPortal(

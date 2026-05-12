@@ -23,8 +23,10 @@
     "customComponents": {
       "topbarRight": "OrderCreateInvoice",
       "topbarExtra": "OrderDraftChips",
-      "bulkActions": "OrderReactivateBulkAction"
+      "bulkActions": "OrderReactivateBulkAction",
+      "bottomSection": "OrderBottomPanel"
     },
+    "linesLayout": "inlineEditable",
     "labelOverrides": {
       "es_ES": {
         "C_BPartner_ID": "Contacto",

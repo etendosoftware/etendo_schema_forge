@@ -20,6 +20,7 @@ import {
 } from './onboarding/onboardingApi.js';
 import { checkSalesInvoiceReadiness } from './onboarding/onboardingReadiness.js';
 import { useLocaleSwitch, useUI } from '../i18n/index.js';
+import { buildAppReturnToHref, getSafeReturnTo } from '../lib/oauthReturnTo.js';
 import {
   applyProgressMessage,
   buildEnvironmentSessionStorage,
@@ -183,7 +184,19 @@ function OnboardingLanguageSelect({ label, locale, onChange, options }) {
 
 const AUTH_FEATURE_KEYS = ['onboardingAuthFeatureNoCard', 'onboardingAuthFeatureTrial', 'onboardingAuthFeatureInstantAccess'];
 
-function AuthShell({ brandLabel, switchPrompt, switchAction, onSwitch, headerContent, marketingTitle, marketingDescription, featureLabels, children }) {
+function EnterEnvironmentButtonContent({ isLoggingIn, label }) {
+  if (isLoggingIn) {
+    return <Loader2 className="h-4 w-4 animate-spin" />;
+  }
+
+  return (
+    <>
+      {label} <ChevronRight className="h-4 w-4 ml-1" />
+    </>
+  );
+}
+
+function AuthShell({ brandLabel, switchPrompt, switchAction, switchTestId, onSwitch, headerContent, marketingTitle, marketingDescription, featureLabels, children }) {
   return (
     <div className="min-h-screen bg-white">
       <div className="flex min-h-screen w-full bg-white lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(420px,0.88fr)]">
@@ -196,6 +209,7 @@ function AuthShell({ brandLabel, switchPrompt, switchAction, onSwitch, headerCon
                 {switchPrompt}{' '}
                 <button
                   type="button"
+                  data-testid={switchTestId}
                   onClick={onSwitch}
                   className="font-medium text-slate-900 underline underline-offset-4 transition hover:text-slate-700"
                 >
@@ -640,7 +654,10 @@ export default function OnboardingPage() {
             return;
           }
         }
-        window.location.href = '/dashboard';
+        window.location.href = buildAppReturnToHref(
+          getSafeReturnTo(window.location.search),
+          window.location.pathname
+        );
         return;
       }
       alert(ui('onboardingEnvironmentLoginFailed'));
@@ -800,6 +817,7 @@ export default function OnboardingPage() {
       <AuthShell
         switchPrompt={ui('onboardingSwitchToLoginPrompt')}
         switchAction={ui('onboardingSwitchToLoginAction')}
+        switchTestId="action-switch-to-login"
         onSwitch={() => {
           setRegisterError(null);
           setLoginError(null);
@@ -880,6 +898,7 @@ export default function OnboardingPage() {
 
           <Button
             type="submit"
+            data-testid="action-register-submit"
             disabled={registerLoading}
             className="h-12 w-full rounded-2xl bg-gray-900 text-base font-medium text-white hover:bg-gray-800"
           >
@@ -898,6 +917,7 @@ export default function OnboardingPage() {
       <AuthShell
         switchPrompt={ui('onboardingSwitchToRegisterPrompt')}
         switchAction={ui('onboardingSwitchToRegisterAction')}
+        switchTestId="action-switch-to-register"
         onSwitch={() => {
           setRegisterError(null);
           setLoginError(null);
@@ -965,6 +985,7 @@ export default function OnboardingPage() {
 
           <Button
             type="submit"
+            data-testid="action-login-submit"
             disabled={loginLoading}
             className="h-12 w-full rounded-2xl bg-gray-900 text-base font-medium text-white hover:bg-gray-800"
           >
@@ -979,6 +1000,74 @@ export default function OnboardingPage() {
 
   // ── LIST VIEW ──
   if (view === 'list') {
+    const renderEnvironmentListContent = () => {
+      if (loadingEnvs) {
+        return (
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+          </div>
+        );
+      }
+
+      if (environments.length === 0) {
+        return (
+          <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
+            <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Building2 className="h-8 w-8 text-gray-300" />
+            </div>
+            <p className="text-lg font-medium text-gray-900 mb-1">{ui('onboardingNoEnvironments')}</p>
+            <p className="text-gray-500 text-sm mb-6">{ui('onboardingCreateFirstEnvironment')}</p>
+            <Button
+              onClick={() => { setCreateStep(1); setResult(null); setView('create'); }}
+              className="bg-amber-400 hover:bg-amber-500 text-white"
+            >
+              <Plus className="h-4 w-4 mr-1" /> {ui('onboardingCreateEnvironment')}
+            </Button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
+          {environments.map(env => {
+            const isLoggingIn = loggingIn === env.clientId;
+
+            return (
+              <div
+                key={env.clientId}
+                className="flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
+                    <Building2 className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{env.clientName}</p>
+                    <p className="text-sm text-gray-500">
+                      {env.orgName || '\u2014'} &middot; {env.adminUserName || env.adminUser || '\u2014'}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-testid={`action-enter-environment-${env.clientId}`}
+                  onClick={() => loginToEnvironment(env)}
+                  disabled={isLoggingIn}
+                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                >
+                  <EnterEnvironmentButtonContent
+                    isLoggingIn={isLoggingIn}
+                    label={ui('onboardingEnterEnvironment')}
+                  />
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
+
     return (
       <div className="min-h-screen bg-gray-50">
         <PageHeader
@@ -1022,59 +1111,7 @@ export default function OnboardingPage() {
             {ui('onboardingEnvironmentsSubtitle')}
           </p>
 
-          {loadingEnvs ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-            </div>
-          ) : environments.length === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
-              <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <Building2 className="h-8 w-8 text-gray-300" />
-              </div>
-              <p className="text-lg font-medium text-gray-900 mb-1">{ui('onboardingNoEnvironments')}</p>
-              <p className="text-gray-500 text-sm mb-6">{ui('onboardingCreateFirstEnvironment')}</p>
-              <Button
-                onClick={() => { setCreateStep(1); setResult(null); setView('create'); }}
-                className="bg-amber-400 hover:bg-amber-500 text-white"
-              >
-                <Plus className="h-4 w-4 mr-1" /> {ui('onboardingCreateEnvironment')}
-              </Button>
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
-              {environments.map(env => (
-                <div
-                  key={env.clientId}
-                  className="flex items-center justify-between px-5 py-4 hover:bg-gray-50/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
-                      <Building2 className="h-5 w-5 text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{env.clientName}</p>
-                      <p className="text-sm text-gray-500">
-                        {env.orgName || '\u2014'} &middot; {env.adminUserName || env.adminUser || '\u2014'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => loginToEnvironment(env)}
-                    disabled={loggingIn === env.clientId}
-                    className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                  >
-                    {loggingIn === env.clientId ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>{ui('onboardingEnterEnvironment')} <ChevronRight className="h-4 w-4 ml-1" /></>
-                    )}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
+          {renderEnvironmentListContent()}
         </div>
       </div>
     );

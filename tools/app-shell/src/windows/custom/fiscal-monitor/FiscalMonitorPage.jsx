@@ -1,9 +1,13 @@
 import { useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { neoBase } from '@/components/related-documents/helpers.js';
 import { useFiscalMonitor } from './useFiscalMonitor.js';
+import InvoicePreviewModal from '../shared/InvoicePreviewModal.jsx';
+import ContactDetailModal from './ContactDetailModal.jsx';
 import { useDebugMode } from './useDebugMode.js';
 import { computeKpis } from './fiscalMonitor.utils.js';
 import { MOCK_MONITOR_DATA, MOCK_SII_ROWS, MOCK_TBAI_ROWS, MOCK_VF_ROWS } from './fiscalMonitorMockData.js';
@@ -32,7 +36,20 @@ const ProfileBadge = ({ profile, labels = {} }) => {
   );
 };
 
-const OrgLead = ({ org, profile, ui }) => {
+const RefreshButton = ({ loading, onRefresh, ui }) => (
+  <button
+    className="fm-orglead-refresh"
+    onClick={loading ? undefined : onRefresh}
+    disabled={loading}
+    aria-label={ui('fiscalMonitor.refresh')}
+    title={ui('fiscalMonitor.refresh')}
+    style={{ background: 'none', border: 'none', cursor: loading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+  >
+    <RefreshCw size={14} className={loading ? 'animate-spin' : ''} style={{ color: 'var(--fm-fg-3)' }} />
+  </button>
+);
+
+const OrgLead = ({ org, profile, ui, onRefresh, loading }) => {
   const profileLabels = {
     sii: 'SII', tbai: 'TBAI', 'sii+tbai': 'SII + TBAI',
     'sii-navarra': 'SII Navarra', verifactu: 'Verifactu',
@@ -51,8 +68,7 @@ const OrgLead = ({ org, profile, ui }) => {
       </div>
     </div>
     <div className="r">
-      <span className="syncdot" />
-      {ui('fiscalMonitor.synced')}
+      <RefreshButton loading={loading} onRefresh={onRefresh} ui={ui} />
     </div>
   </div>
   );
@@ -84,7 +100,7 @@ function useDebugState(orgId, token, apiBaseUrl) {
   const [debugProfile, setDebugProfile] = useState(null);
   const [mockData,     setMockData]     = useState(false);
 
-  const { loading, error, profile: realProfile, kpis: realKpis, siiParentId } = useFiscalMonitor(orgId, token, apiBaseUrl);
+  const { loading, error, profile: realProfile, kpis: realKpis, siiParentId, refetch } = useFiscalMonitor(orgId, token, apiBaseUrl);
 
   const profile = (debugMode && debugProfile) ? debugProfile : realProfile;
 
@@ -104,6 +120,7 @@ function useDebugState(orgId, token, apiBaseUrl) {
 
   return {
     loading, error, profile, kpis, siiParentId,
+    refetch,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
     mockData, setMockData, debugOverrideActive,
@@ -135,13 +152,46 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
   const [siiInitialTab,     setSiiInitialTab]     = useState('issued');
   const [tbaiInitialFilter, setTbaiInitialFilter] = useState('all');
   const [veriInitialTab,    setVeriInitialTab]    = useState('accepted');
+  const [refreshKey,        setRefreshKey]        = useState(0);
+  const [previewInvoice,    setPreviewInvoice]    = useState(null);
+  const [previewSpec,       setPreviewSpec]       = useState('sales-invoice');
+  const [bpPopup,           setBpPopup]           = useState(null);
+  const contactsApiBase = `${neoBase(apiBaseUrl)}/contacts`;
 
   const {
     loading, error, profile, kpis, siiParentId,
+    refetch,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
     mockData, setMockData, debugOverrideActive,
   } = useDebugState(orgId, token, apiBaseUrl);
+
+  function handleRefresh() {
+    refetch();
+    setRefreshKey(k => k + 1);
+  }
+
+  async function handleInvoiceOpen(invoiceId, specHint = 'sales-invoice') {
+    if (!invoiceId) return;
+    const base = neoBase(apiBaseUrl);
+    const headers = { Authorization: `Bearer ${token}` };
+    const specs = specHint === 'sales-invoice'
+      ? ['sales-invoice', 'purchase-invoice']
+      : ['purchase-invoice', 'sales-invoice'];
+    for (const spec of specs) {
+      try {
+        const res = await fetch(`${base}/${spec}/header/${invoiceId}`, { headers });
+        if (!res.ok) continue;
+        const json = await res.json();
+        const inv = json?.response?.data?.[0] ?? null;
+        if (inv?.id) {
+          setPreviewSpec(spec);
+          setPreviewInvoice(inv);
+          return;
+        }
+      } catch { /* try next */ }
+    }
+  }
 
   const DebugPanel = debugMode ? (
     <FiscalMonitorDebugPanel
@@ -225,7 +275,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
       {DebugPanel}
     <div className="relative fm-wrap fm-page">
       <WipBadge ui={ui} />
-      <OrgLead org={org} profile={profile} ui={ui} />
+      <OrgLead org={org} profile={profile} ui={ui} onRefresh={handleRefresh} loading={loading} />
 
       {(profile === 'sii' || profile === 'sii-navarra' || profile === 'sii+tbai') && (
         <>
@@ -241,6 +291,9 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
             initialTab={siiInitialTab}
             mockRows={siiMockRows}
             onTabChange={setSiiInitialTab}
+            refreshKey={refreshKey}
+            onInvoiceOpen={handleInvoiceOpen}
+            onBpClick={(bpId) => setBpPopup(bpId)}
           />
         </>
       )}
@@ -264,6 +317,9 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
             initialFilter={tbaiInitialFilter}
             mockRows={tbaiMockRows}
             onFilterChange={setTbaiInitialFilter}
+            refreshKey={refreshKey}
+            onInvoiceOpen={handleInvoiceOpen}
+            onBpClick={(bpId) => setBpPopup(bpId)}
           />
         </>
       )}
@@ -281,10 +337,31 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
             initialTab={veriInitialTab}
             mockRows={vfMockRows}
             onTabChange={setVeriInitialTab}
+            refreshKey={refreshKey}
+            onInvoiceOpen={handleInvoiceOpen}
+            onBpClick={(bpId) => setBpPopup(bpId)}
           />
         </>
       )}
     </div>
+    {previewInvoice && (
+      <InvoicePreviewModal
+        invoice={previewInvoice}
+        token={token}
+        apiBaseUrl={`${neoBase(apiBaseUrl)}/${previewSpec}`}
+        specName={previewSpec}
+        onClose={() => setPreviewInvoice(null)}
+      />
+    )}
+    {bpPopup && (
+      <ContactDetailModal
+        open={!!bpPopup}
+        onClose={() => setBpPopup(null)}
+        bpId={bpPopup}
+        token={token}
+        contactsApiBase={contactsApiBase}
+      />
+    )}
     </>
   );
 }

@@ -7,11 +7,13 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const [orders, setOrders] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const ui = useUI();
 
   useEffect(() => {
     if (!recordId) { setLoading(false); return; }
+    setLoading(true);
     Promise.all([
       fetchByCriteria('sales-order', 'header', 'quotation', recordId, token, apiBaseUrl)
         .catch(() => []),
@@ -22,10 +24,10 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       setInvoices(invoiceRows);
       setLoading(false);
     });
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, token, apiBaseUrl, refreshKey]);
 
   return (
-    <RelatedDocumentsShell loading={loading}>
+    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
       {orders.map((row) => (
         <DocChip
           key={row.id}

@@ -27,6 +27,28 @@ function resolveId(value) {
 
 // ─── Discount select ────────────────────────────────────────────────────────
 
+function YesNoRadio({ label, value, onChange }) {
+  const ui = useUI();
+  const isChecked = value === true || value === 'Y' || value === 'true';
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-medium text-[#121217]">{label}</p>
+      <div className="flex items-center gap-5 h-10">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input type="radio" checked={!isChecked} onChange={() => onChange(false)}
+            className="w-4 h-4 accent-[#121217] cursor-pointer" />
+          <span className="text-sm text-[#121217]">{ui('no')}</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input type="radio" checked={isChecked} onChange={() => onChange(true)}
+            className="w-4 h-4 accent-[#121217] cursor-pointer" />
+          <span className="text-sm text-[#121217]">{ui('yes')}</span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function DiscountSelect({ value, options, onChange, loading }) {
   const ui = useUI();
   return (
@@ -35,7 +57,7 @@ function DiscountSelect({ value, options, onChange, loading }) {
         <Tag size={13} className="text-muted-foreground" />
       </div>
       <select
-        className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm appearance-none cursor-pointer hover:border-ring transition-colors disabled:opacity-50"
+        className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-white pl-8 pr-3 text-sm appearance-none cursor-pointer shadow-[0px_1px_2px_rgba(18,18,23,0.05)] transition-colors disabled:cursor-not-allowed"
         value={value ?? ''}
         onChange={e => onChange(e.target.value || null)}
         disabled={loading}
@@ -192,24 +214,26 @@ export default function BillingPreferencesForm(props) {
     { key: 'customer', column: 'IsCustomer', type: 'checkbox', label: ui('customer'), required: true, section: 'principal' },
   ];
 
-  const customerBillingFields = [
+  const customerTopBillingFields = [
     { key: 'priceList', column: 'M_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     { key: 'account', column: 'FIN_Financial_Account_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+  ];
+  const customerPaymentTermsField = [
     { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-    { key: 'customerBlocking', column: 'Customer_Blocking', type: 'checkbox', section: 'principal' },
   ];
 
   const vendorCheckboxField = [
     { key: 'vendor', column: 'IsVendor', type: 'checkbox', label: ui('vendor'), required: true, section: 'principal' },
   ];
 
-  const vendorBillingFields = [
+  const vendorTopBillingFields = [
     { key: 'purchasePricelist', column: 'PO_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     { key: 'pOPaymentMethod', column: 'PO_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     { key: 'pOFinancialAccount', column: 'PO_Financial_Account_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
+  ];
+  const vendorPaymentTermsField = [
     { key: 'pOPaymentTerms', column: 'PO_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
-    { key: 'vendorBlocking', column: 'Vendor_Blocking', type: 'checkbox', section: 'principal' },
   ];
 
   return (
@@ -235,17 +259,49 @@ export default function BillingPreferencesForm(props) {
         <>
           {/* ── Cliente ───────────────────────────────────────────────────── */}
           <div className="bg-[#F5F7F9] rounded-lg p-3 flex flex-col gap-3">
-            <EntityForm {...props} fields={customerCheckboxField} selectorContext={customerSelectorContext} />
+            <div className="[&_.pt-6]:pt-0">
+              <EntityForm {...props} fields={customerCheckboxField} selectorContext={customerSelectorContext} />
+            </div>
             {data?.customer && (
-              <EntityForm {...props} fields={customerBillingFields} selectorContext={customerSelectorContext} />
+              <>
+                <EntityForm {...props} fields={customerTopBillingFields} selectorContext={customerSelectorContext} />
+                <div className="flex flex-row gap-5 items-start">
+                  <div className="flex-1 min-w-0">
+                    <EntityForm {...props} fields={customerPaymentTermsField} cols={1} selectorContext={customerSelectorContext} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <YesNoRadio
+                      label={ui('customerBlockField')}
+                      value={data?.customerBlocking}
+                      onChange={(val) => onChange?.('customerBlocking', val, 'Customer_Blocking')}
+                    />
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
           {/* ── Proveedor ─────────────────────────────────────────────────── */}
           <div className="bg-[#F5F7F9] rounded-lg p-3 flex flex-col gap-3">
-            <EntityForm {...props} fields={vendorCheckboxField} selectorContext={vendorSelectorContext} />
+            <div className="[&_.pt-6]:pt-0">
+              <EntityForm {...props} fields={vendorCheckboxField} selectorContext={vendorSelectorContext} />
+            </div>
             {data?.vendor && (
-              <EntityForm {...props} fields={vendorBillingFields} selectorContext={vendorSelectorContext} />
+              <>
+                <EntityForm {...props} fields={vendorTopBillingFields} selectorContext={vendorSelectorContext} />
+                <div className="flex flex-row gap-5 items-start">
+                  <div className="flex-1 min-w-0">
+                    <EntityForm {...props} fields={vendorPaymentTermsField} cols={1} selectorContext={vendorSelectorContext} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <YesNoRadio
+                      label={ui('vendorBlockField')}
+                      value={data?.vendorBlocking}
+                      onChange={(val) => onChange?.('vendorBlocking', val, 'Vendor_Blocking')}
+                    />
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </>

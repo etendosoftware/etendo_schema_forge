@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-04-29T19:46:12.773Z",
-  "updatedAt": "2026-05-06T22:31:24.051Z",
-  "checksum": "b1da90796d71a7aa",
+  "updatedAt": "2026-05-11T16:22:44.839Z",
+  "checksum": "7c63ffb4e39aacf3",
   "frontendContract": {
     "window": {
       "id": "FF808081330213E60133021822E40007",
@@ -15,6 +15,9 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "customComponents": {
+        "bottomSection": "ReturnFromCustomerBottomPanel"
+      },
       "processOverrides": {
         "documentAction": {
           "label": "Complete Return",
@@ -23,7 +26,8 @@
       },
       "dateFilterKey": "orderDate",
       "lineEntityConfig": "returnOrder",
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "customerReturn": {
@@ -703,6 +707,9 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "customComponents": {
+        "bottomSection": "ReturnFromCustomerBottomPanel"
+      },
       "processOverrides": {
         "documentAction": {
           "label": "Complete Return",
@@ -710,7 +717,8 @@
         }
       },
       "dateFilterKey": "orderDate",
-      "lineEntityConfig": "returnOrder"
+      "lineEntityConfig": "returnOrder",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "customerReturn": {

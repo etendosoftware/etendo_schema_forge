@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -122,11 +123,23 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
       <WipBadge />
       <div className="px-6 py-8">
         {orgId && (
-          <div className="mb-6">
-            <h1 className="text-xl font-bold">{ui('fiscal.title')}</h1>
-            {selectedOrg?.name && (
-              <p className="text-sm text-muted-foreground mt-1">{ui('fiscal.org.label', { name: selectedOrg.name })}</p>
-            )}
+          <div className="mb-6 flex items-start justify-between">
+            <div>
+              <h1 className="text-xl font-bold">{ui('fiscal.title')}</h1>
+              {selectedOrg?.name && (
+                <p className="text-sm text-muted-foreground mt-1">{ui('fiscal.org.label', { name: selectedOrg.name })}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={refetch}
+              disabled={loading}
+              aria-label={ui('fiscalMonitor.refresh')}
+              title={ui('fiscalMonitor.refresh')}
+              className="mt-1 p-2 rounded-lg border border-[#D1D4DB] bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin text-gray-400' : 'text-gray-500'} />
+            </button>
           </div>
         )}
 

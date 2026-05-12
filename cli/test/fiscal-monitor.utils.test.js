@@ -95,7 +95,7 @@ describe('computeKpis - sii+tbai', () => {
   it('returns kpi buckets for both systems', () => {
     const kpis = computeKpis('sii+tbai', {
       sii:  { issued: { totalCount: 20 }, received: { totalCount: 15 }, issuedPrevious: { totalCount: 0 }, receivedPrevious: { totalCount: 0 } },
-      tbai: { totalCount: 8, recibidoCount: 6, rechazadoCount: 1, errorCount: 1 },
+      tbai: { totalCount: 8, receivedCount: 6, rejectedCount: 1, errorCount: 1 },
     });
     assert.equal(kpis.sii.issued, 20);
     assert.equal(kpis.tbai.total, 8);
@@ -106,9 +106,9 @@ describe('computeKpis - sii+tbai', () => {
 describe('computeKpis - tbai', () => {
   it('returns total and per-status counts', () => {
     const kpis = computeKpis('tbai', {
-      tbai: { totalCount: 45, recibidoCount: 40, rechazadoCount: 3, errorCount: 2 },
+      tbai: { totalCount: 45, receivedCount: 40, rejectedCount: 3, errorCount: 2 },
     });
-    assert.deepStrictEqual(kpis.tbai, { total: 45, received: 40, rejected: 3, error: 2 });
+    assert.deepStrictEqual(kpis.tbai, { total: 45, received: 40, rejected: 3, error: 2, pending: 0 });
   });
 
   it('defaults to 0 on missing data', () => {

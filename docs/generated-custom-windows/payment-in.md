@@ -18,6 +18,7 @@ The current repo evidence shows a generated finance window with payment-in-speci
 - Visibility: visible from the Finance menu in `tools/app-shell/src/menu.json`.
 - Implementation type: generated window loader from `tools/app-shell/src/windows/registry.js`, backed by `artifacts/payment-in/generated/web/payment-in/FinPaymentPage.jsx` and extended with payment-specific custom components such as `NewPaymentModal`, `PaymentBottomPanel`, `PaymentActivityToggle`, and `RelatedDocuments`.
 - Window shape: master-child. The primary entity is `finPayment` and the child dataset is `finPaymentScheduleDetail`, exposed as the payment allocation lines.
+- Lines surface: the allocation child (`finPaymentScheduleDetail`) is managed through the custom `PaymentBottomPanel` component, not through the standard lines table. `decisions.json` sets `detailEntity: null`, so `linesLayout` is not applicable for this window. Allocation management and summary recalculation are handled entirely inside `PaymentBottomPanel`.
 - List interaction: the list shows document number, payment date, received-from business partner, amount, and status, with filters limited to `documentNo`, `paymentDate`, and `businessPartner`.
 - Detail interaction: opening a payment uses the generated detail page with the contract-backed header form, related-documents tab, bottom summary panel, notes field on `description`, and a top-right activity toggle. Creating a payment from the list opens the specialized `NewPaymentModal` instead of the plain generated new-record flow.
 

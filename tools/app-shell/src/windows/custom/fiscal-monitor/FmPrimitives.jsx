@@ -1,6 +1,13 @@
 // Shared UI primitives for the Fiscal Monitor.
 import { useUI } from '@/i18n';
 
+export const ERROR_STATUSES = new Set([
+  'IN', 'EE', 'AE',                            // SII
+  'Rechazado', 'Error',                         // TBAI
+  'rejected', 'invalid', 'partiallyAccepted',   // Verifactu
+]);
+export const isErrorStatus = (estado) => ERROR_STATUSES.has(estado);
+
 const STATUS_CONFIG = {
   // SII — API returns 2-letter codes from AD_Ref_List
   CO: { cls: 'success', labelKey: 'fiscalMonitor.status.sii.CO' },
@@ -15,6 +22,7 @@ const STATUS_CONFIG = {
   Recibido:           { cls: 'success', labelKey: 'fiscalMonitor.tbai.status.Recibido' },
   Rechazado:          { cls: 'danger',  labelKey: 'fiscalMonitor.tbai.status.Rechazado' },
   Error:              { cls: 'danger',  labelKey: 'fiscalMonitor.tbai.status.Error' },
+  Pendiente:          { cls: 'pending', labelKey: 'fiscalMonitor.tbai.status.Pendiente' },
   // Verifactu
   accepted:           { cls: 'success', labelKey: 'fiscalMonitor.status.vf.accepted' },
   partiallyAccepted:  { cls: 'warn',    labelKey: 'fiscalMonitor.status.vf.partiallyAccepted' },
@@ -22,11 +30,23 @@ const STATUS_CONFIG = {
   invalid:            { cls: 'danger',  labelKey: 'fiscalMonitor.status.vf.invalid' },
 };
 
-export const StatusPill = ({ estado }) => {
+export const StatusPill = ({ estado, onClick }) => {
   const ui = useUI();
   const cfg = STATUS_CONFIG[estado];
   const cls  = cfg?.cls  ?? 'pending';
   const text = cfg ? ui(cfg.labelKey) : (estado ?? '—');
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={`fm-pill ${cls}`}
+        onClick={onClick}
+        title={ui('fiscalMonitor.viewContact')}
+      >
+        {text}
+      </button>
+    );
+  }
   return <span className={`fm-pill ${cls}`}>{text}</span>;
 };
 

@@ -75,3 +75,27 @@ generate-frontend.js → generateAll() dispatches by layoutType
     - "calendar" → generateCalendarPage() → artifacts/{name}/generated/
     - "default"  → generatePageComponent() [unchanged]
 ```
+
+## Flow: linesLayout → contract → generator
+
+`window.linesLayout` is an orthogonal flag — it modifies how the Lines tab inside the
+`default` (header-detail) layout renders, regardless of `layoutType`. It does not introduce
+a new top-level page template.
+
+```
+decisions.json (window.linesLayout)
+    ↓
+resolve-curated.js → schema.window.linesLayout (via WINDOW_TRUTHY_PROPS)
+    ↓
+generate-contract.js → frontendContract.window.linesLayout (defaults to "classic")
+    ↓
+generate-frontend.js → emits linesLayout="<value>" on <DetailView>
+    ↓
+Generated <Window>LineTable.jsx switches at runtime:
+    - "classic"        → <DataTable columns={columns} ... />          (current behavior)
+    - "inlineEditable" → <InlineLinesPanel columns={columns} ... />   (Figma redesign)
+```
+
+`InlineLinesPanel` lives in `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx`.
+Validator F11 enforces the enum. Default is `"classic"`, so windows that don't opt in are
+unaffected by the new component.

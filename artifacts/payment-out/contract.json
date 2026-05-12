@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-05-05T18:50:54.405Z",
-  "checksum": "d79b703d1dcff1b3",
+  "updatedAt": "2026-05-11T16:22:46.850Z",
+  "checksum": "111d074327b02ffe",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -11,8 +11,12 @@
       "category": "finance",
       "notesField": "description",
       "relatedDocuments": true,
+      "customComponents": {
+        "bottomSection": "PaymentOutBottomPanel"
+      },
       "dateFilterKey": "paymentDate",
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "header": {
@@ -1723,7 +1727,11 @@
       "category": "finance",
       "notesField": "description",
       "relatedDocuments": true,
-      "dateFilterKey": "paymentDate"
+      "customComponents": {
+        "bottomSection": "PaymentOutBottomPanel"
+      },
+      "dateFilterKey": "paymentDate",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "header": {

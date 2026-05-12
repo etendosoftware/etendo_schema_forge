@@ -17,7 +17,8 @@ Because the line model points back to a return source, this window should primar
 - Route: `/return-to-vendor-shipment`, `/return-to-vendor-shipment/:recordId`
 - Visibility: visible in the Purchases menu
 - Implementation type: generated window registered in `tools/app-shell/src/windows/registry.js` and loaded through the generic app-shell window loader
-- Window shape: master-child window with a header entity on `M_InOut` and child lines on `M_InOutLine`
+- Window shape: master-child window with a header entity on `M_InOut` and child lines on `M_InOutLine`.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. The add-line button and any related panels are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
 
 At list level, the window exposes return-to-vendor shipments as purchase records. At detail level, it renders the shipment header plus child lines and a related-documents tab. The contract uses the default layout, marks `description` as the notes field, and enables related-documents support.
 

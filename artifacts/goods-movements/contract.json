@@ -1,14 +1,17 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-04-29T19:05:48.778Z",
-  "updatedAt": "2026-05-05T18:50:37.564Z",
-  "checksum": "cd42cf269dce416d",
+  "updatedAt": "2026-05-11T16:22:46.452Z",
+  "checksum": "c9c20297c85666a0",
   "frontendContract": {
     "window": {
       "id": "170",
       "name": "Goods Movements",
       "primaryEntity": "movement",
       "category": "inventory",
+      "customComponents": {
+        "bottomSection": "GoodsMovementsBottomPanel"
+      },
       "processOverrides": {
         "processNow": {
           "requiresLines": true
@@ -16,7 +19,8 @@
       },
       "statusField": "processed",
       "dateFilterKey": "movementDate",
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "movement": {
@@ -364,13 +368,17 @@
       "name": "Goods Movements",
       "primaryEntity": "movement",
       "category": "inventory",
+      "customComponents": {
+        "bottomSection": "GoodsMovementsBottomPanel"
+      },
       "processOverrides": {
         "processNow": {
           "requiresLines": true
         }
       },
       "statusField": "processed",
-      "dateFilterKey": "movementDate"
+      "dateFilterKey": "movementDate",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "movement": {

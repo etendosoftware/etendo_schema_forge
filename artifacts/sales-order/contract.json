@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-04-30T15:33:38.824Z",
-  "updatedAt": "2026-05-07T18:28:08.761Z",
-  "checksum": "0591997a03927f08",
+  "updatedAt": "2026-05-11T16:05:50.663Z",
+  "checksum": "e81e2ae8027875cf",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -16,7 +16,8 @@
       "customComponents": {
         "topbarRight": "OrderCreateInvoice",
         "topbarExtra": "OrderDraftChips",
-        "bulkActions": "OrderReactivateBulkAction"
+        "bulkActions": "OrderReactivateBulkAction",
+        "bottomSection": "OrderBottomPanel"
       },
       "menuActions": [
         {
@@ -45,7 +46,8 @@
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "header": {
@@ -843,7 +845,8 @@
       "customComponents": {
         "topbarRight": "OrderCreateInvoice",
         "topbarExtra": "OrderDraftChips",
-        "bulkActions": "OrderReactivateBulkAction"
+        "bulkActions": "OrderReactivateBulkAction",
+        "bottomSection": "OrderBottomPanel"
       },
       "menuActions": [
         {
@@ -871,7 +874,8 @@
         }
       },
       "dateFilterKey": "orderDate",
-      "noHeaderBorder": true
+      "noHeaderBorder": true,
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "header": {

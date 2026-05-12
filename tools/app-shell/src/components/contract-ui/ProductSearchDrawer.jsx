@@ -268,6 +268,7 @@ export default function ProductSearchDrawer({
 
       <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose}>
         <div
+          data-testid="product-search-drawer"
           className="w-full max-w-xl bg-background rounded-xl border border-border shadow-2xl flex flex-col overflow-hidden"
           onClick={(e) => e.stopPropagation()}
           onKeyDown={handleKeyDown}
@@ -280,6 +281,7 @@ export default function ProductSearchDrawer({
             <Search className="h-4 w-4 text-muted-foreground shrink-0" />
             <input
               ref={inputRef}
+              data-testid="product-search-input"
               type="text"
               value={query}
               onChange={(e) => { setQuery(e.target.value); doFetch(e.target.value, 0); }}
@@ -320,6 +322,7 @@ export default function ProductSearchDrawer({
                     <li key={item.id} ref={isActive ? activeItemRef : null}>
                       <button
                         type="button"
+                        data-testid={`product-search-option-${item.id}`}
                         onClick={() => handleSelect(item)}
                         className={`w-full text-left px-4 py-2 transition-colors cursor-pointer flex items-center gap-3 border-l-2 ${
                           isActive

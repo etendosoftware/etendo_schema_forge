@@ -520,6 +520,7 @@ const WINDOW_TRUTHY_PROPS = [
   'dateFilterKey',
   'statusEnumLabels',
   'lineEntityConfig',
+  'linesLayout',
 ];
 
 const WINDOW_BOOLEAN_TRUE_PROPS = [
@@ -555,7 +556,7 @@ export const WINDOW_KEY_ORDER = [
   'disableProcessedLock', 'titleField',
   'listViewOptions', 'listBaseFilter', 'quickFilters', 'subsetFilters',
   'dateFilterKey', 'statusEnumLabels', 'noHeaderBorder', 'lineEntityConfig',
-  'layoutType',
+  'layoutType', 'linesLayout',
 ];
 
 // Generic helper: returns a new object with keys in `canonicalOrder` first

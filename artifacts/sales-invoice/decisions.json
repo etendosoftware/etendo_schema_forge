@@ -9,11 +9,13 @@
     "notesField": "description",
     "hideDeleteWhenComplete": true,
     "hidePrint": true,
+    "noHeaderBorder": true,
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",
       "bottomSection": "InvoiceBottomPanel",
       "topbarRight": "InvoiceTopbarExtra"
     },
+    "linesLayout": "inlineEditable",
     "menuActions": [
       {
         "key": "reactivate",

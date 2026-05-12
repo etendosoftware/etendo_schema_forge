@@ -28,8 +28,9 @@ describe('RelatedDocuments', () => {
     assert.match(src, /paymentDetails/);
   });
 
-  it('renders nothing when chips are empty', () => {
-    assert.match(src, /chips\.length === 0/);
+  it('always renders through RelatedDocumentsShell (empty state handled by shell)', () => {
+    assert.doesNotMatch(src, /chips\.length === 0/);
+    assert.match(src, /RelatedDocumentsShell/);
   });
 
   it('uses correct entity names (camelCase for NEO)', () => {

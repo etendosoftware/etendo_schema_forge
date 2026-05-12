@@ -23,6 +23,7 @@ export function QuickActionsList({ actions = [] }) {
             <Link
               key={action.to}
               to={action.to}
+              data-testid={action.testId}
               style={{
                 display: 'flex',
                 flexDirection: 'row',

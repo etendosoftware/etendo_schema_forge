@@ -4,6 +4,7 @@ import InternalConsumptionTable from './InternalConsumptionTable';
 import InternalConsumptionForm from './InternalConsumptionForm';
 import InternalConsumptionLineTable from './InternalConsumptionLineTable';
 import InternalConsumptionLineForm from './InternalConsumptionLineForm';
+import InternalConsumptionBottomPanel from '../../../custom/InternalConsumptionBottomPanel';
 import InternalConsumptionActions from '../../../custom/InternalConsumptionActions';
 import catalogs from './mockCatalogs';
 
@@ -32,6 +33,10 @@ const processes = [
 // @sf-generated-start draftMode:internalConsumption
 const draftMode = null;
 // @sf-generated-end draftMode:internalConsumption
+
+// @sf-generated-start requiredHeaderFields:internalConsumption
+const requiredHeaderFields = ['movementDate', 'name'];
+// @sf-generated-end requiredHeaderFields:internalConsumption
 
 // @sf-generated-start addLineFields:internalConsumptionLine
 const addLineFields = {
@@ -163,7 +168,10 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        bottomSection={InternalConsumptionBottomPanel}
         customMenuContent={InternalConsumptionActions}
+        requiredHeaderFields={requiredHeaderFields}
+        linesLayout="inlineEditable"
         {...props}
       />
     );

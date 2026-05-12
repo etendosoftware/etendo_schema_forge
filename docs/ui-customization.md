@@ -327,6 +327,40 @@ Use this when menu actions are only valid for persisted, non-completed records (
 
 ---
 
+### 13. `window.linesLayout` — inline-editable lines table
+
+**What it does:** switches the Lines tab from the classic side-panel edit flow to the new `InlineLinesPanel` layout: 40 px rows in Inter font, pencil + trash hover-action icons on the right, single-row inline edit triggered by the pencil, autosave on blur. The add-line button, related-documents panel, notes panel and totals panel are left untouched.
+
+**When to use:** any document-style window (orders, quotations, invoices, shipments) where users need fast inline edits without opening a side panel. The flag is opt-in per window so the rest of the catalog keeps the classic experience until you migrate them.
+
+**`decisions.json`:**
+```json
+{
+  "window": {
+    "linesLayout": "inlineEditable"
+  }
+}
+```
+
+Default: `"classic"`. Validator F11 enforces the enum (`"classic"` | `"inlineEditable"`).
+
+**MVP scope (current iteration):**
+- Inline edit covers all column types: `string`, `number`, `amount`, `percent`, `date`, `selector` and `search`. Selector/search columns reuse the shared `SelectorInput` Radix dropdown — the same component the add-row flow uses — so the inline experience matches the form-mode UX.
+- Pencil and trash carry full logic. No other action icons are rendered in this iteration.
+- Desktop only (>= 1280 px). Tablet/mobile responsive support is out of scope for this iteration.
+- **Add-line flow** keeps using the existing `DataTable` inline-add row (callouts, focus management, defaults from header context). The generated `<Window>LineTable.jsx` falls back to `<DataTable>` while `addRow.active` is true and returns to `<InlineLinesPanel>` once the new line is saved or cancelled. This avoids duplicating the heavyweight add-row machinery and keeps a single source of truth for line creation.
+
+**How it threads through the pipeline:**
+- `cli/src/resolve-curated.js` — added to `WINDOW_TRUTHY_PROPS` (auto-passes through).
+- `cli/src/generate-contract.js` — defaults to `"classic"` and is copied into `frontendContract.window.linesLayout`.
+- `cli/src/generate-frontend.js` — emits `linesLayout="<value>"` on `<DetailView>` only when non-default.
+- Generated `<Window>LineTable.jsx` — switches between `<DataTable>` (classic) and `<InlineLinesPanel>` (inlineEditable) based on the prop.
+- `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — owns rendering of the table block (header strip + rows + hover-action strip).
+
+**Real example:** `sales-quotation` (pilot — the first window to ship the new layout).
+
+---
+
 ## Decision tree: which option to use?
 
 ```

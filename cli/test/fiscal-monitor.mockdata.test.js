@@ -76,8 +76,8 @@ describe('MOCK_TBAI_ROWS structure', () => {
     }
   });
 
-  it('estado values are one of the 3 valid statuses', () => {
-    const valid = new Set(['Recibido', 'Rechazado', 'Error']);
+  it('estado values are one of the 4 valid statuses', () => {
+    const valid = new Set(['Recibido', 'Rechazado', 'Error', 'Pendiente']);
     for (const row of MOCK_TBAI_ROWS) {
       assert.ok(valid.has(row.estado), `unexpected estado "${row.estado}" on row ${row.id}`);
     }
@@ -96,12 +96,12 @@ describe('MOCK_TBAI_ROWS counts match MOCK_MONITOR_DATA', () => {
 
   it('Recibido count matches', () => {
     const actual = countBy(MOCK_TBAI_ROWS, 'estado', 'Recibido');
-    assert.equal(actual, MOCK_MONITOR_DATA.tbai.recibidoCount);
+    assert.equal(actual, MOCK_MONITOR_DATA.tbai.receivedCount);
   });
 
   it('Rechazado count matches', () => {
     const actual = countBy(MOCK_TBAI_ROWS, 'estado', 'Rechazado');
-    assert.equal(actual, MOCK_MONITOR_DATA.tbai.rechazadoCount);
+    assert.equal(actual, MOCK_MONITOR_DATA.tbai.rejectedCount);
   });
 
   it('Error count matches', () => {
@@ -109,9 +109,14 @@ describe('MOCK_TBAI_ROWS counts match MOCK_MONITOR_DATA', () => {
     assert.equal(actual, MOCK_MONITOR_DATA.tbai.errorCount);
   });
 
+  it('Pendiente count matches', () => {
+    const actual = countBy(MOCK_TBAI_ROWS, 'estado', 'Pendiente');
+    assert.equal(actual, MOCK_MONITOR_DATA.tbai.pendingCount);
+  });
+
   it('per-status counts sum to total', () => {
-    const { recibidoCount, rechazadoCount, errorCount, totalCount } = MOCK_MONITOR_DATA.tbai;
-    assert.equal(recibidoCount + rechazadoCount + errorCount, totalCount);
+    const { receivedCount, rejectedCount, errorCount, pendingCount, totalCount } = MOCK_MONITOR_DATA.tbai;
+    assert.equal(receivedCount + rejectedCount + errorCount + pendingCount, totalCount);
   });
 });
 

@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-04-29T18:11:05.114Z",
-  "updatedAt": "2026-05-05T18:49:51.766Z",
-  "checksum": "9cf67c27b4345633",
+  "updatedAt": "2026-05-11T16:22:45.010Z",
+  "checksum": "963d5b3618f4484b",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -11,8 +11,12 @@
       "category": "sales",
       "notesField": "description",
       "relatedDocuments": true,
+      "customComponents": {
+        "bottomSection": "ReturnMaterialReceiptBottomPanel"
+      },
       "dateFilterKey": "movementDate",
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "returnMaterialReceipt": {
@@ -470,7 +474,11 @@
       "category": "sales",
       "notesField": "description",
       "relatedDocuments": true,
-      "dateFilterKey": "movementDate"
+      "customComponents": {
+        "bottomSection": "ReturnMaterialReceiptBottomPanel"
+      },
+      "dateFilterKey": "movementDate",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "returnMaterialReceipt": {

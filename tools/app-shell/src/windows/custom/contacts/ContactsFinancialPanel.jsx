@@ -7,12 +7,19 @@ import BillingPreferencesForm from './BillingPreferencesForm';
 function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
   const ui = useUI();
   const num = value === '' || value == null ? 0 : Number(value);
+  const debounceRef = useRef(null);
+
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   function step(delta) {
     if (readOnly || saving) return;
     const next = Math.max(0, num + delta);
     onChange(next);
-    setTimeout(onBlur, 0);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onBlur();
+      debounceRef.current = null;
+    }, 400);
   }
 
   return (
@@ -21,7 +28,7 @@ function CreditLimitStepper({ value, readOnly, onChange, onBlur, saving }) {
         <span className="text-sm font-medium text-[#121217]">{ui('creditLimitField')}</span>
         <span className="text-sm text-[#F53D6B]">*</span>
       </div>
-      <div className="flex flex-row items-center h-10 border border-[#D1D4DB] rounded-lg shadow-sm overflow-hidden bg-white">
+      <div className="flex flex-row items-center h-10 border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] overflow-hidden bg-white hover:bg-[#F5F7F9] focus-within:border-[#121217] focus-within:shadow-[0px_0px_0px_1px_#121217] transition-colors">
         <input
           type="number"
           value={num}
@@ -121,7 +128,7 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
   }
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className="space-y-2 pb-6">
       {/* Crédito — layout fila: texto izquierda + stepper derecha */}
       <div className="flex flex-row items-start px-5 pt-2 pb-3 gap-5">
         <div className="flex flex-col gap-1 w-[148px] shrink-0">
@@ -138,6 +145,8 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
           />
         </div>
       </div>
+
+      <hr className="border-t border-[#E8EAEF] mx-5" />
 
       {/* Preferencias de facturación — layout fila: texto izquierda + contenido derecha */}
       <div className="flex flex-row items-start px-5 pt-2 pb-3 gap-5">

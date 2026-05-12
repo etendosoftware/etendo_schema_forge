@@ -7,7 +7,7 @@ export function getInvoiceFiscalTargets(specName, profile) {
   }
 
   if (profile === 'tbai') {
-    return { showSii: false, showTbai: isSales || isPurchase, showVerifactu: false };
+    return { showSii: false, showTbai: isSales, showVerifactu: false };
   }
 
   if (profile === 'sii+tbai') {
@@ -19,7 +19,7 @@ export function getInvoiceFiscalTargets(specName, profile) {
   }
 
   if (profile === 'verifactu') {
-    return { showSii: false, showTbai: false, showVerifactu: isSales || isPurchase };
+    return { showSii: false, showTbai: false, showVerifactu: isSales };
   }
 
   return { showSii: false, showTbai: false, showVerifactu: false };

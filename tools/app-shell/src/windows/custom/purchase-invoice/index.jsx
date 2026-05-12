@@ -7,10 +7,8 @@ import BulkDocumentAction from '@/components/contract-ui/BulkDocumentAction';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import PurchaseInvoiceHeaderTable from './PurchaseInvoiceHeaderTable.jsx';
 import HeaderPage from '@generated/purchase-invoice/generated/web/purchase-invoice/HeaderPage';
-import InvoiceLineTableCustom from './InvoiceLineTableCustom.jsx';
 import InvoicePreviewModal from '../shared/InvoicePreviewModal.jsx';
 import PurchaseInvoiceTopbar from './PurchaseInvoiceTopbar.jsx';
-import PurchaseInvoiceBottomPanel from './PurchaseInvoiceBottomPanel.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import CreateContactModal from '@/components/contract-ui/CreateContactModal';
@@ -119,18 +117,15 @@ export default function PurchaseInvoiceWindow(props) {
       <CreateContactContext.Provider value={createContactCtxValue}>
         <HeaderPage
           {...props}
-          DetailTable={InvoiceLineTableCustom}
           secondaryTabs={[]}
           summary={summary}
           extraBadges={[]}
           topbarRight={PurchaseInvoiceTopbar}
-          bottomSection={PurchaseInvoiceBottomPanel}
           notesField="description"
           customTabs={customTabs}
           breadcrumb={breadcrumb}
           onAfterSave={true}
           refetchAfterSave={true}
-          addLineGuard={(d) => !!d?.businessPartner}
         />
         {createContactState && createPortal(
           <CreateContactModal

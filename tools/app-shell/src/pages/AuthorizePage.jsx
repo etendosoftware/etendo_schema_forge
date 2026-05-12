@@ -104,7 +104,10 @@ export default function AuthorizePage() {
   }
 
   return (
-    <div className={isEmbedded ? 'flex min-h-screen items-center justify-center p-4' : 'flex min-h-[80vh] items-center justify-center p-4'}>
+    <div
+      data-testid="oauth-consent-view"
+      className={isEmbedded ? 'flex min-h-screen items-center justify-center p-4' : 'flex min-h-[80vh] items-center justify-center p-4'}
+    >
       <Card className="w-full max-w-md">
         <CardContent className="pt-6">
           <div className="flex flex-col items-center gap-4">
@@ -130,7 +133,10 @@ export default function AuthorizePage() {
             </div>
 
             <div className="w-full">
-              <div className="mb-2 text-xs font-medium text-muted-foreground">
+              <div
+                data-testid="oauth-requested-permissions"
+                className="mb-2 text-xs font-medium text-muted-foreground"
+              >
                 {ui('oauthRequestedPermissions')}
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -166,6 +172,7 @@ export default function AuthorizePage() {
                   className="flex-1"
                   onClick={handleDeny}
                   disabled={status === 'authorizing'}
+                  data-testid="oauth-deny"
                 >
                   {ui('oauthDeny')}
                 </Button>
@@ -173,6 +180,7 @@ export default function AuthorizePage() {
                   className="flex-1"
                   onClick={handleAuthorize}
                   disabled={status === 'authorizing'}
+                  data-testid="oauth-authorize-submit"
                 >
                   {status === 'authorizing' ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {ui('oauthAuthorizing')}</>

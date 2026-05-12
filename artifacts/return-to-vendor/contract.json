@@ -1,8 +1,8 @@
 {
   "version": "0.4.0",
   "generatedAt": "2026-04-29T19:46:13.628Z",
-  "updatedAt": "2026-05-06T22:31:24.783Z",
-  "checksum": "3ba219a1263817c7",
+  "updatedAt": "2026-05-11T16:22:45.908Z",
+  "checksum": "15d5f7864e570092",
   "frontendContract": {
     "window": {
       "id": "C50A8AEE6F044825B5EF54FAAE76826F",
@@ -11,9 +11,13 @@
       "category": "purchases",
       "notesField": "returnReason",
       "relatedDocuments": true,
+      "customComponents": {
+        "bottomSection": "ReturnToVendorBottomPanel"
+      },
       "dateFilterKey": "orderDate",
       "lineEntityConfig": "returnOrder",
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "header": {
@@ -1759,8 +1763,12 @@
       "category": "purchases",
       "notesField": "returnReason",
       "relatedDocuments": true,
+      "customComponents": {
+        "bottomSection": "ReturnToVendorBottomPanel"
+      },
       "dateFilterKey": "orderDate",
-      "lineEntityConfig": "returnOrder"
+      "lineEntityConfig": "returnOrder",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "header": {

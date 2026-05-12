@@ -18,6 +18,7 @@ Receive material back into stock after a sales-side return flow. The window is o
 - Visibility: visible from the Sales menu and not marked hidden in `tools/app-shell/src/menu.json`.
 - Implementation type: generated window loaded through `tools/app-shell/src/windows/registry.js`.
 - Window shape: master-child. The detail view uses `returnMaterialReceipt` as the header entity and `returnMaterialReceiptLine` as the child entity.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. The add-line button and any related panels are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
 - Header interaction: the header form exposes movement date, business partner, warehouse, dependent partner address, a read-only sales order field, tracking number, and notes.
 - Line interaction: the child table and form expose line number, product, movement quantity, UOM, order quantity, and sales-order-line context.
 

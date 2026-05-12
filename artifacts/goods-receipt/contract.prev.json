@@ -1,8 +1,8 @@
 {
   "version": "0.4.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-05-05T18:49:56.260Z",
-  "checksum": "f67504590180db2d",
+  "updatedAt": "2026-05-11T16:22:45.571Z",
+  "checksum": "776d09d33d4016b1",
   "frontendContract": {
     "window": {
       "id": "184",
@@ -10,8 +10,12 @@
       "primaryEntity": "goodsReceipt",
       "category": "purchases",
       "relatedDocuments": true,
+      "customComponents": {
+        "bottomSection": "GoodsReceiptBottomPanel"
+      },
       "dateFilterKey": "movementDate",
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "goodsReceipt": {
@@ -855,7 +859,11 @@
       "primaryEntity": "goodsReceipt",
       "category": "purchases",
       "relatedDocuments": true,
-      "dateFilterKey": "movementDate"
+      "customComponents": {
+        "bottomSection": "GoodsReceiptBottomPanel"
+      },
+      "dateFilterKey": "movementDate",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "goodsReceipt": {

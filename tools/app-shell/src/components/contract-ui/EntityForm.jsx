@@ -195,6 +195,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
   const createBtn = canCreate ? (
     <button
       type="button"
+      data-testid={`action-create-${field.key}`}
       className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-blue-50 border-b border-border/40 transition-colors"
       style={{ color: '#202452' }}
       onMouseDown={e => { e.preventDefault(); setOpen(false); createCtx.onOpen(query, handleSelect); }}
@@ -263,7 +264,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
             <button
               key={opt.id}
               type="button"
-              data-testid={`option-${opt.id}`}
+              data-testid={`option-${field.key}-${opt.id}`}
               className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer"
               onMouseDown={() => handleSelect(opt)}
             >
@@ -513,15 +514,18 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
       ? parseFloat(Number(rawDisplayValue).toFixed(10))
       : rawDisplayValue;
     // Shared read-only rendering for FK-style fields (dependent, selector, search).
-    // The data-testid sits on the wrapper so tests can use the container/input
-    // pattern (`container.locator('input').first()`) consistently with the
-    // editable branches above.
     const renderReadOnlyFk = () => (
       <div key={f.key} data-testid={`field-${f.key}`} className="space-y-1.5">
         <Label htmlFor={f.key} className="text-sm text-muted-foreground font-medium">
           {label}
         </Label>
-        <Input id={f.key} value={resolveIdentifier(data, f.key) || data?.[f.key] || ''} disabled className="bg-muted/50" />
+        <Input
+          id={f.key}
+          name={f.key}
+          value={resolveIdentifier(data, f.key) || data?.[f.key] || ''}
+          disabled
+          className="bg-muted/50"
+        />
       </div>
     );
     if (f.type === 'checkbox') {

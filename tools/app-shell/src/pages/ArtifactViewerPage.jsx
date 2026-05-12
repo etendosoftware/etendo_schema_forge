@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useUI } from '@/i18n';
 import { useParams, useNavigate } from 'react-router-dom';
 import { FileJson, Search, History, Loader2, FolderOpen } from 'lucide-react';
 
 const ARTIFACT_FILES = [
-  { key: 'schema-raw.json', label: 'Schema Raw' },
-  { key: 'schema-curated.json', label: 'Schema Curated' },
-  { key: 'contract.json', label: 'Contract' },
+  { key: 'schema-raw.json', labelKey: 'artifactSchemaRaw' },
+  { key: 'schema-curated.json', labelKey: 'artifactSchemaCurated' },
+  { key: 'contract.json', labelKey: 'artifactContract' },
 ];
 
 /**
@@ -75,6 +76,7 @@ function JsonView({ data }) {
 }
 
 export default function ArtifactViewerPage() {
+  const ui = useUI();
   const { windowName: paramWindow } = useParams();
   const navigate = useNavigate();
 
@@ -168,7 +170,7 @@ export default function ArtifactViewerPage() {
         <div className="border-b border-gray-200 p-3">
           <div className="flex items-center gap-2 mb-2">
             <FileJson className="h-4 w-4 text-gray-500" />
-            <h2 className="text-sm font-semibold text-gray-700">Artifacts</h2>
+            <h2 className="text-sm font-semibold text-gray-700">{ui("artifactsTitle")}</h2>
             <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
               {windows.length}
             </span>
@@ -177,7 +179,7 @@ export default function ArtifactViewerPage() {
             <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search windows..."
+              placeholder={ui("searchWindows")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-md border border-gray-200 bg-gray-50 py-1.5 pl-7 pr-2 text-xs placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
@@ -200,7 +202,7 @@ export default function ArtifactViewerPage() {
             </button>
           ))}
           {filteredWindows.length === 0 && (
-            <p className="px-3 py-4 text-xs text-gray-400">No windows found</p>
+            <p className="px-3 py-4 text-xs text-gray-400">{ui("noWindowsFound")}</p>
           )}
         </nav>
       </aside>
@@ -211,7 +213,7 @@ export default function ArtifactViewerPage() {
           <div className="flex flex-1 items-center justify-center text-gray-400">
             <div className="text-center">
               <FolderOpen className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-              <p className="text-sm">Select a window from the list</p>
+              <p className="text-sm">{ui("selectWindowFromList")}</p>
             </div>
           </div>
         ) : (
@@ -220,7 +222,7 @@ export default function ArtifactViewerPage() {
             <div className="flex items-center gap-4 border-b border-gray-200 bg-white px-4 py-2">
               {/* File tabs */}
               <div className="flex gap-1">
-                {ARTIFACT_FILES.map(({ key, label }) => (
+                {ARTIFACT_FILES.map(({ key, labelKey }) => (
                   <button
                     key={key}
                     onClick={() => {
@@ -233,7 +235,7 @@ export default function ArtifactViewerPage() {
                         : 'text-gray-600 hover:bg-gray-100'
                     }`}
                   >
-                    {label}
+                    {ui(labelKey)}
                   </button>
                 ))}
               </div>
@@ -249,7 +251,7 @@ export default function ArtifactViewerPage() {
                   onChange={(e) => setSelectedRef(e.target.value || null)}
                   className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
                 >
-                  <option value="">Current version</option>
+                  <option value="">{ui("currentVersion")}</option>
                   {commits.map((c) => (
                     <option key={c.hash} value={c.hash}>
                       {c.hash} — {c.date?.substring(0, 10)} — {c.subject?.substring(0, 50)}
@@ -269,7 +271,7 @@ export default function ArtifactViewerPage() {
               {loading && (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-                  <span className="ml-2 text-sm text-gray-500">Loading...</span>
+                  <span className="ml-2 text-sm text-gray-500">{ui("loading")}</span>
                 </div>
               )}
 
@@ -283,7 +285,7 @@ export default function ArtifactViewerPage() {
 
               {!jsonData && !loading && !error && (
                 <div className="flex items-center justify-center py-16 text-gray-400">
-                  <p className="text-sm">No data to display</p>
+                  <p className="text-sm">{ui("noDataToDisplay")}</p>
                 </div>
               )}
             </div>

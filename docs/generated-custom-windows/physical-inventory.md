@@ -17,6 +17,7 @@ Physical Inventory should let a warehouse user create an inventory count session
 - Visibility: visible from the Inventory menu as `Physical Inventory`.
 - Implementation type: custom window wrapper at `tools/app-shell/src/windows/custom/physical-inventory/index.jsx`, registered in `customLoaders` in `tools/app-shell/src/windows/registry.js`. The wrapper supplies an explicit `COLUMNS` array to `InventoryTable` (`dot: false` on `movementDate`), passes a `CustomInventoryTable` to `GeneratedApp`, and passes a `hideMoreMenu` function that hides the ⋮ button when `!data?.id` (unsaved record) or `data?.processed` (completed record).
 - Window shape: master-child. The header entity is `inventory`, and the detail entity is `inventoryLine`.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. The add-line button and any related panels are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
 - List/detail behavior: the list page opens inventory headers; the record page shows the header form plus the child line table and line form.
 
 ## Reactive behavior and dependencies

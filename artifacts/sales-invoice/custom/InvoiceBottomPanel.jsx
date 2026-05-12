@@ -1,120 +1,27 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { LinesBottomSection } from '@/components/contract-ui';
 import RelatedDocuments from './RelatedDocuments';
 import SifDataTabs from './SifDataTabs';
 import ImportFromShipmentModal from './ImportFromShipmentModal';
-import DocumentTotalsPanel from '@/components/contract-ui/DocumentTotalsPanel.jsx';
-
-function fmt(val, curr) {
-  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  const s = n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return curr ? `${s} ${curr}` : s;
-}
-
-function fmtForPanel(val, currency) {
-  return fmt(val, currency);
-}
 
 /**
- * InvoiceBottomPanel — two-column bottom block for Invoice detail.
- *
- * Left:  DOCS chips + NOTES text field (secondary background)
- * Right: Subtotal / Tax / Total
- *
- * Payment status is shown in the topbar (InvoiceTopbarExtra).
+ * Sales Invoice bottom section. Delegates to the shared LinesBottomSection so
+ * the Docs/Notes/Totals layout stays identical to the rest of the
+ * inline-editable family; injects the invoice-specific RelatedDocuments and
+ * the SIF (fiscal) data tabs as the `notesExtra` slot beneath the notes
+ * block — preserving the bespoke fiscal UI without diverging from the
+ * shared layout.
  */
-export default function InvoiceBottomPanel({
-  recordId, data, token, apiBaseUrl, api, summary,
-  notesField, onFieldChange, notesFocused, setNotesFocused,
-  lines, pendingLine, editingLine, lineConfig,
-  discountPerProductEnabled, onDiscountPerProductChange,
-  totalDiscountPct, onTotalDiscountChange,
-}) {
-  const ui = useUI();
-  const currency = data?.['currency$_identifier'] || '';
-
-  const isReadOnly = data?.documentStatus !== 'DR';
-
+export default function InvoiceBottomPanel(props) {
   return (
-    <div className="flex flex-col">
-      <div className="flex">
-      {/* ── Left column: Docs + Notes ── */}
-      <div className="flex-1 min-w-0 py-4 px-1 bg-muted/30 rounded-bl-lg">
-        {/* DOCS */}
-        <div className="flex items-start gap-3 px-3 pb-3">
-          <span className="text-[11px] font-medium text-foreground uppercase shrink-0 w-24 pt-0.5" style={{ letterSpacing: '0.04em' }}>
-            {ui('docs')}
-          </span>
-          <div className="flex-1">
-            <RelatedDocuments
-              recordId={recordId}
-              data={data}
-              token={token}
-              apiBaseUrl={apiBaseUrl}
-              api={api}
-              layout="chips"
-            />
-          </div>
-        </div>
-
-        {/* NOTES */}
-        {notesField && (
-          <div className="flex items-start gap-3 px-3 mt-3 pt-3 border-t border-border/40" style={{ borderTopWidth: '0.5px' }}>
-            <span className="text-[11px] font-medium text-foreground uppercase shrink-0 w-24 pt-1.5" style={{ letterSpacing: '0.04em' }}>
-              {ui('notes')}
-            </span>
-            <div className="flex-1">
-              {notesFocused ? (
-                <textarea
-                  value={data?.[notesField] || ''}
-                  onChange={(e) => onFieldChange?.(notesField, e.target.value)}
-                  onBlur={() => setNotesFocused?.(false)}
-                  placeholder={ui('addNoteHint')}
-                  rows={2}
-                  autoFocus
-                  className="w-full text-xs bg-white border border-border/40 rounded px-2.5 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-primary/30 placeholder:text-muted-foreground/40"
-                  style={{ borderWidth: '0.5px' }}
-                />
-              ) : (
-                <div
-                  tabIndex={0}
-                  role="textbox"
-                  onClick={() => setNotesFocused?.(true)}
-                  onFocus={() => setNotesFocused?.(true)}
-                  className="w-full text-xs px-2.5 py-1.5 cursor-text min-h-[1.5rem] text-foreground/80 border border-transparent rounded hover:border-border/30 transition-colors"
-                >
-                  {data?.[notesField] || <span className="text-muted-foreground/40">{ui('addNoteHint')}</span>}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        <SifDataTabs data={data} recordId={recordId} token={token} apiBaseUrl={apiBaseUrl} />
-      </div>
-
-      {/* ── Vertical separator ── */}
-      <div className="border-l border-border/50" style={{ borderLeftWidth: '0.5px' }} />
-
-      {/* ── Right column: Totals ── */}
-      <div className="w-[340px] shrink-0 py-4 px-4 flex flex-col justify-start">
-        <DocumentTotalsPanel
-          lines={lines ?? []}
-          pendingLine={pendingLine ?? null}
-          editingLine={editingLine ?? null}
-          lineConfig={lineConfig}
-          formatAmount={fmtForPanel}
-          currency={currency}
-          discountPerProductEnabled={discountPerProductEnabled ?? false}
-          onDiscountPerProductChange={onDiscountPerProductChange}
-          readOnly={isReadOnly}
-          totalDiscountPct={Number(data?.etgoTotalDiscount ?? totalDiscountPct ?? 0)}
-          onTotalDiscountChange={onTotalDiscountChange}
-        />
-      </div>
-      </div>
-    </div>
+    <LinesBottomSection
+      {...props}
+      relatedDocuments={RelatedDocuments}
+      notesExtra={SifDataTabs}
+    />
   );
 }
 
@@ -182,7 +89,14 @@ function InvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, 
   );
 }
 
-function InvoiceLineActions({ data, recordId, token, apiBaseUrl, onSave, forceOpen, onForceOpenHandled }) {
+// forwardRef so DetailView can imperatively trigger the import modal from a menu
+// item in the "+ Añadir línea" dropdown — see InvoiceBottomPanel.lineMenuActions
+// below. `hideTrigger` lets DetailView mount this only for the modal portal
+// (the visible link is suppressed when the menu item is in use).
+const InvoiceLineActions = forwardRef(function InvoiceLineActions(
+  { data, recordId, token, apiBaseUrl, onSave, forceOpen, onForceOpenHandled, hideTrigger = false },
+  ref,
+) {
   const ui = useUI();
   const [showImportModal, setShowImportModal] = useState(false);
   const isDraft = data?.documentStatus === 'DR';
@@ -194,9 +108,7 @@ function InvoiceLineActions({ data, recordId, token, apiBaseUrl, onSave, forceOp
     if (forceOpen) { setShowImportModal(true); onForceOpenHandled?.(); }
   }, [forceOpen, onForceOpenHandled]);
 
-  if (!isDraft || !bpId) return null;
-
-  const handleClick = async () => {
+  const openModal = async () => {
     if (onSave) {
       const shouldOpen = await onSave();
       if (!shouldOpen) return;
@@ -204,20 +116,30 @@ function InvoiceLineActions({ data, recordId, token, apiBaseUrl, onSave, forceOp
     setShowImportModal(true);
   };
 
+  useImperativeHandle(ref, () => ({ openImportModal: openModal }), [onSave]);
+
+  if (!isDraft || !bpId) {
+    // Still keep the modal portal mounted in case forceOpen fires; trigger
+    // (link) only renders in the legacy mode.
+    return null;
+  }
+
   return (
     <>
-      <button
-        type="button"
-        onClick={handleClick}
-        style={{ all: 'unset', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary, #6b7280)', cursor: 'pointer' }}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-        {ui('importFromShipment')}
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          onClick={openModal}
+          style={{ all: 'unset', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary, #6b7280)', cursor: 'pointer' }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          {ui('importFromShipment')}
+        </button>
+      )}
       {showImportModal && createPortal(
         <ImportFromShipmentModal
           invoiceId={recordId}
@@ -231,7 +153,27 @@ function InvoiceLineActions({ data, recordId, token, apiBaseUrl, onSave, forceOp
       )}
     </>
   );
-}
+});
 
 InvoiceBottomPanel.linesEmptyState = InvoiceLinesEmptyState;
 InvoiceBottomPanel.detailExtraActions = InvoiceLineActions;
+
+/**
+ * Returns the menu items for the "+ Añadir línea" dropdown chevron. Plain
+ * function (NOT a hook) — called every render of DetailView at the top level,
+ * so React's hook-order tracking isn't involved. The `importRef` points at the
+ * `InvoiceLineActions` instance mounted by DetailView with `hideTrigger`, which
+ * exposes `openImportModal` via `useImperativeHandle`.
+ */
+InvoiceBottomPanel.lineMenuActions = function lineMenuActions({ data, importRef }) {
+  const isDraft = data?.documentStatus === 'DR';
+  const bpId = data?.businessPartner;
+  if (!isDraft || !bpId) return [];
+  return [
+    {
+      key: 'import-shipment',
+      label: 'importFromShipment',
+      onClick: () => importRef.current?.openImportModal?.(),
+    },
+  ];
+};

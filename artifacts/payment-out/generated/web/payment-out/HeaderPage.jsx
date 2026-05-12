@@ -9,6 +9,7 @@ import AccountingForm from './AccountingForm';
 import ExecutionHistoryTable from './ExecutionHistoryTable';
 import ExecutionHistoryForm from './ExecutionHistoryForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
+import PaymentOutBottomPanel from '../../../custom/PaymentOutBottomPanel';
 import catalogs from './mockCatalogs';
 
 
@@ -36,6 +37,10 @@ const processes = [
 // @sf-generated-start draftMode:header
 const draftMode = null;
 // @sf-generated-end draftMode:header
+
+// @sf-generated-start requiredHeaderFields:header
+const requiredHeaderFields = ['documentNo', 'paymentMethod', 'account', 'currency'];
+// @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
 const addLineFields = {
@@ -535,6 +540,9 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         ]}
         notesField="description"
         customTabs={[{ key: 'related', label: 'Related Documents', Component: RelatedDocuments }]}
+        bottomSection={PaymentOutBottomPanel}
+        requiredHeaderFields={requiredHeaderFields}
+        linesLayout="inlineEditable"
         {...props}
       />
     );

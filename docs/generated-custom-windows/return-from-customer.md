@@ -14,6 +14,7 @@ Users should be able to review existing customer returns, open a specific return
 - Visibility: visible from the Sales menu in the app shell.
 - Implementation type: generated app-shell window loaded from the window registry.
 - Window shape: master-child document with `customerReturn` as the header entity and `customerReturnLine` as the child entity.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. The add-line button and any related panels are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
 - List behavior: the generated page exposes a list view for existing returns and hides create from that list, so record creation is not evidenced from the list surface itself.
 - Detail behavior: the detail view renders the header form, line table, line form, notes, document preview metadata, and a custom Related Documents tab.
 

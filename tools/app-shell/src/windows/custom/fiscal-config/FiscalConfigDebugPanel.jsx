@@ -76,7 +76,7 @@ const MOCK_PROFILES = [
 const CERT_MODAL_STATES = [
   { key: 'pick',       label: 'Pick',       state: { step: 'pick' } },
   { key: 'pick-file',  label: 'File sel.',  state: { step: 'pick', file: MOCK_FILE_STUB } },
-  { key: 'pick-err',   label: 'Pick err',   state: { step: 'pick', errMsg: 'Formato no válido. Solo se aceptan archivos .p12 y .pfx.' } },
+  { key: 'pick-err',   label: 'Pick err',   state: { step: 'pick', errMsg: 'Invalid format. Only .p12 and .pfx files are accepted.' } },
   { key: 'verify',     label: 'Verify',     state: { step: 'verify', file: MOCK_FILE_STUB } },
   { key: 'confirmNif', label: 'NIF conf.',  state: { step: 'confirmNif', file: MOCK_FILE_STUB, pendingNif: 'B12345678' } },
   { key: 'done',       label: 'Done',       state: { step: 'done', file: MOCK_FILE_STUB, certDetails: MOCK_CERT_DETAILS } },

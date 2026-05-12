@@ -63,14 +63,14 @@ async function fetchSiiMonitorData(base, orgId, token) {
     return { counts: { issued: { totalCount: 0 }, received: { totalCount: 0 }, issuedPrevious: { totalCount: 0 }, receivedPrevious: { totalCount: 0 } }, parentId: null };
   }
   const siiParams = { parentId };
-  const [emitidas, recibidas, emitidasAnt, recibidasAnt] = await Promise.all([
+  const [issued, received, issuedPrev, receivedPrev] = await Promise.all([
     fetchCount(base, SII_SPEC, SII_EMITIDAS_ENTITY,      siiParams, token),
     fetchCount(base, SII_SPEC, SII_RECIBIDAS_ENTITY,     siiParams, token),
     fetchCount(base, SII_SPEC, SII_EMITIDAS_ANT_ENTITY,  siiParams, token),
     fetchCount(base, SII_SPEC, SII_RECIBIDAS_ANT_ENTITY, siiParams, token),
   ]);
   return {
-    counts: { issued: emitidas, received: recibidas, issuedPrevious: emitidasAnt, receivedPrevious: recibidasAnt },
+    counts: { issued, received, issuedPrevious: issuedPrev, receivedPrevious: receivedPrev },
     parentId,
   };
 }
@@ -97,14 +97,15 @@ async function fetchCountByCriteria(base, spec, entity, orgId, field, value, tok
 }
 
 async function fetchTbaiData(base, orgId, token) {
-  const [total, recibido, rechazado, error] = await Promise.all([
+  const [total, received, rejected, error, pending] = await Promise.all([
     get(base, TBAI_SPEC, TBAI_ENTITY, { organization: orgId, _limit: '1' }, token)
       .then(r => r.totalRows ?? 0),
     fetchCountByCriteria(base, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Recibido', token),
     fetchCountByCriteria(base, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Rechazado', token),
     fetchCountByCriteria(base, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Error', token),
+    fetchCountByCriteria(base, TBAI_SPEC, TBAI_ENTITY, orgId, 'estado', 'Pendiente', token),
   ]);
-  return { totalCount: total, recibidoCount: recibido, rechazadoCount: rechazado, errorCount: error };
+  return { totalCount: total, receivedCount: received, rejectedCount: rejected, errorCount: error, pendingCount: pending };
 }
 
 export function useFiscalMonitor(orgId, token, apiBaseUrl) {

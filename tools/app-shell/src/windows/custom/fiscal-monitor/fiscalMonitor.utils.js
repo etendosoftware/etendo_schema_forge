@@ -43,10 +43,11 @@ export function computeKpis(profile, monitorData) {
 
   if (profile === 'tbai' || profile === 'sii+tbai') {
     kpis.tbai = {
-      total:    tbai?.totalCount    ?? 0,
-      received: tbai?.recibidoCount ?? 0,
-      rejected: tbai?.rechazadoCount ?? 0,
-      error:    tbai?.errorCount    ?? 0,
+      total:    tbai?.totalCount   ?? 0,
+      received: tbai?.receivedCount ?? 0,
+      rejected: tbai?.rejectedCount ?? 0,
+      error:    tbai?.errorCount   ?? 0,
+      pending:  tbai?.pendingCount ?? 0,
     };
   }
 

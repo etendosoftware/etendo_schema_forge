@@ -9,7 +9,8 @@
     "hideDeleteWhenComplete": true,
     "hidePrint": true,
     "customComponents": {
-      "topbarRight": "QuotationTopbarActions"
+      "topbarRight": "QuotationTopbarActions",
+      "bottomSection": "QuotationBottomPanel"
     },
     "labelOverrides": {
       "es_ES": {
@@ -50,6 +51,7 @@
       }
     },
     "noHeaderBorder": true,
+    "linesLayout": "inlineEditable",
     "dateFilterKey": "orderDate",
     "hideSaveStatuses": [
       "CA",

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { computeDocumentTotals } from '@/lib/documentTotals';
+import { Checkbox } from '@/components/ui/checkbox';
 
 /**
  * DocumentTotalsPanel — generic totals block for document detail views.
@@ -72,39 +73,36 @@ export default function DocumentTotalsPanel({
 
   return (
     <div className="mt-1 flex flex-col items-end" data-inline-add-portal="true">
-      <div className="w-full max-w-xs text-sm">
+      <div className="w-full text-sm pr-12">
 
-        {/* Button — hidden once total discount is active */}
-        {canShowTotalDiscount && !totalDiscountOpen && (
-          <button
-            type="button"
-            onClick={() => setTotalDiscountOpen(true)}
-            className="mb-3 px-2 text-xs text-primary underline underline-offset-2 hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-0 text-left"
-          >
-            + {ui('addTotalDiscount')}
-          </button>
-        )}
+        <div>
 
-        {/*
-          Top border only when no per-product discount rows are shown.
-          When per-product discount rows are present they start the block visually
-          and need no separator above them.
-        */}
-        <div style={!(hasPerProductDiscount || totalDiscountOpen) ? { borderTopWidth: '0.5px', borderTopStyle: 'solid', borderTopColor: 'var(--border)' } : {}}>
+          {/* Gross subtotal header — always visible. */}
+          <div className="flex justify-between py-2 px-2">
+            <span className="font-semibold">{ui('subtotalWithoutDiscount')}</span>
+            <span className="tabular-nums font-semibold">{fmt(grossSubtotal)}</span>
+          </div>
 
-          {/* Gross subtotal header — shown whenever any discount section is active */}
-          {(hasPerProductDiscount || totalDiscountOpen) && (
-            <div className="flex justify-between py-2 px-2">
-              <span className="font-semibold">{ui('subtotalWithoutDiscount')}</span>
-              <span className="tabular-nums font-semibold">{fmt(grossSubtotal)}</span>
-            </div>
-          )}
+          {/* Per-product discount row — always visible. Renders 0 until a line
+              carries a discount; updates live as user edits. */}
+          <div className="flex justify-between py-2 px-2">
+            <span className="text-muted-foreground">{ui('discountPerProduct')}</span>
+            <span className="tabular-nums text-muted-foreground">{discountAmt > 0 ? `-${fmt(discountAmt)}` : fmt(0)}</span>
+          </div>
 
-          {/* Per-product discount row — only when lines actually carry a discount */}
-          {hasPerProductDiscount && (
-            <div className="flex justify-between py-2 px-2">
-              <span className="text-muted-foreground">{ui('discountPerProduct')}</span>
-              <span className="tabular-nums text-muted-foreground">-{fmt(discountAmt)}</span>
+          {/* "+ Añadir descuento total" button — sits BELOW the per-product
+              discount row when the panel is collapsed. Uses the same vertical
+              footprint as the expanded "Descuento total" row so toggling does
+              not change the panel's total height. */}
+          {canShowTotalDiscount && !totalDiscountOpen && (
+            <div className="flex items-center py-2 px-2">
+              <button
+                type="button"
+                onClick={() => setTotalDiscountOpen(true)}
+                className="text-xs text-primary underline underline-offset-2 hover:opacity-70 transition-opacity cursor-pointer bg-transparent border-0 text-left p-0"
+              >
+                + {ui('addTotalDiscount')}
+              </button>
             </div>
           )}
 
@@ -115,49 +113,53 @@ export default function DocumentTotalsPanel({
                 <span className="text-muted-foreground whitespace-nowrap">
                   {ui('totalDiscount')} ({inputPct}%)
                 </span>
-                <span className="tabular-nums text-muted-foreground">-{fmt(totalDiscountAmt ?? 0)}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {totalDiscountAmt > 0 ? `-${fmt(totalDiscountAmt)}` : fmt(0)}
+                </span>
               </div>
             ) : (
-              <>
-                <div className="flex justify-between items-center py-2 px-2">
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked
-                      onChange={() => {
-                        setTotalDiscountOpen(false);
-                        setInputPct(0);
-                        onTotalDiscountChange?.(0);
-                      }}
-                      className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                    />
-                    <span className="whitespace-nowrap">{ui('totalDiscount')}</span>
-                  </label>
-                  <span className="tabular-nums text-muted-foreground">-{fmt(totalDiscountAmt ?? 0)}</span>
-                </div>
-                <div className="flex items-center gap-2 pl-[1.75rem] pr-2 pb-2">
-                  <input
-                    type="number"
-                    value={inputPct}
-                    min={0}
-                    max={100}
-                    onChange={e => setInputPct(Number(e.target.value))}
-                    onBlur={e => {
-                      const v = Math.max(0, Math.min(100, Number(e.target.value)));
-                      setInputPct(v);
-                      onTotalDiscountChange?.(v);
+              // Single compact row — checkbox + label + % input + amount — so the
+              // expanded panel keeps the same height as the collapsed "+ Añadir
+              // descuento total" link area, no layout shift on toggle.
+              <div className="flex items-center gap-2 py-2 px-2">
+                <div className="flex items-center gap-1.5 select-none">
+                  <Checkbox
+                    checked
+                    onChange={() => {
+                      setTotalDiscountOpen(false);
+                      setInputPct(0);
+                      onTotalDiscountChange?.(0);
                     }}
-                    className="w-16 text-xs border border-border/60 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                    style={{ borderWidth: '0.5px' }}
                   />
-                  <span className="text-xs text-muted-foreground">%</span>
+                  <span className="whitespace-nowrap">{ui('totalDiscount')}</span>
                 </div>
-              </>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={inputPct}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/[^\d.]/g, '');
+                    setInputPct(raw === '' ? 0 : Number(raw));
+                  }}
+                  onBlur={e => {
+                    const v = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                    setInputPct(v);
+                    onTotalDiscountChange?.(v);
+                  }}
+                  className="w-12 text-xs border border-border/60 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  style={{ borderWidth: '0.5px' }}
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+                <span className="tabular-nums text-muted-foreground ml-auto whitespace-nowrap">
+                  {totalDiscountAmt > 0 ? `-${fmt(totalDiscountAmt)}` : fmt(0)}
+                </span>
+              </div>
             )
           )}
 
-          {/* Separator before net totals — only when discount rows precede them */}
-          {(hasPerProductDiscount || totalDiscountOpen) && divider}
+          {/* Separator before net totals — discount rows (always visible) sit
+              above, so the divider is always drawn here. */}
+          {divider}
 
           {/* Net subtotal — deducts totalDiscountAmt when active (0 when no discount, so always safe) */}
           {netSubtotal != null && (

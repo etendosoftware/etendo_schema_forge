@@ -36,6 +36,15 @@ describe('PWA configuration', () => {
     assert.ok(config.includes("cleanupOutdatedCaches: true"), 'should enable cache cleanup');
   });
 
+  it('service worker navigation fallback excludes backend and discovery routes', () => {
+    const config = readFileSync(resolve(APP_SHELL, 'vite.config.js'), 'utf8');
+    assert.ok(config.includes('navigateFallbackDenylist'), 'should configure a navigation fallback denylist');
+    assert.ok(config.includes('/^\\/etendo\\//'), 'should denylist backend /etendo routes');
+    assert.ok(config.includes('/^\\/mcp(?:\\/|$)/'), 'should denylist the public MCP endpoint');
+    assert.ok(config.includes('/^\\/\\.well-known\\//'), 'should denylist OAuth/MCP discovery metadata');
+    assert.ok(!config.includes('/^\\/authorize'), 'should keep the SPA /authorize route cacheable');
+  });
+
   it('manifest includes required PWA fields', () => {
     const config = readFileSync(resolve(APP_SHELL, 'vite.config.js'), 'utf8');
     assert.ok(config.includes("name: 'Etendo'"), 'manifest should have name');
@@ -102,6 +111,15 @@ describe('PWA configuration', () => {
       !sw.includes('url:"assets/index.css",revision:null'),
       'service worker should not precache a stable /assets/index.css URL'
     );
+  });
+
+  it('production service worker does not fallback backend routes to index.html', () => {
+    const { sw } = readBuiltArtifacts();
+
+    assert.match(sw, /denylist:\[[^\]]*\/\^\\\/etendo\\\//, 'SW should denylist /etendo navigations');
+    assert.match(sw, /denylist:\[[^\]]*\/\^\\\/mcp/, 'SW should denylist /mcp navigations');
+    assert.match(sw, /denylist:\[[^\]]*\/\^\\\/\\\.well-known\\\//, 'SW should denylist /.well-known navigations');
+    assert.doesNotMatch(sw, /\/\^\\\/authorize/, 'SW should not denylist the SPA /authorize route');
   });
 
   it('favicon.png exists in public/ for the PWA icon', () => {

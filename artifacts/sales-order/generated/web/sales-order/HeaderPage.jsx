@@ -6,6 +6,7 @@ import HeaderForm from './HeaderForm';
 import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
+import OrderBottomPanel from '../../../custom/OrderBottomPanel';
 import OrderCreateInvoice from '../../../custom/OrderCreateInvoice';
 import OrderDraftChips from '../../../custom/OrderDraftChips';
 import OrderReactivateBulkAction from '../../../custom/OrderReactivateBulkAction';
@@ -56,6 +57,10 @@ const draftMode = {
   "label": "soConfirmBtn"
 };
 // @sf-generated-end draftMode:header
+
+// @sf-generated-start requiredHeaderFields:header
+const requiredHeaderFields = ['documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'grandTotalAmount', 'summedLineAmount'];
+// @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
 const addLineFields = {
@@ -409,14 +414,17 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         noHeaderBorder
         notesField="description"
         customTabs={[{ key: 'related', label: 'Related Documents', Component: RelatedDocuments }]}
+        bottomSection={OrderBottomPanel}
         topbarRight={OrderCreateInvoice}
         topbarExtra={OrderDraftChips}
         menuActions={({ data, status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO' && !data?.hasLinkedDocuments, labelKey: 'reactivate', successKey: 'reactivated', documentAction: 'RE',  }
         ]}
         draftMode={draftMode}
+        requiredHeaderFields={requiredHeaderFields}
         salesTheme
         labelOverrides={labelOverrides}
+        linesLayout="inlineEditable"
         {...props}
       />
     );

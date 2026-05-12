@@ -76,7 +76,6 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
           draftMode={draftModeWithModal}
           menuActions={customMenuActions}
           linesEmptyState={LinesEmptyState}
-          addLineGuard={(d) => !!d?.businessPartner}
           {...rest}
         />
         {createContactState && createPortal(

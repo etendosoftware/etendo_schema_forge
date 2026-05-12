@@ -6,7 +6,11 @@
     "relatedDocuments": true,
     "notesField": "returnReason",
     "dateFilterKey": "orderDate",
-    "lineEntityConfig": "returnOrder"
+    "lineEntityConfig": "returnOrder",
+    "linesLayout": "inlineEditable",
+    "customComponents": {
+      "bottomSection": "ReturnToVendorBottomPanel"
+    }
   },
   "entities": {
     "header": {

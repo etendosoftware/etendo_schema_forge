@@ -1,4 +1,3 @@
-import GoodsReceiptLineTable from '@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptLineTable';
 import GoodsReceiptTable from '@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptTable';
 import GeneratedApp from '@generated/goods-receipt/generated/web/goods-receipt/index.jsx';
 import GoodsReceiptBottomPanel from './GoodsReceiptBottomPanel.jsx';
@@ -19,26 +18,12 @@ function CustomHeaderTable(props) {
   return <GoodsReceiptTable columns={HEADER_COLUMNS} {...props} />;
 }
 
-// Lines table columns without lineNo
-const LINES_COLUMNS = [
-  { key: 'product', column: 'M_Product_ID', type: 'string', label: 'Product' },
-  { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity' },
-  { key: 'uOM', column: 'C_UOM_ID', type: 'string', label: 'UOM' },
-  { key: 'storageBin', column: 'M_Locator_ID', type: 'string', label: 'Storage Bin' },
-  { key: 'invoiceQuantity', column: 'Qtyinvoiced', type: 'number', label: 'Invoiced Quantity' },
-];
-
-function CustomLinesTable(props) {
-  return <GoodsReceiptLineTable columns={LINES_COLUMNS} {...props} />;
-}
-
 export default function GoodsReceiptWindow(props) {
   useBulkActionToast();
   return (
     <GeneratedApp
       {...props}
       Table={CustomHeaderTable}
-      DetailTable={CustomLinesTable}
       secondaryTabs={[]}
       notesField="description"
       bottomSection={GoodsReceiptBottomPanel}

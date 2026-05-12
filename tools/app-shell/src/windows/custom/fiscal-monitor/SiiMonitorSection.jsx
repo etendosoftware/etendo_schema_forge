@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { StatusPill, NumFactura, Pager, RowActionBtn } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, Pager, RowActionBtn, isErrorStatus } from './FmPrimitives.jsx';
 import {
   SII_SPEC,
   SII_EMITIDAS_ENTITY,
@@ -20,6 +20,24 @@ const SUBTAB_ENTITIES = {
 const INVOICE_FK_FIELD = 'aeatsiiInvoice';
 const PAGE_SIZE = 20;
 
+const SII_ERROR_STATUSES = new Set(['IN', 'EE']);
+
+function fmtDate(raw) {
+  if (!raw) return '—';
+  const parts = String(raw).split(/[-/]/);
+  if (parts.length !== 3) return raw;
+  const [a, b, c] = parts.map(p => p.trim());
+  return a.length === 4 ? `${c}/${b}/${a}` : `${a}/${b}/${c}`;
+}
+
+const SII_STATUS_TABS = [
+  { key: 'all',    dot: null,      labelKey: 'fiscalMonitor.sii.filter.all' },
+  { key: 'CO',     dot: 'success', labelKey: 'fiscalMonitor.status.sii.CO' },
+  { key: 'AE',     dot: 'warn',    labelKey: 'fiscalMonitor.status.sii.AE' },
+  { key: 'errors', dot: 'danger',  labelKey: 'fiscalMonitor.sii.filter.errors' },
+  { key: 'PE',     dot: 'pending', labelKey: 'fiscalMonitor.status.sii.PE' },
+];
+
 const UploadIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -33,12 +51,17 @@ const DownloadIcon = () => (
   </svg>
 );
 
-async function fetchSubtab(base, entity, parentId, page, token) {
+async function fetchSubtab(base, entity, parentId, page, token, statusFilter) {
   const params = new URLSearchParams({
     parentId,
     _startRow: String((page - 1) * PAGE_SIZE),
     _endRow:   String(page * PAGE_SIZE),
   });
+  if (statusFilter && statusFilter !== 'all') {
+    const criteriaValue = statusFilter === 'errors' ? ['IN', 'EE'] : statusFilter;
+    const operator      = statusFilter === 'errors' ? 'inSet'      : 'equals';
+    params.set('criteria', JSON.stringify([{ fieldName: 'aeatsiiEstado', operator, value: criteriaValue }]));
+  }
   const res = await fetch(`${base}/${SII_SPEC}/${encodeURIComponent(entity)}?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -47,10 +70,11 @@ async function fetchSubtab(base, entity, parentId, page, token) {
   return { data: json?.response?.data ?? [], totalRows: json?.response?.totalRows ?? 0 };
 }
 
-export default function SiiMonitorSection({ orgId, token, apiBaseUrl, parentId, initialTab = 'issued', mockRows, onTabChange }) {
+export default function SiiMonitorSection({ orgId, token, apiBaseUrl, parentId, initialTab = 'issued', mockRows, onTabChange, refreshKey = 0, onInvoiceOpen, onBpClick }) {
   const ui = useUI();
-  const [tab, setTab]       = useState('issued');
-  const [period, setPeriod] = useState('current');
+  const [tab, setTab]             = useState('issued');
+  const [period, setPeriod]       = useState('current');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   function changeTab(newTab, newPeriod) {
     setTab(newTab);
@@ -84,7 +108,12 @@ export default function SiiMonitorSection({ orgId, token, apiBaseUrl, parentId, 
   useEffect(() => {
     if (mockRows) {
       const currentKey = period === 'previous' ? `${tab}-previous` : tab;
-      const filtered = mockRows.filter(r => !r._siiTab || r._siiTab === currentKey);
+      let filtered = mockRows.filter(r => !r._siiTab || r._siiTab === currentKey);
+      if (statusFilter && statusFilter !== 'all') {
+        filtered = statusFilter === 'errors'
+          ? filtered.filter(r => SII_ERROR_STATUSES.has(r.aeatsiiEstado))
+          : filtered.filter(r => r.aeatsiiEstado === statusFilter);
+      }
       setRows(filtered);
       setTotalRows(filtered.length);
       setLoading(false);
@@ -95,13 +124,13 @@ export default function SiiMonitorSection({ orgId, token, apiBaseUrl, parentId, 
     setLoading(true);
     setError(null);
     const base = neoBase(apiBaseUrl);
-    fetchSubtab(base, SUBTAB_ENTITIES[entityKey], parentId, page, token)
+    fetchSubtab(base, SUBTAB_ENTITIES[entityKey], parentId, page, token, statusFilter)
       .then(({ data, totalRows }) => { setRows(data); setTotalRows(totalRows); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [parentId, entityKey, page, token, apiBaseUrl, mockRows]);
+  }, [parentId, entityKey, page, token, apiBaseUrl, mockRows, statusFilter, refreshKey]);
 
-  useEffect(() => { setPage(1); }, [tab, period]);
+  useEffect(() => { setPage(1); }, [tab, period, statusFilter]);
 
   const partyHeader = tab === 'issued' ? ui('fiscalMonitor.sii.party.cliente') : ui('fiscalMonitor.sii.party.proveedor');
 
@@ -148,6 +177,19 @@ export default function SiiMonitorSection({ orgId, token, apiBaseUrl, parentId, 
           </div>
         </div>
 
+        <div className="fm-tabs fm-status-filter">
+          {SII_STATUS_TABS.map(({ key, dot, labelKey }) => (
+            <button
+              key={key}
+              className={`tab${statusFilter === key ? ' active' : ''}`}
+              onClick={() => setStatusFilter(key)}
+            >
+              {dot && <span className={`dotcolor ${dot}`} />}
+              {ui(labelKey)}
+            </button>
+          ))}
+        </div>
+
         <div className="fm-subtoolbar">
           <span className="meta">{ui('fiscalMonitor.sii.lastSync')}</span>
         </div>
@@ -186,15 +228,23 @@ export default function SiiMonitorSection({ orgId, token, apiBaseUrl, parentId, 
                 ) : rows.map((row, i) => (
                   <tr key={row.id ?? i}>
                     <td><input type="checkbox" /></td>
-                    <td className="strong">{row.invoiceDate ?? '—'}</td>
+                    <td className="strong">{fmtDate(row.invoiceDate)}</td>
                     <td className="num-factura">
-                      <NumFactura n={row.documentNo ?? row[INVOICE_FK_FIELD] ?? '—'} />
+                      <NumFactura
+                        n={row.documentNo ?? row[INVOICE_FK_FIELD] ?? '—'}
+                        onOpen={() => onInvoiceOpen?.(row[INVOICE_FK_FIELD], tab === 'issued' ? 'sales-invoice' : 'purchase-invoice')}
+                      />
                     </td>
-                    <td className="strong">{row.businessPartner ?? '—'}</td>
+                    <td className="strong">{row['businessPartner$_identifier'] ?? row.businessPartnerIdentifier ?? row.businessPartner ?? '—'}</td>
                     <td>{row.aeatsiiClaveTipo ?? row.aeatsiiClaveTipoFc ?? '—'}</td>
                     <td className="num strong">{row.grandTotalAmount ?? '—'}</td>
                     <td>
-                      <StatusPill estado={row.aeatsiiEstado} />
+                      <StatusPill
+                        estado={row.aeatsiiEstado}
+                        onClick={isErrorStatus(row.aeatsiiEstado) && row.businessPartner
+                          ? () => onBpClick?.(row.businessPartner)
+                          : undefined}
+                      />
                       {row.aeatsiiErrorMsg && (
                         <div style={{ fontSize: 11, color: 'var(--fm-danger-fg)', marginTop: 3 }}>
                           {row.aeatsiiErrorCode ? `[${row.aeatsiiErrorCode}] ` : ''}{row.aeatsiiErrorMsg}

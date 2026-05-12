@@ -4,8 +4,8 @@ import { login, navigateTo } from '../helpers/auth.js';
 /**
  * Bug: Partner Address dropdown is empty after selecting Business Partner.
  *
- * Recorded flow: login → switch to Group Admin + España Norte →
- *   Purchase Order → New Order → select "Bebidas Alegres, S.L." →
+ * Recorded flow: login -> enter environment ->
+ *   Purchase Order -> New Order -> select a Business Partner ->
  *   Partner Address combobox has no options (should list BP locations).
  *
  * Expected: after selecting a Business Partner, the Partner Address
@@ -29,14 +29,10 @@ test.describe('Purchase Order - Partner Address Bug', () => {
     const partnerAddress = page.getByTestId('field-partnerAddress');
     await expect(partnerAddress).toBeDisabled();
 
-    // Search and select a Business Partner via data-testid
+    // Select the first real backend suggestion without depending on localized labels.
     const bpField = page.getByTestId('field-businessPartner');
-    await bpField.fill('Bebidas');
-    await page.waitForTimeout(1_500);
-
-    // Click the suggestion
-    await page.getByRole('button', { name: 'Bebidas Alegres, S.L.' }).click();
-    await page.waitForTimeout(2_000);
+    await bpField.click();
+    await clickFirstStableOption(page, 'option-businessPartner-');
 
     // Partner Address should now be enabled
     await expect(partnerAddress).toBeEnabled({ timeout: 5_000 });
@@ -44,12 +40,24 @@ test.describe('Purchase Order - Partner Address Bug', () => {
     // BUG: The dropdown should have options, not be empty
     // Open the dropdown and check for options
     await partnerAddress.click();
-    await page.waitForTimeout(1_000);
 
     // There should be at least one selectable option (a BP location)
-    const options = page.getByRole('option');
-    const optionCount = await options.count();
-
-    expect(optionCount, 'Partner Address should have at least one location option').toBeGreaterThan(0);
+    await expect(page.locator('[data-testid^="option-partnerAddress-"]').first()).toBeVisible({ timeout: 5_000 });
   });
 });
+
+async function clickFirstStableOption(page, testIdPrefix) {
+  const options = page.locator(`[data-testid^="${testIdPrefix}"]`);
+  await expect(options.first()).toBeVisible({ timeout: 10_000 });
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const option = options.first();
+    try {
+      await option.click({ timeout: 3_000 });
+      return;
+    } catch (error) {
+      if (attempt === 4) throw error;
+      await page.waitForTimeout(250);
+    }
+  }
+}

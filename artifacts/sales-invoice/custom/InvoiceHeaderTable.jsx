@@ -1,12 +1,17 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useLocaleSwitch } from '@/i18n';
+import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatCalendarDate, getCalendarDateRelation } from '@/lib/dateOnly';
 import {
   getDueDateState,
   getDueDateDotStyle,
   getDueDateTextStyle,
 } from '@/lib/invoiceDueDate';
+import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
+import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { useInvoiceListFiscalStatus } from '@/windows/custom/shared/useInvoiceListFiscalStatus.js';
+import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 
 // ─── Invoice-specific status logic ───────────────────────────────
 
@@ -44,42 +49,80 @@ const filters = ['documentNo', 'invoiceDate', 'businessPartner'];
 // ─── Component ──────────────────────────────────────────────────
 
 export default function InvoiceHeaderTable(props) {
+  const { token, apiBaseUrl, data } = props;
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
   const gl = dictionary?.genericLabels || {};
   const t = (key) => gl[key] || key;
 
-  // ─── Custom columns (override generated ones) ─────────────────
-  const columns = useMemo(() => [
-    { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false },
-    {
-      key: 'documentNo', column: 'DocumentNo', type: 'string',
-      pill: {
-        when: (row) => isCreditNote(row),
-        label: t('creditNoteLabel'),
-        className: 'bg-purple-50 text-purple-700 border-purple-200',
+  const { selectedOrg } = useAuth();
+  const orgId = selectedOrg?.id ?? null;
+  const { profile } = useFiscalConfig(orgId, token, apiBaseUrl);
+
+  const targets = useMemo(() => getInvoiceFiscalTargets('sales-invoice', profile), [profile]);
+
+  const ids = useMemo(() => (data || []).map(r => r.id).filter(Boolean), [data]);
+  const { statusMap, loading: fiscalLoading } = useInvoiceListFiscalStatus(ids, 'sales-invoice', profile, apiBaseUrl, token, orgId);
+
+  // Derive stable label strings from gl (avoids putting the unstable ui() fn in useMemo deps)
+  const siiColLabel  = gl['invoiceList.col.siiStatus']       || 'SII Status';
+  const tbaiColLabel = gl['invoiceList.col.tbaiStatus']      || 'TBAI Status';
+  const vfColLabel   = gl['invoiceList.col.verifactuStatus'] || 'Verifactu Status';
+
+  // ─── Custom columns ────────────────────────────────────────────
+  const columns = useMemo(() => {
+    const fiscalCols = [];
+    if (targets.showSii) {
+      fiscalCols.push({
+        key: '_siiStatus', type: 'custom', label: siiColLabel,
+        render: (row) => <FiscalStatusBadge status={statusMap?.[row.id]?.sii} loading={fiscalLoading && !statusMap} />,
+      });
+    }
+    if (targets.showTbai) {
+      fiscalCols.push({
+        key: '_tbaiStatus', type: 'custom', label: tbaiColLabel,
+        render: (row) => <FiscalStatusBadge status={statusMap?.[row.id]?.tbai ?? 'Pendiente'} loading={fiscalLoading && !statusMap} />,
+      });
+    }
+    if (targets.showVerifactu) {
+      fiscalCols.push({
+        key: '_vfStatus', type: 'custom', label: vfColLabel,
+        render: (row) => <FiscalStatusBadge status={statusMap?.[row.id]?.verifactu} loading={fiscalLoading && !statusMap} />,
+      });
+    }
+
+    return [
+      { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false },
+      {
+        key: 'documentNo', column: 'DocumentNo', type: 'string',
+        pill: {
+          when: (row) => isCreditNote(row),
+          label: t('creditNoteLabel'),
+          className: 'bg-purple-50 text-purple-700 border-purple-200',
+        },
       },
-    },
-    {
-      key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
-      render: (row) => {
-        const d = row.eTGODueDate;
-        if (!d) return <span className="text-muted-foreground">—</span>;
-        const state = getDueDateState(d, row.outstandingAmount);
-        return (
-          <span className="inline-flex items-center gap-1.5" style={getDueDateTextStyle(state)}>
-            <span className="inline-block h-2 w-2 rounded-full shrink-0" style={getDueDateDotStyle(state)} />
-            {formatCalendarDate(d, locale)}
-          </span>
-        );
+      {
+        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        render: (row) => {
+          const d = row.eTGODueDate;
+          if (!d) return <span className="text-muted-foreground">—</span>;
+          const state = getDueDateState(d, row.outstandingAmount);
+          return (
+            <span className="inline-flex items-center gap-1.5" style={getDueDateTextStyle(state)}>
+              <span className="inline-block h-2 w-2 rounded-full shrink-0" style={getDueDateDotStyle(state)} />
+              {formatCalendarDate(d, locale)}
+            </span>
+          );
+        },
       },
-    },
-    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
-    { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusColumn') },
-    { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-    { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
-    { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
-  ], [gl, locale]);
+      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
+      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusColumn') },
+      ...fiscalCols,
+      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
+      { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+      { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
+    ];
+  }, [gl, locale, targets, fiscalLoading, statusMap, siiColLabel, tbaiColLabel, vfColLabel]);
 
   // ─── Filter options ───────────────────────────────────────────
   const TYPE_OPTIONS = useMemo(() => [
@@ -108,13 +151,13 @@ export default function InvoiceHeaderTable(props) {
   }, [showPaymentDropdown]);
 
   const filteredData = useMemo(() => {
-    let rows = props.data;
+    let rows = data;
     if (!rows) return rows;
     if (typeFilter === 'credit-notes') rows = rows.filter(isCreditNote);
     else if (typeFilter === 'invoices') rows = rows.filter(r => !isCreditNote(r));
     if (paymentFilter !== 'all') rows = rows.filter(r => getPaymentFilter(r) === paymentFilter);
     return rows;
-  }, [props.data, typeFilter, paymentFilter]);
+  }, [data, typeFilter, paymentFilter]);
 
   const activePaymentLabel = PAYMENT_STATUS_OPTIONS.find(o => o.value === paymentFilter)?.label || t('allPayments');
 

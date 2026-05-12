@@ -14,6 +14,9 @@ import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
+import { useFiscalStatus } from './useFiscalStatus.js';
+import { StatusPill } from '@/windows/custom/fiscal-monitor/FmPrimitives.jsx';
+import { getInvoiceFiscalTargets } from './fiscalTargets.js';
 
 const ACCEPTED_TYPES = {
   'application/pdf': 'pdf',
@@ -564,6 +567,8 @@ export default function InvoicePreviewModal({ invoice, token, apiBaseUrl, window
                     specName={specName}
                     apiBaseUrl={apiBaseUrl}
                     token={token}
+                    orgId={orgId}
+                    profile={profile}
                     onAddPayment={() => setShowPaymentModal(true)}
                     onSend={openEmailModal}
                   />
@@ -752,9 +757,13 @@ function fmtPayDate(raw) {
 
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM']);
 
-function StatsPanel({ invoice, partnerName, badgeProps, statusLabel: sl, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isDraft, isFullyPaid, specName, apiBaseUrl, token, onAddPayment, onSend }) {
+function StatsPanel({ invoice, partnerName, badgeProps, statusLabel: sl, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isDraft, isFullyPaid, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
+  const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
+  const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
+    invoice?.id, specName, profile, apiBaseUrl, token, orgId,
+  );
   const [accountingAccount, setAccountingAccount] = useState(null);
 
   const invoiceDate = invoice.invoiceDate
@@ -802,6 +811,30 @@ function StatsPanel({ invoice, partnerName, badgeProps, statusLabel: sl, install
           <span className="text-gray-400">{ui('invoicePreviewStatus')}</span>
           <Badge {...badgeProps}>{sl}</Badge>
         </div>
+        {fiscalTargets.showSii && (
+          <div className="flex justify-between items-center py-1.5 text-sm">
+            <span className="text-gray-400">{ui('invoicePreview.fiscalStatus.sii')}</span>
+            {fiscalLoading
+              ? <span className="h-5 w-16 bg-gray-100 rounded animate-pulse inline-block" />
+              : <StatusPill estado={siiStatus ?? 'PE'} />}
+          </div>
+        )}
+        {fiscalTargets.showTbai && (
+          <div className="flex justify-between items-center py-1.5 text-sm">
+            <span className="text-gray-400">{ui('invoicePreview.fiscalStatus.tbai')}</span>
+            {fiscalLoading
+              ? <span className="h-5 w-16 bg-gray-100 rounded animate-pulse inline-block" />
+              : <StatusPill estado={tbaiStatus ?? 'Pendiente'} />}
+          </div>
+        )}
+        {fiscalTargets.showVerifactu && (
+          <div className="flex justify-between items-center py-1.5 text-sm">
+            <span className="text-gray-400">{ui('invoicePreview.fiscalStatus.verifactu')}</span>
+            {fiscalLoading
+              ? <span className="h-5 w-16 bg-gray-100 rounded animate-pulse inline-block" />
+              : <StatusPill estado={vfStatus ?? 'PE'} />}
+          </div>
+        )}
       </SectionCard>
 
       {/* Payments — title above card, dark underline titleRight */}

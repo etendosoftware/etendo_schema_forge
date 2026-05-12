@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { StatusPill, NumFactura, Pager, RowActionBtn } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, Pager, RowActionBtn, isErrorStatus } from './FmPrimitives.jsx';
 import {
   VF_SPEC,
   VF_ACEPTADAS_ENTITY,
@@ -18,6 +18,14 @@ const STATUS_ENTITIES = {
 };
 
 const INVOICE_FK_FIELD = 'invoice';
+
+function fmtDate(raw) {
+  if (!raw) return '—';
+  const parts = String(raw).split(/[-/]/);
+  if (parts.length !== 3) return raw;
+  const [a, b, c] = parts.map(p => p.trim());
+  return a.length === 4 ? `${c}/${b}/${a}` : `${a}/${b}/${c}`;
+}
 const PAGE_SIZE = 20;
 
 const STATUS_TABS = [
@@ -41,7 +49,7 @@ async function fetchStatusTab(base, entity, orgId, page, token) {
   return { data: json?.response?.data ?? [], totalRows: json?.response?.totalRows ?? 0 };
 }
 
-export default function VerifactuMonitorSection({ orgId, token, apiBaseUrl, initialTab = 'accepted', mockRows, onTabChange }) {
+export default function VerifactuMonitorSection({ orgId, token, apiBaseUrl, initialTab = 'accepted', mockRows, onTabChange, refreshKey = 0, onInvoiceOpen, onBpClick }) {
   const ui = useUI();
   const [activeTab, setActiveTab] = useState('accepted');
   const [page, setPage]     = useState(1);
@@ -69,7 +77,7 @@ export default function VerifactuMonitorSection({ orgId, token, apiBaseUrl, init
       .then(({ data, totalRows }) => { setRows(data); setTotalRows(totalRows); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [orgId, activeTab, page, token, apiBaseUrl, mockRows]);
+  }, [orgId, activeTab, page, token, apiBaseUrl, mockRows, refreshKey]);
 
   useEffect(() => { setPage(1); }, [activeTab]);
 
@@ -116,6 +124,7 @@ export default function VerifactuMonitorSection({ orgId, token, apiBaseUrl, init
               <thead>
                 <tr>
                   <th><input type="checkbox" /></th>
+                  <th className="sortable sorted">{ui('fiscalMonitor.col.date')}</th>
                   <th>{ui('fiscalMonitor.col.invoiceNumber')}</th>
                   <th>{ui('fiscalMonitor.col.issuerNIF')}</th>
                   <th>{ui('fiscalMonitor.col.type')}</th>
@@ -128,21 +137,30 @@ export default function VerifactuMonitorSection({ orgId, token, apiBaseUrl, init
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}>
+                    <td colSpan={9} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--fm-fg-3)' }}>
                       {ui('fiscalMonitor.empty')}
                     </td>
                   </tr>
                 ) : rows.map((row, i) => (
                   <tr key={row.id ?? i}>
                     <td><input type="checkbox" /></td>
+                    <td className="strong">{fmtDate(row.invoiceDate)}</td>
                     <td className="num-factura">
-                      <NumFactura n={row[INVOICE_FK_FIELD] ?? '—'} />
+                      <NumFactura
+                        n={row[INVOICE_FK_FIELD] ?? '—'}
+                        onOpen={() => onInvoiceOpen?.(row[INVOICE_FK_FIELD], 'sales-invoice')}
+                      />
                     </td>
                     <td className="mono">{row.issuerTaxID ?? '—'}</td>
                     <td>{row.typeOperation ?? '—'}</td>
                     <td className="mono">{row.cSV ?? '—'}</td>
                     <td>
-                      <StatusPill estado={row.verifactuSendingStatus ?? activeTab} />
+                      <StatusPill
+                        estado={row.verifactuSendingStatus ?? activeTab}
+                        onClick={isErrorStatus(row.verifactuSendingStatus ?? activeTab) && row.businessPartner
+                          ? () => onBpClick?.(row.businessPartner)
+                          : undefined}
+                      />
                     </td>
                     <td style={{ maxWidth: 280, color: row.errorReason ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12 }}>
                       {row.codeError ? `[${row.codeError}] ` : ''}{row.errorReason ?? '—'}

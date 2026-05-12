@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'PurchaseInvoiceHeaderTable.jsx'), 'utf8');
 
-const columnsBlock = src.match(/const columns = useMemo\(\(\) => \[([\s\S]*?)\], \[/);
+// Matches both arrow-expression form useMemo(() => [...], []) and block-body form
+// useMemo(() => { ... return [...]; }, [...]) — the source was refactored to the latter.
+const columnsBlock =
+  src.match(/const columns = useMemo\(\(\) => \{[\s\S]*?return \[([\s\S]*?)\];\s*\}/) ||
+  src.match(/const columns = useMemo\(\(\) => \[([\s\S]*?)\], \[/);
 
 const expectedKeysInOrder = [
   'invoiceDate',

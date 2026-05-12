@@ -10,8 +10,10 @@
     "hidePrint": true,
     "customComponents": {
       "topbarRight": "GoodsShipmentActions",
-      "bulkActions": "BulkInvoiceFromShipment"
+      "bulkActions": "BulkInvoiceFromShipment",
+      "bottomSection": "GoodsShipmentBottomPanel"
     },
+    "linesLayout": "inlineEditable",
     "menuActions": [],
     "processOverrides": {
       "documentAction": {

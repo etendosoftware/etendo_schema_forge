@@ -4,6 +4,7 @@ import InventoryTable from './InventoryTable';
 import InventoryForm from './InventoryForm';
 import InventoryLineTable from './InventoryLineTable';
 import InventoryLineForm from './InventoryLineForm';
+import PhysicalInventoryBottomPanel from '../../../custom/PhysicalInventoryBottomPanel';
 import InventoryMenuContent from '../../../custom/InventoryMenuContent';
 import catalogs from './mockCatalogs';
 
@@ -33,6 +34,10 @@ const processes = [
 // @sf-generated-start draftMode:inventory
 const draftMode = null;
 // @sf-generated-end draftMode:inventory
+
+// @sf-generated-start requiredHeaderFields:inventory
+const requiredHeaderFields = ['movementDate', 'name', 'warehouse', 'inventoryType'];
+// @sf-generated-end requiredHeaderFields:inventory
 
 // @sf-generated-start addLineFields:inventoryLine
 const addLineFields = {
@@ -196,7 +201,10 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        bottomSection={PhysicalInventoryBottomPanel}
         customMenuContent={InventoryMenuContent}
+        requiredHeaderFields={requiredHeaderFields}
+        linesLayout="inlineEditable"
         {...props}
       />
     );

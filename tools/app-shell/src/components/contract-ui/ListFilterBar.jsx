@@ -309,6 +309,7 @@ export function ListFilterBar({
         <Popover open={statusMenuOpen} onOpenChange={setStatusMenuOpen}>
           <PopoverTrigger asChild>
             <Button
+              data-testid="filter-status"
               variant="outline"
               size="sm"
               className={[
@@ -344,6 +345,7 @@ export function ListFilterBar({
         <Popover open={dateMenuOpen} onOpenChange={setDateMenuOpen}>
           <PopoverTrigger asChild>
             <Button
+              data-testid="filter-date"
               variant="outline"
               size="sm"
               className={[
@@ -440,6 +442,7 @@ export function ListFilterBar({
         <PopoverTrigger asChild>
           <button
             type="button"
+            data-testid="filter-advanced"
             title={ui('advancedFilters')}
             className="relative h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
           >

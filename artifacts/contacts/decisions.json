@@ -34,10 +34,11 @@
     ],
     "customComponents": {
       "headerTable": "ContactsTable",
-      "topbarRight": "ContactTypeToggle"
+      "topbarExtra": "ContactTypeToggle"
     },
     "hidePrint": true,
     "hideMoreMenu": true,
+    "linesLayout": "inlineEditable",
     "labelOverrides": {
       "en_US": {
         "Name": "Legal Name",
@@ -89,6 +90,7 @@
         "label": "Bank Account",
         "addLineFields": [
           "bankName",
+          "country",
           "bankFormat",
           "accountNo",
           "iBAN"
@@ -428,6 +430,7 @@
         },
         "position": {
           "visibility": "editable",
+          "grid": true,
           "section": "principal"
         },
         "active": {
@@ -490,6 +493,11 @@
     "bankAccount": {
       "fields": {
         "bankName": {
+          "visibility": "editable",
+          "grid": true,
+          "section": "principal"
+        },
+        "country": {
           "visibility": "editable",
           "grid": true,
           "section": "principal"

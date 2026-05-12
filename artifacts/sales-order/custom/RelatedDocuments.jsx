@@ -132,22 +132,10 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       });
   }, [recordId, token, apiBaseUrl, refreshKey]);
 
-  const refreshBtn = (
-    <button
-      type="button"
-      onClick={() => setRefreshKey(k => k + 1)}
-      title={ui('refresh')}
-      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`}>
-        <path d="M23 4v6h-6" /><path d="M1 20v-6h6" />
-        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-      </svg>
-    </button>
-  );
+  const onRefresh = () => setRefreshKey(k => k + 1);
 
   if (loading) {
-    return <RelatedDocumentsShell loading />;
+    return <RelatedDocumentsShell loading onRefresh={onRefresh} />;
   }
 
   const chips = [];
@@ -218,19 +206,9 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     );
   }
 
-  if (chips.length === 0) {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground/50">{ui('noRelatedDocuments')}</span>
-        {refreshBtn}
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <RelatedDocumentsShell loading={loading} onRefresh={onRefresh}>
       {chips}
-      {refreshBtn}
-    </div>
+    </RelatedDocumentsShell>
   );
 }

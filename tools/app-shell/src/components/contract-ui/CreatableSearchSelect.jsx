@@ -256,11 +256,12 @@ export function CreatableSearchSelect({
       </div>
 
       {showDropdown && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
+        <div data-testid={`options-${field.key}`} className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
           {/* Create action — always pinned at the top */}
           {createLabel && onCreateRequest && (
             <button
               type="button"
+              data-testid={`action-create-${field.key}`}
               className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-blue-50 border-b border-border/40 transition-colors"
               style={{ color: '#202452' }}
               onMouseDown={(e) => { e.preventDefault(); handleCreate(); }}

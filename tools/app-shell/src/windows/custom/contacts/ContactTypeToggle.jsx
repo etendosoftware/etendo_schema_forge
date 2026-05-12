@@ -54,7 +54,7 @@ export default function ContactTypeToggle({ data, recordId, token, apiBaseUrl })
 
   return (
     <div
-      className="flex items-center gap-1 p-1 rounded-xl"
+      className="flex items-center gap-1 p-1 h-10 rounded-xl"
       style={{ background: '#F5F7F9' }}
     >
       <button

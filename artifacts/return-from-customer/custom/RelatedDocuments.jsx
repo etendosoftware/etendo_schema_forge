@@ -6,11 +6,14 @@ import { useUI } from '@/i18n';
 export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
   const [shipments, setShipments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const ui = useUI();
 
   useEffect(() => {
     if (!recordId) { setLoading(false); return; }
+    setLoading(true);
+    setLoading(true);
 
     (async () => {
       try {
@@ -51,13 +54,13 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         setLoading(false);
       }
     })();
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, token, apiBaseUrl, refreshKey]);
 
   // Credit notes: pending backend — when the return generates a credit note,
   // the invoice will have C_Order_ID pointing to this return order.
 
   return (
-    <RelatedDocumentsShell loading={loading}>
+    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
       {shipments.map((s) => (
         <DocChip
           key={`ship-${s.id}`}

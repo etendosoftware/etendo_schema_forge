@@ -21,6 +21,7 @@ Use this window to register and complete outbound customer shipments. The functi
 - Visibility: visible in the Sales menu and not marked hidden in `tools/app-shell/src/menu.json`.
 - Implementation type: custom route entry in `tools/app-shell/src/windows/registry.js` that loads a generated `GoodsShipmentPage` plus shipment-specific custom actions (`GoodsShipmentActions`, `BulkInvoiceFromShipment`, `RelatedDocuments`).
 - Window shape: master-child window. The header entity is `goodsShipment` and the child entity is `goodsShipmentLine`.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. The add-line button, related-documents panel, notes panel, and totals panel are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
 
 ## Reactive behavior and dependencies
 

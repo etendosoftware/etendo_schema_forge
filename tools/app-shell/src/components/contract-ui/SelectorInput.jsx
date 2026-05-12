@@ -110,7 +110,7 @@ export function SelectorInput({
   const hasValue = value && baseOptions.some(opt => opt.id === value);
 
   const defaultTriggerClass = compact
-    ? 'h-8 text-sm focus:ring-2 focus:ring-primary'
+    ? 'w-full h-8 text-sm bg-white focus:ring-2 focus:ring-primary'
     : 'focus:ring-2 focus:ring-primary';
 
   // Radix shows the placeholder when value is undefined. Using undefined for

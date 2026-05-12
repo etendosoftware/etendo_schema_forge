@@ -5,6 +5,7 @@
     "name": "Purchase Invoice",
     "relatedDocuments": true,
     "notesField": "description",
+    "noHeaderBorder": true,
     "menuActions": [
       {
         "key": "reactivate",
@@ -15,6 +16,10 @@
         "successKey": "reactivated"
       }
     ],
+    "customComponents": {
+      "headerTable": "InvoiceHeaderTable",
+      "bottomSection": "PurchaseInvoiceBottomPanel"
+    },
     "processOverrides": {},
     "draftMode": {
       "enabled": true,
@@ -24,6 +29,7 @@
     },
     "dateFilterKey": "invoiceDate",
     "lineEntityConfig": "invoice",
+    "linesLayout": "inlineEditable",
     "labelOverrides": {
       "es_ES": {
         "POReference": "Nº documento",

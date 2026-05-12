@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useUI } from '@/i18n';
 import { DataTable } from '@/components/contract-ui';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -8,16 +9,16 @@ import * as mockData from '@generated/reports/generated/mockData';
 
 // -- Tab definitions ----------------------------------------------------------
 
-const TABS = [
-  { id: 'balanceSheet', label: 'Balance Sheet', title: 'Balance Sheet' },
-  { id: 'profitLoss', label: 'P&L', title: 'Profit & Loss' },
-  { id: 'agingReceivable', label: 'Aging Receivable', title: 'Aging of Receivables' },
-  { id: 'agingPayable', label: 'Aging Payable', title: 'Aging of Payables' },
-];
-
 // -- Component ----------------------------------------------------------------
 
 export default function ReportsPage() {
+  const ui = useUI();
+  const TABS = [
+    { id: 'balanceSheet', label: ui('balanceSheet'), title: ui('balanceSheet') },
+    { id: 'profitLoss', label: ui('profitLoss'), title: ui('profitLossTitle') },
+    { id: 'agingReceivable', label: ui('agingReceivable'), title: ui('agingReceivableTitle') },
+    { id: 'agingPayable', label: ui('agingPayable'), title: ui('agingPayableTitle') },
+  ];
   const [activeTab, setActiveTab] = useState('balanceSheet');
 
   const currentTab = TABS.find((t) => t.id === activeTab);

@@ -5,7 +5,11 @@
     "name": "Return Material Receipt",
     "relatedDocuments": true,
     "notesField": "description",
-    "dateFilterKey": "movementDate"
+    "dateFilterKey": "movementDate",
+    "linesLayout": "inlineEditable",
+    "customComponents": {
+      "bottomSection": "ReturnMaterialReceiptBottomPanel"
+    }
   },
   "entities": {
     "header": {

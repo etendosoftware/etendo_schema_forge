@@ -10,6 +10,10 @@
       "processField": "documentAction",
       "processValue": "CO",
       "label": "Confirmar"
+    },
+    "linesLayout": "inlineEditable",
+    "customComponents": {
+      "bottomSection": "GoodsReceiptBottomPanel"
     }
   },
   "entities": {

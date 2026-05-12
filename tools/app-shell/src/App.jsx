@@ -24,6 +24,7 @@ import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { CurrencyProvider } from './hooks/useCurrency.jsx';
+import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
 
 import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
 
@@ -120,7 +121,10 @@ async function loadAllMockData() {
 
 function AuthGuard({ children }) {
   const { isAuthenticated } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/onboarding" replace />;
+  const location = useLocation();
+  if (!isAuthenticated) {
+    return <Navigate to={buildOnboardingReturnTo(location)} replace />;
+  }
   return children;
 }
 

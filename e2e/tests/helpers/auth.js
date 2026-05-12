@@ -1,34 +1,31 @@
 /**
  * Authentication and navigation helpers for E2E tests.
  *
- * Two modes, selected automatically based on the BASE_URL env var:
+ * Two modes:
  *
- * Mock mode (default — no BASE_URL set, server started with make dev or make dev-mock):
+ * Mock mode (default when BASE_URL is not set, or E2E_USE_MOCK=1):
  *   Seeds localStorage with a fake token before React boots and intercepts /sws/*
  *   so useEntity never receives a 401 and never calls logout().
  *
- * Real Etendo mode (BASE_URL=http://localhost:8080/...):
- *   Uses the original login form + switchContext flow.
- *   Route interception is NOT applied so real API calls go through unchanged.
+ * Real Etendo mode (BASE_URL set, or E2E_USE_MOCK=0):
+ *   Uses the current onboarding login flow, then enters the first available environment.
  */
 
-const IS_MOCK_MODE = !process.env.BASE_URL;
+const MOCK_MODE_OVERRIDE = process.env.E2E_USE_MOCK;
+const IS_MOCK_MODE = MOCK_MODE_OVERRIDE === '1' || (MOCK_MODE_OVERRIDE !== '0' && !process.env.BASE_URL);
 
-/** Default role/org for real-backend tests */
-export const DEFAULT_ROLE = 'F&B International Group Admin';
-export const DEFAULT_ORG = 'F&B España - Región Norte';
+export const DEFAULT_USER = process.env.E2E_USER || 'goadmin@etendo.software';
+export const DEFAULT_LOGIN_PASS = process.env.E2E_PASSWORD || '';
 
 /**
  * Authenticate for E2E tests.
  *
  * In mock mode: seeds localStorage + intercepts /sws/* API calls.
- * In real mode: fills the login form and switches role/org context.
+ * In real mode: fills the onboarding login form and enters the first available environment.
  */
 export async function login(page, {
-  user = 'admin',
-  password = 'admin',
-  role = DEFAULT_ROLE,
-  org = DEFAULT_ORG,
+  user = DEFAULT_USER,
+  password = DEFAULT_LOGIN_PASS,
 } = {}) {
   if (IS_MOCK_MODE) {
     // Inject token before React boots so AuthContext.isAuthenticated = true.
@@ -46,7 +43,19 @@ export async function login(page, {
     await page.route('**/sws/**', (route) => {
       const url = route.request().url();
       const method = route.request().method();
-      if (url.includes('/selectors/')) {
+      if (url.includes('/sws/neo/session')) {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ currencyCode: 'EUR' }),
+        });
+      } else if (url.includes('/sws/neo/dashboard/')) {
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ response: { data: [] } }),
+        });
+      } else if (url.includes('/selectors/')) {
         route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -56,7 +65,11 @@ export async function login(page, {
         route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ updates: { quantityCount: 42, bookQuantity: 42 }, combos: {}, messages: [] }),
+          body: JSON.stringify({
+            updates: { quantityCount: { value: 42 }, bookQuantity: { value: 42 } },
+            combos: {},
+            messages: [],
+          }),
         });
       } else if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
         route.fulfill({
@@ -75,62 +88,42 @@ export async function login(page, {
 
     await page.goto('/dashboard');
     await page.waitForURL('**/dashboard', { timeout: 10_000 });
-  } else {
-    // Real Etendo mode: login form + context switch
-    await page.goto('/login');
-    await page.getByRole('textbox', { name: 'Username' }).fill(user);
-    await page.getByRole('textbox', { name: 'Password' }).fill(password);
-    await page.getByRole('button', { name: 'Sign in' }).click();
-    await page.waitForURL('**/dashboard', { timeout: 15_000 });
-    await switchContext(page, role, org);
+    return;
   }
+
+  if (!password) {
+    throw new Error('Set E2E_PASSWORD for real-backend E2E login, or set E2E_USE_MOCK=1 for mock mode.');
+  }
+
+  await page.goto('/onboarding');
+
+  const dashboardReady = await page.waitForURL('**/dashboard', { timeout: 2_000 }).then(() => true).catch(() => false);
+  if (dashboardReady) return;
+
+  const switchToLogin = page.getByTestId('action-switch-to-login');
+  if (await switchToLogin.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await switchToLogin.click();
+  }
+
+  await page.locator('#login-email').fill(user);
+  await page.locator('#login-password').fill(password);
+  await page.getByTestId('action-login-submit').click();
+
+  await expectAnyEnvironmentOrDashboard(page);
+
+  if (page.url().includes('/dashboard')) return;
+
+  const enterButton = page.locator('[data-testid^="action-enter-environment-"]').first();
+  await enterButton.click({ timeout: 30_000 });
+  await page.waitForURL('**/dashboard', { timeout: 30_000 });
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
-/**
- * Switch role and organization via the context switcher popover.
- *
- * The Etendo logo button (img[alt="Etendo"]) is always visible regardless
- * of sidebar state. Clicking it opens the context popover with Role/Org selects.
- */
-export async function switchContext(page, role, org) {
-  // Click the Etendo logo to open the context switcher popover
-  const logoButton = page.locator('button:has(img[alt="Etendo"])');
-  await logoButton.click({ timeout: 5_000 });
-
-  // The popover renders two <select> elements: Role (first) and Organization (second)
-  const roleSelect = page.locator('select').first();
-  await roleSelect.waitFor({ state: 'visible', timeout: 5_000 });
-  await roleSelect.selectOption({ label: role });
-  await page.waitForTimeout(300);
-
-  // Org select updates based on the selected role
-  const orgSelect = page.locator('select').nth(1);
-  await orgSelect.selectOption({ label: org });
-  await page.waitForTimeout(300);
-
-  // Click Apply (only appears when there are changes)
-  const applyButton = page.getByRole('button', { name: 'Apply' });
-  try {
-    if (await applyButton.isVisible({ timeout: 2_000 })) {
-      await applyButton.click();
-      // Wait for the context to settle — Apply may trigger a re-render or reload
-      await page.waitForLoadState('domcontentloaded', { timeout: 5_000 }).catch(() => {});
-      await page.waitForTimeout(500);
-    }
-  } catch {
-    // Apply not visible means context was already correct
-  }
-
-  // Close the popover by clicking outside (if still open)
-  try {
-    const backdrop = page.locator('.fixed.inset-0');
-    if (await backdrop.isVisible({ timeout: 500 }).catch(() => false)) {
-      await backdrop.click();
-    }
-  } catch {
-    // Popover already closed
-  }
-  await page.waitForTimeout(200);
+async function expectAnyEnvironmentOrDashboard(page) {
+  await Promise.race([
+    page.waitForURL('**/dashboard', { timeout: 30_000 }),
+    page.locator('[data-testid^="action-enter-environment-"]').first().waitFor({ state: 'visible', timeout: 30_000 }),
+  ]);
 }
 
 /**

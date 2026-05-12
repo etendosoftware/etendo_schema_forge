@@ -9,7 +9,9 @@ const src = readFileSync(join(__dirname, '..', 'InvoiceHeaderTable.jsx'), 'utf8'
 
 // Extract the columns array literal so order-sensitive assertions don't have
 // to fight the surrounding JSX or render closures.
-const columnsBlock = src.match(/const columns = useMemo\(\(\) => \[([\s\S]*?)\], \[/);
+const columnsBlock =
+  src.match(/const columns = useMemo\(\(\) => \{[\s\S]*?return \[([\s\S]*?)\];\s*\}/) ||
+  src.match(/const columns = useMemo\(\(\) => \[([\s\S]*?)\], \[/);
 
 const expectedKeysInOrder = [
   'invoiceDate',

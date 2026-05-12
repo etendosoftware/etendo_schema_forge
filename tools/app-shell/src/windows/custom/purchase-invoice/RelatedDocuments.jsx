@@ -28,6 +28,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const [receipts, setReceipts] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const ui = useUI();
 
@@ -48,7 +49,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         setPayments(paymentResults);
       })
       .finally(() => setLoading(false));
-  }, [recordId, data?.salesOrder, token, apiBaseUrl]);
+  }, [recordId, data?.salesOrder, token, apiBaseUrl, refreshKey]);
 
   const chips = [];
 
@@ -101,7 +102,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   }
 
   return (
-    <RelatedDocumentsShell loading={loading}>
+    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
       {chips}
     </RelatedDocumentsShell>
   );

@@ -130,6 +130,40 @@
   animation: slide-out-to-right 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+/* Lines selection bar: subtle "appears from the chart side" animation.
+   The bar already overlays the full table width, so a translateX(100%) slide
+   would feel like it travels across the screen. A short 40 px nudge + fade
+   reads as "materialising on the right edge". */
+@keyframes lines-bar-appear {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.lines-bar-appear {
+  animation: lines-bar-appear 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes lines-bar-dismiss {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+
+.lines-bar-dismiss {
+  animation: lines-bar-dismiss 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 @keyframes slide-in-from-left {
   from { transform: translateX(-100%); }
   to   { transform: translateX(0); }

@@ -16,7 +16,11 @@
         "displayLogicRaw": "@documentStatus@='DR'"
       }
     },
-    "dateFilterKey": "orderDate"
+    "dateFilterKey": "orderDate",
+    "linesLayout": "inlineEditable",
+    "customComponents": {
+      "bottomSection": "ReturnFromCustomerBottomPanel"
+    }
   },
   "entities": {
     "header": {

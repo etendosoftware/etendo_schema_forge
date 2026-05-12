@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import { toast } from 'sonner';
 import { INVOICE_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
-import HeaderTable from './HeaderTable';
+import HeaderTable from '../../../custom/InvoiceHeaderTable';
 import HeaderForm from './HeaderForm';
 import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
@@ -15,6 +15,7 @@ import AccountingForm from './AccountingForm';
 import ReversedInvoicesTable from './ReversedInvoicesTable';
 import ReversedInvoicesForm from './ReversedInvoicesForm';
 import RelatedDocuments from '@/windows/custom/purchase-invoice/RelatedDocuments';
+import PurchaseInvoiceBottomPanel from '../../../custom/PurchaseInvoiceBottomPanel';
 import catalogs from './mockCatalogs';
 
 
@@ -62,6 +63,10 @@ const draftMode = {
   "label": "Confirm"
 };
 // @sf-generated-end draftMode:header
+
+// @sf-generated-start requiredHeaderFields:header
+const requiredHeaderFields = ['invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'paymentMethod'];
+// @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
 const addLineFields = {
@@ -868,14 +873,18 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
           { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm },
           { key: 'reversedInvoices', label: 'Reversed Invoices', Table: ReversedInvoicesTable, Form: ReversedInvoicesForm },
         ]}
+        noHeaderBorder
         notesField="description"
         customTabs={[{ key: 'related', label: 'Related Documents', Component: RelatedDocuments }]}
+        bottomSection={PurchaseInvoiceBottomPanel}
         menuActions={({ status }) => [
           { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', documentAction: 'RE',  }
         ]}
         draftMode={draftMode}
+        requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         lineConfig={INVOICE_LINE_CONFIG}
+        linesLayout="inlineEditable"
         {...props}
       />
     );

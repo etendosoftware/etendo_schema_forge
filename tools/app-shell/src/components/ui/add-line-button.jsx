@@ -51,18 +51,23 @@ const DISABLED_OVERLAY = { opacity: 0.5, cursor: 'not-allowed' };
  *                  When provided, the chevron opens a dropdown with these items.
  *                  When omitted, the chevron falls back to triggering `onClick`.
  */
-export function AddLineButton({ onClick, label, disabled = false, menuActions }) {
+export function AddLineButton({ onClick, label, disabled = false, menuActions, hideChevron = false }) {
   const ui = useUI();
   const hasMenu = Array.isArray(menuActions) && menuActions.length > 0;
+
+  const primaryStyle = hideChevron
+    ? { ...PRIMARY_STYLE, borderRadius: 7 }
+    : PRIMARY_STYLE;
 
   const primaryButton = (
     <button
       type="button"
+      data-testid="action-add-line"
       onClick={onClick}
       disabled={disabled}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.backgroundColor = '#F9FAFB'; }}
       onMouseLeave={(e) => { if (!disabled) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
-      style={{ ...PRIMARY_STYLE, ...(disabled ? DISABLED_OVERLAY : null) }}
+      style={{ ...primaryStyle, ...(disabled ? DISABLED_OVERLAY : null) }}
     >
       <Plus size={20} color={ICON_COLOR} strokeWidth={2} />
       <span>{label}</span>
@@ -72,6 +77,7 @@ export function AddLineButton({ onClick, label, disabled = false, menuActions })
   const chevronButton = (
     <button
       type="button"
+      data-testid="action-add-line-more"
       disabled={disabled}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.backgroundColor = '#F9FAFB'; }}
       onMouseLeave={(e) => { if (!disabled) e.currentTarget.style.backgroundColor = '#FFFFFF'; }}
@@ -85,29 +91,33 @@ export function AddLineButton({ onClick, label, disabled = false, menuActions })
   return (
     <span style={GROUP_STYLE}>
       {primaryButton}
-      <span style={DIVIDER_STYLE} />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>{chevronButton}</DropdownMenuTrigger>
-        <DropdownMenuContent align="end" sideOffset={4}>
-          {hasMenu ? (
-            menuActions.map((action) => (
-              <DropdownMenuItem
-                key={action.key ?? action.label}
-                onSelect={action.onClick}
-                disabled={action.disabled}
-                className={action.destructive ? 'text-destructive focus:text-destructive' : undefined}
-              >
-                {action.icon ? <span className="mr-2 inline-flex">{action.icon}</span> : null}
-                {action.label}
-              </DropdownMenuItem>
-            ))
-          ) : (
-            <DropdownMenuItem disabled className="text-xs italic text-muted-foreground">
-              {ui('noAdditionalActions')}
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {!hideChevron && (
+        <>
+          <span style={DIVIDER_STYLE} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>{chevronButton}</DropdownMenuTrigger>
+            <DropdownMenuContent align="start" sideOffset={4} className="min-w-[200px]">
+              {hasMenu ? (
+                menuActions.map((action) => (
+                  <DropdownMenuItem
+                    key={action.key ?? action.label}
+                    onSelect={action.onClick}
+                    disabled={action.disabled}
+                    className={action.destructive ? 'text-destructive focus:text-destructive' : undefined}
+                  >
+                    {action.icon ? <span className="mr-2 inline-flex">{action.icon}</span> : null}
+                    {action.label}
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <DropdownMenuItem disabled className="text-xs italic text-muted-foreground">
+                  {ui('noAdditionalActions')}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
     </span>
   );
 }

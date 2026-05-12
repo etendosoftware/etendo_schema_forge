@@ -13,11 +13,13 @@ import { useUI } from '@/i18n';
 export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const ui = useUI();
 
   useEffect(() => {
     if (!recordId || !token || !apiBaseUrl) { setLoading(false); return; }
+    setLoading(true);
 
     const base = neoBase(apiBaseUrl);
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -67,10 +69,10 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       } catch { /* silent */ }
       finally { setLoading(false); }
     })();
-  }, [recordId, token, apiBaseUrl]);
+  }, [recordId, token, apiBaseUrl, refreshKey]);
 
   return (
-    <RelatedDocumentsShell loading={loading}>
+    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
       {docs.map(inv => (
         <DocChip
           key={inv.id}

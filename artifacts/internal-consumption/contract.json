@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-04-29T19:05:49.589Z",
-  "updatedAt": "2026-05-05T18:50:41.118Z",
-  "checksum": "2ce192a9eeb092c2",
+  "updatedAt": "2026-05-11T16:22:46.629Z",
+  "checksum": "662e84d7bcb288e6",
   "frontendContract": {
     "window": {
       "id": "800076",
@@ -11,11 +11,13 @@
       "category": "inventory",
       "breadcrumb": "Inventory / Internal Consumption",
       "customComponents": {
-        "moreMenuContent": "InternalConsumptionActions"
+        "moreMenuContent": "InternalConsumptionActions",
+        "bottomSection": "InternalConsumptionBottomPanel"
       },
       "statusField": "status",
       "dateFilterKey": "movementDate",
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "internalConsumption": {
@@ -236,10 +238,12 @@
       "category": "inventory",
       "breadcrumb": "Inventory / Internal Consumption",
       "customComponents": {
-        "moreMenuContent": "InternalConsumptionActions"
+        "moreMenuContent": "InternalConsumptionActions",
+        "bottomSection": "InternalConsumptionBottomPanel"
       },
       "statusField": "status",
-      "dateFilterKey": "movementDate"
+      "dateFilterKey": "movementDate",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "internalConsumption": {

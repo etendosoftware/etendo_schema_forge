@@ -4,6 +4,7 @@ import { KPIHeader, KanbanBoard, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Users, Calendar, UserPlus, Clock, Bell, ArrowUp, ArrowDown } from 'lucide-react';
+import { useUI } from '@/i18n';
 
 import { sections } from '@generated/hr/generated/config';
 import * as mockData from '@generated/hr/generated/mockData';
@@ -34,6 +35,7 @@ const HR_FEED = mockData.hrUpdates;
 
 export default function HrPage() {
   const navigate = useNavigate();
+  const ui = useUI();
   const [cards, setCards] = useState(INITIAL_CARDS);
 
   const handleDragEnd = useCallback((cardId, _fromColumnId, toColumnId) => {
@@ -62,7 +64,7 @@ export default function HrPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-muted-foreground" />
-                Employee Directory
+                {ui('employeeDirectory')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -92,7 +94,7 @@ export default function HrPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Bell className="h-5 w-5 text-muted-foreground" />
-            HR Updates
+            {ui('hrUpdates')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

@@ -5,7 +5,11 @@
     "name": "Payment Out",
     "relatedDocuments": true,
     "notesField": "description",
-    "dateFilterKey": "paymentDate"
+    "dateFilterKey": "paymentDate",
+    "linesLayout": "inlineEditable",
+    "customComponents": {
+      "bottomSection": "PaymentOutBottomPanel"
+    }
   },
   "entities": {
     "header": {

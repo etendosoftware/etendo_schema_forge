@@ -192,7 +192,13 @@ export function generateTableComponent(entityName, contract) {
     if (f.cellType === 'depreciationProgress') renderPart = ', render: renderDepreciationProgress';
     else if (f.cellType === 'taxRate') renderPart = ', render: renderTaxRate';
     else if (f.cellType === 'taxScope') renderPart = `, render: (row) => renderTaxScope(row, '${f.name}')`;
-    return `  { key: '${f.name}', column: '${f.column}', type: '${type}'${labelsPart}${labelPart}${enumLabelsPart}${enumVariantsPart}${selectionPart}${togglePart}${badgePart}${badgeLabelsPart}${badgeColorsPart}${badgeVariantsPart}${summablePart}${displayPart}${renderPart} },`;
+    // Flags consumed by InlineLinesPanel to drive inline-edit affordances:
+    //  - required → suppress the empty option in the SelectorInput dropdown.
+    //  - lookup / popup → swap the dropdown for a ProductSearchDrawer modal.
+    const requiredPart = f.required ? ', required: true' : '';
+    const lookupPart = f.lookup ? ', lookup: true' : '';
+    const popupPart = f.popup ? ', popup: true' : '';
+    return `  { key: '${f.name}', column: '${f.column}', type: '${type}'${labelsPart}${labelPart}${enumLabelsPart}${enumVariantsPart}${selectionPart}${togglePart}${badgePart}${badgeLabelsPart}${badgeColorsPart}${badgeVariantsPart}${summablePart}${displayPart}${renderPart}${requiredPart}${lookupPart}${popupPart} },`;
   }).join('\n');
 
   const filtersArray = searchableFields.map(f => `'${f}'`).join(', ');
@@ -245,7 +251,8 @@ function TaxScopeCell({ row, fieldKey }) {
   const needsUiImport = neededCellTypes.has('taxScope');
   const uiImport = needsUiImport ? `import { useUI } from '@/i18n';\n` : '';
 
-  return `import { DataTable } from '@/components/contract-ui';
+  return `import { forwardRef } from 'react';
+import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 ${tagImport}${uiImport}${depreciationProgressHelper}${taxRateHelper}${taxScopeHelper}
 ${MARKERS.GENERATED_START(`columns:${entityName}`)}
 const columns = [
@@ -256,9 +263,19 @@ ${MARKERS.GENERATED_END(`columns:${entityName}`)}
 const filters = [${filtersArray}];
 
 ${MARKERS.GENERATED_START(`component:${compName}`)}
-export default function ${compName}(props) {
+const ${compName} = forwardRef(function ${compName}(props, ref) {
+  // Inline-editable layout owns rendering of the existing rows. The add-line flow keeps
+  // using the proven DataTable inline-add row (callouts, focus management, defaults) —
+  // when addRow.active flips on, we hand off to DataTable so the user can fill the new
+  // line, then return to InlineLinesPanel once addRow.active flips off again. The ref
+  // is forwarded so DetailView can imperatively flush pending edits on global save.
+  if (props.linesLayout === 'inlineEditable' && !props.addRow?.active) {
+    return <InlineLinesPanel ref={ref} columns={columns} {...props} />;
+  }
   return <DataTable columns={columns} filters={filters} {...props} />;
-}
+});
+
+export default ${compName};
 ${MARKERS.GENERATED_END(`component:${compName}`)}
 `;
 }
@@ -519,6 +536,20 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   // Status field gets a badge in the header; summary strip uses only fields with explicit section:'summary'.
   // Prefer DocStatus column (document workflow status) if present, even when form:false.
   const allEntityFields = contract.frontendContract.entities[headerEntity]?.fields ?? [];
+
+  // Required form fields on the header. DetailView uses this as the default
+  // gate for "+ Añadir línea" — the button only appears when all of these are
+  // filled in `data`. Windows can still override with their own addLineGuard
+  // prop for more complex business rules.
+  const requiredHeaderFieldNames = allEntityFields
+    .filter(f => f.required && f.form && f.visibility !== 'discarded' && f.visibility !== 'system')
+    .map(f => f.name);
+  // Built without a nested template literal (Sonar S4624): plain concat
+  // around each name keeps the outer template flat.
+  const quotedRequiredHeaderFields = requiredHeaderFieldNames.map(n => "'" + n + "'").join(', ');
+  const requiredHeaderFieldsArray = requiredHeaderFieldNames.length > 0
+    ? `[${quotedRequiredHeaderFields}]`
+    : '[]';
   const docStatusField = allEntityFields.find(f => f.column === 'DocStatus');
   const statusFieldOverride = contract.frontendContract.window.statusField;
   const statusField = statusFieldOverride
@@ -671,6 +702,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const hideMoreMenu = windowConfig.hideMoreMenu ?? false;
   const hideMoreDetails = windowConfig.hideMoreDetails ?? false;
   const noHeaderBorder = windowConfig.noHeaderBorder ?? false;
+  const linesLayout = windowConfig.linesLayout ?? 'classic';
   const listViewOptions = windowConfig.listViewOptions ?? null;
   const listBaseFilter = windowConfig.listBaseFilter ?? null;
   const quickFilters = windowConfig.quickFilters ?? null;
@@ -830,6 +862,11 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const hideMoreDetailsProp = hideMoreDetails ? '\n        hideMoreDetails' : '';
   // noHeaderBorder prop (DetailView)
   const noHeaderBorderProp = noHeaderBorder ? '\n        noHeaderBorder' : '';
+  // linesLayout prop (DetailView). Only emit when non-default to keep generated
+  // output diff-free for windows that don't opt in.
+  const linesLayoutProp = linesLayout && linesLayout !== 'classic'
+    ? `\n        linesLayout="${linesLayout}"`
+    : '';
   // listViewOptions props
   const listViewOptionsProp = listViewOptions
     ? `\n      listViewOptions={${JSON.stringify(listViewOptions)}}`
@@ -949,6 +986,9 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
     ? JSON.stringify(draftModeConfig, null, 2)
     : 'null';
   const draftModeProp = draftModeConfig?.enabled ? '\n        draftMode={draftMode}' : '';
+  const requiredHeaderFieldsProp = requiredHeaderFieldNames.length > 0
+    ? '\n        requiredHeaderFields={requiredHeaderFields}'
+    : '';
 
   // entityLabel / detailLabel / detailTabIndex from window decisions config
   const entityLabel = windowConfig.entityLabel || toLabel(headerEntity);
@@ -1124,6 +1164,10 @@ ${MARKERS.GENERATED_START(`draftMode:${headerEntity}`)}
 const draftMode = ${draftModeValue};
 ${MARKERS.GENERATED_END(`draftMode:${headerEntity}`)}
 
+${MARKERS.GENERATED_START(`requiredHeaderFields:${headerEntity}`)}
+const requiredHeaderFields = ${requiredHeaderFieldsArray};
+${MARKERS.GENERATED_END(`requiredHeaderFields:${headerEntity}`)}
+
 ${detailEntity ? `${MARKERS.GENERATED_START(`addLineFields:${detailEntity}`)}
 const addLineFields = {
   entry: [
@@ -1159,7 +1203,7 @@ export default function ${compName}({ windowName, recordId, ...props }) {${custo
         detailLabel="${entityDetailLabel}"` : ''}
         windowName={windowName}
         recordId={recordId}
-        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${primaryTabsProp}${othersLabelProp}${documentPreviewProp}${hideDeleteProp}${hidePrintProp}${hideSaveStatusesProp}${hideMoreMenuProp}${hideMoreDetailsProp}${noHeaderBorderProp}${contentBgProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${headerContentProp}${detailSortByProp}${titleFieldProp}${salesThemeProp}${disableProcessedLockProp}${statusEnumLabelsProp}${showDetailFooterTotalsProp}${labelOverridesProp}${lineConfigProp}
+        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${primaryTabsProp}${othersLabelProp}${documentPreviewProp}${hideDeleteProp}${hidePrintProp}${hideSaveStatusesProp}${hideMoreMenuProp}${hideMoreDetailsProp}${noHeaderBorderProp}${contentBgProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${requiredHeaderFieldsProp}${headerContentProp}${detailSortByProp}${titleFieldProp}${salesThemeProp}${disableProcessedLockProp}${statusEnumLabelsProp}${showDetailFooterTotalsProp}${labelOverridesProp}${lineConfigProp}${linesLayoutProp}
         {...props}${sidebarContentProp}
       />
     );

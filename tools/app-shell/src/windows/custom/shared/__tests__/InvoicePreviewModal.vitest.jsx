@@ -170,12 +170,12 @@ describe('InvoicePreviewModal', () => {
   });
 
   it('shows Send to SIF in the preview actions when the fiscal profile enables it', () => {
-    renderPreview();
+    renderPreview({ specName: 'sales-invoice' });
     expect(screen.getByText('sendToSif')).toBeInTheDocument();
   });
 
   it('opens the SIF confirmation modal from the preview action', () => {
-    renderPreview();
+    renderPreview({ specName: 'sales-invoice' });
     fireEvent.click(screen.getByText('sendToSif'));
     expect(screen.getByText('sendToSifTitle')).toBeInTheDocument();
     expect(screen.getByText('sendToSifBodyTbai')).toBeInTheDocument();
@@ -209,14 +209,14 @@ describe('InvoicePreviewModal', () => {
         json: () => Promise.resolve({ response: { data: [] } }),
       });
 
-    renderPreview();
+    renderPreview({ specName: 'sales-invoice' });
     fireEvent.click(screen.getByText('sendToSif'));
     fireEvent.click(screen.getByText('sendToSifConfirm'));
 
     await screen.findByRole('button', { name: 'close' });
 
-    expect(screen.getByText(/Purchase Invoice INV-001/i)).toBeInTheDocument();
-    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'purchase-invoice:invoice-updated' }));
+    expect(screen.getByText(/Sales Invoice INV-001/i)).toBeInTheDocument();
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'sales-invoice:invoice-updated' }));
   });
 
   it('shows empty messages panel when messages tab is clicked', () => {

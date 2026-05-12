@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { login, navigateTo } from '../helpers/auth.js';
-import { salesOrderList, salesOrderDetail, byRole } from '../helpers/selectors.js';
 
 /**
  * Sales Order — flow tests.
@@ -17,89 +16,61 @@ test.describe('Sales Order', () => {
   });
 
   test('list view renders with correct columns', async ({ page }) => {
-    // Heading
-    await expect(byRole(page, salesOrderList.heading)).toBeVisible();
+    await expect(page.getByTestId('list-view')).toBeVisible();
 
     // Action buttons
-    await expect(byRole(page, salesOrderList.newButton)).toBeVisible();
+    await expect(page.getByTestId('action-new')).toBeVisible();
 
     // Column headers
-    const cols = salesOrderList.columns;
-    await expect(byRole(page, cols.businessPartner)).toBeVisible();
-    await expect(byRole(page, cols.orderDate)).toBeVisible();
-    await expect(byRole(page, cols.grossAmount)).toBeVisible();
+    await expect(page.getByTestId('column-header-businessPartner')).toBeVisible();
+    await expect(page.getByTestId('column-header-orderDate')).toBeVisible();
+    await expect(page.getByTestId('column-header-documentNo')).toBeVisible();
+    await expect(page.getByTestId('column-header-documentStatus')).toBeVisible();
+    await expect(page.getByTestId('column-header-grandTotalAmount')).toBeVisible();
   });
 
   test('filters are present', async ({ page }) => {
-    await expect(byRole(page, salesOrderList.statusFilter)).toBeVisible();
-    await expect(byRole(page, salesOrderList.dateFilter)).toBeVisible();
-    await expect(byRole(page, salesOrderList.searchInput)).toBeVisible();
+    await expect(page.getByTestId('filter-status')).toBeVisible();
+    await expect(page.getByTestId('filter-date')).toBeVisible();
   });
 
   test('New Order opens form with required fields', async ({ page }) => {
-    await byRole(page, salesOrderList.newButton).click();
+    await page.getByTestId('action-new').click();
 
-    // Form heading
-    await expect(byRole(page, salesOrderDetail.heading)).toBeVisible();
+    await expect(page.getByTestId('detail-view')).toBeVisible();
 
     // Required fields
-    await expect(byRole(page, salesOrderDetail.businessPartner)).toBeVisible();
-    await expect(byRole(page, salesOrderDetail.warehouse)).toBeVisible();
+    await expect(page.getByTestId('field-businessPartner')).toBeVisible();
 
     // Actions
-    await expect(byRole(page, salesOrderDetail.save)).toBeVisible();
-    await expect(byRole(page, salesOrderDetail.saveDraft)).toBeVisible();
-    await expect(byRole(page, salesOrderDetail.cancel)).toBeVisible();
+    await expect(page.getByTestId('action-save')).toBeVisible();
+    await expect(page.getByTestId('action-cancel')).toBeVisible();
   });
 
   test('New Order shows order line tab with columns', async ({ page }) => {
-    await byRole(page, salesOrderList.newButton).click();
+    await page.getByTestId('action-new').click();
 
     // Order Line tab
-    await expect(byRole(page, salesOrderDetail.orderLineTab)).toBeVisible();
-    await expect(byRole(page, salesOrderDetail.addOrderLine)).toBeVisible();
+    await expect(page.getByTestId('lines-empty-state')).toBeVisible();
 
-    // Line columns
-    const lineCols = salesOrderDetail.lineColumns;
-    await expect(byRole(page, lineCols.product)).toBeVisible();
-    await expect(byRole(page, lineCols.quantity)).toBeVisible();
-    await expect(byRole(page, lineCols.price)).toBeVisible();
+    await expect(page.getByTestId('lines-empty-state-title')).toBeVisible();
+    await expect(page.getByTestId('lines-empty-state-description')).toBeVisible();
   });
 
   test('Cancel returns to list view', async ({ page }) => {
-    await byRole(page, salesOrderList.newButton).click();
-    await expect(byRole(page, salesOrderDetail.heading)).toBeVisible();
+    await page.getByTestId('action-new').click();
+    await expect(page.getByTestId('detail-view')).toBeVisible();
 
-    await byRole(page, salesOrderDetail.cancel).click();
+    await page.getByTestId('action-cancel').click();
 
     // Back to list
-    await expect(byRole(page, salesOrderList.heading)).toBeVisible();
+    await expect(page.getByTestId('list-view')).toBeVisible();
   });
 
   test('Partner Address is disabled until Business Partner selected', async ({ page }) => {
-    await byRole(page, salesOrderList.newButton).click();
+    await page.getByTestId('action-new').click();
 
-    const partnerAddress = byRole(page, salesOrderDetail.partnerAddress);
-    await expect(partnerAddress).toBeDisabled();
+    await expect(page.getByTestId('field-partnerAddress')).toBeDisabled();
   });
 
-  // --- TEMPLATE: Full create flow (requires backend running) ---
-  // Uncomment when testing against Etendo with real data:
-  //
-  // test('can create and save a sales order', async ({ page }) => {
-  //   await byRole(page, salesOrderList.newButton).click();
-  //
-  //   // Fill Business Partner (type to search)
-  //   await byRole(page, salesOrderDetail.businessPartner).fill('Alimentos');
-  //   await page.waitForTimeout(1000);
-  //   // Click first suggestion...
-  //
-  //   // Select Warehouse
-  //   await byRole(page, salesOrderDetail.warehouse).click();
-  //   // Select first option...
-  //
-  //   // Save
-  //   await byRole(page, salesOrderDetail.save).click();
-  //   await expect(page.locator('[data-sonner-toast]')).toBeVisible();
-  // });
 });

@@ -20,6 +20,7 @@ Goods Movements should let an inventory user register a stock transfer from one 
 - **Visibility:** visible from the Inventory menu as **Goods Movement**
 - **Implementation type:** custom window wrapper at `tools/app-shell/src/windows/custom/goods-movements/index.jsx`, registered in `customLoaders` in `tools/app-shell/src/windows/registry.js`. The wrapper supplies an explicit `COLUMNS` array to `MovementTable` and passes a `CustomMovementTable` to `GeneratedApp`.
 - **Window shape:** master-child. The list route shows movement headers; the record route shows one `movement` header with child `movementLine` rows.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. The add-line button and any related panels are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
 - **List behavior:** the list shows Name, Movement Date, Document No., and Status columns. Movement Date has `dot: false` so no red/green date dot appears on that column. Filters are available on Name and Movement Date.
 - **Record behavior:** the header form exposes Name, Movement Date, Description, and read-only Document No. The detail area manages movement lines with Line No., Product, Movement Quantity, UOM, Storage Bin, and New Storage Bin.
 

@@ -88,6 +88,7 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `statusBar` | object | `null` | See below | Generates a summary status bar above the detail form showing key numeric fields and an optional progress indicator. |
 | `subsetFilters` | array | `null` | See below | Segmented, radio-style filter above the list. One is always active, mutually exclusive, applied before any other filter. Ideal for "which universe am I looking at" selectors (e.g., All / Customers / Vendors). |
 | `quickFilters` | array | `null` | See below | Independent toggle pills above the list. Each can be on/off; multiple can be active simultaneously. Combined with the active subset and column filters using AND. Ideal for "refinements" (e.g., only overdue, only pending delivery). |
+| `linesLayout` | string | `"classic"` | `"classic"`, `"inlineEditable"` | Lines tab rendering mode. `"classic"` keeps the side-panel edit flow (current behavior). `"inlineEditable"` switches the table to `InlineLinesPanel`: pencil + trash hover-action icons on the right, single-row inline edit triggered by the pencil, autosave on blur. All column types (string, number, amount, percent, date, selector, search) are inline-editable; selector/search reuse the shared `SelectorInput` dropdown. The add-line button, related-documents panel, notes panel and totals panel are unchanged. Validator F11 enforces the enum. |
 
 ### Status Bar (`window.statusBar`)
 

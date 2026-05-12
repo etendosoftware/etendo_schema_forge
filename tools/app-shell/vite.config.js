@@ -167,6 +167,11 @@ export default defineConfig(({ mode }) => {
         clientsClaim: true,
         skipWaiting: true,
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        navigateFallbackDenylist: [
+          /^\/etendo\//,
+          /^\/mcp(?:\/|$)/,
+          /^\/\.well-known\//,
+        ],
       },
       manifest: {
         name: 'Etendo',

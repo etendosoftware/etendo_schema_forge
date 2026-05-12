@@ -4,6 +4,7 @@ import MovementTable from './MovementTable';
 import MovementForm from './MovementForm';
 import MovementLineTable from './MovementLineTable';
 import MovementLineForm from './MovementLineForm';
+import GoodsMovementsBottomPanel from '../../../custom/GoodsMovementsBottomPanel';
 import catalogs from './mockCatalogs';
 
 
@@ -32,6 +33,10 @@ const processes = [
 // @sf-generated-start draftMode:movement
 const draftMode = null;
 // @sf-generated-end draftMode:movement
+
+// @sf-generated-start requiredHeaderFields:movement
+const requiredHeaderFields = ['name', 'movementDate', 'documentNo'];
+// @sf-generated-end requiredHeaderFields:movement
 
 // @sf-generated-start addLineFields:movementLine
 const addLineFields = {
@@ -182,6 +187,9 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        bottomSection={GoodsMovementsBottomPanel}
+        requiredHeaderFields={requiredHeaderFields}
+        linesLayout="inlineEditable"
         {...props}
       />
     );

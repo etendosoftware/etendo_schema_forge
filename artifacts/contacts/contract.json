@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.1",
   "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-05-11T11:52:33.346Z",
-  "checksum": "d9bc02604ffd915b",
+  "updatedAt": "2026-05-11T22:36:21.606Z",
+  "checksum": "80c1bb79c65a7819",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -15,7 +15,7 @@
       "breadcrumb": "Contact",
       "customComponents": {
         "headerTable": "ContactsTable",
-        "topbarRight": "ContactTypeToggle"
+        "topbarExtra": "ContactTypeToggle"
       },
       "processOverrides": {
         "setNewCurrency": {
@@ -43,6 +43,7 @@
           "label": "Bank Account",
           "addLineFields": [
             "bankName",
+            "country",
             "bankFormat",
             "accountNo",
             "iBAN"
@@ -108,7 +109,8 @@
           "filter": "criteria=%5B%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
         }
       ],
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "businessPartner": {
@@ -2845,7 +2847,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "derivation": {
               "type": "fromConfig",
@@ -2853,7 +2855,8 @@
             },
             "reference": "Country",
             "inputMode": "selector",
-            "defaultValue": "@COUNTRYDEF@"
+            "defaultValue": "@COUNTRYDEF@",
+            "section": "principal"
           },
           {
             "name": "userContact",
@@ -3412,7 +3415,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "section": "principal"
           },
@@ -3771,7 +3774,7 @@
       "breadcrumb": "Contact",
       "customComponents": {
         "headerTable": "ContactsTable",
-        "topbarRight": "ContactTypeToggle"
+        "topbarExtra": "ContactTypeToggle"
       },
       "processOverrides": {
         "setNewCurrency": {
@@ -3799,6 +3802,7 @@
           "label": "Bank Account",
           "addLineFields": [
             "bankName",
+            "country",
             "bankFormat",
             "accountNo",
             "iBAN"
@@ -3863,7 +3867,8 @@
           "label": "vendors",
           "filter": "criteria=%5B%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
         }
-      ]
+      ],
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "businessPartner": {

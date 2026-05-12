@@ -76,15 +76,15 @@ describe('OAuth2ClientsPage source', () => {
 
   it('empty state shows prompt to create first client', () => {
     const src = readFileSync(SOURCE, 'utf8');
-    assert.ok(src.includes('No OAuth2 clients'), 'empty state should display no-clients message');
-    assert.ok(src.includes('Create First Client'), 'empty state should show create CTA');
+    assert.ok(src.includes("ui(\"oauthClientNoClients\")"), 'empty state should display no-clients message via i18n');
+    assert.ok(src.includes("ui(\"oauthClientCreateFirst\")"), 'empty state should show create CTA via i18n');
   });
 
   it('table shows correct columns', () => {
     const src = readFileSync(SOURCE, 'utf8');
-    const expectedHeaders = ['Name', 'Client ID', 'User', 'Role', 'Scopes', 'Active'];
-    for (const header of expectedHeaders) {
-      assert.ok(src.includes(`>${header}<`), `table should have "${header}" column`);
+    const expectedKeys = ['name', 'oauthClientId', 'user', 'role', 'oauthScopes', 'oauthActive'];
+    for (const key of expectedKeys) {
+      assert.ok(src.includes(`ui("${key}")`), `table should have "${key}" column via i18n`);
     }
   });
 

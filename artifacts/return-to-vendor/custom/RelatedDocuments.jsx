@@ -6,11 +6,13 @@ import { useUI } from '@/i18n';
 export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) {
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const ui = useUI();
 
   useEffect(() => {
     if (!recordId || !data) { setLoading(false); return; }
+    setLoading(true);
     const receiptId = data.originalReceipt;
     if (!receiptId) { setLoading(false); return; }
 
@@ -20,10 +22,10 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [recordId, data, token, apiBaseUrl]);
+  }, [recordId, data, token, apiBaseUrl, refreshKey]);
 
   return (
-    <RelatedDocumentsShell loading={loading}>
+    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
       {receipt && (
         <DocChip
           key="receipt"

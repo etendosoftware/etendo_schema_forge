@@ -26,8 +26,10 @@
     "customComponents": {
       "topbarRight": "PurchaseOrderActions",
       "topbarExtra": "PurchaseOrderDraftChips",
-      "bulkActions": "PurchaseOrderReactivateBulkAction"
+      "bulkActions": "PurchaseOrderReactivateBulkAction",
+      "bottomSection": "PurchaseOrderBottomPanel"
     },
+    "linesLayout": "inlineEditable",
     "labelOverrides": {
       "es_ES": {
         "C_BPartner_ID": "Contacto",

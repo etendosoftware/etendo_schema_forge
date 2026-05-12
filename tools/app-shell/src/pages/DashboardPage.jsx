@@ -41,9 +41,9 @@ const ICON_MAP = {
 
 function useQuickActions(ui) {
   return useMemo(() => [
-    { label: ui('quickAccessSalesOrders'),  to: '/sales-order/new',   icon: TrendingUp },
-    { label: ui('quickAccessSalesInvoices'), to: '/sales-invoice/new', icon: FileText   },
-    { label: ui('quickAccessContacts'),      to: '/contacts/new',      icon: Users      },
+    { label: ui('quickAccessSalesOrders'),  to: '/sales-order/new',   icon: TrendingUp, testId: 'quick-action-sales-order-new' },
+    { label: ui('quickAccessSalesInvoices'), to: '/sales-invoice/new', icon: FileText, testId: 'quick-action-sales-invoice-new' },
+    { label: ui('quickAccessContacts'),      to: '/contacts/new',      icon: Users, testId: 'quick-action-contacts-new' },
   ], [ui]);
 }
 

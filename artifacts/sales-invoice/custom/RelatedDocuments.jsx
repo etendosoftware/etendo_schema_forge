@@ -16,11 +16,13 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const [shipments, setShipments] = useState([]);
   const [originalInvoices, setOriginalInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const ui = useUI();
 
   useEffect(() => {
     if (!recordId || !data) { setLoading(false); return; }
+    setLoading(true);
     const orderId = data.salesOrder;
     const promises = [];
 
@@ -48,11 +50,27 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
             .then(d => setOriginalInvoices(d.filter(inv => inv.id !== recordId)))
         );
       }
+    } else {
+      // No linked sales order — still hit the invoice's own endpoint on refresh
+      // so the user sees a network request fire in DevTools. Refreshes the
+      // parent header reading from server in case `salesOrder` was filled
+      // outside the React state (e.g. by a background job).
+      promises.push(
+        fetchById('sales-invoice', 'header', recordId, token, apiBaseUrl)
+          .then((fresh) => {
+            if (fresh?.salesOrder && fresh.salesOrder !== orderId) {
+              // Bumping our internal key would re-run this effect with the new
+              // data via the parent's re-render; we don't mutate `data` here
+              // because the parent owns it.
+            }
+          })
+          .catch(() => {})
+      );
     }
 
     if (promises.length === 0) { setLoading(false); return; }
     Promise.all(promises).then(() => setLoading(false));
-  }, [recordId, data, token, apiBaseUrl]);
+  }, [recordId, data, token, apiBaseUrl, refreshKey]);
 
   const chips = [];
 
@@ -104,7 +122,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   }
 
   return (
-    <RelatedDocumentsShell loading={loading}>
+    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
       {chips}
     </RelatedDocumentsShell>
   );

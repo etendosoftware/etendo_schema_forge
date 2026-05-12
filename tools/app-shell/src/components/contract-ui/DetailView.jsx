@@ -11,6 +11,7 @@ import { useEntity } from '@/hooks/useEntity';
 import { useCatalogs } from '@/hooks/useCatalogs';
 import { useDisplayLogic } from '@/hooks/useDisplayLogic';
 import { useCallout } from '@/hooks/useCallout';
+import { useCurrency } from '@/hooks/useCurrency';
 import { useLineGrossAmount, ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useMenuLabel, useUI } from '@/i18n';
@@ -18,6 +19,7 @@ import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { SummaryBar } from './SummaryBar.jsx';
 import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
+import LinesSelectionBar from './LinesSelectionBar.jsx';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import {
   buildCalloutFormState, extractAuxValues, normalizeCalloutQty,
@@ -80,6 +82,44 @@ function CollapsibleSection({ title, children }) {
       </div>
     </details>
   );
+}
+
+/**
+ * Compute the padding classes for the main detail content column.
+ *
+ * Combinations:
+ *  - `hasSidebar` true → reserved space for the right side panel (pr-2 inline,
+ *    pl-6 pr-2 classic).
+ *  - `hasSidebar` false, variant `'panel'` → standalone Panel tab (pr-6 inline,
+ *    px-6 classic).
+ *  - `hasSidebar` false, variant `'content'` → form content card (no padding
+ *    inline because the inner card supplies its own, px-6 classic).
+ *
+ * Extracted from inline JSX to avoid the nested-ternary anti-pattern Sonar
+ * S3358 was flagging inside the className templates.
+ */
+function detailContentPadding(linesLayout, hasSidebar, variant) {
+  const isInline = linesLayout === 'inlineEditable';
+  if (hasSidebar) return isInline ? 'pr-2' : 'pl-6 pr-2';
+  if (variant === 'panel') return isInline ? 'pr-6' : 'px-6';
+  return isInline ? '' : 'px-6';
+}
+
+/**
+ * Resolve the `onRowClick` handler for a secondary-tab table.
+ *
+ * Priority:
+ *  1. `customAddModal` tabs (e.g. Dirección) → click opens the popup editor.
+ *  2. Tabs with a `Form` → click selects the row for the side-panel form.
+ *  3. Read-only tabs → no row click handler.
+ *
+ * Extracted from inline JSX so the call site stays a flat expression (Sonar
+ * S3358: avoid nested ternaries).
+ */
+function resolveSecondaryRowClickHandler(st, { openCustomModal, openSecondaryLine }) {
+  if (st.customAddModal) return openCustomModal;
+  if (st.Form) return openSecondaryLine;
+  return undefined;
 }
 
 /**
@@ -147,6 +187,7 @@ export function DetailView({
   lineConfig = ORDER_LINE_CONFIG,
   lockWhenProcessed = true,
   addLineGuard = null,
+  requiredHeaderFields = null,
   showDetailFooterTotals = undefined,
   onAfterSave,
   onAfterCreate,
@@ -154,9 +195,21 @@ export function DetailView({
   labelOverrides,
   enableSecondaryRowDelete = false,
   sidebarClassName = 'w-96 shrink-0 overflow-y-auto pt-0 pl-0 pr-4 pb-5',
+  linesLayout = 'classic',
   autoSaveOnBlur = false,
   toolbarPaddingX = 'px-6',
+  tabsBarPaddingX = 'px-6',
+  formScrollPaddingX = null,
+  formCardPadding = 'p-6',
+  toolbarButtonSize = 'sm',
+  primaryTabsVariant = 'default',
   refetchAfterSave = false,
+  secondaryTabsPaddingY = 'py-2.5',
+  secondaryTabsShowHoverLine = false,
+  hideAddLineChevron = false,
+  addLineButtonPaddingX = '',
+  formScrollPaddingB = 'pb-6',
+  secondaryTabContentPaddingT = 'pt-3',
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -164,8 +217,30 @@ export function DetailView({
   // the effect falls through to fetchById. Skipping the list fetch unconditionally drops one
   // wasted GET per direct-URL navigation.
   const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave });
+  // Session-level currency fallback. NEO Headless doesn't return
+  // `currency$_identifier` on every line endpoint (only on the header), so we
+  // back-fill it generically here. Windows that already get it from the
+  // backend or that don't show amount columns are unaffected (the spread
+  // preserves any existing value). Removes the need for per-window
+  // `*LinesTable` wrappers that were doing the same thing manually.
+  const sessionCurrencyCode = useCurrency();
+  const enrichedChildren = useMemo(() => {
+    if (!Array.isArray(hook.children)) return hook.children;
+    if (!sessionCurrencyCode) return hook.children;
+    return hook.children.map(row => (
+      row && row['currency$_identifier'] == null
+        ? { ...row, 'currency$_identifier': sessionCurrencyCode }
+        : row
+    ));
+  }, [hook.children, sessionCurrencyCode]);
   const LinesEmptyState = linesEmptyState ?? bottomSection?.linesEmptyState ?? null;
   const DetailExtraActions = bottomSection?.detailExtraActions ?? null;
+  // Optional function (NOT a hook) that returns menu actions for the
+  // "+ Añadir línea" dropdown. When present, the chevron menu is populated
+  // from this and the visible inline "DetailExtraActions" link is suppressed
+  // — the actions ref-controls the same modal so no functionality is lost.
+  const getLineMenuActions = bottomSection?.lineMenuActions ?? null;
+  const extraActionsRef = useRef(null);
   // Static hooks for up to 4 secondary tabs (React rules forbid dynamic hook calls).
   // Secondary hooks only consume child-level state (children, handleAddChild, handleDeleteChild,
   // handleSelect) — never the parent list. skipListFetch avoids refetching the parent entity
@@ -254,6 +329,8 @@ export function DetailView({
   // Imperative handles to in-progress inline add rows so we can commit them
   // before header save (mirrors clicking the green check on an editing line).
   const primaryAddRowRef = useRef(null);
+  const linesScrollRef = useRef(null);
+  const bottomSectionRef = useRef(null);
   const secondaryAddRowRefs = useRef({});
   const getSecondaryAddRowRef = useCallback((key) => {
     if (!secondaryAddRowRefs.current[key]) {
@@ -261,7 +338,31 @@ export function DetailView({
     }
     return secondaryAddRowRefs.current[key];
   }, []);
+  // Per-tab refs powering the selection bar in secondary inline-editable tabs.
+  // Mirrors `addLineWrapperRef` + `inlineLinesRef` from the primary lines flow,
+  // one entry per tab key so each tab measures and clears independently.
+  const secondaryAddLineWrapperRefs = useRef({});
+  const getSecondaryAddLineWrapperRef = useCallback((key) => {
+    if (!secondaryAddLineWrapperRefs.current[key]) {
+      secondaryAddLineWrapperRefs.current[key] = { current: null };
+    }
+    return secondaryAddLineWrapperRefs.current[key];
+  }, []);
+  const secondaryInlineLinesRefs = useRef({});
+  const getSecondaryInlineLinesRef = useCallback((key) => {
+    if (!secondaryInlineLinesRefs.current[key]) {
+      secondaryInlineLinesRefs.current[key] = { current: null };
+    }
+    return secondaryInlineLinesRefs.current[key];
+  }, []);
+  // Imperative ref to InlineLinesPanel — only attached when linesLayout==='inlineEditable'.
+  // Used by flushPendingLines so the global "Guardar" closes any open inline-edit row
+  // (firing the focused input's blur → autosave PATCH) before the parent record saves.
+  const inlineLinesRef = useRef(null);
   const flushPendingLines = useCallback(async () => {
+    if (linesLayout === 'inlineEditable' && inlineLinesRef.current?.flushPendingEdits) {
+      await inlineLinesRef.current.flushPendingEdits();
+    }
     if (addingLine && primaryAddRowRef.current?.flush) {
       const ok = await primaryAddRowRef.current.flush({ closeAfterSave: true });
       if (ok === false) return false;
@@ -275,7 +376,7 @@ export function DetailView({
       }
     }
     return true;
-  }, [addingLine, addingSecondaryLine]);
+  }, [addingLine, addingSecondaryLine, linesLayout]);
   const [customModalState, setCustomModalState] = useState({ key: null, rowId: null });
   const [activeTab, setActiveTab] = useState(0);
 
@@ -294,6 +395,8 @@ export function DetailView({
     )
   );
   const isDocumentReadOnly = lockWhenProcessed && isProcessed;
+  const sqBtnSize = toolbarButtonSize === 'default' ? 'h-10 w-10' : 'h-9 w-9';
+  const saveBtnCls = toolbarButtonSize === 'default' ? 'h-10 gap-2' : 'gap-1.5';
   const [showPrint, setShowPrint] = useState(false);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -322,6 +425,196 @@ export function DetailView({
   const [directFetched, setDirectFetched] = useState(false);
   const [selectedLine, setSelectedLine] = useState(null);
   const [selectedChildRows, setSelectedChildRows] = useState([]);
+  const [selectionBarVisible, setSelectionBarVisible] = useState(false);
+  const [selectionBarClosing, setSelectionBarClosing] = useState(false);
+  // Per secondary-tab selection state — same shape as the primary lines bar,
+  // keyed by tab key. Only the active tab measures and renders its bar.
+  const [secondarySelectedRows, setSecondarySelectedRows] = useState({});
+  const [secondaryBarVisible, setSecondaryBarVisible] = useState({});
+  const [secondaryBarClosing, setSecondaryBarClosing] = useState({});
+  const [secondaryBarRects, setSecondaryBarRects] = useState({});
+  const [secondaryDeleting, setSecondaryDeleting] = useState({});
+  // Position of the AddLineButton wrapper in viewport coordinates. Drives the
+  // portal-rendered selection bar so its downward shadow always renders OUTSIDE
+  // the linesScrollRef's overflow-auto clipping boundary, regardless of how
+  // many rows are in the table.
+  const addLineWrapperRef = useRef(null);
+  const [barRect, setBarRect] = useState(null);
+  useEffect(() => {
+    if (!selectionBarVisible) return;
+    const el = addLineWrapperRef.current;
+    const scrollEl = linesScrollRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setBarRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    };
+    measure();
+    let ro = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+      if (scrollEl) ro.observe(scrollEl);
+    }
+    const events = ['scroll', 'resize'];
+    events.forEach(e => window.addEventListener(e, measure, true));
+    return () => {
+      ro?.disconnect();
+      events.forEach(e => window.removeEventListener(e, measure, true));
+    };
+  }, [selectionBarVisible, linesLayout]);
+  // When the bottom section (Docs/Notes/Totals) grows because the user expanded
+  // an inner block (e.g., "Añadir descuento total"), the lines area shrinks via
+  // flex-1, and rows previously at the bottom of the visible scroll get covered.
+  // We compensate by scrolling the lines container by the delta, keeping the
+  // same content visible.
+  useEffect(() => {
+    if (linesLayout !== 'inlineEditable') return;
+    const bottomEl = bottomSectionRef.current;
+    const scrollEl = linesScrollRef.current;
+    if (!bottomEl || !scrollEl || typeof ResizeObserver === 'undefined') return;
+    let prevHeight = bottomEl.getBoundingClientRect().height;
+    const ro = new ResizeObserver(() => {
+      const nextHeight = bottomEl.getBoundingClientRect().height;
+      const delta = nextHeight - prevHeight;
+      if (delta > 1) {
+        // Bottom panel grew → lines viewport shrank by `delta` from the bottom.
+        // Scroll DOWN by `delta` so the rows that were at the bottom of view
+        // remain visible (top rows scroll out instead of bottom ones being
+        // hidden behind the now-taller panel).
+        const maxScroll = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+        scrollEl.scrollTop = Math.min(maxScroll, scrollEl.scrollTop + delta);
+      }
+      prevHeight = nextHeight;
+    });
+    ro.observe(bottomEl);
+    return () => ro.disconnect();
+  }, [linesLayout]);
+
+  // When the user opens the inline add-line row (inlineEditable mode), scroll the
+  // lines container to the bottom with a long, eased animation so the user can
+  // visually follow the scroll instead of seeing a sudden jump.
+  useEffect(() => {
+    if (linesLayout !== 'inlineEditable' || !addingLine) return;
+    const el = linesScrollRef.current;
+    if (!el) return;
+    let rafId = 0;
+    let cancelled = false;
+    const startScroll = () => {
+      const startTop = el.scrollTop;
+      const targetTop = el.scrollHeight - el.clientHeight;
+      const distance = targetTop - startTop;
+      if (distance <= 1) return;
+      // If the user was already near the bottom (within one row of the new add
+      // row), just snap instantly — animating a few px feels jittery.
+      if (distance <= 60) {
+        el.scrollTop = targetTop;
+        return;
+      }
+      const duration = 300;
+      const startTime = performance.now();
+      // easeOutCubic — quick start, slow gentle finish.
+      const ease = (t) => 1 - Math.pow(1 - t, 3);
+      const step = (now) => {
+        if (cancelled) return;
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        el.scrollTop = startTop + distance * ease(progress);
+        if (progress < 1) rafId = requestAnimationFrame(step);
+      };
+      rafId = requestAnimationFrame(step);
+    };
+    // Wait two frames so the inline-add row is mounted and its height included
+    // in scrollHeight before we compute the target offset.
+    rafId = requestAnimationFrame(() => { rafId = requestAnimationFrame(startScroll); });
+    return () => { cancelled = true; cancelAnimationFrame(rafId); };
+  }, [addingLine, linesLayout]);
+
+  // Selection toolbar lifecycle: mount on first select, keep mounted with a
+  // slide-out animation while count drops to 0, then unmount.
+  useEffect(() => {
+    if (selectedChildRows.length > 0) {
+      setSelectionBarVisible(true);
+      setSelectionBarClosing(false);
+      return;
+    }
+    if (selectionBarVisible) {
+      setSelectionBarClosing(true);
+      const t = setTimeout(() => {
+        setSelectionBarVisible(false);
+        setSelectionBarClosing(false);
+      }, 250);
+      return () => clearTimeout(t);
+    }
+  }, [selectedChildRows.length, selectionBarVisible]);
+  // Per-tab close-animation timeouts. Kept in a ref so the lifecycle effect
+  // below doesn't have to depend on visibility state (which would cancel its
+  // own scheduled close on the next re-render).
+  const secondaryBarTimeoutRef = useRef({});
+  // Mirrors the primary lifecycle, but iterates secondary tabs. Each tab's
+  // bar mounts when its selection becomes non-empty and slides out 250ms
+  // after the selection is cleared.
+  useEffect(() => {
+    for (const st of secondaryTabs) {
+      const tabKey = st.key;
+      const rows = secondarySelectedRows[tabKey] ?? [];
+      if (rows.length > 0) {
+        if (secondaryBarTimeoutRef.current[tabKey]) {
+          clearTimeout(secondaryBarTimeoutRef.current[tabKey]);
+          delete secondaryBarTimeoutRef.current[tabKey];
+        }
+        setSecondaryBarVisible(prev => (prev[tabKey] ? prev : { ...prev, [tabKey]: true }));
+        setSecondaryBarClosing(prev => (prev[tabKey] ? { ...prev, [tabKey]: false } : prev));
+      } else if (!secondaryBarTimeoutRef.current[tabKey]) {
+        setSecondaryBarClosing(prev => ({ ...prev, [tabKey]: true }));
+        secondaryBarTimeoutRef.current[tabKey] = setTimeout(() => {
+          setSecondaryBarVisible(prev => ({ ...prev, [tabKey]: false }));
+          setSecondaryBarClosing(prev => ({ ...prev, [tabKey]: false }));
+          delete secondaryBarTimeoutRef.current[tabKey];
+        }, 250);
+      }
+    }
+  }, [secondarySelectedRows, secondaryTabs]);
+  // Measure each visible secondary tab's add-line wrapper so its bar can be
+  // portaled with `position: fixed`. Only the active tab actually mounts its
+  // wrapper (inactive tabs unmount their content), so refs from other tabs
+  // resolve to null and are skipped naturally.
+  useEffect(() => {
+    const cleanups = [];
+    for (const st of secondaryTabs) {
+      if (!secondaryBarVisible[st.key]) continue;
+      const el = secondaryAddLineWrapperRefs.current[st.key]?.current;
+      if (!el) continue;
+      const measure = () => {
+        const r = el.getBoundingClientRect();
+        setSecondaryBarRects(prev => ({
+          ...prev,
+          [st.key]: { top: r.top, left: r.left, width: r.width, height: r.height },
+        }));
+      };
+      measure();
+      let ro = null;
+      if (typeof ResizeObserver !== 'undefined') {
+        ro = new ResizeObserver(measure);
+        ro.observe(el);
+      }
+      const events = ['scroll', 'resize'];
+      events.forEach(e => window.addEventListener(e, measure, true));
+      cleanups.push(() => {
+        ro?.disconnect();
+        events.forEach(e => window.removeEventListener(e, measure, true));
+      });
+    }
+    return () => cleanups.forEach(fn => fn());
+  }, [secondaryBarVisible, secondaryTabs]);
+  // Clear secondary-tab selection state when the active tab changes. The
+  // InlineLinesPanel resets its internal checkboxes on unmount, so we mirror
+  // that here so the bar doesn't outlive the row checks.
+  useEffect(() => {
+    setSecondarySelectedRows({});
+    setSecondaryBarVisible({});
+    setSecondaryBarClosing({});
+  }, [activeTab]);
   const [deletingChildren, setDeletingChildren] = useState(false);
   const [lineEdits, setLineEdits] = useState(null);
   const [lineEditColumns, setLineEditColumns] = useState({});
@@ -891,8 +1184,23 @@ export function DetailView({
   }, [data?.id, recordId, isNew, apiBaseUrl, entity, token]);
 
   // Guard that controls whether "+ Add Lines" is shown.
-  // When addLineGuard is provided, it receives the current record data and must return true to allow.
-  const canAddLines = addLineGuard ? addLineGuard(data) : true;
+  // 1. Explicit `addLineGuard` from the window wins (business-specific rules).
+  // 2. Otherwise, fall back to the generic "all required header fields must
+  //    be filled" check using `requiredHeaderFields` (emitted by the
+  //    pipeline). This matches the UX where the add-lines button only
+  //    appears once the header form is complete.
+  // 3. Otherwise (no metadata at all), allow.
+  let canAddLines;
+  if (addLineGuard) {
+    canAddLines = addLineGuard(data);
+  } else if (Array.isArray(requiredHeaderFields) && requiredHeaderFields.length > 0) {
+    canAddLines = requiredHeaderFields.every((k) => {
+      const v = data?.[k];
+      return v != null && v !== '' && !(typeof v === 'string' && v.trim() === '');
+    });
+  } else {
+    canAddLines = true;
+  }
   const windowTitle = breadcrumb
     ? tMenu(breadcrumb.split(' / ').at(-1).trim()) || breadcrumb.split(' / ').at(-1).trim()
     : tMenu(windowName) || windowName || '';
@@ -1008,16 +1316,13 @@ export function DetailView({
             </div>
           ) : null
         ) : (
-        <div className={`flex items-center justify-between ${toolbarPaddingX} py-3${toolbarBorderBottom ? ' border-b border-[#E8EAEF]' : ''}`}>
+        <div className={`flex items-center justify-between ${linesLayout === 'inlineEditable' ? 'p-2' : toolbarPaddingX + ' py-3'}${toolbarBorderBottom || linesLayout === 'inlineEditable' ? ' border-b border-[#E8EAEF]' : ''}`}>
           <div className="flex items-center gap-3">
             <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
+              className="h-10 px-3 rounded-lg bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_rgba(18,18,23,0.05)] text-[#121217] text-sm font-medium hover:bg-[#F5F7F9] transition-colors"
               data-testid="action-cancel"
               onClick={() => navigate(`/${windowName}`)}
             >
-              <X className="h-3.5 w-3.5" />
               {ui('cancel')}
             </Button>
             {statusField && data[statusField] != null && (
@@ -1068,7 +1373,7 @@ export function DetailView({
               {!documentPreview && !hidePrint && !isNew && recordId && (
                 <button
                   onClick={() => setShowPrint(true)}
-                  className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors`}
                   title={ui('print')}
                 >
                   <Printer className="h-4 w-4" />
@@ -1078,7 +1383,7 @@ export function DetailView({
               {!isNew && recordId && !(hideDeleteWhenComplete && statusField && data?.[statusField] && data[statusField] !== 'DR' && data[statusField] !== 'RPAP') && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="h-9 w-9 flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                  className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}
                   title={ui('delete')}
                   data-testid="action-delete"
                 >
@@ -1174,8 +1479,8 @@ export function DetailView({
                   <Button
                     key={action.key || i}
                     variant="outline"
-                    size="sm"
-                    className={action.className || ''}
+                    size="default"
+                    className={`${action.className || ''} ${saveBtnCls}`.trim()}
                     onClick={action.onClick}
                   >
                     {action.label}
@@ -1205,8 +1510,8 @@ export function DetailView({
                     <Button
                       key={p.name}
                       variant={isPrimary ? 'default' : 'outline'}
-                      size="sm"
-                      className={btnClass}
+                      size="default"
+                      className={`${btnClass} ${saveBtnCls}`.trim()}
                       onClick={() => hook.handleProcess?.(p)}
                     >
                       {tMenu(p.label)}
@@ -1218,7 +1523,7 @@ export function DetailView({
                 if (draftMode?.enabled) {
                   return (
                     <>
-                      <Button variant="outline" size="sm" className="gap-1.5 bg-white border-[#D1D4DB] text-[#121217]" data-testid="action-save-draft" disabled={hook.isSaving || !isDirty} onClick={async () => {
+                      <Button variant="outline" size="default" className={`${saveBtnCls} bg-white border-[#D1D4DB] text-[#121217]`} data-testid="action-save-draft" disabled={hook.isSaving || !isDirty} onClick={async () => {
                         if (!(await flushPendingLines())) return;
                         const saved = await hook.handleSave(data);
                         if (saved?.id && isNew) {
@@ -1229,7 +1534,7 @@ export function DetailView({
                         {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" color="#64748B" />}
                         {ui('save')}
                       </Button>
-                      <Button size="sm" className="gap-1.5" data-testid="action-save" disabled={hook.isSaving} onClick={async () => {
+                      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving} onClick={async () => {
                         if (!(await flushPendingLines())) return;
                         if (typeof draftMode.onConfirm === 'function') { draftMode.onConfirm(); return; }
                         const saved = await hook.handleSaveAndProcess(draftMode);
@@ -1252,7 +1557,7 @@ export function DetailView({
                 if (isNew) {
                   return (
                     <>
-                      <Button size="sm" className="gap-1.5" data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving} onClick={async () => {
+                      <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving} onClick={async () => {
                         if (!(await flushPendingLines())) return;
                         const saved = await hook.handleSave(data);
                         if (saved?.id && isNew) {
@@ -1264,7 +1569,7 @@ export function DetailView({
                         {ui('save')}
                       </Button>
                       {!isProcessed && hook.children.length > 0 && (
-                        <Button size="sm" className="gap-1.5" data-testid="action-save" disabled={hook.isSaving} onClick={async () => {
+                        <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={hook.isSaving} onClick={async () => {
                           if (!(await flushPendingLines())) return;
                           const saved = await hook.handleSaveAndProcess(draftMode);
                           if (saved) {
@@ -1285,7 +1590,7 @@ export function DetailView({
                   );
                 }
                 return (
-                  <Button size="sm" className="gap-1.5" data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty} onClick={async () => {
+                  <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty} onClick={async () => {
                     if (!(await flushPendingLines())) return;
                     const saved = await hook.handleSave(data);
                     if (saved) {
@@ -1315,26 +1620,45 @@ export function DetailView({
         {/* Primary tab bar (General / Additional Info / etc.) */}
         {primaryTabs && (
           <div
-            className={`flex items-center gap-1 px-6 py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`}
+            className={`flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`}
             style={tabsBarRight && tabsBarRightDivider ? { paddingRight: `calc(${tabsBarRightDivider} + 24px)` } : undefined}
           >
             {tabsBarRightDivider && (
               <div className="absolute top-0 bottom-0 w-px bg-[#E8EAEF] pointer-events-none" style={{ left: `calc(100% - ${tabsBarRightDivider})` }} />
             )}
-            {primaryTabs.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActivePrimaryTab(tab.key)}
-                className={[
-                  'relative px-4 py-1.5 text-sm font-medium rounded-lg transition-colors border',
-                  activePrimaryTab === tab.key
-                    ? 'bg-white border-gray-200 shadow-sm text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                ].join(' ')}
-              >
-                {tMenu(tab.label)}
-              </button>
-            ))}
+            {primaryTabsVariant === 'pill' ? (
+              <div className="inline-flex items-center gap-1 p-1 h-10 rounded-xl" style={{ background: '#F5F7F9' }}>
+                {primaryTabs.map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActivePrimaryTab(tab.key)}
+                    className="h-8 px-4 text-sm font-medium rounded-lg transition-all"
+                    style={
+                      activePrimaryTab === tab.key
+                        ? { background: '#FFFFFF', color: '#121217', boxShadow: '0px 1px 3px rgba(18,18,23,0.10), 0px 1px 2px rgba(18,18,23,0.06)' }
+                        : { color: '#121217' }
+                    }
+                  >
+                    {tMenu(tab.label)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              primaryTabs.map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActivePrimaryTab(tab.key)}
+                  className={[
+                    'relative px-4 py-1.5 text-sm font-medium rounded-lg transition-colors border',
+                    activePrimaryTab === tab.key
+                      ? 'bg-white border-gray-200 shadow-sm text-foreground'
+                      : 'border-transparent text-muted-foreground hover:text-foreground',
+                  ].join(' ')}
+                >
+                  {tMenu(tab.label)}
+                </button>
+              ))
+            )}
             {tabsBarRight && (() => {
               const TabsBarRightComponent = tabsBarRight;
               return (
@@ -1349,18 +1673,18 @@ export function DetailView({
         {primaryTabs && activePrimaryTab !== 'general' ? (() => {
           const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
           return activeTab?.Panel ? (
-            <div className={`flex-1 overflow-auto pb-6 min-w-0 ${sidePanel || sidebarContent ? 'pl-6 pr-2' : 'px-6'}`}>
+            <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel')}`}>
               <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} />
             </div>
           ) : null;
         })() : null}
-        <div className={`flex-1 overflow-auto pb-6 min-w-0 ${sidePanel || sidebarContent ? 'pl-6 pr-2' : 'px-6'}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`}>
+        <div className={`flex-1 min-w-0 ${linesLayout === 'inlineEditable' ? 'flex flex-col overflow-hidden' : 'overflow-auto pb-6'} ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'content')}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`}>
           {typeof headerContent === 'function' ? headerContent(data) : headerContent}
-          <div className={`${sidePanel ? 'flex items-start gap-0' : ''}`}>
-          <div className={`${sidePanel ? 'flex-1 min-w-0' : 'max-w-full'} space-y-2`}>
+          <div className={`${sidePanel ? 'flex items-start gap-0' : ''} ${linesLayout === 'inlineEditable' ? 'flex-1 min-h-0 flex flex-col' : ''}`}>
+          <div className={`${sidePanel ? 'flex-1 min-w-0' : 'max-w-full'} ${linesLayout === 'inlineEditable' ? 'flex flex-col min-h-0 flex-1' : 'space-y-2'}`}>
             {/* Principal + collapsed fields wrapped in a card */}
             <div className={`${noHeaderBorder ? '' : ' rounded-2xl border border-gray-200/70 bg-white shadow-sm'}${embedded ? ' pointer-events-none' : ''}`}>
-              <div className="p-6">
+              <div className={linesLayout === 'inlineEditable' ? 'p-2' : 'p-6'}>
                 <Form
                   entity={entity}
                   data={data}
@@ -1415,38 +1739,59 @@ export function DetailView({
 
             {/* Tabs: child entities + Others */}
             {tabs.length > 0 && (
-              <div className="mt-6">
-                <div className="flex items-center justify-between border-b border-border/50">
+              <div className={linesLayout === 'inlineEditable' ? 'mt-1 flex-1 flex flex-col min-h-0 relative' : 'mt-6'}>
+                <div className={`flex items-center justify-between border-b border-border/50 ${linesLayout === 'inlineEditable' ? 'shrink-0' : ''}`}>
                   <div className="flex items-center gap-0">
-                    {tabs.map((tab, idx) => (
-                      <button
-                        key={tab.key}
-                        onClick={() => { setActiveTab(idx); setSelectedLine(null); setSelectedSecondaryLine(null); }}
-                        className={[
-                          'flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors relative',
-                          activeTab === idx
-                            ? 'text-foreground'
-                            : 'text-muted-foreground hover:text-foreground',
-                        ].join(' ')}
-                      >
-                        <List className="h-4 w-4" />
-                        {tMenu(tab.label)}
-                        {tab.count != null && (
-                          <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">
-                            {tab.count}
-                          </span>
-                        )}
-                        {activeTab === idx && (
-                          <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full" />
-                        )}
-                      </button>
-                    ))}
+                    {tabs.map((tab, idx) => {
+                      const tabIndicatorCls = linesLayout === 'inlineEditable'
+                        ? 'absolute bottom-0 left-0 right-0 h-[2px] bg-foreground'
+                        : 'absolute bottom-0 left-2 right-2 h-0.5 bg-foreground rounded-full';
+                      return (
+                        <button
+                          key={tab.key}
+                          onClick={() => { setActiveTab(idx); setSelectedLine(null); setSelectedSecondaryLine(null); }}
+                          className={[
+                            `${secondaryTabsShowHoverLine ? 'group ' : ''}flex items-center gap-2 px-4 ${secondaryTabsPaddingY} text-sm font-medium transition-colors relative`,
+                            activeTab === idx
+                              ? 'text-foreground'
+                              : 'text-muted-foreground hover:text-foreground',
+                          ].join(' ')}
+                        >
+                          <List className="h-4 w-4" />
+                          {tMenu(tab.label)}
+                          {tab.count != null && (
+                            <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">
+                              {tab.count}
+                            </span>
+                          )}
+                          {secondaryTabsShowHoverLine ? (
+                            <span className={[
+                              'absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-colors',
+                              activeTab === idx
+                                ? 'bg-foreground'
+                                : 'bg-transparent group-hover:bg-muted-foreground/30',
+                            ].join(' ')} />
+                          ) : (
+                            activeTab === idx && <span className={tabIndicatorCls} />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                {/* Tab content: Lines */}
+                {/* Tab content: Lines.
+                    In inlineEditable mode this wrapper is the SOLE scroll
+                    container — everything outside (form card, tabs bar,
+                    bottom section) stays fixed in viewport. */}
+                <div ref={linesScrollRef} className={linesLayout === 'inlineEditable' ? 'flex-1 overflow-auto min-h-0' : ''}>
                 {tabs[activeTab]?.key === 'lines' && DetailTable && (
-                  hook.childrenLoading ? (
+                  // Only show the loading spinner on INITIAL load (no children yet).
+                  // Subsequent refetches (e.g., after PATCH on a child) keep the table
+                  // mounted to preserve transient state like InlineLinesPanel's
+                  // editingRowId — otherwise editing mode is silently dropped on every
+                  // autosave round-trip.
+                  hook.childrenLoading && hook.children.length === 0 ? (
                     <div className="flex items-center justify-center py-10 text-muted-foreground">
                       <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                     </div>
@@ -1464,11 +1809,11 @@ export function DetailView({
                       onForceOpenHandled={() => setForceOpenImport(false)}
                     />
                   ) : (
-                  <div className={`pt-3 flex items-start gap-4${embedded ? ' pointer-events-none' : ''}`}>
+                  <div className={`${linesLayout === 'inlineEditable' ? '' : 'pt-3 '}flex items-start gap-4${embedded ? ' pointer-events-none' : ''}`}>
                     {/* Table + add button */}
                     <div className="flex-1 min-w-0">
-                      {/* Bulk delete bar */}
-                      {(api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly && selectedChildRows.length > 0 && (
+                      {/* Bulk delete bar (classic only) */}
+                      {linesLayout !== 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly && selectedChildRows.length > 0 && (
                         <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted/60 border border-border/40">
                           <span className="text-sm font-medium text-foreground">
                             {ui('selected', { count: selectedChildRows.length })}
@@ -1517,16 +1862,137 @@ export function DetailView({
                         </div>
                       )}
                       <DetailTable
-                        data={hook.children}
+                        ref={inlineLinesRef}
+                        data={enrichedChildren}
                         entity={detailEntity}
                         token={token}
                         apiBaseUrl={apiBaseUrl}
-                        onRowClick={DetailForm ? (row) => { const line = { ...row }; roundAmounts(line); setSelectedLine(line); } : undefined}
+                        linesLayout={linesLayout}
+                        isDocumentReadOnly={isDocumentReadOnly}
+                        onRowClick={DetailForm && linesLayout !== 'inlineEditable' ? (row) => { const line = { ...row }; roundAmounts(line); setSelectedLine(line); } : undefined}
                         selectedRowId={selectedLine?.id}
                         onSelectionChange={setSelectedChildRows}
                         showFooterTotals={showDetailFooterTotals ?? !summary.some(f => f.type === 'amount')}
                         selectorContext={selectorContextByEntity[detailEntity]}
                         hiddenColumns={[]}
+                        onUpdateRow={linesLayout === 'inlineEditable' && !isDocumentReadOnly ? async (row, fieldKey, value, opts) => {
+                          // Inline autosave with callout chain. NEO Headless expects API keys
+                          // (camelCase), an unwrapped body, and numeric strings coerced for
+                          // BigDecimal — mirrors the side-panel save at line ~1750. When a
+                          // trigger field changes (e.g., product), `handleLineFieldChange`
+                          // populates `derivedUpdates` with all callout-driven fields (price,
+                          // tax, description, etc.) so they can be PATCHed in one shot.
+                          const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+                            || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+                          const coerce = (v) => (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v);
+                          const payloadValue = coerce(value);
+
+                          // Build the row snapshot the callout sees: existing row + the change.
+                          // Strip null/empty inherited keys that the parent has set (e.g.
+                          // businessPartner, priceList on OrderLine). buildCalloutFormState
+                          // by contract does NOT overwrite a row value with the header's,
+                          // so without this prune the callout would receive
+                          // businessPartner=null and NEO returns listPrice=0. The addRow
+                          // flow doesn't hit this because it starts from an empty values
+                          // object, but existing rows include denormalized parent keys.
+                          const headerSnapshot = hook.editing || hook.selected || {};
+                          const cleanRow = { ...row };
+                          for (const k of Object.keys(headerSnapshot)) {
+                            const v = cleanRow[k];
+                            if (v === null || v === undefined || v === '') {
+                              delete cleanRow[k];
+                            }
+                          }
+                          const snapshot = { ...cleanRow, [fieldKey]: payloadValue };
+                          if (opts?.identifier !== undefined) {
+                            snapshot[fieldKey + '$_identifier'] = opts.identifier;
+                          }
+                          // Mirror DataTable's selector-aux merge (lines 468–512). The
+                          // selector item carries `_aux` (product_PSTD, _PLIM, _UOM, _CURR)
+                          // and top-level fields (standardPrice, isTaxIncluded, currency)
+                          // that the callout needs to compute the price. Without this, the
+                          // callout has no access to the price-list metadata and returns 0.
+                          const selectedItem = opts?.selectedItem;
+                          if (selectedItem && typeof selectedItem === 'object') {
+                            if (selectedItem._aux) {
+                              for (const [suffix, auxVal] of Object.entries(selectedItem._aux)) {
+                                snapshot[fieldKey + suffix] = auxVal;
+                              }
+                            }
+                            for (const [topField, topVal] of Object.entries(selectedItem)) {
+                              if (topField === 'id' || topField === '_aux' || topField === 'label'
+                                  || topField === 'name' || topField === 'searchKey'
+                                  || typeof topVal === 'object' || topVal === null) continue;
+                              if (topField === 'standardPrice' && topVal != null) {
+                                const isGross = selectedItem.isTaxIncluded !== false;
+                                if (isGross) {
+                                  snapshot.grossUnitPrice = topVal;
+                                  snapshot.grossListPrice = topVal;
+                                } else {
+                                  snapshot.unitPrice = topVal;
+                                  snapshot.listPrice = topVal;
+                                }
+                                continue;
+                              }
+                              const ctxKey = `${fieldKey}_${topField}`;
+                              if (!(ctxKey in snapshot)) snapshot[ctxKey] = topVal;
+                            }
+                          }
+
+                          // Run callout (no-op for fields without one). Captures derived fields
+                          // through the applyUpdates callback so we can fold them into the PATCH.
+                          let derivedUpdates = {};
+                          try {
+                            await handleLineFieldChange(fieldKey, payloadValue, snapshot, (updates) => {
+                              derivedUpdates = { ...updates };
+                            });
+                          } catch {
+                            // Callout is best-effort; PATCH continues with the user-typed value only.
+                          }
+
+                          // PATCH body: send the full row + derived + change. NEO Headless
+                          // doesn't reliably recompute derived fields (lineGrossAmount,
+                          // standardPrice) when only a partial body arrives — observed
+                          // when changing product to one with a different price. The
+                          // side-panel save (line ~1750) sends the whole row for the same
+                          // reason, so we mirror that here for parity.
+                          const fieldValues = {};
+                          // 1. Start from the cleaned row (skips already-null inherited keys).
+                          for (const [k, v] of Object.entries(cleanRow)) {
+                            if (k.endsWith('$_identifier')) continue;
+                            // Skip internal markers and metadata that aren't valid fields.
+                            if (k === '_identifier' || k === '_entityName' || k === '$ref' || k === 'id') continue;
+                            fieldValues[k] = coerce(v);
+                          }
+                          // 2. Overlay derived fields from the callout (incl. lineGrossAmount,
+                          //    standardPrice, unitPrice, listPrice).
+                          for (const [k, v] of Object.entries(derivedUpdates)) {
+                            if (k.endsWith('$_identifier')) continue;
+                            fieldValues[k] = coerce(v);
+                          }
+                          // 3. The user-changed field always wins (last-write).
+                          fieldValues[fieldKey] = payloadValue;
+
+                          const res = await fetch(childUrl, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                            body: JSON.stringify(fieldValues),
+                          });
+                          if (res.ok) {
+                            // Local update folds in derived values (incl. $_identifier keys for
+                            // FK callout outputs like tax$_identifier) so the row UI reflects
+                            // the full snapshot without a refetch.
+                            const localUpdate = { ...derivedUpdates, [fieldKey]: payloadValue };
+                            if (opts?.identifier !== undefined) {
+                              localUpdate[fieldKey + '$_identifier'] = opts.identifier;
+                            }
+                            hook.handleUpdateChild?.(row.id, localUpdate);
+                          } else {
+                            const msg = await extractErrorMessage(res);
+                            toast.error(msg || ui('networkError'));
+                            throw new Error(msg || 'PATCH failed');
+                          }
+                        } : undefined}
                         onDeleteRow={(api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly ? async (row) => {
                           if (!(await confirmDelete())) return;
                           try {
@@ -1649,22 +2115,107 @@ export function DetailView({
                       )}
 
                       {hook.editing && !isDocumentReadOnly && (allEntryFields.length > 0 || DetailExtraActions) && canAddLines && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)', padding: '10px 16px' }}>
+                        <div
+                          ref={addLineWrapperRef}
+                          className={linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-white z-10' : 'relative'}
+                          style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)', padding: linesLayout === 'inlineEditable' ? 8 : '10px 16px' }}
+                        >
                           {allEntryFields.length > 0 && (
                             <AddLineButton
                               onClick={handleAddLineClick}
                               label={ui('addLine')}
+                              menuActions={getLineMenuActions
+                                ? getLineMenuActions({ data, importRef: extraActionsRef }).map(a => ({
+                                    ...a,
+                                    label: typeof a.label === 'string' ? (ui(a.label) || a.label) : a.label,
+                                  }))
+                                : undefined}
                             />
                           )}
                           {DetailExtraActions && (
-                            <DetailExtraActions data={data} recordId={data?.id || recordId} token={token} apiBaseUrl={apiBaseUrl} onRefresh={() => hook.fetchChildren?.(data?.id || recordId)} onSave={handleImportClick} forceOpen={forceOpenImport} onForceOpenHandled={() => setForceOpenImport(false)} />
+                            <DetailExtraActions
+                              ref={getLineMenuActions ? extraActionsRef : undefined}
+                              hideTrigger={!!getLineMenuActions}
+                              data={data}
+                              recordId={data?.id || recordId}
+                              token={token}
+                              apiBaseUrl={apiBaseUrl}
+                              onRefresh={() => hook.fetchChildren?.(data?.id || recordId)}
+                              onSave={handleImportClick}
+                              forceOpen={forceOpenImport}
+                              onForceOpenHandled={() => setForceOpenImport(false)}
+                            />
+                          )}
+                          {/* Selection toolbar — portaled to document.body so the
+                              downward shadow renders OUTSIDE the linesScrollRef's
+                              overflow-auto clipping boundary even when scroll is
+                              engaged (many rows). Positioned via fixed coords from
+                              `barRect`, measured off `addLineWrapperRef`. */}
+                          {linesLayout === 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true) && (
+                            <LinesSelectionBar
+                              visible={selectionBarVisible}
+                              closing={selectionBarClosing}
+                              barRect={barRect}
+                              count={selectedChildRows.length}
+                              selectedLabel={ui('selected', { count: selectedChildRows.length })}
+                              totalLabel={bottomSection?.showLineTotals !== false ? (() => {
+                                const total = selectedChildRows.reduce((acc, row) => {
+                                  const v = parseFloat(String(row?.[lineConfig.grossField] ?? row?.lineGrossAmount ?? 0));
+                                  return acc + (Number.isFinite(v) ? v : 0);
+                                }, 0);
+                                const formatted = total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                                const curr = data?.['currency$_identifier'] || '';
+                                return curr ? `${formatted} ${curr}` : formatted;
+                              })() : null}
+                              deleting={deletingChildren}
+                              deleteTitle={ui('delete')}
+                              closeTitle={ui('close')}
+                              onDelete={async () => {
+                                if (!(await confirmDelete())) return;
+                                setDeletingChildren(true);
+                                try {
+                                  const results = await Promise.allSettled(
+                                    selectedChildRows.map(row => {
+                                      const childUrl = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+                                        || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+                                      return fetch(childUrl, {
+                                        method: 'DELETE',
+                                        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                      }).then(res => ({ res, row }));
+                                    })
+                                  );
+                                  let deleted = 0;
+                                  for (const result of results) {
+                                    if (result.status === 'fulfilled' && result.value.res.ok) {
+                                      hook.handleDeleteChild(result.value.row.id);
+                                      if (selectedLine?.id === result.value.row.id) setSelectedLine(null);
+                                      deleted++;
+                                    }
+                                  }
+                                  inlineLinesRef.current?.clearSelection?.();
+                                  setSelectedChildRows([]);
+                                  if (deleted > 0) toast.success(ui('recordsDeleted', { count: deleted }));
+                                  const failed = results.length - deleted;
+                                  if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', { count: failed }));
+                                } catch (err) {
+                                  toast.error(err.message || ui('networkError'));
+                                } finally {
+                                  setDeletingChildren(false);
+                                }
+                              }}
+                              onClose={() => {
+                                inlineLinesRef.current?.clearSelection?.();
+                                setSelectedChildRows([]);
+                              }}
+                            />
                           )}
                         </div>
                       )}
                     </div>
 
-                    {/* Right sidebar: line detail form */}
-                    {DetailForm && (selectedLine || isClosingLine) && (
+                    {/* Right sidebar: line detail form. Suppressed in inlineEditable mode —
+                        edit happens inside the row via InlineLinesPanel. */}
+                    {linesLayout !== 'inlineEditable' && DetailForm && (selectedLine || isClosingLine) && (
                       <div className={`w-[48rem] shrink-0 border-l border-border pl-4 self-stretch overflow-hidden ${isClosingLine ? 'sidebar-slide-out' : 'sidebar-slide-in'}`}>
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-medium text-foreground">{ui('entityDetail', { label: tMenu(detailLabel || 'Line') })}</span>
@@ -1850,7 +2401,7 @@ export function DetailView({
 
                 {/* Tab content: secondary child entity tabs (or form-only tabs) */}
                 {secondaryTabs.map((st, stIdx) => tabs[activeTab]?.key === st.key && (
-                  <div key={st.key} className={`pt-3 flex flex-col gap-3${embedded ? ' pointer-events-none' : ''}`}>
+                  <div key={st.key} className={`${secondaryTabContentPaddingT} flex flex-col gap-3${embedded ? ' pointer-events-none' : ''}`}>
                     {st.isFormTab ? (
                       <div className="flex-1 min-w-0">
                         <st.Form
@@ -1882,21 +2433,73 @@ export function DetailView({
                     <div className="flex items-start gap-4">
                     <div className="flex-1 min-w-0">
                       <st.Table
+                        ref={linesLayout === 'inlineEditable' ? getSecondaryInlineLinesRef(st.key) : undefined}
                         data={secondaryHooks[stIdx]?.children ?? []}
                         entity={st.key}
+                        token={token}
+                        apiBaseUrl={apiBaseUrl}
                         selectorContext={selectorContextByEntity[st.key]}
-                        onRowClick={st.customAddModal
+                        linesLayout={linesLayout}
+                        onRowClick={resolveSecondaryRowClickHandler(st, {
+                          openCustomModal: (row) => setCustomModalState({ key: st.key, rowId: row.id }),
+                          openSecondaryLine: (row) => { setSelectedSecondaryLine({ ...row, _tabKey: st.key }); setSecondaryLineEdits(null); },
+                        })}
+                        // Pencil action for customAddModal tabs (Dirección) opens
+                        // the popup editor — rows are not editable in place.
+                        onEditRow={st.customAddModal
                           ? (row) => setCustomModalState({ key: st.key, rowId: row.id })
-                          : st.Form
-                            ? (row) => { setSelectedSecondaryLine({ ...row, _tabKey: st.key }); setSecondaryLineEdits(null); }
-                            : undefined}
+                          : undefined}
                         selectedRowId={selectedSecondaryLine?._tabKey === st.key ? selectedSecondaryLine?.id : undefined}
+                        onSelectionChange={linesLayout === 'inlineEditable'
+                          ? (rows) => setSecondarySelectedRows(prev => ({ ...prev, [st.key]: rows }))
+                          : undefined}
                         onDeleteRow={enableSecondaryRowDelete && (api?.crud?.[st.key]?.delete ?? true) ? (row) => {
                           setSecondaryDeleteConfirm({
                             tabKey: st.key,
                             tabIndex: stIdx,
                             id: row.id,
                           });
+                        } : undefined}
+                        // Inline edit save for secondary-tab rows. Fires when a
+                        // cell loses focus while in edit mode. Optimistic flow:
+                        // we update the local cache FIRST so the Radix Select
+                        // (and read-mode label) reflect the new pick instantly,
+                        // then PATCH the server and roll back if it rejects.
+                        onUpdateRow={!st.customAddModal && linesLayout === 'inlineEditable' ? async (row, fieldKey, value, opts) => {
+                          const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
+                            || `${apiBaseUrl}/${st.key}/${row.id}`;
+                          const includesIdentifier = opts?.identifier !== undefined;
+                          const optimistic = includesIdentifier
+                            ? { [fieldKey]: value, [`${fieldKey}$_identifier`]: opts.identifier }
+                            : { [fieldKey]: value };
+                          // Snapshot the previous values so we can revert on failure.
+                          const previous = includesIdentifier
+                            ? { [fieldKey]: row[fieldKey], [`${fieldKey}$_identifier`]: row[`${fieldKey}$_identifier`] }
+                            : { [fieldKey]: row[fieldKey] };
+                          secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, optimistic);
+                          let res;
+                          try {
+                            res = await fetch(childUrl, {
+                              method: 'PATCH',
+                              headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ [fieldKey]: value }),
+                            });
+                          } catch (err) {
+                            secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
+                            toast.error(err?.message || ui('networkError'));
+                            throw err;
+                          }
+                          if (res.ok) {
+                            const updated = await res.json().catch(() => null);
+                            // Server response wins over the optimistic cache when present
+                            // — keeps any callout-driven fields the backend computed.
+                            if (updated) secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, updated);
+                          } else {
+                            secondaryHooks[stIdx]?.handleUpdateChild?.(row.id, previous);
+                            const msg = await extractErrorMessage(res);
+                            toast.error(msg || ui('networkError'));
+                            throw new Error(msg || 'PATCH failed');
+                          }
                         } : undefined}
                         addRow={st.addLineFields?.entry?.length > 0 ? {
                           ref: getSecondaryAddRowRef(st.key),
@@ -2016,16 +2619,75 @@ export function DetailView({
                     )}
                     </div>
                     {(st.addLineFields?.entry?.length > 0 || st.customAddModal) && hook.editing && (
-                      <AddLineButton
-                        onClick={() => {
-                          if (st.customAddModal) {
-                            void handleCustomModalAddClick(st.key);
-                          } else {
-                            void handleSecondaryAddLineToggle(st.key);
-                          }
-                        }}
-                        label={ui('addEntity', { label: tMenu(st.label) })}
-                      />
+                      // Wrapper measured by the secondary selection bar — its
+                      // `position: fixed` portal overlays exactly this region.
+                      <div ref={getSecondaryAddLineWrapperRef(st.key)} className="relative">
+                        <AddLineButton
+                          onClick={() => {
+                            if (st.customAddModal) {
+                              void handleCustomModalAddClick(st.key);
+                            } else {
+                              void handleSecondaryAddLineToggle(st.key);
+                            }
+                          }}
+                          label={ui('addEntity', { label: tMenu(st.label) })}
+                          hideChevron={hideAddLineChevron}
+                        />
+                        {linesLayout === 'inlineEditable' && (api?.crud?.[st.key]?.delete ?? true) && (
+                          <LinesSelectionBar
+                            visible={secondaryBarVisible[st.key] ?? false}
+                            closing={secondaryBarClosing[st.key] ?? false}
+                            barRect={secondaryBarRects[st.key]}
+                            count={(secondarySelectedRows[st.key] ?? []).length}
+                            selectedLabel={ui('selected', { count: (secondarySelectedRows[st.key] ?? []).length })}
+                            totalLabel={null}
+                            deleting={secondaryDeleting[st.key] ?? false}
+                            deleteTitle={ui('delete')}
+                            closeTitle={ui('close')}
+                            compact
+                            onDelete={async () => {
+                              if (!(await confirmDelete())) return;
+                              setSecondaryDeleting(prev => ({ ...prev, [st.key]: true }));
+                              const rows = secondarySelectedRows[st.key] ?? [];
+                              try {
+                                const results = await Promise.allSettled(
+                                  rows.map(row => {
+                                    const childUrl = api?.crud?.[st.key]?.detailUrl?.replace('{id}', row.id)
+                                      || `${apiBaseUrl}/${st.key}/${row.id}`;
+                                    return fetch(childUrl, {
+                                      method: 'DELETE',
+                                      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                    }).then(res => ({ res, row }));
+                                  })
+                                );
+                                let deleted = 0;
+                                for (const result of results) {
+                                  if (result.status === 'fulfilled' && result.value.res.ok) {
+                                    secondaryHooks[stIdx]?.handleDeleteChild?.(result.value.row.id);
+                                    if (selectedSecondaryLine?._tabKey === st.key && selectedSecondaryLine?.id === result.value.row.id) {
+                                      setSelectedSecondaryLine(null);
+                                    }
+                                    deleted++;
+                                  }
+                                }
+                                secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
+                                setSecondarySelectedRows(prev => ({ ...prev, [st.key]: [] }));
+                                if (deleted > 0) toast.success(ui('recordsDeleted', { count: deleted }));
+                                const failed = results.length - deleted;
+                                if (failed > 0) toast.error(ui('recordsCouldNotBeDeleted', { count: failed }));
+                              } catch (err) {
+                                toast.error(err.message || ui('networkError'));
+                              } finally {
+                                setSecondaryDeleting(prev => ({ ...prev, [st.key]: false }));
+                              }
+                            }}
+                            onClose={() => {
+                              secondaryInlineLinesRefs.current[st.key]?.current?.clearSelection?.();
+                              setSecondarySelectedRows(prev => ({ ...prev, [st.key]: [] }));
+                            }}
+                          />
+                        )}
+                      </div>
                     )}
                     </>
                     )}
@@ -2052,6 +2714,7 @@ export function DetailView({
                     />
                   </div>
                 )}
+                </div>
 
               </div>
             )}
@@ -2080,7 +2743,11 @@ export function DetailView({
               </>
             )}
 
-            {/* Bottom section: custom (two-column) or default (totals + footer) */}
+            {/* Bottom section: custom (two-column) or default (totals + footer).
+                In inlineEditable mode the parent is a flex column with
+                overflow-hidden, so this wrapper sits naturally at the bottom
+                while the lines area scrolls in the middle. */}
+            <div ref={bottomSectionRef} className={linesLayout === 'inlineEditable' ? 'shrink-0' : ''}>
             {bottomSection ? (() => {
               const BottomComponent = bottomSection;
               return (
@@ -2188,6 +2855,7 @@ export function DetailView({
                 )}
               </>
             )}
+            </div>
           </div>
           {sidePanel && (
             <div

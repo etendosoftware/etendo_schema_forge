@@ -5,7 +5,11 @@
     "name": "Return to Vendor Shipment",
     "relatedDocuments": true,
     "notesField": "description",
-    "dateFilterKey": "movementDate"
+    "dateFilterKey": "movementDate",
+    "linesLayout": "inlineEditable",
+    "customComponents": {
+      "bottomSection": "ReturnToVendorShipmentBottomPanel"
+    }
   },
   "entities": {
     "header": {

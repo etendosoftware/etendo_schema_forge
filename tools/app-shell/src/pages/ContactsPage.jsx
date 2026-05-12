@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useUI } from '@/i18n';
 import { KPIHeader } from '@/components/contract-ui/KPIHeader';
 import { KanbanBoard } from '@/components/contract-ui/KanbanBoard';
 import { Chatter } from '@/components/contract-ui/Chatter';
@@ -52,6 +53,7 @@ function formatCurrency(value) {
 }
 
 function DetailPanel({ contact, onClose }) {
+  const ui = useUI();
   if (!contact) return null;
 
   const tags = [CATEGORY_LABEL[contact.columnId]];
@@ -64,7 +66,7 @@ function DetailPanel({ contact, onClose }) {
       <div className="p-4">
         {/* Close button */}
         <div className="flex justify-end mb-2">
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close detail panel">
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label={ui("closeDetailPanel")}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -104,19 +106,20 @@ function DetailPanel({ contact, onClose }) {
         {/* Activity summary */}
         <Card>
           <CardHeader className="p-3 pb-2">
-            <CardTitle className="text-sm font-medium">Activity Summary</CardTitle>
+            <CardTitle className="text-sm font-medium">{ui("activitySummary")}</CardTitle>
           </CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Last sale</span>
+              <span className="text-muted-foreground">{ui("lastSale")}</span>
+              {/* i18n-allowlist: ["Mar 2, 2026"] */}
               <span className="font-medium">Mar 2, 2026</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total invoiced (12m)</span>
+              <span className="text-muted-foreground">{ui("totalInvoiced12m")}</span>
               <span className="font-medium">{contact.value ? formatCurrency(contact.value) : '-'}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Pending balance</span>
+              <span className="text-muted-foreground">{ui("pendingBalanceLabel")}</span>
               <span className="font-medium">{contact.value ? formatCurrency(Math.round(contact.value * 0.12)) : '-'}</span>
             </div>
           </CardContent>
@@ -142,17 +145,18 @@ function DetailPanel({ contact, onClose }) {
 }
 
 function ListView({ contacts, onRowClick }) {
+  const ui = useUI();
   return (
     <div className="border rounded-lg overflow-hidden">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/50">
-            <th className="text-left p-3 font-medium">Name</th>
-            <th className="text-left p-3 font-medium">Category</th>
-            <th className="text-left p-3 font-medium">Location</th>
-            <th className="text-left p-3 font-medium">Email</th>
-            <th className="text-right p-3 font-medium">Total Invoiced</th>
-            <th className="text-right p-3 font-medium">Pending Balance</th>
+            <th className="text-left p-3 font-medium">{ui("name")}</th>
+            <th className="text-left p-3 font-medium">{ui("category")}</th>
+            <th className="text-left p-3 font-medium">{ui("location")}</th>
+            <th className="text-left p-3 font-medium">{ui("email")}</th>
+            <th className="text-right p-3 font-medium">{ui("totalInvoicedHeader")}</th>
+            <th className="text-right p-3 font-medium">{ui("pendingBalanceHeader")}</th>
           </tr>
         </thead>
         <tbody>
@@ -181,6 +185,7 @@ function ListView({ contacts, onRowClick }) {
 }
 
 export default function ContactsPage() {
+  const ui = useUI();
   const [search, setSearch] = useState('');
   const [activeView, setActiveView] = useState('kanban');
   const [selectedContact, setSelectedContact] = useState(null);
@@ -217,14 +222,14 @@ export default function ContactsPage() {
             size="sm"
             onClick={() => setActiveView('kanban')}
           >
-            Kanban
+            {ui('viewKanban')}
           </Button>
           <Button
             variant={activeView === 'list' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => setActiveView('list')}
           >
-            List
+            {ui('viewList')}
           </Button>
         </div>
 

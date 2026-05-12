@@ -5,6 +5,7 @@ import ReturnMaterialReceiptForm from './ReturnMaterialReceiptForm';
 import ReturnMaterialReceiptLineTable from './ReturnMaterialReceiptLineTable';
 import ReturnMaterialReceiptLineForm from './ReturnMaterialReceiptLineForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
+import ReturnMaterialReceiptBottomPanel from '../../../custom/ReturnMaterialReceiptBottomPanel';
 import catalogs from './mockCatalogs';
 
 
@@ -33,6 +34,10 @@ const processes = [
 // @sf-generated-start draftMode:returnMaterialReceipt
 const draftMode = null;
 // @sf-generated-end draftMode:returnMaterialReceipt
+
+// @sf-generated-start requiredHeaderFields:returnMaterialReceipt
+const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', 'warehouse', 'partnerAddress'];
+// @sf-generated-end requiredHeaderFields:returnMaterialReceipt
 
 // @sf-generated-start addLineFields:returnMaterialReceiptLine
 const addLineFields = {
@@ -276,6 +281,9 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
       api={api}
         notesField="description"
         customTabs={[{ key: 'related', label: 'Related Documents', Component: RelatedDocuments }]}
+        bottomSection={ReturnMaterialReceiptBottomPanel}
+        requiredHeaderFields={requiredHeaderFields}
+        linesLayout="inlineEditable"
         {...props}
       />
     );

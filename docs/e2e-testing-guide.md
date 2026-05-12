@@ -27,6 +27,62 @@ npm install -g agent-browser && agent-browser install   # Optional: install agen
 
 ---
 
+## Deployed MCP OAuth2 Smoke
+
+`e2e/tests/flows/mcp-oauth-pkce.smoke.spec.js` validates the public MCP/OAuth integration after deploy. It models the browser flow started by `opencode mcp auth etendo`: clean session, OAuth authorize URL, login, requested permissions, explicit authorization, local callback, and PKCE token exchange. The UI preserves the original `/authorize?...` URL through onboarding with a local-only `returnTo` parameter, then resumes the authorization screen after environment login. It is skipped by default because it targets a deployed environment, uses real smoke credentials, can create an OAuth client through DCR, and binds a local callback server.
+
+Run it explicitly:
+
+```bash
+cd e2e
+npm run test:mcp-oauth-smoke
+```
+
+Before running, export or otherwise provide `E2E_MCP_OAUTH_SMOKE=1`, `E2E_MCP_SMOKE_USER`, `E2E_MCP_SMOKE_PASSWORD`, and `E2E_MCP_OAUTH_CLIENT_ID` in the shell or CI environment.
+
+Use DCR instead of a pre-created client when the environment allows dynamic registration:
+
+```bash
+cd e2e
+npm run test:mcp-oauth-smoke
+```
+
+For DCR, provide `E2E_MCP_OAUTH_SMOKE=1`, `E2E_MCP_SMOKE_USER`, `E2E_MCP_SMOKE_PASSWORD`, and `E2E_MCP_OAUTH_ENABLE_DCR=1` in the shell or CI environment.
+
+If DCR creates the client but `/etendo/oauth2/authorize` returns `invalid_scope`, the environment is not granting the requested MCP scopes to dynamically registered clients. In that case, create a client from the OAuth2 Clients administration page with a System Administrator role, enable `neo:read`, `neo:write`, `neo:process`, `neo:report`, and `neo:*`, then pass its id through `E2E_MCP_OAUTH_CLIENT_ID`.
+
+Configuration variables:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `E2E_MCP_PUBLIC_BASE_URL` | `https://go.experimental.etendo.cloud` | Public viewer origin used for discovery checks |
+| `E2E_MCP_RESOURCE` | `${E2E_MCP_PUBLIC_BASE_URL}/mcp` | Expected protected resource value |
+| `E2E_MCP_ENDPOINT` | `${E2E_MCP_PUBLIC_BASE_URL}/mcp` | MCP endpoint used for the WAF/method smoke |
+| `E2E_MCP_OAUTH_AUTHORIZE_URL` | `${E2E_MCP_PUBLIC_BASE_URL}/etendo/oauth2/authorize` | Backend authorization endpoint |
+| `E2E_MCP_OAUTH_TOKEN_URL` | `${E2E_MCP_PUBLIC_BASE_URL}/etendo/oauth2/token` | Token endpoint for the PKCE exchange |
+| `E2E_MCP_OAUTH_REGISTRATION_URL` | `${E2E_MCP_PUBLIC_BASE_URL}/etendo/oauth2/register` | DCR endpoint |
+| `E2E_MCP_OAUTH_SCOPES` | `neo:read neo:write neo:process neo:report neo:*` | Requested MCP scopes |
+| `E2E_MCP_OAUTH_CLIENT_ID` | none | Existing OAuth client ID |
+| `E2E_MCP_OAUTH_CLIENT_SECRET` | none | Optional client secret |
+| `E2E_MCP_OAUTH_TOKEN_AUTH_METHOD` | `client_secret_post` | Use `client_secret_basic`, `client_secret_post`, or `none` |
+| `E2E_MCP_OAUTH_ENABLE_DCR` | `0` | Set to `1` to create a client dynamically |
+| `E2E_MCP_OAUTH_DCR_INITIAL_ACCESS_TOKEN` | none | Optional bearer token for protected DCR |
+| `E2E_MCP_OAUTH_REDIRECT_URI` | local random port | Fixed callback URI when the client requires one; must use `127.0.0.1`, `localhost`, or `[::1]`, include an explicit port, and use the callback path registered for the client |
+
+The smoke performs these checks:
+
+1. `/.well-known/oauth-authorization-server` returns JSON with public HTTPS URLs.
+2. `/.well-known/oauth-protected-resource` returns JSON with the expected MCP resource.
+3. `POST /mcp` is not blocked by CloudFront/WAF as a method-level `403`.
+4. An unauthenticated authorization request does not resolve to only the Vite/PWA shell.
+5. The user reaches the standard login flow, logs in, returns to OAuth with the original parameters, sees the requested permissions prompt, explicitly authorizes access, receives `code` and `state`, and exchanges the code for an `access_token` with PKCE.
+
+The app service worker must not serve `index.html` for backend or metadata navigations. `tools/app-shell/vite.config.js` keeps `/etendo/*`, `/mcp`, and `/.well-known/*` in the Workbox navigation fallback denylist while leaving `/authorize` as a SPA route.
+
+After deploying a service worker or routing change, invalidate CloudFront for `/sw.js`, `/registerSW.js`, `/index.html`, and `/assets/*`. For one local browser session, close and reopen the browser or unregister the existing service worker before retrying MCP authorization.
+
+---
+
 ## Method 1: Record a Flow (Recommended for new tests)
 
 The fastest way to create a test. You interact with the app in a real browser, and Playwright records every action as code. Then Claude takes that recording and turns it into a proper test with assertions and validations.

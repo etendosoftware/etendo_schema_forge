@@ -19,6 +19,7 @@ The Return to Vendor window should let purchasing users register a vendor return
 - **Visibility:** Visible in the Purchases menu.
 - **Implementation type:** Generated standard list/detail window registered in `tools/app-shell/src/windows/registry.js`, using the shared app-shell generated route flow plus a generated detail page that adds a related-documents tab.
 - **Window shape:** Master-child window. The primary `header` entity is backed by `C_Order`, the main child table is `lines` on `C_OrderLine`, and the generated detail page also exposes secondary child tabs such as `basicDiscounts`.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. The add-line button, related-documents panel, notes panel, and totals panel are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
 
 ## Reactive behavior and dependencies
 

@@ -10,9 +10,11 @@
       }
     },
     "customComponents": {
-      "moreMenuContent": "InventoryMenuContent"
+      "moreMenuContent": "InventoryMenuContent",
+      "bottomSection": "PhysicalInventoryBottomPanel"
     },
-    "dateFilterKey": "movementDate"
+    "dateFilterKey": "movementDate",
+    "linesLayout": "inlineEditable"
   },
   "entities": {
     "header": {

@@ -19,6 +19,7 @@ Use this window to register and complete outgoing payments to vendors or other p
 - **Visibility:** visible in the Finance menu through `tools/app-shell/src/menu.json`.
 - **Implementation type:** custom app-shell route. `tools/app-shell/src/windows/registry.js` resolves `payment-out` to `tools/app-shell/src/windows/custom/payment-out/index.jsx`, which wraps the generated payment-out app from `artifacts/payment-out/generated/web/payment-out/index.jsx`.
 - **Window shape:** master-child. The primary record is the payment header (`header` / generated `finPayment` page), and the main child working surface is **Lines**.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. The add-line button and any related panels are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
 - **Current visible detail composition:** the generated page is list/detail based, and the custom wrapper keeps the header plus **Lines**, uses `description` as notes, removes generated secondary tabs, and adds a custom **Related Documents** tab.
 - **Contract-backed secondary surfaces:** the payment-out contract and generated API still define **Execution History**, **Exchange rates**, **Used Credit Source**, and **Accounting** entities even though the custom wrapper does not currently expose those generated secondary tabs in the app-shell detail view.
 

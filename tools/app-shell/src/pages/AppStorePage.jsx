@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useUI } from '@/i18n';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ function pickIcon(name) {
 }
 
 function AppCard({ app, installed, busy, onInstall, onUninstall }) {
+  const ui = useUI();
   const Icon = pickIcon(app.icon);
 
   return (
@@ -53,7 +55,7 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
           {installed && (
             <Badge variant="secondary" className="gap-1">
               <CheckCircle2 className="h-3 w-3" />
-              Installed
+              {ui("installed")}
             </Badge>
           )}
         </div>
@@ -63,7 +65,7 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
         <p className="text-sm text-muted-foreground">{app.description}</p>
 
         <div className="text-xs text-muted-foreground">
-          <div className="font-medium text-foreground mb-1">Adds menu entries</div>
+          <div className="font-medium text-foreground mb-1">{ui("addsMenuEntries")}</div>
           <ul className="list-disc pl-4 space-y-0.5">
             {app.menuEntries.map((e) => (
               <li key={e.name}>
@@ -88,7 +90,7 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
             onClick={() => onUninstall(app.appId)}
             disabled={busy}
           >
-            Uninstall
+            {ui("uninstall")}
           </Button>
         ) : (
           <Button
@@ -99,10 +101,10 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
             {busy ? (
               <>
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Installing…
+                {ui("installing")}
               </>
             ) : (
-              'Install'
+              ui('install')
             )}
           </Button>
         )}
@@ -112,6 +114,7 @@ function AppCard({ app, installed, busy, onInstall, onUninstall }) {
 }
 
 export default function AppStorePage() {
+  const ui = useUI();
   const installedIds = useInstalledApps();
   const installedSet = new Set(installedIds);
   const [busyId, setBusyId] = useState(null);
@@ -137,17 +140,15 @@ export default function AppStorePage() {
             <Store className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold">App Store</h1>
+            <h1 className="text-xl font-semibold">{ui("appStore")}</h1>
             <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-              External apps built on the Etendo Apps SDK. Each app runs in its
-              own iframe with its own BFF — installing one here adds its menu
-              entries to the shell; uninstalling removes them. No shell rebuild
-              required.
+              {ui("appStoreDescription")}
             </p>
             <p className="text-xs text-muted-foreground/80 mt-2">
-              Tip: this section is hidden by default — reveal it with{' '}
+              {ui("appStoreTip")}{' '}
               <code className="px-1 py-0.5 rounded bg-muted text-foreground">playstoreon</code>,
-              hide it with{' '}
+              {ui("appStoreTipHide")}{' '}
+{/* i18n-allowlist: ["playstoreon", "playstoreoff"] */}
               <code className="px-1 py-0.5 rounded bg-muted text-foreground">playstoreoff</code>.
             </p>
           </div>
@@ -156,9 +157,9 @@ export default function AppStorePage() {
           variant="ghost"
           size="sm"
           onClick={() => lockAppStore()}
-          title="Hide the App Store from the sidebar"
+          title={ui("hideAppStoreTitle")}
         >
-          Hide App Store
+          {ui("hideAppStore")}
         </Button>
       </div>
 

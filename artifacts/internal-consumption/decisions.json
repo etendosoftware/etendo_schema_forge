@@ -6,9 +6,11 @@
     "breadcrumb": "Inventory / Internal Consumption",
     "statusField": "status",
     "customComponents": {
-      "moreMenuContent": "InternalConsumptionActions"
+      "moreMenuContent": "InternalConsumptionActions",
+      "bottomSection": "InternalConsumptionBottomPanel"
     },
-    "dateFilterKey": "movementDate"
+    "dateFilterKey": "movementDate",
+    "linesLayout": "inlineEditable"
   },
   "entities": {
     "header": {

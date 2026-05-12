@@ -24,7 +24,8 @@ A user should be able to:
 - Route: `/goods-receipt`, `/goods-receipt/:recordId`
 - Visibility: visible from the Purchases menu under Operations
 - Implementation type: custom window override registered in `tools/app-shell/src/windows/registry.js`, built on top of the generated goods-receipt window
-- Window shape: master-child window with a header record (`goodsReceipt`) and child received lines (`goodsReceiptLine`)
+- Window shape: master-child window with a header record (`goodsReceipt`) and child received lines (`goodsReceiptLine`).
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. The add-line button and any related panels are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
 
 In practice, the header behaves like the receipt execution record and the child area behaves like the intake workspace. The custom implementation narrows the visible line table to receipt-focused columns and adds receipt-specific actions for line import and related-document navigation.
 

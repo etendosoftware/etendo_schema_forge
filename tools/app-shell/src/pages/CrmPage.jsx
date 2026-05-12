@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { useUI } from '@/i18n';
 import { useNavigate } from 'react-router-dom';
 import { KPIHeader, KanbanBoard, DataTable } from '@/components/contract-ui';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -42,6 +43,7 @@ const STATUS_VARIANT = {
 
 export default function CrmPage() {
   const navigate = useNavigate();
+  const ui = useUI();
   const [cards, setCards] = useState(INITIAL_CARDS);
 
   const handleDragEnd = useCallback((cardId, _fromColumnId, toColumnId) => {
@@ -79,7 +81,7 @@ export default function CrmPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5 text-muted-foreground" />
-                Recent Activities
+                {ui('recentActivities')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -98,7 +100,7 @@ export default function CrmPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <Users className="h-5 w-5 text-muted-foreground" />
-                Team Activity
+                {ui('teamActivity')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">

@@ -7,11 +7,13 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const [rma, setRma] = useState(null);
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const ui = useUI();
 
   useEffect(() => {
     if (!recordId || !data) { setLoading(false); return; }
+    setLoading(true);
     const rmaId = data.returnReason;
     const orderId = data.orderReference;
 
@@ -33,10 +35,10 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
 
     if (fetches.length === 0) { setLoading(false); return; }
     Promise.all(fetches).finally(() => setLoading(false));
-  }, [recordId, data, token, apiBaseUrl]);
+  }, [recordId, data, token, apiBaseUrl, refreshKey]);
 
   return (
-    <RelatedDocumentsShell loading={loading}>
+    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
       {rma && (
         <DocChip
           key="rma"

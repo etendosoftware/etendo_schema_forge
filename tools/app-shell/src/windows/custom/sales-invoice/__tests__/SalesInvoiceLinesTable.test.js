@@ -9,7 +9,7 @@ const src = readFileSync(join(__dirname, '..', 'SalesInvoiceLinesTable.jsx'), 'u
 
 describe('SalesInvoiceLinesTable', () => {
   it('exports a default function component', () => {
-    assert.match(src, /export default function SalesInvoiceLinesTable/);
+    assert.match(src, /export default SalesInvoiceLinesTable/);
   });
 
   it('renders a DataTable', () => {

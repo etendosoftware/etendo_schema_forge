@@ -7,11 +7,13 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   const [order, setOrder] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
   const ui = useUI();
 
   useEffect(() => {
     if (!recordId || !data) { setLoading(false); return; }
+    setLoading(true);
     const orderId = data.salesOrder;
     if (!orderId) { setLoading(false); return; }
 
@@ -23,7 +25,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
       setInvoices(inv);
       setLoading(false);
     });
-  }, [recordId, data, token, apiBaseUrl]);
+  }, [recordId, data, token, apiBaseUrl, refreshKey]);
 
   const chips = [];
 
@@ -76,7 +78,7 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
   }
 
   return (
-    <RelatedDocumentsShell loading={loading}>
+    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
       {chips}
     </RelatedDocumentsShell>
   );

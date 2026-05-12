@@ -1,8 +1,8 @@
 {
   "version": "0.17.0",
   "generatedAt": "2026-04-29T19:05:48.442Z",
-  "updatedAt": "2026-05-05T18:50:35.188Z",
-  "checksum": "091564477783a1b4",
+  "updatedAt": "2026-05-11T16:22:46.243Z",
+  "checksum": "94f86c1d168d824b",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -10,7 +10,8 @@
       "primaryEntity": "inventory",
       "category": "inventory",
       "customComponents": {
-        "moreMenuContent": "InventoryMenuContent"
+        "moreMenuContent": "InventoryMenuContent",
+        "bottomSection": "PhysicalInventoryBottomPanel"
       },
       "processOverrides": {
         "processNow": {
@@ -19,7 +20,8 @@
       },
       "statusField": "processed",
       "dateFilterKey": "movementDate",
-      "layoutType": "default"
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "inventory": {
@@ -470,7 +472,8 @@
       "primaryEntity": "inventory",
       "category": "inventory",
       "customComponents": {
-        "moreMenuContent": "InventoryMenuContent"
+        "moreMenuContent": "InventoryMenuContent",
+        "bottomSection": "PhysicalInventoryBottomPanel"
       },
       "processOverrides": {
         "processNow": {
@@ -478,7 +481,8 @@
         }
       },
       "statusField": "processed",
-      "dateFilterKey": "movementDate"
+      "dateFilterKey": "movementDate",
+      "linesLayout": "inlineEditable"
     },
     "entities": {
       "inventory": {

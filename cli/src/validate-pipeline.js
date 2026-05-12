@@ -403,6 +403,34 @@ async function ruleF10(artifactDir, artifactName, registryContent, repoRoot = RO
   return null;
 }
 
+const VALID_LINES_LAYOUTS = ['classic', 'inlineEditable'];
+
+/**
+ * F11: window.linesLayout in decisions.json must be one of the supported values.
+ * @param {string} artifactDir - absolute path to the artifact directory
+ * @param {string} artifactName
+ */
+async function ruleF11(artifactDir, artifactName) {
+  const decisionsPath = join(artifactDir, 'decisions.json');
+  if (!(await fileExists(decisionsPath))) return null;
+  let decisions;
+  try {
+    decisions = JSON.parse(await readFile(decisionsPath, 'utf8'));
+  } catch {
+    return skipped('F11', artifactName, 'decisions.json could not be parsed — F11 check skipped');
+  }
+  const value = decisions?.window?.linesLayout;
+  if (value === undefined || value === null) return null;
+  if (!VALID_LINES_LAYOUTS.includes(value)) {
+    return violation(
+      'F11', artifactName, 'BLOCK',
+      `window.linesLayout = '${value}' is not a supported value`,
+      `Set decisions.json window.linesLayout to one of: ${VALID_LINES_LAYOUTS.join(', ')}`,
+    );
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Artifact discovery
 // ---------------------------------------------------------------------------
@@ -541,6 +569,7 @@ export async function validatePipeline({
           skipSet.has('F6') ? null : ruleF6(artifactDir, name),
           skipSet.has('F7') ? null : ruleF7(artifactDir, name),
           skipSet.has('F10') ? null : ruleF10(artifactDir, name, registryContent, root),
+          skipSet.has('F11') ? null : ruleF11(artifactDir, name),
         ];
         const results = await Promise.all(checks);
         for (const r of results) {

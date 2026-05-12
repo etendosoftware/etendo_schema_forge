@@ -9,7 +9,11 @@
         "requiresLines": true
       }
     },
-    "dateFilterKey": "movementDate"
+    "dateFilterKey": "movementDate",
+    "linesLayout": "inlineEditable",
+    "customComponents": {
+      "bottomSection": "GoodsMovementsBottomPanel"
+    }
   },
   "entities": {
     "header": {
