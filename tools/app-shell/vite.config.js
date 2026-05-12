@@ -187,7 +187,7 @@ export default defineConfig(({ mode }) => {
     }),
     sentryVitePlugin({
       org: 'etendo-22',
-      project: 'etendo-go-frontend',
+      project: 'schema_forge',
       authToken: process.env.SENTRY_AUTH_TOKEN,
       telemetry: false,
       silent: !process.env.SENTRY_AUTH_TOKEN,
