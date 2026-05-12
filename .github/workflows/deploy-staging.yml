@@ -85,8 +85,10 @@ jobs:
           VITE_RUM_IDENTITY_POOL_ID_EXPERIMENTAL: ${{ vars.RUM_IDENTITY_POOL_ID_EXPERIMENTAL }}
           VITE_RUM_APP_MONITOR_ID_PRODUCTION: ${{ vars.RUM_APP_MONITOR_ID_PRODUCTION }}
           VITE_RUM_IDENTITY_POOL_ID_PRODUCTION: ${{ vars.RUM_IDENTITY_POOL_ID_PRODUCTION }}
+          # Sentry — DSN as variable (public, baked into JS bundle), token as secret
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        # .env.production (committed) provides VITE_MOCK=false, VITE_API_BASE=/etendo, VITE_SENTRY_DSN
+        # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
 
       - name: Generate reports manifest
         run: node cli/src/generate-reports-manifest.js
