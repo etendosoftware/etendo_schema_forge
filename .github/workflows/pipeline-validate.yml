@@ -31,7 +31,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - run: npm install
 
       - name: Determine scope (PR = changed artifacts only, push = full repo)
         id: scope
