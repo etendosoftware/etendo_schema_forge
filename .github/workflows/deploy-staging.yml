@@ -66,7 +66,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build app-shell
         run: npm run build --workspace=tools/app-shell
