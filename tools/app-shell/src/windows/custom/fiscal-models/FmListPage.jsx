@@ -94,16 +94,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   const allSelected = filtered.length > 0 && filtered.every(d => selected.has(d.id));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map(d => d.id)));
 
-  if (showCatalog) {
-    return (
-      <FmCatalogPage
-        activeModels={activeModels}
-        onBack={() => setShowCatalog(false)}
-        onSave={(newActive) => { setActiveModels(newActive); setShowCatalog(false); }}
-      />
-    );
-  }
-
   return (
     <div className="fm-page">
 
@@ -273,6 +263,20 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
       {/* ── Overlays ─────────────────────────────────────────────── */}
       {showConfig  && <ConfigDrawer onClose={() => setShowConfig(false)} />}
       {showNewDecl && <NewDeclModal onConfirm={handleNewDecl} onClose={() => setShowNewDecl(false)} />}
+
+      {/* ── Catalog drawer (slides from right) ───────────────────── */}
+      {showCatalog && (
+        <>
+          <div className="fm-catalog-overlay" onClick={() => setShowCatalog(false)} />
+          <div className="fm-catalog-drawer">
+            <FmCatalogPage
+              activeModels={activeModels}
+              onBack={() => setShowCatalog(false)}
+              onSave={(newActive) => { setActiveModels(newActive); setShowCatalog(false); }}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
