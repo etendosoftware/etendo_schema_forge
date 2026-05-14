@@ -27,7 +27,7 @@ function buildKpis(declarations, t) {
 
 export default function FmListPage({ declarations: propDecls, onSelect, onStatusChange }) {
   const ui = useUI();
-  const t = (k) => ui.t(k);
+  const t = ui;
   const [decls, setDecls] = useState(propDecls ?? MOCK_DECLARATIONS);
   const [filter, setFilter] = useState('all');
 

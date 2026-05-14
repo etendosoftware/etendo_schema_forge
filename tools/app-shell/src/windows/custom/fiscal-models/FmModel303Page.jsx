@@ -13,7 +13,7 @@ const TABS = [
 
 export default function FmModel303Page({ decl, onBack, onStatusChange }) {
   const ui = useUI();
-  const t = (k) => ui.t(k);
+  const t = ui;
   const [status, setStatus] = useState(decl.status);
   const [activeTab, setActiveTab] = useState('boxes');
   const [showPresent, setShowPresent] = useState(false);

@@ -8,7 +8,7 @@ import './fiscal-models.css';
 //   3. presentadoOtra   — submitted via external agency; status → presentadoOtra
 export function PresentModal({ decl, onConfirm, onClose }) {
   const ui = useUI();
-  const t = (k) => ui.t(k);
+  const t = ui;
   const [path, setPath] = useState(null);
   const [acuseFile, setAcuseFile] = useState(null);
   const fileRef = useRef(null);
@@ -85,7 +85,7 @@ export function PresentModal({ decl, onConfirm, onClose }) {
 
 export function FileGenModal({ decl, onConfirm, onClose }) {
   const ui = useUI();
-  const t = (k) => ui.t(k);
+  const t = ui;
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true">
       <div className="fm-present-modal">
@@ -109,7 +109,7 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
 
 export function NewDeclModal({ onConfirm, onClose }) {
   const ui = useUI();
-  const t = (k) => ui.t(k);
+  const t = ui;
   const [model, setModel] = useState('303');
   const [year, setYear] = useState(new Date().getFullYear());
   const [period, setPeriod] = useState('T1');
@@ -161,7 +161,7 @@ export function NewDeclModal({ onConfirm, onClose }) {
 
 export function IncidentTray({ incidents, onClose }) {
   const ui = useUI();
-  const t = (k) => ui.t(k);
+  const t = ui;
   if (!incidents?.length) return null;
   return (
     <div className="fm-incident-tray" role="complementary" aria-label={t('fm.incidents.title')}>
@@ -188,7 +188,7 @@ export function IncidentTray({ incidents, onClose }) {
 
 export function DrillDownPanel({ title, children, onClose }) {
   const ui = useUI();
-  const t = (k) => ui.t(k);
+  const t = ui;
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 360, background: '#fff', borderLeft: '1px solid #e5e7eb', boxShadow: '-4px 0 16px rgba(0,0,0,.10)', zIndex: 55, display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

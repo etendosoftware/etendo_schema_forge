@@ -12,7 +12,7 @@ const MOCK_OPERATORS = [
 
 export default function FmModel349Page({ decl, onBack, onStatusChange }) {
   const ui = useUI();
-  const t = (k) => ui.t(k);
+  const t = ui;
   const [status, setStatus] = useState(decl.status);
   const [showPresent, setShowPresent] = useState(false);
   const [showFilegen, setShowFilegen] = useState(false);

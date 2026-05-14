@@ -97,7 +97,7 @@ export function EmptyState({ message }) {
   const ui = useUI();
   return (
     <div className="fm-empty-state">
-      <p>{message ?? ui.t('fm.list.empty')}</p>
+      <p>{message ?? ui('fm.list.empty')}</p>
     </div>
   );
 }
