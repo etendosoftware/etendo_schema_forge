@@ -5,7 +5,7 @@
 
 ## Context
 
-This repository already had deterministic PR checks (`core-approval.yml`, `test.yml`, `pr-architecture-alert.yml`), but the architecture review was limited to a PR comment with a few regex-based findings.
+This repository already had deterministic PR automation (`core-approval.yml`, `test.yml`, `pr-architecture-alert.yml`), but the architecture review was limited to a PR comment with a few regex-based findings.
 
 The goal of this change is to make pull request review stricter and more useful for the cases that repeatedly hurt this codebase:
 

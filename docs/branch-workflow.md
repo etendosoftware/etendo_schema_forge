@@ -83,3 +83,14 @@ When working on a feature, always check if there's a corresponding branch/PR in 
 ## Branch Safety (MANDATORY)
 
 Both repos **MUST** be on the same branch. This prevents accidental commits to `main` or `develop` in the module. Always verify both repos are on matching branches before generating or committing code.
+
+## Core File Approval Rule
+
+Core-file merge blocking is handled by GitHub code-owner review rules, not by a failing CI check.
+
+- `.github/CODEOWNERS` assigns `@sebastianbarrozo` and `@valenvivaldi` as owners for repository files outside `artifacts/`.
+- `.github/CODEOWNERS` leaves `/artifacts/` ownerless so artifact-only PRs do not trigger the core owner gate by themselves.
+- Protected branches or rulesets that accept Schema Forge PRs must enable **Require review from Code Owners**.
+- Keep `.github/workflows/core-approval.yml` informational only. It may summarize core changes, but it must not fail just because required approvals are still pending.
+
+With this setup, a PR that changes core files stays unmergeable until the branch rule has the required approval state. The PR should show a pending review requirement instead of a red `core-approval` check.

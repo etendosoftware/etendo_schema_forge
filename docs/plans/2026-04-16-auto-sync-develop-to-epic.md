@@ -128,7 +128,7 @@ jobs:
 ```
 
 **Pros**
-- All required checks (`test.yml`, `core-approval.yml`, `pr-architecture-alert.yml`, etc.) run against the merge before it lands → much safer.
+- All required checks (`test.yml`, `pr-architecture-alert.yml`, etc.) run against the merge before it lands, while core-file approval is enforced by the code-owner branch rule.
 - No need for elevated tokens or branch-protection exceptions.
 - Conflicts are visible in the PR UI, where reviewers can fix them.
 - Plays nicely with the project rule "agents NEVER merge to develop/main" — this PR goes the other direction (develop → epic), still respects branch protection.
@@ -179,7 +179,7 @@ Same as Option A but trigger on `schedule: '0 6 * * *'` instead of `push`.
 - Auto-create the PR on every push to `develop`.
 - Add `--label epic-sync` so we can filter/track these PRs separately.
 - Enable GH "auto-merge" with method = merge (never squash) so it lands as soon as
-  the existing required checks (`test`, `core-approval`, etc.) pass.
+  the existing required checks (`test`, etc.) pass and any required code-owner approval is present.
 - On conflict, the PR stays open and waits for a human — which is the right behavior
   for a long-lived epic with multiple parallel features.
 

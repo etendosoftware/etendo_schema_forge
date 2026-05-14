@@ -1,14 +1,11 @@
-name: Core Files Approval Gate
+name: Core Files Review Notice
 
 on:
-  pull_request_review:
-    types: [submitted]
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
   core-approval:
@@ -18,53 +15,38 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for non-artifact changes
+      - name: Check for core changes
         id: check
+        shell: bash
         run: |
+          set -euo pipefail
+
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
-          NON_ARTIFACT=$(git diff --name-only "$BASE" "$HEAD" | grep -v '^artifacts/' || true)
-          if [ -n "$NON_ARTIFACT" ]; then
+          CORE_CHANGES=$(git diff --name-only "$BASE" "$HEAD" | grep -v '^artifacts/' || true)
+
+          if [ -n "$CORE_CHANGES" ]; then
             echo "has_core_changes=true" >> "$GITHUB_OUTPUT"
-            echo "Core files changed:"
-            echo "$NON_ARTIFACT"
+            echo "::notice::Core files changed. Merge gating is handled by CODEOWNERS plus branch protection/rulesets."
+            {
+              echo "### Core file review required"
+              echo
+              echo "This PR modifies files outside \`artifacts/\`."
+              echo
+              echo "Merge blocking is handled by GitHub code-owner review rules, not by this workflow failing."
+              echo
+              echo "Changed core files:"
+              echo
+              echo '```'
+              echo "$CORE_CHANGES"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "has_core_changes=false" >> "$GITHUB_OUTPUT"
-            echo "Only artifact changes — no approval gate needed."
-          fi
-
-      - name: Verify required approval
-        if: steps.check.outputs.has_core_changes == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          REQUIRED_REVIEWERS="valenvivaldi sebastianbarrozo"
-          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-
-          # Skip check if PR author is a required reviewer
-          for reviewer in $REQUIRED_REVIEWERS; do
-            if [ "$PR_AUTHOR" = "$reviewer" ]; then
-              echo "PR author ($PR_AUTHOR) is a required reviewer — skipping approval gate."
-              exit 0
-            fi
-          done
-
-          APPROVALS=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
-            --jq '[.[] | select(.state == "APPROVED") | .user.login] | unique | .[]')
-
-          echo "Current approvals: $APPROVALS"
-
-          APPROVED=false
-          for reviewer in $REQUIRED_REVIEWERS; do
-            if echo "$APPROVALS" | grep -qx "$reviewer"; then
-              echo "Approved by required reviewer: $reviewer"
-              APPROVED=true
-              break
-            fi
-          done
-
-          if [ "$APPROVED" = "false" ]; then
-            echo "::error::This PR modifies core files (outside artifacts/) and requires approval from one of: $REQUIRED_REVIEWERS"
-            exit 1
+            echo "Only artifact changes - no core owner gate needed."
+            {
+              echo "### No core file review required"
+              echo
+              echo "This PR only modifies files under \`artifacts/\`."
+            } >> "$GITHUB_STEP_SUMMARY"
           fi

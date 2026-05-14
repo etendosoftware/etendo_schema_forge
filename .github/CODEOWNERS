@@ -1,2 +1,12 @@
-# Default reviewers for all files
+# Core review ownership.
+#
+# Branch protection/rulesets should enable "Require review from Code Owners".
+# With that setting, changes outside artifacts/ block merge until the required
+# branch-rule approvals are present, without failing a CI check.
 * @sebastianbarrozo @valenvivaldi
+
+# Generated/window artifacts do not need the core owner gate by themselves.
+/artifacts/
+
+# Keep ownership on this policy file explicit.
+/.github/CODEOWNERS @sebastianbarrozo @valenvivaldi
