@@ -20227,5 +20227,82 @@
     "noProductsFound": {
       "label": "No se encontraron productos"
     }
+  },
+  "fm": {
+    "kpi": {
+      "total": "Declaraciones",
+      "pending": "Pendientes",
+      "blocking": "Bloqueantes",
+      "current_result": "Resultado actual"
+    },
+    "col": {
+      "model": "Modelo",
+      "year": "Año",
+      "period": "Período",
+      "type": "Tipo",
+      "result": "Resultado",
+      "incidents": "Incidencias",
+      "status": "Estado",
+      "nif": "NIF/CIF",
+      "nombre": "Nombre",
+      "pais": "País",
+      "base": "Base imponible",
+      "operacion": "Op."
+    },
+    "filter": { "all": "Todos" },
+    "type": { "ordinary": "Ordinaria", "complementary": "Complementaria" },
+    "result": {
+      "ingresar": "A ingresar",
+      "compensar": "A compensar",
+      "informativa": "Informativa"
+    },
+    "list": { "empty": "No se encontraron declaraciones." },
+    "present": {
+      "title": "Marcar como presentada",
+      "path": {
+        "acuse": "Con acuse de recibo",
+        "acuse_desc": "Sube el justificante PDF del portal de la AEAT.",
+        "sin_acuse": "Sin acuse de recibo",
+        "sin_acuse_desc": "Presentada en la AEAT, sin justificante adjunto.",
+        "otra": "Otra plataforma",
+        "otra_desc": "Presentada por gestoría u otra plataforma externa."
+      },
+      "upload_acuse": "Subir justificante (PDF/XML)"
+    },
+    "action": {
+      "back": "Volver",
+      "cancel": "Cancelar",
+      "confirm_presentation": "Confirmar",
+      "generate_file": "Generar fichero",
+      "present": "Marcar presentada",
+      "close": "Cerrar",
+      "create": "Crear"
+    },
+    "filegen": {
+      "title": "Generar fichero de declaración",
+      "desc": "Generar el fichero .303 / .349 para",
+      "generate": "Generar"
+    },
+    "new_decl": {
+      "title": "Nueva declaración",
+      "model": "Modelo",
+      "year": "Año",
+      "period": "Período"
+    },
+    "incidents": {
+      "title": "Incidencias",
+      "blocking": "bloqueante(s)",
+      "warning": "aviso(s)",
+      "none": "Sin incidencias.",
+      "blocking_placeholder": "Incidencia bloqueante — requiere revisión",
+      "warning_placeholder": "Aviso — verificar antes de presentar"
+    },
+    "section": {
+      "boxes": "Casillas del impuesto",
+      "summary": "Resumen",
+      "operators": "Operadores intracomunitarios (Mod. 349)"
+    },
+    "operators": { "empty": "Sin operadores intracomunitarios declarados." },
+    "summary": { "placeholder": "El resumen completo aparecerá aquí cuando se carguen los datos de NEO." }
   }
 }

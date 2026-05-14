@@ -19953,5 +19953,82 @@
     "noProductsFound": {
       "label": "No products found"
     }
+  },
+  "fm": {
+    "kpi": {
+      "total": "Declarations",
+      "pending": "Pending",
+      "blocking": "Blocking",
+      "current_result": "Current result"
+    },
+    "col": {
+      "model": "Model",
+      "year": "Year",
+      "period": "Period",
+      "type": "Type",
+      "result": "Result",
+      "incidents": "Incidents",
+      "status": "Status",
+      "nif": "VAT Number",
+      "nombre": "Name",
+      "pais": "Country",
+      "base": "Tax Base",
+      "operacion": "Op."
+    },
+    "filter": { "all": "All" },
+    "type": { "ordinary": "Ordinary", "complementary": "Complementary" },
+    "result": {
+      "ingresar": "To pay",
+      "compensar": "To offset",
+      "informativa": "Informative"
+    },
+    "list": { "empty": "No declarations found." },
+    "present": {
+      "title": "Mark as submitted",
+      "path": {
+        "acuse": "With acknowledgement receipt",
+        "acuse_desc": "Upload the PDF receipt from the AEAT portal.",
+        "sin_acuse": "Without acknowledgement receipt",
+        "sin_acuse_desc": "Submitted via AEAT but no receipt uploaded.",
+        "otra": "Other platform",
+        "otra_desc": "Submitted via external agency or third-party platform."
+      },
+      "upload_acuse": "Upload receipt (PDF/XML)"
+    },
+    "action": {
+      "back": "Back",
+      "cancel": "Cancel",
+      "confirm_presentation": "Confirm",
+      "generate_file": "Generate file",
+      "present": "Mark submitted",
+      "close": "Close",
+      "create": "Create"
+    },
+    "filegen": {
+      "title": "Generate declaration file",
+      "desc": "Generate the .303 / .349 submission file for",
+      "generate": "Generate"
+    },
+    "new_decl": {
+      "title": "New declaration",
+      "model": "Model",
+      "year": "Year",
+      "period": "Period"
+    },
+    "incidents": {
+      "title": "Incidents",
+      "blocking": "blocking",
+      "warning": "warnings",
+      "none": "No incidents.",
+      "blocking_placeholder": "Blocking incident — review required",
+      "warning_placeholder": "Warning — verify before submitting"
+    },
+    "section": {
+      "boxes": "Tax boxes",
+      "summary": "Summary",
+      "operators": "EU operators (Mod. 349)"
+    },
+    "operators": { "empty": "No EU operators declared." },
+    "summary": { "placeholder": "Full summary will appear here when data is loaded from NEO." }
   }
 }
