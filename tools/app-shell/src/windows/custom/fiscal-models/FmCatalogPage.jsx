@@ -17,11 +17,11 @@ const CAT_TEXT  = { iva: '#1d4ed8', ret: '#7c3aed' };
 // Only 303 and 349 support per-model configuration
 const CONFIGURABLE = new Set(['303', '349']);
 
-export default function FmCatalogPage({ onBack, onSave }) {
+export default function FmCatalogPage({ onBack, onSave, activeModels }) {
   const ui = useUI();
   const t = ui;
   const [active, setActive] = useState(
-    () => Object.fromEntries(CATALOG.map(m => [m.id, m.defaultActive]))
+    () => activeModels ?? Object.fromEntries(CATALOG.map(m => [m.id, m.defaultActive]))
   );
   const [configModel, setConfigModel] = useState(null);
 
