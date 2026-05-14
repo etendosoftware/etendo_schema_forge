@@ -206,15 +206,80 @@ function CfgField({ label, children, style }) {
 
 const INPUT_ST = { width: '100%', fontSize: 12, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 4, boxSizing: 'border-box' };
 
-export function ConfigDrawer({ onClose }) {
+function CfgSection303({ t }) {
+  return (
+    <CfgSection title={t('fm.config.m303.title')}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', cursor: 'pointer', marginBottom: 8 }}>
+        <input type="checkbox" defaultChecked />
+        {t('fm.config.m303.redeme')}
+      </label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', cursor: 'pointer', marginBottom: 12 }}>
+        <input type="checkbox" />
+        {t('fm.config.m303.recc')}
+      </label>
+      <CfgField label={t('fm.config.m303.prorata')}>
+        <select style={INPUT_ST}>
+          <option>{t('fm.config.m303.prorata_general')}</option>
+          <option>{t('fm.config.m303.prorata_especial')}</option>
+        </select>
+      </CfgField>
+      <CfgField label={t('fm.config.m303.iban')}>
+        <input type="text" placeholder="ES00 0000 0000 0000 0000 0000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
+      </CfgField>
+    </CfgSection>
+  );
+}
+
+function CfgSection349({ t }) {
+  return (
+    <CfgSection title={t('fm.config.m349.title')}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <CfgField label={t('fm.config.m349.periodicity')} style={{ flex: 1 }}>
+          <select style={INPUT_ST}>
+            <option>{t('fm.config.m349.periodicity_monthly')}</option>
+            <option>{t('fm.config.m349.periodicity_quarterly')}</option>
+            <option>{t('fm.config.m349.periodicity_annual')}</option>
+          </select>
+        </CfgField>
+        <CfgField label={t('fm.config.m349.threshold')} style={{ flex: 1 }}>
+          <input type="text" defaultValue="50.000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
+        </CfgField>
+      </div>
+      <CfgField label={t('fm.config.m349.viespref')}>
+        <select style={INPUT_ST}>
+          <option>{t('fm.config.m349.viespref_auto')}</option>
+          <option>{t('fm.config.m349.viespref_manual')}</option>
+        </select>
+      </CfgField>
+      <CfgField label={t('fm.config.m349.keys')}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {['E', 'A', 'T', 'S', 'I'].map(k => (
+            <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+              <input type="checkbox" defaultChecked />
+              <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{k}</span>
+            </label>
+          ))}
+        </div>
+      </CfgField>
+    </CfgSection>
+  );
+}
+
+// model: '303' | '349' | undefined — when provided, shows only that model's section;
+// undefined shows all sections (global config from the declaration detail page).
+export function ConfigDrawer({ model, onClose }) {
   const ui = useUI();
   const t = ui;
+  const subtitle = model
+    ? t(`fm.config.m${model}.title`)
+    : t('fm.config.sub');
+
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 400, background: '#fff', borderLeft: '1px solid #e5e7eb', boxShadow: '-4px 0 16px rgba(0,0,0,.10)', zIndex: 55, display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{t('fm.config.title')}</span>
-          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{t('fm.config.sub')}</div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{subtitle}</div>
         </div>
         <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#6b7280' }} onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
       </div>
@@ -230,55 +295,8 @@ export function ConfigDrawer({ onClose }) {
             <CfgField label={t('fm.config.declarant.province')} style={{ flex: 1 }}><input type="text" style={INPUT_ST} /></CfgField>
           </div>
         </CfgSection>
-        <CfgSection title={t('fm.config.m303.title')}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', cursor: 'pointer', marginBottom: 8 }}>
-            <input type="checkbox" defaultChecked />
-            {t('fm.config.m303.redeme')}
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', cursor: 'pointer', marginBottom: 12 }}>
-            <input type="checkbox" />
-            {t('fm.config.m303.recc')}
-          </label>
-          <CfgField label={t('fm.config.m303.prorata')}>
-            <select style={INPUT_ST}>
-              <option>{t('fm.config.m303.prorata_general')}</option>
-              <option>{t('fm.config.m303.prorata_especial')}</option>
-            </select>
-          </CfgField>
-          <CfgField label={t('fm.config.m303.iban')}>
-            <input type="text" placeholder="ES00 0000 0000 0000 0000 0000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
-          </CfgField>
-        </CfgSection>
-        <CfgSection title={t('fm.config.m349.title')}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <CfgField label={t('fm.config.m349.periodicity')} style={{ flex: 1 }}>
-              <select style={INPUT_ST}>
-                <option>{t('fm.config.m349.periodicity_monthly')}</option>
-                <option>{t('fm.config.m349.periodicity_quarterly')}</option>
-                <option>{t('fm.config.m349.periodicity_annual')}</option>
-              </select>
-            </CfgField>
-            <CfgField label={t('fm.config.m349.threshold')} style={{ flex: 1 }}>
-              <input type="text" defaultValue="50.000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
-            </CfgField>
-          </div>
-          <CfgField label={t('fm.config.m349.viespref')}>
-            <select style={INPUT_ST}>
-              <option>{t('fm.config.m349.viespref_auto')}</option>
-              <option>{t('fm.config.m349.viespref_manual')}</option>
-            </select>
-          </CfgField>
-          <CfgField label={t('fm.config.m349.keys')}>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {['E', 'A', 'T', 'S', 'I'].map(k => (
-                <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
-                  <input type="checkbox" defaultChecked />
-                  <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{k}</span>
-                </label>
-              ))}
-            </div>
-          </CfgField>
-        </CfgSection>
+        {(!model || model === '303') && <CfgSection303 t={t} />}
+        {(!model || model === '349') && <CfgSection349 t={t} />}
       </div>
       <div style={{ padding: '12px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button style={{ fontSize: 12, padding: '6px 14px', borderRadius: 4, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#f9fafb' }} onClick={onClose}>{t('fm.action.cancel')}</button>
