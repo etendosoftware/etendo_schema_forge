@@ -15,7 +15,7 @@ describe('fiscal-models.css — key class families', () => {
   it('defines fm-kpi-strip', () => assert.match(css, /\.fm-kpi-strip/));
   it('defines fm-table (dense)', () => assert.match(css, /\.fm-table/));
   it('defines fm-present-modal', () => assert.match(css, /\.fm-present-modal/));
-  it('defines fm-aeat-box', () => assert.match(css, /\.fm-aeat-box/));
+  it('defines fm-aeat-cell', () => assert.match(css, /\.fm-aeat-cell/));
 });
 
 describe('FmCommon — exports', () => {

@@ -1,41 +1,63 @@
 import React from 'react';
 import { useUI } from '@/i18n';
+import { getLayout303 } from './fm303Layouts.js';
 import { formatAmount } from './fiscalModelsUtils.js';
 
-const DEFAULT_BOX_DEFS = [
-  { num: 1,  group: 'bases' },
-  { num: 2,  group: 'cuotas' },
-  { num: 3,  group: 'bases' },
-  { num: 4,  group: 'cuotas' },
-  { num: 5,  group: 'bases' },
-  { num: 6,  group: 'cuotas' },
-  { num: 28, group: 'totals', highlight: true },
-  { num: 48, group: 'deducciones' },
-  { num: 64, group: 'deducciones', highlight: true },
-  { num: 69, group: 'resultado', highlight: true },
-  { num: 71, group: 'resultado', highlight: true },
-];
-
-export default function FmBoxes303({ boxes }) {
+export default function FmBoxes303({ boxes, year, period }) {
   const ui = useUI();
   const t = ui;
-  const defaultBoxes = DEFAULT_BOX_DEFS.map(b => ({ ...b, label: t(`fm.box.${b.num}`) }));
-  const resolved = (boxes ?? defaultBoxes).map(box => ({
-    ...box,
-    value: box.value ?? null,
-  }));
+  const layout = getLayout303(year, period);
+
+  // Normalize boxes to { [boxNum]: value } regardless of input format
+  const valueMap = {};
+  if (Array.isArray(boxes)) {
+    boxes.forEach(b => { valueMap[b.num] = b.value; });
+  } else if (boxes && typeof boxes === 'object') {
+    Object.assign(valueMap, boxes);
+  }
 
   return (
-    <div className="fm-aeat-grid">
-      {resolved.map(box => (
-        <div key={box.num} className={`fm-aeat-box${box.highlight ? ' fm-aeat-box--highlight' : ''}`}>
-          <div className="fm-aeat-box__num">{t('fm.box.prefix')} {box.num}</div>
-          <div className="fm-aeat-box__label">{box.label}</div>
-          <div className="fm-aeat-box__value">
-            {box.value != null ? formatAmount(box.value) : '—'}
+    <div className="fm-aeat-table">
+      {layout.sections.map((section, si) => {
+        const cols = section.colHeaderKeys?.length || 1;
+        return (
+          <div key={si} className="fm-aeat-section">
+            <div className="fm-aeat-section__title">{t(section.titleKey)}</div>
+
+            {cols > 0 && section.colHeaderKeys?.length > 0 && (
+              <div className="fm-aeat-col-headers">
+                <span className="fm-aeat-col-headers__label" />
+                {section.colHeaderKeys.map((k, ci) => (
+                  <span key={ci} className="fm-aeat-col-headers__cell">{t(k)}</span>
+                ))}
+              </div>
+            )}
+
+            {section.rows.map((row, ri) => (
+              <div key={ri} className="fm-aeat-row">
+                <span className="fm-aeat-row__label">
+                  {row.labelKey ? t(row.labelKey) : ''}
+                </span>
+                {Array.from({ length: cols }, (_, ci) => {
+                  const boxNum = row.cells?.[ci] ?? null;
+                  if (boxNum === null) {
+                    return <div key={ci} className="fm-aeat-cell fm-aeat-cell--empty" />;
+                  }
+                  const val = valueMap[boxNum] ?? null;
+                  return (
+                    <div key={ci} className="fm-aeat-cell">
+                      <span className="fm-aeat-cell__num">{boxNum}</span>
+                      <span className="fm-aeat-cell__value">
+                        {val != null ? formatAmount(val) : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import FmListPage from './FmListPage';
 import FmModel303Page from './FmModel303Page';
 import FmModel349Page from './FmModel349Page';
+import FmCatalogPage from './FmCatalogPage';
 import { NewDeclModal } from './FmOverlays.jsx';
 
 export default function FiscalModelsPage() {
@@ -40,9 +41,18 @@ export default function FiscalModelsPage() {
     );
   }
 
+  if (view.type === 'catalog') {
+    return (
+      <FmCatalogPage
+        onBack={handleBack}
+        onSave={() => handleBack()}
+      />
+    );
+  }
+
   return (
     <>
-      <FmListPage onSelect={handleSelect} />
+      <FmListPage onSelect={handleSelect} onOpenCatalog={() => setView({ type: 'catalog' })} />
       {showNewDecl && <NewDeclModal onConfirm={() => {}} onClose={() => setShowNewDecl(false)} />}
     </>
   );
