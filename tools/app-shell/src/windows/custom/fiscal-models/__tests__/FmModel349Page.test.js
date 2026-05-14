@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'FmModel349Page.jsx'), 'utf8');
+const src = readFileSync(join(__dirname, '..', 'models', '349', 'FmModel349Page.jsx'), 'utf8');
 
 describe('FmModel349Page — exports', () => {
   it('has default export', () => assert.match(src, /export default/));

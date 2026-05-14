@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useUI } from '@/i18n';
 import CertModal from './CertModal.jsx';
+import { useDraggable } from '../fiscal-monitor/useDraggable.js';
 
 // idField = javaQualifier of the PK column in ETGO_SF_FIELD; NeoFieldFilter renames 'id' → qualifier
 const CONFIGS = [
@@ -174,6 +175,7 @@ export default function FiscalConfigDebugPanel({ orgId, token, apiBaseUrl, onDel
   const [collapsed, setCollapsed] = useState(false);
   const [status, setStatus] = useState({});
   const [certDebug, setCertDebug] = useState(null);
+  const { panelRef, posStyle, handleMouseDown } = useDraggable();
 
   async function handleDelete(cfg) {
     if (!orgId) return;
@@ -201,13 +203,17 @@ export default function FiscalConfigDebugPanel({ orgId, token, apiBaseUrl, onDel
 
   return (
     <>
-      <div style={panelStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed ? 0 : 4 }}>
+      <div ref={panelRef} style={{ ...panelStyle, ...posStyle }}>
+        <div
+          onMouseDown={handleMouseDown}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed ? 0 : 4, cursor: 'grab', userSelect: 'none' }}
+        >
           <span style={{ fontSize: 10, letterSpacing: '0.08em', color: '#a0a0cc', textTransform: 'uppercase' }}>
             {ui('fiscalDebug.title')}
           </span>
           <button
             onClick={() => setCollapsed(c => !c)}
+            onMouseDown={e => e.stopPropagation()}
             style={{ background: 'none', border: 'none', color: '#a0a0cc', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
           >
             {collapsed ? '▾' : '▴'}

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useUI } from '@/i18n';
-import { StatusPillMenu } from './FmCommon.jsx';
-import { PresentModal, FileGenModal } from './FmOverlays.jsx';
-import { formatAmount } from './fiscalModelsUtils.js';
-import './fiscal-models.css';
+import { StatusPillMenu } from '../../FmCommon.jsx';
+import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
+import { formatAmount } from '../../fiscalModelsUtils.js';
+import '../../fiscal-models.css';
 
 // ── Constants ────────────────────────────────────────────────────
 const MESES_ES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];

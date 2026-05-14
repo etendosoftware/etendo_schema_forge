@@ -1,9 +1,9 @@
 import React from 'react';
 import { useUI } from '@/i18n';
 import { getLayout303 } from './fm303Layouts.js';
-import { formatAmount } from './fiscalModelsUtils.js';
+import { formatAmount } from '../../fiscalModelsUtils.js';
 
-export default function FmBoxes303({ boxes, year, period }) {
+export default function FmBoxes303({ boxes, year, period, sectionIds }) {
   const ui = useUI();
   const t = ui;
   const layout = getLayout303(year, period);
@@ -16,9 +16,13 @@ export default function FmBoxes303({ boxes, year, period }) {
     Object.assign(valueMap, boxes);
   }
 
+  const sections = sectionIds
+    ? layout.sections.filter(s => sectionIds.includes(s.id))
+    : layout.sections;
+
   return (
     <div className="fm-aeat-table">
-      {layout.sections.map((section, si) => {
+      {sections.map((section, si) => {
         const cols = section.colHeaderKeys?.length || 1;
         return (
           <div key={si} className="fm-aeat-section">

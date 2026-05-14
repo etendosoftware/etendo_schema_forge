@@ -1,0 +1,450 @@
+import React, { useState } from 'react';
+import { useUI } from '@/i18n';
+import {
+  StatusPillMenu, ResultPill, SummaryCard, Tabs, Banner, SectionCard, EmptyState,
+  NumberedStepper,
+} from '../../FmCommon.jsx';
+import FmBoxes303 from './FmBoxes303.jsx';
+import { PresentModal, FileGenModal, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
+import { fmtDecl, formatAmount, formatPeriod } from '../../fiscalModelsUtils.js';
+
+const STEPPER_INDEX = {
+  pendiente: 0, borrador: 1, listo: 2,
+  presentado: 3, presentadoOtra: 3, presentadoAcuse: 3,
+  omitido: -1,
+};
+
+// ── Tab content components ────────────────────────────────────────
+
+function SourcesTab({ decl, t }) {
+  const sources = decl.sources ?? [];
+  return (
+    <SectionCard
+      title={t('fm.sources.title')}
+      sub={t('fm.sources.sub')}
+      flush
+    >
+      {sources.length === 0 ? (
+        <EmptyState
+          icon="📄"
+          title={t('fm.list.empty')}
+          sub={t('fm.sources.sub')}
+        />
+      ) : (
+        <div className="fm-table-wrap">
+          <table className="fm-dtable">
+            <thead>
+              <tr>
+                <th>{t('fm.sources.col.date')}</th>
+                <th>{t('fm.sources.col.ref')}</th>
+                <th>{t('fm.sources.col.type')}</th>
+                <th>{t('fm.sources.col.party')}</th>
+                <th>{t('fm.sources.col.regime')}</th>
+                <th className="num">{t('fm.sources.col.base')}</th>
+                <th className="num">{t('fm.sources.col.vat')}</th>
+                <th className="num">{t('fm.sources.col.total')}</th>
+                <th>{t('fm.sources.col.boxes')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sources.map((r, i) => (
+                <tr key={i}>
+                  <td className="strong">{r.date}</td>
+                  <td className="mono">{r.ref}</td>
+                  <td>{r.type}</td>
+                  <td>{r.party}</td>
+                  <td style={{ color: '#6b7280' }}>{r.regime || '—'}</td>
+                  <td className="num strong">{formatAmount(r.base)}</td>
+                  <td className="num">{r.vat != null ? formatAmount(r.vat) : '—'}</td>
+                  <td className="num strong">{formatAmount(r.total)}</td>
+                  <td className="mono" style={{ color: '#9ca3af', fontSize: 11 }}>{r.boxes || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function FilesTab({ decl, t, onGenerate, fileBlocked }) {
+  const file = decl.file ?? null;
+  return (
+    <SectionCard title={t('fm.files.title')} flush>
+      {file ? (
+        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid #d1fae5', borderRadius: 8, background: '#f0fdf4' }}>
+            <span style={{ fontSize: 20 }}>✅</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{file.name}</div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                {file.size} · {file.generatedAt}
+              </div>
+            </div>
+            <button className="fm-btn" onClick={() => {}}>⬇ {t('fm.action.download')}</button>
+          </div>
+          <Banner
+            tone="info"
+            title={t('fm.files.next_step')}
+            sub={t('fm.files.next_step_sub')}
+          />
+        </div>
+      ) : (
+        <EmptyState
+          icon="📂"
+          title={t('fm.files.empty')}
+          sub={t('fm.files.empty_sub')}
+          cta={
+            <button
+              className={`fm-btn${fileBlocked ? ' fm-btn--danger' : ' fm-btn--primary'}`}
+              onClick={onGenerate}
+            >
+              {fileBlocked ? '🔒' : '📄'} {t('fm.action.gen303')}
+            </button>
+          }
+        />
+      )}
+    </SectionCard>
+  );
+}
+
+function HistoryTab({ decl, t }) {
+  const history = decl.history ?? [];
+  return (
+    <SectionCard title={t('fm.history.title')} flush>
+      {history.length === 0 ? (
+        <EmptyState icon="🕐" title={t('fm.list.empty')} />
+      ) : (
+        <div className="fm-timeline">
+          {history.map((e, i) => (
+            <div key={i} className="fm-timeline__event">
+              <div className="fm-timeline__dot">{e.icon ?? '○'}</div>
+              <div className="fm-timeline__body">
+                <div className="fm-timeline__text">{e.text}</div>
+                <div className="fm-timeline__meta">{e.at} · {e.who}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function IncidentsTab({ decl, blocking, warning, t }) {
+  const incidents = decl.incidents?.items ?? [];
+
+  if (blocking === 0 && warning === 0) {
+    return (
+      <SectionCard title={t('fm.incidents.tab_title')} flush>
+        <EmptyState
+          icon="✅"
+          title={t('fm.incidents.empty')}
+          sub={t('fm.incidents.empty_sub')}
+        />
+      </SectionCard>
+    );
+  }
+
+  const sorted = [...incidents].sort((a, b) =>
+    (a.severity === 'block' ? 0 : 1) - (b.severity === 'block' ? 0 : 1)
+  );
+
+  return (
+    <SectionCard
+      title={`${incidents.length} ${t('fm.incidents.tab_title').toLowerCase()}`}
+      sub={t('fm.incidents.block_sub')}
+      flush
+    >
+      {sorted.length > 0 ? (
+        <div className="fm-table-wrap">
+          <table className="fm-dtable">
+            <thead>
+              <tr>
+                <th>{t('fm.incidents.col.severity')}</th>
+                <th>{t('fm.incidents.col.origin')}</th>
+                <th>{t('fm.incidents.col.message')}</th>
+                <th>{t('fm.incidents.col.suggestion')}</th>
+                <th style={{ textAlign: 'right' }}>{t('fm.incidents.col.action')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((inc, i) => (
+                <tr key={i}>
+                  <td>
+                    {inc.severity === 'block'
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#dc2626', background: '#fee2e2', borderRadius: 4, padding: '2px 6px' }}>🚫 {t('fm.incidents.severity.block')}</span>
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#d97706', background: '#fef3c7', borderRadius: 4, padding: '2px 6px' }}>⚠ {t('fm.incidents.severity.warn')}</span>
+                    }
+                  </td>
+                  <td style={{ color: '#6b7280', fontSize: 11 }}>{inc.origin ?? '—'}</td>
+                  <td className="strong">{inc.message}</td>
+                  <td style={{ color: '#6b7280' }}>{inc.suggestion ?? '—'}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button className="fm-btn">{t('fm.action.go_to')} →</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div style={{ padding: '8px 16px', fontSize: 12, color: '#9ca3af' }}>
+          {blocking} {t('fm.incidents.blocking')}, {warning} {t('fm.incidents.warning')}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────
+
+export default function FmModel303Page({ decl, onBack, onStatusChange }) {
+  const ui = useUI();
+  const t = ui;
+  const [status, setStatus] = useState(decl.status);
+  const [activeTab, setActiveTab] = useState('boxes');
+  const [boxPage, setBoxPage] = useState(0);
+  const [showPresent, setShowPresent] = useState(false);
+  const [showFilegen, setShowFilegen] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+
+  const stepperSteps = [
+    t('fm.stepper.pending'),
+    t('fm.stepper.draft'),
+    t('fm.stepper.ready'),
+    t('fm.stepper.presented'),
+  ];
+
+  function handleStatusChange(newStatus) {
+    setStatus(newStatus);
+    onStatusChange?.(decl.id, newStatus);
+  }
+
+  function handlePresent({ status: newStatus }) {
+    handleStatusChange(newStatus);
+  }
+
+  const blocking = decl.incidents?.blocking ?? 0;
+  const warning = decl.incidents?.warning ?? 0;
+  const incidentCount = blocking + warning;
+  const isSubmitted = ['presentado', 'presentadoOtra', 'presentadoAcuse'].includes(status);
+  const fileBlocked = blocking > 0;
+  const summary = decl.summary ?? {};
+  const resultKind = decl.result?.kind ?? null;
+  const prev = summary.prev ?? null;
+
+  function pctDelta(current, previous) {
+    if (previous == null || previous === 0 || current == null) return null;
+    const pct = ((current - previous) / Math.abs(previous)) * 100;
+    return { dir: pct >= 0 ? 'up' : 'down', text: `${Math.abs(pct).toFixed(1)}%` };
+  }
+
+  const tabs = [
+    { id: 'boxes',     label: t('fm.tab.boxes') },
+    { id: 'sources',   label: t('fm.tab.sources') },
+    { id: 'incidents', label: t('fm.tab.incidents'),
+      badge: incidentCount > 0 ? incidentCount : null,
+      badgeTone: blocking > 0 ? 'danger' : warning > 0 ? 'warn' : null,
+    },
+    { id: 'files',     label: t('fm.tab.files'),
+      badge: decl.file ? 1 : null,
+    },
+    { id: 'history',   label: t('fm.tab.history') },
+  ];
+
+  return (
+    <div className="fm-page fm-page--freeflow">
+
+      {/* ── Header (349-style) ──────────────────────────────────── */}
+      <div className="fm-349-header">
+        <div className="fm-349-header__back">
+          <button className="fm-349-header__back-btn" onClick={onBack}>
+            ← {t('fm.action.back')}
+          </button>
+        </div>
+        <div className="fm-349-header__main">
+          <div>
+            <div className="fm-349-header__title-row">
+              <span className="fm-model-badge fm-model-badge--303">303</span>
+              <span className="fm-349-header__title">
+                Modelo 303 · {decl.year} / {formatPeriod(decl.period)}
+              </span>
+              <StatusPillMenu status={status} onStatusChange={handleStatusChange} />
+            </div>
+            <div className="fm-349-header__subtitle">
+              {t('fm.m303.subtitle')}
+              {' · '}
+              {decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}
+              {decl.nif ? ` · NIF: ${decl.nif}` : ''}
+            </div>
+          </div>
+          <div className="fm-349-header__actions">
+            <button className="fm-349-header__btn" onClick={() => setShowCompare(true)}>
+              ⇄ {t('fm.action.compare')}
+            </button>
+            <button className="fm-349-header__btn" onClick={() => setShowConfig(true)}>
+              ⚙ {t('fm.config.title')}
+            </button>
+            {!isSubmitted && (
+              <button
+                className={`fm-349-header__btn${fileBlocked ? ' fm-303-header__btn--locked' : ''}`}
+                onClick={() => setShowFilegen(true)}
+                title={fileBlocked ? t('fm.incidents.block_sub') : ''}
+                style={fileBlocked ? { color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2' } : {}}
+              >
+                {fileBlocked ? '🔒' : '↓'} {t('fm.action.gen303')}
+              </button>
+            )}
+            <button
+              className="fm-349-header__btn fm-349-header__btn--primary"
+              onClick={() => setShowPresent(true)}
+            >
+              ▶ {isSubmitted ? t('fm.action.change_status') : t('fm.action.submit')}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Numbered Stepper ────────────────────────────────────── */}
+      <NumberedStepper steps={stepperSteps} current={STEPPER_INDEX[status] ?? 0} />
+
+      {/* Incident banners */}
+      {blocking > 0 && (
+        <Banner
+          tone="danger"
+          icon="🚫"
+          title={`${blocking} ${t('fm.incidents.banner')}`}
+          sub={t('fm.incidents.block_sub')}
+          actions={
+            <button className="fm-btn" onClick={() => setActiveTab('incidents')}>
+              {t('fm.action.go_to')} →
+            </button>
+          }
+        />
+      )}
+      {warning > 0 && blocking === 0 && (
+        <Banner
+          tone="warn"
+          icon="⚠"
+          title={`${warning} ${t('fm.incidents.banner_warn')}`}
+          actions={
+            <button className="fm-btn" onClick={() => setActiveTab('incidents')}>
+              {t('fm.tab.incidents')} →
+            </button>
+          }
+        />
+      )}
+
+      {/* Summary cards row — always visible */}
+      <div className="fm-summary-row">
+        <SummaryCard
+          eyebrow={t('fm.m303.summary.accrued')}
+          value={formatAmount(summary.accrued ?? 0)}
+          sub={t('fm.m303.summary.accrued_sub')}
+          delta={pctDelta(summary.accrued, prev?.accrued)}
+        />
+        <SummaryCard
+          eyebrow={t('fm.m303.summary.deductible')}
+          value={formatAmount(summary.deductible ?? 0)}
+          sub={t('fm.m303.summary.deductible_sub')}
+          delta={pctDelta(summary.deductible, prev?.deductible)}
+        />
+        <SummaryCard
+          accent
+          eyebrow={t('fm.m303.summary.result')}
+          value={formatAmount(summary.result ?? 0)}
+          delta={pctDelta(summary.result, prev?.result)}
+          right={resultKind ? (
+            <ResultPill
+              kind={resultKind}
+              label={t(`fm.result.${resultKind}`)}
+            />
+          ) : null}
+          sub={t('fm.m303.summary.result_sub')}
+        />
+        {summary.previousCompensation != null && (
+          <SummaryCard
+            eyebrow={t('fm.m303.summary.previous')}
+            value={formatAmount(summary.previousCompensation)}
+            sub={t('fm.m303.summary.previous_sub')}
+            valueColor="#2563eb"
+          />
+        )}
+      </div>
+
+      <div className="fm-tabs-sticky">
+        <Tabs tabs={tabs} active={activeTab} onSelect={setActiveTab} />
+      </div>
+
+      <div className="fm-page__body">
+        {activeTab === 'boxes' && (() => {
+          const BOX_PAGES = [
+            { titleKey: 'fm.page.liquidacion',    sections: ['iva_devengado', 'iva_deducible', 'resultado'] },
+            { titleKey: 'fm.page.info_adicional', sections: ['info_adicional'] },
+            { titleKey: 'fm.page.resultado_final',sections: ['resultado_final'] },
+          ];
+          const page = BOX_PAGES[boxPage];
+          return (
+            <SectionCard title={t(page.titleKey)}>
+              <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
+                {BOX_PAGES.map((p, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setBoxPage(idx)}
+                    style={{
+                      fontSize: 12, padding: '4px 14px', borderRadius: 6, border: '1px solid',
+                      cursor: 'pointer', fontWeight: boxPage === idx ? 600 : 400,
+                      background: boxPage === idx ? '#1e40af' : '#f9fafb',
+                      color: boxPage === idx ? '#fff' : '#374151',
+                      borderColor: boxPage === idx ? '#1e40af' : '#d1d5db',
+                    }}
+                  >
+                    {t(p.titleKey)}
+                  </button>
+                ))}
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af', alignSelf: 'center' }}>
+                  {boxPage + 1} / {BOX_PAGES.length}
+                </span>
+              </div>
+              <FmBoxes303
+                boxes={decl.boxes ?? null}
+                year={decl.year}
+                period={decl.period}
+                sectionIds={page.sections}
+              />
+            </SectionCard>
+          );
+        })()}
+        {activeTab === 'sources' && (
+          <SourcesTab decl={decl} t={t} />
+        )}
+        {activeTab === 'incidents' && (
+          <IncidentsTab decl={decl} blocking={blocking} warning={warning} t={t} />
+        )}
+        {activeTab === 'files' && (
+          <FilesTab
+            decl={decl}
+            t={t}
+            fileBlocked={fileBlocked}
+            onGenerate={() => setShowFilegen(true)}
+          />
+        )}
+        {activeTab === 'history' && (
+          <HistoryTab decl={decl} t={t} />
+        )}
+      </div>
+
+      {showPresent && (
+        <PresentModal decl={decl} onConfirm={handlePresent} onClose={() => setShowPresent(false)} />
+      )}
+      {showFilegen && (
+        <FileGenModal decl={decl} onConfirm={() => {}} onClose={() => setShowFilegen(false)} />
+      )}
+      {showConfig && <ConfigDrawer onClose={() => setShowConfig(false)} />}
+      {showCompare && <CompareDrawer decl={decl} onClose={() => setShowCompare(false)} />}
+    </div>
+  );
+}

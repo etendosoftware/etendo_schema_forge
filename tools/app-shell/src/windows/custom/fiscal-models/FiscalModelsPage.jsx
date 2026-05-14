@@ -1,10 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import FmListPage from './FmListPage';
-import FmModel303Page from './FmModel303Page';
-import FmModel349Page from './FmModel349Page';
+import FmModel303Page from './models/303/FmModel303Page';
+import FmModel349Page from './models/349/FmModel349Page';
+import FmDebugPanel from './FmDebugPanel.jsx';
+import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
 
 export default function FiscalModelsPage() {
   const [view, setView] = useState({ type: 'list' });
+  const debugMode = useDebugMode();
 
   const handleSelect = useCallback((decl) => {
     setView({ type: decl.model, decl });
@@ -14,8 +17,9 @@ export default function FiscalModelsPage() {
     setView({ type: 'list' });
   }, []);
 
+  let content;
   if (view.type === '303') {
-    return (
+    content = (
       <FmModel303Page
         decl={view.decl}
         onBack={handleBack}
@@ -24,10 +28,8 @@ export default function FiscalModelsPage() {
         }}
       />
     );
-  }
-
-  if (view.type === '349') {
-    return (
+  } else if (view.type === '349') {
+    content = (
       <FmModel349Page
         decl={view.decl}
         onBack={handleBack}
@@ -36,7 +38,14 @@ export default function FiscalModelsPage() {
         }}
       />
     );
+  } else {
+    content = <FmListPage onSelect={handleSelect} />;
   }
 
-  return <FmListPage onSelect={handleSelect} />;
+  return (
+    <>
+      {content}
+      {debugMode && <FmDebugPanel view={view} setView={setView} />}
+    </>
+  );
 }

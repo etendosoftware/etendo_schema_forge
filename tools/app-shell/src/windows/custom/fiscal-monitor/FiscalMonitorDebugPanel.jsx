@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUI } from '@/i18n';
+import { useDraggable } from './useDraggable.js';
 
 const PROFILES = [
   { key: 'sii',        labelKey: 'fmDebug.profile.sii' },
@@ -33,15 +34,20 @@ const panelStyle = {
 export default function FiscalMonitorDebugPanel({ activeProfile, onProfileChange, mockData, onMockDataChange, mockCertDays, onSetCertDays }) {
   const ui = useUI();
   const [collapsed, setCollapsed] = useState(false);
+  const { panelRef, posStyle, handleMouseDown } = useDraggable();
 
   return (
-    <div style={panelStyle}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed ? 0 : 8 }}>
+    <div ref={panelRef} style={{ ...panelStyle, ...posStyle }}>
+      <div
+        onMouseDown={handleMouseDown}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: collapsed ? 0 : 8, cursor: 'grab', userSelect: 'none' }}
+      >
         <span style={{ fontSize: 10, letterSpacing: '0.08em', color: '#a0a0cc', textTransform: 'uppercase' }}>
           {ui('fmDebug.title')}
         </span>
         <button
           onClick={() => setCollapsed(c => !c)}
+          onMouseDown={e => e.stopPropagation()}
           style={{ background: 'none', border: 'none', color: '#a0a0cc', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}
         >
           {collapsed ? '▾' : '▴'}
