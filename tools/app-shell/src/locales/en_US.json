@@ -19975,7 +19975,26 @@
       "base": "Tax Base",
       "operacion": "Op."
     },
-    "filter": { "all": "All" },
+    "filter": { "all": "All", "model_prefix": "Form" },
+    "tab": {
+      "boxes": "Boxes",
+      "summary": "Summary",
+      "incidents": "Incidents"
+    },
+    "box": {
+      "prefix": "Box",
+      "1":  "Transactions subject to 21% VAT",
+      "2":  "VAT at 21%",
+      "3":  "Transactions subject to 10% VAT",
+      "4":  "VAT at 10%",
+      "5":  "Transactions subject to 4% VAT",
+      "6":  "VAT at 4%",
+      "28": "Total accrued VAT",
+      "48": "Deductible VAT (domestic acquisitions)",
+      "64": "Total deductible VAT",
+      "69": "Net VAT difference",
+      "71": "Declaration result"
+    },
     "type": { "ordinary": "Ordinary", "complementary": "Complementary" },
     "result": {
       "ingresar": "To pay",
@@ -20007,10 +20026,10 @@
       "compare": "Compare"
     },
     "stepper": {
-      "pendiente": "Pending",
-      "borrador": "Draft",
-      "listo": "Ready",
-      "presentado": "Submitted"
+      "pending": "Pending",
+      "draft": "Draft",
+      "ready": "Ready",
+      "presented": "Submitted"
     },
     "config": {
       "title": "Settings",
@@ -20030,13 +20049,20 @@
         "redeme": "Enrolled in REDEME",
         "recc": "RECC regime",
         "prorata": "Pro-rata",
+        "prorata_general": "General",
+        "prorata_especial": "Special",
         "iban": "Direct debit IBAN"
       },
       "m349": {
         "title": "Form 349",
         "periodicity": "Periodicity",
+        "periodicity_monthly": "Monthly",
+        "periodicity_quarterly": "Quarterly",
+        "periodicity_annual": "Annual",
         "threshold": "Threshold (€)",
         "viespref": "VIES preference",
+        "viespref_auto": "Auto",
+        "viespref_manual": "Manual",
         "keys": "Operation keys"
       }
     },

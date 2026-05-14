@@ -23,3 +23,10 @@ describe('FmBoxes303 — box data', () => {
   it('renders box number', () => assert.match(src, /box\.num|\.num/));
   it('renders box value', () => assert.match(src, /box\.value|\.value/));
 });
+
+describe('FmBoxes303 — i18n', () => {
+  it('uses fm.box.prefix for "Casilla" label', () => assert.match(src, /fm\.box\.prefix/));
+  it('uses fm.box.{num} for box labels', () => assert.match(src, /fm\.box\.\$\{/));
+  it('has no hardcoded Spanish box label strings', () => assert.doesNotMatch(src, /'Cuota tipo|'Operaciones sujetas/));
+  it('has no hardcoded "Casilla" string', () => assert.doesNotMatch(src, /'Casilla'/));
+});

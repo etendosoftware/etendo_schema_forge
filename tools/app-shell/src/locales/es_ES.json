@@ -20249,7 +20249,26 @@
       "base": "Base imponible",
       "operacion": "Op."
     },
-    "filter": { "all": "Todos" },
+    "filter": { "all": "Todos", "model_prefix": "Modelo" },
+    "tab": {
+      "boxes": "Casillas",
+      "summary": "Resumen",
+      "incidents": "Incidencias"
+    },
+    "box": {
+      "prefix": "Casilla",
+      "1":  "Operaciones sujetas tipo 21%",
+      "2":  "Cuota tipo 21%",
+      "3":  "Operaciones sujetas tipo 10%",
+      "4":  "Cuota tipo 10%",
+      "5":  "Operaciones sujetas tipo 4%",
+      "6":  "Cuota tipo 4%",
+      "28": "Total cuota devengada",
+      "48": "Cuota a deducir (adq. interiores)",
+      "64": "Total a deducir",
+      "69": "Diferencia (cuota neta)",
+      "71": "Resultado de la declaración"
+    },
     "type": { "ordinary": "Ordinaria", "complementary": "Complementaria" },
     "result": {
       "ingresar": "A ingresar",
@@ -20281,10 +20300,10 @@
       "compare": "Comparar"
     },
     "stepper": {
-      "pendiente": "Pendiente",
-      "borrador": "Borrador",
-      "listo": "Listo",
-      "presentado": "Presentado"
+      "pending": "Pendiente",
+      "draft": "Borrador",
+      "ready": "Listo",
+      "presented": "Presentado"
     },
     "config": {
       "title": "Configuración",
@@ -20304,13 +20323,20 @@
         "redeme": "Inscrito en REDEME",
         "recc": "Régimen RECC",
         "prorata": "Prorrata",
+        "prorata_general": "General",
+        "prorata_especial": "Especial",
         "iban": "IBAN domiciliación"
       },
       "m349": {
         "title": "Modelo 349",
         "periodicity": "Periodicidad",
+        "periodicity_monthly": "Mensual",
+        "periodicity_quarterly": "Trimestral",
+        "periodicity_annual": "Anual",
         "threshold": "Umbral (€)",
         "viespref": "Preferencia VIES",
+        "viespref_auto": "Auto",
+        "viespref_manual": "Manual",
         "keys": "Claves de operación"
       }
     },

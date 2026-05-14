@@ -23,9 +23,22 @@ describe('FmModel303Page — composition', () => {
 });
 
 describe('FmModel303Page — stepper', () => {
-  it('defines all 7 statuses in STEPPER_INDEX', () => assert.match(src, /pendiente.*borrador.*listo.*presentado|STEPPER_INDEX/s));
+  it('defines all 7 statuses in STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX/));
   it('passes steps from i18n keys', () => assert.match(src, /fm\.stepper\./));
+  it('uses fm.stepper.ready (not listo)', () => assert.match(src, /fm\.stepper\.ready/));
+  it('uses fm.stepper.presented (not presentado)', () => assert.match(src, /fm\.stepper\.presented/));
   it('derives current from status via STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX\[status\]/));
+});
+
+describe('FmModel303Page — i18n completeness', () => {
+  it('uses fm.tab.boxes for tab label', () => assert.match(src, /fm\.tab\.boxes/));
+  it('uses fm.tab.summary for tab label', () => assert.match(src, /fm\.tab\.summary/));
+  it('uses fm.tab.incidents for tab label', () => assert.match(src, /fm\.tab\.incidents/));
+  it('has no hardcoded Casillas/Resumen/Incidencias tab labels', () => {
+    assert.doesNotMatch(src, /label: 'Casillas'/);
+    assert.doesNotMatch(src, /label: 'Resumen'/);
+    assert.doesNotMatch(src, /label: 'Incidencias'/);
+  });
 });
 
 describe('FmModel303Page — no removed features', () => {

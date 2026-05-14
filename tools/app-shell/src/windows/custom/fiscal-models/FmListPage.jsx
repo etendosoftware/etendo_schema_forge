@@ -54,7 +54,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
               color: filter === f ? '#1d4ed8' : '#374151',
               fontWeight: filter === f ? 600 : 400 }}
             onClick={() => setFilter(f)}>
-            {f === 'all' ? t('fm.filter.all') : `Modelo ${f}`}
+            {f === 'all' ? t('fm.filter.all') : `${t('fm.filter.model_prefix')} ${f}`}
           </button>
         ))}
       </div>

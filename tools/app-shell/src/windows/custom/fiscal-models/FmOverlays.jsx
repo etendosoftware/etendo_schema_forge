@@ -241,8 +241,8 @@ export function ConfigDrawer({ onClose }) {
           </label>
           <CfgField label={t('fm.config.m303.prorata')}>
             <select style={INPUT_ST}>
-              <option>General</option>
-              <option>Especial</option>
+              <option>{t('fm.config.m303.prorata_general')}</option>
+              <option>{t('fm.config.m303.prorata_especial')}</option>
             </select>
           </CfgField>
           <CfgField label={t('fm.config.m303.iban')}>
@@ -253,9 +253,9 @@ export function ConfigDrawer({ onClose }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <CfgField label={t('fm.config.m349.periodicity')} style={{ flex: 1 }}>
               <select style={INPUT_ST}>
-                <option>Mensual</option>
-                <option>Trimestral</option>
-                <option>Anual</option>
+                <option>{t('fm.config.m349.periodicity_monthly')}</option>
+                <option>{t('fm.config.m349.periodicity_quarterly')}</option>
+                <option>{t('fm.config.m349.periodicity_annual')}</option>
               </select>
             </CfgField>
             <CfgField label={t('fm.config.m349.threshold')} style={{ flex: 1 }}>
@@ -264,8 +264,8 @@ export function ConfigDrawer({ onClose }) {
           </div>
           <CfgField label={t('fm.config.m349.viespref')}>
             <select style={INPUT_ST}>
-              <option>Auto</option>
-              <option>Manual</option>
+              <option>{t('fm.config.m349.viespref_auto')}</option>
+              <option>{t('fm.config.m349.viespref_manual')}</option>
             </select>
           </CfgField>
           <CfgField label={t('fm.config.m349.keys')}>

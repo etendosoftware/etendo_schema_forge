@@ -11,11 +11,6 @@ const STEPPER_INDEX = {
   omitido: -1,
 };
 
-const TABS = [
-  { id: 'boxes',     label: 'Casillas' },
-  { id: 'summary',   label: 'Resumen' },
-  { id: 'incidents', label: 'Incidencias' },
-];
 
 export default function FmModel303Page({ decl, onBack, onStatusChange }) {
   const ui = useUI();
@@ -28,11 +23,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
   const [showConfig, setShowConfig] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
 
+  const tabs = [
+    { id: 'boxes',     label: t('fm.tab.boxes') },
+    { id: 'summary',   label: t('fm.tab.summary') },
+    { id: 'incidents', label: t('fm.tab.incidents') },
+  ];
+
   const stepperSteps = [
-    t('fm.stepper.pendiente'),
-    t('fm.stepper.borrador'),
-    t('fm.stepper.listo'),
-    t('fm.stepper.presentado'),
+    t('fm.stepper.pending'),
+    t('fm.stepper.draft'),
+    t('fm.stepper.ready'),
+    t('fm.stepper.presented'),
   ];
 
   function handleStatusChange(newStatus) {
@@ -121,7 +122,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
         <Banner type="success" message={`${t('fm.result.compensar')}: ${formatAmount(decl.result.amount)}`} />
       )}
 
-      <Tabs tabs={TABS} active={activeTab} onSelect={setActiveTab} />
+      <Tabs tabs={tabs} active={activeTab} onSelect={setActiveTab} />
 
       <div className="fm-page__body">
         {activeTab === 'boxes' && (
