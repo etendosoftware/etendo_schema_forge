@@ -101,3 +101,27 @@ export function EmptyState({ message }) {
     </div>
   );
 }
+
+// steps: string[] labels; current: index of active step (-1 = omitted/special)
+export function Stepper({ steps, current }) {
+  return (
+    <div className="fm-stepper" role="list">
+      {steps.map((label, i) => {
+        const done = i < current;
+        const active = i === current;
+        return (
+          <React.Fragment key={label}>
+            {i > 0 && <span className="fm-stepper__sep" aria-hidden="true">›</span>}
+            <span
+              role="listitem"
+              className={`fm-stepper__step${active ? ' fm-stepper__step--active' : ''}${done ? ' fm-stepper__step--done' : ''}`}
+            >
+              {done && <span aria-hidden="true">✓ </span>}
+              {label}
+            </span>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}

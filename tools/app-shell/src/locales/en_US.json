@@ -20002,7 +20002,57 @@
       "generate_file": "Generate file",
       "present": "Mark submitted",
       "close": "Close",
-      "create": "Create"
+      "create": "Create",
+      "save": "Save",
+      "compare": "Compare"
+    },
+    "stepper": {
+      "pendiente": "Pending",
+      "borrador": "Draft",
+      "listo": "Ready",
+      "presentado": "Submitted"
+    },
+    "config": {
+      "title": "Settings",
+      "sub": "Declarant data and preferences",
+      "declarant": {
+        "title": "Declarant",
+        "nif": "NIF / CIF",
+        "name": "Company name",
+        "phone": "Phone",
+        "address": "Address",
+        "postal": "ZIP",
+        "city": "City",
+        "province": "Province"
+      },
+      "m303": {
+        "title": "Form 303",
+        "redeme": "Enrolled in REDEME",
+        "recc": "RECC regime",
+        "prorata": "Pro-rata",
+        "iban": "Direct debit IBAN"
+      },
+      "m349": {
+        "title": "Form 349",
+        "periodicity": "Periodicity",
+        "threshold": "Threshold (€)",
+        "viespref": "VIES preference",
+        "keys": "Operation keys"
+      }
+    },
+    "compare": {
+      "title": "Compare periods",
+      "sub": "Change vs previous period",
+      "prev": "Prev period",
+      "curr": "Curr period",
+      "delta": "Δ %",
+      "row": {
+        "base": "Taxable base",
+        "iva_dev": "Accrued VAT",
+        "iva_ded": "Deductible VAT",
+        "result": "Result"
+      },
+      "insight": "Accrued VAT grew while deductible VAT decreased. The final amount due has risen significantly."
     },
     "filegen": {
       "title": "Generate declaration file",

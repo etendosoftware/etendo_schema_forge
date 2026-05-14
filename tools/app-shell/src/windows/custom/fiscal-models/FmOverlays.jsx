@@ -186,6 +186,158 @@ export function IncidentTray({ incidents, onClose }) {
   );
 }
 
+function CfgSection({ title, children }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontWeight: 600, fontSize: 12, color: '#374151', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function CfgField({ label, children, style }) {
+  return (
+    <div style={{ marginBottom: 10, ...style }}>
+      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+const INPUT_ST = { width: '100%', fontSize: 12, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 4, boxSizing: 'border-box' };
+
+export function ConfigDrawer({ onClose }) {
+  const ui = useUI();
+  const t = ui;
+  return (
+    <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 400, background: '#fff', borderLeft: '1px solid #e5e7eb', boxShadow: '-4px 0 16px rgba(0,0,0,.10)', zIndex: 55, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{t('fm.config.title')}</span>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{t('fm.config.sub')}</div>
+        </div>
+        <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#6b7280' }} onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <CfgSection title={t('fm.config.declarant.title')}>
+          <CfgField label={t('fm.config.declarant.nif')}><input type="text" placeholder="A78901234" style={INPUT_ST} /></CfgField>
+          <CfgField label={t('fm.config.declarant.name')}><input type="text" style={INPUT_ST} /></CfgField>
+          <CfgField label={t('fm.config.declarant.phone')}><input type="tel" placeholder="+34 ..." style={INPUT_ST} /></CfgField>
+          <CfgField label={t('fm.config.declarant.address')}><input type="text" style={INPUT_ST} /></CfgField>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <CfgField label={t('fm.config.declarant.postal')} style={{ flex: '0 0 90px' }}><input type="text" style={INPUT_ST} /></CfgField>
+            <CfgField label={t('fm.config.declarant.city')} style={{ flex: 1 }}><input type="text" style={INPUT_ST} /></CfgField>
+            <CfgField label={t('fm.config.declarant.province')} style={{ flex: 1 }}><input type="text" style={INPUT_ST} /></CfgField>
+          </div>
+        </CfgSection>
+        <CfgSection title={t('fm.config.m303.title')}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', cursor: 'pointer', marginBottom: 8 }}>
+            <input type="checkbox" defaultChecked />
+            {t('fm.config.m303.redeme')}
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', cursor: 'pointer', marginBottom: 12 }}>
+            <input type="checkbox" />
+            {t('fm.config.m303.recc')}
+          </label>
+          <CfgField label={t('fm.config.m303.prorata')}>
+            <select style={INPUT_ST}>
+              <option>General</option>
+              <option>Especial</option>
+            </select>
+          </CfgField>
+          <CfgField label={t('fm.config.m303.iban')}>
+            <input type="text" placeholder="ES00 0000 0000 0000 0000 0000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
+          </CfgField>
+        </CfgSection>
+        <CfgSection title={t('fm.config.m349.title')}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <CfgField label={t('fm.config.m349.periodicity')} style={{ flex: 1 }}>
+              <select style={INPUT_ST}>
+                <option>Mensual</option>
+                <option>Trimestral</option>
+                <option>Anual</option>
+              </select>
+            </CfgField>
+            <CfgField label={t('fm.config.m349.threshold')} style={{ flex: 1 }}>
+              <input type="text" defaultValue="50.000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
+            </CfgField>
+          </div>
+          <CfgField label={t('fm.config.m349.viespref')}>
+            <select style={INPUT_ST}>
+              <option>Auto</option>
+              <option>Manual</option>
+            </select>
+          </CfgField>
+          <CfgField label={t('fm.config.m349.keys')}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {['E', 'A', 'T', 'S', 'I'].map(k => (
+                <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+                  <input type="checkbox" defaultChecked />
+                  <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{k}</span>
+                </label>
+              ))}
+            </div>
+          </CfgField>
+        </CfgSection>
+      </div>
+      <div style={{ padding: '12px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button style={{ fontSize: 12, padding: '6px 14px', borderRadius: 4, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#f9fafb' }} onClick={onClose}>{t('fm.action.cancel')}</button>
+        <button style={{ fontSize: 12, padding: '6px 14px', borderRadius: 4, border: 'none', cursor: 'pointer', background: '#111827', color: '#fff', fontWeight: 600 }} onClick={onClose}>{t('fm.action.save')}</button>
+      </div>
+    </div>
+  );
+}
+
+export function CompareDrawer({ decl, onClose }) {
+  const ui = useUI();
+  const t = ui;
+  const rows = [
+    { label: t('fm.compare.row.base'), prev: 48350.00, curr: 56920.00 },
+    { label: t('fm.compare.row.iva_dev'), prev: 10153.50, curr: 11953.20 },
+    { label: t('fm.compare.row.iva_ded'), prev: 8340.00, curr: 7820.00 },
+    { label: t('fm.compare.row.result'), prev: 1813.50, curr: 4133.20 },
+  ];
+  const fmt = (n) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n);
+  return (
+    <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 400, background: '#fff', borderLeft: '1px solid #e5e7eb', boxShadow: '-4px 0 16px rgba(0,0,0,.10)', zIndex: 55, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{t('fm.compare.title')}</span>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{t('fm.compare.sub')}</div>
+        </div>
+        <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#6b7280' }} onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '6px 0', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e5e7eb' }}>
+          <span />
+          <span style={{ textAlign: 'right' }}>{t('fm.compare.prev')}</span>
+          <span style={{ textAlign: 'right' }}>{t('fm.compare.curr')}</span>
+          <span style={{ textAlign: 'right' }}>{t('fm.compare.delta')}</span>
+        </div>
+        {rows.map((r, i) => {
+          const d = r.curr - r.prev;
+          const pct = r.prev !== 0 ? ((d / r.prev) * 100).toFixed(1) : '—';
+          const up = d >= 0;
+          return (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6', fontSize: 12, alignItems: 'center' }}>
+              <span style={{ color: '#374151' }}>{r.label}</span>
+              <span style={{ textAlign: 'right', color: '#6b7280', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.prev)}</span>
+              <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.curr)}</span>
+              <span style={{ textAlign: 'right', color: up ? '#059669' : '#dc2626', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                {up ? '↑' : '↓'} {pct}%
+              </span>
+            </div>
+          );
+        })}
+        <div style={{ marginTop: 16, padding: '12px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 12, color: '#1e40af', display: 'flex', gap: 8 }}>
+          <span style={{ flexShrink: 0 }}>ℹ</span>
+          <span>{t('fm.compare.insight')}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DrillDownPanel({ title, children, onClose }) {
   const ui = useUI();
   const t = ui;

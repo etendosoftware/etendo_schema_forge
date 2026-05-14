@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { useUI } from '@/i18n';
-import { StatusPillMenu, Tabs, Banner, SectionCard } from './FmCommon.jsx';
+import { StatusPillMenu, Tabs, Banner, SectionCard, Stepper } from './FmCommon.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
-import { PresentModal, FileGenModal, IncidentTray } from './FmOverlays.jsx';
+import { PresentModal, FileGenModal, IncidentTray, ConfigDrawer, CompareDrawer } from './FmOverlays.jsx';
 import { fmtDecl, formatAmount } from './fiscalModelsUtils.js';
+
+const STEPPER_INDEX = {
+  pendiente: 0, borrador: 1, listo: 2,
+  presentado: 3, presentadoOtra: 3, presentadoAcuse: 3,
+  omitido: -1,
+};
 
 const TABS = [
   { id: 'boxes',     label: 'Casillas' },
@@ -19,6 +25,15 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
   const [showPresent, setShowPresent] = useState(false);
   const [showFilegen, setShowFilegen] = useState(false);
   const [showIncidents, setShowIncidents] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
+
+  const stepperSteps = [
+    t('fm.stepper.pendiente'),
+    t('fm.stepper.borrador'),
+    t('fm.stepper.listo'),
+    t('fm.stepper.presentado'),
+  ];
 
   function handleStatusChange(newStatus) {
     setStatus(newStatus);
@@ -42,10 +57,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
         >
           ←
         </button>
-        <span style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>{fmtDecl(decl)}</span>
-        <span style={{ fontSize: 12, color: '#6b7280' }}>
-          {decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}
-        </span>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>{fmtDecl(decl)}</span>
+            <span style={{ fontSize: 12, color: '#6b7280' }}>
+              {decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}
+            </span>
+          </div>
+          <div style={{ marginTop: 4 }}>
+            <Stepper steps={stepperSteps} current={STEPPER_INDEX[status] ?? 0} />
+          </div>
+        </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {blocking > 0 && (
             <button
@@ -65,6 +87,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
           )}
           <button
             style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#f9fafb' }}
+            onClick={() => setShowCompare(true)}
+          >
+            {t('fm.action.compare')}
+          </button>
+          <button
+            style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#f9fafb' }}
             onClick={() => setShowFilegen(true)}
           >
             {t('fm.action.generate_file')}
@@ -76,6 +104,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
             {t('fm.action.present')}
           </button>
           <StatusPillMenu status={status} onStatusChange={handleStatusChange} />
+          <button
+            style={{ fontSize: 13, padding: '4px 8px', borderRadius: 4, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#f9fafb', color: '#6b7280' }}
+            onClick={() => setShowConfig(true)}
+            aria-label={t('fm.config.title')}
+          >
+            ⚙
+          </button>
         </div>
       </div>
 
@@ -123,6 +158,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
           onClose={() => setShowIncidents(false)}
         />
       )}
+      {showConfig && <ConfigDrawer onClose={() => setShowConfig(false)} />}
+      {showCompare && <CompareDrawer decl={decl} onClose={() => setShowCompare(false)} />}
     </div>
   );
 }

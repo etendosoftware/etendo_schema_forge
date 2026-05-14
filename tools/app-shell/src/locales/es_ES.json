@@ -20276,7 +20276,57 @@
       "generate_file": "Generar fichero",
       "present": "Marcar presentada",
       "close": "Cerrar",
-      "create": "Crear"
+      "create": "Crear",
+      "save": "Guardar",
+      "compare": "Comparar"
+    },
+    "stepper": {
+      "pendiente": "Pendiente",
+      "borrador": "Borrador",
+      "listo": "Listo",
+      "presentado": "Presentado"
+    },
+    "config": {
+      "title": "Configuración",
+      "sub": "Datos del declarante y preferencias",
+      "declarant": {
+        "title": "Declarante",
+        "nif": "NIF / CIF",
+        "name": "Razón social",
+        "phone": "Teléfono",
+        "address": "Dirección",
+        "postal": "CP",
+        "city": "Municipio",
+        "province": "Provincia"
+      },
+      "m303": {
+        "title": "Modelo 303",
+        "redeme": "Inscrito en REDEME",
+        "recc": "Régimen RECC",
+        "prorata": "Prorrata",
+        "iban": "IBAN domiciliación"
+      },
+      "m349": {
+        "title": "Modelo 349",
+        "periodicity": "Periodicidad",
+        "threshold": "Umbral (€)",
+        "viespref": "Preferencia VIES",
+        "keys": "Claves de operación"
+      }
+    },
+    "compare": {
+      "title": "Comparar periodos",
+      "sub": "Variación respecto al periodo anterior",
+      "prev": "Período ant.",
+      "curr": "Período act.",
+      "delta": "Δ %",
+      "row": {
+        "base": "Base imponible",
+        "iva_dev": "IVA devengado",
+        "iva_ded": "IVA deducible",
+        "result": "Resultado"
+      },
+      "insight": "El IVA devengado ha crecido mientras el deducible se ha reducido. El resultado a ingresar ha aumentado significativamente."
     },
     "filegen": {
       "title": "Generar fichero de declaración",

@@ -16,6 +16,16 @@ describe('FmModel303Page — composition', () => {
   it('renders StatusPillMenu', () => assert.match(src, /StatusPillMenu/));
   it('renders Tabs', () => assert.match(src, /Tabs/));
   it('has back navigation (onBack)', () => assert.match(src, /onBack/));
+  it('renders Stepper', () => assert.match(src, /Stepper/));
+  it('uses STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX/));
+  it('renders ConfigDrawer', () => assert.match(src, /ConfigDrawer/));
+  it('renders CompareDrawer', () => assert.match(src, /CompareDrawer/));
+});
+
+describe('FmModel303Page — stepper', () => {
+  it('defines all 7 statuses in STEPPER_INDEX', () => assert.match(src, /pendiente.*borrador.*listo.*presentado|STEPPER_INDEX/s));
+  it('passes steps from i18n keys', () => assert.match(src, /fm\.stepper\./));
+  it('derives current from status via STEPPER_INDEX', () => assert.match(src, /STEPPER_INDEX\[status\]/));
 });
 
 describe('FmModel303Page — no removed features', () => {

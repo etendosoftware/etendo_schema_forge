@@ -26,4 +26,11 @@ describe('FmCommon — exports', () => {
   it('exports Banner', () => assert.match(src, /export function Banner/));
   it('exports SectionCard', () => assert.match(src, /export function SectionCard/));
   it('exports EmptyState', () => assert.match(src, /export function EmptyState/));
+  it('exports Stepper', () => assert.match(src, /export function Stepper/));
+});
+
+describe('Stepper — structure', () => {
+  it('accepts steps and current props', () => assert.match(src, /steps.*current|current.*steps/));
+  it('marks done steps', () => assert.match(src, /fm-stepper__step--done/));
+  it('marks active step', () => assert.match(src, /fm-stepper__step--active/));
 });

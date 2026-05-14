@@ -13,6 +13,23 @@ describe('FmOverlays — exports', () => {
   it('exports NewDeclModal', () => assert.match(src, /export function NewDeclModal/));
   it('exports IncidentTray', () => assert.match(src, /export function IncidentTray/));
   it('exports DrillDownPanel', () => assert.match(src, /export function DrillDownPanel/));
+  it('exports ConfigDrawer', () => assert.match(src, /export function ConfigDrawer/));
+  it('exports CompareDrawer', () => assert.match(src, /export function CompareDrawer/));
+});
+
+describe('ConfigDrawer — structure', () => {
+  it('has declarant section', () => assert.match(src, /fm\.config\.declarant\.title/));
+  it('has m303 section', () => assert.match(src, /fm\.config\.m303\.title/));
+  it('has m349 section', () => assert.match(src, /fm\.config\.m349\.title/));
+  it('has IBAN field', () => assert.match(src, /fm\.config\.m303\.iban/));
+  it('has operation keys E,A,T,S,I', () => assert.match(src, /'E', 'A', 'T', 'S', 'I'/));
+});
+
+describe('CompareDrawer — structure', () => {
+  it('has compare title key', () => assert.match(src, /fm\.compare\.title/));
+  it('has prev/curr/delta columns', () => assert.match(src, /fm\.compare\.prev/));
+  it('has delta column header', () => assert.match(src, /fm\.compare\.delta/));
+  it('has insight note', () => assert.match(src, /fm\.compare\.insight/));
 });
 
 describe('FmOverlays — no removed components', () => {
