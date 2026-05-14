@@ -11,9 +11,10 @@ describe('FmListPage — exports', () => {
   it('has a default export', () => assert.match(src, /export default/));
 });
 
-describe('FmListPage — KPI strip', () => {
-  it('renders KpiCard', () => assert.match(src, /KpiCard/));
-  it('renders KPI strip container', () => assert.match(src, /fm-kpi-strip/));
+describe('FmListPage — KPI banners', () => {
+  it('renders kpi banner container', () => assert.match(src, /fm-kpi-banner/));
+  it('shows model 303 open count', () => assert.match(src, /open303/));
+  it('shows model 349 pending count', () => assert.match(src, /pend349/));
 });
 
 describe('FmListPage — table', () => {

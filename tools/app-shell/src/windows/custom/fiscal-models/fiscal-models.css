@@ -1,5 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
 /* ─── Layout ─────────────────────────────────────────────────── */
-.fm-page { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: #f8f9fa; }
+.fm-page { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: #f8f9fa; font-family: 'IBM Plex Sans', system-ui, sans-serif; }
 .fm-page__body { flex: 1; overflow-y: auto; padding: 12px 16px; }
 
 /* ─── Compact KPI Strip (62px, fits 12 rows) ─────────────────── */
@@ -107,3 +109,75 @@
 
 /* ─── Empty state ─────────────────────────────────────────────── */
 .fm-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 16px; color: #9ca3af; font-size: 13px; gap: 8px; }
+
+/* ─── Toolbar ─────────────────────────────────────────────────── */
+.fm-toolbar { padding: 8px 20px; border-bottom: 1px solid #e8eaed; background: #fff; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 46px; }
+.fm-toolbar__pill { font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: 6px; border: 1px solid #e2e8f0; cursor: pointer; background: #fff; color: #4b5563; transition: all .12s; white-space: nowrap; }
+.fm-toolbar__pill:hover { border-color: #cbd5e1; background: #f8fafc; }
+.fm-toolbar__pill--active-dark { background: #0f172a; color: #fff; border-color: #0f172a; font-weight: 600; }
+.fm-toolbar__pill--active-blue { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; font-weight: 600; }
+.fm-toolbar__sep { width: 1px; height: 18px; background: #e2e8f0; flex-shrink: 0; margin: 0 2px; }
+.fm-toolbar__space { flex: 1; }
+.fm-toolbar__btn { font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: 6px; border: 1px solid #e2e8f0; cursor: pointer; background: #fff; color: #374151; display: inline-flex; align-items: center; gap: 6px; transition: all .12s; white-space: nowrap; }
+.fm-toolbar__btn:hover { border-color: #cbd5e1; background: #f8fafc; }
+.fm-toolbar__btn--primary { background: #0f172a; color: #fff; border-color: #0f172a; font-weight: 600; }
+.fm-toolbar__btn--primary:hover { background: #1e293b; border-color: #1e293b; }
+.fm-toolbar__count-badge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: #0f172a; color: #fff; font-size: 10px; font-weight: 700; }
+.fm-toolbar__active-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+.fm-toolbar__status-select { font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 6px; border: 1px solid #e2e8f0; background: #fff; color: #374151; cursor: pointer; appearance: none; -webkit-appearance: none; }
+
+/* ─── KPI Banners ─────────────────────────────────────────────── */
+.fm-kpi-banners { display: grid; grid-template-columns: repeat(4, 1fr); background: #fff; border-bottom: 1px solid #e8eaed; flex-shrink: 0; }
+.fm-kpi-banner { padding: 14px 20px 12px; border-right: 1px solid #e8eaed; min-height: 72px; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.fm-kpi-banner:last-child { border-right: none; }
+.fm-kpi-banner__label { font-size: 10px; font-weight: 600; color: #9ca3af; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+.fm-kpi-banner__body { display: flex; align-items: baseline; gap: 8px; }
+.fm-kpi-banner__num { font-family: 'IBM Plex Sans', sans-serif; font-size: 24px; font-weight: 700; color: #0f172a; line-height: 1; }
+.fm-kpi-banner__desc { font-size: 11px; color: #6b7280; }
+.fm-kpi-banner__date { font-family: 'IBM Plex Sans', sans-serif; font-size: 22px; font-weight: 700; color: #0f172a; line-height: 1; }
+.fm-kpi-banner__days { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #fef9c3; color: #a16207; }
+.fm-kpi-banner__days--urgent { background: #fef2f2; color: #dc2626; }
+.fm-kpi-banner__sub { font-size: 11px; color: #6b7280; margin-top: 2px; }
+.fm-kpi-banner__blocking { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; background: #fef2f2; color: #dc2626; margin-left: 4px; }
+
+/* ─── Section header ──────────────────────────────────────────── */
+.fm-section-header { padding: 12px 20px 8px; display: flex; align-items: baseline; gap: 10px; }
+.fm-section-header__title { font-size: 13px; font-weight: 700; color: #0f172a; letter-spacing: .02em; text-transform: uppercase; }
+.fm-section-header__count { font-size: 12px; color: #9ca3af; font-weight: 400; }
+.fm-section-header__actions { margin-left: auto; display: flex; gap: 6px; }
+.fm-section-header__icon-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6b7280; }
+.fm-section-header__icon-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+/* ─── Enhanced Table ──────────────────────────────────────────── */
+.fm-table th { font-size: 11px; font-weight: 600; color: #6b7280; letter-spacing: .02em; }
+.fm-table td { font-size: 12px; color: #374151; }
+.fm-table tr:hover td { background: #f8fafc; }
+
+/* ─── Model Badge ─────────────────────────────────────────────── */
+.fm-model-badge { display: inline-flex; align-items: center; justify-content: center; padding: 2px 7px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: .02em; margin-right: 6px; }
+.fm-model-badge--303 { background: #dbeafe; color: #1d4ed8; }
+.fm-model-badge--349 { background: #ede9fe; color: #6d28d9; }
+.fm-model-year { font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 700; color: #0f172a; }
+
+/* ─── Period cell ─────────────────────────────────────────────── */
+.fm-period { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #374151; }
+
+/* ─── File cell ───────────────────────────────────────────────── */
+.fm-file { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #4b5563; display: inline-flex; align-items: center; gap: 4px; }
+.fm-file--external { color: #6d28d9; }
+.fm-file--none { color: #d1d5db; }
+
+/* ─── Date cell ───────────────────────────────────────────────── */
+.fm-date { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #9ca3af; }
+
+/* ─── Incidents cell ──────────────────────────────────────────── */
+.fm-incidents-ok { font-size: 12px; color: #9ca3af; }
+.fm-incidents-warn { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: #d97706; }
+.fm-incidents-warn__dot { width: 16px; height: 16px; border-radius: 50%; background: #fef3c7; border: 1px solid #fcd34d; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; color: #d97706; }
+
+/* ─── Action button ───────────────────────────────────────────── */
+.fm-table-action { font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; font-weight: 500; color: #374151; background: none; border: none; cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; gap: 2px; }
+.fm-table-action:hover { color: #0f172a; }
+
+/* ─── Checkbox ────────────────────────────────────────────────── */
+.fm-table__cb { width: 14px; height: 14px; accent-color: #0f172a; cursor: pointer; }

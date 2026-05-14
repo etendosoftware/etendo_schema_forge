@@ -9,8 +9,8 @@ export const STATUS_LABEL = {
   borrador:        'Borrador',
   listo:           'Listo',
   presentado:      'Presentado',
-  presentadoOtra:  'Pres. otra plataforma',
-  presentadoAcuse: 'Presentado con acuse',
+  presentadoOtra:  'Presentado · otra plataforma',
+  presentadoAcuse: 'Presentado · con acuse',
 };
 
 export const STATUS_COLOR = {
@@ -24,13 +24,13 @@ export const STATUS_COLOR = {
 };
 
 export const STATUS_ICON = {
-  omitido:         '⊘',
-  pendiente:       '●',
+  omitido:         '×',
+  pendiente:       '○',
   borrador:        '✎',
   listo:           '✓',
-  presentado:      '▶',
+  presentado:      '✓',
   presentadoOtra:  '↗',
-  presentadoAcuse: '★',
+  presentadoAcuse: '☑',
 };
 
 export const STATUS_ORDER = [...STATUSES];
