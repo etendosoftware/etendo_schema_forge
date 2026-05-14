@@ -285,6 +285,11 @@
           "favname": "Fiscal Monitor"
         },
         {
+          "name": "fiscal-models",
+          "label": "Modelos Fiscales",
+          "favname": "Modelos Fiscales"
+        },
+        {
           "name": "report-viewer-finance",
           "label": "Reports",
           "favname": "Finance Reports",

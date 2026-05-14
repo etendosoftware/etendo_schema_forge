@@ -134,6 +134,7 @@ const customLoaders = {
   // Auto-registered by pipeline when layoutType: "custom"
   'fiscal-config': () => import('./custom/fiscal-config/index.jsx'),
   'fiscal-monitor': () => import('./custom/fiscal-monitor/index.jsx'),
+  'fiscal-models': () => import('./custom/fiscal-models/index.jsx'),
   'sales-order': () => import('./custom/sales-order/index.jsx'),
   'price-list': () => import('./custom/price-list/index.jsx'),
   'purchase-invoice': () => import('./custom/purchase-invoice/index.jsx'),
