@@ -73,7 +73,7 @@ const MOCK_DECLARATIONS = [
     { severity:'warn',  origin:'Casilla 48', message:'No se han detectado facturas de compra para este período', suggestion:'Comprueba si hay facturas de compra no registradas' },
     { severity:'warn',  origin:'Casilla 64', message:'El total deducible es inferior al período anterior en más de un 30%', suggestion:'Verifica si es coherente con la actividad del trimestre' },
     { severity:'warn',  origin:'NIF declarante', message:'El NIF del declarante no está verificado en la AEAT', suggestion:'Confirma el NIF en la configuración del declarante' },
-  ]}, file:null, boxes:{ 151:0, 2:4, 5:10, 8:21, 157:1.75, 169:0.50, 20:1.40, 23:5.20 }, updatedAt:'14/05/2026', current:true },
+  ]}, file:null, boxes:{}, updatedAt:'14/05/2026', current:true },
   { id:'303-2025-T4', model:'303', year:2025, period:'T4', type:'ord', status:'presentadoAcuse',  result:{kind:'compensar',amount:2100}, incidents:{blocking:0,warning:0}, file:'2025_T4.303', updatedAt:'28/01/2026' },
 ];
 

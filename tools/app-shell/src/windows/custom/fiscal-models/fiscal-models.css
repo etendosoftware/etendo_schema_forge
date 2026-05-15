@@ -857,6 +857,8 @@
   font-variant-numeric: tabular-nums;
 }
 .fm-aeat-cell--empty { border-color: transparent; background: transparent; flex: 1; min-width: 70px; }
+.fm-aeat-cell--fixed { background: var(--fm-bg-subtle); }
+.fm-aeat-cell--fixed .fm-aeat-cell__value { color: var(--fm-fg-3); font-style: italic; }
 
 /* ─── Model badges ─────────────────────────────────────────────────── */
 .fm-model-badge {

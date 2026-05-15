@@ -50,9 +50,10 @@ export default function FmBoxes303({ boxes, year, period, sectionIds }) {
                   if (boxNum === null) {
                     return <div key={ci} className="fm-aeat-cell fm-aeat-cell--empty" />;
                   }
-                  const val = valueMap[boxNum] ?? null;
+                  const isFixed = row.fixedValues != null && Object.prototype.hasOwnProperty.call(row.fixedValues, boxNum);
+                  const val = isFixed ? row.fixedValues[boxNum] : (valueMap[boxNum] ?? null);
                   return (
-                    <div key={ci} className="fm-aeat-cell">
+                    <div key={ci} className={`fm-aeat-cell${isFixed ? ' fm-aeat-cell--fixed' : ''}`}>
                       <span className="fm-aeat-cell__num">{String(boxNum).padStart(2, '0')}</span>
                       <span className="fm-aeat-cell__value">
                         {val != null ? formatAmount(val) : '—'}
