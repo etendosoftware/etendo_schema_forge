@@ -38,7 +38,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds }) {
             )}
 
             {section.rows.map((row, ri) => (
-              <div key={ri} className="fm-aeat-row">
+              <div key={ri} className={`fm-aeat-row${row.total ? ' fm-aeat-row--total' : ''}`}>
                 <span className="fm-aeat-row__label">
                   {row.labelKey ? t(row.labelKey) : ''}
                   {row.formula && (
