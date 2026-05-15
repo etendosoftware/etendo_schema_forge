@@ -110,7 +110,7 @@ function IncidentsCell({ blocking, warning, t }) {
 }
 
 // ── Main component ───────────────────────────────────────────────
-export default function FmListPage({ declarations: propDecls, onSelect, onStatusChange }) {
+export default function FmListPage({ declarations: propDecls, onSelect, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
 
@@ -312,7 +312,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
       </div>
 
       {/* ── Overlays ─────────────────────────────────────────────── */}
-      {showConfig  && <ConfigDrawer onClose={() => setShowConfig(false)} />}
+      {showConfig  && <ConfigDrawer onClose={() => setShowConfig(false)} token={token} apiBaseUrl={apiBaseUrl} />}
       {showNewDecl && <NewDeclModal onConfirm={handleNewDecl} onClose={() => setShowNewDecl(false)} />}
 
       {/* ── Catalog drawer (slides from right) ───────────────────── */}
@@ -324,6 +324,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
               activeModels={activeModels}
               onBack={() => setShowCatalog(false)}
               onSave={(newActive) => { setActiveModels(newActive); setShowCatalog(false); }}
+              token={token}
+              apiBaseUrl={apiBaseUrl}
             />
           </div>
         </>

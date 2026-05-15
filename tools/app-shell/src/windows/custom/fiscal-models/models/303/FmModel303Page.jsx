@@ -211,7 +211,7 @@ function IncidentsTab({ decl, blocking, warning, t }) {
 
 // ── Main page ─────────────────────────────────────────────────────
 
-export default function FmModel303Page({ decl, onBack, onStatusChange }) {
+export default function FmModel303Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
   const [status, setStatus] = useState(decl.status);
@@ -454,7 +454,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
       {showFilegen && (
         <FileGenModal decl={decl} onConfirm={() => {}} onClose={() => setShowFilegen(false)} />
       )}
-      {showConfig && <ConfigDrawer onClose={() => setShowConfig(false)} />}
+      {showConfig && <ConfigDrawer onClose={() => setShowConfig(false)} token={token} apiBaseUrl={apiBaseUrl} />}
       {showCompare && <CompareDrawer decl={decl} onClose={() => setShowCompare(false)} />}
     </div>
   );

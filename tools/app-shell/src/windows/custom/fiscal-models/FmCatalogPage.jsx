@@ -15,7 +15,7 @@ const CATALOG = [
 // Only 303 and 349 support per-model configuration
 const CONFIGURABLE = new Set(['303', '349']);
 
-export default function FmCatalogPage({ onBack, onSave, activeModels }) {
+export default function FmCatalogPage({ onBack, onSave, activeModels, token, apiBaseUrl }) {
   const t = useUI();
   const [active, setActive] = useState(
     () => activeModels ?? Object.fromEntries(CATALOG.map(m => [m.id, m.defaultActive]))
@@ -114,7 +114,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels }) {
       </div>
 
       {configModel && (
-        <ConfigDrawer model={configModel} onClose={() => setConfigModel(null)} />
+        <ConfigDrawer model={configModel} onClose={() => setConfigModel(null)} token={token} apiBaseUrl={apiBaseUrl} />
       )}
     </div>
   );

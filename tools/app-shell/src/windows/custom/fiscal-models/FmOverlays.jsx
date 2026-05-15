@@ -1,6 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { neoBase } from '@/components/related-documents/helpers.js';
 import './fiscal-models.css';
+
+function parseCityLine(cityLine) {
+  if (!cityLine) return { postal: '', city: '', province: '' };
+  // Format: "28001 - Madrid (Madrid)" — postal optional, region in parens optional
+  const m = /^(\S+)\s*-\s*(.+?)(?:\s*\((.+)\))?$/.exec(cityLine.trim());
+  if (!m) return { postal: '', city: cityLine.trim(), province: '' };
+  return { postal: m[1] ?? '', city: m[2]?.trim() ?? '', province: m[3]?.trim() ?? '' };
+}
 
 // PresentModal — 3-path submission:
 //   1. presentadoAcuse  — upload PDF/XML receipt; status → presentadoAcuse
@@ -267,12 +276,37 @@ function CfgSection349({ t }) {
 
 // model: '303' | '349' | undefined — when provided, shows only that model's section;
 // undefined shows all sections (global config from the declaration detail page).
-export function ConfigDrawer({ model, onClose }) {
+export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
   const subtitle = model
     ? t(`fm.config.m${model}.title`)
     : t('fm.config.sub');
+
+  const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '' });
+
+  useEffect(() => {
+    if (!token || !apiBaseUrl) return;
+    fetch(`${neoBase(apiBaseUrl)}/session`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const org = data?.organization;
+        if (!org) return;
+        const { postal, city, province } = parseCityLine(org.cityLine);
+        setForm(prev => ({
+          ...prev,
+          nif:     org.taxId    ?? prev.nif,
+          name:    org.name     ?? prev.name,
+          address: org.address1 ?? prev.address,
+          postal, city, province,
+        }));
+      })
+      .catch(() => {});
+  }, [token, apiBaseUrl]);
+
+  const set = (key) => (e) => setForm(prev => ({ ...prev, [key]: e.target.value }));
 
   return (
     <div className="fm-catalog-overlay" onClick={onClose}>
@@ -286,14 +320,14 @@ export function ConfigDrawer({ model, onClose }) {
         </div>
         <div className="fm-config-modal__body">
           <CfgSection title={t('fm.config.declarant.title')}>
-            <CfgField label={t('fm.config.declarant.nif')}><input type="text" placeholder="A78901234" style={INPUT_ST} /></CfgField>
-            <CfgField label={t('fm.config.declarant.name')}><input type="text" style={INPUT_ST} /></CfgField>
-            <CfgField label={t('fm.config.declarant.phone')}><input type="tel" placeholder="+34 ..." style={INPUT_ST} /></CfgField>
-            <CfgField label={t('fm.config.declarant.address')}><input type="text" style={INPUT_ST} /></CfgField>
+            <CfgField label={t('fm.config.declarant.nif')}><input type="text" value={form.nif} onChange={set('nif')} placeholder="A78901234" style={INPUT_ST} /></CfgField>
+            <CfgField label={t('fm.config.declarant.name')}><input type="text" value={form.name} onChange={set('name')} style={INPUT_ST} /></CfgField>
+            <CfgField label={t('fm.config.declarant.phone')}><input type="tel" value={form.phone} onChange={set('phone')} placeholder="+34 ..." style={INPUT_ST} /></CfgField>
+            <CfgField label={t('fm.config.declarant.address')}><input type="text" value={form.address} onChange={set('address')} style={INPUT_ST} /></CfgField>
             <div style={{ display: 'flex', gap: 8 }}>
-              <CfgField label={t('fm.config.declarant.postal')} style={{ flex: '0 0 90px' }}><input type="text" style={INPUT_ST} /></CfgField>
-              <CfgField label={t('fm.config.declarant.city')} style={{ flex: 1 }}><input type="text" style={INPUT_ST} /></CfgField>
-              <CfgField label={t('fm.config.declarant.province')} style={{ flex: 1 }}><input type="text" style={INPUT_ST} /></CfgField>
+              <CfgField label={t('fm.config.declarant.postal')} style={{ flex: '0 0 90px' }}><input type="text" value={form.postal} onChange={set('postal')} style={INPUT_ST} /></CfgField>
+              <CfgField label={t('fm.config.declarant.city')} style={{ flex: 1 }}><input type="text" value={form.city} onChange={set('city')} style={INPUT_ST} /></CfgField>
+              <CfgField label={t('fm.config.declarant.province')} style={{ flex: 1 }}><input type="text" value={form.province} onChange={set('province')} style={INPUT_ST} /></CfgField>
             </div>
           </CfgSection>
           {(!model || model === '303') && <CfgSection303 t={t} />}
