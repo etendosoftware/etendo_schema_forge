@@ -275,32 +275,34 @@ export function ConfigDrawer({ model, onClose }) {
     : t('fm.config.sub');
 
   return (
-    <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 400, background: '#fff', borderLeft: '1px solid #e5e7eb', boxShadow: '-4px 0 16px rgba(0,0,0,.10)', zIndex: 55, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{t('fm.config.title')}</span>
-          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{subtitle}</div>
-        </div>
-        <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#6b7280' }} onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-        <CfgSection title={t('fm.config.declarant.title')}>
-          <CfgField label={t('fm.config.declarant.nif')}><input type="text" placeholder="A78901234" style={INPUT_ST} /></CfgField>
-          <CfgField label={t('fm.config.declarant.name')}><input type="text" style={INPUT_ST} /></CfgField>
-          <CfgField label={t('fm.config.declarant.phone')}><input type="tel" placeholder="+34 ..." style={INPUT_ST} /></CfgField>
-          <CfgField label={t('fm.config.declarant.address')}><input type="text" style={INPUT_ST} /></CfgField>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <CfgField label={t('fm.config.declarant.postal')} style={{ flex: '0 0 90px' }}><input type="text" style={INPUT_ST} /></CfgField>
-            <CfgField label={t('fm.config.declarant.city')} style={{ flex: 1 }}><input type="text" style={INPUT_ST} /></CfgField>
-            <CfgField label={t('fm.config.declarant.province')} style={{ flex: 1 }}><input type="text" style={INPUT_ST} /></CfgField>
+    <div className="fm-catalog-overlay" onClick={onClose}>
+      <div className="fm-config-modal" onClick={e => e.stopPropagation()}>
+        <div className="fm-config-modal__header">
+          <div className="fm-config-modal__titles">
+            <div className="fm-config-modal__title">{t('fm.config.title')}</div>
+            <div className="fm-config-modal__sub">{subtitle}</div>
           </div>
-        </CfgSection>
-        {(!model || model === '303') && <CfgSection303 t={t} />}
-        {(!model || model === '349') && <CfgSection349 t={t} />}
-      </div>
-      <div style={{ padding: '12px 16px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button style={{ fontSize: 12, padding: '6px 14px', borderRadius: 4, border: '1px solid #e5e7eb', cursor: 'pointer', background: '#f9fafb' }} onClick={onClose}>{t('fm.action.cancel')}</button>
-        <button style={{ fontSize: 12, padding: '6px 14px', borderRadius: 4, border: 'none', cursor: 'pointer', background: '#111827', color: '#fff', fontWeight: 600 }} onClick={onClose}>{t('fm.action.save')}</button>
+          <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
+        </div>
+        <div className="fm-config-modal__body">
+          <CfgSection title={t('fm.config.declarant.title')}>
+            <CfgField label={t('fm.config.declarant.nif')}><input type="text" placeholder="A78901234" style={INPUT_ST} /></CfgField>
+            <CfgField label={t('fm.config.declarant.name')}><input type="text" style={INPUT_ST} /></CfgField>
+            <CfgField label={t('fm.config.declarant.phone')}><input type="tel" placeholder="+34 ..." style={INPUT_ST} /></CfgField>
+            <CfgField label={t('fm.config.declarant.address')}><input type="text" style={INPUT_ST} /></CfgField>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <CfgField label={t('fm.config.declarant.postal')} style={{ flex: '0 0 90px' }}><input type="text" style={INPUT_ST} /></CfgField>
+              <CfgField label={t('fm.config.declarant.city')} style={{ flex: 1 }}><input type="text" style={INPUT_ST} /></CfgField>
+              <CfgField label={t('fm.config.declarant.province')} style={{ flex: 1 }}><input type="text" style={INPUT_ST} /></CfgField>
+            </div>
+          </CfgSection>
+          {(!model || model === '303') && <CfgSection303 t={t} />}
+          {(!model || model === '349') && <CfgSection349 t={t} />}
+        </div>
+        <div className="fm-config-modal__footer">
+          <button className="fm-btn" onClick={onClose}>{t('fm.action.cancel')}</button>
+          <button className="fm-btn fm-btn--primary" onClick={onClose}>{t('fm.action.save')}</button>
+        </div>
       </div>
     </div>
   );

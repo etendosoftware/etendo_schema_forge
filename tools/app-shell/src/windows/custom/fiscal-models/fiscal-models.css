@@ -551,7 +551,11 @@
 .fm-side-panel__foot  { padding: 12px 20px; border-top: 1px solid var(--fm-border-1); display: flex; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
 
 /* Catalog overlay */
-.fm-catalog-overlay { position: fixed; inset: 0; background: rgba(18,18,23,.25); z-index: 50; backdrop-filter: blur(1px); }
+.fm-catalog-overlay {
+  position: fixed; inset: 0; background: rgba(18,18,23,.35); z-index: 50;
+  backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
 .fm-catalog-drawer {
   position: fixed; top: 0; right: 0; height: 100%; width: 520px;
   background: var(--fm-bg-card, #fff);
@@ -560,6 +564,32 @@
   animation: fm-drawer-in .22s cubic-bezier(.4,0,.2,1);
 }
 @keyframes fm-drawer-in { from { transform: translateX(100%); opacity: .6; } to { transform: translateX(0); opacity: 1; } }
+.fm-config-modal {
+  background: var(--fm-bg-card, #fff); border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(18,18,23,.18); z-index: 51;
+  width: 100%; max-width: 500px; margin: 16px;
+  display: flex; flex-direction: column; max-height: calc(100vh - 64px);
+  animation: fm-modal-in .2s cubic-bezier(.4,0,.2,1);
+}
+@keyframes fm-modal-in { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.fm-config-modal__header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 20px 20px 0; gap: 12px;
+}
+.fm-config-modal__titles { flex: 1; min-width: 0; }
+.fm-config-modal__title { font: 700 15px/20px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); }
+.fm-config-modal__sub { font: 400 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); margin-top: 2px; }
+.fm-config-modal__close {
+  width: 28px; height: 28px; border-radius: 8px; border: none; cursor: pointer;
+  background: none; color: var(--fm-fg-3); display: flex; align-items: center; justify-content: center;
+  transition: background .1s, color .1s; flex-shrink: 0;
+}
+.fm-config-modal__close:hover { background: var(--fm-bg-subtle); color: var(--fm-fg-1); }
+.fm-config-modal__body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.fm-config-modal__footer {
+  padding: 14px 20px; border-top: 1px solid var(--fm-border-1);
+  display: flex; gap: 8px; justify-content: flex-end;
+}
 
 /* ─── Small action / compare buttons ───────────────────────────────── */
 .fm-btn {
