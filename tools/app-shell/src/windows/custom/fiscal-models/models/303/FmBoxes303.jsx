@@ -41,6 +41,9 @@ export default function FmBoxes303({ boxes, year, period, sectionIds }) {
               <div key={ri} className="fm-aeat-row">
                 <span className="fm-aeat-row__label">
                   {row.labelKey ? t(row.labelKey) : ''}
+                  {row.formula && (
+                    <span className="fm-aeat-row__formula">{row.formula}</span>
+                  )}
                 </span>
                 {Array.from({ length: cols }, (_, ci) => {
                   const boxNum = row.cells?.[ci] ?? null;

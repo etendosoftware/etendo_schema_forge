@@ -67,14 +67,14 @@ const BASE = {
         { id: 'compensaciones_reag',labelKey: 'fm.box.row.compensaciones_reag', cells: [null, 42] },
         { id: 'reg_bienes_inv',     labelKey: 'fm.box.row.reg_bienes_inv',      cells: [null, 43] },
         { id: 'prorrata_definitiva',labelKey: 'fm.box.row.prorrata_definitiva', cells: [null, 44] },
-        { id: 'total_deducir',      labelKey: 'fm.box.row.total_deducir',       cells: [null, 45] },
+        { id: 'total_deducir',      labelKey: 'fm.box.row.total_deducir',       cells: [null, 45], formula: '(29 + 31 + 33 + 35 + 37 + 39 + 41 + 42 + 43 + 44)' },
       ],
     },
     resultado: {
       titleKey: 'fm.box.section.resultado',
       colHeaderKeys: [],
       rows: [
-        { id: 'diferencia', labelKey: 'fm.box.row.diferencia', cells: [46] },
+        { id: 'diferencia', labelKey: 'fm.box.row.diferencia', cells: [46], formula: '(27 − 45)' },
       ],
     },
     info_adicional: {
