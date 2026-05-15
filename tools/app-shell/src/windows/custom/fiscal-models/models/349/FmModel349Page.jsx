@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useUI } from '@/i18n';
+import { ArrowLeft, Download, FileDown, Play, TriangleAlert, OctagonAlert, CircleCheck, Search, RefreshCw, Globe, Eye, UserPlus, Lock } from 'lucide-react';
 import { StatusPillMenu } from '../../FmCommon.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount } from '../../fiscalModelsUtils.js';
@@ -97,7 +98,7 @@ function TotalsCard({ operators }) {
           <div key={k.id} className="fm-349-total-cell">
             <div className="fm-349-total-cell__head">
               <KeyBadge k={k.id} />
-              <span style={{ fontSize: 10, color: '#9ca3af' }}>🔒</span>
+              <Lock size={10} strokeWidth={2} style={{ color: '#9ca3af' }} />
             </div>
             <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{k.label}</div>
             <div className={`fm-349-total-cell__amount${totals[k.id] === 0 ? ' fm-349-total-cell__amount--zero' : ''}`}>
@@ -158,7 +159,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange }) {
       <div className="fm-349-header">
         <div className="fm-349-header__back">
           <button className="fm-349-header__back-btn" onClick={onBack}>
-            ← Volver a Modelos fiscales
+            <ArrowLeft size={14} strokeWidth={1.75} /> {t('fm.action.back')}
           </button>
         </div>
         <div className="fm-349-header__main">
@@ -175,12 +176,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange }) {
             </div>
           </div>
           <div className="fm-349-header__actions">
-            <button className="fm-349-header__btn">🗘 Recalcular</button>
-            <button className="fm-349-header__btn">◎ Validar VIES</button>
-            <button className="fm-349-header__btn">◉ Vista previa PDF</button>
-            <button className="fm-349-header__btn" onClick={() => setShowFilegen(true)}>↓ Generar .349</button>
+            <button className="fm-349-header__btn"><RefreshCw size={14} strokeWidth={1.75} /> {t('fm.action.recalc')}</button>
+            <button className="fm-349-header__btn"><Globe size={14} strokeWidth={1.75} /> VIES</button>
+            <button className="fm-349-header__btn"><Eye size={14} strokeWidth={1.75} /> {t('fm.action.preview_pdf')}</button>
+            <button className="fm-349-header__btn" onClick={() => setShowFilegen(true)}><FileDown size={14} strokeWidth={1.75} /> {t('fm.action.generate_file')}</button>
             <button className="fm-349-header__btn fm-349-header__btn--primary" onClick={() => setShowPresent(true)}>
-              ▶ {t('fm.action.present')}
+              <Play size={13} strokeWidth={1.75} fill="currentColor" /> {t('fm.action.present')}
             </button>
           </div>
         </div>
@@ -196,31 +197,31 @@ export default function FmModel349Page({ decl, onBack, onStatusChange }) {
         {blocking > 0 && (
           <Banner349
             type="error"
-            icon="⚠"
+            icon={<OctagonAlert size={18} strokeWidth={1.75} />}
             title={`${blocking} incidencias bloqueantes impiden generar el fichero`}
             sub="Resuelve las incidencias bloqueantes para poder generar el fichero AEAT."
-            actions={<button className="fm-349-banner__btn fm-349-banner__btn--outline">→ Resolver</button>}
+            actions={<button className="fm-349-banner__btn fm-349-banner__btn--outline">Resolver</button>}
           />
         )}
         {viesPending > 0 && (
           <Banner349
             type="info"
-            icon="🌐"
+            icon={<Globe size={18} strokeWidth={1.75} />}
             title={`${viesPending} NIF-IVA con validación VIES pendiente`}
             sub="Validación VIES asíncrona — informativa, no bloqueante"
-            actions={<button className="fm-349-banner__btn fm-349-banner__btn--outline">↻ Validar VIES</button>}
+            actions={<button className="fm-349-banner__btn fm-349-banner__btn--outline"><RefreshCw size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />Validar VIES</button>}
           />
         )}
         {status === 'listo' && (
           <Banner349
             type="success"
-            icon="✓"
+            icon={<CircleCheck size={18} strokeWidth={1.75} />}
             title="Fichero 349 generado correctamente"
             sub={`349_A78901234_${decl.year}_${decl.period}.349 · ${operators.length} operadores · totales por clave reconciliables fila a fila`}
             actions={
               <>
-                <button className="fm-349-banner__btn fm-349-banner__btn--outline">↓ Descargar</button>
-                <button className="fm-349-banner__btn fm-349-banner__btn--primary">▶ Presentar</button>
+                <button className="fm-349-banner__btn fm-349-banner__btn--outline"><Download size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />Descargar</button>
+                <button className="fm-349-banner__btn fm-349-banner__btn--primary"><Play size={12} strokeWidth={1.75} fill="currentColor" style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />Presentar</button>
               </>
             }
           />
@@ -281,7 +282,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange }) {
               <div style={{ flex: 1 }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', border: '1px solid #e2e8f0', borderRadius: 6, fontSize: 12, color: '#6b7280', background: '#fff' }}>
-                  🔍 <span>Buscar operador o NIF-IVA</span>
+                  <Search size={13} strokeWidth={1.75} style={{ flexShrink: 0 }} /> <span>Buscar operador o NIF-IVA</span>
                 </div>
                 <button className="fm-toolbar__btn fm-toolbar__btn--primary" style={{ fontSize: 12, padding: '5px 12px' }}>
                   + Añadir operador
@@ -328,7 +329,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange }) {
                       <td style={{ textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{formatAmount(op.base)}</td>
                       <td><ViesBadge status={op.vies} /></td>
                       <td><a className="fm-origin-link">{op.origin}</a></td>
-                      <td><button className="fm-table-action">👁 Ver</button></td>
+                      <td><button className="fm-table-action"><Eye size={12} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />{t('fm.action.open')}</button></td>
                     </tr>
                   ))}
                 </tbody>

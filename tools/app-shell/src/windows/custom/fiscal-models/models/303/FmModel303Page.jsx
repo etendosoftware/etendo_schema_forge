@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { useUI } from '@/i18n';
 import {
+  ArrowLeft, Settings2, Download, FileText, Lock, Play,
+  OctagonAlert, TriangleAlert, CircleCheck, ChevronRight, GitCompare, FolderOpen,
+} from 'lucide-react';
+import {
   StatusPillMenu, ResultPill, SummaryCard, Tabs, Banner, SectionCard, EmptyState,
   NumberedStepper,
 } from '../../FmCommon.jsx';
@@ -26,7 +30,7 @@ function SourcesTab({ decl, t }) {
     >
       {sources.length === 0 ? (
         <EmptyState
-          icon="📄"
+          icon={<FileText size={28} strokeWidth={1.5} />}
           title={t('fm.list.empty')}
           sub={t('fm.sources.sub')}
         />
@@ -75,14 +79,14 @@ function FilesTab({ decl, t, onGenerate, fileBlocked }) {
       {file ? (
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid #d1fae5', borderRadius: 8, background: '#f0fdf4' }}>
-            <span style={{ fontSize: 20 }}>✅</span>
+            <CircleCheck size={20} strokeWidth={1.75} style={{ color: '#16a34a', flexShrink: 0 }} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{file.name}</div>
               <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
                 {file.size} · {file.generatedAt}
               </div>
             </div>
-            <button className="fm-btn" onClick={() => {}}>⬇ {t('fm.action.download')}</button>
+            <button className="fm-btn" onClick={() => {}}><Download size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />{t('fm.action.download')}</button>
           </div>
           <Banner
             tone="info"
@@ -92,7 +96,7 @@ function FilesTab({ decl, t, onGenerate, fileBlocked }) {
         </div>
       ) : (
         <EmptyState
-          icon="📂"
+          icon={<FolderOpen size={28} strokeWidth={1.5} />}
           title={t('fm.files.empty')}
           sub={t('fm.files.empty_sub')}
           cta={
@@ -100,7 +104,11 @@ function FilesTab({ decl, t, onGenerate, fileBlocked }) {
               className={`fm-btn${fileBlocked ? ' fm-btn--danger' : ' fm-btn--primary'}`}
               onClick={onGenerate}
             >
-              {fileBlocked ? '🔒' : '📄'} {t('fm.action.gen303')}
+              {fileBlocked
+                ? <Lock size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />
+                : <FileText size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />
+              }
+              {t('fm.action.gen303')}
             </button>
           }
         />
@@ -139,7 +147,7 @@ function IncidentsTab({ decl, blocking, warning, t }) {
     return (
       <SectionCard title={t('fm.incidents.tab_title')} flush>
         <EmptyState
-          icon="✅"
+          icon={<CircleCheck size={28} strokeWidth={1.5} />}
           title={t('fm.incidents.empty')}
           sub={t('fm.incidents.empty_sub')}
         />
@@ -147,13 +155,14 @@ function IncidentsTab({ decl, blocking, warning, t }) {
     );
   }
 
+  const total = blocking + warning;
   const sorted = [...incidents].sort((a, b) =>
     (a.severity === 'block' ? 0 : 1) - (b.severity === 'block' ? 0 : 1)
   );
 
   return (
     <SectionCard
-      title={`${incidents.length} ${t('fm.incidents.tab_title').toLowerCase()}`}
+      title={`${total} ${t('fm.incidents.tab_title').toLowerCase()}`}
       sub={t('fm.incidents.block_sub')}
       flush
     >
@@ -174,15 +183,15 @@ function IncidentsTab({ decl, blocking, warning, t }) {
                 <tr key={i}>
                   <td>
                     {inc.severity === 'block'
-                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#dc2626', background: '#fee2e2', borderRadius: 4, padding: '2px 6px' }}>🚫 {t('fm.incidents.severity.block')}</span>
-                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#d97706', background: '#fef3c7', borderRadius: 4, padding: '2px 6px' }}>⚠ {t('fm.incidents.severity.warn')}</span>
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#dc2626', background: '#fee2e2', borderRadius: 4, padding: '2px 6px' }}><OctagonAlert size={11} strokeWidth={2} /> {t('fm.incidents.severity.block')}</span>
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#d97706', background: '#fef3c7', borderRadius: 4, padding: '2px 6px' }}><TriangleAlert size={11} strokeWidth={2} /> {t('fm.incidents.severity.warn')}</span>
                     }
                   </td>
                   <td style={{ color: '#6b7280', fontSize: 11 }}>{inc.origin ?? '—'}</td>
                   <td className="strong">{inc.message}</td>
                   <td style={{ color: '#6b7280' }}>{inc.suggestion ?? '—'}</td>
                   <td style={{ textAlign: 'right' }}>
-                    <button className="fm-btn">{t('fm.action.go_to')} →</button>
+                    <button className="fm-btn">{t('fm.action.go_to')} <ChevronRight size={13} strokeWidth={2} style={{ display:'inline',verticalAlign:'middle' }} /></button>
                   </td>
                 </tr>
               ))}
@@ -190,9 +199,11 @@ function IncidentsTab({ decl, blocking, warning, t }) {
           </table>
         </div>
       ) : (
-        <div style={{ padding: '8px 16px', fontSize: 12, color: '#9ca3af' }}>
-          {blocking} {t('fm.incidents.blocking')}, {warning} {t('fm.incidents.warning')}
-        </div>
+        <EmptyState
+          icon={<CircleCheck size={28} strokeWidth={1.5} />}
+          title={t('fm.incidents.empty')}
+          sub={t('fm.incidents.empty_sub')}
+        />
       )}
     </SectionCard>
   );
@@ -262,7 +273,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
       <div className="fm-349-header">
         <div className="fm-349-header__back">
           <button className="fm-349-header__back-btn" onClick={onBack}>
-            ← {t('fm.action.back')}
+            <ArrowLeft size={14} strokeWidth={1.75} /> {t('fm.action.back')}
           </button>
         </div>
         <div className="fm-349-header__main">
@@ -283,10 +294,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
           </div>
           <div className="fm-349-header__actions">
             <button className="fm-349-header__btn" onClick={() => setShowCompare(true)}>
-              ⇄ {t('fm.action.compare')}
+              <GitCompare size={14} strokeWidth={1.75} /> {t('fm.action.compare')}
             </button>
             <button className="fm-349-header__btn" onClick={() => setShowConfig(true)}>
-              ⚙ {t('fm.config.title')}
+              <Settings2 size={14} strokeWidth={1.75} /> {t('fm.config.title')}
             </button>
             {!isSubmitted && (
               <button
@@ -295,14 +306,14 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
                 title={fileBlocked ? t('fm.incidents.block_sub') : ''}
                 style={fileBlocked ? { color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2' } : {}}
               >
-                {fileBlocked ? '🔒' : '↓'} {t('fm.action.gen303')}
+                {fileBlocked ? <Lock size={14} strokeWidth={1.75} /> : <Download size={14} strokeWidth={1.75} />} {t('fm.action.gen303')}
               </button>
             )}
             <button
               className="fm-349-header__btn fm-349-header__btn--primary"
               onClick={() => setShowPresent(true)}
             >
-              ▶ {isSubmitted ? t('fm.action.change_status') : t('fm.action.submit')}
+              <Play size={13} strokeWidth={1.75} fill="currentColor" /> {isSubmitted ? t('fm.action.change_status') : t('fm.action.submit')}
             </button>
           </div>
         </div>
@@ -315,12 +326,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
       {blocking > 0 && (
         <Banner
           tone="danger"
-          icon="🚫"
+          icon={<OctagonAlert size={18} strokeWidth={1.75} />}
           title={`${blocking} ${t('fm.incidents.banner')}`}
           sub={t('fm.incidents.block_sub')}
           actions={
             <button className="fm-btn" onClick={() => setActiveTab('incidents')}>
-              {t('fm.action.go_to')} →
+              {t('fm.action.go_to')} <ChevronRight size={13} strokeWidth={2} style={{ display:'inline',verticalAlign:'middle' }} />
             </button>
           }
         />
@@ -328,11 +339,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange }) {
       {warning > 0 && blocking === 0 && (
         <Banner
           tone="warn"
-          icon="⚠"
+          icon={<TriangleAlert size={18} strokeWidth={1.75} />}
           title={`${warning} ${t('fm.incidents.banner_warn')}`}
           actions={
             <button className="fm-btn" onClick={() => setActiveTab('incidents')}>
-              {t('fm.tab.incidents')} →
+              {t('fm.tab.incidents')} <ChevronRight size={13} strokeWidth={2} style={{ display:'inline',verticalAlign:'middle' }} />
             </button>
           }
         />
