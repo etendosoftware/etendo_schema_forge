@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
+import { FileText, Upload, Eye, EyeOff, Lock, TriangleAlert, CircleCheck } from 'lucide-react';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -179,9 +180,9 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                     file    ? 'border-green-400 bg-green-50' :
                               'border-border hover:border-foreground/40 hover:bg-muted/20'}`}
               >
-                <div className={`w-11 h-11 mx-auto mb-3 rounded-xl flex items-center justify-center text-xl
+                <div className={`w-11 h-11 mx-auto mb-3 rounded-xl flex items-center justify-center
                   ${file ? 'bg-green-100 text-green-700' : 'bg-muted text-foreground'}`}>
-                  {file ? '📄' : '⬆'}
+                  {file ? <FileText size={22} strokeWidth={1.5} /> : <Upload size={22} strokeWidth={1.5} />}
                 </div>
                 {file ? (
                   <>
@@ -227,11 +228,11 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                     className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
                     aria-label={showPwd ? ui('fiscal.cert.pwd.hide') : ui('fiscal.cert.pwd.show')}
                   >
-                    {showPwd ? '🙈' : '👁'}
+                    {showPwd ? <EyeOff size={14} strokeWidth={1.75} /> : <Eye size={14} strokeWidth={1.75} />}
                   </button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
-                  🔒 {ui('fiscal.cert.pwd.hint')}
+                  <Lock size={11} strokeWidth={2} /> {ui('fiscal.cert.pwd.hint')}
                 </p>
               </div>
 
@@ -259,7 +260,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
           {step === 'confirmNif' && (
             <div className="space-y-4">
               <div className="flex gap-2.5 items-start p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-900">
-                <span className="flex-shrink-0 text-base">⚠</span>
+                <TriangleAlert size={16} strokeWidth={1.75} className="flex-shrink-0" />
                 <div>
                   <p className="font-semibold">{ui('fiscal.cert.nif.warning.title')}</p>
                   <p className="text-xs text-amber-800/80 mt-1">
@@ -283,7 +284,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
           {step === 'done' && (
             <div className="space-y-4">
               <div className="flex gap-2.5 items-start p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800">
-                <span className="flex-shrink-0">✓</span>
+                <CircleCheck size={16} strokeWidth={1.75} className="flex-shrink-0" />
                 <div>
                   <strong>{ui('fiscal.cert.success.title')}</strong>
                   <p className="text-xs text-green-700/80 mt-0.5">{ui('fiscal.cert.success.body')}</p>
@@ -307,7 +308,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
               </div>
 
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                🔒 {ui('fiscal.cert.success.encrypted')}
+                <Lock size={11} strokeWidth={2} /> {ui('fiscal.cert.success.encrypted')}
               </p>
             </div>
           )}

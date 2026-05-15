@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useUI, useLocaleSwitch } from '@/i18n';
+import { FileText, Check, ChevronRight } from 'lucide-react';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import {
@@ -280,7 +281,7 @@ function AppliedScreen({ orgId, orgName, system, selectedTerritory, alsoNational
           <div className="flex flex-col gap-2">
             {certContext && (
               <NextItem
-                icon="📄"
+                icon={<FileText size={15} strokeWidth={1.75} />}
                 title={cert ? ui('fiscal.onboarding.cert.loaded.title') : ui('fiscal.onboarding.cert.upload.title')}
                 desc={cert
                   ? ui('fiscal.onboarding.cert.loaded.desc', { name: cert.name, validTo: cert.validTo })
@@ -827,7 +828,7 @@ function NextItem({ icon, title, desc, badge, done, onClick }) {
         ${done ? 'bg-green-50 border-green-200' : 'bg-background border-border'}`}>
       <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm
         ${done ? 'bg-green-100 text-green-700' : 'bg-muted text-foreground/60'}`}>
-        {done ? '✓' : icon}
+        {done ? <Check size={15} strokeWidth={2.5} /> : icon}
       </span>
       <span className="flex-1">
         <span className="flex items-center gap-2">
@@ -838,7 +839,7 @@ function NextItem({ icon, title, desc, badge, done, onClick }) {
         </span>
         <span className="block text-xs text-muted-foreground mt-0.5">{desc}</span>
       </span>
-      <span className="text-muted-foreground text-xs">›</span>
+      <ChevronRight size={14} strokeWidth={1.75} className="text-muted-foreground" />
     </button>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUI } from '@/i18n';
+import { OctagonAlert, TriangleAlert, X } from 'lucide-react';
 
 const WARN_DAYS     = 60;
 const CRITICAL_DAYS = 30;
@@ -40,9 +41,9 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
             type="button"
             onClick={() => setDismissed(true)}
             aria-label={ui('fiscal.cert.expiry.dismiss')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.fg, fontSize: 16, lineHeight: 1, opacity: 0.5, padding: '0 2px' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.fg, opacity: 0.5, padding: '0 2px', display: 'flex' }}
           >
-            ×
+            <X size={14} strokeWidth={2} />
           </button>
         )}
       </div>
@@ -55,8 +56,10 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
       padding: '14px 18px', borderRadius: 10, marginBottom: 20,
       background: c.bg, border: `1px solid ${c.border}`, color: c.fg,
     }}>
-      <span style={{ fontSize: 18, lineHeight: 1.1, flexShrink: 0 }}>
-        {isCritical ? '🔴' : '⚠️'}
+      <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+        {isCritical
+          ? <OctagonAlert size={18} strokeWidth={1.75} />
+          : <TriangleAlert size={18} strokeWidth={1.75} />}
       </span>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600, fontSize: 14 }}>
@@ -73,9 +76,9 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
           type="button"
           onClick={() => setDismissed(true)}
           aria-label={ui('fiscal.cert.expiry.dismiss')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.fg, fontSize: 20, lineHeight: 1, opacity: 0.45, flexShrink: 0, marginTop: -2 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.fg, opacity: 0.45, flexShrink: 0, display: 'flex' }}
         >
-          ×
+          <X size={16} strokeWidth={2} />
         </button>
       )}
     </div>
