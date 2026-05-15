@@ -18732,6 +18732,7 @@
     "fm.catalog.periodicity.quarterly": "Quarterly",
     "fm.catalog.periodicity.monthly": "Monthly",
     "fm.catalog.periodicity.annual": "Annual",
+    "fm.catalog.coming_soon": "Coming soon",
     "fm.box.section.iva_devengado": "Accrued VAT",
     "fm.box.section.iva_deducible": "Deductible VAT",
     "fm.box.section.resultado": "Result",

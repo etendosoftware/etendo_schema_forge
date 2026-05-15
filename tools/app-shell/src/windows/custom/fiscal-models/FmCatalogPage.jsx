@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { useUI } from '@/i18n';
-import { ArrowLeft, Settings2 } from 'lucide-react';
+import { ArrowLeft, Settings2, Lock } from 'lucide-react';
 import { ConfigDrawer } from './FmOverlays.jsx';
 
 const CATALOG = [
-  { id: '303', cat: 'iva',  periodicity: 'quarterly', defaultActive: true  },
-  { id: '349', cat: 'iva',  periodicity: 'monthly',   defaultActive: true  },
-  { id: '115', cat: 'ret',  periodicity: 'quarterly', defaultActive: false },
-  { id: '111', cat: 'ret',  periodicity: 'quarterly', defaultActive: false },
-  { id: '190', cat: 'ret',  periodicity: 'annual',    defaultActive: false },
-  { id: '180', cat: 'ret',  periodicity: 'annual',    defaultActive: false },
+  { id: '303', cat: 'iva',  periodicity: 'quarterly', defaultActive: true,  locked: false },
+  { id: '349', cat: 'iva',  periodicity: 'monthly',   defaultActive: true,  locked: false },
+  { id: '115', cat: 'ret',  periodicity: 'quarterly', defaultActive: false, locked: true  },
+  { id: '111', cat: 'ret',  periodicity: 'quarterly', defaultActive: false, locked: true  },
+  { id: '190', cat: 'ret',  periodicity: 'annual',    defaultActive: false, locked: true  },
+  { id: '180', cat: 'ret',  periodicity: 'annual',    defaultActive: false, locked: true  },
 ];
 
 // Only 303 and 349 support per-model configuration
@@ -23,7 +23,8 @@ export default function FmCatalogPage({ onBack, onSave, activeModels }) {
   const [configModel, setConfigModel] = useState(null);
 
   const toggleModel = (id) => setActive(prev => ({ ...prev, [id]: !prev[id] }));
-  const activeCount = Object.values(active).filter(Boolean).length;
+  const lockedIds = new Set(CATALOG.filter(m => m.locked).map(m => m.id));
+  const activeCount = Object.entries(active).filter(([id, v]) => v && !lockedIds.has(id)).length;
 
   return (
     <div className="fm-page">
@@ -41,7 +42,7 @@ export default function FmCatalogPage({ onBack, onSave, activeModels }) {
           <div className="fm-catalog-header__sub">{activeCount} {t('fm.catalog.active_count')}</div>
         </div>
         <button
-          className="fm-toolbar__btn--primary"
+          className="fm-toolbar__btn fm-toolbar__btn--primary"
           onClick={() => onSave?.(active)}
         >
           {t('fm.action.save')}
@@ -59,10 +60,11 @@ export default function FmCatalogPage({ onBack, onSave, activeModels }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
               {CATALOG.filter(m => m.cat === cat).map(model => {
                 const isActive = active[model.id];
+                const isLocked = model.locked;
                 return (
                   <div
                     key={model.id}
-                    className={`fm-catalog-card${isActive ? (cat === 'ret' ? ' fm-catalog-card--active-ret' : ' fm-catalog-card--active') : ''}`}
+                    className={`fm-catalog-card${isLocked ? ' fm-catalog-card--locked' : isActive ? (cat === 'ret' ? ' fm-catalog-card--active-ret' : ' fm-catalog-card--active') : ''}`}
                   >
                     <span className={`fm-catalog-card__badge fm-catalog-card__badge--${cat}`}>
                       {model.id}
@@ -77,21 +79,30 @@ export default function FmCatalogPage({ onBack, onSave, activeModels }) {
                       </div>
                     </div>
                     <div className="fm-catalog-card__actions">
-                      <button
-                        className={`fm-catalog-toggle ${isActive ? 'fm-catalog-toggle--active' : 'fm-catalog-toggle--inactive'}`}
-                        onClick={() => toggleModel(model.id)}
-                      >
-                        {isActive ? t('fm.catalog.deactivate') : t('fm.catalog.activate')}
-                      </button>
-                      {isActive && CONFIGURABLE.has(model.id) && (
-                        <button
-                          className="fm-catalog-config-btn"
-                          title={t('fm.config.title')}
-                          aria-label={t('fm.config.title')}
-                          onClick={() => setConfigModel(model.id)}
-                        >
-                          <Settings2 size={14} strokeWidth={1.75} />
-                        </button>
+                      {isLocked ? (
+                        <span className="fm-catalog-card__locked-badge">
+                          <Lock size={10} strokeWidth={2} />
+                          {t('fm.catalog.coming_soon')}
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            className={`fm-catalog-toggle ${isActive ? 'fm-catalog-toggle--active' : 'fm-catalog-toggle--inactive'}`}
+                            onClick={() => toggleModel(model.id)}
+                          >
+                            {isActive ? t('fm.catalog.deactivate') : t('fm.catalog.activate')}
+                          </button>
+                          {isActive && CONFIGURABLE.has(model.id) && (
+                            <button
+                              className="fm-catalog-config-btn"
+                              title={t('fm.config.title')}
+                              aria-label={t('fm.config.title')}
+                              onClick={() => setConfigModel(model.id)}
+                            >
+                              <Settings2 size={14} strokeWidth={1.75} />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

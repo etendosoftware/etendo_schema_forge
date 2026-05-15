@@ -431,6 +431,14 @@
   background: #f0fdf4; color: #15803d; border-color: #86efac;
 }
 .fm-catalog-toggle--inactive:hover { background: #dcfce7; border-color: #4ade80; }
+.fm-catalog-card--locked { opacity: .55; pointer-events: none; }
+.fm-catalog-card__locked-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: 500 10px/14px var(--fm-font-sans, system-ui);
+  padding: 2px 8px; border-radius: 20px;
+  background: var(--fm-bg-subtle); color: var(--fm-fg-3);
+  border: 1px solid var(--fm-border-1);
+}
 .fm-catalog-config-btn {
   background: var(--fm-bg-subtle); border: 1px solid var(--fm-border-1);
   color: var(--fm-fg-3); border-radius: 8px; cursor: pointer;
