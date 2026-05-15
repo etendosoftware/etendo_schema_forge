@@ -53,7 +53,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds }) {
                   const val = valueMap[boxNum] ?? null;
                   return (
                     <div key={ci} className="fm-aeat-cell">
-                      <span className="fm-aeat-cell__num">{boxNum}</span>
+                      <span className="fm-aeat-cell__num">{String(boxNum).padStart(2, '0')}</span>
                       <span className="fm-aeat-cell__value">
                         {val != null ? formatAmount(val) : '—'}
                       </span>
