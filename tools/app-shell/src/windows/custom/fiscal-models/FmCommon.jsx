@@ -1,18 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { STATUS_COLOR, STATUS_ICON, STATUS_LABEL, STATUS_ORDER } from './fiscalModelsUtils.js';
+import { STATUS_COLOR, STATUS_ICON, STATUS_ORDER } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
 
 export function StatusPill({ status }) {
+  const t = useUI();
   const color = STATUS_COLOR[status] ?? 'grey';
   return (
     <span className={`fm-status-pill fm-status-pill--${color}`}>
-      {STATUS_ICON[status]} {STATUS_LABEL[status] ?? status}
+      {STATUS_ICON[status]} {t(`fm.status.${status}`) ?? status}
     </span>
   );
 }
 
 export function StatusMenu({ current, onSelect, onClose }) {
+  const t = useUI();
   const ref = useRef(null);
   useEffect(() => {
     const handler = (e) => { if (!ref.current?.contains(e.target)) onClose(); };
@@ -30,7 +32,7 @@ export function StatusMenu({ current, onSelect, onClose }) {
           onClick={() => { onSelect(s); onClose(); }}
         >
           <span className={`fm-status-dot fm-status-dot--${STATUS_COLOR[s]}`} />
-          {STATUS_LABEL[s]}
+          {t(`fm.status.${s}`)}
         </button>
       ))}
     </div>

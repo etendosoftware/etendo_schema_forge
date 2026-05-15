@@ -1,9 +1,59 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { StatusPillMenu, EmptyState } from './FmCommon.jsx';
 import { ConfigDrawer, NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
-import { formatAmount, STATUS_COLOR } from './fiscalModelsUtils.js';
+import { formatAmount, STATUS_COLOR, STATUS_ORDER } from './fiscalModelsUtils.js';
+
+function StatusSelect({ value, options, onChange }) {
+  const t = useUI();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  const label = value === 'all'
+    ? `${t('fm.filter.all')} · ${t('fm.col.status')}`
+    : t(`fm.status.${value}`) ?? value;
+  const active = value !== 'all';
+  return (
+    <div className="fm-status-select" ref={ref}>
+      <button
+        className={`fm-toolbar__pill fm-status-select__trigger${active ? ' fm-toolbar__pill--active-dark' : ''}`}
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+      >
+        {active && <span className={`fm-status-dot fm-status-dot--${STATUS_COLOR[value]}`} />}
+        {label}
+        <span className="fm-status-select__caret" aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="fm-status-select__menu" role="listbox">
+          <button
+            className={`fm-status-select__item${value === 'all' ? ' fm-status-select__item--active' : ''}`}
+            role="option" aria-selected={value === 'all'}
+            onClick={() => { onChange('all'); setOpen(false); }}
+          >
+            {t('fm.filter.all')} · {t('fm.col.status')}
+          </button>
+          {options.map(s => (
+            <button
+              key={s}
+              className={`fm-status-select__item${value === s ? ' fm-status-select__item--active' : ''}`}
+              role="option" aria-selected={value === s}
+              onClick={() => { onChange(s); setOpen(false); }}
+            >
+              <span className={`fm-status-dot fm-status-dot--${STATUS_COLOR[s]}`} />
+              {t(`fm.status.${s}`) ?? s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const MOCK_DECLARATIONS = [
   { id:'349-2025-12', model:'349', year:2025, period:'12', type:'ord', status:'presentadoAcuse',  result:{kind:'informativa',amount:0}, incidents:{blocking:0,warning:0}, file:'2025_12.349',  updatedAt:'19/01/2026' },
@@ -116,17 +166,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
         ))}
 
         {/* Status dropdown */}
-        <select
-          className="fm-toolbar__status-select"
+        <StatusSelect
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          aria-label={t('fm.col.status')}
-        >
-          <option value="all">{t('fm.filter.all')} · {t('fm.col.status')}</option>
-          {statuses.filter(s => s !== 'all').map(s => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
+          options={statuses.filter(s => s !== 'all')}
+          onChange={setStatusFilter}
+        />
 
         <div className="fm-toolbar__space" />
 
@@ -153,34 +197,34 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
       {/* ── KPI Banners ──────────────────────────────────────────── */}
       <div className="fm-kpi-banners">
         <div className="fm-kpi-banner">
-          <div className="fm-kpi-banner__label">Modelo 303 abiertas</div>
+          <div className="fm-kpi-banner__label">{t('fm.kpi.m303_open')}</div>
           <div className="fm-kpi-banner__body">
             <span className="fm-kpi-banner__num">{banners.open303}</span>
-            <span className="fm-kpi-banner__desc">declaraciones en curso</span>
+            <span className="fm-kpi-banner__desc">{t('fm.kpi.m303_open_sub')}</span>
           </div>
         </div>
         <div className="fm-kpi-banner">
-          <div className="fm-kpi-banner__label">Modelo 349 pendientes</div>
+          <div className="fm-kpi-banner__label">{t('fm.kpi.m349_pending')}</div>
           <div className="fm-kpi-banner__body">
             <span className="fm-kpi-banner__num">{banners.pend349}</span>
-            <span className="fm-kpi-banner__desc">pendientes de presentar</span>
+            <span className="fm-kpi-banner__desc">{t('fm.kpi.m349_pending_sub')}</span>
           </div>
         </div>
         <div className="fm-kpi-banner">
-          <div className="fm-kpi-banner__label">Incidencias fiscales</div>
+          <div className="fm-kpi-banner__label">{t('fm.kpi.fiscal_incidents')}</div>
           <div className="fm-kpi-banner__body">
             <span className="fm-kpi-banner__num">{banners.blocking + banners.warning}</span>
             {banners.blocking > 0 && (
-              <span className="fm-kpi-banner__blocking">{banners.blocking} bloq.</span>
+              <span className="fm-kpi-banner__blocking">{banners.blocking} {t('fm.kpi.deadline_blocking')}</span>
             )}
-            <span className="fm-kpi-banner__desc">requieren revisión</span>
+            <span className="fm-kpi-banner__desc">{t('fm.kpi.fiscal_incidents_sub')}</span>
           </div>
         </div>
         <div className="fm-kpi-banner">
-          <div className="fm-kpi-banner__label">Próxima fecha límite</div>
+          <div className="fm-kpi-banner__label">{t('fm.kpi.deadline')}</div>
           <div className="fm-kpi-banner__body" style={{ gap: 10 }}>
             <span className="fm-kpi-banner__date">20 may</span>
-            <span className="fm-kpi-banner__days">12 días</span>
+            <span className="fm-kpi-banner__days">12 {t('fm.kpi.deadline_days')}</span>
           </div>
           <div className="fm-kpi-banner__sub">Modelo 349 · 04/2026</div>
         </div>
@@ -188,8 +232,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
 
       {/* ── Section header ───────────────────────────────────────── */}
       <div className="fm-section-header">
-        <span className="fm-section-header__title">{t('fm.col.model') !== 'Model' ? 'Declaraciones' : 'Declarations'}</span>
-        <span className="fm-section-header__count">{filtered.length} declaraciones</span>
+        <span className="fm-section-header__title">{t('fm.list.title')}</span>
+        <span className="fm-section-header__count">{filtered.length} {t('fm.list.count')}</span>
         <div className="fm-section-header__actions">
           <button className="fm-section-header__icon-btn" title="Filtrar" aria-label="Filtrar">▽</button>
           <button className="fm-section-header__icon-btn" title="Ordenar" aria-label="Ordenar">⇅</button>
@@ -213,9 +257,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
                   <th style={{ minWidth: 180 }}>{t('fm.col.status')}</th>
                   <th style={{ textAlign: 'right' }}>{t('fm.col.result')}</th>
                   <th>{t('fm.col.incidents')}</th>
-                  <th>Fichero</th>
-                  <th>Últ. actualización</th>
-                  <th>Acción</th>
+                  <th>{t('fm.col.file')}</th>
+                  <th>{t('fm.col.updated_at')}</th>
+                  <th>{t('fm.col.action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -250,7 +294,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
                     <td><span className="fm-date">{decl.updatedAt ?? '—'}</span></td>
                     <td onClick={e => e.stopPropagation()}>
                       <button className="fm-table-action" onClick={() => onSelect?.(decl)}>
-                        Abrir ›
+                        {t('fm.action.open')} ›
                       </button>
                     </td>
                   </tr>

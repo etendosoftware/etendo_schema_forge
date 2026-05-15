@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { STATUSES, STATUS_LABEL, STATUS_COLOR } from './fiscalModelsUtils.js';
+import { STATUSES, STATUS_COLOR } from './fiscalModelsUtils.js';
 import { useDraggable } from '../fiscal-monitor/useDraggable.js';
 
 // ── Mock payloads ─────────────────────────────────────────────────
@@ -259,8 +259,8 @@ export default function FmDebugPanel({ view, setView }) {
                       textAlign: 'left',
                     }}
                   >
-                    {decl?.status === s ? '✓ ' : '  '}{STATUS_LABEL[s] ?? s}
-                    <span style={{ fontSize: 9, color: '#6060aa', marginLeft: 4 }}>({s})</span>
+                    {decl?.status === s ? '✓ ' : '  '}{s}
+                    <span style={{ fontSize: 9, color: '#6060aa', marginLeft: 4 }}>({STATUS_COLOR[s]})</span>
                   </button>
                 ))}
               </div>

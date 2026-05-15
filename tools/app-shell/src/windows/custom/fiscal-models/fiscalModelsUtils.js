@@ -3,16 +3,6 @@ export const STATUSES = [
   'presentado', 'presentadoOtra', 'presentadoAcuse',
 ];
 
-export const STATUS_LABEL = {
-  omitido:         'Omitido',
-  pendiente:       'Pendiente',
-  borrador:        'Borrador',
-  listo:           'Listo',
-  presentado:      'Presentado',
-  presentadoOtra:  'Presentado · otra plataforma',
-  presentadoAcuse: 'Presentado · con acuse',
-};
-
 export const STATUS_COLOR = {
   omitido:         'grey',
   pendiente:       'orange',

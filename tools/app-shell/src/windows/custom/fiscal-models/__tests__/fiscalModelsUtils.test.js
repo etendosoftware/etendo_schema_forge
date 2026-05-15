@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  STATUSES, STATUS_LABEL, STATUS_COLOR, STATUS_ORDER,
+  STATUSES, STATUS_COLOR, STATUS_ORDER,
   formatPeriod, formatAmount, fmtDecl,
 } from '../fiscalModelsUtils.js';
 
@@ -14,12 +14,6 @@ describe('STATUSES — enum completeness', () => {
   it('includes presentado', () => assert.ok(STATUSES.includes('presentado')));
   it('includes presentadoOtra', () => assert.ok(STATUSES.includes('presentadoOtra')));
   it('includes presentadoAcuse', () => assert.ok(STATUSES.includes('presentadoAcuse')));
-});
-
-describe('STATUS_LABEL — all statuses have labels', () => {
-  for (const s of ['omitido','pendiente','borrador','listo','presentado','presentadoOtra','presentadoAcuse']) {
-    it(`${s} has a label`, () => assert.ok(typeof STATUS_LABEL[s] === 'string' && STATUS_LABEL[s].length > 0));
-  }
 });
 
 describe('STATUS_COLOR — all statuses have colors', () => {

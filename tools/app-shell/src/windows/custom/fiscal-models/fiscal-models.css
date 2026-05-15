@@ -118,13 +118,31 @@
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--fm-green-500); flex-shrink: 0;
 }
-.fm-toolbar__status-select {
-  font: 500 12px/16px var(--fm-font-sans, system-ui);
-  padding: 5px 10px; border-radius: 8px;
+.fm-status-select { position: relative; }
+.fm-status-select__trigger { display: inline-flex; align-items: center; gap: 5px; }
+.fm-status-select__caret { font-size: 10px; opacity: .6; margin-left: 1px; }
+.fm-status-select__menu {
+  position: absolute; top: calc(100% + 5px); left: 0; z-index: 200;
+  background: var(--fm-bg-card, #fff);
   border: 1px solid var(--fm-border-1);
-  background: var(--fm-bg-card, #fff); color: var(--fm-fg-2);
-  cursor: pointer; appearance: none; -webkit-appearance: none;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.10), 0 1px 4px rgba(0,0,0,.06);
+  padding: 4px; min-width: 190px;
+  display: flex; flex-direction: column; gap: 1px;
 }
+.fm-status-select__item {
+  display: flex; align-items: center; gap: 8px;
+  font: 500 12px/16px var(--fm-font-sans, system-ui);
+  color: var(--fm-fg-1); padding: 7px 10px; border-radius: 7px;
+  border: none; background: transparent; cursor: pointer; text-align: left;
+  width: 100%;
+  transition: background .1s;
+}
+.fm-status-select__item:hover { background: var(--fm-bg-subtle); }
+.fm-status-select__item--active {
+  background: var(--fm-gray-900); color: #fff; font-weight: 600;
+}
+.fm-status-select__item--active .fm-status-dot { opacity: .8; }
 
 /* ─── KPI Banners ─────────────────────────────────────────────────── */
 /* Redesigned to match the fm-kpi card style from fiscal-monitor */
