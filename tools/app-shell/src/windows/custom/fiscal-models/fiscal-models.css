@@ -1,8 +1,58 @@
 /* fiscal-models.css
-   Redesigned to share the fiscal-monitor design token system (--fm-* variables
-   defined in fiscal-monitor.css). IBM Plex Sans removed; Inter via --fm-font-sans.
-   All hardcoded colours replaced with semantic tokens. Table density and font
-   sizes raised to match the monitor window. */
+   Uses the same --fm-* design token system as fiscal-monitor.css.
+   Tokens are re-declared here so this file is self-contained and works even
+   when fiscal-monitor.css has not been loaded on the same page. */
+
+/* ─── Design tokens (mirrors fiscal-monitor.css :root) ──────────── */
+:root {
+  --fm-gray-50:  #F7F7F8;
+  --fm-gray-100: #E8E8ED;
+  --fm-gray-200: #D1D1DB;
+  --fm-gray-300: #A9A9BC;
+  --fm-gray-400: #8A8AA3;
+  --fm-gray-500: #6C6C89;
+  --fm-gray-600: #55556D;
+  --fm-gray-700: #3F3F50;
+  --fm-gray-800: #282833;
+  --fm-gray-900: #121217;
+  --fm-purple-600: #5423E7;
+  --fm-blue-700:   #0075AD;
+  --fm-green-50:   #EEFBF4;
+  --fm-green-200:  #B2EECC;
+  --fm-green-500:  #2DCA72;
+  --fm-green-700:  #17663A;
+  --fm-yellow-50:  #FFF9EB;
+  --fm-yellow-200: #FFE7AD;
+  --fm-yellow-700: #C28800;
+  --fm-red-50:     #FEF0F4;
+  --fm-red-200:    #FBB1C4;
+  --fm-red-700:    #D50B3E;
+  --fm-orange-50:  #FFF2EE;
+  --fm-orange-200: #FFCDBD;
+  --fm-orange-500: #FF7D52;
+  --fm-orange-700: #EB3A00;
+  --fm-blue-50:    #F0FAFF;
+  --fm-blue-200:   #ADE4FF;
+  --fm-blue-700f:  #0075AD;
+  --fm-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --fm-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --fm-bg-page:   #FFFFFF;
+  --fm-bg-subtle: var(--fm-gray-50);
+  --fm-bg-card:   #FFFFFF;
+  --fm-fg-1: var(--fm-gray-900);
+  --fm-fg-2: var(--fm-gray-700);
+  --fm-fg-3: var(--fm-gray-500);
+  --fm-fg-4: var(--fm-gray-400);
+  --fm-border-1: var(--fm-gray-100);
+  --fm-border-2: var(--fm-gray-200);
+  --fm-shadow-xs: 0 1px 1px rgba(18,18,23,.03);
+  --fm-shadow-sm: 0 1px 2px rgba(18,18,23,.04), 0 0 0 1px rgba(18,18,23,.03);
+  --fm-success-bg: var(--fm-green-50);  --fm-success-border: var(--fm-green-200); --fm-success-fg: var(--fm-green-700);
+  --fm-warning-bg: var(--fm-yellow-50); --fm-warning-border: var(--fm-yellow-200);--fm-warning-fg: var(--fm-yellow-700);
+  --fm-danger-bg:  var(--fm-red-50);    --fm-danger-border:  var(--fm-red-200);   --fm-danger-fg:  var(--fm-red-700);
+  --fm-pending-bg: var(--fm-orange-50); --fm-pending-border: var(--fm-orange-200);--fm-pending-fg: var(--fm-orange-700);
+  --fm-info-bg:    var(--fm-blue-50);   --fm-info-border:    var(--fm-blue-200);  --fm-info-fg:    var(--fm-blue-700f);
+}
 
 /* ─── Layout ─────────────────────────────────────────────────────── */
 .fm-page {
