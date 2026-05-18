@@ -44,7 +44,15 @@ export function createServiceAuth({ etendoUrl, user, password, refreshSkewMs = 6
     return pending;
   }
 
-  return { getToken };
+  // Clears the cache and fetches a fresh token regardless of TTL.
+  // Call this when the upstream rejects the cached token with 401/403.
+  async function forceRefresh() {
+    cache = null;
+    pending = null;
+    return getToken();
+  }
+
+  return { getToken, forceRefresh };
 }
 
 function decodeJwtPayload(token) {
