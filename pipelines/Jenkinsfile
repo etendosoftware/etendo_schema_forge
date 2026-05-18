@@ -175,9 +175,13 @@ pipeline {
                             def sfCheckout   = checkoutChain()
 
                             // TODO: Remove this block to restore normal branch resolution for etendo_core
-                            if (!isHotfixBranch && !(isFeatureBranch && env.EPIC_BRANCH)) {
-                                coreCheckout = "git checkout epic/ETP-3504"
-                                echo "Hardcoding etendo_core checkout to epic/ETP-3504"
+                            // etendo_core's develop is behind epic/ETP-3504 — classes like
+                            // InitialOrgSetupAccounting* only exist on epic/ETP-3504.
+                            // Always use that branch as baseline for non-hotfix builds; then
+                            // try the exact feature branch so it wins if it exists there too.
+                            if (!isHotfixBranch) {
+                                coreCheckout = "git checkout epic/ETP-3504\ngit checkout ${env.GIT_BRANCH} || echo 'Branch ${env.GIT_BRANCH} not found in etendo_core, keeping epic/ETP-3504'"
+                                echo "Hardcoding etendo_core checkout to epic/ETP-3504 (+ override ${env.GIT_BRANCH})"
                             }
                             echo "Checkout chain for etendo_core / com.etendoerp.go / schema_forge:\n${coreCheckout}"
 
