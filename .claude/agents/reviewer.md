@@ -53,8 +53,27 @@ Use the file list to know what to read, then use the diff to understand exactly 
 3. Read the changed files in full for context
 3. **Classify each changed file as source vs. generated (UI Change Survival Check — see `schema_forge_rules`)** — if any UI fix is directly in `artifacts/*/generated/` without a generator change, REJECT immediately before proceeding
 4. Run build and tests
-5. Classify remaining issues: BLOCKER / WARNING / SUGGESTION
-6. APPROVE if 0 blockers, REJECT if any blockers
+5. **Run SonarQube PR analysis** — `make sonar PR=<n>` (see "SonarQube — no new issues" below). Any new BLOCKER/CRITICAL/MAJOR issue introduced by the PR is a BLOCKER in your review.
+6. Classify remaining issues: BLOCKER / WARNING / SUGGESTION
+7. APPROVE if 0 blockers, REJECT if any blockers
+
+## SonarQube — no new issues (MANDATORY)
+Every PR you review MUST be clean in Sonar's "Clean as You Code" view. Run:
+
+```bash
+make sonar PR=<pr-number>
+```
+
+- Exit code 0 + "No issues found in this PR" → PR is Sonar-clean.
+- Exit code 1 + listed issues → those are issues **introduced by this PR's diff**. New BLOCKER/CRITICAL/MAJOR → REJECT. New MINOR/INFO → WARNING (still ship-blocking unless dev justifies in PR description).
+- Pre-existing issues outside the PR diff are NOT your concern in this review.
+
+If the command fails with "✗ SonarQube auth not configured" or "token rejected":
+1. Do NOT commit a token to the repo.
+2. Surface the setup instructions (the script prints them, including which rc file to edit) to the coordinator/user.
+3. Wait for confirmation, then retry.
+
+Reference: `docs/sonarqube-access.md` and CLAUDE.md → "Static Analysis (SonarQube)".
 
 ### Report Format
 ```

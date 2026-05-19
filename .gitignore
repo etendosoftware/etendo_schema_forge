@@ -34,3 +34,5 @@ e2e/recordings/
 e2e/auth.json
 .fyso/
 tmp/
+.scannerwork/
+coverage/

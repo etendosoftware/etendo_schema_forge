@@ -257,25 +257,30 @@ Every process must declare >=3 edge cases. Every kept rule must have a behaviora
 
 ## Static Analysis (SonarQube)
 
-Run `cli/sonar-check.sh` to analyze specific Java files with SonarQube and get results inline.
-Requires `SONAR_TOKEN` and `SONAR_HOST_URL` exported in `~/.zshrc` or `~/.bashrc`, and `sonar-scanner` CLI installed.
+**Policy — "no new issues":** every PR must pass `make sonar PR=<n>` with **zero new issues** introduced by that PR. Pre-existing issues do not block, but each PR must leave the new-code line clean. Alex (Reviewer) enforces this in REVIEW.
 
-```bash
-# Analyze specific files
-./cli/sonar-check.sh path/to/SomeHandler.java path/to/OtherHandler.java
+### Commands
 
-# Analyze with glob
-./cli/sonar-check.sh path/to/Widget*.java
+| Goal | Command |
+|---|---|
+| Overall code on current branch | `make sonar` |
+| Branch analysis (explicit) | `make sonar BRANCH=feature/x` |
+| **PR analysis (explicit)** | `make sonar PR=547` |
+| **PR analysis (auto-detect)** | `make sonar-pr` |
+| Overall + coverage upload | `make sonar-coverage` |
+| Single Java file(s) | `./cli/sonar-check.sh path/to/File.java` |
+| Single file(s) in PR mode | `./cli/sonar-check.sh --pr 547 path/to/File.java` |
+| Single file(s) in branch mode | `./cli/sonar-check.sh --branch feature/x path/to/File.java` |
 
-# Quiet mode (suppress scanner output, show only results)
-./cli/sonar-check.sh -q path/to/*.java
+PR mode uses Sonar's "Clean as You Code" view (only the PR diff is reported). The command exits non-zero if it finds any issue, so it can gate merges.
 
-# Custom project key
-./cli/sonar-check.sh --project-key my-project path/to/*.java
-```
+### Auth
 
-The script scans, waits for the report to process, and prints issues sorted by severity. Exit code 0 = clean, 1 = issues found.
-**Delegate to Alex (Reviewer) or Sentinel (QA)** for running static analysis as part of the pipeline.
+The scripts auto-source `SONAR_TOKEN` and `SONAR_HOST_URL` from your shell profile and validate the token against `api/authentication/validate`. If missing or rejected, they print step-by-step setup instructions (including which rc file to edit based on your `$SHELL`) and exit non-zero. Full reference: `docs/sonarqube-access.md`.
+
+**If an agent hits "✗ SonarQube auth not configured" or "token rejected":** do NOT commit a token to the repo. Surface the setup instructions printed by the script to the user, wait for confirmation, then retry the original command.
+
+**Delegate to Alex (Reviewer) or Sentinel (QA)** for running static analysis as part of the pipeline. Developers (DEV phase) should run `make sonar-pr` themselves before declaring a task done.
 
 ## Decisions
 

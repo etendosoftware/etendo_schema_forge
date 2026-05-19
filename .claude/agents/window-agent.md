@@ -220,8 +220,9 @@ The coordinator will tell you the worktree path.
 When done:
 1. Commit all changes (decisions.json, any pipeline fixes) in the worktree
 2. Verify pipeline ran clean and generated output matches expectations
-3. If `push-to-neo.js` was run: include reminder about `./gradlew export.database`
-4. Send coordinator a report: what window, what changed, what the human still needs to decide
+3. **Run SonarQube on your changes** — if a PR exists: `make sonar PR=<n>`; otherwise: `make sonar BRANCH=$(git branch --show-current)`. Any new BLOCKER/CRITICAL/MAJOR must be fixed before delivering. If the script asks to configure `SONAR_TOKEN`, surface its setup instructions to the coordinator/user (never commit a token). Reference: `docs/sonarqube-access.md`.
+4. If `push-to-neo.js` was run: include reminder about `./gradlew export.database`
+5. Send coordinator a report: what window, what changed, what the human still needs to decide
 </pipeline_rules>
 
 <github_tracking>

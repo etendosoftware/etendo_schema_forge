@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record generate regen dev dev-with-shell dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline quality-gate sonar sonar-coverage menu-cache uuid test-xml-regeneration-check test-python xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help
+.PHONY: test test-all-coverage test-ci test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record generate regen dev dev-with-shell dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline quality-gate sonar sonar-pr sonar-coverage menu-cache uuid test-xml-regeneration-check test-python xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help
 
 # --- Testing ---
 
@@ -296,17 +296,28 @@ report-preview: ## Preview Business Partner listing report
 	node cli/src/report-preview.js --artifact business-partner --report listing
 
 # --- Static Analysis (SonarQube) ---
+# Modes (selected via env vars; see docs/sonarqube-access.md):
+#   make sonar                       → Overall code on the current branch
+#   make sonar BRANCH=feature/x      → Branch analysis (explicit)
+#   make sonar PR=547                → PR analysis (auto-resolves BASE via gh)
+#   make sonar PR=547 BASE=epic/x    → PR analysis with explicit base
+#   make sonar-pr                    → PR analysis, auto-detects PR for current branch
+# Auth: needs SONAR_TOKEN + SONAR_HOST_URL. The script validates and prints
+# setup instructions if they are missing or rejected.
 
-sonar: ## Run SonarQube analysis on Schema Forge JS/JSX code
-	sonar-scanner -Dproject.settings=sonar-project.properties
+sonar: ## Run SonarQube analysis (overall by default; PR=<n> or BRANCH=<name> for scoped)
+	@./cli/sonar-scan.sh
 
-sonar-coverage: ## Run all tests with coverage then SonarQube analysis
+sonar-pr: ## Run SonarQube PR analysis (auto-detects PR from current branch)
+	@AUTO_PR=1 ./cli/sonar-scan.sh
+
+sonar-coverage: ## Run all tests with coverage then SonarQube (accepts PR/BRANCH vars too)
 	@mkdir -p coverage
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info 'cli/test/*.test.js'
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-test-lcov.info 'tools/app-shell/test/*.test.js'
 	cd tools/app-shell && npx vitest run --coverage && cp coverage/vitest/lcov.info ../../coverage/vitest-lcov.info
-	sonar-scanner -Dproject.settings=sonar-project.properties
+	@COVERAGE=1 ./cli/sonar-scan.sh
 
 # --- XML Regeneration Check ---
 

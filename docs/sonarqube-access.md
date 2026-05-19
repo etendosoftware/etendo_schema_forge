@@ -1,7 +1,42 @@
 # SonarQube — quick access reference
 
 Host: `https://sonar.etendo.cloud/`
-Auth env vars (already exported in `~/.zshrc`): `SONAR_TOKEN` (Bearer), `SONAR_HOST_URL`.
+Auth env vars: `SONAR_TOKEN` (User Token), `SONAR_HOST_URL`. The Sonar scripts source them from your shell profile automatically — see **Setup** below if they are missing.
+
+## Setup — first-time token configuration
+
+The scripts (`make sonar`, `cli/sonar-scan.sh`, `cli/sonar-check.sh`) auto-validate auth and print these instructions when it is missing. To configure manually:
+
+1. Open <https://sonar.etendo.cloud/account/security> (log in with your Etendo account).
+2. Generate a **User Token** (not a Project Analysis Token).
+3. Append to your shell profile — pick the one your shell uses:
+   - **zsh** (macOS default): `~/.zshrc`
+   - **bash on macOS**: `~/.bash_profile`
+   - **bash on Linux**: `~/.bashrc`
+   - **fish**: `~/.config/fish/config.fish` (use `set -x` instead of `export`)
+4. Add the two exports:
+   ```bash
+   export SONAR_HOST_URL=https://sonar.etendo.cloud
+   export SONAR_TOKEN=<your-token>
+   ```
+5. Reload: `source <profile-file>`.
+6. Validate by running `make sonar` (or any sonar command). The preflight calls `api/authentication/validate` and refuses to proceed if the token is rejected.
+
+If the token later expires or is revoked, the scripts print a "✗ SonarQube token rejected" message with the same setup steps — generate a fresh token and update the export.
+
+## Running analyses — modes
+
+| Goal | Command |
+|---|---|
+| Overall code on current branch | `make sonar` |
+| Branch analysis (explicit) | `make sonar BRANCH=feature/x` |
+| PR analysis (explicit) | `make sonar PR=547` |
+| PR analysis (auto-detect via `gh`) | `make sonar-pr` |
+| Overall + coverage upload | `make sonar-coverage` |
+| Single Java file(s) | `./cli/sonar-check.sh path/to/File.java` |
+| Single file(s) in PR mode | `./cli/sonar-check.sh --pr 547 path/to/File.java` |
+
+PR mode runs Sonar's "Clean as You Code" filter — only issues introduced by the PR are reported and the command exits non-zero if any are found. **Use this before merging any PR.**
 
 ## CRITICAL: bypass RTK for any curl to Sonar
 

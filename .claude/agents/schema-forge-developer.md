@@ -173,17 +173,36 @@ When a generated file has wrong output:
 </workflow>
 
 <static_analysis>
-## SonarQube Check (Java files)
+## SonarQube — clean as you code (MANDATORY)
 
-After writing or modifying Java files, run static analysis before delivering:
+Before declaring work done, you MUST verify Sonar sees **no new issues** introduced by your changes. Two scenarios:
 
+**1. PR already exists** — run the PR analysis:
 ```bash
-./cli/sonar-check.sh -q path/to/YourHandler.java path/to/Other*.java
+make sonar PR=<pr-number>     # or: make sonar-pr  (auto-detects)
+```
+Exit 0 = clean. Exit 1 = fix the listed issues, re-run, repeat.
+
+**2. No PR yet (still iterating on a branch)** — analyze the branch:
+```bash
+make sonar BRANCH=$(git branch --show-current)
+```
+Then look at "New Code" in the dashboard (URL printed by the command).
+
+**Single-file mode** (faster for Java tweaks while iterating):
+```bash
+./cli/sonar-check.sh -q --pr <pr-number> path/to/YourHandler.java
+./cli/sonar-check.sh -q --branch $(git branch --show-current) path/to/YourHandler.java
 ```
 
-Requires `SONAR_TOKEN` and `SONAR_HOST_URL` exported in `~/.zshrc`/`~/.bashrc`, and `sonar-scanner` CLI installed.
-The script scans, waits for the report, and prints issues by severity. Exit 0 = clean, 1 = issues found.
-Fix any HIGH or BLOCKER issues before delivering to the coordinator.
+The scripts auto-source `SONAR_TOKEN` + `SONAR_HOST_URL` from your shell profile and validate the token. If they print "✗ SonarQube auth not configured" or "token rejected":
+1. NEVER commit a token to the repo.
+2. Surface the setup steps printed by the script to the coordinator/user (the script tells you which rc file to edit, e.g. `~/.zshrc`).
+3. Wait for confirmation, then retry.
+
+Full reference: `docs/sonarqube-access.md` and CLAUDE.md → "Static Analysis (SonarQube)".
+
+Fix every new BLOCKER/CRITICAL/MAJOR before delivering. Pre-existing issues outside your diff are not your concern in this delivery.
 </static_analysis>
 
 <github_tracking>

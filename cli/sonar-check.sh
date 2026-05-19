@@ -13,7 +13,14 @@
 #   --base-dir DIR      Override the base directory for analysis (default: auto-detected)
 #   --timeout SECS      Max seconds to wait for report processing (default: 120)
 #   --no-wait           Skip waiting for the report to be processed
+#   --pr <NUM>          Run as PR analysis (auto-resolves base/branch via gh)
+#   --branch <NAME>     Run as branch analysis on the given branch
+#   --base <NAME>       Target branch for PR mode (default: gh pr view → main)
 #   -q, --quiet         Suppress scanner output, only show results
+#
+# Auth: SONAR_TOKEN + SONAR_HOST_URL. The script sources them from your shell
+# profile and validates the token; if missing/invalid it prints setup steps
+# and exits. See docs/sonarqube-access.md for the full reference.
 
 set -euo pipefail
 
@@ -29,6 +36,9 @@ TIMEOUT=120
 WAIT=true
 QUIET=false
 FILES=()
+PR=""
+BRANCH=""
+BASE=""
 
 # ── Parse args ────────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -37,6 +47,9 @@ while [[ $# -gt 0 ]]; do
     --base-dir)    BASE_DIR="$2"; shift 2 ;;
     --timeout)     TIMEOUT="$2"; shift 2 ;;
     --no-wait)     WAIT=false; shift ;;
+    --pr)          PR="$2"; shift 2 ;;
+    --branch)      BRANCH="$2"; shift 2 ;;
+    --base)        BASE="$2"; shift 2 ;;
     -q|--quiet)    QUIET=true; shift ;;
     -h|--help)
       sed -n '2,/^$/{ s/^# //; s/^#//; p }' "$0"
@@ -51,41 +64,102 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# ── Detect shell rc file for setup hints ─────────────────────────────────────
+detect_shell_rc() {
+  case "${SHELL:-}" in
+    */zsh)  echo "$HOME/.zshrc" ;;
+    */bash)
+      if [[ "$(uname)" == "Darwin" && -f "$HOME/.bash_profile" ]]; then
+        echo "$HOME/.bash_profile"
+      else
+        echo "$HOME/.bashrc"
+      fi
+      ;;
+    */fish) echo "$HOME/.config/fish/config.fish" ;;
+    *)      echo "$HOME/.profile" ;;
+  esac
+}
+
 # ── Source shell profile for SONAR_TOKEN / SONAR_HOST_URL ─────────────────────
 if [[ -z "${SONAR_TOKEN:-}" || -z "${SONAR_HOST_URL:-}" ]]; then
-  for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; do
+  for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
     if [[ -f "$rc" ]]; then
-      # Source in a subshell-safe way: only extract exports, skip interactive bits
       eval "$(grep -E '^\s*export\s+(SONAR_TOKEN|SONAR_HOST_URL)=' "$rc" 2>/dev/null)" || true
     fi
   done
 fi
 
 # ── Validate prerequisites ────────────────────────────────────────────────────
-errors=()
-
 if [[ ${#FILES[@]} -eq 0 ]]; then
-  errors+=("No files specified. Usage: $0 <file1.java> [file2.java] ...")
+  echo "Error: No files specified. Usage: $0 <file1.java> [file2.java] ..." >&2
+  exit 1
 fi
 
-if [[ -z "${SONAR_TOKEN:-}" ]]; then
-  errors+=("SONAR_TOKEN is not defined. Add 'export SONAR_TOKEN=...' to your ~/.zshrc or ~/.bashrc.")
-fi
+if [[ -z "${SONAR_TOKEN:-}" || -z "${SONAR_HOST_URL:-}" ]]; then
+  rc_file="$(detect_shell_rc)"
+  cat >&2 <<EOF
+✗ SonarQube auth not configured.
 
-if [[ -z "${SONAR_HOST_URL:-}" ]]; then
-  errors+=("SONAR_HOST_URL is not defined. Add 'export SONAR_HOST_URL=...' to your ~/.zshrc or ~/.bashrc (e.g. https://sonar.etendo.cloud).")
+Missing: $([[ -z "${SONAR_TOKEN:-}" ]] && echo -n 'SONAR_TOKEN ')$([[ -z "${SONAR_HOST_URL:-}" ]] && echo -n 'SONAR_HOST_URL')
+
+Setup steps:
+  1. Open https://sonar.etendo.cloud/account/security
+     (log in with your Etendo account)
+  2. Generate a "User Token" (not a Project Analysis Token)
+  3. Append to your shell profile ($rc_file):
+       export SONAR_HOST_URL=https://sonar.etendo.cloud
+       export SONAR_TOKEN=<your-token>
+  4. Reload:  source "$rc_file"
+  5. Re-run your command.
+
+Full reference: docs/sonarqube-access.md
+EOF
+  exit 1
 fi
 
 if ! command -v sonar-scanner &>/dev/null; then
-  errors+=("sonar-scanner CLI is not installed. Install it via: brew install sonar-scanner")
+  echo "Error: sonar-scanner CLI is not installed. Install via: brew install sonar-scanner" >&2
+  exit 1
 fi
 
-if [[ ${#errors[@]} -gt 0 ]]; then
-  echo "Error: Prerequisites not met:" >&2
-  for e in "${errors[@]}"; do
-    echo "  - $e" >&2
-  done
+# ── Validate token against the server (cheap call) ───────────────────────────
+auth_resp="$(curl -sf -u "$SONAR_TOKEN:" "${SONAR_HOST_URL%/}/api/authentication/validate" 2>/dev/null || echo "")"
+if [[ -z "$auth_resp" ]] || ! echo "$auth_resp" | grep -q '"valid":true'; then
+  rc_file="$(detect_shell_rc)"
+  cat >&2 <<EOF
+✗ SonarQube token rejected by $SONAR_HOST_URL.
+
+Your SONAR_TOKEN appears expired, revoked, or wrong for this host.
+
+Fix:
+  1. Generate a fresh token at https://sonar.etendo.cloud/account/security
+  2. Update the export in $rc_file:
+       export SONAR_TOKEN=<new-token>
+  3. Reload:  source "$rc_file"
+
+Full reference: docs/sonarqube-access.md
+EOF
   exit 1
+fi
+
+# ── Resolve PR / branch mode ─────────────────────────────────────────────────
+MODE_PARAMS=()
+MODE="files"
+if [[ -n "$PR" ]]; then
+  MODE="pr"
+  [[ -z "$BRANCH" ]] && BRANCH="$(git branch --show-current 2>/dev/null || echo '')"
+  if [[ -z "$BASE" ]] && command -v gh &>/dev/null; then
+    BASE="$(gh pr view "$PR" --json baseRefName -q .baseRefName 2>/dev/null || echo '')"
+  fi
+  [[ -z "$BASE" ]] && BASE="main"
+  MODE_PARAMS+=(
+    -Dsonar.pullrequest.key="$PR"
+    -Dsonar.pullrequest.branch="$BRANCH"
+    -Dsonar.pullrequest.base="$BASE"
+  )
+elif [[ -n "$BRANCH" ]]; then
+  MODE="branch"
+  MODE_PARAMS+=(-Dsonar.branch.name="$BRANCH")
 fi
 
 # ── Resolve files to absolute paths ──────────────────────────────────────────
@@ -134,10 +208,14 @@ if [[ -z "$PROJECT_KEY" ]]; then
 fi
 
 # ── Run sonar-scanner ────────────────────────────────────────────────────────
-echo "=== SonarQube Analysis ==="
+echo "=== SonarQube Analysis ($MODE) ==="
 echo "  Server:   $SONAR_HOST_URL"
 echo "  Project:  $PROJECT_KEY"
 echo "  Base dir: $BASE_DIR"
+case "$MODE" in
+  pr)     echo "  Scope:    PR #$PR ($BRANCH → $BASE)" ;;
+  branch) echo "  Scope:    Branch '$BRANCH'" ;;
+esac
 echo "  Files:    ${#RESOLVED_FILES[@]}"
 for f in "${RESOLVED_FILES[@]}"; do
   echo "    - ${f#"$BASE_DIR"/}"
@@ -153,6 +231,7 @@ SCANNER_ARGS=(
   -Dsonar.inclusions="$INCLUSION_PATTERN"
   -Dsonar.java.binaries=.
   -Dsonar.sourceEncoding=UTF-8
+  "${MODE_PARAMS[@]}"
 )
 
 SCANNER_OUTPUT_FILE="$(mktemp)"
@@ -230,8 +309,21 @@ fi
 echo ""
 echo "=== Results ==="
 
+ISSUES_URL="$SONAR_HOST_URL/api/issues/search?componentKeys=$PROJECT_KEY&statuses=OPEN,CONFIRMED&ps=100"
+DASH_URL="$SONAR_HOST_URL/dashboard?id=$PROJECT_KEY"
+case "$MODE" in
+  pr)
+    ISSUES_URL="${ISSUES_URL}&pullRequest=$PR"
+    DASH_URL="${DASH_URL}&pullRequest=$PR"
+    ;;
+  branch)
+    ISSUES_URL="${ISSUES_URL}&branch=$BRANCH"
+    DASH_URL="${DASH_URL}&branch=$BRANCH"
+    ;;
+esac
+
 curl -sf -u "$SONAR_TOKEN:" \
-  "$SONAR_HOST_URL/api/issues/search?componentKeys=$PROJECT_KEY&statuses=OPEN,CONFIRMED&ps=100" 2>/dev/null \
+  "$ISSUES_URL" 2>/dev/null \
   | python3 -c "
 import sys, json
 
@@ -269,4 +361,4 @@ for i in issues:
 
 print(f'Dashboard: {sys.argv[1]}')
 sys.exit(1 if total > 0 else 0)
-" "$SONAR_HOST_URL/dashboard?id=$PROJECT_KEY"
+" "$DASH_URL"

@@ -33,10 +33,23 @@ Do not present a task as complete unless it has:
 3. appropriate tests: unit, functional, integration, or E2E;
 4. executed verification with exact command and result from the confirmed repository;
 5. evidence that the requirement is satisfied;
-6. QA validation when applicable;
-7. a clear functional requirement.
+6. **SonarQube "Clean as You Code" check for the PR (or branch if no PR yet) — zero new BLOCKER/CRITICAL/MAJOR issues**;
+7. QA validation when applicable;
+8. a clear functional requirement.
 
 If any item is missing, mark it as pending or blocked. Do not close anyway.
+
+## SonarQube — no new issues
+
+Run one of these and include the result in the delivery evidence:
+
+- PR exists: `make sonar PR=<n>` (or `make sonar-pr` to auto-detect)
+- No PR yet: `make sonar BRANCH=$(git branch --show-current)`
+- Single Java file: `./cli/sonar-check.sh --pr <n> path/to/File.java`
+
+Exit code 0 = clean. Exit code 1 = at least one new issue → blocker for delivery; fix and re-run.
+
+If auth fails (`✗ SonarQube auth not configured` or `token rejected`), surface the setup instructions printed by the script (they tell you which rc file to edit) to the user. **Never commit a token.** Full reference: `docs/sonarqube-access.md`.
 
 ## Before Writing or Accepting Tests
 

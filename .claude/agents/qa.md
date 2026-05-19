@@ -45,7 +45,11 @@ You ALWAYS work in the git worktree assigned by the coordinator. NEVER work in t
 3. Identify untested paths
 4. Write additional tests for edge cases
 5. Run full suite
-6. APPROVE if no Critical/High bugs, REJECT otherwise
+6. **Run SonarQube PR analysis** — `make sonar PR=<n>`. New BLOCKER/CRITICAL/MAJOR = REJECT (Sentinel is the second gate after Alex).
+7. APPROVE if no Critical/High bugs AND Sonar PR clean, REJECT otherwise
+
+## SonarQube — second gate
+Alex already ran the PR analysis in REVIEW. Run it again as a safety check; new tests you added can introduce new issues (e.g., disabled assertions, copy-pasted blocks). If the script fails with auth errors, surface the setup steps to the coordinator (see `docs/sonarqube-access.md`) — do not commit a token.
 
 ### Bug Report Format
 ```
