@@ -617,6 +617,157 @@ describe('deriveBoxes303', () => {
     });
   });
 
+  describe('snapshot — 2026 T2 screenshot values', () => {
+    const data = {
+      salesByRate: {
+        '4':  { base: 44,     tax: 1.76   },
+        '10': { base: 201,    tax: 20.10  },
+        '21': { base: 982.60, tax: 206.35 },
+      },
+      purchNormal:    { base: 99, tax: 20.79 },
+      intracommSales: 23,
+      exports:        36,
+    };
+
+    it('box 1 = 44, box 3 = 1.76', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[1]).toBe(44);
+      expect(boxes[3]).toBe(1.76);
+    });
+
+    it('box 4 = 201, box 6 = 20.10', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[4]).toBe(201);
+      expect(boxes[6]).toBe(20.10);
+    });
+
+    it('box 7 = 982.60, box 9 = 206.35', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[7]).toBe(982.60);
+      expect(boxes[9]).toBe(206.35);
+    });
+
+    it('box 27 = 228.21 (sum of tax boxes 3 + 6 + 9)', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[27]).toBe(228.21);
+    });
+
+    it('box 28 = 99, box 29 = 20.79', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[28]).toBe(99);
+      expect(boxes[29]).toBe(20.79);
+    });
+
+    it('box 45 = 20.79', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[45]).toBe(20.79);
+    });
+
+    it('box 46 = 207.42 (228.21 - 20.79)', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[46]).toBe(207.42);
+    });
+
+    it('box 59 = 23, box 60 = 36', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[59]).toBe(23);
+      expect(boxes[60]).toBe(36);
+    });
+
+    it('summary matches box 27/45/46', () => {
+      const { summary } = deriveBoxes303(data);
+      expect(summary.accrued).toBe(228.21);
+      expect(summary.deductible).toBe(20.79);
+      expect(summary.result).toBe(207.42);
+    });
+  });
+
+  describe('all accrued boxes feed into box 27', () => {
+    it('box 27 equals the exact sum of every contributing tax input', () => {
+      const data = {
+        salesByRate: {
+          '21': { base: 100, tax: 10 },
+          '10': { base: 100, tax: 10 },
+          '4':  { base: 100, tax: 10 },
+          '5':  { base: 100, tax: 10 },
+          '0':  { base: 100, tax: 10 },
+          '2':  { base: 100, tax: 10 },
+        },
+        ecByRate: {
+          '1.4':  { base: 100, tax: 10 },
+          '5.2':  { base: 100, tax: 10 },
+          '0.5':  { base: 100, tax: 10 },
+          '1.75': { base: 100, tax: 10 },
+        },
+        euPurch:  { base: 100, tax: 10 },
+        ispPurch: { base: 100, tax: 10 },
+      };
+      const { boxes } = deriveBoxes303(data);
+      // accruedBoxes in source: [3,6,9,11,13,15,18,21,24,26,152,155,158,167,170]
+      // inputs above map to boxes: 3(4%+5%), 6(10%+7%+8%), 9(21%), 11(euPurch),
+      //   13(ispPurch), 18(EC 0.5%), 21(EC 1.4%), 24(EC 5.2%), 152(0%), 158(EC 1.75%), 167(2%)
+      const accruedBoxes = [3, 6, 9, 11, 13, 15, 18, 21, 24, 26, 152, 155, 158, 167, 170];
+      const expectedSum = Math.round(accruedBoxes.reduce((s, box) => s + (boxes[box] ?? 0), 0) * 100) / 100;
+      expect(boxes[27]).toBe(expectedSum);
+    });
+
+    it('no tax input is silently dropped — 4% and 5% merge into box 3 (20), ten others each 10 → 27 = 120', () => {
+      const data = {
+        salesByRate: {
+          '21': { base: 100, tax: 10 },
+          '10': { base: 100, tax: 10 },
+          '4':  { base: 100, tax: 10 },
+          '5':  { base: 100, tax: 10 },
+          '0':  { base: 100, tax: 10 },
+          '2':  { base: 100, tax: 10 },
+        },
+        ecByRate: {
+          '1.4':  { base: 100, tax: 10 },
+          '5.2':  { base: 100, tax: 10 },
+          '0.5':  { base: 100, tax: 10 },
+          '1.75': { base: 100, tax: 10 },
+        },
+        euPurch:  { base: 100, tax: 10 },
+        ispPurch: { base: 100, tax: 10 },
+      };
+      const { boxes } = deriveBoxes303(data);
+      // box 3 = 4%+5% merged = 20; boxes 6,9,11,13,18,21,24,152,158,167 = 10 each
+      expect(boxes[27]).toBe(120);
+    });
+  });
+
+  describe('RE + IVA combined — same invoice data', () => {
+    const data = {
+      salesByRate: { '21': { base: 1000, tax: 210 } },
+      ecByRate:    { '5.2': { base: 1000, tax: 52 } },
+    };
+
+    it('box 7 = 1000 (IVA base at 21%)', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[7]).toBe(1000);
+    });
+
+    it('box 9 = 210 (IVA cuota at 21%)', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[9]).toBe(210);
+    });
+
+    it('box 22 = 1000 (RE base at 5.2%)', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[22]).toBe(1000);
+    });
+
+    it('box 24 = 52 (RE cuota at 5.2%)', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[24]).toBe(52);
+    });
+
+    it('box 27 = 262 (both IVA and RE tax contribute)', () => {
+      const { boxes } = deriveBoxes303(data);
+      expect(boxes[27]).toBe(262);
+    });
+  });
+
   describe('rounding', () => {
     it('rounds to 2 decimal places', () => {
       const data = { salesByRate: { '21': { base: 100.005, tax: 21.005 } } };
