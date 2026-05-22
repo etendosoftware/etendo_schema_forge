@@ -44,7 +44,8 @@ export async function generate303File(decl, { token, apiBaseUrl } = {}) {
   if (!token || !apiBaseUrl) return false;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    const url = `${base}/fiscal303/generate?year=${decl.year}&period=${decl.period}`;
+    const tipo = decl.result?.kind ?? 'N';
+    const url = `${base}/fiscal303/generate?year=${decl.year}&period=${decl.period}&tipo=${tipo}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return false;
     const blob = await res.blob();
