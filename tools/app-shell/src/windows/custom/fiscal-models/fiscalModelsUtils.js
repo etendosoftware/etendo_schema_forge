@@ -36,6 +36,32 @@ export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
   return null;
 }
 
+/**
+ * Calls GET /neo/fiscal303/generate and triggers a browser file download.
+ * Returns true on success, false on error.
+ */
+export async function generate303File(decl, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return false;
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const url = `${base}/fiscal303/generate?year=${decl.year}&period=${decl.period}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = `303_${decl.period}_${decl.year}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 export const STATUSES = [
   'omitido', 'pendiente', 'borrador', 'listo',
   'presentado', 'presentadoOtra', 'presentadoAcuse',
