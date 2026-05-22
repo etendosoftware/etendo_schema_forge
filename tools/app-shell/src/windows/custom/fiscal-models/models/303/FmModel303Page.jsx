@@ -430,6 +430,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
               <button
                 className={`fm-349-header__btn${fileBlocked ? ' fm-303-header__btn--locked' : ''}`}
                 onClick={() => setShowFilegen(true)}
+                disabled={generating}
                 title={fileBlocked ? t('fm.incidents.block_sub') : ''}
                 style={fileBlocked ? { color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2' } : {}}
               >
