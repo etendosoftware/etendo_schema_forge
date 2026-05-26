@@ -208,8 +208,17 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
 
   const [dataMode, setDataMode]          = useState('demo');
   const [demoDecls, setDemoDecls]        = useState(propDecls ?? MOCK_DECLARATIONS);
-  const [realDecls, setRealDecls]        = useState([]);
+  const [realDecls, setRealDecls]        = useState(() => {
+    try {
+      const stored = localStorage.getItem('fm-real-decls');
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  });
   const decls = dataMode === 'demo' ? demoDecls : realDecls;
+
+  useEffect(() => {
+    try { localStorage.setItem('fm-real-decls', JSON.stringify(realDecls)); } catch { /* quota */ }
+  }, [realDecls]);
 
   const draftDecls303 = useMemo(
     () => realDecls.filter(d => d.model === '303' && d.status === 'borrador'),

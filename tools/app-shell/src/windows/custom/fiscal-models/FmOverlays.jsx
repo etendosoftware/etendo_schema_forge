@@ -172,7 +172,7 @@ export function NewDeclModal({ onConfirm, onClose }) {
           <button className="fm-present-modal__btn" onClick={onClose}>{t('fm.action.cancel')}</button>
           <button
             className="fm-present-modal__btn fm-present-modal__btn--primary"
-            onClick={() => { onConfirm?.({ model, year, period, status: 'pendiente' }); onClose(); }}
+            onClick={() => { onConfirm?.({ model, year, period, status: 'borrador' }); onClose(); }}
           >
             {t('fm.action.create')}
           </button>
