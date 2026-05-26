@@ -258,6 +258,24 @@ function getDeadlineDate(model, year, period) {
   return null;
 }
 
+/**
+ * Returns true if any invoice affecting the given declaration's period was
+ * updated after sinceMs (Unix ms timestamp). Returns false on any error.
+ */
+export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}) {
+  if (!token || !apiBaseUrl) return false;
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const url = `${base}/fiscal303/modified?year=${decl.year}&period=${decl.period}&since=${sinceMs}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.modified === true;
+  } catch (_) {
+    return false;
+  }
+}
+
 export function computeUpcomingDeadlines(decls, limit = 5) {
   return decls
     .filter(d => !COMPLETED_STATUSES.has(d.status))

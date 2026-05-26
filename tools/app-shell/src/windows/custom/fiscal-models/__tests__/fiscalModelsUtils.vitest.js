@@ -15,14 +15,14 @@ import {
 // ── STATUSES ──────────────────────────────────────────────────────────────────
 
 describe('STATUSES', () => {
-  it('is an array with 7 entries', () => {
+  it('is an array with 6 entries', () => {
     expect(Array.isArray(STATUSES)).toBe(true);
-    expect(STATUSES).toHaveLength(7);
+    expect(STATUSES).toHaveLength(6);
   });
 
   it('contains all expected status values', () => {
     expect(STATUSES).toContain('omitido');
-    expect(STATUSES).toContain('pendiente');
+    expect(STATUSES).not.toContain('pendiente');
     expect(STATUSES).toContain('borrador');
     expect(STATUSES).toContain('listo');
     expect(STATUSES).toContain('presentado');
@@ -47,7 +47,7 @@ describe('STATUS_COLOR', () => {
 
   it('maps specific statuses to expected color names', () => {
     expect(STATUS_COLOR.omitido).toBe('grey');
-    expect(STATUS_COLOR.pendiente).toBe('orange');
+    expect(STATUS_COLOR.pendiente).toBeUndefined();
     expect(STATUS_COLOR.borrador).toBe('blue');
     expect(STATUS_COLOR.listo).toBe('green');
     expect(STATUS_COLOR.presentado).toBe('teal');
@@ -78,8 +78,8 @@ describe('STATUS_ORDER', () => {
     expect(Array.isArray(STATUS_ORDER)).toBe(true);
   });
 
-  it('contains all 7 statuses', () => {
-    expect(STATUS_ORDER).toHaveLength(7);
+  it('contains all 6 statuses', () => {
+    expect(STATUS_ORDER).toHaveLength(6);
     for (const s of STATUSES) {
       expect(STATUS_ORDER).toContain(s);
     }
@@ -839,10 +839,6 @@ describe('computeUpcomingDeadlines', () => {
       expect(computeUpcomingDeadlines([D('303', 2026, 'T1', 'borrador')])).toHaveLength(1);
     });
 
-    it('includes pendiente', () => {
-      expect(computeUpcomingDeadlines([D('303', 2026, 'T1', 'pendiente')])).toHaveLength(1);
-    });
-
     it('includes listo', () => {
       expect(computeUpcomingDeadlines([D('303', 2026, 'T1', 'listo')])).toHaveLength(1);
     });
@@ -880,7 +876,7 @@ describe('computeUpcomingDeadlines', () => {
     });
 
     it('T4 → deadline January 20 of next year', () => {
-      const [{ deadline }] = computeUpcomingDeadlines([D('303', 2025, 'T4', 'pendiente')]);
+      const [{ deadline }] = computeUpcomingDeadlines([D('303', 2025, 'T4', 'borrador')]);
       expect(deadline.getFullYear()).toBe(2026);
       expect(deadline.getMonth()).toBe(0);
       expect(deadline.getDate()).toBe(20);
@@ -889,28 +885,28 @@ describe('computeUpcomingDeadlines', () => {
 
   describe('monthly period deadlines', () => {
     it('"03" → deadline April 20 (month index 3)', () => {
-      const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '03', 'pendiente')]);
+      const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '03', 'borrador')]);
       expect(deadline.getFullYear()).toBe(2026);
       expect(deadline.getMonth()).toBe(3);
       expect(deadline.getDate()).toBe(20);
     });
 
     it('"12" → deadline January 20 of next year', () => {
-      const [{ deadline }] = computeUpcomingDeadlines([D('349', 2025, '12', 'pendiente')]);
+      const [{ deadline }] = computeUpcomingDeadlines([D('349', 2025, '12', 'borrador')]);
       expect(deadline.getFullYear()).toBe(2026);
       expect(deadline.getMonth()).toBe(0);
       expect(deadline.getDate()).toBe(20);
     });
 
     it('"01" → deadline February 20', () => {
-      const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '01', 'pendiente')]);
+      const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '01', 'borrador')]);
       expect(deadline.getFullYear()).toBe(2026);
       expect(deadline.getMonth()).toBe(1);
       expect(deadline.getDate()).toBe(20);
     });
 
     it('"06" → deadline July 20 (month index 6)', () => {
-      const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '06', 'pendiente')]);
+      const [{ deadline }] = computeUpcomingDeadlines([D('349', 2026, '06', 'borrador')]);
       expect(deadline.getFullYear()).toBe(2026);
       expect(deadline.getMonth()).toBe(6);
       expect(deadline.getDate()).toBe(20);
@@ -941,14 +937,14 @@ describe('computeUpcomingDeadlines', () => {
 
   describe('limit parameter', () => {
     it('respects the default limit of 5', () => {
-      const decls = ['T1', 'T2', 'T3', 'T4'].map(p => D('303', 2026, p, 'pendiente'))
-        .concat(['01', '02'].map(p => D('349', 2026, p, 'pendiente')));
+      const decls = ['T1', 'T2', 'T3', 'T4'].map(p => D('303', 2026, p, 'borrador'))
+        .concat(['01', '02'].map(p => D('349', 2026, p, 'borrador')));
       const result = computeUpcomingDeadlines(decls);
       expect(result).toHaveLength(5);
     });
 
     it('respects a custom limit of 2', () => {
-      const decls = ['T1', 'T2', 'T3', 'T4'].map(p => D('303', 2026, p, 'pendiente'));
+      const decls = ['T1', 'T2', 'T3', 'T4'].map(p => D('303', 2026, p, 'borrador'));
       expect(computeUpcomingDeadlines(decls, 2)).toHaveLength(2);
     });
 
