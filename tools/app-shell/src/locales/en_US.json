@@ -18844,6 +18844,7 @@
     "fm.status.presentado": "Submitted",
     "fm.status.presentadoOtra": "Submitted · other platform",
     "fm.status.presentadoAcuse": "Submitted · acknowledged",
+    "fm.status.error": "Compute error",
     "fm.kpi.m303_open": "Open Model 303",
     "fm.kpi.m303_open_sub": "declarations in progress",
     "fm.kpi.m349_pending": "Pending Model 349",

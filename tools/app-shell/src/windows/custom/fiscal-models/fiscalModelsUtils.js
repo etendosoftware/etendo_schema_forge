@@ -64,13 +64,12 @@ export async function generate303File(decl, { token, apiBaseUrl } = {}) {
 }
 
 export const STATUSES = [
-  'omitido', 'pendiente', 'borrador', 'listo',
+  'omitido', 'borrador', 'listo',
   'presentado', 'presentadoOtra', 'presentadoAcuse',
 ];
 
 export const STATUS_COLOR = {
   omitido:         'grey',
-  pendiente:       'orange',
   borrador:        'blue',
   listo:           'green',
   presentado:      'teal',
@@ -80,7 +79,6 @@ export const STATUS_COLOR = {
 
 export const STATUS_ICON = {
   omitido:         '×',
-  pendiente:       '○',
   borrador:        '✎',
   listo:           '✓',
   presentado:      '✓',

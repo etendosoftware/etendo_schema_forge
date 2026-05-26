@@ -19094,6 +19094,7 @@
     "fm.status.presentado": "Presentado",
     "fm.status.presentadoOtra": "Presentado · otra plataforma",
     "fm.status.presentadoAcuse": "Presentado · con acuse",
+    "fm.status.error": "Error de cálculo",
     "fm.kpi.m303_open": "Modelo 303 abiertas",
     "fm.kpi.m303_open_sub": "declaraciones en curso",
     "fm.kpi.m349_pending": "Modelo 349 pendientes",
