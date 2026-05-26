@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { LayoutGrid, Settings2, ListFilter, ArrowUpDown } from 'lucide-react';
 import { StatusPillMenu, ResultPill, EmptyState } from './FmCommon.jsx';
 import { ConfigDrawer, NewDeclModal } from './FmOverlays.jsx';
 import FmCatalogPage from './FmCatalogPage.jsx';
-import { formatAmount, STATUS_COLOR, computeUpcomingDeadlines } from './fiscalModelsUtils.js';
+import { formatAmount, STATUS_COLOR, computeUpcomingDeadlines, computeBoxes303, checkModified303 } from './fiscalModelsUtils.js';
+import useFiscalAutoCompute from './useFiscalAutoCompute.js';
 
 function StatusSelect({ value, options, onChange }) {
   const t = useUI();
@@ -209,6 +210,21 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   const [demoDecls, setDemoDecls]        = useState(propDecls ?? MOCK_DECLARATIONS);
   const [realDecls, setRealDecls]        = useState([]);
   const decls = dataMode === 'demo' ? demoDecls : realDecls;
+
+  const draftDecls303 = useMemo(
+    () => realDecls.filter(d => d.model === '303' && d.status === 'borrador'),
+    [realDecls]
+  );
+
+  const { computedMap } = useFiscalAutoCompute(draftDecls303, {
+    computeFn:       computeBoxes303,
+    checkModifiedFn: checkModified303,
+    token,
+    apiBaseUrl,
+    enabled:         dataMode === 'real',
+    pollIntervalMs:  180_000,
+  });
+
   const [modelFilter, setModelFilter]   = useState('all');
   const [yearFilter,  setYearFilter]    = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -309,7 +325,11 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
       {/* ── Body: sidebar + main ─────────────────────────────────── */}
       <div className="fm-list-body">
 
-        <UpcomingDeadlines decls={modelYearFiltered} onSelect={onSelect} t={t} />
+        <UpcomingDeadlines
+          decls={modelYearFiltered}
+          onSelect={decl => onSelect?.({ ...decl, _precomputed: computedMap[decl.id] })}
+          t={t}
+        />
 
         <div className="fm-list-main">
           {/* ── Section header ─────────────────────────────────── */}
@@ -345,11 +365,24 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(decl => (
+                {filtered.map(decl => {
+                  const computed = computedMap[decl.id];
+                  const isComputingThis = dataMode === 'real' && decl.model === '303'
+                    && decl.status === 'borrador' && !computed;
+                  const computeError = computed?.error ?? null;
+
+                  let displayResult = decl.result;
+                  if (computed?.summary && !computed.error) {
+                    const r = computed.summary.result;
+                    const kind = r > 0 ? 'ingresar' : r < 0 ? 'compensar' : 'informativa';
+                    displayResult = { kind, amount: Math.abs(r) };
+                  }
+
+                  return (
                   <tr
                     key={decl.id}
                     className={decl.current ? 'fm-table__row--current' : ''}
-                    onClick={() => onSelect?.(decl)}
+                    onClick={() => onSelect?.({ ...decl, _precomputed: computedMap[decl.id] })}
                   >
                     <td onClick={e => e.stopPropagation()}>
                       <input type="checkbox" className="fm-table__cb" checked={selected.has(decl.id)} onChange={() => toggleSelect(decl.id)} />
@@ -364,12 +397,22 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
                       <StatusPillMenu status={decl.status} onStatusChange={s => handleStatusChange(decl.id, s)} />
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      {decl.result?.kind ? (
+                      {isComputingThis ? (
+                        <span style={{ color: '#6b7280', fontSize: 12 }}>…</span>
+                      ) : computeError ? (
+                        <span
+                          className="fm-status-pill fm-status-pill--red"
+                          title={computeError}
+                          style={{ fontSize: 11 }}
+                        >
+                          {t('fm.status.error')}
+                        </span>
+                      ) : displayResult?.kind ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                          <ResultPill kind={decl.result.kind} label={t(`fm.result.${decl.result.kind}`) ?? decl.result.kind} />
-                          {decl.result.kind !== 'informativa' && decl.result.amount != null && (
+                          <ResultPill kind={displayResult.kind} label={t(`fm.result.${displayResult.kind}`) ?? displayResult.kind} />
+                          {displayResult.kind !== 'informativa' && displayResult.amount != null && (
                             <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
-                              {formatAmount(decl.result.amount)}
+                              {formatAmount(displayResult.amount)}
                             </span>
                           )}
                         </div>
@@ -381,12 +424,13 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
                     <td><FileCell file={decl.file} fileExternal={decl.fileExternal} /></td>
                     <td><span className="fm-date">{decl.updatedAt ?? '—'}</span></td>
                     <td onClick={e => e.stopPropagation()}>
-                      <button className="fm-table-action" onClick={() => onSelect?.(decl)}>
+                      <button className="fm-table-action" onClick={() => onSelect?.({ ...decl, _precomputed: computedMap[decl.id] })}>
                         {t('fm.action.open')} ›
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
