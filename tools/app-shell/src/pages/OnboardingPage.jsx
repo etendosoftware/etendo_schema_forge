@@ -3,13 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Loader2, Check, ChevronRight,
+  Loader2, Check, ChevronRight, ChevronDown,
   Plus, Building2, RefreshCw,
   Settings,
   UserPlus, Mail, Lock, Eye, EyeOff, Sparkles,
   ArrowRight, User, MessageCircle,
 } from 'lucide-react';
 import {
+  ONBOARDING_ERROR_CODES,
   fetchAccount,
   fetchEnvironments,
   loginAccount,
@@ -402,63 +403,6 @@ function PageHeader({ accountName, onLogout, isAuthenticated, logoutLabel, brand
   );
 }
 
-function getBusinessTypeIcon(value) {
-  if (value === 'company') return Building2;
-  if (value === 'freelancer') return User;
-  return MessageCircle;
-}
-
-function getSetupProgressState(result, activeSetupStep, ui, countryCode) {
-  if (result?.status === 'success') {
-    return {
-      progress: 100,
-      title: ui('onboardingSuccessTitle'),
-      description: ui('onboardingSuccessDescription'),
-      leading: <Check className="h-8 w-8 text-[#54b56a]" strokeWidth={3} />,
-      statusLabel: ui('onboardingCompleted'),
-      success: true,
-    };
-  }
-  if (activeSetupStep === 'client') {
-    return {
-      progress: 50,
-      title: ui('onboardingPreparingTitle'),
-      description: ui('onboardingPreparingActivatingDescription'),
-      leading: <Sparkles className="h-8 w-8 text-slate-400" />,
-      statusLabel: ui('loading'),
-      success: false,
-    };
-  }
-  if (activeSetupStep === 'sequences') {
-    return {
-      progress: 80,
-      title: ui('onboardingPreparingTitle'),
-      description: ui('onboardingPreparingSequencesDescription'),
-      leading: <Settings className="h-8 w-8 text-slate-400" />,
-      statusLabel: ui('loading'),
-      success: false,
-    };
-  }
-  if (activeSetupStep === 'organization' || activeSetupStep === 'finalize') {
-    return {
-      progress: 80,
-      title: ui('onboardingPreparingTitle'),
-      description: ui('onboardingPreparingFinishingDescription'),
-      leading: <Check className="h-8 w-8 text-slate-400" strokeWidth={3} />,
-      statusLabel: ui('loading'),
-      success: false,
-    };
-  }
-  return {
-    progress: 20,
-    title: ui('onboardingPreparingTitle'),
-    description: ui('onboardingPreparingTaxesDescription'),
-    leading: countryCode === 'ES' ? '🇪🇸' : '🌍',
-    statusLabel: ui('loading'),
-    success: false,
-  };
-}
-
 export default function OnboardingPage() {
   const [view, setView] = useState(null); // null = loading initial state
   const [accountName, setAccountName] = useState(null);
@@ -489,6 +433,7 @@ export default function OnboardingPage() {
   const [steps, setSteps] = useState(() => initialSetupSteps());
   const [result, setResult] = useState(null);
   const [running, setRunning] = useState(false);
+  const [formSubmitted, setFormSubmitted] = useState(false);
   const ui = useUI();
   const { locale, setLocale } = useLocaleSwitch();
 
@@ -559,6 +504,7 @@ export default function OnboardingPage() {
     setRegisterError(null);
     setLoginError(null);
     setResult(null);
+    setFormSubmitted(false);
     setRunning(false);
     setCreateStep(1);
     setSteps(initialSetupSteps());
@@ -736,6 +682,7 @@ export default function OnboardingPage() {
     });
     setRunning(true);
     setResult(null);
+    setFormSubmitted(true);
     setSteps(initialSetupSteps());
 
     let succeeded = false;
@@ -810,7 +757,7 @@ export default function OnboardingPage() {
   const businessTypeOptions = BUSINESS_TYPE_VALUES.map((value) => ({
     value,
     label: ui(`onboardingBusinessType${value.charAt(0).toUpperCase()}${value.slice(1)}`),
-    icon: getBusinessTypeIcon(value),
+    icon: value === 'company' ? Building2 : value === 'freelancer' ? User : MessageCircle,
   }));
   const authFeatureLabels = AUTH_FEATURE_KEYS.map((key) => ui(key));
   const languageOptions = LOCALE_CODES.map((code) => ({
@@ -830,7 +777,50 @@ export default function OnboardingPage() {
   const setupGreetingName = (form.fullName || accountName || ui('onboardingGreetingFallback')).trim().split(/\s+/)[0];
   const activeSetupStep = steps.find((step) => step.status === 'running')?.name;
   const readinessFailureText = (result?.readinessFailures ?? []).map((failure) => ui(failure.key)).join(' ');
-  const setupProgressState = getSetupProgressState(result, activeSetupStep, ui, form.countryCode);
+  const setupProgressState = result?.status === 'success'
+    ? {
+      progress: 100,
+      title: ui('onboardingSuccessTitle'),
+      description: ui('onboardingSuccessDescription'),
+      leading: <Check className="h-8 w-8 text-[#54b56a]" strokeWidth={3} />,
+      statusLabel: ui('onboardingCompleted'),
+      success: true,
+    }
+    : activeSetupStep === 'client'
+      ? {
+        progress: 50,
+        title: ui('onboardingPreparingTitle'),
+        description: ui('onboardingPreparingActivatingDescription'),
+        leading: <Sparkles className="h-8 w-8 text-slate-400" />,
+        statusLabel: ui('loading'),
+        success: false,
+      }
+      : activeSetupStep === 'sequences'
+        ? {
+          progress: 80,
+          title: ui('onboardingPreparingTitle'),
+          description: ui('onboardingPreparingSequencesDescription'),
+          leading: <Settings className="h-8 w-8 text-slate-400" />,
+          statusLabel: ui('loading'),
+          success: false,
+        }
+        : activeSetupStep === 'organization' || activeSetupStep === 'finalize'
+        ? {
+          progress: 80,
+          title: ui('onboardingPreparingTitle'),
+          description: ui('onboardingPreparingFinishingDescription'),
+          leading: <Check className="h-8 w-8 text-slate-400" strokeWidth={3} />,
+          statusLabel: ui('loading'),
+          success: false,
+        }
+        : {
+          progress: 20,
+          title: ui('onboardingPreparingTitle'),
+          description: ui('onboardingPreparingTaxesDescription'),
+          leading: form.countryCode === 'ES' ? '🇪🇸' : '🌍',
+          statusLabel: ui('loading'),
+          success: false,
+        };
 
 
   // ── LOADING (initial token check) ──
