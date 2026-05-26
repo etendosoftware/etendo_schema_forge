@@ -17,6 +17,31 @@ import { useEffect, useRef, useState } from 'react';
  * @param {boolean}  opts.enabled - set false to disable all activity (e.g. in demo mode)
  * @returns {{ computedMap: { [id]: { boxes, summary, error, computedAt } } }}
  */
+
+async function computeOne(decl, { fn, token, apiBaseUrl, isCancelled, computedAtRef, setComputedMap }) {
+  try {
+    const result = await fn(decl, { token, apiBaseUrl });
+    if (isCancelled()) return;
+    const computedAt = Date.now();
+    computedAtRef.current[decl.id] = computedAt;
+    setComputedMap(m => ({
+      ...m,
+      [decl.id]: result
+        ? { ...result, error: null, computedAt }
+        : { boxes: null, summary: null, error: null, computedAt },
+    }));
+  } catch (err) {
+    if (!isCancelled()) {
+      const computedAt = Date.now();
+      computedAtRef.current[decl.id] = computedAt;
+      setComputedMap(m => ({
+        ...m,
+        [decl.id]: { boxes: null, summary: null, error: String(err), computedAt },
+      }));
+    }
+  }
+}
+
 export default function useFiscalAutoCompute(decls, {
   computeFn,
   checkModifiedFn,
@@ -38,30 +63,10 @@ export default function useFiscalAutoCompute(decls, {
     let cancelled = false;
 
     (async () => {
-      await Promise.all(decls.map(async (decl) => {
-        const { computeFn: fn, token: t, apiBaseUrl: api } = ctxRef.current;
-        try {
-          const result = await fn(decl, { token: t, apiBaseUrl: api });
-          if (cancelled) return;
-          const computedAt = Date.now();
-          computedAtRef.current[decl.id] = computedAt;
-          setComputedMap(m => ({
-            ...m,
-            [decl.id]: result
-              ? { ...result, error: null, computedAt }
-              : { boxes: null, summary: null, error: null, computedAt },
-          }));
-        } catch (err) {
-          if (!cancelled) {
-            const computedAt = Date.now();
-            computedAtRef.current[decl.id] = computedAt;
-            setComputedMap(m => ({
-              ...m,
-              [decl.id]: { boxes: null, summary: null, error: String(err), computedAt },
-            }));
-          }
-        }
-      }));
+      const { computeFn: fn, token: t, apiBaseUrl: api } = ctxRef.current;
+      await Promise.all(decls.map(decl =>
+        computeOne(decl, { fn, token: t, apiBaseUrl: api, isCancelled: () => cancelled, computedAtRef, setComputedMap })
+      ));
     })();
 
     return () => { cancelled = true; };
@@ -77,29 +82,9 @@ export default function useFiscalAutoCompute(decls, {
         const { checkModifiedFn: checkFn, computeFn: fn, token: t, apiBaseUrl: api } = ctxRef.current;
         if (!checkFn) return;
         const sinceMs = computedAtRef.current[decl.id] ?? 0;
-        try {
-          const modified = await checkFn(decl, sinceMs, { token: t, apiBaseUrl: api });
-          if (cancelled || !modified) return;
-          const result = await fn(decl, { token: t, apiBaseUrl: api });
-          if (cancelled) return;
-          const computedAt = Date.now();
-          computedAtRef.current[decl.id] = computedAt;
-          setComputedMap(m => ({
-            ...m,
-            [decl.id]: result
-              ? { ...result, error: null, computedAt }
-              : { boxes: null, summary: null, error: null, computedAt },
-          }));
-        } catch (err) {
-          if (!cancelled) {
-            const computedAt = Date.now();
-            computedAtRef.current[decl.id] = computedAt;
-            setComputedMap(m => ({
-              ...m,
-              [decl.id]: { boxes: null, summary: null, error: String(err), computedAt },
-            }));
-          }
-        }
+        const modified = await checkFn(decl, sinceMs, { token: t, apiBaseUrl: api });
+        if (cancelled || !modified) return;
+        await computeOne(decl, { fn, token: t, apiBaseUrl: api, isCancelled: () => cancelled, computedAtRef, setComputedMap });
       });
     }, pollIntervalMs);
 
