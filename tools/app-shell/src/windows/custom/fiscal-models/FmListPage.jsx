@@ -124,6 +124,15 @@ const MOCK_DECLARATIONS = [
 
 const DEFAULT_ACTIVE = { '303': true, '349': true };
 
+function normDecl(d) {
+  return {
+    ...d,
+    updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString('es-ES') : '—',
+    result: d.result ?? null,
+    incidents: d.incidents ?? { blocking: 0, warning: 0 },
+  };
+}
+
 // ── Upcoming deadlines helpers ───────────────────────────────────
 const MONTH_NAMES_ES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
 const MONTH_LABELS_ES = ['', 'Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -208,17 +217,19 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
 
   const [dataMode, setDataMode]          = useState('demo');
   const [demoDecls, setDemoDecls]        = useState(propDecls ?? MOCK_DECLARATIONS);
-  const [realDecls, setRealDecls]        = useState(() => {
-    try {
-      const stored = localStorage.getItem('fm-real-decls');
-      return stored ? JSON.parse(stored) : [];
-    } catch { return []; }
-  });
+  const [realDecls, setRealDecls]        = useState([]);
   const decls = dataMode === 'demo' ? demoDecls : realDecls;
 
   useEffect(() => {
-    try { localStorage.setItem('fm-real-decls', JSON.stringify(realDecls)); } catch { /* quota */ }
-  }, [realDecls]);
+    if (dataMode !== 'real' || !token || !apiBaseUrl) return;
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    fetch(`${base}/fiscal303/declarations`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => setRealDecls((data.data ?? []).map(normDecl)))
+      .catch(() => {});
+  }, [dataMode, token, apiBaseUrl]);
 
   const draftDecls303 = useMemo(
     () => realDecls.filter(d => d.model === '303' && d.status === 'borrador'),
@@ -244,15 +255,51 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   const [selected,     setSelected]     = useState(new Set());
 
   const handleStatusChange = useCallback((id, newStatus) => {
-    (dataMode === 'demo' ? setDemoDecls : setRealDecls)(ds => ds.map(d => d.id === id ? { ...d, status: newStatus } : d));
+    (dataMode === 'demo' ? setDemoDecls : setRealDecls)(ds =>
+      ds.map(d => d.id === id
+        ? { ...d, status: newStatus, updatedAt: new Date().toLocaleDateString('es-ES') }
+        : d)
+    );
     onStatusChange?.(id, newStatus);
-  }, [dataMode, onStatusChange]);
+    if (dataMode === 'real' && token && apiBaseUrl) {
+      const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+      fetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      }).catch(() => {});
+    }
+  }, [dataMode, onStatusChange, token, apiBaseUrl]);
 
   const handleNewDecl = useCallback(({ model, year, period, status }) => {
-    const id = `${model}-${year}-${period}`;
-    const newDecl = { id, model, year, period, type:'ord', status, result:{kind:'informativa',amount:0}, incidents:{blocking:0,warning:0}, file:null, updatedAt: new Date().toLocaleDateString('es-ES') };
-    (dataMode === 'demo' ? setDemoDecls : setRealDecls)(ds => [newDecl, ...ds]);
-  }, [dataMode]);
+    if (dataMode === 'real' && token && apiBaseUrl) {
+      const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+      fetch(`${base}/fiscal303/declarations`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
+      })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(created => setRealDecls(ds => [normDecl(created), ...ds]))
+        .catch(() => {
+          const id = `${model}-${year}-${period}`;
+          setRealDecls(ds => [
+            { id, model, year, period, type: 'ord', status, result: null,
+              incidents: { blocking: 0, warning: 0 }, file: null,
+              updatedAt: new Date().toLocaleDateString('es-ES') },
+            ...ds,
+          ]);
+        });
+    } else {
+      const id = `${model}-${year}-${period}`;
+      setDemoDecls(ds => [
+        { id, model, year, period, type: 'ord', status,
+          result: { kind: 'informativa', amount: 0 }, incidents: { blocking: 0, warning: 0 },
+          file: null, updatedAt: new Date().toLocaleDateString('es-ES') },
+        ...ds,
+      ]);
+    }
+  }, [dataMode, token, apiBaseUrl]);
 
   const years = ['all', ...Array.from(new Set(decls.map(d => String(d.year)))).sort((a,b) => b - a)];
   const statuses = ['all', ...Array.from(new Set(decls.map(d => d.status)))];
