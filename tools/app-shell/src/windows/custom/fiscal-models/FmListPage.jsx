@@ -215,10 +215,16 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
   const ui = useUI();
   const t  = ui;
 
-  const [dataMode, setDataMode]          = useState('demo');
+  const [dataMode, setDataMode]          = useState(() => {
+    try { return sessionStorage.getItem('fm-data-mode') ?? 'demo'; } catch { return 'demo'; }
+  });
   const [demoDecls, setDemoDecls]        = useState(propDecls ?? MOCK_DECLARATIONS);
   const [realDecls, setRealDecls]        = useState([]);
   const decls = dataMode === 'demo' ? demoDecls : realDecls;
+
+  useEffect(() => {
+    try { sessionStorage.setItem('fm-data-mode', dataMode); } catch {}
+  }, [dataMode]);
 
   useEffect(() => {
     if (dataMode !== 'real' || !token || !apiBaseUrl) return;
