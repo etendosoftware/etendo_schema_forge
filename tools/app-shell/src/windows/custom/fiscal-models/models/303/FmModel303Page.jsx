@@ -15,8 +15,8 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File } from '../../fiscalModelsUtils.js';
 
 const STEPPER_INDEX = {
-  borrador: 1, listo: 2,
-  presentado: 3, presentadoOtra: 3, presentadoAcuse: 3,
+  borrador: 0, listo: 1,
+  presentado: 2, presentadoOtra: 2, presentadoAcuse: 2,
   omitido: -1,
 };
 
@@ -313,7 +313,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   async function handleGenerate() {
     setGenerating(true);
     const result = liveSummary?.result ?? decl.summary?.result ?? 0;
-    const kind = decl.result?.kind ?? (result > 0 ? 'ingresar' : result < 0 ? 'compensar' : 'informativa');
+    let kind = decl.result?.kind;
+    if (!kind) {
+      if (result > 0) kind = 'ingresar';
+      else if (result < 0) kind = 'compensar';
+      else kind = 'informativa';
+    }
     const declForGenerate = { ...decl, result: { ...decl.result, kind } };
     const ok = await generate303File(declForGenerate, { token, apiBaseUrl });
     setGenerating(false);
@@ -337,7 +342,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   }, [token, apiBaseUrl]);
 
   const stepperSteps = [
-    t('fm.stepper.pending'),
     t('fm.stepper.draft'),
     t('fm.stepper.ready'),
     t('fm.stepper.presented'),

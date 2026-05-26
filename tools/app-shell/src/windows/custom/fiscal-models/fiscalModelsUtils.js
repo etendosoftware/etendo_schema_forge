@@ -45,7 +45,8 @@ export async function generate303File(decl, { token, apiBaseUrl } = {}) {
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const tipo = decl.result?.kind ?? 'N';
-    const url = `${base}/fiscal303/generate?year=${decl.year}&period=${decl.period}&tipo=${tipo}`;
+    const params = new URLSearchParams({ year: decl.year, period: decl.period, tipo });
+    const url = `${base}/fiscal303/generate?${params}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return false;
     const blob = await res.blob();
@@ -266,7 +267,8 @@ export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}
   if (!token || !apiBaseUrl) return false;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    const url = `${base}/fiscal303/modified?year=${decl.year}&period=${decl.period}&since=${sinceMs}`;
+    const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
+    const url = `${base}/fiscal303/modified?${params}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return false;
     const data = await res.json();

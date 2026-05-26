@@ -60,6 +60,23 @@ describe('useFiscalAutoCompute — initial compute', () => {
     expect(computeFn).not.toHaveBeenCalled();
   });
 
+  it('writes a null-result entry when computeFn returns null', async () => {
+    const computeFn = vi.fn().mockResolvedValue(null);
+    const { result } = renderHook(() =>
+      useFiscalAutoCompute([DECL_A], {
+        computeFn,
+        checkModifiedFn: vi.fn(),
+        token: 'tok',
+        apiBaseUrl: 'http://host/neo/fiscal-models',
+        enabled: true,
+        pollIntervalMs: 100_000,
+      })
+    );
+    await waitFor(() =>
+      expect(result.current.computedMap[DECL_A.id]).toMatchObject({ boxes: null, summary: null, error: null })
+    );
+  });
+
   it('does not call computeFn when decls is empty', async () => {
     const computeFn = vi.fn();
     renderHook(() =>

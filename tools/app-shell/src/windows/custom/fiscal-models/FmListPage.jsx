@@ -210,6 +210,28 @@ function IncidentsCell({ blocking, warning, t }) {
   );
 }
 
+function ResultCell({ isComputing, error, result, t }) {
+  if (isComputing) return <span style={{ color: '#6b7280', fontSize: 12 }}>…</span>;
+  if (error) {
+    return (
+      <span className="fm-status-pill fm-status-pill--red" title={error} style={{ fontSize: 11 }}>
+        {t('fm.status.error')}
+      </span>
+    );
+  }
+  if (!result?.kind) return <span style={{ color: '#9ca3af' }}>—</span>;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+      <ResultPill kind={result.kind} label={t(`fm.result.${result.kind}`) ?? result.kind} />
+      {result.kind !== 'informativa' && result.amount != null && (
+        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
+          {formatAmount(result.amount)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ───────────────────────────────────────────────
 export default function FmListPage({ declarations: propDecls, onSelect, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
@@ -436,7 +458,10 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
                   let displayResult = decl.result;
                   if (computed?.summary && !computed.error) {
                     const r = computed.summary.result;
-                    const kind = r > 0 ? 'ingresar' : r < 0 ? 'compensar' : 'informativa';
+                    let kind;
+                    if (r > 0) kind = 'ingresar';
+                    else if (r < 0) kind = 'compensar';
+                    else kind = 'informativa';
                     displayResult = { kind, amount: Math.abs(r) };
                   }
 
@@ -459,26 +484,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
                       <StatusPillMenu status={decl.status} onStatusChange={s => handleStatusChange(decl.id, s)} />
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      {isComputingThis ? (
-                        <span style={{ color: '#6b7280', fontSize: 12 }}>…</span>
-                      ) : computeError ? (
-                        <span
-                          className="fm-status-pill fm-status-pill--red"
-                          title={computeError}
-                          style={{ fontSize: 11 }}
-                        >
-                          {t('fm.status.error')}
-                        </span>
-                      ) : displayResult?.kind ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-                          <ResultPill kind={displayResult.kind} label={t(`fm.result.${displayResult.kind}`) ?? displayResult.kind} />
-                          {displayResult.kind !== 'informativa' && displayResult.amount != null && (
-                            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
-                              {formatAmount(displayResult.amount)}
-                            </span>
-                          )}
-                        </div>
-                      ) : <span style={{ color: '#9ca3af' }}>—</span>}
+                      <ResultCell isComputing={isComputingThis} error={computeError} result={displayResult} t={t} />
                     </td>
                     <td>
                       <IncidentsCell blocking={decl.incidents?.blocking ?? 0} warning={decl.incidents?.warning ?? 0} t={t} />

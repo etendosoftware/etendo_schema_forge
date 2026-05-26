@@ -31,8 +31,6 @@ describe('FmModel303Page — precomputed data initialization', () => {
         decl={DECL}
         onBack={vi.fn()}
         onStatusChange={vi.fn()}
-        token="tok"
-        apiBaseUrl="http://host/neo/fiscal-models"
       />
     );
     const calcBtns = screen.queryAllByRole('button', { name: /fm\.action\.compute/i });

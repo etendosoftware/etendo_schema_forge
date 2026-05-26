@@ -42,15 +42,22 @@ export default function useFiscalAutoCompute(decls, {
         const { computeFn: fn, token: t, apiBaseUrl: api } = ctxRef.current;
         try {
           const result = await fn(decl, { token: t, apiBaseUrl: api });
-          if (cancelled || !result) return;
+          if (cancelled) return;
           const computedAt = Date.now();
           computedAtRef.current[decl.id] = computedAt;
-          setComputedMap(m => ({ ...m, [decl.id]: { ...result, error: null, computedAt } }));
+          setComputedMap(m => ({
+            ...m,
+            [decl.id]: result
+              ? { ...result, error: null, computedAt }
+              : { boxes: null, summary: null, error: null, computedAt },
+          }));
         } catch (err) {
           if (!cancelled) {
+            const computedAt = Date.now();
+            computedAtRef.current[decl.id] = computedAt;
             setComputedMap(m => ({
               ...m,
-              [decl.id]: { boxes: null, summary: null, error: String(err), computedAt: Date.now() },
+              [decl.id]: { boxes: null, summary: null, error: String(err), computedAt },
             }));
           }
         }
@@ -63,6 +70,7 @@ export default function useFiscalAutoCompute(decls, {
   // Polling: check for modifications, recompute only changed declarations
   useEffect(() => {
     if (!enabled || !decls.length) return;
+    let cancelled = false;
 
     const interval = setInterval(() => {
       decls.forEach(async (decl) => {
@@ -71,22 +79,31 @@ export default function useFiscalAutoCompute(decls, {
         const sinceMs = computedAtRef.current[decl.id] ?? 0;
         try {
           const modified = await checkFn(decl, sinceMs, { token: t, apiBaseUrl: api });
-          if (!modified) return;
+          if (cancelled || !modified) return;
           const result = await fn(decl, { token: t, apiBaseUrl: api });
-          if (!result) return;
+          if (cancelled) return;
           const computedAt = Date.now();
           computedAtRef.current[decl.id] = computedAt;
-          setComputedMap(m => ({ ...m, [decl.id]: { ...result, error: null, computedAt } }));
-        } catch (err) {
           setComputedMap(m => ({
             ...m,
-            [decl.id]: { boxes: null, summary: null, error: String(err), computedAt: Date.now() },
+            [decl.id]: result
+              ? { ...result, error: null, computedAt }
+              : { boxes: null, summary: null, error: null, computedAt },
           }));
+        } catch (err) {
+          if (!cancelled) {
+            const computedAt = Date.now();
+            computedAtRef.current[decl.id] = computedAt;
+            setComputedMap(m => ({
+              ...m,
+              [decl.id]: { boxes: null, summary: null, error: String(err), computedAt },
+            }));
+          }
         }
       });
     }, pollIntervalMs);
 
-    return () => clearInterval(interval);
+    return () => { cancelled = true; clearInterval(interval); };
   }, [enabled, decls, pollIntervalMs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { computedMap };
