@@ -312,7 +312,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
   async function handleGenerate() {
     setGenerating(true);
-    const ok = await generate303File(decl, { token, apiBaseUrl });
+    const result = liveSummary?.result ?? decl.summary?.result ?? 0;
+    const kind = decl.result?.kind ?? (result > 0 ? 'ingresar' : result < 0 ? 'compensar' : 'informativa');
+    const declForGenerate = { ...decl, result: { ...decl.result, kind } };
+    const ok = await generate303File(declForGenerate, { token, apiBaseUrl });
     setGenerating(false);
     if (!ok) {
       console.error('generate303File failed for', decl.year, decl.period);
