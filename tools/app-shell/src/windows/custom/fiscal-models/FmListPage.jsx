@@ -255,7 +255,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => setRealDecls((data.data ?? []).map(normDecl)))
+      .then(data => setRealDecls((Array.isArray(data) ? data : (data?.data ?? [])).map(normDecl)))
       .catch(() => {});
   }, [dataMode, token, apiBaseUrl]);
 
@@ -308,7 +308,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onStatus
         body: JSON.stringify({ model, year: parseInt(year, 10), period, status }),
       })
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(created => setRealDecls(ds => [normDecl(created), ...ds]))
+        .then(created => setRealDecls(ds => [normDecl(created?.data ?? created), ...ds]))
         .catch(() => {
           const id = `${model}-${year}-${period}`;
           setRealDecls(ds => [

@@ -32,11 +32,11 @@ async function computeOne(decl, { fn, token, apiBaseUrl, isCancelled, computedAt
     }));
   } catch (err) {
     if (!isCancelled()) {
-      const computedAt = Date.now();
-      computedAtRef.current[decl.id] = computedAt;
+      // Do not update computedAtRef on error — sinceMs stays at the last
+      // successful compute time so any subsequent invoice change still triggers a retry.
       setComputedMap(m => ({
         ...m,
-        [decl.id]: { boxes: null, summary: null, error: String(err), computedAt },
+        [decl.id]: { boxes: null, summary: null, error: String(err), computedAt: Date.now() },
       }));
     }
   }

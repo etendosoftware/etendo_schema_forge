@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   STATUSES,
   STATUS_COLOR,
@@ -10,6 +10,7 @@ import {
   fmtDecl,
   deriveBoxes303,
   computeUpcomingDeadlines,
+  generate303File,
 } from '../fiscalModelsUtils.js';
 
 // ── STATUSES ──────────────────────────────────────────────────────────────────
@@ -975,5 +976,84 @@ describe('computeUpcomingDeadlines', () => {
       const [item] = computeUpcomingDeadlines([decl]);
       expect(item.decl).toBe(decl);
     });
+  });
+});
+
+// ── generate303File ───────────────────────────────────────────────────────────
+
+describe('generate303File', () => {
+  const DECL = { id: '303-2026-T2', model: '303', year: 2026, period: 'T2', result: { kind: 'ingresar' } };
+  const TOKEN = 'test-token';
+  const API_BASE = 'http://host/neo/fiscal-models';
+
+  afterEach(() => vi.restoreAllMocks());
+
+  function mockFetchOk(blob = new Blob(['data'])) {
+    const objectUrl = 'blob:mock';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: () => Promise.resolve(blob) }));
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn().mockReturnValue(objectUrl),
+      revokeObjectURL: vi.fn(),
+    });
+    const anchor = { href: '', download: '', click: vi.fn() };
+    vi.spyOn(document.body, 'appendChild').mockImplementation(() => {});
+    vi.spyOn(document.body, 'removeChild').mockImplementation(() => {});
+    vi.spyOn(document, 'createElement').mockReturnValue(anchor);
+    return { anchor, objectUrl };
+  }
+
+  it('returns false when token is missing', async () => {
+    expect(await generate303File(DECL, { token: '', apiBaseUrl: API_BASE })).toBe(false);
+    expect(await generate303File(DECL, { apiBaseUrl: API_BASE })).toBe(false);
+  });
+
+  it('returns false when apiBaseUrl is missing', async () => {
+    expect(await generate303File(DECL, { token: TOKEN })).toBe(false);
+  });
+
+  it('builds the correct URL with URLSearchParams', async () => {
+    mockFetchOk();
+    await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE });
+    const calledUrl = vi.mocked(fetch).mock.calls[0][0];
+    expect(calledUrl).toContain('/fiscal303/generate?');
+    expect(calledUrl).toContain('year=2026');
+    expect(calledUrl).toContain('period=T2');
+    expect(calledUrl).toContain('tipo=ingresar');
+  });
+
+  it('uses the result.kind from decl as tipo', async () => {
+    mockFetchOk();
+    await generate303File({ ...DECL, result: { kind: 'compensar' } }, { token: TOKEN, apiBaseUrl: API_BASE });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toContain('tipo=compensar');
+  });
+
+  it('defaults tipo to N when result.kind is absent', async () => {
+    mockFetchOk();
+    await generate303File({ ...DECL, result: null }, { token: TOKEN, apiBaseUrl: API_BASE });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toContain('tipo=N');
+  });
+
+  it('sends Authorization header', async () => {
+    mockFetchOk();
+    await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE });
+    expect(vi.mocked(fetch).mock.calls[0][1].headers.Authorization).toBe(`Bearer ${TOKEN}`);
+  });
+
+  it('returns true and triggers download on success', async () => {
+    const { anchor } = mockFetchOk();
+    const result = await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE });
+    expect(result).toBe(true);
+    expect(anchor.download).toBe('303_T2_2026.txt');
+    expect(anchor.click).toHaveBeenCalled();
+  });
+
+  it('returns false when fetch responds not ok', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    expect(await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE })).toBe(false);
+  });
+
+  it('returns false when fetch throws', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')));
+    expect(await generate303File(DECL, { token: TOKEN, apiBaseUrl: API_BASE })).toBe(false);
   });
 });

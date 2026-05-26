@@ -9,7 +9,7 @@ The window supports two data modes: **demo** (read-only mock data for exploratio
 ## What this window should allow
 
 - Switch between demo and real data modes via a toolbar toggle; mode persists in `sessionStorage` across navigation.
-- In real mode, fetch all declarations from `GET /fiscal303/declarations` and keep status changes in sync via `PATCH /fiscal303/declarations?id=`.
+- In real mode, fetch all declarations from `GET /fiscal303/declarations` and keep status changes in sync via `PUT /fiscal303/declarations?id=`.
 - Auto-compute fiscal boxes for Modelo 303 draft declarations in the background every 3 minutes, updating the result column in the list without user interaction.
 - Display an upcoming deadlines panel for unsubmitted declarations.
 - Filter declarations by model type (303, 349) and status.
@@ -23,7 +23,7 @@ The window supports two data modes: **demo** (read-only mock data for exploratio
 | Mode | Source | Auto-compute | Status writes |
 |------|--------|--------------|---------------|
 | `demo` | `MOCK_DECLARATIONS` constant in `FmListPage.jsx` | Disabled | Local state only |
-| `real` | `GET /fiscal303/declarations` (NEO Headless) | Enabled for 303 borrador | `PATCH /fiscal303/declarations?id=` |
+| `real` | `GET /fiscal303/declarations` (NEO Headless) | Enabled for 303 borrador | `PUT /fiscal303/declarations?id=` |
 
 The toggle renders as `Demo` / `Real` pill in the toolbar. The selected mode is stored in `sessionStorage` under key `fm-data-mode` so it survives page navigation within the session.
 
