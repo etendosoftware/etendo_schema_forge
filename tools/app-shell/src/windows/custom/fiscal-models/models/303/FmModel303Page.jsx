@@ -15,7 +15,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File } from '../../fiscalModelsUtils.js';
 
 const STEPPER_INDEX = {
-  pendiente: 0, borrador: 1, listo: 2,
+  borrador: 1, listo: 2,
   presentado: 3, presentadoOtra: 3, presentadoAcuse: 3,
   omitido: -1,
 };
@@ -290,9 +290,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [orgIdent, setOrgIdent] = useState({ nif: '', nombre: '' });
   const [identChecks, setIdentChecks] = useState(decl.identification ?? {});
   const handleIdentChange = (id, value) => setIdentChecks(prev => ({ ...prev, [id]: value }));
-  const [liveBoxes,   setLiveBoxes]   = useState(null);
-  const [liveSummary, setLiveSummary] = useState(null);
-  const [liveSources, setLiveSources] = useState(null);
+  const [liveBoxes,   setLiveBoxes]   = useState(decl._precomputed?.boxes   ?? null);
+  const [liveSummary, setLiveSummary] = useState(decl._precomputed?.summary ?? null);
+  const [liveSources, setLiveSources] = useState(decl._precomputed?.sources ?? null);
   const [computing,   setComputing]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
 
