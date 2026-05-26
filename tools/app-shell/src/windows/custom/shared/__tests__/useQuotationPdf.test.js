@@ -16,8 +16,9 @@ describe('useQuotationPdf', () => {
     assert.match(src, /export function useQuotationPdf/);
   });
 
-  it('accepts quotationId, apiBaseUrl and token parameters', () => {
-    assert.match(src, /useQuotationPdf\(quotationId,\s*apiBaseUrl,\s*token\)/);
+  it('accepts quotationId, apiBaseUrl, token and optional currencyData parameters', () => {
+    // Signature updated in ETP-4027 to include currencyData for dual-currency PDF generation
+    assert.match(src, /useQuotationPdf\(quotationId,\s*apiBaseUrl,\s*token,\s*currencyData/);
   });
 
   it('returns pdfUrl, pdfBlob, loading and error', () => {

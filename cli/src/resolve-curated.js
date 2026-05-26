@@ -359,6 +359,13 @@ function buildCuratedField(rawField, fieldDecision, discardPatterns) {
   if (isVisible) applyVisibleFieldProps(field, rawField, fieldDecision);
   copyRawProps(field, rawField, FIELD_RAW_COPY_PROPS);
 
+  // Allow decisions to explicitly suppress a raw derivation by setting derivation: null.
+  // This is needed when a field transitions from system/readOnly (auto-derived) to editable
+  // (user-provided), so NEO does not override the user's value on save.
+  if (Object.prototype.hasOwnProperty.call(fieldDecision, 'derivation') && fieldDecision.derivation === null) {
+    delete field.derivation;
+  }
+
   return field;
 }
 
@@ -665,6 +672,7 @@ const WINDOW_TRUTHY_PROPS = [
 
 const WINDOW_BOOLEAN_TRUE_PROPS = [
   'hideDeleteWhenComplete',
+  'saveCurrencyBeforeLines',
   'customTabsAfterBottom',
   'hidePrint',
   'hideMoreMenu',
@@ -695,7 +703,7 @@ export const WINDOW_KEY_ORDER = [
   'id', 'name', 'primaryEntity', 'category', 'agentPrompt',
   'sidebarLayout', 'templateConfig',
   'documentPreview', 'notesField', 'relatedDocuments',
-  'hideDeleteWhenComplete', 'customTabsAfterBottom', 'hidePrint', 'hideSaveStatuses',
+  'hideDeleteWhenComplete', 'saveCurrencyBeforeLines', 'customTabsAfterBottom', 'hidePrint', 'hideSaveStatuses',
   'hideMoreMenu', 'hideMoreDetails', 'contentBg',
   'hideListFilters', 'hideLink', 'hideEyeCount', 'breadcrumb',
   'customComponents', 'menuActions', 'processOverrides',

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ClipboardList, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 
 /**
  * Confirmation modal for Sales Quotation in Under Evaluation (UE) state.
@@ -78,6 +79,30 @@ export default function QuotationConfirmModal({
 
     try {
       const baseNeoUrl = apiBaseUrl.replace(/\/sales-quotation$/, '');
+
+      // Exchange rate check: if currencies differ, verify a rate exists for the document date
+      const docCurrency = d['currency$_identifier'];
+      const docDate = d.orderDate;
+      if (docCurrency && docDate) {
+        try {
+          const session = await fetchOptionalJson(`${baseNeoUrl}/session`, token);
+          const orgCurrency = session?.organization?.['currency$_identifier'];
+          const orgCurrencyId = session?.organization?.currency;
+          if (orgCurrency && docCurrency !== orgCurrency) {
+            const fromCurrency = d.currency || docCurrency;
+            const toCurrency = orgCurrencyId ?? orgCurrency;
+            const rateData = await fetchOptionalJson(
+              `${baseNeoUrl}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrency)}&toCurrency=${encodeURIComponent(toCurrency)}&date=${encodeURIComponent(docDate)}`,
+              token,
+            );
+            if (rateData && !rateData.hasRate) {
+              setError(ui('noExchangeRateAvailable'));
+              setLoading(false);
+              return;
+            }
+          }
+        } catch { /* non-fatal — allow confirmation to proceed */ }
+      }
 
       if (selected === 'order') {
         const res = await fetch(

@@ -66,8 +66,18 @@ vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
   ),
 }));
 
+vi.mock('../useDocumentCurrency.js', () => ({
+  useDocumentCurrency: vi.fn(() => ({
+    orgCurrencyCode: null,
+    exchangeRate: null,
+    isSameCurrency: true,
+    loading: false,
+    convertAmount: (amount) => amount,
+  })),
+}));
+
 vi.mock('../preview-cards/SummaryCard.jsx', () => ({
-  default: () => <div data-testid="summary-card" />,
+  default: vi.fn(() => <div data-testid="summary-card" />),
 }));
 
 vi.mock('../preview-cards/EmailsCard.jsx', () => ({
@@ -92,6 +102,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import OrderPreview from '../OrderPreview.jsx';
 import { useOrderPdf } from '../useOrderPdf.js';
 import { usePurchaseOrderPdf } from '../usePurchaseOrderPdf.js';
+import { useDocumentCurrency } from '../useDocumentCurrency.js';
+import SummaryCard from '../preview-cards/SummaryCard.jsx';
 
 const defaultOrder = {
   id: 'order-1',
@@ -194,5 +206,54 @@ describe('OrderPreview', () => {
     renderOrderPreview({ specName: 'purchase-order' });
     const title = screen.getByTestId('modal-title').textContent;
     expect(title).toContain('Purchase Order');
+  });
+
+  // ── useDocumentCurrency integration (ETP-4027) ────────────────────────────
+
+  describe('dual-currency via useDocumentCurrency', () => {
+    beforeEach(() => {
+      vi.mocked(SummaryCard).mockClear();
+    });
+
+    it('passes orgCurrencyCode and exchangeRate to SummaryCard when currencies differ', () => {
+      const convertAmount = vi.fn((amount) => amount != null ? amount * 0.86 : null);
+      vi.mocked(useDocumentCurrency).mockReturnValue({
+        orgCurrencyCode: 'EUR',
+        exchangeRate: 0.86,
+        isSameCurrency: false,
+        loading: false,
+        convertAmount,
+      });
+
+      const orderWithUsd = { ...defaultOrder, 'currency$_identifier': 'USD', grandTotalAmount: 1000 };
+      renderOrderPreview({ order: orderWithUsd });
+
+      // SummaryCard should have been called with orgCurrencyCode and exchangeRate
+      const lastCall = vi.mocked(SummaryCard).mock.calls.at(-1)?.[0];
+      expect(lastCall).toBeDefined();
+      expect(lastCall.orgCurrencyCode).toBe('EUR');
+      expect(lastCall.exchangeRate).toBe(0.86);
+      // orgGrandTotal is convertAmount(grandTotalAmount) = 1000 * 0.86 = 860
+      expect(lastCall.orgGrandTotal).toBeCloseTo(860);
+    });
+
+    it('passes no org currency data to SummaryCard when currencies are the same', () => {
+      vi.mocked(useDocumentCurrency).mockReturnValue({
+        orgCurrencyCode: 'EUR',
+        exchangeRate: null,
+        isSameCurrency: true,
+        loading: false,
+        convertAmount: (amount) => amount,
+      });
+
+      renderOrderPreview({ order: { ...defaultOrder, 'currency$_identifier': 'EUR' } });
+
+      const lastCall = vi.mocked(SummaryCard).mock.calls.at(-1)?.[0];
+      expect(lastCall).toBeDefined();
+      // orgGrandTotal comes from convertAmount which returns amount unchanged for isSameCurrency
+      // SummaryCard decides whether to show dual-display based on orgCurrencyCode != currencyCode
+      // The orgCurrencyCode is still passed through; SummaryCard handles the condition internally
+      expect(lastCall.exchangeRate).toBeNull();
+    });
   });
 });

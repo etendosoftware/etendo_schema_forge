@@ -1648,6 +1648,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const notesField = windowConfig.notesField ?? null;
   const relatedDocuments = windowConfig.relatedDocuments ?? false;
   const hideDeleteWhenComplete = windowConfig.hideDeleteWhenComplete ?? false;
+  const saveCurrencyBeforeLines = windowConfig.saveCurrencyBeforeLines ?? false;
   const customTabsAfterBottom = windowConfig.customTabsAfterBottom ?? false;
   const hidePrint = windowConfig.hidePrint ?? false;
   const hideSaveStatuses = windowConfig.hideSaveStatuses ?? [];
@@ -1869,6 +1870,8 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
 
   // hideDeleteWhenComplete prop
   const hideDeleteProp = fragmentIf(hideDeleteWhenComplete, '\n        hideDeleteWhenComplete');
+  // saveCurrencyBeforeLines prop
+  const saveCurrencyBeforeLinesProp = fragmentIf(saveCurrencyBeforeLines, '\n        saveCurrencyBeforeLines');
   // customTabsAfterBottom prop
   const customTabsAfterBottomProp = fragmentIf(customTabsAfterBottom, '\n        customTabsAfterBottom');
 
@@ -2145,7 +2148,7 @@ export default function ${compName}({ windowName, recordId, ...props }) {${fragm
         detailLabel="${entityDetailLabel}"` : ''}
         windowName={windowName}
         recordId={recordId}
-        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${customLinesProp}${primaryTabsProp}${othersLabelProp}${documentPreviewProp}${hideDeleteProp}${customTabsAfterBottomProp}${hidePrintProp}${hideSaveStatusesProp}${hideMoreMenuProp}${hideMoreDetailsProp}${noHeaderBorderProp}${toolbarBorderBottomProp}${compactSidebarPaddingProp}${whiteFormBackgroundProp}${autoSaveOnBlurProp}${hideFormCardProp}${sidebarAboveTabsOnlyProp}${sidebarClassNameProp}${tabsBarPaddingXProp}${primaryTabsVariantProp}${toolbarPaddingXProp}${toolbarButtonSizeProp}${contentBgProp}${formCardPaddingProp}${formScrollPaddingXProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${requiredHeaderFieldsProp}${addLineGuardProp}${headerContentProp}${detailSortByProp}${titleFieldProp}${salesThemeProp}${disableProcessedLockProp}${statusEnumLabelsProp}${showDetailFooterTotalsProp}${labelOverridesProp}${lineConfigProp}${linesLayoutProp}${balanceFooterProp}${sendDocumentDetailProp}
+        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${customLinesProp}${primaryTabsProp}${othersLabelProp}${documentPreviewProp}${hideDeleteProp}${saveCurrencyBeforeLinesProp}${customTabsAfterBottomProp}${hidePrintProp}${hideSaveStatusesProp}${hideMoreMenuProp}${hideMoreDetailsProp}${noHeaderBorderProp}${toolbarBorderBottomProp}${compactSidebarPaddingProp}${whiteFormBackgroundProp}${autoSaveOnBlurProp}${hideFormCardProp}${sidebarAboveTabsOnlyProp}${sidebarClassNameProp}${tabsBarPaddingXProp}${primaryTabsVariantProp}${toolbarPaddingXProp}${toolbarButtonSizeProp}${contentBgProp}${formCardPaddingProp}${formScrollPaddingXProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${requiredHeaderFieldsProp}${addLineGuardProp}${headerContentProp}${detailSortByProp}${titleFieldProp}${salesThemeProp}${disableProcessedLockProp}${statusEnumLabelsProp}${showDetailFooterTotalsProp}${labelOverridesProp}${lineConfigProp}${linesLayoutProp}${balanceFooterProp}${sendDocumentDetailProp}
         {...props}${sidebarContentProp}
       />${confirmModalName ? `
       {showConfirmModal && (

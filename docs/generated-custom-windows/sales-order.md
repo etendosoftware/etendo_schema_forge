@@ -143,3 +143,62 @@ Schema Forge extracts from AD, that column surfaces in this window's contract as
 frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
 this note only records why the contract was regenerated when the PSD2 dependency
 was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## Dual-currency display — ETP-4027
+
+### Overview
+
+When a sales order is denominated in a currency different from the organization's functional currency (the "org currency"), the preview panel and `SummaryCard` show both amounts side-by-side in a Holded-style layout. When both currencies are the same this section is inactive and rendering is unchanged.
+
+### How it works
+
+1. `OrderPreview.jsx` calls `useDocumentCurrency` (shared hook at `tools/app-shell/src/windows/custom/shared/useDocumentCurrency.js`) with three inputs:
+   - `docCurrencyCode` — the ISO 4217 code of the order currency, taken from `order['currency$_identifier']` (e.g. `"USD"`).
+   - `orderDate` — the order's ISO date string, used to resolve the exchange rate for that day.
+   - `apiBaseUrl` / `token` — for authentication.
+
+2. The hook makes two sequential requests:
+   - `GET /sws/neo/session` — returns `{ currencyCode: "EUR", ... }` with the org's functional currency code.
+   - `GET /sws/neo/validate-exchange-rate?fromCurrency={docCurrency}&toCurrency={orgCurrency}&date={orderDate}` — returns `{ hasRate: true, rate: 1.09 }` or `{ hasRate: false }`.
+
+3. The hook returns `{ orgCurrencyCode, exchangeRate, isSameCurrency, loading, convertAmount }`. `convertAmount(amount)` applies Etendo's `multiplyrate` convention: `to_amount = from_amount × rate`. When currencies are the same, `convertAmount` returns the amount unchanged.
+
+4. `OrderPreview` pre-computes `orgGrandTotal = convertAmount(order.grandTotalAmount)` and passes `orgCurrencyCode`, `exchangeRate`, and `orgGrandTotal` through `OrderGeneralTab` into `SummaryCard`.
+
+5. `SummaryCard` renders the dual-currency block when `orgCurrencyCode` is set and differs from `currencyCode`:
+   - **Primary row** (card header): org-currency amount with the document currency shown as a badge, e.g. `261.81 €  [USD]`.
+   - **Secondary row** (below the header): exchange rate in parentheses followed by the document-currency amount, e.g. `(1.1647) $304.92`.
+
+### Exchange rate endpoint — `NeoExchangeRateService`
+
+`GET /sws/neo/validate-exchange-rate` is implemented in `NeoExchangeRateService.java` (com.etendoerp.go). It queries `C_Conversion_Rate` for the most recent active row whose `VALIDFROM ≤ date ≤ VALIDTO` (or open-ended). Parameters:
+
+| Parameter | Required | Format |
+|---|---|---|
+| `fromCurrency` | yes | ISO 4217 code (`"USD"`) or DB record ID |
+| `toCurrency` | yes | ISO 4217 code (`"EUR"`) or DB record ID |
+| `date` | yes | `YYYY-MM-DD` |
+
+The endpoint first tries the direct `FROM→TO` direction. If no row is found, it tries the inverse `TO→FROM` direction and returns `1/rate`. This means configuring only one direction in Etendo's currency conversion setup is sufficient — both `USD→EUR` and `EUR→USD` resolve from a single row. Scoping is client + org (org-level rows take priority over `AD_Org_ID = '0'` rows).
+
+**multiplyrate convention:** Etendo stores `multiplyrate` such that `to_amount = from_amount × multiplyrate`. The endpoint returns this value directly; the inverse fallback already applies the `1/rate` division before returning.
+
+**Same-currency short-circuit:** when `fromCurrencyId == toCurrencyId`, the endpoint skips the DB query and returns `{ hasRate: true, rate: 1.0 }` immediately.
+
+### Currency field lock
+
+The `currency` field on the header form is locked (rendered as readOnly) whenever the order already has saved lines (`hook.children.length > 0`). This is enforced in `DetailView.jsx` via `displayLogicWithCurrencyLock`, a `useMemo` that spreads `displayLogic` and overrides `currency: true` in the `readOnly` map when lines exist.
+
+The reason is the DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` on the `C_ORDER` table. The trigger blocks changes to `C_Currency_ID` when `C_ORDERLINE` rows already reference that order, returning error code `@20502@`. Without the lock, a user saving a currency change after adding lines would receive an unrecoverable 500 error.
+
+The lock is intentionally applied to **both** the `principal` form section (where `currency` is rendered) and the `collapsed` section, so there is no path through the UI that allows editing the field while lines exist.
+
+**Save-order guard for the edge case:** when a user changes currency on an order that has a pending (not yet saved) add-row but zero committed lines, `DetailView` inverts the normal save order: it commits the header currency first (no lines in the DB → trigger is silent), then saves the pending line. This narrow case is handled by `flushAndSave` and is the only exception to the default "flush lines → save header" order.
+
+### Automated evidence
+
+- `tools/app-shell/src/windows/custom/shared/useDocumentCurrency.js` — the shared hook.
+- `tools/app-shell/src/windows/custom/shared/preview-cards/SummaryCard.jsx` — dual-currency rendering logic (props: `orgCurrencyCode`, `exchangeRate`, `orgGrandTotal`).
+- `tools/app-shell/src/windows/custom/shared/OrderPreview.jsx` — calls the hook, threads data to `OrderGeneralTab`.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `displayLogicWithCurrencyLock` memo and `flushAndSave` save-order guard.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoExchangeRateService.java` — the exchange rate endpoint.

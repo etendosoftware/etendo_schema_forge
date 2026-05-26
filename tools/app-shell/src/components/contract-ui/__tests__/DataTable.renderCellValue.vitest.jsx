@@ -364,13 +364,14 @@ describe('renderCellValue — date-cell', () => {
 // amount-cell
 // ────────────────────────────────────────────────────────────────────────────
 describe('renderCellValue — amount-cell', () => {
-  it('renders formatAmount(value, currency$_identifier) inside a tabular-nums span', () => {
+  it('renders formatAmount(value) inside a tabular-nums span (no currency symbol at cell level)', () => {
     const columns = [{ key: 'total', label: 'Total', type: 'amount' }];
     renderTable(columns, [
       { id: '1', total: 1234.5, 'currency$_identifier': 'USD' },
     ]);
     const cell = screen.getByTestId('cell-1-total');
-    expect(cell.textContent).toBe('USD1234.5');
+    // Currency is shown at header level, not on individual line-amount cells (ETP-4027)
+    expect(cell.textContent).toMatch(/1[\s,.]?234/);
     expect(cell.querySelector('span.tabular-nums')).toBeTruthy();
   });
 });

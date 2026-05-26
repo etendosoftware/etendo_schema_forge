@@ -135,13 +135,17 @@
           "visibility": "discarded"
         },
         "priceList": {
-          "section": "principal"
+          "section": "principal",
+          "order": 11
         },
         "currency": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": false,
-          "form": false,
-          "section": "summary"
+          "form": true,
+          "section": "principal",
+          "order": 10,
+          "readOnlyLogic": "@Processed@='Y'",
+          "derivation": null
         },
         "paymentTerms": {
           "section": "principal"

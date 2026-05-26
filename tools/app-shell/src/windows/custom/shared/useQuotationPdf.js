@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useUI } from '@/i18n';
 import {
   fetchJson,
@@ -14,7 +15,7 @@ import {
 // ---------------------------------------------------------------------------
 // Build quotation data for the template
 // ---------------------------------------------------------------------------
-async function buildQuotationData(quotationId, base, token) {
+async function buildQuotationData(quotationId, base, token, currencyData = null) {
   const [header, linesRaw, session] = await Promise.all([
     fetchJson(`${base}/sales-quotation/quotation/${quotationId}`, token),
     fetchAll(`${base}/sales-quotation/quotationLine?parentId=${quotationId}`, token),
@@ -66,13 +67,18 @@ async function buildQuotationData(quotationId, base, token) {
     discountPerProduct: discountPerProduct > 0 ? discountPerProduct : null,
     etgoTotalDiscount:  etgoTotalDiscount > 0 ? etgoTotalDiscount : null,
     totalDiscountAmt:   totalDiscountAmt > 0 ? totalDiscountAmt : null,
+    exchangeRate: currencyData?.exchangeRate ?? null,
+    orgCurrencyCode: currencyData?.orgCurrencyCode ?? null,
+    orgGrandTotal: (currencyData?.exchangeRate && currencyData?.exchangeRate !== 1)
+      ? Number(grandTotal) / currencyData.exchangeRate
+      : null,
   };
 }
 
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
-export function useQuotationPdf(quotationId, apiBaseUrl, token) {
+export function useQuotationPdf(quotationId, apiBaseUrl, token, currencyData = null) {
   const ui = useUI();
   const labels = buildDocumentPdfLabels(ui, {
     title:           ui('quotationPdfTitle'),
@@ -82,5 +88,10 @@ export function useQuotationPdf(quotationId, apiBaseUrl, token) {
     validUntil:      ui('quotationPdfValidUntil'),
     colQty:          ui('quotationPdfColQty'),
   });
-  return useDocumentPdf(quotationId, apiBaseUrl, token, buildQuotationData, labels);
+  const buildData = useCallback(
+    (recordId, base, tk) => buildQuotationData(recordId, base, tk, currencyData),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
+  );
+  return useDocumentPdf(quotationId, apiBaseUrl, token, buildData, labels);
 }

@@ -14,11 +14,18 @@ export function CardShell({ children }) {
   );
 }
 
-function CardHeader({ title, amount }) {
+function CardHeader({ title, amount, badge }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
       <span className="font-bold text-gray-900 text-sm">{title}</span>
-      <span className="font-bold text-base tabular-nums text-gray-900">{amount}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="font-bold text-base tabular-nums text-gray-900">{amount}</span>
+        {badge && (
+          <span className="text-[11px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+            {badge}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -90,17 +97,20 @@ export function MovementSummaryCard({ title, rows, statusRowLabel, statusLabel, 
  * SummaryCard — top card shown in all preview right panels.
  *
  * Props:
- *   currencyCode   string   — e.g. "EUR"
- *   grandTotal     number
- *   contact        string   — business partner name
- *   date           string   — ISO date string or formatted string
- *   statusCode     string   — raw doc status code (e.g. "CO", "DR")
- *   statusLabel    string   — human-readable label (e.g. "Completado")
- *   validUntil     string?  — ISO date, shown only when truthy (quotations)
- *   dueDate        string?  — ISO date, shown between Date and Status when provided (invoices)
- *   invoicePercent number?  — 0-100, shows "X%" row when provided (orders)
- *   deliveryPercent number? — 0-100, shows "X%" row when provided (orders)
- *   children       node?    — extra InfoRow(s) appended after standard rows
+ *   currencyCode    string   — e.g. "EUR"
+ *   grandTotal      number
+ *   contact         string   — business partner name
+ *   date            string   — ISO date string or formatted string
+ *   statusCode      string   — raw doc status code (e.g. "CO", "DR")
+ *   statusLabel     string   — human-readable label (e.g. "Completado")
+ *   validUntil      string?  — ISO date, shown only when truthy (quotations)
+ *   dueDate         string?  — ISO date, shown between Date and Status when provided (invoices)
+ *   invoicePercent  number?  — 0-100, shows "X%" row when provided (orders)
+ *   deliveryPercent number?  — 0-100, shows "X%" row when provided (orders)
+ *   orgCurrencyCode string?  — e.g. "EUR". Shown below grand total when different from currencyCode.
+ *   exchangeRate    number?  — e.g. 1.09. Shown as rate note next to orgGrandTotal.
+ *   orgGrandTotal   number?  — pre-computed equivalent in org currency. Shown below grand total.
+ *   children        node?    — extra InfoRow(s) appended after standard rows
  */
 export default function SummaryCard({
   currencyCode = '',
@@ -113,6 +123,9 @@ export default function SummaryCard({
   dueDate,
   invoicePercent,
   deliveryPercent,
+  orgCurrencyCode,
+  exchangeRate,
+  orgGrandTotal,
   children,
 }) {
   const ui = useUI();
@@ -121,14 +134,31 @@ export default function SummaryCard({
   const formattedDate = date ? formatCalendarDate(date, locale) : '—';
   const formattedValidUntil = validUntil ? formatCalendarDate(validUntil, locale) : null;
   const formattedDueDate = dueDate ? formatCalendarDate(dueDate, locale) : null;
-  const amountStr = `${currencyCode} ${formatAmount(grandTotal ?? 0)}`;
+
+  // Dual-currency display (Holded-style):
+  //   primary  = org-currency amount + doc-currency badge   e.g. "261.81 €  [USD]"
+  //   secondary = (rate) doc-currency amount                e.g. "(1.1647) $304.92"
+  // When currencies are the same: primary = doc-currency amount, no secondary.
+  const showOrgTotal = orgCurrencyCode && orgCurrencyCode !== currencyCode && orgGrandTotal != null;
+  const primaryAmount = showOrgTotal
+    ? formatAmount(orgGrandTotal, orgCurrencyCode)
+    : formatAmount(grandTotal ?? 0, currencyCode || undefined);
+  const docAmountStr = showOrgTotal
+    ? formatAmount(grandTotal ?? 0, currencyCode || undefined)
+    : null;
+  const rateNote = showOrgTotal && exchangeRate
+    ? `(${exchangeRate.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })})`
+    : null;
 
   return (
     <CardShell data-testid="CardShell__a696d7">
-      <CardHeader
-        title={ui('previewCardTotal')}
-        amount={amountStr}
-        data-testid="CardHeader__a696d7" />
+      <CardHeader title={ui('previewCardTotal')} amount={primaryAmount} badge={showOrgTotal ? currencyCode : null} data-testid="CardHeader__a696d7" />
+      {showOrgTotal && (
+        <div className="flex items-center justify-end gap-1.5 px-4 pb-1 text-xs text-gray-400 tabular-nums">
+          {rateNote && <span>{rateNote}</span>}
+          {docAmountStr && <span>{docAmountStr}</span>}
+        </div>
+      )}
       <div className="px-4 py-2">
         <InfoRow
           label={ui('previewCardContact')}

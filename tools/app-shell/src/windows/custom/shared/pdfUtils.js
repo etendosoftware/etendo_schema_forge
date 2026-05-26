@@ -82,6 +82,12 @@ function fmtDate(v) {
   return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
 }
 function ifEq(a, b, opts) { return a === b ? opts.fn(this) : opts.inverse(this); }
+function fmtRate(v) {
+  if (v == null || v === '') return '';
+  var n = Number(v);
+  if (isNaN(n)) return '';
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n);
+}
 `;
 
 // Return-doc helpers: adds fmt() (3-decimal number formatter) to the common set
@@ -117,6 +123,15 @@ export async function fetchAll(url, token) {
 
 export async function fetchOptionalJson(url, token) {
   try { return await fetchJson(url, token); } catch { return null; }
+}
+
+export async function fetchExchangeRate(fromCurrencyId, toCurrencyId, date, base, token) {
+  if (!fromCurrencyId || !toCurrencyId || !date) return null;
+  if (fromCurrencyId === toCurrencyId) return null;
+  return fetchOptionalJson(
+    `${base}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrencyId)}&toCurrency=${encodeURIComponent(toCurrencyId)}&date=${encodeURIComponent(date)}`,
+    token,
+  );
 }
 
 export async function fetchLocationAddress(locationId, base, token) {

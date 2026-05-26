@@ -4,6 +4,7 @@ import { statusLabel as resolveStatusLabel } from '@/lib/statusBadge.js';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useQuotationPdf } from './useQuotationPdf.js';
+import { useDocumentCurrency } from './useDocumentCurrency.js';
 import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from './PreviewActionButtons.jsx';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
@@ -20,7 +21,7 @@ const QUOTATION_SPECS = [
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl }) {
+function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal }) {
   const ui = useUI();
   const statusCode = quotation.documentStatus;
   const statusLabel = resolveStatusLabel(statusCode, null, ui);
@@ -35,6 +36,9 @@ function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl }) {
         statusCode={statusCode}
         statusLabel={statusLabel}
         validUntil={quotation.validUntil || null}
+        orgCurrencyCode={orgCurrencyCode}
+        exchangeRate={exchangeRate}
+        orgGrandTotal={orgGrandTotal}
         data-testid="SummaryCard__7eb018" />
       <EmailsCard onSend={onSend} data-testid="EmailsCard__7eb018" />
       <RelatedDocumentsCard
@@ -56,10 +60,21 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
 
+  // Dual-currency: fetch exchange rate when doc currency differs from org currency
+  const { orgCurrencyCode, exchangeRate, convertAmount } = useDocumentCurrency({
+    docCurrencyId: quotation?.['currency$_identifier'],
+    orderDate: quotation?.orderDate,
+    apiBaseUrl,
+    token,
+  });
+  const orgGrandTotal = convertAmount(quotation?.grandTotalAmount);
+  const currencyData = { orgCurrencyCode, exchangeRate };
+
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useQuotationPdf(
     quotation?.id,
     apiBaseUrl,
     token,
+    currencyData,
   );
 
   if (!quotation) return null;
@@ -126,6 +141,9 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         onSend={openEmailModal}
         token={token}
         apiBaseUrl={apiBaseUrl}
+        orgCurrencyCode={orgCurrencyCode}
+        exchangeRate={exchangeRate}
+        orgGrandTotal={orgGrandTotal}
         data-testid="QuotationGeneralTab__7eb018" />,
     },
     {

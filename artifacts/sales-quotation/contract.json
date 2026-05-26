@@ -1,8 +1,8 @@
 {
   "version": "0.9.0",
   "generatedAt": "2026-04-30T15:42:46.907Z",
-  "updatedAt": "2026-06-11T12:55:37.110Z",
-  "checksum": "74aa9c0b783dc07a",
+  "updatedAt": "2026-05-21T15:28:23.769Z",
+  "checksum": "e7fabe40e4a2fb99",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -440,19 +440,20 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.cCurrencyId"
-            },
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
-            "section": "summary"
+            "section": "principal",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
           },
           {
             "name": "description",
@@ -534,13 +535,6 @@
             "derivation": {
               "type": "computed",
               "source": "DR"
-            }
-          },
-          {
-            "name": "currency",
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.cCurrencyId"
             }
           },
           {
@@ -966,14 +960,6 @@
             "required": true
           },
           {
-            "name": "rMPickFromShipment",
-            "apiKey": "rMPickFromShipment",
-            "column": "RM_PickFromShipment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "partnerAddress",
             "apiKey": "partnerAddress",
             "column": "C_BPartner_Location_ID",
@@ -982,19 +968,19 @@
             "required": true
           },
           {
+            "name": "rMPickFromShipment",
+            "apiKey": "rMPickFromShipment",
+            "column": "RM_PickFromShipment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
             "name": "priceList",
             "apiKey": "priceList",
             "column": "M_PriceList_ID",
             "type": "foreignKey",
             "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "scheduledDeliveryDate",
-            "apiKey": "scheduledDeliveryDate",
-            "column": "DatePromised",
-            "type": "date",
-            "visibility": "discarded",
             "required": true
           },
           {
@@ -1012,6 +998,14 @@
             "type": "date",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "scheduledDeliveryDate",
+            "apiKey": "scheduledDeliveryDate",
+            "column": "DatePromised",
+            "type": "date",
+            "visibility": "discarded",
+            "required": true
           },
           {
             "name": "paymentMethod",
@@ -1090,7 +1084,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1270,19 +1264,19 @@
             "required": false
           },
           {
-            "name": "project",
-            "apiKey": "project",
-            "column": "C_Project_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "activity",
             "apiKey": "activity",
             "column": "C_Activity_ID",
             "type": "foreignKey",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1326,42 +1320,34 @@
             "required": false
           },
           {
-            "name": "iNCOTERMSDescription",
-            "apiKey": "iNCOTERMSDescription",
-            "column": "Incotermsdescription",
-            "type": "text",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "selected",
-            "apiKey": "selected",
-            "column": "IsSelected",
+            "name": "salesTransaction",
+            "apiKey": "salesTransaction",
+            "column": "IsSOTrx",
             "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "dropShipContact",
-            "apiKey": "dropShipContact",
-            "column": "DropShip_User_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
+            "name": "reinvoice",
+            "apiKey": "reinvoice",
+            "column": "IsInvoiced",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "processNow",
-            "apiKey": "processNow",
-            "column": "Processing",
+            "name": "generateTemplate",
+            "apiKey": "generateTemplate",
+            "column": "Generatetemplate",
             "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "datePrinted",
+            "apiKey": "datePrinted",
+            "column": "DatePrinted",
+            "type": "date",
             "visibility": "system",
             "required": false
           },
@@ -1374,28 +1360,36 @@
             "required": true
           },
           {
-            "name": "datePrinted",
-            "apiKey": "datePrinted",
-            "column": "DatePrinted",
-            "type": "date",
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
             "visibility": "system",
             "required": false
           },
           {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
+            "name": "formOfPayment",
+            "apiKey": "formOfPayment",
+            "column": "PaymentRule",
+            "type": "enum",
             "visibility": "discarded",
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Order_ID",
-            "type": "id",
+            "name": "selfService",
+            "apiKey": "selfService",
+            "column": "IsSelfService",
+            "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "deliveryNotes",
+            "apiKey": "deliveryNotes",
+            "column": "Deliverynotes",
+            "type": "text",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "posted",
@@ -1406,12 +1400,76 @@
             "required": true
           },
           {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "dropShipContact",
+            "apiKey": "dropShipContact",
+            "column": "DropShip_User_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "selected",
+            "apiKey": "selected",
+            "column": "IsSelected",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "iNCOTERMSDescription",
+            "apiKey": "iNCOTERMSDescription",
+            "column": "Incotermsdescription",
+            "type": "text",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "dropShipLocation",
+            "apiKey": "dropShipLocation",
+            "column": "DropShip_Location_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "incoterms",
+            "apiKey": "incoterms",
+            "column": "C_Incoterms_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Order_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "dropShipPartner",
             "apiKey": "dropShipPartner",
             "column": "DropShip_BPartner_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
           },
           {
             "name": "priceIncludesTax",
@@ -1430,27 +1488,11 @@
             "required": true
           },
           {
-            "name": "dropShipLocation",
-            "apiKey": "dropShipLocation",
-            "column": "DropShip_Location_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "reinvoice",
-            "apiKey": "reinvoice",
-            "column": "IsInvoiced",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "salesTransaction",
-            "apiKey": "salesTransaction",
-            "column": "IsSOTrx",
-            "type": "boolean",
-            "visibility": "system",
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "type": "date",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -1460,54 +1502,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "accountingDate",
-            "apiKey": "accountingDate",
-            "column": "DateAcct",
-            "type": "date",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "deliveryNotes",
-            "apiKey": "deliveryNotes",
-            "column": "Deliverynotes",
-            "type": "text",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "selfService",
-            "apiKey": "selfService",
-            "column": "IsSelfService",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "formOfPayment",
-            "apiKey": "formOfPayment",
-            "column": "PaymentRule",
-            "type": "enum",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "generateTemplate",
-            "apiKey": "generateTemplate",
-            "column": "Generatetemplate",
-            "type": "button",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "incoterms",
-            "apiKey": "incoterms",
-            "column": "C_Incoterms_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "asset",
@@ -1523,6 +1517,14 @@
             "column": "BPartner_ExtRef",
             "type": "string",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "costcenter",
+            "apiKey": "costcenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -1542,17 +1544,17 @@
             "required": false
           },
           {
-            "name": "costcenter",
-            "apiKey": "costcenter",
-            "column": "C_Costcenter_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "confirmcancelandreplace",
             "apiKey": "confirmcancelandreplace",
             "column": "Confirmcancelandreplace",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "createPOLines",
+            "apiKey": "createPOLines",
+            "column": "Create_POLines",
             "type": "button",
             "visibility": "system",
             "required": false
@@ -1572,14 +1574,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "createPOLines",
-            "apiKey": "createPOLines",
-            "column": "Create_POLines",
-            "type": "button",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "deliveryStatus",
@@ -1724,14 +1718,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "psd2GenerateBankPayment",
-            "apiKey": "psd2GenerateBankPayment",
-            "column": "EM_Psd2_Generate_Bank_Payment",
-            "type": "button",
-            "visibility": "system",
-            "required": false
           }
         ],
         "javaQualifier": "salesQuotationHeaderHandler"
@@ -1838,20 +1824,20 @@
             "required": false
           },
           {
-            "name": "uOM",
-            "apiKey": "uOM",
-            "column": "C_UOM_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "cReturnReasonID",
             "apiKey": "cReturnReasonID",
             "column": "C_Return_Reason_ID",
             "type": "foreignKey",
             "visibility": "discarded",
             "required": false
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
           },
           {
             "name": "unitPrice",
@@ -2054,6 +2040,14 @@
             "required": false
           },
           {
+            "name": "invoiceDate",
+            "apiKey": "invoiceDate",
+            "column": "DateInvoiced",
+            "type": "date",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "descriptionOnly",
             "apiKey": "descriptionOnly",
             "column": "IsDescription",
@@ -2174,14 +2168,6 @@
             "required": true
           },
           {
-            "name": "invoiceDate",
-            "apiKey": "invoiceDate",
-            "column": "DateInvoiced",
-            "type": "date",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "asset",
             "apiKey": "asset",
             "column": "A_Asset_ID",
@@ -2206,6 +2192,14 @@
             "required": false
           },
           {
+            "name": "createReservation",
+            "apiKey": "createReservation",
+            "column": "Create_Reservation",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -2222,19 +2216,19 @@
             "required": true
           },
           {
-            "name": "createReservation",
-            "apiKey": "createReservation",
-            "column": "Create_Reservation",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "explode",
             "apiKey": "explode",
             "column": "Explode",
             "type": "button",
             "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "warehouseRule",
+            "apiKey": "warehouseRule",
+            "column": "M_Warehouse_Rule_ID",
+            "type": "foreignKey",
+            "visibility": "system",
             "required": false
           },
           {
@@ -2250,14 +2244,6 @@
             "apiKey": "manageReservation",
             "column": "Manage_Reservation",
             "type": "button",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "warehouseRule",
-            "apiKey": "warehouseRule",
-            "column": "M_Warehouse_Rule_ID",
-            "type": "foreignKey",
             "visibility": "system",
             "required": false
           },
@@ -2459,16 +2445,7 @@
         "column": "C_BPartner_Location_ID",
         "reference": "BusinessPartnerLocation",
         "inputMode": "dependent",
-        "url": "/sws/neo/sales-quotation/quotation/selectors/partnerAddress",
-        "context": {
-          "required": [
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
+        "url": "/sws/neo/sales-quotation/quotation/selectors/partnerAddress"
       },
       {
         "entity": "quotation",
@@ -2476,15 +2453,7 @@
         "column": "M_PriceList_ID",
         "reference": "PriceList",
         "inputMode": "selector",
-        "url": "/sws/neo/sales-quotation/quotation/selectors/priceList",
-        "context": {
-          "required": [
-            {
-              "param": "isSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
+        "url": "/sws/neo/sales-quotation/quotation/selectors/priceList"
       },
       {
         "entity": "quotation",
@@ -2492,15 +2461,7 @@
         "column": "FIN_Paymentmethod_ID",
         "reference": "Paymentmethod",
         "inputMode": "selector",
-        "url": "/sws/neo/sales-quotation/quotation/selectors/paymentMethod",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
+        "url": "/sws/neo/sales-quotation/quotation/selectors/paymentMethod"
       },
       {
         "entity": "quotation",
@@ -2540,21 +2501,7 @@
         "column": "C_Tax_ID",
         "reference": "Tax",
         "inputMode": "selector",
-        "url": "/sws/neo/sales-quotation/quotationLine/selectors/tax",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "DateInvoiced",
-              "source": "parentField",
-              "field": "orderDate",
-              "format": "DD-MM-YYYY"
-            }
-          ]
-        }
+        "url": "/sws/neo/sales-quotation/quotationLine/selectors/tax"
       }
     ],
     "actions": [
@@ -2622,6 +2569,14 @@
       },
       {
         "entity": "quotation",
+        "field": "generateTemplate",
+        "column": "Generatetemplate",
+        "url": "/sws/neo/sales-quotation/quotation/{id}/action/generateTemplate",
+        "processId": "800022",
+        "processType": "classic"
+      },
+      {
+        "entity": "quotation",
         "field": "processNow",
         "column": "Processing",
         "url": "/sws/neo/sales-quotation/quotation/{id}/action/processNow",
@@ -2635,14 +2590,6 @@
         "url": "/sws/neo/sales-quotation/quotation/{id}/action/posted",
         "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
-      },
-      {
-        "entity": "quotation",
-        "field": "generateTemplate",
-        "column": "Generatetemplate",
-        "url": "/sws/neo/sales-quotation/quotation/{id}/action/generateTemplate",
-        "processId": "800022",
-        "processType": "classic"
       },
       {
         "entity": "quotation",
@@ -2690,14 +2637,6 @@
         "column": "RM_Pickfromreceipt",
         "url": "/sws/neo/sales-quotation/quotation/{id}/action/rMPickfromreceipt",
         "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "quotation",
-        "field": "psd2GenerateBankPayment",
-        "column": "EM_Psd2_Generate_Bank_Payment",
-        "url": "/sws/neo/sales-quotation/quotation/{id}/action/psd2GenerateBankPayment",
-        "processId": "0661406A983B4D8EA611F8596F114D52",
         "processType": "obuiapp"
       },
       {
@@ -2859,14 +2798,6 @@
         "field": "processNow",
         "runner": "node",
         "description": "Action endpoint for 'processNow' in quotation should exist"
-      },
-      {
-        "id": "t-action-endpoint-quotation-psd2GenerateBankPayment",
-        "category": "action-endpoint",
-        "entity": "quotation",
-        "field": "psd2GenerateBankPayment",
-        "runner": "node",
-        "description": "Action endpoint for 'psd2GenerateBankPayment' in quotation should exist"
       },
       {
         "id": "t-action-endpoint-quotation-rMAddOrphanLine",
@@ -3467,6 +3398,14 @@
         "description": "Read-only logic for 'businessPartner' in quotation should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-quotation-currency",
+        "category": "readonlylogic-evaluable",
+        "entity": "quotation",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in quotation should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-quotation-description",
         "category": "readonlylogic-evaluable",
         "entity": "quotation",
@@ -3601,6 +3540,14 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Read-only logic for 'businessPartner' in quotation should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-quotation-currency",
+        "category": "readonlylogic-valid",
+        "entity": "quotation",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in quotation should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-quotation-description",
@@ -4395,14 +4342,6 @@
         "description": "System field 'project' should exist in backend but not frontend for quotation"
       },
       {
-        "id": "t-system-field-quotation-psd2GenerateBankPayment",
-        "category": "system-field",
-        "entity": "quotation",
-        "field": "psd2GenerateBankPayment",
-        "runner": "node",
-        "description": "System field 'psd2GenerateBankPayment' should exist in backend but not frontend for quotation"
-      },
-      {
         "id": "t-system-field-quotation-quotation",
         "category": "system-field",
         "entity": "quotation",
@@ -5132,19 +5071,19 @@
     "summary": {
       "total": 297,
       "byCategory": {
-        "action-endpoint": 22,
+        "action-endpoint": 21,
         "crud-flags": 2,
         "default-value-type": 7,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
         "field-presence": 25,
         "field-type": 25,
-        "readonlylogic-evaluable": 17,
-        "readonlylogic-valid": 17,
+        "readonlylogic-evaluable": 18,
+        "readonlylogic-valid": 18,
         "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 9,
-        "system-field": 151,
+        "system-field": 150,
         "visibility": 2
       },
       "byRunner": {

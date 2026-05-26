@@ -1301,7 +1301,6 @@
     "to": "0.20.0",
     "level": "additive",
     "reasons": [
-      "Field \"tax\" property \"inputMode\" changed from \"selector\" to \"search\" in frontend (additive)",
       "Field \"orderedQuantity\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)",
       "Field \"listPrice\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)",
       "Field \"discount\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)"
@@ -1314,7 +1313,6 @@
     "to": "0.20.0",
     "level": "additive",
     "reasons": [
-      "Field \"tax\" property \"inputMode\" changed from \"search\" to \"selector\" in frontend (additive)",
       "Field \"orderedQuantity\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)",
       "Field \"listPrice\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)",
       "Field \"discount\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)"
@@ -1327,9 +1325,16 @@
     "to": "0.21.0",
     "level": "additive",
     "reasons": [
-      "Field \"psd2GenerateBankPayment\" added to entity \"header\" in backend"
+      "Field \"currency\" property \"visibility\" changed from \"readOnly\" to \"editable\" in frontend (patch)",
+      "Field \"currency\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"currency\" property \"derivation\" changed from \"[object Object]\" to \"undefined\" in frontend (additive)",
+      "Field \"currency\" property \"section\" changed from \"other\" to \"principal\" in frontend (additive)",
+      "Field \"currency\" property \"reference\" changed from \"undefined\" to \"Currency\" in frontend (additive)",
+      "Field \"currency\" property \"inputMode\" changed from \"undefined\" to \"selector\" in frontend (additive)",
+      "Field \"currency\" property \"readOnlyLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"currency\" property \"visibility\" changed from \"readOnly\" to \"editable\" in backend (patch)"
     ],
     "author": "pipeline",
-    "date": "2026-06-11"
+    "date": "2026-05-21"
   }
 ]

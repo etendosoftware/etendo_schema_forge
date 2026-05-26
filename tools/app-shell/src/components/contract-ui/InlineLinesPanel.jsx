@@ -132,7 +132,8 @@ function ReadCell({ row, col, locale, t, ui }) {
     return col.render(row, {});
   }
   if (col.type === 'amount') {
-    return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
+    // No currency symbol on line-level cells — the currency is shown at the header level.
+    return <span className="tabular-nums">{formatAmount(row[col.key])}</span>;
   }
   if (col.type === 'percent') {
     const val = Number(row[col.key]);

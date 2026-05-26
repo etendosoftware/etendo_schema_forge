@@ -453,17 +453,20 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.cCurrencyId"
-            },
+            "reference": "Currency",
+            "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
-            "section": "other"
+            "section": "principal",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
           },
           {
             "name": "deliveryNotes",
@@ -1030,13 +1033,6 @@
             "derivation": {
               "type": "computed",
               "source": "DR"
-            }
-          },
-          {
-            "name": "currency",
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.cCurrencyId"
             }
           },
           {
@@ -2470,7 +2466,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -3120,14 +3116,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "psd2GenerateBankPayment",
-            "apiKey": "psd2GenerateBankPayment",
-            "column": "EM_Psd2_Generate_Bank_Payment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": false
           }
         ],
         "javaQualifier": "purchaseOrderHeaderHandler"
@@ -4555,31 +4543,14 @@
         "column": "C_BPartner_Location_ID",
         "reference": "BusinessPartnerLocation",
         "inputMode": "dependent",
-        "url": "/sws/neo/purchase-order/header/selectors/partnerAddress",
-        "context": {
-          "required": [
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
+        "url": "/sws/neo/purchase-order/header/selectors/partnerAddress"
       },
       {
         "entity": "header",
         "field": "transactionDocument",
         "column": "C_DocTypeTarget_ID",
         "reference": "DocumentType",
-        "url": "/sws/neo/purchase-order/header/selectors/transactionDocument",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
+        "url": "/sws/neo/purchase-order/header/selectors/transactionDocument"
       },
       {
         "entity": "header",
@@ -4595,15 +4566,7 @@
         "column": "FIN_Paymentmethod_ID",
         "reference": "PaymentMethod",
         "inputMode": "selector",
-        "url": "/sws/neo/purchase-order/header/selectors/paymentMethod",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
+        "url": "/sws/neo/purchase-order/header/selectors/paymentMethod"
       },
       {
         "entity": "header",
@@ -4619,20 +4582,14 @@
         "column": "M_PriceList_ID",
         "reference": "PriceList",
         "inputMode": "selector",
-        "url": "/sws/neo/purchase-order/header/selectors/priceList",
-        "context": {
-          "required": [
-            {
-              "param": "isSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
+        "url": "/sws/neo/purchase-order/header/selectors/priceList"
       },
       {
         "entity": "header",
         "field": "currency",
         "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
         "url": "/sws/neo/purchase-order/header/selectors/currency"
       },
       {
@@ -4647,16 +4604,7 @@
         "column": "BillTo_ID",
         "reference": "BusinessPartnerLocation",
         "inputMode": "dependent",
-        "url": "/sws/neo/purchase-order/header/selectors/invoiceFrom",
-        "context": {
-          "required": [
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
+        "url": "/sws/neo/purchase-order/header/selectors/invoiceFrom"
       },
       {
         "entity": "header",
@@ -4683,20 +4631,7 @@
         "column": "C_Project_ID",
         "reference": "Project",
         "inputMode": "search",
-        "url": "/sws/neo/purchase-order/header/selectors/project",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
+        "url": "/sws/neo/purchase-order/header/selectors/project"
       },
       {
         "entity": "header",
@@ -4744,21 +4679,7 @@
         "column": "C_Tax_ID",
         "reference": "Tax",
         "inputMode": "selector",
-        "url": "/sws/neo/purchase-order/lines/selectors/tax",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "DateInvoiced",
-              "source": "parentField",
-              "field": "orderDate",
-              "format": "DD-MM-YYYY"
-            }
-          ]
-        }
+        "url": "/sws/neo/purchase-order/lines/selectors/tax"
       },
       {
         "entity": "lines",
@@ -4766,20 +4687,7 @@
         "column": "C_Aum",
         "reference": "UOM",
         "inputMode": "selector",
-        "url": "/sws/neo/purchase-order/lines/selectors/operativeUOM",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "M_Product_ID",
-              "source": "field",
-              "field": "product"
-            }
-          ]
-        }
+        "url": "/sws/neo/purchase-order/lines/selectors/operativeUOM"
       },
       {
         "entity": "lines",
@@ -4807,16 +4715,7 @@
         "field": "partnerAddress",
         "column": "C_BPartner_Location_ID",
         "reference": "BusinessPartnerLocation",
-        "url": "/sws/neo/purchase-order/lines/selectors/partnerAddress",
-        "context": {
-          "required": [
-            {
-              "param": "C_BPartner_ID",
-              "source": "parentField",
-              "field": "businessPartner"
-            }
-          ]
-        }
+        "url": "/sws/neo/purchase-order/lines/selectors/partnerAddress"
       },
       {
         "entity": "lines",
@@ -5051,14 +4950,6 @@
         "processType": "obuiapp"
       },
       {
-        "entity": "header",
-        "field": "psd2GenerateBankPayment",
-        "column": "EM_Psd2_Generate_Bank_Payment",
-        "url": "/sws/neo/purchase-order/header/{id}/action/psd2GenerateBankPayment",
-        "processId": "0661406A983B4D8EA611F8596F114D52",
-        "processType": "obuiapp"
-      },
-      {
         "entity": "lines",
         "field": "managePrereservation",
         "column": "Manage_Prereservation",
@@ -5219,14 +5110,6 @@
         "field": "processNow",
         "runner": "node",
         "description": "Action endpoint for 'processNow' in header should exist"
-      },
-      {
-        "id": "t-action-endpoint-header-psd2GenerateBankPayment",
-        "category": "action-endpoint",
-        "entity": "header",
-        "field": "psd2GenerateBankPayment",
-        "runner": "node",
-        "description": "Action endpoint for 'psd2GenerateBankPayment' in header should exist"
       },
       {
         "id": "t-action-endpoint-header-rMAddOrphanLine",
@@ -7120,6 +7003,14 @@
         "description": "Read-only logic for 'costcenter' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-currency",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-deliveryMethod",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -7462,6 +7353,14 @@
         "field": "costcenter",
         "runner": "node",
         "description": "Read-only logic for 'costcenter' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-currency",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-deliveryMethod",
@@ -8543,13 +8442,6 @@
         "description": "Rule 'FIN_PaymentMethodsWithAccountIsSOTrxControl' (validation) should be declared"
       },
       {
-        "id": "t-rule-declared-Generate-Bank-Payment",
-        "category": "rule-declared",
-        "rule": "Generate Bank Payment",
-        "runner": "node",
-        "description": "Rule 'Generate Bank Payment' (process) should be declared"
-      },
-      {
         "id": "t-rule-declared-Insert-Orphan-Line",
         "category": "rule-declared",
         "rule": "Insert Orphan Line",
@@ -8884,13 +8776,6 @@
         "rule": "purchase-order-Header-EM_APRM_AddPayment-displayLogic",
         "runner": "node",
         "description": "Rule 'purchase-order-Header-EM_APRM_AddPayment-displayLogic' (displayLogic) should be declared"
-      },
-      {
-        "id": "t-rule-declared-purchase-order-Header-EM-Psd2-Generate-Bank-Payment-displayLogic",
-        "category": "rule-declared",
-        "rule": "purchase-order-Header-EM_Psd2_Generate_Bank_Payment-displayLogic",
-        "runner": "node",
-        "description": "Rule 'purchase-order-Header-EM_Psd2_Generate_Bank_Payment-displayLogic' (displayLogic) should be declared"
       },
       {
         "id": "t-rule-declared-purchase-order-Header-PaymentRule-displayLogic",
@@ -10049,14 +9934,6 @@
         "description": "System field 'processNow' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-psd2GenerateBankPayment",
-        "category": "system-field",
-        "entity": "header",
-        "field": "psd2GenerateBankPayment",
-        "runner": "node",
-        "description": "System field 'psd2GenerateBankPayment' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-quotation",
         "category": "system-field",
         "entity": "header",
@@ -10965,25 +10842,25 @@
       }
     ],
     "summary": {
-      "total": 760,
+      "total": 758,
       "byCategory": {
-        "action-endpoint": 22,
+        "action-endpoint": 21,
         "crud-flags": 5,
         "default-value-type": 26,
         "displaylogic-evaluable": 1,
         "displaylogic-valid": 1,
         "field-presence": 94,
         "field-type": 94,
-        "readonlylogic-evaluable": 43,
-        "readonlylogic-valid": 43,
-        "rule-declared": 231,
+        "readonlylogic-evaluable": 44,
+        "readonlylogic-valid": 44,
+        "rule-declared": 229,
         "searchable-filters": 5,
         "selector-endpoint": 38,
-        "system-field": 152,
+        "system-field": 151,
         "visibility": 5
       },
       "byRunner": {
-        "node": 760,
+        "node": 758,
         "junit": 0
       }
     }

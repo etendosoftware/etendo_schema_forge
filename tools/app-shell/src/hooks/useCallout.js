@@ -80,14 +80,7 @@ export function useCallout(entity, { token, apiBaseUrl }) {
           else toast.info(text);
         }
 
-        // Only set result if there are actual updates or combos
-        const hasUpdates = Object.keys(updates).length > 0;
-        const hasCombos = Object.keys(combos).length > 0;
-        if (hasUpdates || hasCombos) {
-          setCalloutResult({ updates, combos, triggerField: field });
-        } else {
-          setCalloutResult(null);
-        }
+        setCalloutResult({ updates, combos, triggerField: field });
       } catch (err) {
         if (err.name !== 'AbortError') {
           // Callout is best-effort — do not block the user on failure

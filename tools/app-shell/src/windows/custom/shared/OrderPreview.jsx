@@ -5,6 +5,7 @@ import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
 import { useOrderPdf } from './useOrderPdf.js';
 import { usePurchaseOrderPdf } from './usePurchaseOrderPdf.js';
+import { useDocumentCurrency } from './useDocumentCurrency.js';
 import PreviewActionButtons, { PreviewEmptyPanel, PreviewPdfPanel } from './PreviewActionButtons.jsx';
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
@@ -37,7 +38,7 @@ async function fetchPaymentsIn(orderId, token, apiBaseUrl) {
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function OrderGeneralTab({ order, specName, token, apiBaseUrl }) {
+function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal }) {
   const ui = useUI();
   const isSalesOrder = specName === 'sales-order';
 
@@ -63,6 +64,9 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl }) {
         statusLabel={statusLabel}
         invoicePercent={invoicePercent}
         deliveryPercent={deliveryPercent != null ? deliveryPercent : undefined}
+        orgCurrencyCode={orgCurrencyCode}
+        exchangeRate={exchangeRate}
+        orgGrandTotal={orgGrandTotal}
         data-testid="SummaryCard__90f59a" />
       <EmailsCard onSend={undefined} data-testid="EmailsCard__90f59a" />
       {isSalesOrder && (
@@ -90,8 +94,18 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const isSalesOrder = specName === 'sales-order';
   const isDraft = order?.documentStatus === 'DR';
 
-  const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, token);
-  const poResult = usePurchaseOrderPdf(!isSalesOrder ? order?.id : null, apiBaseUrl, token);
+  // Dual-currency: fetch exchange rate when doc currency differs from org currency
+  const { orgCurrencyCode, exchangeRate, convertAmount } = useDocumentCurrency({
+    docCurrencyCode: order?.['currency$_identifier'],
+    orderDate: order?.orderDate,
+    apiBaseUrl,
+    token,
+  });
+  const orgGrandTotal = convertAmount(order?.grandTotalAmount);
+  const currencyData = { orgCurrencyCode, exchangeRate };
+
+  const soResult = useOrderPdf(isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData);
+  const poResult = usePurchaseOrderPdf(!isSalesOrder ? order?.id : null, apiBaseUrl, token, currencyData);
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = isSalesOrder ? soResult : poResult;
 
   if (!order) return null;
@@ -128,6 +142,9 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
         specName={specName}
         token={token}
         apiBaseUrl={apiBaseUrl}
+        orgCurrencyCode={orgCurrencyCode}
+        exchangeRate={exchangeRate}
+        orgGrandTotal={orgGrandTotal}
         data-testid="OrderGeneralTab__90f59a" />,
     },
     {

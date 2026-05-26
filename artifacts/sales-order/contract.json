@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-06-11T12:55:37.001Z",
-  "checksum": "3fda0494d3c6a437",
+  "updatedAt": "2026-05-26T18:57:09.174Z",
+  "checksum": "682fd0cd26f7a73a",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -12,6 +12,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "saveCurrencyBeforeLines": true,
       "hidePrint": true,
       "customComponents": {
         "topbarRight": "OrderCreateInvoice",
@@ -395,19 +396,20 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.cCurrencyId"
-            },
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
-            "section": "summary"
+            "section": "principal",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
           },
           {
             "name": "description",
@@ -510,13 +512,6 @@
             "derivation": {
               "type": "computed",
               "source": "DR"
-            }
-          },
-          {
-            "name": "currency",
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.cCurrencyId"
             }
           },
           {
@@ -844,6 +839,7 @@
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
+      "saveCurrencyBeforeLines": true,
       "hidePrint": true,
       "customComponents": {
         "topbarRight": "OrderCreateInvoice",
@@ -1043,7 +1039,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1693,14 +1689,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "psd2GenerateBankPayment",
-            "apiKey": "psd2GenerateBankPayment",
-            "column": "EM_Psd2_Generate_Bank_Payment",
-            "type": "button",
-            "visibility": "discarded",
-            "required": false
           }
         ],
         "javaQualifier": "salesOrderHeaderHandler"
@@ -2426,16 +2414,7 @@
         "column": "C_BPartner_Location_ID",
         "reference": "BusinessPartnerLocation",
         "inputMode": "dependent",
-        "url": "/sws/neo/sales-order/header/selectors/partnerAddress",
-        "context": {
-          "required": [
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
+        "url": "/sws/neo/sales-order/header/selectors/partnerAddress"
       },
       {
         "entity": "header",
@@ -2443,15 +2422,7 @@
         "column": "M_PriceList_ID",
         "reference": "PriceList",
         "inputMode": "selector",
-        "url": "/sws/neo/sales-order/header/selectors/priceList",
-        "context": {
-          "required": [
-            {
-              "param": "isSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
+        "url": "/sws/neo/sales-order/header/selectors/priceList"
       },
       {
         "entity": "header",
@@ -2459,15 +2430,7 @@
         "column": "FIN_Paymentmethod_ID",
         "reference": "PaymentMethod",
         "inputMode": "selector",
-        "url": "/sws/neo/sales-order/header/selectors/paymentMethod",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            }
-          ]
-        }
+        "url": "/sws/neo/sales-order/header/selectors/paymentMethod"
       },
       {
         "entity": "header",
@@ -2507,21 +2470,7 @@
         "column": "C_Tax_ID",
         "reference": "Tax",
         "inputMode": "selector",
-        "url": "/sws/neo/sales-order/lines/selectors/tax",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "DateInvoiced",
-              "source": "parentField",
-              "field": "orderDate",
-              "format": "DD-MM-YYYY"
-            }
-          ]
-        }
+        "url": "/sws/neo/sales-order/lines/selectors/tax"
       }
     ],
     "actions": [
@@ -2657,14 +2606,6 @@
         "column": "RM_Pickfromreceipt",
         "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
         "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "header",
-        "field": "psd2GenerateBankPayment",
-        "column": "EM_Psd2_Generate_Bank_Payment",
-        "url": "/sws/neo/sales-order/header/{id}/action/psd2GenerateBankPayment",
-        "processId": "0661406A983B4D8EA611F8596F114D52",
         "processType": "obuiapp"
       },
       {
@@ -2826,14 +2767,6 @@
         "field": "processNow",
         "runner": "node",
         "description": "Action endpoint for 'processNow' in header should exist"
-      },
-      {
-        "id": "t-action-endpoint-header-psd2GenerateBankPayment",
-        "category": "action-endpoint",
-        "entity": "header",
-        "field": "psd2GenerateBankPayment",
-        "runner": "node",
-        "description": "Action endpoint for 'psd2GenerateBankPayment' in header should exist"
       },
       {
         "id": "t-action-endpoint-header-rMAddOrphanLine",
@@ -3458,6 +3391,14 @@
         "description": "Read-only logic for 'businessPartner' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-currency",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-documentNo",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -3576,6 +3517,14 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Read-only logic for 'businessPartner' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-currency",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-documentNo",
@@ -6052,14 +6001,6 @@
         "description": "System field 'project' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-psd2GenerateBankPayment",
-        "category": "system-field",
-        "entity": "header",
-        "field": "psd2GenerateBankPayment",
-        "runner": "node",
-        "description": "System field 'psd2GenerateBankPayment' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-quotation",
         "category": "system-field",
         "entity": "header",
@@ -6797,19 +6738,19 @@
     "summary": {
       "total": 540,
       "byCategory": {
-        "action-endpoint": 22,
+        "action-endpoint": 21,
         "crud-flags": 2,
         "default-value-type": 8,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
         "field-presence": 26,
         "field-type": 26,
-        "readonlylogic-evaluable": 15,
-        "readonlylogic-valid": 15,
+        "readonlylogic-evaluable": 16,
+        "readonlylogic-valid": 16,
         "rule-declared": 254,
         "searchable-filters": 5,
         "selector-endpoint": 9,
-        "system-field": 150,
+        "system-field": 149,
         "visibility": 2
       },
       "byRunner": {

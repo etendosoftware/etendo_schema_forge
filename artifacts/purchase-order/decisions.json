@@ -6,6 +6,7 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
+    "saveCurrencyBeforeLines": true,
     "menuActions": [],
     "draftMode": {
       "enabled": true,
@@ -78,10 +79,13 @@
           "gridOrder": 4
         },
         "currency": {
-          "form": false,
-          "reference": null,
-          "inputMode": null,
-          "section": "other"
+          "visibility": "editable",
+          "grid": false,
+          "form": true,
+          "section": "principal",
+          "order": 10,
+          "readOnlyLogic": "@Processed@='Y'",
+          "derivation": null
         },
         "orderDate": {
           "grid": true,
@@ -135,7 +139,8 @@
         "priceList": {
           "grid": false,
           "section": "principal",
-          "form": true
+          "form": true,
+          "order": 11
         },
         "invoiceAddress": {
           "reference": "BusinessPartnerLocation",
