@@ -331,6 +331,7 @@ export default function SideMenu({
   expanded,
   onToggle,
   onHelpClick,
+  unreadCount = 0,
   logoSrc = '/favicon.png',
 }) {
   const { selectedOrg } = useAuth();
@@ -631,9 +632,14 @@ export default function SideMenu({
                   type="button"
                   onClick={handleHelpClick}
                   aria-label={ui('helpAndSupport')}
-                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Headphones className="h-5 w-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ring-2 ring-white">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="right">{ui('helpAndSupport')}</TooltipContent>
@@ -644,11 +650,21 @@ export default function SideMenu({
               onClick={handleHelpClick}
               className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
             >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <Headphones className="h-4 w-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ring-2 ring-white">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </span>
               <span className="flex-1 text-left truncate">{ui('helpAndSupport')}</span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {unreadCount > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-white text-[10px] font-bold leading-none">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+              {unreadCount === 0 && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
             </button>
           )}
 

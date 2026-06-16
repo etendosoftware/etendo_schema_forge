@@ -8,6 +8,8 @@ import { CommandPalette } from '@/components/CommandPalette.jsx';
 import { CopilotProvider } from '@/components/CopilotContext';
 import { CopilotWidget } from '@/components/CopilotWidget';
 import { CurrentWindowProvider } from '@/components/CurrentWindowContext';
+import { SupportChatProvider, useSupportChat } from '@/components/support/SupportChatContext.jsx';
+import { SupportChatWidget } from '@/components/support/SupportChatWidget.jsx';
 
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
@@ -17,6 +19,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
   const { expanded, toggle } = useSidebar();
   const meta = usePageMeta();
   const marginLeft = expanded ? EXPANDED_W : COLLAPSED_W;
+  const { state: supportState, actions: supportActions } = useSupportChat();
 
   return (
     <>
@@ -25,6 +28,8 @@ function AppLayoutInner({ menuGroups, embedded }) {
           menuGroups={menuGroups}
           expanded={expanded}
           onToggle={toggle}
+          onHelpClick={supportState.isOpen ? supportActions.close : supportActions.open}
+          unreadCount={supportState.unreadCount}
         />
       )}
       <div
@@ -65,6 +70,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
       </div>
       {!embedded && <CommandPalette />}
       {!embedded && <CopilotWidget hideTrigger />}
+      {!embedded && <SupportChatWidget />}
     </>
   );
 }
@@ -76,13 +82,15 @@ export default function AppLayout({ menuGroups }) {
   return (
     <CurrentWindowProvider>
       <CopilotProvider>
-        <FavoritesProvider>
-          <SidebarProvider>
-            <PageMetaProvider>
-              <AppLayoutInner menuGroups={menuGroups} embedded={embedded} />
-            </PageMetaProvider>
-          </SidebarProvider>
-        </FavoritesProvider>
+        <SupportChatProvider>
+          <FavoritesProvider>
+            <SidebarProvider>
+              <PageMetaProvider>
+                <AppLayoutInner menuGroups={menuGroups} embedded={embedded} />
+              </PageMetaProvider>
+            </SidebarProvider>
+          </FavoritesProvider>
+        </SupportChatProvider>
       </CopilotProvider>
     </CurrentWindowProvider>
   );
