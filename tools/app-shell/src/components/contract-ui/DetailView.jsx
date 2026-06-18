@@ -1489,7 +1489,6 @@ export function DetailView({
   menuActions = [],
   customMenuContent = null,
   hideDeleteWhenComplete = false,
-  saveCurrencyBeforeLines = false,
   customTabsAfterBottom = false,
   hidePrint = false,
   hideSaveStatuses = [],
@@ -1676,16 +1675,6 @@ export function DetailView({
   }, [entity, detailEntity, parentRecordId, secondaryTabKeysStr, priceListId, api, hook.selected, hook.editing, sessionCurrencyCode]);
   const { catalogs, catalogsLoaded } = useCatalogs(api, token, apiBaseUrl, staticCatalogs);
   const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
-  // Lock the currency field when committed lines exist — changing currency on a document
-  // with lines is blocked by C_ORDER_CHK_RESTRINCTIONS_TRG and would produce a 500.
-  // See the flushAndSave comment below for the full constraint description.
-  const displayLogicWithCurrencyLock = useMemo(() => {
-    if (!hook.children.length) return displayLogic;
-    return {
-      ...displayLogic,
-      readOnly: { ...displayLogic?.readOnly, currency: true },
-    };
-  }, [displayLogic, hook.children.length]);
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
   const navigate = useNavigate();
@@ -1757,53 +1746,13 @@ export function DetailView({
 
   // ── Ordered save helper ────────────────────────────────────────────────────
   //
-  // EXCEPTIONAL CASE — currency change with an open add-row and no committed lines:
-  //
-  //   The DB trigger C_ORDER_CHK_RESTRINCTIONS_TRG blocks C_Currency_ID changes
-  //   on C_ORDER when C_ORDERLINE rows already exist (line 55 of the trigger).
-  //   Under the normal flow, flushPendingLines() fires first (INSERT → line exists
-  //   in DB), and then handleSave() tries to UPDATE the currency — the trigger
-  //   fires and the save fails with "@20502@".
-  //
-  //   When ALL of these conditions hold simultaneously, we must invert the order:
-  //     1. The document currency was changed by the user (editing.currency ≠ DB value)
-  //     2. There are zero committed lines (hook.children.length === 0)
-  //     3. An add-row is open (addingLine === true)
-  //
-  //   In that narrow case we: (a) commit the header first — 0 lines → trigger silent,
-  //   (b) then flush the pending add-row line.  For every other situation the normal
-  //   order (flush lines → save header) is preserved.
-  //
-  //   When saved lines already exist (hook.children.length > 0) the currency field
-  //   is rendered read-only (see displayLogicWithCurrencyLock below), so the user
-  //   cannot reach this condition with N > 0 lines.
-  //
-  //   NEW RECORDS (recordId === 'new'): hook.selected is always null (the record has
-  //   never been persisted), so the currency comparison is not applicable.  For new
-  //   records with an open add-row we ALWAYS save the header first: the header INSERT
-  //   carries the correct currency from the start, so the trigger never sees a change,
-  //   and the subsequent line INSERT finds a consistent parent.
+  // Always flush any open add-row before saving the header so the parent record
+  // sees the committed line state. If flushPendingLines reports a failure
+  // (e.g. validation), the save is aborted and returns null.
   const flushAndSave = useCallback(async (data) => {
-    const currencyChangedWithPendingLine = saveCurrencyBeforeLines
-      && addingLine
-      && hook.children.length === 0
-      && (
-        recordId === 'new'
-        || (hook.selected?.currency != null
-            && hook.editing?.currency != null
-            && hook.editing.currency !== hook.selected.currency)
-      );
-
-    if (currencyChangedWithPendingLine) {
-      const saved = await hook.handleSave(data);
-      if (!saved) return null;
-      if (!(await flushPendingLines())) return null;
-      return saved;
-    }
-
     if (!(await flushPendingLines())) return null;
     return hook.handleSave(data);
-  }, [saveCurrencyBeforeLines, addingLine, hook, flushPendingLines, recordId]);
+  }, [hook, flushPendingLines]);
 
   const [customModalState, setCustomModalState] = useState({ key: null, rowId: null });
   const [activeTab, setActiveTab] = useState(0);
@@ -2117,29 +2066,79 @@ export function DetailView({
   // Track fields whose values were set by a callout response, keyed by field with
   // the applied value, so we only skip the echo (same value) and not genuine edits.
   const calloutAppliedRef = useRef(new Map());
-  const pendingCurrencyConversionRef = useRef(null);
-  // Persists the active conversion rate (price-list currency → header currency) across
-  // multiple line additions. Cleared when currency returns to the org base currency.
+  // Active conversion rate (org base currency → header currency) for the SAVED state of
+  // the order. Set by the sync effect below whenever the saved currency differs from
+  // the org base currency. Used by handleLineFieldChange to convert pricelist prices on
+  // newly added lines. Conversion only applies to lines added AFTER the order's currency
+  // has been saved — there is no longer real-time conversion of unsaved lines on currency
+  // change (ETP-4027 simplification).
   const activeCurrencyConversionRef = useRef(null);
-  // Stores the raw price-list price in org base currency before any header currency
-  // conversion. Invariant base for all conversions — prevents double-conversion on
-  // multi-hop changes (EUR→USD→GBP) and enables correct revert (USD→EUR restores original).
-  // Updated when user selects a product; cleared when add row closes or price list changes.
-  const lineOriginalBasePriceRef = useRef(null);
   // Track fields the user has manually changed in this record session — protected
   // from being overwritten by callouts triggered from other fields.
   const userTouchedRef = useRef(new Set());
-  // Reset both refs when the record context changes (new record / different existing record)
+  // Reset session-scoped refs when the record context changes (new record / different existing record).
   useEffect(() => {
     userTouchedRef.current = new Set();
     calloutAppliedRef.current = new Map();
     activeCurrencyConversionRef.current = null;
-    lineOriginalBasePriceRef.current = null;
   }, [recordId]);
-  // Clear stored base price when the add row closes so the next line starts fresh.
+
+  // Sync activeCurrencyConversionRef with the SAVED state of the order: whenever
+  // hook.selected.currency changes (typically after a save), re-evaluate whether
+  // conversion is needed. Lines added afterwards inherit this rate via
+  // handleLineFieldChange. There is no real-time conversion on unsaved currency changes.
   useEffect(() => {
-    if (!addingLine) lineOriginalBasePriceRef.current = null;
-  }, [addingLine]);
+    if (recordId === 'new') return;
+    const docCurrencyId = hook.selected?.currency;
+    const orderDate = hook.selected?.orderDate;
+    if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
+        const sessionRes = await fetch(`${neoBase}/session`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!sessionRes.ok || cancelled) return;
+        const session = await sessionRes.json();
+        const orgCurrencyId = session?.currencyId;
+        if (!orgCurrencyId) return;
+        if (orgCurrencyId === docCurrencyId) {
+          // Saved currency matches org currency — no conversion needed.
+          activeCurrencyConversionRef.current = null;
+          return;
+        }
+        const rateRes = await fetch(
+          `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(docCurrencyId)}&date=${encodeURIComponent(orderDate)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!rateRes.ok || cancelled) {
+          activeCurrencyConversionRef.current = null;
+          return;
+        }
+        const rateData = await rateRes.json();
+        if (cancelled) return;
+        if (rateData?.hasRate && rateData.rate) {
+          activeCurrencyConversionRef.current = {
+            baseCurrency: orgCurrencyId,
+            toCurrency: docCurrencyId,
+            rate: rateData.rate,
+          };
+        } else {
+          // No rate available — clear stale ref. The dropdown-change validator
+          // normally blocks selecting a currency without a rate, but the saved
+          // state may still get here through other paths.
+          activeCurrencyConversionRef.current = null;
+        }
+      } catch {
+        activeCurrencyConversionRef.current = null;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [recordId, hook.selected?.currency, hook.selected?.orderDate, apiBaseUrl, token]);
   // Guard: fire default callouts only once per new-record session
   const defaultCalloutsTriggeredRef = useRef(false);
   // Cache for tax rates fetched from the selector (keyed by tax ID).
@@ -2416,71 +2415,19 @@ export function DetailView({
     // Mark these fields so the next onChange doesn't re-trigger callout
     calloutAppliedRef.current = appliedFields;
 
-    // Convert listPrice of the in-progress add-row when the header currency changes,
-    // and persist the rate so all subsequent new lines are also converted automatically.
-    if (triggerField === 'currency' && pendingCurrencyConversionRef.current) {
-      const pending = pendingCurrencyConversionRef.current;
-      pendingCurrencyConversionRef.current = null;
-
-      if (pending.revert) {
-        // Reverting to org base currency — restore the original price-list price.
-        const originalPrice = lineOriginalBasePriceRef.current;
-        lineOriginalBasePriceRef.current = null;
-        const currentAddRowPrice = parseFloat(pendingLineValues?.[lineConfig.priceField]) || 0;
-        if (addingLine && primaryAddRowRef.current?.setFieldValues && originalPrice != null && originalPrice > 0 && currentAddRowPrice > 0) {
-          const grossResult = {};
-          computeLineGrossAmount(lineConfig.priceField, originalPrice, grossResult, {
-            ...pendingLineValues,
-            [lineConfig.priceField]: originalPrice,
-          });
-          primaryAddRowRef.current?.setFieldValues({
-            [lineConfig.priceField]: originalPrice,
-            ...(grossResult[lineConfig.grossField] != null ? { [lineConfig.grossField]: grossResult[lineConfig.grossField] } : {}),
-            ...(grossResult.lineNetAmount != null ? { lineNetAmount: grossResult.lineNetAmount } : {}),
-          });
-        }
-        return;
-      }
-
-      const { from: fromCurrency, to: toCurrency, baseCurrency } = pending;
-      const orderDate = data?.orderDate ?? '';
-      if (fromCurrency && toCurrency && fromCurrency !== toCurrency && orderDate) {
-        const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
-        fetch(
-          `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrency)}&toCurrency=${encodeURIComponent(toCurrency)}&date=${encodeURIComponent(orderDate)}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-          .then(r => r.ok ? r.json() : null)
-          .then(rateData => {
-            if (!rateData?.hasRate || !rateData.rate) {
-              activeCurrencyConversionRef.current = null;
-              return;
-            }
-            activeCurrencyConversionRef.current = { baseCurrency, toCurrency, rate: rateData.rate };
-            const currentAddRowPrice = parseFloat(pendingLineValues?.[lineConfig.priceField]) || 0;
-            if (addingLine && primaryAddRowRef.current?.setFieldValues && currentAddRowPrice > 0) {
-              const basePrice = lineOriginalBasePriceRef.current ?? currentAddRowPrice;
-              if (!lineOriginalBasePriceRef.current) lineOriginalBasePriceRef.current = basePrice;
-              const newPrice = parseFloat((basePrice * rateData.rate).toFixed(2));
-              const grossResult = {};
-              computeLineGrossAmount(lineConfig.priceField, newPrice, grossResult, {
-                ...pendingLineValues,
-                [lineConfig.priceField]: newPrice,
-              });
-              primaryAddRowRef.current?.setFieldValues({
-                [lineConfig.priceField]: newPrice,
-                ...(grossResult[lineConfig.grossField] != null ? { [lineConfig.grossField]: grossResult[lineConfig.grossField] } : {}),
-                ...(grossResult.lineNetAmount != null ? { lineNetAmount: grossResult.lineNetAmount } : {}),
-              });
-            }
-          })
-          .catch(() => {});
-      }
-    }
+    // Currency change validation is handled inside handleChangeWithCallout (synchronous
+    // dropdown-change path). The callout response handler intentionally no longer applies
+    // any conversion to pending lines — under the simplified ETP-4027 model, conversion
+    // only applies to lines added AFTER the saved currency change.
   }, [calloutResult]);
 
   // Wrapped onChange that triggers callout for user-initiated FK changes
   const handleChangeWithCallout = useCallback((field, value) => {
+    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
+    // revert the dropdown if the rate check fails. The closure preserves the old
+    // hook.editing reference, but capturing explicitly keeps intent clear.
+    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
+
     hook.handleChange(field, value);
 
     // Skip companion/auxiliary fields — they don't have callouts
@@ -2505,27 +2452,49 @@ export function DetailView({
     if (!value || value === '') return;
     if (!/^[0-9A-Fa-f]{32}$/.test(value) && !/^-?\d+(\.\d+)?$/.test(value) && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
 
-    // Capture currency change for in-progress and subsequent add-row price conversion.
-    // hook.editing.currency still holds the old value here (state update is async).
-    // baseCurrency tracks the org (source) currency across multiple changes:
-    //   EUR→USD→GBP always converts from EUR (the first "from"), not from USD.
-    if (field === 'currency' && hook.editing?.currency && hook.editing.currency !== value) {
-      const baseCurrency = activeCurrencyConversionRef.current?.baseCurrency ?? hook.editing.currency;
-      if (value === baseCurrency) {
-        activeCurrencyConversionRef.current = null;
-        pendingCurrencyConversionRef.current = { revert: true };
-      } else {
-        pendingCurrencyConversionRef.current = { from: baseCurrency, to: value, baseCurrency };
+    // Currency change validation (ETP-4027 simplified model): if no conversion rate
+    // exists between the org base currency and the newly selected currency for the
+    // order date, revert the dropdown to the previous value and surface an error.
+    // Skipped when the new currency equals the org currency (no rate needed) and when
+    // there is no previous currency yet (initial set, e.g. defaults).
+    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
+      const orderDate = hook.selected?.orderDate ?? hook.editing?.orderDate;
+      if (orderDate) {
+        const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
+        (async () => {
+          const revert = () => {
+            toast.error(ui('noConversionRateError', { date: orderDate }));
+            hook.handleChange('currency', previousCurrency);
+          };
+          try {
+            const sessionRes = await fetch(`${neoBase}/session`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!sessionRes.ok) { revert(); return; }
+            const session = await sessionRes.json();
+            const orgCurrencyId = session?.currencyId;
+            // No rate needed when changing TO the org currency — that's just removing
+            // the conversion. Allow without validation.
+            if (!orgCurrencyId || orgCurrencyId === value) return;
+            const rateRes = await fetch(
+              `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(value)}&date=${encodeURIComponent(orderDate)}`,
+              { headers: { Authorization: `Bearer ${token}` } },
+            );
+            if (!rateRes.ok) { revert(); return; }
+            const rateData = await rateRes.json();
+            if (!rateData?.hasRate || !rateData.rate) { revert(); return; }
+            // Rate exists — change stays. The sync effect on hook.selected.currency
+            // will pick it up after the user saves the header.
+          } catch {
+            revert();
+          }
+        })();
       }
-    }
-    // Changing the price list means product prices may differ — the stored base price is stale.
-    if (field === 'priceList') {
-      lineOriginalBasePriceRef.current = null;
     }
 
     // Trigger callout — the backend returns empty if no callout is registered
     executeCallout(field, value, hook.editing);
-  }, [hook.handleChange, hook.editing, executeCallout]);
+  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui]);
 
   // Execute callout for child entity (line-level) fields and apply results via callback.
   // Merges parent header data into formState so callouts have full context (e.g., priceList).
@@ -2607,23 +2576,34 @@ export function DetailView({
       if (field === 'product' && lineConfig.discountField) forceFields.add(lineConfig.discountField);
       // Apply active currency conversion when a product populates the list price from
       // the price list (which is always in the org base currency). This ensures every
-      // new line added AFTER a header currency change gets the converted price.
+      // new line added AFTER a header currency change gets the converted price AND the
+      // line's currency reflects the order header's currency (not the pricelist's, which
+      // is what SL_Order_Product/SL_Invoice_Product return by default).
+      // Mutate `result` in place so the downstream applyUpdates() picks up the converted
+      // values; using setFieldValues as a side channel races with applyUpdates and loses.
       if (field === 'product' && activeCurrencyConversionRef.current) {
-        const { rate } = activeCurrencyConversionRef.current;
+        const { rate, toCurrency } = activeCurrencyConversionRef.current;
+        // Override the line's currency to match the order header's. Without this the
+        // line ends up with the pricelist's currency (e.g. EUR) while the price stored
+        // is already in the header's currency (e.g. USD) — a silent data inconsistency.
+        result.currency = toCurrency;
+        const headerCurrencyIdentifier = hook.selected?.['currency$_identifier']
+          ?? hook.editing?.['currency$_identifier'];
+        if (headerCurrencyIdentifier) {
+          result['currency$_identifier'] = headerCurrencyIdentifier;
+        }
         const rawPrice = parseFloat(String(result[lineConfig.priceField] ?? 0));
         if (rawPrice > 0 && rate !== 1) {
-          lineOriginalBasePriceRef.current = rawPrice;
           const convertedPrice = parseFloat((rawPrice * rate).toFixed(2));
-          const convResult = {};
-          computeLineGrossAmount(lineConfig.priceField, convertedPrice, convResult, {
+          result[lineConfig.priceField] = convertedPrice;
+          if (result.standardPrice != null) result.standardPrice = convertedPrice;
+          if (result.unitPrice != null) result.unitPrice = convertedPrice;
+          if (result.listPrice != null) result.listPrice = convertedPrice;
+          // Recompute gross / net so the row is internally consistent with the new price.
+          computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
             ...rowValues,
             ...result,
             [lineConfig.priceField]: convertedPrice,
-          });
-          primaryAddRowRef.current?.setFieldValues({
-            [lineConfig.priceField]: convertedPrice,
-            ...(convResult[lineConfig.grossField] != null ? { [lineConfig.grossField]: convResult[lineConfig.grossField] } : {}),
-            ...(convResult.lineNetAmount != null ? { lineNetAmount: convResult.lineNetAmount } : {}),
           });
         }
       }
@@ -3174,7 +3154,7 @@ export function DetailView({
                               catalogs={catalogs}
                               layout="horizontal"
                               section="principal"
-                              displayLogic={{ readOnly: displayLogicWithCurrencyLock?.readOnly ?? {}, visibility: {} }}
+                              displayLogic={{ readOnly: displayLogic?.readOnly ?? {}, visibility: {} }}
                               api={api}
                               token={token}
                               apiBaseUrl={apiBaseUrl}
@@ -3198,7 +3178,7 @@ export function DetailView({
                                   layout="horizontal"
                                   section="collapsed"
                                   excludeFields={notesField ? [notesField] : []}
-                                  displayLogic={displayLogicWithCurrencyLock}
+                                  displayLogic={displayLogic}
                                   api={api}
                                   token={token}
                                   apiBaseUrl={apiBaseUrl}
@@ -3377,19 +3357,6 @@ export function DetailView({
                                     fields: allEntryFields,
                                     resolvedDefaults: hook.childDefaults,
                                     onAdd: async (lineData) => {
-                                      // Same C_ORDER_CHK_RESTRINCTIONS_TRG constraint as flushAndSave:
-                                      // if the user changed the currency before saving this first line,
-                                      // commit the header first so the trigger doesn't block the INSERT.
-                                      // Opt-in per window via saveCurrencyBeforeLines (set on C_ORDER windows only).
-                                      const currencyChangedNoLines = saveCurrencyBeforeLines
-                                        && hook.children.length === 0
-                                        && hook.selected?.currency != null
-                                        && hook.editing?.currency != null
-                                        && hook.editing.currency !== hook.selected.currency;
-                                      if (currencyChangedNoLines) {
-                                        const saved = await hook.handleSave(data);
-                                        if (!saved) return null;
-                                      }
                                       // Send all values: entry fields + callout-derived values (tax, prices, uOM, etc.).
                                       // handleAddChild filters out internal keys (_identifier, _aux, CURSOR_FIELD, etc.)
                                       // Also include hidden entry defaults (e.g., fields with predefined values).
@@ -3885,7 +3852,7 @@ export function DetailView({
                               catalogs={catalogs}
                               layout="horizontal"
                               section="other"
-                              displayLogic={displayLogicWithCurrencyLock}
+                              displayLogic={displayLogic}
                               api={api}
                               token={token}
                               apiBaseUrl={apiBaseUrl}

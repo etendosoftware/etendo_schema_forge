@@ -1,5 +1,5 @@
 {
-  "version": "0.21.0",
+  "version": "0.22.1",
   "generatedAt": "2026-04-30T15:42:46.497Z",
   "updatedAt": "2026-06-24T13:21:50.747Z",
   "contractChecksum": "bd966b94b92da43c",
@@ -162,6 +162,8 @@
         "entity": "header",
         "field": "currency",
         "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
         "url": "/sws/neo/purchase-order/header/selectors/currency"
       },
       {
@@ -1084,8 +1086,8 @@
             "required": true
           },
           "currency": {
-            "readOnly": true,
             "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@C_Currency_ID@"
           },
           "deliveryNotes": {},
@@ -1282,7 +1284,6 @@
             "readOnlyLogic": "@Posted@='Y'"
           },
           "currency": {
-            "readOnly": true,
             "required": true,
             "defaultValue": "@C_Currency_ID@"
           }
@@ -1406,6 +1407,7 @@
         "warehouse",
         "paymentTerms",
         "priceList",
+        "currency",
         "cashVAT",
         "invoiceFrom",
         "deliveryMethod",
@@ -1418,7 +1420,8 @@
         "listPrice",
         "tax",
         "unitPrice",
-        "lineNetAmount"
+        "lineNetAmount",
+        "currency"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -1599,6 +1602,7 @@
           "warehouse",
           "paymentTerms",
           "priceList",
+          "currency",
           "cashVAT",
           "invoiceFrom",
           "deliveryMethod",
@@ -1615,7 +1619,8 @@
           "listPrice",
           "tax",
           "unitPrice",
-          "lineNetAmount"
+          "lineNetAmount",
+          "currency"
         ]
       },
       {

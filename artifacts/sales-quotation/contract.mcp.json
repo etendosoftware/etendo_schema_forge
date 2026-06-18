@@ -1,8 +1,8 @@
 {
   "version": "0.9.0",
   "generatedAt": "2026-04-30T15:42:46.907Z",
-  "updatedAt": "2026-06-11T12:55:37.110Z",
-  "contractChecksum": "74aa9c0b783dc07a",
+  "updatedAt": "2026-06-16T18:01:42.917Z",
+  "contractChecksum": "cdc05528bf2fd25d",
   "apiPrediction": {
     "specName": "sales-quotation",
     "baseUrl": "/sws/neo/sales-quotation",
@@ -351,6 +351,29 @@
         "processType": "classic"
       },
       {
+        "name": "generateTemplate",
+        "actionType": "createFrom",
+        "entity": "quotation",
+        "column": "Generatetemplate",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sales-quotation/quotation/{id}/action/generateTemplate",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "800022",
+        "processType": "classic"
+      },
+      {
         "name": "processNow",
         "actionType": "documentAction",
         "entity": "quotation",
@@ -429,29 +452,6 @@
         ],
         "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
-      },
-      {
-        "name": "generateTemplate",
-        "actionType": "createFrom",
-        "entity": "quotation",
-        "column": "Generatetemplate",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/sales-quotation/quotation/{id}/action/generateTemplate",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
-        ],
-        "processId": "800022",
-        "processType": "classic"
       },
       {
         "name": "cancelandreplace",
@@ -586,29 +586,6 @@
           "Required reference data is missing (price list, warehouse, etc.)"
         ],
         "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "psd2GenerateBankPayment",
-        "actionType": "paymentAction",
-        "entity": "quotation",
-        "column": "EM_Psd2_Generate_Bank_Payment",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/sales-quotation/quotation/{id}/action/psd2GenerateBankPayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
-        "processId": "0661406A983B4D8EA611F8596F114D52",
         "processType": "obuiapp"
       },
       {
@@ -783,8 +760,8 @@
             "required": true
           },
           "currency": {
-            "readOnly": true,
             "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@C_Currency_ID@"
           },
           "description": {
@@ -852,7 +829,8 @@
         "businessPartner",
         "partnerAddress",
         "priceList",
-        "paymentTerms"
+        "paymentTerms",
+        "currency"
       ],
       "lineFields": [
         "product",
@@ -932,9 +910,9 @@
       "copyFromPO",
       "documentAction",
       "createOrder",
+      "generateTemplate",
       "processNow",
       "posted",
-      "generateTemplate",
       "createPOLines",
       "rMPickfromreceipt"
     ],
@@ -965,7 +943,8 @@
           "businessPartner",
           "partnerAddress",
           "priceList",
-          "paymentTerms"
+          "paymentTerms",
+          "currency"
         ]
       },
       {
@@ -993,5 +972,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "4a24418beaf0827d"
+  "checksum": "bff63948cfc76cb9"
 }

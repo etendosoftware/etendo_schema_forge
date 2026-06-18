@@ -255,6 +255,7 @@ export const lines = [
     "lineGrossAmount": 38907,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "USD",
     "headerId": "mock-header-001"
   },
   {
@@ -268,6 +269,7 @@ export const lines = [
     "lineGrossAmount": 9306,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "EUR",
     "headerId": "mock-header-002"
   },
   {
@@ -281,6 +283,7 @@ export const lines = [
     "lineGrossAmount": 11544,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "GBP",
     "headerId": "mock-header-003"
   },
   {
@@ -294,6 +297,7 @@ export const lines = [
     "lineGrossAmount": 11872,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "USD",
     "headerId": "mock-header-004"
   },
   {
@@ -307,6 +311,7 @@ export const lines = [
     "lineGrossAmount": 48460,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "EUR",
     "headerId": "mock-header-005"
   },
   {
@@ -320,6 +325,7 @@ export const lines = [
     "lineGrossAmount": 45418,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "GBP",
     "headerId": "mock-header-006"
   },
   {
@@ -333,6 +339,7 @@ export const lines = [
     "lineGrossAmount": 33840,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "USD",
     "headerId": "mock-header-007"
   },
   {
@@ -346,6 +353,7 @@ export const lines = [
     "lineGrossAmount": 25716,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "EUR",
     "headerId": "mock-header-008"
   },
   {
@@ -359,6 +367,7 @@ export const lines = [
     "lineGrossAmount": 44780,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "GBP",
     "headerId": "mock-header-009"
   },
   {
@@ -372,6 +381,7 @@ export const lines = [
     "lineGrossAmount": 12483,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "USD",
     "headerId": "mock-header-010"
   },
   {
@@ -385,6 +395,7 @@ export const lines = [
     "lineGrossAmount": 46022,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "EUR",
     "headerId": "mock-header-011"
   },
   {
@@ -398,6 +409,7 @@ export const lines = [
     "lineGrossAmount": 38634,
     "unitPrice": "Sample unitPrice",
     "grossUnitPrice": "Sample grossUnitPrice",
+    "currency": "GBP",
     "headerId": "mock-header-012"
   }
 ];

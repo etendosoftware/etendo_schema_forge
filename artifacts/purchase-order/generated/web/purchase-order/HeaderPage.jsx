@@ -749,7 +749,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        saveCurrencyBeforeLines
         hidePrint
         hideSaveStatuses={["CO","CL","VO"]}
         noHeaderBorder

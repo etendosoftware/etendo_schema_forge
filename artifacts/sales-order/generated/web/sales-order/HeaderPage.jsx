@@ -65,6 +65,7 @@ const addLineFields = {
   ],
   hidden: [
     { key: 'grossUnitPrice', value: '0' },
+    { key: 'currency', fromParent: 'currency' },
   ],
 };
 // @sf-generated-end addLineFields:lines
@@ -214,6 +215,14 @@ export const api = {
           }
         ]
       }
+    },
+    {
+      "entity": "lines",
+      "field": "currency",
+      "column": "C_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-order/lines/selectors/currency"
     }
   ],
   "actions": [
@@ -447,7 +456,6 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         hideDeleteWhenComplete
-        saveCurrencyBeforeLines
         hidePrint
         noHeaderBorder
         notesField="description"

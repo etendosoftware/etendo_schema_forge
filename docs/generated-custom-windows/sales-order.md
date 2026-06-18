@@ -185,20 +185,48 @@ The endpoint first tries the direct `FROM→TO` direction. If no row is found, i
 
 **Same-currency short-circuit:** when `fromCurrencyId == toCurrencyId`, the endpoint skips the DB query and returns `{ hasRate: true, rate: 1.0 }` immediately.
 
-### Currency field lock
+### Currency change handling (ETP-4027 functional model)
 
-The `currency` field on the header form is locked (rendered as readOnly) whenever the order already has saved lines (`hook.children.length > 0`). This is enforced in `DetailView.jsx` via `displayLogicWithCurrencyLock`, a `useMemo` that spreads `displayLogic` and overrides `currency: true` in the `readOnly` map when lines exist.
+The `currency` field on the header form is **always editable on draft orders**, including those with saved lines. The DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` no longer blocks the change (the `C_Currency_ID` clause was removed in ETP-4027 Phase 0). The frontend enforces a rate-availability validation at the dropdown change moment, and the per-line conversion runs only on lines added AFTER a save.
 
-The reason is the DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` on the `C_ORDER` table. The trigger blocks changes to `C_Currency_ID` when `C_ORDERLINE` rows already reference that order, returning error code `@20502@`. Without the lock, a user saving a currency change after adding lines would receive an unrecoverable 500 error.
+#### Real-time rate validation in the dropdown
 
-The lock is intentionally applied to **both** the `principal` form section (where `currency` is rendered) and the `collapsed` section, so there is no path through the UI that allows editing the field while lines exist.
+When the user picks a new currency in the dropdown, `handleChangeWithCallout` (`DetailView.jsx`) runs an async validation:
 
-**Save-order guard for the edge case:** when a user changes currency on an order that has a pending (not yet saved) add-row but zero committed lines, `DetailView` inverts the normal save order: it commits the header currency first (no lines in the DB → trigger is silent), then saves the pending line. This narrow case is handled by `flushAndSave` and is the only exception to the default "flush lines → save header" order.
+1. Fetch the org base currency ID from `/sws/neo/sales-order/header/session` (field `currencyId`).
+2. If the new currency equals the org currency → skip validation (no rate needed to return to base).
+3. Otherwise fetch `validate-exchange-rate?fromCurrency=<orgId>&toCurrency=<newId>&date=<orderDate>` (uses `hook.selected?.orderDate ?? hook.editing?.orderDate`).
+4. If the response has no rate → call `hook.handleChange('currency', previousCurrency)` to revert the dropdown to the previous value and show a toast `noConversionRateError`.
+5. If the response has a rate → the change stays. The user can save when ready.
+
+The validation is best-effort: network or server failures revert the dropdown to be safe, preventing silent currency mismatches.
+
+#### Line conversion based on saved state
+
+A `useEffect` in `DetailView.jsx` keeps `activeCurrencyConversionRef` synchronized with the SAVED order currency:
+
+- It depends on `recordId`, `hook.selected?.currency`, and `hook.selected?.orderDate`. On every change it re-fetches `/session` and `/validate-exchange-rate` if the saved currency differs from the org currency.
+- When `docCurrency === orgCurrency` → ref is cleared (no conversion).
+- When they differ and a rate exists → ref holds `{baseCurrency: orgId, toCurrency: docId, rate}`.
+
+When the user adds a new line and selects a product, the conversion block inside `handleLineFieldChange` checks `activeCurrencyConversionRef.current`. If active, it mutates `result` in place:
+
+- Converts the price: `convertedPrice = pricelistPrice × rate`.
+- Overrides `result.currency` to the order header's currency (so the line's `C_CURRENCY_ID` matches the order header, not the pricelist's currency that `SL_Order_Product` returns).
+- Recomputes `lineNetAmount` / `lineGrossAmount` for internal consistency.
+
+This is **only** applied to lines added after the saved currency change. Conversion of pending unsaved lines on currency change is no longer supported (simplified model — analyst confirmed 2026-06-18).
+
+#### NeoFieldFilter (lines.currency writable)
+
+The line's `currency` field is configured in `artifacts/sales-order/decisions.json` with `visibility: editable, grid: false, form: false`. The `editable` visibility makes the field writable via the NEO PATCH (`ETGO_SF_FIELD.IsReadOnly = N`), so the frontend's override of `result.currency` is preserved on save. `grid: false, form: false` hides the field from the UI — the user never edits per-line currency directly; it's set automatically by the conversion logic to match the header.
 
 ### Automated evidence
 
-- `tools/app-shell/src/windows/custom/shared/useDocumentCurrency.js` — the shared hook.
-- `tools/app-shell/src/windows/custom/shared/preview-cards/SummaryCard.jsx` — dual-currency rendering logic (props: `orgCurrencyCode`, `exchangeRate`, `orgGrandTotal`).
-- `tools/app-shell/src/windows/custom/shared/OrderPreview.jsx` — calls the hook, threads data to `OrderGeneralTab`.
-- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — `displayLogicWithCurrencyLock` memo and `flushAndSave` save-order guard.
-- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoExchangeRateService.java` — the exchange rate endpoint.
+- `tools/app-shell/src/windows/custom/shared/useDocumentCurrency.js` — the shared hook for the preview view (returns `orgCurrencyCode`, `exchangeRate`, `convertAmount`).
+- `tools/app-shell/src/windows/custom/shared/preview-cards/SummaryCard.jsx` — dual-currency rendering in the preview.
+- `tools/app-shell/src/windows/custom/shared/OrderPreview.jsx` — calls the hook, threads `orgGrandTotal` to `OrderGeneralTab` for the informational equivalent in org currency.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — sync effect for `activeCurrencyConversionRef`, dropdown rate validation in `handleChangeWithCallout`, in-place conversion block in `handleLineFieldChange`.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoExchangeRateService.java` — exchange rate endpoint with inverse fallback.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoSessionService.java` — `/session` endpoint returning both `currencyCode` and `currencyId` (added in ETP-4027).
+- `etendo_core_pg/src-db/database/model/triggers/C_ORDER_CHK_RESTRINCTIONS_TRG.xml` — trigger with `C_Currency_ID` clause removed (Phase 0 / ETP-4027).

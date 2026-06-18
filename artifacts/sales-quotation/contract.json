@@ -1,8 +1,8 @@
 {
   "version": "0.9.0",
   "generatedAt": "2026-04-30T15:42:46.907Z",
-  "updatedAt": "2026-05-21T15:28:23.769Z",
-  "checksum": "e7fabe40e4a2fb99",
+  "updatedAt": "2026-06-16T18:01:42.917Z",
+  "checksum": "cdc05528bf2fd25d",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -2445,7 +2445,16 @@
         "column": "C_BPartner_Location_ID",
         "reference": "BusinessPartnerLocation",
         "inputMode": "dependent",
-        "url": "/sws/neo/sales-quotation/quotation/selectors/partnerAddress"
+        "url": "/sws/neo/sales-quotation/quotation/selectors/partnerAddress",
+        "context": {
+          "required": [
+            {
+              "param": "C_BPartner_ID",
+              "source": "field",
+              "field": "businessPartner"
+            }
+          ]
+        }
       },
       {
         "entity": "quotation",
@@ -2453,7 +2462,15 @@
         "column": "M_PriceList_ID",
         "reference": "PriceList",
         "inputMode": "selector",
-        "url": "/sws/neo/sales-quotation/quotation/selectors/priceList"
+        "url": "/sws/neo/sales-quotation/quotation/selectors/priceList",
+        "context": {
+          "required": [
+            {
+              "param": "isSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
       },
       {
         "entity": "quotation",
@@ -2461,7 +2478,15 @@
         "column": "FIN_Paymentmethod_ID",
         "reference": "Paymentmethod",
         "inputMode": "selector",
-        "url": "/sws/neo/sales-quotation/quotation/selectors/paymentMethod"
+        "url": "/sws/neo/sales-quotation/quotation/selectors/paymentMethod",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
       },
       {
         "entity": "quotation",
@@ -2501,7 +2526,21 @@
         "column": "C_Tax_ID",
         "reference": "Tax",
         "inputMode": "selector",
-        "url": "/sws/neo/sales-quotation/quotationLine/selectors/tax"
+        "url": "/sws/neo/sales-quotation/quotationLine/selectors/tax",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "DateInvoiced",
+              "source": "parentField",
+              "field": "orderDate",
+              "format": "DD-MM-YYYY"
+            }
+          ]
+        }
       }
     ],
     "actions": [

@@ -672,7 +672,6 @@ const WINDOW_TRUTHY_PROPS = [
 
 const WINDOW_BOOLEAN_TRUE_PROPS = [
   'hideDeleteWhenComplete',
-  'saveCurrencyBeforeLines',
   'customTabsAfterBottom',
   'hidePrint',
   'hideMoreMenu',
@@ -703,7 +702,7 @@ export const WINDOW_KEY_ORDER = [
   'id', 'name', 'primaryEntity', 'category', 'agentPrompt',
   'sidebarLayout', 'templateConfig',
   'documentPreview', 'notesField', 'relatedDocuments',
-  'hideDeleteWhenComplete', 'saveCurrencyBeforeLines', 'customTabsAfterBottom', 'hidePrint', 'hideSaveStatuses',
+  'hideDeleteWhenComplete', 'customTabsAfterBottom', 'hidePrint', 'hideSaveStatuses',
   'hideMoreMenu', 'hideMoreDetails', 'contentBg',
   'hideListFilters', 'hideLink', 'hideEyeCount', 'breadcrumb',
   'customComponents', 'menuActions', 'processOverrides',

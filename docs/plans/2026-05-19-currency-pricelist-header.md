@@ -3,7 +3,7 @@
 **Feature:** ETP-4027  
 **Affects:** Sales Quotation, Sales Order, Purchase Order  
 **Created:** 2026-05-19  
-**Status:** Dual-currency display complete, currency field lock complete, exchange rate endpoint complete. Remaining: price list fallback alert, E2E tests, REVIEW/QA phases.
+**Status:** Dual-currency display complete, currency field lock complete, exchange rate endpoint complete, save-order guard (`saveCurrencyBeforeLines`) complete. Rebased onto `epic/ETP-3504` (2026-06-16). Remaining: price list fallback alert, E2E tests, REVIEW/QA phases.
 
 ---
 
@@ -252,6 +252,13 @@ No manual changes to generated files. Run the Window Change Integrity Protocol (
 
 ### 4.3 Layer 3: Custom component changes
 
+> **Implementation note — `saveCurrencyBeforeLines` opt-in (added during ETP-4027):**
+> `DetailView.jsx` accepts a `saveCurrencyBeforeLines` boolean prop (default `false`). When `true`, the component inverts the normal save order in two scenarios:
+> 1. **Header "Guardar" button** (`flushAndSave`): if the user changed `currency` with a pending add-row and zero committed lines, the header is committed first (no lines → `C_ORDER_CHK_RESTRINCTIONS_TRG` is silent), then the line.
+> 2. **Line save via Enter** (`onAdd` callback): same check — if `currencyChangedNoLines`, save header before posting the line.
+>
+> The prop is emitted by `generate-frontend.js` only for windows that declare `"saveCurrencyBeforeLines": true` in `decisions.json`. Currently only `sales-order` and `purchase-order` opt in. This prevents the fix from affecting invoices or other windows that don't have the `C_ORDER_CHK_RESTRINCTIONS_TRG` constraint. The pipeline carries this flag through `resolve-curated.js` (`WINDOW_BOOLEAN_TRUE_PROPS`) → `contract.json` → `generate-frontend.js` → `HeaderPage.jsx`.
+
 > **Post-rebase note (ETP-3991):** The shared infrastructure was significantly refactored. Key architectural changes that affect this layer:
 > - `documentPdf.js` was split: fetch utilities moved to the new **`pdfUtils.js`** file. Any new fetch helper (e.g., `fetchExchangeRate`) must go in `pdfUtils.js`, not in `documentPdf.js`.
 > - `buildOrderData` now takes `(spec, orderId, base, token)` — `spec` is explicit.
@@ -312,7 +319,7 @@ export function useDocumentCurrency({ docCurrencyId, orderDate, apiBaseUrl, toke
     exchangeRate,       // 1.09 — null if same currency or not found
     isSameCurrency,     // boolean
     loading,
-    convertAmount,      // (amount) => amount / exchangeRate — returns amount unchanged if isSameCurrency
+    convertAmount,      // (amount) => amount * exchangeRate — returns amount unchanged if isSameCurrency
   };
 }
 ```

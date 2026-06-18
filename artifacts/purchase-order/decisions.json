@@ -6,7 +6,6 @@
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
-    "saveCurrencyBeforeLines": true,
     "menuActions": [],
     "draftMode": {
       "enabled": true,
@@ -465,7 +464,8 @@
           "displayLogic": null
         },
         "currency": {
-          "visibility": "readOnly",
+          "visibility": "editable",
+          "grid": false,
           "form": false,
           "reference": "Currency",
           "inputMode": null

@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.5.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-06-11T12:55:37.001Z",
-  "contractChecksum": "3fda0494d3c6a437",
+  "updatedAt": "2026-06-18T14:46:38.018Z",
+  "contractChecksum": "7f7b8fe7eb7f5b4d",
   "apiPrediction": {
     "specName": "sales-order",
     "baseUrl": "/sws/neo/sales-order",
@@ -148,6 +148,14 @@
             }
           ]
         }
+      },
+      {
+        "entity": "lines",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-order/lines/selectors/currency"
       }
     ],
     "actions": [
@@ -779,8 +787,8 @@
             "required": true
           },
           "currency": {
-            "readOnly": true,
             "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@C_Currency_ID@"
           },
           "description": {},
@@ -834,6 +842,10 @@
           "grossUnitPrice": {
             "readOnlyLogic": "@Processed@='Y' | @GROSSPRICE@='N'",
             "defaultValue": "0"
+          },
+          "currency": {
+            "required": true,
+            "defaultValue": "@C_Currency_ID@"
           }
         }
       }
@@ -853,14 +865,16 @@
         "partnerAddress",
         "priceList",
         "paymentTerms",
-        "warehouse"
+        "warehouse",
+        "currency"
       ],
       "lineFields": [
         "product",
         "orderedQuantity",
         "listPrice",
         "tax",
-        "unitPrice"
+        "unitPrice",
+        "currency"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -966,7 +980,8 @@
           "partnerAddress",
           "priceList",
           "paymentTerms",
-          "warehouse"
+          "warehouse",
+          "currency"
         ]
       },
       {
@@ -977,7 +992,8 @@
           "orderedQuantity",
           "listPrice",
           "tax",
-          "unitPrice"
+          "unitPrice",
+          "currency"
         ]
       },
       {
@@ -993,5 +1009,5 @@
       "confirmCancelAndReplace"
     ]
   },
-  "checksum": "515c9487bd8d2f7d"
+  "checksum": "abf7e85ffa55f8ed"
 }

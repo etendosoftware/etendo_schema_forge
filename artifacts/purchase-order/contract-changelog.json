@@ -1336,5 +1336,26 @@
     ],
     "author": "pipeline",
     "date": "2026-05-21"
+  },
+  {
+    "from": "0.21.0",
+    "to": "0.22.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"psd2GenerateBankPayment\" added to entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-17"
+  },
+  {
+    "from": "0.22.0",
+    "to": "0.22.1",
+    "level": "patch",
+    "reasons": [
+      "Field \"currency\" property \"visibility\" changed from \"readOnly\" to \"editable\" in frontend (patch)",
+      "Field \"currency\" property \"visibility\" changed from \"readOnly\" to \"editable\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-18"
   }
 ]

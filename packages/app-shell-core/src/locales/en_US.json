@@ -18750,6 +18750,7 @@
     "recordDeleted": "Record deleted",
     "recordsDeleted": "{count} record(s) deleted",
     "recordsCouldNotBeDeleted": "{count} record(s) could not be deleted",
+    "noConversionRateError": "No conversion rate defined between the current and the selected currency for date {date}. Currency change cancelled.",
     "networkError": "Network error",
     "backendError.ibanRequired": "Using IBAN for generating the Displayed Account requires to introduce the IBAN",
     "backendError.genericAccountRequired": "Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number",

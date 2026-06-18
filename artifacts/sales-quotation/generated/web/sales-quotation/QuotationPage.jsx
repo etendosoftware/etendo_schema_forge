@@ -288,6 +288,14 @@ export const api = {
     },
     {
       "entity": "quotation",
+      "field": "generateTemplate",
+      "column": "Generatetemplate",
+      "url": "/sws/neo/sales-quotation/quotation/{id}/action/generateTemplate",
+      "processId": "800022",
+      "processType": "classic"
+    },
+    {
+      "entity": "quotation",
       "field": "processNow",
       "column": "Processing",
       "url": "/sws/neo/sales-quotation/quotation/{id}/action/processNow",
@@ -301,14 +309,6 @@ export const api = {
       "url": "/sws/neo/sales-quotation/quotation/{id}/action/posted",
       "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
-    },
-    {
-      "entity": "quotation",
-      "field": "generateTemplate",
-      "column": "Generatetemplate",
-      "url": "/sws/neo/sales-quotation/quotation/{id}/action/generateTemplate",
-      "processId": "800022",
-      "processType": "classic"
     },
     {
       "entity": "quotation",
@@ -356,14 +356,6 @@ export const api = {
       "column": "RM_Pickfromreceipt",
       "url": "/sws/neo/sales-quotation/quotation/{id}/action/rMPickfromreceipt",
       "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "quotation",
-      "field": "psd2GenerateBankPayment",
-      "column": "EM_Psd2_Generate_Bank_Payment",
-      "url": "/sws/neo/sales-quotation/quotation/{id}/action/psd2GenerateBankPayment",
-      "processId": "0661406A983B4D8EA611F8596F114D52",
       "processType": "obuiapp"
     },
     {
