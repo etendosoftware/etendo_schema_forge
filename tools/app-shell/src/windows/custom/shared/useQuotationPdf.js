@@ -72,6 +72,7 @@ async function buildQuotationData(quotationId, base, token, currencyData = null)
     orgGrandTotal: (currencyData?.exchangeRate && currencyData?.exchangeRate !== 1)
       ? Number(grandTotal) / currencyData.exchangeRate
       : null,
+    rateDecimals: session?.currencyStandardPrecision ?? 4,
   };
 }
 

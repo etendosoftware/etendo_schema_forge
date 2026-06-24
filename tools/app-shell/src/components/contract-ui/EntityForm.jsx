@@ -14,6 +14,7 @@ import { ImageField } from './ImageField.jsx';
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
+import { CurrencyRatePicker } from './CurrencyRatePicker.jsx';
 import { SelectorChip } from './SelectorChip.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
 import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
@@ -1243,6 +1244,29 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
       return renderDependentField(f, label, isReadOnly);
     }
     if (f.type === 'selector') {
+      // Currency selector on order header: use CurrencyRatePicker for searchable rate display
+      if (
+        f.column === 'C_Currency_ID' &&
+        (entity === 'header' || entity === 'quotation') &&
+        /\/(sales-order|purchase-order|sales-quotation)(\/|$)/.test(apiBaseUrl || '')
+      ) {
+        const isRateReadOnly = formReadOnly || f.readOnly || displayLogic?.readOnly?.[f.key] === true || evalReadOnlyLogic(f, data);
+        return (
+          <CurrencyRatePicker
+            key={f.key}
+            field={f}
+            value={data?.[f.key] ?? ''}
+            displayValue={resolveIdentifier(data, f.key)}
+            onChange={onChange}
+            formData={data}
+            resolvedLabel={label}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            entityPath={entity}
+            isReadOnly={isRateReadOnly}
+          />
+        );
+      }
       return renderSelectorField(f, label, isReadOnly);
     }
     if (f.type === 'search') {

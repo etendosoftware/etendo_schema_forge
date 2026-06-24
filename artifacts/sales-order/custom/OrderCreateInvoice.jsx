@@ -29,7 +29,7 @@ function Spinner() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }) {
+export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, onRefresh }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -112,7 +112,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl }
           ].filter(Boolean)}
           currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
-          onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); }}
+          onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); onRefresh?.(); }}
         />,
         document.body,
       )
@@ -314,7 +314,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
-          throw new Error(e?.response?.message || `Error (${processRes.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || `Error (${processRes.status})`);
         }
         setOrderConfirmed(true);
         window.dispatchEvent(new CustomEvent('sales-order:document-created'));
@@ -338,7 +338,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedShipmentError') + (e?.response?.message || `Error (${res.status})`));
+          throw new Error(ui('soOrderConfirmedShipmentError') + (e?.error?.message || e?.response?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -356,7 +356,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.response?.message || `Error (${res.status})`));
+          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.error?.message || e?.response?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -578,7 +578,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
@@ -589,7 +589,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         result.invoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };

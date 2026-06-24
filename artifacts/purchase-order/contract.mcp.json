@@ -1,5 +1,5 @@
 {
-  "version": "0.22.1",
+  "version": "0.24.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
   "updatedAt": "2026-06-24T13:21:50.747Z",
   "contractChecksum": "bd966b94b92da43c",
@@ -1167,7 +1167,8 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "A"
-          }
+          },
+          "eTGOCurrencyRate": {}
         }
       },
       "lines": {

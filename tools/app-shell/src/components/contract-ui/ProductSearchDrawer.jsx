@@ -91,7 +91,7 @@ export default function ProductSearchDrawer({
   const abortRef = useRef(null);
   const ui = useUI();
   const sessionCurrency = useCurrency();
-  const currency = selectorContext?.currency ?? sessionCurrency;
+  const currency = selectorContext?.priceCurrency ?? selectorContext?.currency ?? sessionCurrency;
   const resolvedTitle = title ?? ui('product');
   const selectorContextRef = useRef(selectorContext);
   // Tracks the raw server-side offset (total rows consumed), independent of dedup count.

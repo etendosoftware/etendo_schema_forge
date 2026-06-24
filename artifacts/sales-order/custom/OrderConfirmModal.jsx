@@ -126,7 +126,7 @@ export default function OrderConfirmModal({
           const err = await res.json().catch(() => null);
           throw new Error(
             ui('soOrderConfirmedShipmentError')
-            + (err?.response?.message || err?.message || `Error (${res.status})`),
+            + (err?.error?.message || err?.response?.message || err?.message || `Error (${res.status})`),
           );
         }
         const json = await res.json();
@@ -149,7 +149,7 @@ export default function OrderConfirmModal({
           const err = await res.json().catch(() => null);
           throw new Error(
             ui('soOrderConfirmedInvoiceError')
-            + (err?.response?.message || err?.message || `Error (${res.status})`),
+            + (err?.error?.message || err?.response?.message || err?.message || `Error (${res.status})`),
           );
         }
         const json = await res.json();

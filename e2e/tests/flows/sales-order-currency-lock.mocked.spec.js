@@ -2,16 +2,16 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 
 /**
- * Sales Order — currency field lock (ETP-4027, mocked).
+ * Sales Order — currency field always editable for draft orders (ETP-4027, mocked).
  *
- * The DetailView locks the currency selector when committed lines exist:
- *   displayLogicWithCurrencyLock = hook.children.length > 0
- *     ? { ...displayLogic, readOnly: { ...displayLogic.readOnly, currency: true } }
- *     : displayLogic
+ * ETP-4027 removed `displayLogicWithCurrencyLock` — the DB trigger that blocked
+ * changes to C_Currency_ID when lines existed was deleted and the frontend lock
+ * logic was removed from DetailView.jsx. The currency field is now always editable
+ * for draft orders, regardless of whether the order has saved lines.
  *
  * Two scenarios:
- *   1. Order has saved lines → currency field input is disabled.
- *   2. Order has no saved lines → currency field input is NOT disabled.
+ *   1. Order has saved lines → currency field is still NOT disabled (lock removed).
+ *   2. Order has no saved lines → currency field is also NOT disabled (baseline).
  */
 
 const ORDER_ID = 'order-lock-test-001';
@@ -80,7 +80,7 @@ async function installDetailMock(page, lines) {
     }
   });
 
-  // Lines endpoint — drives the currency lock decision
+  // Lines endpoint
   await page.route(`**/sws/neo/sales-order/lines**`, async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
@@ -94,22 +94,24 @@ async function installDetailMock(page, lines) {
   });
 }
 
-test.describe('Sales Order — currency field lock when lines exist', () => {
-  test('currency field is disabled when order has saved lines', async ({ page }) => {
+test.describe('Sales Order — currency field always editable for draft orders (ETP-4027)', () => {
+  test('currency field is editable even when order has saved lines', async ({ page }) => {
     await login(page);
     await installDetailMock(page, [SAMPLE_LINE]);
 
     await page.goto(`/sales-order/${ORDER_ID}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // The currency field renders as a selector input inside the form.
-    // EntityForm emits data-testid="field-currency" on the field wrapper.
+    // CurrencyRatePicker renders as the trigger button (data-testid="currency-rate-trigger")
+    // inside the field-currency wrapper. It must NOT be disabled after ETP-4027 removed
+    // the displayLogicWithCurrencyLock feature.
     const currencyField = page.getByTestId('field-currency');
     await expect(currencyField).toBeVisible({ timeout: 8_000 });
 
-    // When currency is locked, the underlying input/button must be disabled.
-    const currencyInput = currencyField.locator('input, button').first();
-    await expect(currencyInput).toBeDisabled();
+    // The trigger button is the interactive element in CurrencyRatePicker
+    const currencyTrigger = currencyField.getByTestId('currency-rate-trigger');
+    await expect(currencyTrigger).toBeVisible({ timeout: 5_000 });
+    await expect(currencyTrigger).not.toBeDisabled();
   });
 
   test('currency field is editable when order has no saved lines', async ({ page }) => {
@@ -122,8 +124,8 @@ test.describe('Sales Order — currency field lock when lines exist', () => {
     const currencyField = page.getByTestId('field-currency');
     await expect(currencyField).toBeVisible({ timeout: 8_000 });
 
-    // With no lines the lock does not apply — the field must NOT be disabled.
-    const currencyInput = currencyField.locator('input, button').first();
-    await expect(currencyInput).not.toBeDisabled();
+    const currencyTrigger = currencyField.getByTestId('currency-rate-trigger');
+    await expect(currencyTrigger).toBeVisible({ timeout: 5_000 });
+    await expect(currencyTrigger).not.toBeDisabled();
   });
 });

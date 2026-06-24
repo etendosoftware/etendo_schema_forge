@@ -1,8 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.11.0",
   "generatedAt": "2026-04-30T15:42:46.907Z",
-  "updatedAt": "2026-06-16T18:01:42.917Z",
-  "checksum": "cdc05528bf2fd25d",
+  "updatedAt": "2026-06-23T15:00:38.679Z",
+  "checksum": "7cb0e41117ca9fc7",
   "frontendContract": {
     "window": {
       "id": "6CB5B67ED33F47DFA334079D3EA2340E",
@@ -68,7 +68,8 @@
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "selectorPriceCurrency": "org"
     },
     "entities": {
       "quotation": {
@@ -506,6 +507,18 @@
               "type": "computed",
               "source": "false"
             }
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "label": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false
           }
         ],
         "searchableFields": [
@@ -903,7 +916,8 @@
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "selectorPriceCurrency": "org"
     },
     "entities": {
       "quotation": {
@@ -1718,6 +1732,22 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "psd2GenerateBankPayment",
+            "apiKey": "psd2GenerateBankPayment",
+            "column": "EM_Psd2_Generate_Bank_Payment",
+            "type": "button",
+            "visibility": "system",
+            "required": false
           }
         ],
         "javaQualifier": "salesQuotationHeaderHandler"
@@ -2679,6 +2709,14 @@
         "processType": "obuiapp"
       },
       {
+        "entity": "quotation",
+        "field": "psd2GenerateBankPayment",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "url": "/sws/neo/sales-quotation/quotation/{id}/action/psd2GenerateBankPayment",
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
         "entity": "quotationLine",
         "field": "explode",
         "column": "Explode",
@@ -2837,6 +2875,14 @@
         "field": "processNow",
         "runner": "node",
         "description": "Action endpoint for 'processNow' in quotation should exist"
+      },
+      {
+        "id": "t-action-endpoint-quotation-psd2GenerateBankPayment",
+        "category": "action-endpoint",
+        "entity": "quotation",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "Action endpoint for 'psd2GenerateBankPayment' in quotation should exist"
       },
       {
         "id": "t-action-endpoint-quotation-rMAddOrphanLine",
@@ -3069,6 +3115,14 @@
         "description": "Field 'documentStatus' should be present in quotation"
       },
       {
+        "id": "t-field-presence-quotation-eTGOCurrencyRate",
+        "category": "field-presence",
+        "entity": "quotation",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should be present in quotation"
+      },
+      {
         "id": "t-field-presence-quotation-etgoTotalDiscount",
         "category": "field-presence",
         "entity": "quotation",
@@ -3267,6 +3321,14 @@
         "field": "documentStatus",
         "runner": "node",
         "description": "Field 'documentStatus' should have type 'string' in quotation"
+      },
+      {
+        "id": "t-field-type-quotation-eTGOCurrencyRate",
+        "category": "field-type",
+        "entity": "quotation",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should have type 'string' in quotation"
       },
       {
         "id": "t-field-type-quotation-etgoTotalDiscount",
@@ -4381,6 +4443,14 @@
         "description": "System field 'project' should exist in backend but not frontend for quotation"
       },
       {
+        "id": "t-system-field-quotation-psd2GenerateBankPayment",
+        "category": "system-field",
+        "entity": "quotation",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "System field 'psd2GenerateBankPayment' should exist in backend but not frontend for quotation"
+      },
+      {
         "id": "t-system-field-quotation-quotation",
         "category": "system-field",
         "entity": "quotation",
@@ -5108,25 +5178,25 @@
       }
     ],
     "summary": {
-      "total": 297,
+      "total": 301,
       "byCategory": {
-        "action-endpoint": 21,
+        "action-endpoint": 22,
         "crud-flags": 2,
         "default-value-type": 7,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 25,
-        "field-type": 25,
+        "field-presence": 26,
+        "field-type": 26,
         "readonlylogic-evaluable": 18,
         "readonlylogic-valid": 18,
         "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 9,
-        "system-field": 150,
+        "system-field": 151,
         "visibility": 2
       },
       "byRunner": {
-        "node": 297,
+        "node": 301,
         "junit": 0
       }
     }

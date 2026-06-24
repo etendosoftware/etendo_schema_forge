@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Order",
+    "selectorPriceCurrency": "org",
     "salesTheme": true,
     "notesField": "description",
     "relatedDocuments": true,
@@ -275,6 +276,11 @@
         "etgoTotalDiscount": {
           "visibility": "editable",
           "form": false
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         }
       }
     },

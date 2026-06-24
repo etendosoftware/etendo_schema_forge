@@ -1,5 +1,5 @@
 {
-  "version": "0.22.1",
+  "version": "0.24.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
   "updatedAt": "2026-06-24T13:21:50.747Z",
   "checksum": "bd966b94b92da43c",
@@ -42,7 +42,8 @@
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "selectorPriceCurrency": "org"
     },
     "entities": {
       "header": {
@@ -990,6 +991,18 @@
               "evaluable": true,
               "js": "record['processed'] === true"
             }
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "label": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false
           }
         ],
         "searchableFields": [
@@ -2301,7 +2314,8 @@
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "selectorPriceCurrency": "org"
     },
     "entities": {
       "header": {
@@ -3123,6 +3137,14 @@
             "column": "EM_Psd2_Generate_Bank_Payment",
             "type": "button",
             "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
             "required": false
           }
         ],
@@ -5686,6 +5708,14 @@
         "description": "Field 'documentStatus' should be present in header"
       },
       {
+        "id": "t-field-presence-header-eTGOCurrencyRate",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-etgoTotalDiscount",
         "category": "field-presence",
         "entity": "header",
@@ -6436,6 +6466,14 @@
         "field": "documentStatus",
         "runner": "node",
         "description": "Field 'documentStatus' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-eTGOCurrencyRate",
+        "category": "field-type",
+        "entity": "header",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-etgoTotalDiscount",
@@ -10979,15 +11017,15 @@
       }
     ],
     "summary": {
-      "total": 762,
+      "total": 764,
       "byCategory": {
         "action-endpoint": 22,
         "crud-flags": 5,
         "default-value-type": 26,
         "displaylogic-evaluable": 1,
         "displaylogic-valid": 1,
-        "field-presence": 94,
-        "field-type": 94,
+        "field-presence": 95,
+        "field-type": 95,
         "readonlylogic-evaluable": 44,
         "readonlylogic-valid": 44,
         "rule-declared": 231,
@@ -10997,7 +11035,7 @@
         "visibility": 5
       },
       "byRunner": {
-        "node": 762,
+        "node": 764,
         "junit": 0
       }
     }

@@ -82,11 +82,12 @@ function fmtDate(v) {
   return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear();
 }
 function ifEq(a, b, opts) { return a === b ? opts.fn(this) : opts.inverse(this); }
-function fmtRate(v) {
+function fmtRate(v, maybeDecimals) {
   if (v == null || v === '') return '';
   var n = Number(v);
   if (isNaN(n)) return '';
-  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n);
+  var d = (typeof maybeDecimals === 'number' && maybeDecimals >= 0) ? maybeDecimals : 4;
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
 }
 `;
 

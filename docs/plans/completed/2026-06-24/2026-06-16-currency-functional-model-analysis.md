@@ -1,6 +1,6 @@
 # Mixed Currencies Per Line — Option B Design (Confirmed Findings)
 
-**Date:** 2026-06-16 (last updated 2026-06-17)
+**Date:** 2026-06-16 (last updated 2026-06-19)
 **Branch:** `feature/ETP-4027` (schema_forge) + `feature/ETP-4027` (com.etendoerp.go)
 **Status:** Design alignment in progress. Findings below are code-verified.
 
@@ -571,6 +571,276 @@ The original plan referenced locales at `tools/app-shell/src/locales/`. The actu
 - ✅ Open saved order in USD (org=EUR), add line — line saved with USD currency and converted price
 - ✅ Round-trip USD → EUR → USD on saved order — currency persists each time
 - ✅ Manual DB inspection confirms `C_ORDERLINE.C_CURRENCY_ID` matches order header currency after conversion
+
+---
+
+## 12. Extra Scope — Currency Selector Enhancements and Order-Level Rate (2026-06-19)
+
+> **Request origin:** Analyst follow-up after original ETP-4027 design was confirmed.
+> This section documents an additional functional requirement added after the original phases
+> were already implemented. It is NOT a correction of anything previously built — it extends
+> the original design.
+
+### 12.1 What was requested
+
+Three improvements to the currency selector on sales-order and purchase-order:
+
+1. **Searchable selector.** The current field is a plain dropdown. It must become a
+   filterable/searchable combobox so users can type to narrow the list.
+
+2. **Key-value display.** Each option must show the ISO code of the currency (key) alongside
+   its current conversion value to the org currency for the order's date (value).
+   Example: `USD — 1.1523`.
+
+3. **Editable conversion rate.** The user must be able to override the displayed rate for
+   that specific order. The override is used when converting prices of new lines added after
+   a currency change (i.e., it feeds `activeCurrencyConversionRef`).
+
+### 12.2 Analysis — Exchange Rate tab in Invoices
+
+Before deciding how to store the override rate, a thorough code analysis of
+`C_Conversion_Rate_Document` (the table backing the Exchange Rate tab in invoices) was
+performed. Code-verified findings:
+
+- **Table:** `C_Conversion_Rate_Document` — one record per (document, currency-pair).
+  Supported parents: `C_Invoice_ID`, `FIN_Payment_ID`, `GL_Journal_ID`,
+  `FIN_FinaccTransaction_ID`. **No `C_Order_ID` column exists.**
+- **30+ consumers** (accounting, costing, aging reports, SII, AEAT390, Verifactu) all
+  query by invoice, payment, transaction, or journal ID. None query by order ID.
+- **Purpose of the tab in invoices:** document-level rate override used exclusively at
+  **accounting posting time** (`DocInvoice`, `FactLine`, `AcctServer`). The rate in
+  `C_Conversion_Rate_Document` overrides the global `C_Conversion_Rate` when `DocInvoice`
+  generates journal entries. It has **no effect on document amounts or line prices**.
+- **The tab is read-only in the UI** (`EM_OBUIAPP_CAN_ADD=N`, `EM_OBUIAPP_CAN_DELETE=N`).
+  Records are created automatically by payment processing
+  (`FIN_PaymentProcess.insertConversionRateDocument`) or by `InvoiceExchangeRateHandler`
+  (NEO). Users can only edit the `Rate` / `ForeignAmount` fields on existing rows.
+- **One record per invoice** in practice: the unique index enforces one record per
+  (currency-from, currency-to, parent-document). `LandedCostProcess` uses
+  `.uniqueResult()` without a currency filter, which would throw on multiple rows.
+
+### 12.3 Why a full Exchange Rate tab on orders is NOT needed
+
+The Exchange Rate tab exists in invoices because invoices are posted to the ledger —
+`DocInvoice` needs a place to find a document-specific rate that overrides the global table.
+Orders are **never posted** directly. There is no `DocOrder` accounting class, no call to
+`AcctServer.getConversionRateDoc` for orders, and `C_ORDER_POST1.xml` makes no reference to
+`C_Conversion_Rate_Document`.
+
+The rate we need for orders serves a completely different purpose: **feeding
+`activeCurrencyConversionRef`** so that line prices are converted when a new line is added.
+This is frontend conversion state, not accounting state. The full tab infrastructure (visible
+currency-pair fields, `Foreign_Amount`, `ConversionRateDocLockObserver`, etc.) would be
+overengineering for this purpose.
+
+### 12.4 Design decision — `EM_ETGO_Currency_Rate` column on `C_Order`
+
+**Store a single numeric column on `C_Order`:**
+
+```
+EM_ETGO_Currency_Rate  NUMERIC(20, 12)  nullable
+```
+
+- **Meaning:** the user-confirmed conversion rate from org currency to order currency
+  (same direction as `activeCurrencyConversionRef.rate`) for this specific order.
+- **When null:** the bootstrap `useEffect` uses `validate-exchange-rate` as it does today.
+- **When non-null:** the bootstrap `useEffect` uses this value directly, skipping the
+  endpoint call. This is the user's overridden rate.
+- **The currency pair is implicit** — always (order.currency → org.currency) — no need
+  to store it.
+- **`Foreign_Amount`** is derivable at any point as `grandTotal × rate` — no need to
+  persist.
+
+**Why not modifying `C_Conversion_Rate` (global table):**
+Ruled out. Writing a new global rate record (even with `VALIDFROM` date management) would
+affect all documents for that currency pair and date range across all clients. Parallel orders
+in the same date window would interfere with each other. Any change to the global table from
+an individual order context is architecturally incorrect.
+
+### 12.5 Invoice creation — propagating the rate to `C_Conversion_Rate_Document`
+
+When `createDraftInvoice` creates a new invoice from an order that has
+`EM_ETGO_Currency_Rate` set, it must also create a `C_Conversion_Rate_Document` record for
+the new invoice. This ensures:
+
+- **`InvoiceExchangeRateValidator`** finds a document-level rate → allows completion.
+- **`DocInvoice`** uses the same rate for accounting journal entries → consistent with the
+  prices on the lines (which were computed using this rate).
+- **`C_INVOICE_REVERSE_TRG`** will copy the record automatically to any reversal of the
+  invoice.
+- **SII, AEAT390, Verifactu** find the correct rate for compliance reporting.
+- **`LandedCostProcess`** finds exactly one record (our single-currency-pair record) → no
+  `NonUniqueResultException`.
+
+The record to create:
+
+```
+C_Conversion_Rate_Document:
+  C_Invoice_ID     = newly created invoice
+  C_Currency_ID    = invoice.getCurrency()   (same as order currency)
+  C_Currency_ID_TO = org functional currency (OBCurrencyUtils.getOrgCurrency)
+  Rate             = order.EM_ETGO_Currency_Rate
+  Foreign_Amount   = invoice.getGrandTotalAmount() × Rate
+```
+
+If `EM_ETGO_Currency_Rate` is null or the order and org currencies are the same, no record
+is created (no conversion needed).
+
+### 12.6 `CurrencyRatePicker` — UI component specification
+
+**Pattern:** follows `PartnerAddressPicker` / `CreatableSearchSelect`. Registered in
+`EntityForm.jsx` by switching on `column === "C_Currency_ID"` **only when the surrounding
+entity is an order header** (sales-order or purchase-order). All other windows that
+happen to have a `C_Currency_ID` field continue using the standard dropdown.
+
+**Visual structure of each option:**
+
+```
+USD — 1.1523  ✏
+EUR — 0.9200  ✏
+GBP — 0.8150  ✏
+```
+
+- Left side: ISO code of the candidate currency.
+- Right side: numeric conversion rate from org currency to that currency, for the order's
+  `dateOrdered` period. Filtered to currencies that actually have a conversion — currencies
+  without a defined rate for the period are excluded entirely from the list.
+- `✏` (pencil icon, inline): opens a small inline rate-editor (a number input) for that
+  option. Confirming the edit PATCHes `currencyRate` on the order header record. The field
+  `currencyRate` must be declared `form: false, grid: false` in `decisions.json` so Go never
+  renders it as a standalone form field — it is managed exclusively by this component.
+
+**Interaction flow for rate edit:**
+1. User clicks `✏` on a currency row.
+2. An inline numeric input appears with the current rate pre-filled.
+3. User changes the value and presses Enter / clicks away.
+4. Component issues `PATCH /sws/neo/sales-order/header/{orderId}` with body
+   `{ "currencyRate": <newRate> }`.
+5. On success, the option label re-renders with the new rate; `activeCurrencyConversionRef`
+   is updated live so the next line added uses the override rate.
+6. The PATCH does NOT trigger a currency change — it is a separate field write on an already-
+   selected currency.
+
+**Props forwarded from `EntityForm`:**
+`field, value, displayValue, onChange, formData, token, apiBaseUrl`
+
+`formData` is needed to read `dateOrdered` and `orderId` (or the record ID from context) so
+the component can call the currency options endpoint with the correct period.
+
+### 12.7 Custom backend endpoint — currency options with rate
+
+**Purpose:** return only the currencies that have a defined conversion from/to the org
+currency, for the given date, filtered by org AND client. This replaces the plain
+`AD_Reference` list currently used for the `C_Currency_ID` selector.
+
+**Endpoint design (window-specific ACTION on both sales-order and purchase-order):**
+
+```
+GET /sws/neo/sales-order/header/{orderId}/action/currencyOptions
+GET /sws/neo/purchase-order/header/{orderId}/action/currencyOptions
+```
+
+Both actions delegate to a shared service method (e.g., in `AbstractOrderHeaderHandler`
+or a standalone `@ApplicationScoped` bean injected into both handlers).
+
+**Why window-specific ACTION, not a generic NEO endpoint:**
+
+- The caller is always a specific order header — the record ID is already in the path, so
+  no extra parameter is needed to identify date and org context.
+- Both windows need it; the implementation lives in the shared abstract handler.
+- A generic endpoint would need explicit `orgId`, `date`, and `clientId` query params and
+  an additional auth check — more surface area for the same result.
+
+**Response shape:**
+
+```json
+[
+  { "id": "<C_Currency_ID>", "isoCode": "USD", "rate": 1.1523 },
+  { "id": "<C_Currency_ID>", "isoCode": "EUR", "rate": 0.9200 }
+]
+```
+
+**Query logic (SQL / OBDal):**
+
+```sql
+SELECT cr.C_Currency_ID_To AS currency_id,
+       c.ISO_Code,
+       cr.MultiplyRate AS rate
+FROM   C_Conversion_Rate cr
+JOIN   C_Currency c ON c.C_Currency_ID = cr.C_Currency_ID_To
+WHERE  cr.C_Currency_ID = :orgCurrencyId          -- FROM org currency
+AND    cr.AD_Org_ID IN (:orgId, '0')              -- org-level or system-level
+AND    cr.AD_Client_ID = :clientId                -- client-scoped
+AND    :orderDate BETWEEN cr.ValidFrom AND cr.ValidTo
+AND    cr.IsActive = 'Y'
+AND    c.IsActive = 'Y'
+ORDER BY c.ISO_Code
+```
+
+- `orgCurrencyId`: from `OBCurrencyUtils.getOrgCurrency(order.getOrganization())`.
+- `orgId`: from `order.getOrganization().getId()`.
+- `clientId`: from `order.getClient().getId()` (NOT `OBContext.getOBContext().getCurrentClient()`
+  — the order's own client, which prevents cross-client rate leakage).
+- `orderDate`: `order.getOrderDate()` (or `dateOrdered`).
+- The org filter uses `IN (:orgId, '0')` because `C_Conversion_Rate` records may be stored
+  under org `*` (id `'0'`), which is the standard Etendo pattern for shared data.
+
+**Org currency itself:** always included in the list, with `rate = 1.0`, so users can switch
+back to the org currency without triggering a conversion.
+
+### 12.8 Existing filtering bug in `validate-exchange-rate` — fix required
+
+The current `validate-exchange-rate` endpoint (used in the bootstrap `useEffect` and in
+`handleChangeWithCallout` to check whether a rate exists) queries `C_Conversion_Rate`
+without filtering by `AD_Client_ID` and uses only `AD_Org_ID IN (:orgId, '0')`.
+
+**Observed symptom:** Go is picking up conversion rates created by the `admin` user under a
+different client, because those records have `AD_Org_ID = '0'` and the query matches them.
+
+**Fix:** add `AND cr.AD_Client_ID = :clientId` to the `validate-exchange-rate` endpoint's
+query, where `clientId` comes from the order's `AD_Client_ID` (same derivation as above).
+
+This fix must be applied:
+1. In `validate-exchange-rate` (backend endpoint) — prevents false-positive validation
+   accepting rates from other clients.
+2. In the new `currencyOptions` action endpoint — ensures the displayed rates are the ones
+   the client actually has configured.
+
+The fix does NOT break any existing behavior for clients that have their rates stored with
+the correct `AD_Client_ID`. It only removes cross-client leakage.
+
+### 12.9 Change list
+
+| # | Component | Change |
+|---|-----------|--------|
+| X-1 | `com.etendoerp.go` — AD | Add `EM_ETGO_Currency_Rate NUMERIC(20,12)` column to `C_Order` via module's `AD_COLUMN.xml` + `src-db` table extension |
+| X-2 | `artifacts/sales-order/decisions.json` | Declare `header.currencyRate` as `form: false, grid: false` (hidden; managed by `CurrencyRatePicker`). Declare `header.currency` as using `CurrencyRatePicker` selector |
+| X-3 | `artifacts/purchase-order/decisions.json` | Same |
+| X-4 | `tools/app-shell/src/components/contract-ui/DetailView.jsx` | Bootstrap `useEffect` reads `hook.selected?.currencyRate`; if non-null, uses it for `activeCurrencyConversionRef` instead of fetching `validate-exchange-rate` |
+| X-5 | New `CurrencyRatePicker.jsx` in `tools/app-shell/src/components/contract-ui/` | Searchable combobox; each option renders `{isoCode} — {rate} ✏`; inline rate editor that PATCHes `currencyRate`. Wired in `EntityForm.jsx` for order header `C_Currency_ID`. Calls `currencyOptions` ACTION endpoint. |
+| X-6 | `AbstractOrderHeaderHandler.java` (shared) | Add `currencyOptions` action handler method. Add client-scoped filtering to rate queries |
+| X-7 | `validate-exchange-rate` endpoint | Add `AND AD_Client_ID = :clientId` to query. Derive `clientId` from the order's own client, not OBContext current client |
+| X-8 | `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/CreateDraftInvoiceHandler.java` | After creating the invoice, if `order.getEmEtgoCurrencyRate() != null` and currencies differ, create `C_Conversion_Rate_Document` record for the new invoice |
+| X-9 | `make regen ONLY=sales-order,purchase-order PUSH_TO_NEO=1` | Propagate decisions changes to NEO |
+| X-10 | `./gradlew export.database` in Etendo root | Persist AD column and NEO config to XML |
+
+### 12.10 What this does NOT require
+
+- No new table in `C_Conversion_Rate_Document` or anywhere else.
+- No modification of `C_Conversion_Rate` (global rate table) — never touched, never written.
+- No Exchange Rate tab in the order window (the rate lives in the `CurrencyRatePicker` UI).
+- No changes to `C_ORDER_POST1.xml`, `DocInvoice`, `AcctServer`, or any accounting class —
+  the order-side rate is transparent to all of them.
+- No changes to `InvoiceExchangeRateValidator` or `InvoiceCompletionRateHook` — they check
+  the invoice's `C_Conversion_Rate_Document`, which we populate in X-8.
+
+### 12.11 Verified downstream compatibility
+
+All 30+ consumers of `C_Conversion_Rate_Document` were audited. Every query filters by
+`C_Invoice_ID`, `FIN_Payment_ID`, `GL_Journal_ID`, or `FIN_FinaccTransaction_ID`. None
+query by order ID. Adding `EM_ETGO_Currency_Rate` to `C_Order` and populating
+`C_Conversion_Rate_Document` at invoice-creation time satisfies all downstream consumers
+without modifying any of them.
 
 ---
 

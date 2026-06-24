@@ -126,6 +126,7 @@ export default function SummaryCard({
   orgCurrencyCode,
   exchangeRate,
   orgGrandTotal,
+  ratePrecision = 4,
   children,
 }) {
   const ui = useUI();
@@ -147,16 +148,16 @@ export default function SummaryCard({
     ? formatAmount(grandTotal ?? 0, currencyCode || undefined)
     : null;
   const rateNote = showOrgTotal && exchangeRate
-    ? `(${exchangeRate.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })})`
+    ? `(${exchangeRate.toLocaleString(undefined, { minimumFractionDigits: ratePrecision, maximumFractionDigits: ratePrecision })})`
     : null;
 
   return (
     <CardShell data-testid="CardShell__a696d7">
       <CardHeader title={ui('previewCardTotal')} amount={primaryAmount} badge={showOrgTotal ? currencyCode : null} data-testid="CardHeader__a696d7" />
       {showOrgTotal && (
-        <div className="flex items-center justify-end gap-1.5 px-4 pb-1 text-xs text-gray-400 tabular-nums">
-          {rateNote && <span>{rateNote}</span>}
-          {docAmountStr && <span>{docAmountStr}</span>}
+        <div className="flex items-center justify-end gap-1.5 px-4 pb-1 tabular-nums">
+          {rateNote && <span className="text-xs text-gray-500 font-bold">{rateNote}</span>}
+          {docAmountStr && <span className="text-sm text-gray-900 font-bold">{docAmountStr}</span>}
         </div>
       )}
       <div className="px-4 py-2">

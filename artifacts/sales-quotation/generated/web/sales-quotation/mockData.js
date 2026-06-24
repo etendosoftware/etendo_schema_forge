@@ -18,7 +18,8 @@ export const quotation = [
     "currency": "USD",
     "description": "Standard order for Q1 delivery",
     "etgoTotalDiscount": 99.44,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-quotation-002",
@@ -37,7 +38,8 @@ export const quotation = [
     "currency": "EUR",
     "description": "Rush order - priority shipping required",
     "etgoTotalDiscount": 96.94,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-quotation-003",
@@ -56,7 +58,8 @@ export const quotation = [
     "currency": "GBP",
     "description": "Bulk purchase for warehouse restocking",
     "etgoTotalDiscount": 12.48,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-quotation-004",
@@ -75,7 +78,8 @@ export const quotation = [
     "currency": "USD",
     "description": "Sample order for client evaluation",
     "etgoTotalDiscount": 96.31,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-quotation-005",
@@ -94,7 +98,8 @@ export const quotation = [
     "currency": "EUR",
     "description": "Recurring monthly supply order",
     "etgoTotalDiscount": 31.27,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-quotation-006",
@@ -113,7 +118,8 @@ export const quotation = [
     "currency": "GBP",
     "description": "Special pricing agreement applies",
     "etgoTotalDiscount": 76.52,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-quotation-007",
@@ -132,7 +138,8 @@ export const quotation = [
     "currency": "USD",
     "description": "Consolidated order from multiple requests",
     "etgoTotalDiscount": 2.66,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-quotation-008",
@@ -151,7 +158,8 @@ export const quotation = [
     "currency": "EUR",
     "description": "Trial order for new product line",
     "etgoTotalDiscount": 10.03,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-quotation-009",
@@ -170,7 +178,8 @@ export const quotation = [
     "currency": "GBP",
     "description": "Replacement for damaged goods",
     "etgoTotalDiscount": 93.97,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-quotation-010",
@@ -189,7 +198,8 @@ export const quotation = [
     "currency": "USD",
     "description": "Pre-season inventory build-up",
     "etgoTotalDiscount": 1.1,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-quotation-011",
@@ -208,7 +218,8 @@ export const quotation = [
     "currency": "EUR",
     "description": "Customer-specific configuration",
     "etgoTotalDiscount": 79.99,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-quotation-012",
@@ -227,7 +238,8 @@ export const quotation = [
     "currency": "GBP",
     "description": "Government contract fulfillment",
     "etgoTotalDiscount": 53.61,
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "eTGOCurrencyRate": "GBP"
   }
 ];
 

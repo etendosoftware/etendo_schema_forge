@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Quotation",
+    "selectorPriceCurrency": "org",
     "salesTheme": true,
     "notesField": "description",
     "relatedDocuments": true,
@@ -286,6 +287,11 @@
         "etgoTotalDiscount": {
           "visibility": "editable",
           "form": false
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         }
       },
       "javaQualifier": "salesQuotationHeaderHandler"

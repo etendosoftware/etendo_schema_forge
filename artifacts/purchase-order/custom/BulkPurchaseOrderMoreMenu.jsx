@@ -107,7 +107,7 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.response?.message || `Error (${res.status})`);
+        throw new Error(err?.error?.message || err?.response?.message || `Error (${res.status})`);
       }
       return row;
     }),

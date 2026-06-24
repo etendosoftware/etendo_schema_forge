@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Order",
+    "selectorPriceCurrency": "org",
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
@@ -16,7 +17,7 @@
     "customComponents": {
       "topbarRight": "PurchaseOrderActions",
       "topbarExtra": "PurchaseOrderDraftChips",
-"bottomSection": "PurchaseOrderBottomPanel"
+      "bottomSection": "PurchaseOrderBottomPanel"
     },
     "linesLayout": "inlineEditable",
     "labelOverrides": {
@@ -310,6 +311,11 @@
         "etgoTotalDiscount": {
           "visibility": "editable",
           "form": false
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         }
       }
     },

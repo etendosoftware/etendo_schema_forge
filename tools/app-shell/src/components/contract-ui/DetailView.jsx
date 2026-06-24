@@ -1550,6 +1550,7 @@ export function DetailView({
   formScrollPaddingB = 'pb-6',
   secondaryTabContentPaddingT = 'pt-3',
   transformRecord = null,
+  selectorPriceCurrency = null,
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -1655,6 +1656,7 @@ export function DetailView({
     if (detailEntity) {
       const headerSnapshot = hook.selected ?? hook.editing;
       const currency = headerSnapshot?.['currency$_identifier'] ?? sessionCurrencyCode ?? null;
+      const priceCurrency = selectorPriceCurrency === 'org' ? sessionCurrencyCode : null;
       next[detailEntity] = {
         ...buildLineSelectorContext({
           windowCategory: category,
@@ -1665,6 +1667,7 @@ export function DetailView({
           },
         }),
         ...(currency ? { currency } : {}),
+        ...(priceCurrency ? { priceCurrency } : {}),
       };
     }
 
@@ -1672,7 +1675,7 @@ export function DetailView({
       next[key] = { parentId: parentRecordId };
     }
     return next;
-  }, [entity, detailEntity, parentRecordId, secondaryTabKeysStr, priceListId, api, hook.selected, hook.editing, sessionCurrencyCode]);
+  }, [entity, detailEntity, parentRecordId, secondaryTabKeysStr, priceListId, api, hook.selected, hook.editing, sessionCurrencyCode, selectorPriceCurrency]);
   const { catalogs, catalogsLoaded } = useCatalogs(api, token, apiBaseUrl, staticCatalogs);
   const displayLogic = useDisplayLogic(entity, hook.editing, { token, apiBaseUrl });
   const { calloutResult, calloutLoading, executeCallout } = useCallout(entity, { token, apiBaseUrl });
@@ -2111,6 +2114,22 @@ export function DetailView({
           activeCurrencyConversionRef.current = null;
           return;
         }
+
+        // If the order has a per-order rate override, use it directly without
+        // fetching validate-exchange-rate. This reflects the user's confirmed rate
+        // (set via CurrencyRatePicker) and avoids a redundant network call.
+        const overrideRate = hook.selected?.eTGOCurrencyRate != null
+          ? parseFloat(hook.selected.eTGOCurrencyRate)
+          : null;
+        if (overrideRate && overrideRate > 0) {
+          activeCurrencyConversionRef.current = {
+            baseCurrency: orgCurrencyId,
+            toCurrency: docCurrencyId,
+            rate: overrideRate,
+          };
+          return;
+        }
+
         const rateRes = await fetch(
           `${neoBase}/validate-exchange-rate?fromCurrency=${encodeURIComponent(orgCurrencyId)}&toCurrency=${encodeURIComponent(docCurrencyId)}&date=${encodeURIComponent(orderDate)}`,
           { headers: { Authorization: `Bearer ${token}` } },
@@ -2138,7 +2157,7 @@ export function DetailView({
       }
     })();
     return () => { cancelled = true; };
-  }, [recordId, hook.selected?.currency, hook.selected?.orderDate, apiBaseUrl, token]);
+  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.orderDate, apiBaseUrl, token]);
   // Guard: fire default callouts only once per new-record session
   const defaultCalloutsTriggeredRef = useRef(false);
   // Cache for tax rates fetched from the selector (keyed by tax ID).

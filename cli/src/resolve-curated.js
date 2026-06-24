@@ -668,6 +668,7 @@ const WINDOW_TRUTHY_PROPS = [
   'balanceFooter',
   'extraTabs',
   'customPanelTabs',
+  'selectorPriceCurrency',
 ];
 
 const WINDOW_BOOLEAN_TRUE_PROPS = [
@@ -715,7 +716,7 @@ export const WINDOW_KEY_ORDER = [
   'dateFilterKey', 'statusEnumLabels', 'noHeaderBorder', 'toolbarBorderBottom', 'compactSidebarPadding', 'whiteFormBackground', 'hideFormCard', 'sidebarClassName', 'formCardPadding', 'formScrollPaddingX', 'tabsBarPaddingX', 'primaryTabsVariant', 'toolbarPaddingX', 'toolbarButtonSize', 'listbarPaddingX', 'tablePaddingX', 'lineEntityConfig',
   'extraTabs', 'attachments', 'customPanelTabs', 'rowQuickActions',
   'sendDocument',
-  'layoutType', 'linesLayout', 'balanceFooter',
+  'layoutType', 'linesLayout', 'balanceFooter', 'selectorPriceCurrency',
 ];
 
 // Generic helper: returns a new object with keys in `canonicalOrder` first

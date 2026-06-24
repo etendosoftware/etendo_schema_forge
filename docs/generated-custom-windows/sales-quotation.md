@@ -163,6 +163,120 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 
 - **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.
 
+## Currency selector and quotation-to-order conversion — ETP-4027
+
+### CurrencyRatePicker on quotations
+
+`EntityForm.jsx` wires `CurrencyRatePicker` for the `C_Currency_ID` field when
+`entity === 'quotation'` and `apiBaseUrl` matches `/sales-quotation`. The
+condition is:
+
+```js
+f.column === 'C_Currency_ID' &&
+(entity === 'header' || entity === 'quotation') &&
+/\/(sales-order|purchase-order|sales-quotation)(\/|$)/.test(apiBaseUrl || '')
+```
+
+The component (`tools/app-shell/src/components/contract-ui/CurrencyRatePicker.jsx`)
+replaces the standard `SelectorInput` and:
+
+- Renders each option as `{isoCode} — {rate}` (e.g. `USD — 1.1523`), where
+  `rate` is the conversion from the org currency to that currency for the
+  quotation's `dateOrdered`.
+- Fetches options lazily from
+  `GET {apiBaseUrl}/quotation/{id}/action/currencyOptions`
+  when the user opens the dropdown. The entity path `'quotation'` is passed via
+  the `entityPath` prop, so the URL differs from the sales-order equivalent
+  (`header/{id}/action/currencyOptions`).
+- Also fires an eager fetch when `hasRecord` becomes `true` (i.e., after the
+  quotation is first saved and a real `id` is available), so the rate is
+  immediately visible in the trigger without requiring the user to open the
+  dropdown.
+- Shows a pencil icon (`data-testid="currency-rate-pencil"`) when `value &&
+  hasRecord`. Clicking it enters inline-edit mode with a numeric input
+  (`data-testid="currency-rate-input"`). Enter confirms and calls
+  `onChange('eTGOCurrencyRate', rate, 'EM_ETGO_Currency_Rate')` to stage the
+  overridden rate. Escape cancels without change.
+- The displayed rate is the staged `eTGOCurrencyRate` value (if present in
+  `formData`) or the rate returned by `currencyOptions` for the currently
+  selected currency.
+- The field `eTGOCurrencyRate` is declared in `decisions.json` as
+  `form: false, grid: false` — it is invisible to the user; only
+  `CurrencyRatePicker` manages it.
+
+The `currencyOptions` endpoint is the same one used by sales-order —
+implemented in `CurrencyOptionsHandler.java` (`com.etendoerp.go`). It filters
+by client and org, returns only currencies that have an active exchange rate for
+the document date, and always includes the org currency with `rate: 1.0`.
+
+### Convertquotation — preserved prices
+
+`SalesQuotationHeaderHandler.handle()` intercepts the `Convertquotation` action
+before it reaches NEO's generic button handler and calls:
+
+```java
+Order newOrder = convertQuotationProcess.convertQuotationIntoSalesOrder(false, quotationId);
+```
+
+The `false` parameter is `recalculatePrices`. Standard Etendo passes `true`
+(re-fetches prices from the active price list), which overwrites the amounts
+agreed in the quotation. With `false`, `ConvertQuotationIntoOrder.java` copies
+lines directly without touching `PriceActual` or `ListPrice`. Returning a
+non-null `NeoResponse` from `handle()` short-circuits the default NEO handler,
+so the overriding parameter is guaranteed to take effect.
+
+The backend action response body is `{ "salesOrderId": "<id>" }`. The frontend
+(`QuotationConfirmModal.jsx`) does not read `salesOrderId` from this response —
+instead it fires a follow-up
+`GET {baseNeoUrl}/sales-order/header?criteria=[{fieldName:'quotation',operator:'equals',value:quotationId}]`
+to resolve the created order and display its document number and total in the
+success state. If the order was auto-completed (`documentStatus === 'CO'`), the
+modal issues a best-effort `POST DocAction { docAction: 'RE' }` to reactivate it
+to Draft before surfacing the result.
+
+`afterHandle()` copies `EM_ETGO_Currency_Rate` from the quotation header to the
+new order header via JDBC:
+
+```java
+UPDATE c_order SET em_etgo_currency_rate = ?
+WHERE c_order_id = (
+  SELECT c_order_id FROM c_order
+  WHERE quotation_id = ? AND issotrx = 'Y' AND em_etgo_currency_rate IS NULL
+  ORDER BY created DESC LIMIT 1
+)
+```
+
+This ensures that an exchange rate agreed during the quotation stage is
+carried forward to the resulting sales order without the user having to
+re-enter it.
+
+### Currency change on quotations
+
+The behavior is identical to Sales Order — see
+`docs/generated-custom-windows/sales-order.md` under "Currency change handling
+(ETP-4027 functional model)". Briefly:
+
+- The `currency` field is always editable on quotations in `DR` or `UE` status.
+- When the user picks a new currency in the dropdown, `DetailView.jsx` validates
+  exchange-rate availability via `validate-exchange-rate` before applying the
+  change. If no rate exists, the dropdown reverts to the previous value and
+  shows a toast.
+- A `useEffect` in `DetailView.jsx` keeps `activeCurrencyConversionRef`
+  synchronized with the saved currency/date so that newly added lines have their
+  prices converted automatically from the pricelist currency to the order
+  currency.
+
+### Automated evidence
+
+- `e2e/tests/flows/sales-quotation-convert-prices.mocked.spec.js` — Playwright
+  mocked spec: modal selection, POST to `Convertquotation`, total display in the
+  blue summary card, and success state showing the new order's `documentNo`.
+- `e2e/tests/flows/sales-order-currency-rate-picker.mocked.spec.js` — covers
+  `CurrencyRatePicker` behavior (rate display in the trigger, pencil-edit flow,
+  rate confirm/cancel, currency change with and without an available rate). This
+  spec targets the sales-order entity but the component is shared; the quotation
+  path (`entityPath='quotation'`) is wired identically.
+
 ## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
 
 `com.etendoerp.go` now depends on the **PSD2** module, which adds the

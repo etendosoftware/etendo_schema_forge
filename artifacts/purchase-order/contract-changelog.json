@@ -1357,5 +1357,26 @@
     ],
     "author": "pipeline",
     "date": "2026-06-18"
+  },
+  {
+    "from": "0.22.1",
+    "to": "0.23.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTGOCurrencyRate\" added to entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-19"
+  },
+  {
+    "from": "0.23.0",
+    "to": "0.24.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTGOCurrencyRate\" added to entity \"header\" in frontend",
+      "Field \"eTGOCurrencyRate\" property \"visibility\" changed from \"discarded\" to \"editable\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-19"
   }
 ]

@@ -114,8 +114,8 @@ body { font-family: var(--font-sans); font-size: 13px; line-height: 18px; color:
 .inv-totals .row { display:flex; justify-content:space-between; font-size:13px; color:var(--fg-2); font-variant-numeric:tabular-nums; }
 .inv-totals .row.grand { margin-top:8px; padding-top:10px; border-top:1px solid var(--border-1); font-size:15px; font-weight:700; color:var(--fg-1); }
 .inv-totals .row.discount { color:var(--fg-3); font-size:12px; }
-.inv-totals .row.conversion-row { color:var(--fg-3); font-size:11px; margin-top:4px; }
-.inv-totals .rate-note { color:var(--fg-4); font-size:10px; margin-left:4px; }
+.inv-totals .row.conversion-row { color:var(--fg-3); font-size:11px; font-weight:700; margin-top:4px; }
+.inv-totals .rate-note { color:var(--fg-4); font-size:10px; font-weight:700; margin-left:4px; }
 
 /* Observations */
 .inv-observ { border:1px solid var(--border-1); border-radius:var(--radius-lg); padding:14px 18px; display:grid; grid-template-columns:120px 1fr; gap:16px; margin-top:8px; }
@@ -220,7 +220,7 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
       <div class="row"><span>{{labels.tax}}</span><span>{{fmt taxAmount}}</span></div>
       <div class="row grand"><span>{{labels.grandTotal}}</span><span>{{fmt grandTotal}}</span></div>
       {{#if exchangeRate}}
-      <div class="row conversion-row"><span>{{orgCurrencyCode}}</span><span>{{fmt orgGrandTotal}} <span class="rate-note">({{fmtRate exchangeRate}})</span></span></div>
+      <div class="row conversion-row"><span>{{orgCurrencyCode}}</span><span>{{fmt orgGrandTotal}} <span class="rate-note">({{fmtRate exchangeRate rateDecimals}})</span></span></div>
       {{/if}}
     </div>
   </div>
@@ -334,9 +334,12 @@ export async function buildOrderData(spec, orderId, base, token, currencyData = 
     totalDiscountAmt:   totalDiscountAmt > 0 ? totalDiscountAmt : null,
     exchangeRate: currencyData?.exchangeRate ?? null,
     orgCurrencyCode: currencyData?.orgCurrencyCode ?? null,
+    // exchangeRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
+    // Divide grandTotal (in doc currency) by it to get the org-currency equivalent.
     orgGrandTotal: (currencyData?.exchangeRate && currencyData?.exchangeRate !== 1)
       ? Number(grandTotal) / currencyData.exchangeRate
       : null,
+    rateDecimals: session?.currencyStandardPrecision ?? 4,
   };
 }
 

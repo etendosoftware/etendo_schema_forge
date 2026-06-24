@@ -10,6 +10,7 @@ import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { fetchByCriteria } from '@/components/related-documents';
+import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 
 // ── Quotation related-documents specs ────────────────────────────────────────
 
@@ -21,7 +22,7 @@ const QUOTATION_SPECS = [
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal }) {
+function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrencyCode, exchangeRate, orgGrandTotal, ratePrecision }) {
   const ui = useUI();
   const statusCode = quotation.documentStatus;
   const statusLabel = resolveStatusLabel(statusCode, null, ui);
@@ -39,6 +40,7 @@ function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrency
         orgCurrencyCode={orgCurrencyCode}
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
+        ratePrecision={ratePrecision}
         data-testid="SummaryCard__7eb018" />
       <EmailsCard onSend={onSend} data-testid="EmailsCard__7eb018" />
       <RelatedDocumentsCard
@@ -60,14 +62,26 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendModalClosing, setSendModalClosing] = useState(false);
 
-  // Dual-currency: fetch exchange rate when doc currency differs from org currency
-  const { orgCurrencyCode, exchangeRate, convertAmount } = useDocumentCurrency({
-    docCurrencyId: quotation?.['currency$_identifier'],
+  const ratePrecision = useCurrencyPrecision();
+
+  // Dual-currency: fetch system exchange rate, then override with per-quotation rate when set.
+  // eTGOCurrencyRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
+  // orgGrandTotal = docTotal / eTGOCurrencyRate converts doc→org correctly.
+  const { orgCurrencyCode, isSameCurrency, exchangeRate: systemExchangeRate } = useDocumentCurrency({
+    docCurrencyCode: quotation?.['currency$_identifier'],
     orderDate: quotation?.orderDate,
     apiBaseUrl,
     token,
   });
-  const orgGrandTotal = convertAmount(quotation?.grandTotalAmount);
+  const etgoRate = (!isSameCurrency && quotation?.eTGOCurrencyRate)
+    ? parseFloat(quotation.eTGOCurrencyRate)
+    : null;
+  const exchangeRate = (etgoRate && etgoRate !== 0 && etgoRate !== 1)
+    ? etgoRate
+    : systemExchangeRate;
+  const orgGrandTotal = (!isSameCurrency && exchangeRate && quotation?.grandTotalAmount != null)
+    ? Number(quotation.grandTotalAmount) / exchangeRate
+    : null;
   const currencyData = { orgCurrencyCode, exchangeRate };
 
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useQuotationPdf(
@@ -144,6 +158,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
         orgCurrencyCode={orgCurrencyCode}
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
+        ratePrecision={ratePrecision}
         data-testid="QuotationGeneralTab__7eb018" />,
     },
     {
