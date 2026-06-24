@@ -1264,7 +1264,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
             apiBaseUrl={apiBaseUrl}
             entityPath={entity}
             isReadOnly={isRateReadOnly}
-          />
+            data-testid="CurrencyRatePicker__a8d626" />
         );
       }
       return renderSelectorField(f, label, isReadOnly);

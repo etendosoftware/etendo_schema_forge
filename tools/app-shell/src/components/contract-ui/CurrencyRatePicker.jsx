@@ -180,7 +180,9 @@ export function CurrencyRatePicker({
   if (isReadOnly) {
     return (
       <div className="space-y-1.5" data-testid={`field-${field.key}`}>
-        <Label className="text-sm text-foreground font-medium">{resolvedLabel}</Label>
+        <Label
+          className="text-sm text-foreground font-medium"
+          data-testid={"Label__" + field.id}>{resolvedLabel}</Label>
         <div className="rounded-md border border-input bg-muted/50 px-3 py-2 text-sm cursor-default">
           {displayIso}
           {displayRate != null && (
@@ -193,11 +195,13 @@ export function CurrencyRatePicker({
 
   return (
     <div className="space-y-1.5 relative" data-testid={`field-${field.key}`} ref={containerRef}>
-      <Label htmlFor={field.key} className="text-sm text-foreground font-medium">
+      <Label
+        htmlFor={field.key}
+        className="text-sm text-foreground font-medium"
+        data-testid={"Label__" + field.id}>
         {resolvedLabel}
         {field.required && <span className="text-destructive ml-0.5">*</span>}
       </Label>
-
       {/* Trigger */}
       {editingRate ? (
         <div className="w-full flex items-center gap-1 rounded-md border border-input bg-white dark:bg-background px-2 py-1.5 text-sm">
@@ -223,7 +227,7 @@ export function CurrencyRatePicker({
             className="text-green-600 hover:text-green-700 p-0.5 rounded"
             title="Confirmar"
           >
-            <Check className="h-3.5 w-3.5" />
+            <Check className="h-3.5 w-3.5" data-testid={"Check__" + field.id} />
           </button>
           <button
             data-testid="currency-rate-cancel"
@@ -232,7 +236,7 @@ export function CurrencyRatePicker({
             className="text-muted-foreground hover:text-foreground p-0.5 rounded"
             title="Cancelar"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" data-testid={"X__" + field.id} />
           </button>
         </div>
       ) : (
@@ -258,7 +262,9 @@ export function CurrencyRatePicker({
                 Seleccionar {resolvedLabel}...
               </span>
             )}
-            <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-1" />
+            <ChevronDown
+              className="h-4 w-4 opacity-50 shrink-0 ml-1"
+              data-testid={"ChevronDown__" + field.id} />
           </button>
           {value && hasRecord && (
             <button
@@ -268,12 +274,11 @@ export function CurrencyRatePicker({
               onClick={handleRateEdit}
               className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             >
-              <Pencil className="h-3.5 w-3.5" />
+              <Pencil className="h-3.5 w-3.5" data-testid={"Pencil__" + field.id} />
             </button>
           )}
         </div>
       )}
-
       {/* Dropdown */}
       {open && (
         <div className="absolute top-full left-0 z-50 mt-1 w-full min-w-[200px] rounded-md border border-input bg-popover shadow-md">
@@ -291,7 +296,9 @@ export function CurrencyRatePicker({
           <div className="max-h-56 overflow-y-auto py-1">
             {loading && (
               <div className="flex items-center justify-center p-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader2
+                  className="h-4 w-4 animate-spin text-muted-foreground"
+                  data-testid={"Loader2__" + field.id} />
               </div>
             )}
             {!loading && filtered.length === 0 && (
