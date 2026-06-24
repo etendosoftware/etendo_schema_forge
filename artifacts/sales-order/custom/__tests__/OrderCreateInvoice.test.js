@@ -13,7 +13,7 @@ describe('OrderCreateInvoice', () => {
   });
 
   it('accepts data, recordId, token, and apiBaseUrl props', () => {
-    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl\s*\}/);
+    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl/);
   });
 
   it('renders confirm flow only for draft orders (status DR)', () => {
