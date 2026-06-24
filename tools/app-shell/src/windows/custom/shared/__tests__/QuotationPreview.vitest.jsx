@@ -5,6 +5,10 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (key) => key,
 }));
 
+vi.mock('@/hooks/useCurrencyPrecision.js', () => ({
+  useCurrencyPrecision: () => 4,
+}));
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
   useLocation: () => ({ pathname: '/', state: null }),

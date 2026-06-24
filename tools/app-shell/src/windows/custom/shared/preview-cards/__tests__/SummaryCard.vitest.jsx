@@ -232,7 +232,7 @@ describe('SummaryCard', () => {
     it('shows exchange rate note (in parentheses) when currencies differ', () => {
       render(<SummaryCard {...dualProps} />);
       // rateNote is formatted to 4 decimal places — matches "(1.1647)" pattern
-      expect(screen.getByText(/\(1\.1647\)/)).toBeInTheDocument();
+      expect(screen.getByText(/\(1[.,]1647\)/)).toBeInTheDocument();
     });
 
     it('shows only doc amount — no secondary row — when orgCurrencyCode equals currencyCode', () => {

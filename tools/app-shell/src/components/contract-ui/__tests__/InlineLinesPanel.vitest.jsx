@@ -1177,7 +1177,7 @@ describe('InlineLinesPanel', () => {
     expect(screen.getByText('Third')).toBeInTheDocument();
   });
 
-  it('renders amount column with currency identifier', () => {
+  it('renders amount column formatted without currency identifier (currency shown at header level)', () => {
     const columns = [{ key: 'lineNetAmount', label: 'Net', type: 'amount' }];
     const rows = [{ id: 'AC1', lineNetAmount: 250, 'currency$_identifier': 'USD' }];
     const ref = React.createRef();
@@ -1186,7 +1186,7 @@ describe('InlineLinesPanel', () => {
         token="test" apiBaseUrl="/api" selectorContext={{}}
         onSelectionChange={vi.fn()} onUpdateRow={vi.fn().mockResolvedValue()} onDeleteRow={vi.fn().mockResolvedValue()} />,
     );
-    expect(screen.getByText('250.00 USD')).toBeInTheDocument();
+    expect(screen.getByText('250.00')).toBeInTheDocument();
   });
 
   it('renders string column with identifier fallback', () => {

@@ -5,6 +5,10 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (key) => key,
 }));
 
+vi.mock('@/hooks/useCurrencyPrecision.js', () => ({
+  useCurrencyPrecision: () => 4,
+}));
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
   useLocation: () => ({ pathname: '/', state: null }),
@@ -215,26 +219,33 @@ describe('OrderPreview', () => {
       vi.mocked(SummaryCard).mockClear();
     });
 
-    it('passes orgCurrencyCode and exchangeRate to SummaryCard when currencies differ', () => {
-      const convertAmount = vi.fn((amount) => amount != null ? amount * 0.86 : null);
+    it('uses eTGOCurrencyRate (org→doc) as exchangeRate and divides to get orgGrandTotal', () => {
+      // eTGOCurrencyRate = org→doc multiplyRate set by the user on the order.
+      // e.g. 1.20 = "1 EUR = 1.20 USD". The component displays this rate directly
+      // and computes orgGrandTotal = docTotal / eTGOCurrencyRate.
       vi.mocked(useDocumentCurrency).mockReturnValue({
         orgCurrencyCode: 'EUR',
-        exchangeRate: 0.86,
+        exchangeRate: null,
         isSameCurrency: false,
         loading: false,
-        convertAmount,
+        convertAmount: () => null,
       });
 
-      const orderWithUsd = { ...defaultOrder, 'currency$_identifier': 'USD', grandTotalAmount: 1000 };
+      const orderWithUsd = {
+        ...defaultOrder,
+        'currency$_identifier': 'USD',
+        grandTotalAmount: 1000,
+        eTGOCurrencyRate: '1.20',
+      };
       renderOrderPreview({ order: orderWithUsd });
 
-      // SummaryCard should have been called with orgCurrencyCode and exchangeRate
       const lastCall = vi.mocked(SummaryCard).mock.calls.at(-1)?.[0];
       expect(lastCall).toBeDefined();
       expect(lastCall.orgCurrencyCode).toBe('EUR');
-      expect(lastCall.exchangeRate).toBe(0.86);
-      // orgGrandTotal is convertAmount(grandTotalAmount) = 1000 * 0.86 = 860
-      expect(lastCall.orgGrandTotal).toBeCloseTo(860);
+      // exchangeRate shown in sidebar = eTGOCurrencyRate (1 EUR = 1.20 USD)
+      expect(lastCall.exchangeRate).toBeCloseTo(1.20);
+      // orgGrandTotal = 1000 USD / 1.20 ≈ 833.33 EUR
+      expect(lastCall.orgGrandTotal).toBeCloseTo(1000 / 1.20, 2);
     });
 
     it('passes no org currency data to SummaryCard when currencies are the same', () => {
