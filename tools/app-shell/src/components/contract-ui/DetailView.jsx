@@ -2555,19 +2555,7 @@ export function DetailView({
       const calloutData = await res.json();
       const result = normalizeCalloutResponse(calloutData, rowValues);
 
-      // Classic callouts (SL_Order_Product, SL_Invoice_Product) return the catalog price
-      // as standardPrice (PriceStd) and zero out listPrice (PriceList column).
-      // Use standardPrice as the list price when the callout zeroed listPrice.
-      // The selector enrichment in NeoSelectorService ensures standardPrice always comes
-      // from the document's price list for both order and invoice configs.
-      if (field === 'product' && result.standardPrice != null && (result.listPrice == null || Number(result.listPrice) === 0)) {
-        result.listPrice = result.standardPrice;
-      }
-
-      // Reset discount to 0 on product change so each product starts with no discount applied.
-      if (field === 'product' && lineConfig.discountField) {
-        result[lineConfig.discountField] = 0;
-      }
+      applyProductCalloutPriceAdjustments(field, result, lineConfig);
 
       // Resolve missing $_identifier from loaded catalogs for FK fields returned by callout
       // (e.g., callout sets uOM='100' but server omits the display name)
@@ -2593,39 +2581,14 @@ export function DetailView({
       const triggerFieldDef = (addLineFields?.entry ?? []).find(f => f.key === field);
       const forceFields = new Set(triggerFieldDef?.forceCalloutFields ?? []);
       if (field === 'product' && lineConfig.discountField) forceFields.add(lineConfig.discountField);
-      // Apply active currency conversion when a product populates the list price from
-      // the price list (which is always in the org base currency). This ensures every
-      // new line added AFTER a header currency change gets the converted price AND the
-      // line's currency reflects the order header's currency (not the pricelist's, which
-      // is what SL_Order_Product/SL_Invoice_Product return by default).
-      // Mutate `result` in place so the downstream applyUpdates() picks up the converted
-      // values; using setFieldValues as a side channel races with applyUpdates and loses.
-      if (field === 'product' && activeCurrencyConversionRef.current) {
-        const { rate, toCurrency } = activeCurrencyConversionRef.current;
-        // Override the line's currency to match the order header's. Without this the
-        // line ends up with the pricelist's currency (e.g. EUR) while the price stored
-        // is already in the header's currency (e.g. USD) — a silent data inconsistency.
-        result.currency = toCurrency;
-        const headerCurrencyIdentifier = hook.selected?.['currency$_identifier']
-          ?? hook.editing?.['currency$_identifier'];
-        if (headerCurrencyIdentifier) {
-          result['currency$_identifier'] = headerCurrencyIdentifier;
-        }
-        const rawPrice = parseFloat(String(result[lineConfig.priceField] ?? 0));
-        if (rawPrice > 0 && rate !== 1) {
-          const convertedPrice = parseFloat((rawPrice * rate).toFixed(2));
-          result[lineConfig.priceField] = convertedPrice;
-          if (result.standardPrice != null) result.standardPrice = convertedPrice;
-          if (result.unitPrice != null) result.unitPrice = convertedPrice;
-          if (result.listPrice != null) result.listPrice = convertedPrice;
-          // Recompute gross / net so the row is internally consistent with the new price.
-          computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
-            ...rowValues,
-            ...result,
-            [lineConfig.priceField]: convertedPrice,
-          });
-        }
-      }
+      // Apply active currency conversion: converts prices added after a header currency
+      // change so each new line reflects the order header's currency, not the pricelist's.
+      applyProductCurrencyConversion(
+        field, result, rowValues, lineConfig,
+        activeCurrencyConversionRef.current,
+        hook.selected?.['currency$_identifier'] ?? hook.editing?.['currency$_identifier'],
+        computeLineGrossAmount,
+      );
       roundAmounts(result);
       applyUpdates?.(result, forceFields);
 
@@ -4232,6 +4195,38 @@ function handleEntryIdentifierChange(entry, hook, key, api, catalogs) {
         hook.handleChange(key + '$_identifier', match.label || match.name || match._identifier);
       }
     }
+  }
+}
+
+function applyProductCalloutPriceAdjustments(field, result, lineConfig) {
+  if (field !== 'product') return;
+  if (result.standardPrice != null && (result.listPrice == null || Number(result.listPrice) === 0)) {
+    result.listPrice = result.standardPrice;
+  }
+  if (lineConfig.discountField) {
+    result[lineConfig.discountField] = 0;
+  }
+}
+
+function applyProductCurrencyConversion(field, result, rowValues, lineConfig, activeCurrencyConversion, currencyIdentifier, computeLineGrossAmount) {
+  if (field !== 'product' || !activeCurrencyConversion) return;
+  const { rate, toCurrency } = activeCurrencyConversion;
+  result.currency = toCurrency;
+  if (currencyIdentifier) {
+    result['currency$_identifier'] = currencyIdentifier;
+  }
+  const rawPrice = parseFloat(String(result[lineConfig.priceField] ?? 0));
+  if (rawPrice > 0 && rate !== 1) {
+    const convertedPrice = parseFloat((rawPrice * rate).toFixed(2));
+    result[lineConfig.priceField] = convertedPrice;
+    if (result.standardPrice != null) result.standardPrice = convertedPrice;
+    if (result.unitPrice != null) result.unitPrice = convertedPrice;
+    if (result.listPrice != null) result.listPrice = convertedPrice;
+    computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
+      ...rowValues,
+      ...result,
+      [lineConfig.priceField]: convertedPrice,
+    });
   }
 }
 
