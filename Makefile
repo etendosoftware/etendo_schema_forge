@@ -332,14 +332,22 @@ sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow
 
 # --- Dev Server ---
 
-dev: ## Start app-shell dev server (http://localhost:3100)
-	cd tools/app-shell && npm run dev
+dev: ensure-locale ## Start dev server for active locale (make switch LOCALE=ar to change)
+	@if [ "$(LOCALE)" = "ar" ]; then \
+		cd tools/etendo-go-ar/app-shell && npm run dev; \
+	else \
+		cd tools/app-shell && npm run dev; \
+	fi
 
 dev-with-shell: ## Start app-shell + spike-hello-app together (shell 3100, UI 5173, API 4100)
 	cd tools/spike-hello-app && npm run dev:with-shell
 
-dev-mock: ## Start app-shell dev server with mock data (http://localhost:3100) — required for E2E tests
-	cd tools/app-shell && npm run dev:mock
+dev-mock: ensure-locale ## Start dev server with mock data for active locale — required for E2E tests
+	@if [ "$(LOCALE)" = "ar" ]; then \
+		cd tools/etendo-go-ar/app-shell && npm run dev:mock; \
+	else \
+		cd tools/app-shell && npm run dev:mock; \
+	fi
 
 build: ## Build app-shell for production
 	cd tools/app-shell && npm run build
