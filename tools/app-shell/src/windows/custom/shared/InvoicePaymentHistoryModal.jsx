@@ -95,7 +95,7 @@ export default function InvoiceCobroModal({ invoiceId, invoiceData, specName, ap
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #F3F4F6', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 44, height: 44, borderRadius: 12, background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#065F46', flexShrink: 0 }}>
-              <ReceiptIcon size={20} />
+              <ReceiptIcon size={20} data-testid="ReceiptIcon__b82d4f" />
             </div>
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>{title}</div>
@@ -152,12 +152,12 @@ export default function InvoiceCobroModal({ invoiceId, invoiceData, specName, ap
                 apiFetch={apiFetch}
                 onCancel={() => setShowForm(false)}
                 onSuccess={handlePaymentSuccess}
-              />
+                data-testid="PaymentRegisterForm__b82d4f" />
             </div>
           ) : payments.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 0', gap: 10 }}>
               <div style={{ width: 48, height: 48, background: '#F3F4F6', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
-                <ReceiptIcon size={22} />
+                <ReceiptIcon size={22} data-testid="ReceiptIcon__b82d4f" />
               </div>
               <p style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', margin: 0 }}>
                 {isSales ? ui('noCobroYet') : ui('noPagoYet')}
