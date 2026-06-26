@@ -55,6 +55,7 @@ tools/app-shell/coverage/vitest/coverage-summary.json
 .etendo-go/
 dev.log
 dev.pid
+.active-locale
 
 # AR localization artifacts (same rules as root artifacts/)
 tools/etendo-go-ar/artifacts/*/schema-raw.json

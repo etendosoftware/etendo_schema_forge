@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record generate regen dev dev-with-shell dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage sonar-file-coverage menu-cache uuid test-xml-regeneration-check test-python xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record generate regen dev dev-with-shell dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage sonar-file-coverage menu-cache uuid test-xml-regeneration-check test-python xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch switch-to-es switch-to-ar ensure-locale project-status
 
 # --- Testing ---
 
@@ -432,6 +432,48 @@ xml-regeneration-check: ## Compare original module XML vs export.database output
 		exit 1; \
 	fi
 	node cli/src/xml-regeneration-check.js "$(ORIGINAL_DB_DIR)" "$(EXPORTED_DB_DIR)"
+
+# --- Project Context Switching ---
+# Active locale is tracked in .active-locale (gitignored). Default: es.
+# Usage: make switch LOCALE=ar  |  make switch LOCALE=es
+
+LOCALE ?= $(shell cat .active-locale 2>/dev/null || echo es)
+
+switch: ## Switch active locale — LOCALE=es (default) | LOCALE=ar
+	@if [ "$(LOCALE)" = "es" ]; then \
+		cp tools/app-shell/.env.es tools/app-shell/.env.local; \
+		echo es > .active-locale; \
+		echo "Active locale: ES (Spain) — com.etendoerp.go"; \
+	elif [ "$(LOCALE)" = "ar" ]; then \
+		cp tools/etendo-go-ar/.env.ar tools/etendo-go-ar/.env.local; \
+		echo ar > .active-locale; \
+		echo "Active locale: AR (Argentina) — com.etendoerp.go.ar"; \
+	else \
+		echo "Unknown locale '$(LOCALE)'. Use LOCALE=es or LOCALE=ar."; \
+		exit 1; \
+	fi
+
+switch-to-es: ## Alias — make switch LOCALE=es
+	@$(MAKE) switch LOCALE=es --no-print-directory
+
+switch-to-ar: ## Alias — make switch LOCALE=ar
+	@$(MAKE) switch LOCALE=ar --no-print-directory
+
+ensure-locale: ## Bootstrap ES locale if .active-locale does not exist (called automatically)
+	@if [ ! -f .active-locale ]; then \
+		$(MAKE) switch LOCALE=es --no-print-directory; \
+	fi
+
+project-status: ## Show active locale and module ID
+	@LOCALE=$$(cat .active-locale 2>/dev/null || echo es); \
+	echo "Active locale : $$LOCALE"; \
+	if [ "$$LOCALE" = "es" ]; then \
+		echo "Module        : com.etendoerp.go (Spain)"; \
+		grep -s SF_MODULE_ID tools/app-shell/.env.local || echo "  .env.local missing — run: make switch LOCALE=es"; \
+	elif [ "$$LOCALE" = "ar" ]; then \
+		echo "Module        : com.etendoerp.go.ar (Argentina)"; \
+		grep -s SF_MODULE_ID tools/etendo-go-ar/.env.local || echo "  .env.local missing — run: make switch LOCALE=ar"; \
+	fi
 
 # --- Cleanup ---
 
