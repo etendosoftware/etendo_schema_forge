@@ -17,7 +17,7 @@ function readEtendoUrl() {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const ETENDO_URL = env.ETENDO_URL || process.env.ETENDO_URL || readEtendoUrl() || 'http://localhost:8080/etendo_ar';
+  const ETENDO_URL = env.ETENDO_URL || process.env.ETENDO_URL || readEtendoUrl() || 'http://localhost:8080/etendo';
 
   return {
     plugins: [react()],
