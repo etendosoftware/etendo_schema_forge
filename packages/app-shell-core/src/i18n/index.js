@@ -1,4 +1,5 @@
 export { LocaleProvider, useLocale, useLocaleSwitch } from './LocaleProvider.jsx';
+export { WindowLabelsProvider, useWindowLabels } from './WindowLabelsProvider.jsx';
 export { useLabel } from './useLabel.js';
 export { useMenuLabel } from './useMenuLabel.js';
 export { resolveLabel } from './resolveLabel.js';

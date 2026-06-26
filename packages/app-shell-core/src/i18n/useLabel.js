@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useLocale, useLocaleSwitch } from './LocaleProvider.jsx';
+import { useWindowLabels } from './WindowLabelsProvider.jsx';
 import { resolveLabel } from './resolveLabel.js';
 
 /**
@@ -20,13 +21,18 @@ import { resolveLabel } from './resolveLabel.js';
  *
  *   const t = useLabel(spec?.window?.labelOverrides);
  *   t('C_BPartner_ID')   // "Cliente" (if overridden for current locale)
+ *
+ * Resolution chain: labelOverrides[locale][column] → window slice (ETP-4300) →
+ * dictionary.fields[column] → null. The window slice comes from a mounted
+ * WindowLabelsProvider; when none is mounted it is null and behavior is unchanged.
  */
 export function useLabel(labelOverrides) {
   const dictionary = useLocale();
   const { locale } = useLocaleSwitch();
   const langOverrides = labelOverrides?.[locale] ?? null;
+  const windowSlice = useWindowLabels();
   return useCallback(
-    (columnName) => resolveLabel(dictionary, columnName, langOverrides),
-    [dictionary, langOverrides],
+    (columnName) => resolveLabel(dictionary, columnName, langOverrides, windowSlice),
+    [dictionary, langOverrides, windowSlice],
   );
 }
