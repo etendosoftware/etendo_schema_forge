@@ -19,7 +19,7 @@ export function ProfileStep({ config, stepData, onNext, onBack, goToStep, accoun
     fullName: stepData.fullName ?? config.defaultForm?.fullName ?? accountName ?? '',
     countryCode: stepData.countryCode ?? config.defaultForm?.countryCode ?? '',
     businessType: stepData.businessType ?? config.defaultForm?.businessType ?? 'company',
-    language: stepData.language ?? config.defaultForm?.language ?? locale ?? 'es_ES',
+    language: stepData.language ?? config.defaultForm?.language ?? locale ?? '',
     sector: stepData.sector ?? config.defaultForm?.sector ?? 'technology',
   }));
 
@@ -56,7 +56,7 @@ export function ProfileStep({ config, stepData, onNext, onBack, goToStep, accoun
     onNext(form);
   };
 
-  const countryOptions = (config.countryCodes || ['ES']).map((code) => ({
+  const countryOptions = (config.countryCodes || []).map((code) => ({
     value: code,
     label: code === 'ES'
       ? ui('onboardingCountrySpain')
@@ -69,7 +69,7 @@ export function ProfileStep({ config, stepData, onNext, onBack, goToStep, accoun
     icon: value === 'company' ? Building2 : value === 'freelancer' ? User : MessageCircle,
   }));
 
-  const languageOptions = (config.localeCodes || ['es_ES', 'en_US']).map((code) => ({
+  const languageOptions = (config.localeCodes || []).map((code) => ({
     value: code,
     label: code.startsWith('es') ? ui('onboardingLanguageSpanish') : ui('onboardingLanguageEnglish'),
   }));

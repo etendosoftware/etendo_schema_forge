@@ -218,7 +218,7 @@ export function LoginStep({ config, stepData, onNext, onBack, goToStep, setToken
     if (setLocale) setLocale(nextLocale);
   };
 
-  const languageOptions = (config.localeCodes || ['es_ES', 'en_US']).map((code) => ({
+  const languageOptions = (config.localeCodes || []).map((code) => ({
     value: code,
     label: code.startsWith('es') ? ui('onboardingLanguageSpanish') : ui('onboardingLanguageEnglish'),
   }));

@@ -134,7 +134,7 @@ export function RegisterStep({ config, stepData, onNext, onBack, goToStep, setTo
     try {
       const data = await registerAccount(fetch, apiBase, {
         ...registerForm,
-        language: locale || config.defaultForm?.language || 'es_ES',
+        language: locale || config.defaultForm?.language || '',
       });
       if (data.token) {
         trackOnboarding(config, 'onboarding_auth_succeeded', {
@@ -166,7 +166,7 @@ export function RegisterStep({ config, stepData, onNext, onBack, goToStep, setTo
     if (setLocale) setLocale(nextLocale);
   };
 
-  const languageOptions = (config.localeCodes || ['es_ES', 'en_US']).map((code) => ({
+  const languageOptions = (config.localeCodes || []).map((code) => ({
     value: code,
     label: code.startsWith('es') ? ui('onboardingLanguageSpanish') : ui('onboardingLanguageEnglish'),
   }));

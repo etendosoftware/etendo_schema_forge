@@ -16,7 +16,7 @@ export function CompanyStep({ config, stepData, onNext, onBack, goToStep, onChan
 
   const [form, setForm] = useState(() => ({
     clientName: stepData.clientName ?? config.defaultForm?.clientName ?? '',
-    fiscalIdType: stepData.fiscalIdType ?? config.defaultForm?.fiscalIdType ?? 'NIF',
+    fiscalIdType: stepData.fiscalIdType ?? config.defaultForm?.fiscalIdType ?? '',
     fiscalIdValue: stepData.fiscalIdValue ?? config.defaultForm?.fiscalIdValue ?? '',
     address: stepData.address ?? config.defaultForm?.address ?? '',
     sector: stepData.sector ?? config.defaultForm?.sector ?? 'technology',
@@ -51,7 +51,7 @@ export function CompanyStep({ config, stepData, onNext, onBack, goToStep, onChan
     label: ui(`onboardingSector${code.charAt(0).toUpperCase()}${code.slice(1)}`),
   }));
 
-  const languageOptions = (config.localeCodes || ['es_ES', 'en_US']).map((code) => ({
+  const languageOptions = (config.localeCodes || []).map((code) => ({
     value: code,
     label: code.startsWith('es') ? ui('onboardingLanguageSpanish') : ui('onboardingLanguageEnglish'),
   }));

@@ -92,9 +92,9 @@ export function SetupProgressStep({ config, stepData, onNext, onBack, goToStep, 
     const formPayload = {
       clientName: stepData.clientName,
       address: stepData.address,
-      countryCode: stepData.countryCode || config.defaultForm?.countryCode || 'ES',
-      language: stepData.language || config.defaultForm?.language || 'es_ES',
-      currency: config.defaultForm?.currency || 'EUR',
+      countryCode: stepData.countryCode || config.defaultForm?.countryCode || '',
+      language: stepData.language || config.defaultForm?.language || '',
+      currency: config.defaultForm?.currency || '',
     };
 
     let succeeded = false;
@@ -166,8 +166,6 @@ export function SetupProgressStep({ config, stepData, onNext, onBack, goToStep, 
   const activeSetupStep = steps.find((step) => step.status === 'running')?.name;
   const readinessFailures = result?.readinessFailures || [];
   const readinessFailureText = readinessFailures.map((failure) => ui(failure.key)).join(' ');
-
-  const countryCode = stepData.profile?.countryCode || config.defaultForm?.countryCode || 'ES';
 
   let setupProgressState;
   if (result?.status === 'success') {
@@ -254,7 +252,7 @@ export function SetupProgressStep({ config, stepData, onNext, onBack, goToStep, 
       progress: 20,
       title: ui('onboardingPreparingTitle'),
       description: ui('onboardingPreparingTaxesDescription'),
-      leading: countryCode === 'ES' ? '🇪🇸' : '🌍',
+      leading: config.countryFlag || '🌍',
       statusLabel: ui('loading'),
       success: false,
     };
