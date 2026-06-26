@@ -63,3 +63,5 @@ tools/etendo-go-ar/artifacts/*/schema-curated.json
 tools/etendo-go-ar/artifacts/*/rules-curated.json
 tools/etendo-go-ar/artifacts/*/processes.json
 tools/etendo-go-ar/artifacts/*/raw-query-results/
+
+etendo_core_ar/
