@@ -1,0 +1,10 @@
+{
+  "name": "@schema-forge/etendo-go-ar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "devDependencies": {
+    "@schema-forge/cli": "*"
+  }
+}
