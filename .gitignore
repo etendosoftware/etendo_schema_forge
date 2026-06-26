@@ -38,16 +38,28 @@ e2e/.auth-credentials.json
 tmp/
 sonar-results.md
 .scannerwork/
-.etendo-go/
-dev.log
-dev.pid
-test-results/
-.idea/
-tools/app-shell/coverage/vitest/coverage-summary.json
+
+# Generated at runtime — not versioned
+coverage/
+sonar-reports/
 domain-boundary-report.json
 domain-boundary-report.md
 review-report.json
 review-report.md
-coverage/
+test-results/
 tools/app-shell/coverage/
-sonar-reports/
+tools/app-shell/coverage/vitest/coverage-summary.json
+
+# IDE / local tooling
+.idea/
+.etendo-go/
+dev.log
+dev.pid
+
+# AR localization artifacts (same rules as root artifacts/)
+tools/etendo-go-ar/artifacts/*/schema-raw.json
+tools/etendo-go-ar/artifacts/*/rules-raw.json
+tools/etendo-go-ar/artifacts/*/schema-curated.json
+tools/etendo-go-ar/artifacts/*/rules-curated.json
+tools/etendo-go-ar/artifacts/*/processes.json
+tools/etendo-go-ar/artifacts/*/raw-query-results/
