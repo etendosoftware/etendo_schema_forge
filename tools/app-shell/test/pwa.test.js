@@ -70,9 +70,10 @@ describe('PWA configuration', () => {
     assert.ok(content.includes('duration: Infinity'), 'toast should be persistent');
   });
 
-  it('OnboardingPage clears SW caches on environment login', () => {
-    const onboardingPath = resolve(APP_SHELL, 'src/pages/OnboardingPage.jsx');
-    const content = readFileSync(onboardingPath, 'utf8');
+  it('OnboardingFlow clears SW caches on environment login', () => {
+    // Cache clearing moved to OnboardingFlow in etendo-go-core (shared across locales)
+    const flowPath = resolve(APP_SHELL, '..', '..', 'packages', 'etendo-go-core', 'src', 'onboarding', 'OnboardingFlow.jsx');
+    const content = readFileSync(flowPath, 'utf8');
     assert.ok(content.includes('caches.keys()'), 'should enumerate caches');
     assert.ok(content.includes('caches.delete'), 'should delete caches');
   });
