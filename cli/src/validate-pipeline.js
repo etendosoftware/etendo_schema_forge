@@ -27,7 +27,7 @@ const execFileAsync = promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT = process.env.SF_ROOT || process.cwd();
+const ROOT = process.env.SF_ROOT || join(__dirname, '..', '..');
 
 // Artifact dirs that are intentionally custom-only: they have decisions.json
 // but no contract pipeline (no contract.json, report-contract.json, etc.).
@@ -87,7 +87,7 @@ async function fileExists(p) {
 
 async function dirExists(p) {
   try {
-    const s = await readdir(p);
+    await readdir(p);
     return true;
   } catch { return false; }
 }
@@ -979,10 +979,6 @@ export async function getChangedArtifactsSince(root, ref) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Core validator
-// ---------------------------------------------------------------------------
-
 /**
  * Validate pipeline completeness.
  *
@@ -1006,6 +1002,7 @@ export async function validatePipeline({
   const resolvedRegistryPath = registryPath ?? join(root, 'tools', 'app-shell', 'src', 'windows', 'registry.js');
   const registryContent = await loadRegistryContent(resolvedRegistryPath);
   const artifactNames = await resolveArtifactNames(scope, root, artifactsRoot);
+
   const skipSet = new Set(skip.map(s => s.toUpperCase()));
   const allResults = []; // mix of violations and skipped entries
 

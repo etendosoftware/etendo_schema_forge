@@ -1,4 +1,3 @@
-import { createReadStream } from 'node:fs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -7,7 +6,7 @@ import { toCamelCase, toPropertyName, computeChecksum, generateVersion } from '.
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT = process.env.SF_ROOT || process.cwd();
+const ROOT = process.env.SF_ROOT || join(__dirname, '..', '..');
 const CLI_DIR = join(__dirname, '..', '..');
 
 /**
@@ -30,7 +29,7 @@ async function loadCoreMap(filename) {
  * 6. Everything else → editable
  */
 export function classifyField(fieldRow, systemColumns) {
-  const { columnname, tablename, isdisplayed, isreadonly, isupdateable, defaultvalue, field_isactive, isshowninstatusbar } = fieldRow;
+  const { columnname, tablename, isdisplayed, isreadonly, isupdateable, defaultvalue, field_isactive } = fieldRow;
 
   // 0. Inactive field → discarded
   if (field_isactive === 'N') {
@@ -122,7 +121,7 @@ export function inferDerivation(defaultValue) {
   }
 
   // @VAR@ pattern — match the full string being a single @...@ token
-  const varMatch = defaultValue.match(/^@([A-Za-z_][A-Za-z0-9_]*)@$/);
+  const varMatch = defaultValue.match(/^@([A-Za-z_]\w*)@$/);
   if (varMatch) {
     const varName = toCamelCase(varMatch[1]);
     return {
@@ -154,13 +153,13 @@ export function parseValidationRule(code) {
   const cascadeParams = new Set();
 
   // First pass: find all @#VAR@ (session context)
-  for (const match of code.matchAll(/@#([A-Za-z_][A-Za-z0-9_]*)@/g)) {
+  for (const match of code.matchAll(/@#([A-Za-z_]\w*)@/g)) {
     contextParams.add(match[1]);
   }
 
   // Second pass: find all @VAR@ that are NOT preceded by #
   // Use negative lookbehind to exclude @#VAR@ matches
-  for (const match of code.matchAll(/(?<!#)@([A-Za-z_][A-Za-z0-9_]*)@/g)) {
+  for (const match of code.matchAll(/(?<!#)@([A-Za-z_]\w*)@/g)) {
     const varName = match[1];
     if (varName === 'SQL') continue;
     cascadeParams.add(varName);
@@ -294,20 +293,131 @@ function deduplicateFieldNames(fields) {
 }
 
 /**
- * Build the full schema structure from DB rows.
- *
- * Groups rows by tab, maps AD_Reference_IDs to schema types, and produces
- * the schema-raw.json structure per TDD 2.1.
+ * Apply optional AD metadata hints (constraints, UI flags, groups) to a field definition.
  */
-export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
-  if (!rows || rows.length === 0) {
-    return { window: null, entities: [] };
+function applyFieldMetadata(fieldDef, row, schemaType, enumValuesMap) {
+  // Add derivation from inferDerivation if not already set by classification
+  if (!fieldDef.derivation && row.defaultvalue) {
+    const derivation = inferDerivation(row.defaultvalue);
+    if (derivation) fieldDef.derivation = derivation;
   }
 
-  const windowName = rows[0].window_name;
-  const windowId = rows[0].ad_window_id;
+  // Constraints
+  if (row.fieldlength) fieldDef.maxLength = row.fieldlength;
+  if (row.valuemin != null) fieldDef.valueMin = row.valuemin;
+  if (row.valuemax != null) fieldDef.valueMax = row.valuemax;
 
-  // Group rows by tab
+  // Display/readOnly logic (convention #6: omit key if null)
+  if (row.displaylogic) fieldDef.displayLogic = row.displaylogic;
+  if (row.displaylogic_server) fieldDef.displayLogicServer = row.displaylogic_server;
+  if (row.displaylogicgrid) fieldDef.displayLogicGrid = row.displaylogicgrid;
+  if (row.readonlylogic) fieldDef.readOnlyLogic = row.readonlylogic;
+
+  // Callout and client-side logic
+  if (row.callout_class) fieldDef.callout = row.callout_class;
+  if (row.onchangefunction) fieldDef.onChangeFunction = row.onchangefunction;
+
+  // UI hints from AD metadata
+  if (row.defaultvalue) fieldDef.defaultValue = row.defaultvalue;
+  if (row.isidentifier === 'Y') fieldDef.isIdentifier = true;
+  if (row.isselectioncolumn === 'Y') fieldDef.isSelectionColumn = true;
+  if (row.isfilterable === 'Y') fieldDef.isFilterable = true;
+  if (row.precision != null && row.precision > 0) fieldDef.precision = Number(row.precision);
+  if (row.istranslated === 'Y') fieldDef.isTranslated = true;
+  if (row.help_text) fieldDef.help = row.help_text;
+  if (row.field_group_name) fieldDef.fieldGroup = row.field_group_name;
+
+  // Validation rule
+  if (row.val_rule_code) fieldDef.validationRule = parseValidationRule(row.val_rule_code);
+
+  // Foreign key reference metadata
+  if (schemaType === 'foreignKey') {
+    const reference = buildReference(row);
+    if (reference) fieldDef.reference = reference;
+  }
+
+  // Button process ID (priority: OBUIAPP > Classic > Hardcoded)
+  if (schemaType === 'button') {
+    if (row.em_obuiapp_process_id) {
+      fieldDef.processId = row.em_obuiapp_process_id;
+      fieldDef.processType = 'obuiapp';
+    } else if (row.ad_process_id) {
+      fieldDef.processId = row.ad_process_id;
+      fieldDef.processType = 'classic';
+    }
+    // No processId + no processType = hardcoded button (resolved by convention)
+  }
+
+  // Enum values for List-type fields (AD_Reference_ID = 17)
+  if (schemaType === 'enum' && row.ad_reference_value_id) {
+    const enumValues = enumValuesMap[row.ad_reference_value_id];
+    if (enumValues) fieldDef.enumValues = enumValues;
+  }
+}
+
+/**
+ * Map a single DB field row to a field definition object.
+ */
+function mapFieldRow(row, tab, systemColumns, refMap, enumValuesMap) {
+  const classification = classifyField(row, systemColumns);
+  const schemaType = refMap[String(row.ad_reference_id)] ?? 'string';
+  const isPk = row.columnname === tab.tableName + '_ID';
+  const isCoreModule = row.table_module_id === '0' || (row.column_module_id != null && row.column_module_id !== '0');
+  const apiKey = toPropertyName(row.obdal_name, { isPk, isCoreModule });
+  const fieldDef = {
+    name: apiKey,
+    apiKey,
+    columnName: row.columnname,
+    label: row.field_name,
+    type: schemaType,
+    mandatory: row.ismandatory === 'Y',
+    ...classification,
+  };
+
+  applyFieldMetadata(fieldDef, row, schemaType, enumValuesMap);
+  return fieldDef;
+}
+
+/**
+ * Convert a tab descriptor to an entity object.
+ * Returns the entity and the resolved entity name.
+ */
+function buildEntityFromTab(tab, fields, semanticLevel) {
+  const entityClassname = tab.entityClassname || tab.entityAlias || toCamelCase(tab.tableName);
+  const entityJavaPackage = tab.entityJavaPackage || null;
+  const entityName = tab.tabName ? toCamelCase(tab.tabName) : toCamelCase(tab.tableName);
+
+  const entity = {
+    name: entityName,
+    tableName: tab.tableName,
+    tabId: tab.tabId,
+    entityClassname,
+    entityJavaPackage,
+    tabName: tab.tabName,
+    level: semanticLevel,
+    sequence: tab.tabSeq,
+    fields,
+  };
+
+  if (entityJavaPackage && entityClassname) {
+    entity.entityFullClass = `${entityJavaPackage}.${entityClassname}`;
+  }
+
+  // Tab clauses (convention #6: omit key if null)
+  if (tab.whereClause) entity.whereClause = tab.whereClause;
+  if (tab.orderByClause) entity.orderByClause = tab.orderByClause;
+  if (tab.filterClause) entity.filterClause = tab.filterClause;
+  if (tab.hqlWhereClause) entity.hqlWhereClause = tab.hqlWhereClause;
+  if (tab.hqlOrderByClause) entity.hqlOrderByClause = tab.hqlOrderByClause;
+  if (tab.hqlFilterClause) entity.hqlFilterClause = tab.hqlFilterClause;
+
+  return { entity, entityName };
+}
+
+/**
+ * Group raw DB rows into a tab map.
+ */
+function groupRowsByTab(rows) {
   const tabMap = new Map();
   for (const row of rows) {
     const tabId = row.ad_tab_id;
@@ -333,122 +443,40 @@ export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
     }
     tabMap.get(tabId).fields.push(row);
   }
+  return tabMap;
+}
+
+/**
+ * Build the full schema structure from DB rows.
+ *
+ * Groups rows by tab, maps AD_Reference_IDs to schema types, and produces
+ * the schema-raw.json structure per TDD 2.1.
+ */
+export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
+  if (!rows || rows.length === 0) {
+    return { window: null, entities: [] };
+  }
+
+  const windowName = rows[0].window_name;
+  const windowId = rows[0].ad_window_id;
+
+  const tabMap = groupRowsByTab(rows);
 
   // Convert tabs to entities
   const entities = [];
   let primaryEntity = null;
 
   for (const tab of tabMap.values()) {
-    const fields = tab.fields.map((row) => {
-      const classification = classifyField(row, systemColumns);
-      const schemaType = refMap[String(row.ad_reference_id)] ?? 'string';
-      const isPk = row.iskey === 'Y';
-      const isCoreModule = isRowCoreModule(row);
-      const apiKey = toPropertyName(row.obdal_name, { isPk, isCoreModule });
-      const fieldDef = {
-        name: apiKey,
-        apiKey,
-        columnName: row.columnname,
-        label: row.field_name,
-        type: schemaType,
-        mandatory: row.ismandatory === 'Y',
-        ...classification,
-      };
-
-      // Property fields navigate through DAL associations (AD_Field.Property != null).
-      // Their column may not exist on the tab's primary table; tag for diagnostic use only.
-      // Do NOT override visibility — the column is often a valid user-visible field.
-      // PK correctness is guaranteed by IsKey='Y', not by this tag.
-      if (row.property != null) {
-        fieldDef.propertyField = true;
-      }
-
-      // Add derivation from inferDerivation if not already set by classification
-      if (!fieldDef.derivation && row.defaultvalue) {
-        const derivation = inferDerivation(row.defaultvalue);
-        if (derivation) {
-          fieldDef.derivation = derivation;
-        }
-      }
-
-      // Add constraints if present
-      addFieldConstraints(row, fieldDef);
-
-      // Add display/readOnly logic if present (convention #6: omit key if null)
-      applyDisplayAndReadOnlyLogic(row, fieldDef);
-
-      // Add callout if present
-      if (row.callout_class) fieldDef.callout = row.callout_class;
-
-      // Add onChangeFunction if present (JS client-side logic from SmartClient)
-      if (row.onchangefunction) fieldDef.onChangeFunction = row.onchangefunction;
-
-      // UI hints from AD metadata
-      applyFieldMetadata(row, fieldDef);
-
-      // Add validation rule with parsed params if present
-      if (row.val_rule_code) {
-        fieldDef.validationRule = parseValidationRule(row.val_rule_code);
-      }
-
-      // Add reference metadata for foreign key fields
-      const reference = schemaType === 'foreignKey' ? buildReference(row) : null;
-      if (reference) fieldDef.reference = reference;
-
-      // Add processId for button-type fields (AD_Reference_ID = 28)
-      // Priority: OBUIAPP (modern) > Classic > Hardcoded (no ID)
-      if (schemaType === 'button') {
-        assignProcessIdAndType(row, fieldDef);
-        // No processId + no processType = hardcoded button (resolved by convention)
-      }
-
-      // Attach enum values for List-type fields (AD_Reference_ID = 17)
-      if (schemaType === 'enum' && row.ad_reference_value_id) {
-        const enumValues = enumValuesMap[row.ad_reference_value_id];
-        if (enumValues) {
-          fieldDef.enumValues = enumValues;
-        }
-      }
-
-      return fieldDef;
-    });
-
-    // Disambiguate duplicate camelCase field names within this entity
+    const fields = tab.fields.map(row => mapFieldRow(row, tab, systemColumns, refMap, enumValuesMap));
     deduplicateFieldNames(fields);
 
-    const entityClassname = tab.entityClassname || tab.entityAlias || toCamelCase(tab.tableName);
-    const entityJavaPackage = tab.entityJavaPackage || null;
     const semanticLevel = mapTabLevel(tab.tabLevel);
+    const { entity, entityName } = buildEntityFromTab(tab, fields, semanticLevel);
 
     // Track the primary entity (first header-level tab)
-    // Prefer tabName (human-readable tab label) over tableName (DB table)
-    const entityName = tab.tabName
-      ? toCamelCase(tab.tabName)
-      : toCamelCase(tab.tableName);
-
     if (semanticLevel === 'header' && !primaryEntity) {
       primaryEntity = entityName;
     }
-
-    const entity = {
-      name: entityName,
-      tableName: tab.tableName,
-      tabId: tab.tabId,
-      entityClassname,
-      entityJavaPackage,
-      tabName: tab.tabName,
-      level: semanticLevel,
-      sequence: tab.tabSeq,
-      fields,
-    };
-
-    // Full qualified Java class: package + classname
-    if (entityJavaPackage && entityClassname) {
-      entity.entityFullClass = `${entityJavaPackage}.${entityClassname}`;
-    }
-
-    // Add tab clauses if present (convention #6: omit key if null)
-    addTabClauses(tab, entity);
 
     entities.push(entity);
   }
@@ -622,53 +650,6 @@ WHERE w.AD_Window_ID = $1
   )
 ORDER BY t.SeqNo, t.Name, t.AD_Tab_ID, c.ColumnName, c.AD_Column_ID
 `;
-
-function addTabClauses(tab, entity) {
-  if (tab.whereClause) entity.whereClause = tab.whereClause;
-  if (tab.orderByClause) entity.orderByClause = tab.orderByClause;
-  if (tab.filterClause) entity.filterClause = tab.filterClause;
-  if (tab.hqlWhereClause) entity.hqlWhereClause = tab.hqlWhereClause;
-  if (tab.hqlOrderByClause) entity.hqlOrderByClause = tab.hqlOrderByClause;
-  if (tab.hqlFilterClause) entity.hqlFilterClause = tab.hqlFilterClause;
-}
-
-function assignProcessIdAndType(row, fieldDef) {
-  if (row.em_obuiapp_process_id) {
-    fieldDef.processId = row.em_obuiapp_process_id;
-    fieldDef.processType = 'obuiapp';
-  } else if (row.ad_process_id) {
-    fieldDef.processId = row.ad_process_id;
-    fieldDef.processType = 'classic';
-  }
-}
-
-function addFieldConstraints(row, fieldDef) {
-  if (row.fieldlength) fieldDef.maxLength = row.fieldlength;
-  if (row.valuemin != null) fieldDef.valueMin = row.valuemin;
-  if (row.valuemax != null) fieldDef.valueMax = row.valuemax;
-}
-
-function isRowCoreModule(row) {
-  return row.table_module_id === '0' || (row.column_module_id != null && row.column_module_id !== '0');
-}
-
-function applyFieldMetadata(row, fieldDef) {
-  if (row.defaultvalue) fieldDef.defaultValue = row.defaultvalue;
-  if (row.isidentifier === 'Y') fieldDef.isIdentifier = true;
-  if (row.isselectioncolumn === 'Y') fieldDef.isSelectionColumn = true;
-  if (row.isfilterable === 'Y') fieldDef.isFilterable = true;
-  if (row.precision != null && row.precision > 0) fieldDef.precision = Number(row.precision);
-  if (row.istranslated === 'Y') fieldDef.isTranslated = true;
-  if (row.help_text) fieldDef.help = row.help_text;
-  if (row.field_group_name) fieldDef.fieldGroup = row.field_group_name;
-}
-
-function applyDisplayAndReadOnlyLogic(row, fieldDef) {
-  if (row.displaylogic) fieldDef.displayLogic = row.displaylogic;
-  if (row.displaylogic_server) fieldDef.displayLogicServer = row.displaylogic_server;
-  if (row.displaylogicgrid) fieldDef.displayLogicGrid = row.displaylogicgrid;
-  if (row.readonlylogic) fieldDef.readOnlyLogic = row.readonlylogic;
-}
 
 /**
  * Main entry point: connects to DB, queries fields for a window,

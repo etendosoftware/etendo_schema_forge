@@ -18,7 +18,7 @@ import { migrateDecisions, needsMigration, getVersion } from './migrations/index
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT = process.env.SF_ROOT || process.cwd();
+const ROOT = process.env.SF_ROOT || join(__dirname, '..', '..');
 
 // ---------------------------------------------------------------------------
 // Entity name helpers

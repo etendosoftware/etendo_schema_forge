@@ -1,11 +1,11 @@
-import { readFile, mkdir, writeFile, readdir, stat } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, sep } from 'node:path';
 import { createDbPool, closePool, setCacheMode, flushCacheWrites } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT = process.env.SF_ROOT || process.cwd();
+const ROOT = process.env.SF_ROOT || join(__dirname, '..', '..');
 
 // --- SQL Queries (TDD 3.2) ---
 
@@ -107,6 +107,58 @@ ORDER BY mechanism, name
 // --- Pure functions ---
 
 /**
+ * Extract field-effect entries from Java source code.
+ * Detects addResult("fieldName", ...) and setFieldValue("fieldName", ...) patterns.
+ */
+function extractEffects(sourceCode) {
+  const effects = [];
+  const effectPattern = /(?:addResult|setFieldValue)\s*\(\s*"([^"]+)"/g;
+  let match;
+  while ((match = effectPattern.exec(sourceCode)) !== null) {
+    effects.push({ field: match[1], action: 'setValue', confidence: 'high' });
+  }
+  return effects;
+}
+
+/**
+ * Count branch points (if, switch, ternary) in non-comment lines.
+ */
+function countBranches(lines) {
+  let branches = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
+    branches += (trimmed.match(/\bif\s*\(/g) || []).length;
+    branches += (trimmed.match(/\bswitch\s*\(/g) || []).length;
+    branches += (trimmed.match(/\?/g) || []).length;
+  }
+  return branches;
+}
+
+/**
+ * Count logical lines of code, skipping blank lines and comments.
+ */
+function countLoc(lines) {
+  let loc = 0;
+  let inBlockComment = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === '') continue;
+    if (inBlockComment) {
+      if (trimmed.includes('*/')) inBlockComment = false;
+      continue;
+    }
+    if (trimmed.startsWith('/*')) {
+      if (!trimmed.includes('*/')) inBlockComment = true;
+      continue;
+    }
+    if (trimmed.startsWith('//')) continue;
+    loc++;
+  }
+  return loc;
+}
+
+/**
  * Regex-based analysis of Java source code.
  * Detects effects, branches, LOC, and DML usage.
  */
@@ -115,85 +167,15 @@ export function analyzeJavaSource(sourceCode) {
     return { effects: [], confidence: 'low', warning: 'Source not found' };
   }
 
-  const effects = [];
-
-  // Detect addResult / setFieldValue patterns
-  // addResult("fieldName", ...) or setFieldValue("fieldName", ...)
-  const effectPattern = /(?:addResult|setFieldValue)\s*\(\s*"([^"]+)"/g;
-  extractEffectsFromSource(effectPattern, sourceCode, effects);
-
-  // Count branches: if, switch, ternary (?)
+  const effects = extractEffects(sourceCode);
   const lines = sourceCode.split('\n');
-  let branches = 0;
-  for (const line of lines) {
-    // Skip comments
-    const trimmed = line.trim();
-    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) continue;
-
-    // Count if statements (word boundary)
-    const ifMatches = trimmed.match(/\bif\s*\(/g);
-    if (ifMatches) branches += ifMatches.length;
-
-    // Count switch statements
-    const switchMatches = trimmed.match(/\bswitch\s*\(/g);
-    if (switchMatches) branches += switchMatches.length;
-
-    // Count ternary operators
-    const ternaryMatches = trimmed.match(/\?/g);
-    if (ternaryMatches) branches += ternaryMatches.length;
-  }
-
-  // Count LOC (non-blank, non-comment lines)
-  const loc = calculateLOC(lines);
-
-  // Detect DML patterns
+  const branches = countBranches(lines);
+  const loc = countLoc(lines);
   const dmlPattern = /OBDal|PreparedStatement|createCriteria|ConnectionProvider|executeUpdate|createQuery|getConnection/;
   const hasDml = dmlPattern.test(sourceCode);
-
   const confidence = effects.length > 0 ? 'high' : 'medium';
 
-  return {
-    effects,
-    confidence,
-    branches,
-    loc,
-    hasDml,
-  };
-}
-
-function calculateLOC(lines) {
-  let loc = 0;
-  let inBlockComment = false;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed === '') continue;
-
-    if (inBlockComment) {
-      if (trimmed.includes('*/')) inBlockComment = false;
-      continue;
-    }
-
-    if (trimmed.startsWith('/*')) {
-      if (!trimmed.includes('*/')) inBlockComment = true;
-      continue;
-    }
-
-    if (trimmed.startsWith('//')) continue;
-
-    loc++;
-  }
-  return loc;
-}
-
-function extractEffectsFromSource(effectPattern, sourceCode, effects) {
-  let match;
-  while ((match = effectPattern.exec(sourceCode)) !== null) {
-    effects.push({
-      field: match[1],
-      action: 'setValue',
-      confidence: 'high',
-    });
-  }
+  return { effects, confidence, branches, loc, hasDml };
 }
 
 /**
@@ -222,7 +204,7 @@ export function translateExpression(expr) {
   });
 
   // Replace @VAR@ with camelCase variable name
-  result = result.replace(/@([A-Za-z_][A-Za-z0-9_]*)@/g, (_match, varName) => {
+  result = result.replace(/@([A-Za-z_]\w*)@/g, (_match, varName) => {
     // camelCase: lowercase first char
     return varName.charAt(0).toLowerCase() + varName.slice(1);
   });
@@ -260,10 +242,7 @@ export function isSimpleValidation(sql) {
   const hasUnion = /\bUNION\b/i.test(upper);
   const hasSubqueryWithJoin = /\bEXISTS\s*\(\s*SELECT\b/i.test(upper) || hasUnion;
 
-  if (hasMultipleJoins || hasSubqueryWithJoin || hasUnion) return false;
-  if (hasExists) return false;
-
-  return true;
+  return !hasMultipleJoins && !hasSubqueryWithJoin && !hasUnion && !hasExists;
 }
 
 /**
