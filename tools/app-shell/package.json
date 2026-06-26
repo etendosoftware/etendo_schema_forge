@@ -28,6 +28,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@etendosoftware/app-shell-core": "0.1.0",
+    "@etendosoftware/etendo-go-core": "*",
     "@sentry/react": "^10.53.0",
     "aws-rum-web": "^1.18.0",
     "class-variance-authority": "^0.7.1",

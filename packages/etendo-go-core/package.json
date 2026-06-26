@@ -1,0 +1,27 @@
+{
+  "name": "@etendosoftware/etendo-go-core",
+  "version": "0.1.0",
+  "description": "Core onboarding, auth flow, and shared components for Etendo GO — consumed by all locale workspaces.",
+  "type": "module",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "exports": {
+    ".": "./src/index.js",
+    "./onboarding": "./src/onboarding/index.js"
+  },
+  "files": [
+    "src",
+    "!src/**/__tests__/**"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "peerDependencies": {
+    "lucide-react": "^0.400.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-router-dom": "^7.0.0"
+  }
+}

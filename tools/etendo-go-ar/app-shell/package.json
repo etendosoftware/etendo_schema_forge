@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@etendosoftware/app-shell-core": "*",
+    "@etendosoftware/etendo-go-core": "*",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-router-dom": "^7.0.0"
