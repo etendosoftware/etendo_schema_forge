@@ -293,31 +293,47 @@ function deduplicateFieldNames(fields) {
 }
 
 /**
- * Apply optional AD metadata hints (constraints, UI flags, groups) to a field definition.
+ * Infer and apply derivation from the default value if not already set.
  */
-function applyFieldMetadata(fieldDef, row, schemaType, enumValuesMap) {
-  // Add derivation from inferDerivation if not already set by classification
+function applyDerivationHint(fieldDef, row) {
   if (!fieldDef.derivation && row.defaultvalue) {
     const derivation = inferDerivation(row.defaultvalue);
     if (derivation) fieldDef.derivation = derivation;
   }
+}
 
-  // Constraints
+/**
+ * Apply value constraints (max length, min/max value) from the DB row.
+ */
+function applyConstraints(fieldDef, row) {
   if (row.fieldlength) fieldDef.maxLength = row.fieldlength;
   if (row.valuemin != null) fieldDef.valueMin = row.valuemin;
   if (row.valuemax != null) fieldDef.valueMax = row.valuemax;
+}
 
-  // Display/readOnly logic (convention #6: omit key if null)
+/**
+ * Apply display and readOnly logic expressions from the DB row.
+ * Convention #6: omit key if null.
+ */
+function applyDisplayLogic(fieldDef, row) {
   if (row.displaylogic) fieldDef.displayLogic = row.displaylogic;
   if (row.displaylogic_server) fieldDef.displayLogicServer = row.displaylogic_server;
   if (row.displaylogicgrid) fieldDef.displayLogicGrid = row.displaylogicgrid;
   if (row.readonlylogic) fieldDef.readOnlyLogic = row.readonlylogic;
+}
 
-  // Callout and client-side logic
+/**
+ * Apply callout class and client-side change function from the DB row.
+ */
+function applyCalloutLogic(fieldDef, row) {
   if (row.callout_class) fieldDef.callout = row.callout_class;
   if (row.onchangefunction) fieldDef.onChangeFunction = row.onchangefunction;
+}
 
-  // UI hints from AD metadata
+/**
+ * Apply UI hints (identifier flags, precision, translation, help, group) from the DB row.
+ */
+function applyUIHints(fieldDef, row) {
   if (row.defaultvalue) fieldDef.defaultValue = row.defaultvalue;
   if (row.isidentifier === 'Y') fieldDef.isIdentifier = true;
   if (row.isselectioncolumn === 'Y') fieldDef.isSelectionColumn = true;
@@ -326,33 +342,55 @@ function applyFieldMetadata(fieldDef, row, schemaType, enumValuesMap) {
   if (row.istranslated === 'Y') fieldDef.isTranslated = true;
   if (row.help_text) fieldDef.help = row.help_text;
   if (row.field_group_name) fieldDef.fieldGroup = row.field_group_name;
+}
 
-  // Validation rule
-  if (row.val_rule_code) fieldDef.validationRule = parseValidationRule(row.val_rule_code);
-
-  // Foreign key reference metadata
+/**
+ * Apply foreign key reference metadata when schemaType is 'foreignKey'.
+ */
+function applyForeignKeyReference(fieldDef, row, schemaType) {
   if (schemaType === 'foreignKey') {
     const reference = buildReference(row);
     if (reference) fieldDef.reference = reference;
   }
+}
 
-  // Button process ID (priority: OBUIAPP > Classic > Hardcoded)
-  if (schemaType === 'button') {
-    if (row.em_obuiapp_process_id) {
-      fieldDef.processId = row.em_obuiapp_process_id;
-      fieldDef.processType = 'obuiapp';
-    } else if (row.ad_process_id) {
-      fieldDef.processId = row.ad_process_id;
-      fieldDef.processType = 'classic';
-    }
-    // No processId + no processType = hardcoded button (resolved by convention)
+/**
+ * Apply button process ID (priority: OBUIAPP > Classic > Hardcoded).
+ */
+function applyButtonProcess(fieldDef, row) {
+  if (row.em_obuiapp_process_id) {
+    fieldDef.processId = row.em_obuiapp_process_id;
+    fieldDef.processType = 'obuiapp';
+  } else if (row.ad_process_id) {
+    fieldDef.processId = row.ad_process_id;
+    fieldDef.processType = 'classic';
   }
+  // No processId + no processType = hardcoded button (resolved by convention)
+}
 
-  // Enum values for List-type fields (AD_Reference_ID = 17)
+/**
+ * Apply enum values for List-type fields (AD_Reference_ID = 17).
+ */
+function applyEnumValues(fieldDef, row, schemaType, enumValuesMap) {
   if (schemaType === 'enum' && row.ad_reference_value_id) {
     const enumValues = enumValuesMap[row.ad_reference_value_id];
     if (enumValues) fieldDef.enumValues = enumValues;
   }
+}
+
+/**
+ * Apply optional AD metadata hints (constraints, UI flags, groups) to a field definition.
+ */
+function applyFieldMetadata(fieldDef, row, schemaType, enumValuesMap) {
+  applyDerivationHint(fieldDef, row);
+  applyConstraints(fieldDef, row);
+  applyDisplayLogic(fieldDef, row);
+  applyCalloutLogic(fieldDef, row);
+  applyUIHints(fieldDef, row);
+  if (row.val_rule_code) fieldDef.validationRule = parseValidationRule(row.val_rule_code);
+  applyForeignKeyReference(fieldDef, row, schemaType);
+  if (schemaType === 'button') applyButtonProcess(fieldDef, row);
+  applyEnumValues(fieldDef, row, schemaType, enumValuesMap);
 }
 
 /**

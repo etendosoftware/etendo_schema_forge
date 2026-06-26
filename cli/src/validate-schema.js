@@ -283,6 +283,26 @@ function checkL4OrphanDisplayFields(fields, ePath, entityName, fieldNames, error
 }
 
 /**
+ * Check a single field for Level 4 computed-no-rule and searchable-type issues.
+ */
+function checkL4Field(field, fPath, rules, errors, warnings) {
+  if (field.visibility === 'system') {
+    checkL4SystemSource(field, fPath, rules, warnings);
+  }
+
+  if (field.visibility === 'readOnly' && field.derivation && field.derivation.type === 'computed') {
+    const hasRule = Array.isArray(rules) && rules.some(r => r.field === field.name);
+    if (!hasRule) {
+      warnings.push(issue(4, 'COMPUTED_NO_RULE', `ReadOnly computed field '${field.name}' has no computing rule`, fPath, 'warning'));
+    }
+  }
+
+  if (field.searchable === true && field.type && !SEARCHABLE_TYPES.includes(field.type)) {
+    errors.push(issue(4, 'INVALID_SEARCHABLE_TYPE', `Searchable field '${field.name}' has incompatible type: ${field.type}`, `${fPath}.searchable`));
+  }
+}
+
+/**
  * Level 4 - Cross-reference validation.
  * Deep consistency checks, optionally using rules.
  */
@@ -299,20 +319,7 @@ function validateLevel4(schema, rules) {
 
     for (const field of entity.fields) {
       const fPath = `${ePath}.fields.${field.name}`;
-
-      if (field.visibility === 'system') {
-        checkL4SystemSource(field, fPath, rules, warnings);
-      }
-
-      if (field.visibility === 'readOnly' && field.derivation && field.derivation.type === 'computed') {
-        if (rules && Array.isArray(rules) && !rules.some(r => r.field === field.name)) {
-          warnings.push(issue(4, 'COMPUTED_NO_RULE', `ReadOnly computed field '${field.name}' has no computing rule`, fPath, 'warning'));
-        }
-      }
-
-      if (field.searchable === true && field.type && !SEARCHABLE_TYPES.includes(field.type)) {
-        errors.push(issue(4, 'INVALID_SEARCHABLE_TYPE', `Searchable field '${field.name}' has incompatible type: ${field.type}`, `${fPath}.searchable`));
-      }
+      checkL4Field(field, fPath, rules, errors, warnings);
     }
 
     checkL4OrphanDisplayFields(entity.fields, ePath, entity.name, fieldNames, errors);
