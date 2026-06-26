@@ -203,12 +203,13 @@ async function main(windowId, windowSlug) {
 export { QUERIES, rowsToCsv };
 
 // CLI entry point — only runs when executed directly
-const isCLI =
-  process.argv[1] &&
-  import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
+const isCLI = process.argv[1] && (
+  process.argv[1].endsWith('extract-from-db.js') ||
+  process.argv[1].endsWith('sf-extract-db')
+);
 
 if (isCLI) {
-  // Extract --write-cache / --from-cache from argv before reading positionals.
+  // Extract flags
   const flags = process.argv.slice(2).filter((a) => a.startsWith('--'));
   const positional = process.argv.slice(2).filter((a) => !a.startsWith('--'));
   const writeCache = flags.includes('--write-cache');
@@ -220,11 +221,29 @@ if (isCLI) {
   if (writeCache) setCacheMode({ mode: 'write' });
   else if (fromCache) setCacheMode({ mode: 'read' });
 
-  const windowId = positional[0];
-  const windowSlug = positional[1];
+  let windowId = positional[0];
+  let windowSlug = positional[1];
+
+  const menuNameIndex = process.argv.indexOf('--menu-name');
+  if (menuNameIndex !== -1 && process.argv[menuNameIndex + 1]) {
+    const menuName = process.argv[menuNameIndex + 1];
+    try {
+      const { resolveMenuByName } = await import('./resolve-menu.js');
+      const resolved = await resolveMenuByName(menuName);
+      if (resolved.resolvedMode !== 'window') {
+        throw new Error(`Menu entry '${menuName}' is not a window (mode: ${resolved.resolvedMode})`);
+      }
+      windowId = resolved.windowId;
+      windowSlug = resolved.resolvedName;
+    } catch (err) {
+      console.error('Error resolving menu name:', err.message);
+      process.exit(1);
+    }
+  }
 
   if (!windowId || !windowSlug) {
     console.error('Usage: node extract-from-db.js [--write-cache|--from-cache] <windowId> <windowSlug>');
+    console.error('       node extract-from-db.js [--write-cache|--from-cache] --menu-name <menuName>');
     console.error('Example: node extract-from-db.js 143 sales-order');
     process.exit(1);
   }

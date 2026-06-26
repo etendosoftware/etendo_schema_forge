@@ -1,3 +1,17 @@
 {
-  "menu": []
+  "menu": [
+    {
+      "group": "Purchasing",
+      "icon": "ShoppingBag",
+      "section": "Purchasing",
+      "items": [
+        {
+          "name": "purchase-order",
+          "label": "Purchase Order",
+          "favname": "Purchase Order",
+          "windowId": "181"
+        }
+      ]
+    }
+  ]
 }

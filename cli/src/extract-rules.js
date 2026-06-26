@@ -5,7 +5,7 @@ import { createDbPool, closePool, setCacheMode, flushCacheWrites } from './db.js
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT = join(__dirname, '..', '..');
+const ROOT = process.env.SF_ROOT || process.cwd();
 
 // --- SQL Queries (TDD 3.2) ---
 

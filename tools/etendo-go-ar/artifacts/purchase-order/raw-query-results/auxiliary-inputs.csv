@@ -1,0 +1,48 @@
+name,validation_code,tab_name,ad_tab_id
+AEATSII_AcogidaSII3,"@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)",Header,294
+APRM_OrderIsPaid,"@SQL=select case when ps.outstandingamt <> 0 then 'N' else 'Y' end
+          from fin_payment_scheduledetail fpsd
+              join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id
+              join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id
+              join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_order
+              join c_order co on co.c_order_id=ps.c_order_id
+                WHERE ps.c_order_id =@c_order_id@
+                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40
+                group by co.GrandTotal, ps.outstandingamt, ps.c_order_id",Header,294
+DOCBASETYPE,"@SQL=select coalesce(max(docbasetype), 'POO') from c_doctype where c_doctype_id = @c_doctypetarget_id@",Header,294
+ORDERTYPE,@SQL=SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@,Header,294
+showAddPayment,"@SQL=select case when sum(fpsd.amount)=co.GrandTotal then 'N' else 'Y' end
+          from fin_payment_scheduledetail fpsd
+              join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id
+              join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id
+              join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_order
+              join c_order co on co.c_order_id=ps.c_order_id
+                WHERE ps.c_order_id =@c_order_id@
+                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40
+                group by co.GrandTotal",Header,294
+ATTRIBUTESET,@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@,Lines,293
+ATTRIBUTESETINSTANCIABLE,@SQL=SELECT (CASE count(*) WHEN 0 THEN 'N' ELSE 'Y' END) from M_ATTRIBUTESET mats join M_PRODUCT mp on mats.M_AttributeSet_ID=mp.M_AttributeSet_ID WHERE mp.M_PRODUCT_ID=@M_Product_ID@ and (mats.IsLot='Y' or mats.IsSerNo='Y' or mats.IsGuaranteeDate='Y'),Lines,293
+ATTRSETVALUETYPE,@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@,Lines,293
+DOCBASETYPE,"@SQL=select coalesce(max(dt.docbasetype), 'POO') from c_order ord join c_doctype dt on (ord.c_doctypetarget_id = dt.c_doctype_id)
+where ord.c_order_id = @c_order_id@",Lines,293
+GROSSPRICE,@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@,Lines,293
+HASSECONDUOM,@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y',Lines,293
+isBOM,@SQL=SELECT isBOM FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@,Lines,293
+isQuantityVariable,@SQL=SELECT ISQUANTITYVARIABLE FROM M_PRODUCT where M_PRODUCT_ID = @M_Product_ID@,Lines,293
+IsStocked,@SQL=SELECT IsStocked FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@,Lines,293
+Parent_AD_Org,"@SQL= SELECT AD_ORG_ID
+FROM C_ORDER
+WHERE C_ORDER_ID = @C_ORDER_ID@
+",Lines,293
+Posted,@SQL=SELECT POSTED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@,Lines,293
+Processed,@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@,Lines,293
+UsesAlternate,"@SQL=SELECT CASE WHEN COUNT(C_TAX_ID)>0 THEN 'Y' ELSE 'N' END AS ISUSED FROM C_TAX WHERE C_TAX_ISMEMBER(@C_TAX_ID@, C_TAX_ID)=1 AND BASEAMOUNT IN ('TBA', 'TBATAX')",Lines,293
+GROSSPRICE,@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@,Discounts and Promotions,800221
+DOCBASETYPE,"@SQL=select coalesce(max(dt.docbasetype), 'POO') from c_orderline_acctdimension olacct 
+                           join c_orderline ol on (olacct.c_orderline_id=ol.c_orderline_id)
+                           join c_order ord on (ol.c_order_id=ord.c_order_id)
+                           join c_doctype dt on (ord.c_doctypetarget_id = dt.c_doctype_id)
+                          where ord.c_order_id = @c_order_id@",Accounting dimension,4CA5324BD037430B8E682B41C1DAA8CC
+INTR_ORDER,@SQL=SELECT processed FROM C_ORDER WHERE C_ORDER_ID IN (SELECT C_ORDER_ID FROM C_ORDERLINE WHERE C_ORDERLINE_ID=@C_Orderline_ID@),Intrastat,15AB548E781248DBBAE32A7646B98AF8
+Processed,@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@,Basic Discounts,1011100001
+Processed,@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@,Tax,295

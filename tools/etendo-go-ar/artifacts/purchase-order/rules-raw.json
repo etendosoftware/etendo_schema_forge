@@ -1,0 +1,2619 @@
+{
+  "windowId": "181",
+  "windowName": "purchase-order",
+  "extractedAt": "2026-06-26T12:13:35.213Z",
+  "rules": [
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "143",
+      "name": "SL_Order_Product",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Product",
+      "triggerColumn": "M_Product_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "138",
+      "name": "SL_Order_Amt",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
+      "triggerColumn": "QtyOrdered",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "138",
+      "name": "SL_Order_Amt",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
+      "triggerColumn": "PriceList",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "138",
+      "name": "SL_Order_Amt",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
+      "triggerColumn": "PriceActual",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "138",
+      "name": "SL_Order_Amt",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
+      "triggerColumn": "C_Tax_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "139",
+      "name": "SL_Order_Charge_Tax",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Charge_Tax",
+      "triggerColumn": "C_Charge_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "144",
+      "name": "SL_Order_Tax",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Tax",
+      "triggerColumn": "C_BPartner_Location_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "138",
+      "name": "SL_Order_Amt",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
+      "triggerColumn": "LineNetAmt",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "138",
+      "name": "SL_Order_Amt",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
+      "triggerColumn": "Discount",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "138",
+      "name": "SL_Order_Amt",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
+      "triggerColumn": "M_AttributeSetInstance_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "140",
+      "name": "SL_Order_Conversion",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Conversion",
+      "triggerColumn": "M_Product_Uom_Id",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "140",
+      "name": "SL_Order_Conversion",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Conversion",
+      "triggerColumn": "QuantityOrder",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "138",
+      "name": "SL_Order_Amt",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
+      "triggerColumn": "CANCELPRICEAD",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "1AB9BD3356D643A79C058AA3B4EB175E",
+      "name": "OperativeQuantity_To_BaseQuantity",
+      "className": "org.openbravo.erpCommon.ad_callouts.OperativeQuantity_To_BaseQuantity",
+      "triggerColumn": "C_Aum",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "1AB9BD3356D643A79C058AA3B4EB175E",
+      "name": "OperativeQuantity_To_BaseQuantity",
+      "className": "org.openbravo.erpCommon.ad_callouts.OperativeQuantity_To_BaseQuantity",
+      "triggerColumn": "Aumqty",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "138",
+      "name": "SL_Order_Amt",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt",
+      "triggerColumn": "Gross_Unit_Price",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "D328D86B2E744A53A071047EA0FF5E4E",
+      "name": "SE_Order_Organization",
+      "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_Organization",
+      "triggerColumn": "AD_Org_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "141",
+      "name": "SL_Order_DocType",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_DocType",
+      "triggerColumn": "C_DocTypeTarget_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "BE4B8516395242B5BC072CDEAAD86163",
+      "name": "SL_Order_UpdateLinesDate",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_UpdateLinesDate",
+      "triggerColumn": "DateOrdered",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "BE4B8516395242B5BC072CDEAAD86163",
+      "name": "SL_Order_UpdateLinesDate",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_UpdateLinesDate",
+      "triggerColumn": "DatePromised",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "142",
+      "name": "SL_Order_PriceList",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_PriceList",
+      "triggerColumn": "M_PriceList_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "107",
+      "name": "SE_Order_BPartner",
+      "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartner",
+      "triggerColumn": "C_BPartner_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "117",
+      "name": "SL_Charge",
+      "className": "org.openbravo.erpCommon.ad_callouts.SL_Charge",
+      "triggerColumn": "C_Charge_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "B95E999B9C554E399A20B41D11657FDE",
+      "name": "SE_Order_BPartnerLocation",
+      "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartnerLocation",
+      "triggerColumn": "C_BPartner_Location_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "callout",
+      "source": "AD_Callout",
+      "id": "108",
+      "name": "SE_Order_Project",
+      "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_Project",
+      "triggerColumn": "C_Project_ID",
+      "effects": [],
+      "complexity": "unknown",
+      "confidence": "low",
+      "warning": "Source not found"
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "53AE60A473D2460D8663D7A1BC5BA732",
+      "name": "AD_Org show child organizations",
+      "column": "AD_Org_ID",
+      "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "5BEA56148DC74215A63927481BDC0B63",
+      "name": "C_Tax_IsSOTrx_Date",
+      "column": "C_Tax_ID",
+      "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID=@AD_CLIENT_ID@ AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+      "isSimple": false
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "167",
+      "name": "C_BPartner Location - Ship To",
+      "column": "C_BPartner_Location_ID",
+      "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+      "name": "Return reason RFC/RTV",
+      "column": "C_Return_Reason_ID",
+      "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "5ABEE0829BD24BFB9BA454E607825821",
+      "name": "UOM Validation",
+      "column": "C_Aum",
+      "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "49DC1D6F086945AB82F84C66F5F13F16",
+      "name": "AD_Org (without *)",
+      "column": "AD_Org_ID",
+      "code": "AD_ORG_ID <> '0'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "133",
+      "name": "C_DocType PO/SO",
+      "column": "C_DocTypeTarget_ID",
+      "code": "C_DocType.DocBaseType IN ('SOO', 'POO') AND C_DocType.IsSOTrx='@IsSOTrx@'\nAND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')\nAND COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn\nAND ((@isQuotation@='Y' AND docsubtypeso like 'OB') OR ((@isQuotation@='N' OR @isQuotation@ is null) AND (docsubtypeso is null OR docsubtypeso not like 'OB')))",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "6F75AF1B05464DD894033D50AEC67310",
+      "name": "AD_User - Org Tree",
+      "column": "SalesRep_ID",
+      "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "119",
+      "name": "C_BPartner Location - Bill To",
+      "column": "BillTo_ID",
+      "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "1000200003",
+      "name": "Invoice Rules for POS Sales orders",
+      "column": "InvoiceRule",
+      "code": "(AD_Ref_List.value IN ('I', 'D', 'O') OR (SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE.C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@) <> 'WR')",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "DB85A30739C3487988921CE3FFFD3BAD",
+      "name": "Price List isSOTrx",
+      "column": "M_PriceList_ID",
+      "code": "M_PriceList.issopricelist = @isSOTrx@",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "123",
+      "name": "AD_User C_BPartner User/Contacts",
+      "column": "AD_User_ID",
+      "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "167",
+      "name": "C_BPartner Location - Ship To",
+      "column": "C_BPartner_Location_ID",
+      "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "800001",
+      "name": "C_Project based on status and bpartner",
+      "column": "C_Project_ID",
+      "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "168",
+      "name": "AD_User C_BPartner User/Contacts Drop",
+      "column": "DropShip_User_ID",
+      "code": "AD_User.C_BPartner_ID=@DropShip_BPartner_ID@",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "120",
+      "name": "C_BPartner Location - Drop Ship To",
+      "column": "DropShip_Location_ID",
+      "code": "C_BPartner_Location.C_BPartner_ID=@DropShip_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "167",
+      "name": "C_BPartner Location - Ship To",
+      "column": "Delivery_Location_ID",
+      "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "FF80808130B107670130B1115F22000D",
+      "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl",
+      "column": "FIN_Paymentmethod_ID",
+      "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+      "isSimple": false
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+      "name": "Return reason RFC/RTV",
+      "column": "C_Return_Reason_ID",
+      "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "104",
+      "name": "AD_Org Security validation",
+      "column": "AD_Org_ID",
+      "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "103",
+      "name": "AD_Client Security validation",
+      "column": "AD_Client_ID",
+      "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "103",
+      "name": "AD_Client Security validation",
+      "column": "AD_Client_ID",
+      "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "104",
+      "name": "AD_Org Security validation",
+      "column": "AD_Org_ID",
+      "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "103",
+      "name": "AD_Client Security validation",
+      "column": "AD_Client_ID",
+      "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "104",
+      "name": "AD_Org Security validation",
+      "column": "AD_Org_ID",
+      "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "129",
+      "name": "AD_Client Trx Security validation",
+      "column": "AD_Client_ID",
+      "code": "AD_Client.AD_Client_ID<>'0'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "130",
+      "name": "AD_Org Trx Security validation",
+      "column": "AD_Org_ID",
+      "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "129",
+      "name": "AD_Client Trx Security validation",
+      "column": "AD_Client_ID",
+      "code": "AD_Client.AD_Client_ID<>'0'",
+      "isSimple": true
+    },
+    {
+      "type": "validation",
+      "source": "AD_Val_Rule",
+      "id": "130",
+      "name": "AD_Org Trx Security validation",
+      "column": "AD_Org_ID",
+      "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+      "isSimple": true
+    },
+    {
+      "name": "purchase-order-Header-AD_Org_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Organization",
+      "column": "AD_Org_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_Order-AD_Org_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Organization",
+      "column": "AD_Org_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-C_DocTypeTarget_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Transaction Document",
+      "column": "C_DocTypeTarget_ID",
+      "rawExpression": "@Processed@='Y' | @DocStatus@='TMP'",
+      "translated": "processed==true || docStatus=='TMP'"
+    },
+    {
+      "name": "C_Order-DocumentNo-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Document No.",
+      "column": "DocumentNo",
+      "rawExpression": "@Processed@='Y' | @DocStatus@='TMP'",
+      "translated": "processed==true || docStatus=='TMP'"
+    },
+    {
+      "name": "C_Order-DateOrdered-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Order Date",
+      "column": "DateOrdered",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Header-C_BPartner_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Business Partner",
+      "column": "C_BPartner_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_Order-C_BPartner_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Business Partner",
+      "column": "C_BPartner_ID",
+      "rawExpression": "@Processed@='Y' | @DocStatus@='TMP'",
+      "translated": "processed==true || docStatus=='TMP'"
+    },
+    {
+      "name": "C_Order-C_BPartner_Location_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Partner Address",
+      "column": "C_BPartner_Location_ID",
+      "rawExpression": "@Processed@='Y' | @DocStatus@='TMP'",
+      "translated": "processed==true || docStatus=='TMP'"
+    },
+    {
+      "name": "C_Order-M_Warehouse_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Warehouse",
+      "column": "M_Warehouse_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-DatePromised-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Scheduled Delivery Date",
+      "column": "DatePromised",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-FIN_Paymentmethod_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Payment Method",
+      "column": "FIN_Paymentmethod_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-C_PaymentTerm_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Payment Terms",
+      "column": "C_PaymentTerm_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-M_PriceList_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Price List",
+      "column": "M_PriceList_ID",
+      "rawExpression": "@Processed@='Y' | @DocStatus@='TMP'",
+      "translated": "processed==true || docStatus=='TMP'"
+    },
+    {
+      "name": "C_Order-AD_User_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "User/Contact",
+      "column": "AD_User_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-Iscashvat-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Cash VAT",
+      "column": "Iscashvat",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-BillTo_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Invoice From",
+      "column": "BillTo_ID",
+      "rawExpression": "@Processed@='Y' | @DocStatus@='TMP'",
+      "translated": "processed==true || docStatus=='TMP'"
+    },
+    {
+      "name": "C_Order-DeliveryViaRule-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Delivery Method",
+      "column": "DeliveryViaRule",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Header-C_Campaign_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Sales Campaign",
+      "column": "C_Campaign_ID",
+      "rawExpression": "@$Element_MC@='Y'",
+      "translated": "element_MC==true"
+    },
+    {
+      "name": "C_Order-C_Campaign_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Sales Campaign",
+      "column": "C_Campaign_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "C_Order-PriorityRule-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Priority",
+      "column": "PriorityRule",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-ChargeAmt-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Charge Amount",
+      "column": "ChargeAmt",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-C_Charge_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Charge",
+      "column": "C_Charge_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Header-C_Activity_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Activity",
+      "column": "C_Activity_ID",
+      "rawExpression": "@$Element_AY@='Y'",
+      "translated": "element_AY==true"
+    },
+    {
+      "name": "C_Order-C_Activity_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Activity",
+      "column": "C_Activity_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Header-AD_OrgTrx_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Trx Organization",
+      "column": "AD_OrgTrx_ID",
+      "rawExpression": "@$Element_OT@='Y'",
+      "translated": "element_OT==true"
+    },
+    {
+      "name": "C_Order-AD_OrgTrx_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Trx Organization",
+      "column": "AD_OrgTrx_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Header-EM_APRM_AddPayment-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Add Payment",
+      "column": "EM_APRM_AddPayment",
+      "rawExpression": "@Processed@='Y' & (@showAddPayment@='Y' | @showAddPayment@ ='') & (@APRM_OrderIsPaid@='N' | @APRM_OrderIsPaid@ ='') & @GrandTotal@!0",
+      "translated": "processed==true && (showAddPayment==true || showAddPayment =='') && (aPRM_OrderIsPaid==false || aPRM_OrderIsPaid =='') && grandTotal!0"
+    },
+    {
+      "name": "purchase-order-Header-DocAction-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Process Order",
+      "column": "DocAction",
+      "rawExpression": "@DocStatus@!'CL'&@DocStatus@!'VO'",
+      "translated": "docStatus!='CL'&&docStatus!='VO'"
+    },
+    {
+      "name": "purchase-order-Header-CopyFrom-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Copy Lines",
+      "column": "CopyFrom",
+      "rawExpression": "@processed@='N'",
+      "translated": "processed==false"
+    },
+    {
+      "name": "purchase-order-Header-CopyFromPO-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Copy from Orders",
+      "column": "CopyFromPO",
+      "rawExpression": "@processed@='N'",
+      "translated": "processed==false"
+    },
+    {
+      "name": "C_Order-C_Reject_Reason_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Reject Reason",
+      "column": "C_Reject_Reason_ID",
+      "rawExpression": "@DocStatus@='CJ'|@DocStatus@='CA'",
+      "translated": "docStatus=='CJ'||docStatus=='CA'"
+    },
+    {
+      "name": "purchase-order-Header-EM_Aeatsii_Fecha_Operacion-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Operation date",
+      "column": "EM_Aeatsii_Fecha_Operacion",
+      "rawExpression": "@AEATSII_AcogidaSII3@='Y'",
+      "translated": "aEATSII_AcogidaSII3==true"
+    },
+    {
+      "name": "purchase-order-Header-EM_Aeatsii_Descripcion_Sii-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "SII Description",
+      "column": "EM_Aeatsii_Descripcion_Sii",
+      "rawExpression": "@AEATSII_AcogidaSII3@='Y'",
+      "translated": "aEATSII_AcogidaSII3==true"
+    },
+    {
+      "name": "purchase-order-Header-C_Project_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Project",
+      "column": "C_Project_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_Order-C_Project_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Project",
+      "column": "C_Project_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Header-C_Costcenter_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Cost Center",
+      "column": "C_Costcenter_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_Order-C_Costcenter_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Cost Center",
+      "column": "C_Costcenter_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Header-A_Asset_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Asset",
+      "column": "A_Asset_ID",
+      "rawExpression": "@$Element_AS@='Y'",
+      "translated": "element_AS==true"
+    },
+    {
+      "name": "C_Order-A_Asset_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Asset",
+      "column": "A_Asset_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Header-User1_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "1st Dimension",
+      "column": "User1_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_Order-User1_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "1st Dimension",
+      "column": "User1_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Header-User2_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "2nd Dimension",
+      "column": "User2_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_Order-User2_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "2nd Dimension",
+      "column": "User2_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Header-Create_POLines-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Create Lines",
+      "column": "Create_POLines",
+      "rawExpression": "@processed@='N'",
+      "translated": "processed==false"
+    },
+    {
+      "name": "C_Order-AD_Client_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Client",
+      "column": "AD_Client_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-DateAcct-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Accounting Date",
+      "column": "DateAcct",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "C_Order-DeliveryRule-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Delivery Terms",
+      "column": "DeliveryRule",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Header-PaymentRule-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Form of Payment",
+      "column": "PaymentRule",
+      "rawExpression": "@FinancialManagement@=''",
+      "translated": "financialManagement==''"
+    },
+    {
+      "name": "C_Order-PaymentRule-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Form of Payment",
+      "column": "PaymentRule",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Header-Posted-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Header",
+      "fieldName": "Posted",
+      "column": "Posted",
+      "rawExpression": "@Processed@='Y' & @#ShowAcct@='Y'",
+      "translated": "processed==true && showAcct==true"
+    },
+    {
+      "name": "C_Order-DropShip_User_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Drop Ship Contact",
+      "column": "DropShip_User_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-DropShip_BPartner_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Drop Ship Partner",
+      "column": "DropShip_BPartner_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order-DropShip_Location_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order",
+      "fieldName": "Drop Ship Location",
+      "column": "DropShip_Location_ID",
+      "rawExpression": "@Processed@='Y' | @DocStatus@='TMP'",
+      "translated": "processed==true || docStatus=='TMP'"
+    },
+    {
+      "name": "C_OrderLine-Line-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Line No.",
+      "column": "Line",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_OrderLine-M_Product_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Product",
+      "column": "M_Product_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-Aumqty-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Operative Quantity",
+      "column": "Aumqty",
+      "rawExpression": "@M_Product_Uom_Id@=''",
+      "translated": "m_Product_Uom_Id==''"
+    },
+    {
+      "name": "C_OrderLine-Aumqty-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Operative Quantity",
+      "column": "Aumqty",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-C_Aum-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Alternative UOM",
+      "column": "C_Aum",
+      "rawExpression": "@M_Product_Uom_Id@=''",
+      "translated": "m_Product_Uom_Id==''"
+    },
+    {
+      "name": "C_OrderLine-C_Aum-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Alternative UOM",
+      "column": "C_Aum",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_OrderLine-QtyOrdered-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Ordered Quantity",
+      "column": "QtyOrdered",
+      "rawExpression": "@Processed@='Y' | (@IsSOTrx@='Y' & @ISLINKEDTOPRODUCT@='Y' & @PRODUCTTYPE@='S') | @UomManagement@='Y'",
+      "translated": "processed==true || (isSOTrx==true && iSLINKEDTOPRODUCT==true && pRODUCTTYPE=='S') || uomManagement==true"
+    },
+    {
+      "name": "C_OrderLine-C_UOM_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "UOM",
+      "column": "C_UOM_ID",
+      "rawExpression": "@UomManagement@='Y'",
+      "translated": "uomManagement==true"
+    },
+    {
+      "name": "purchase-order-Lines-M_AttributeSetInstance_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Attribute Set Value",
+      "column": "M_AttributeSetInstance_ID",
+      "rawExpression": "(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0')",
+      "translated": "(aTTRIBUTESET!=''&&aTTRSETVALUETYPE!='F')||(m_AttributeSetInstance_ID!=''&&m_AttributeSetInstance_ID!='0')"
+    },
+    {
+      "name": "C_OrderLine-M_AttributeSetInstance_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Attribute Set Value",
+      "column": "M_AttributeSetInstance_ID",
+      "rawExpression": "@Processed@='Y' | @ATTRIBUTESETINSTANCIABLE@='Y'",
+      "translated": "processed==true || aTTRIBUTESETINSTANCIABLE==true"
+    },
+    {
+      "name": "C_OrderLine-PriceActual-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Net Unit Price",
+      "column": "PriceActual",
+      "rawExpression": "@Processed@='Y' | @GROSSPRICE@='Y'",
+      "translated": "processed==true || gROSSPRICE==true"
+    },
+    {
+      "name": "purchase-order-Lines-Gross_Unit_Price-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Gross Unit Price",
+      "column": "Gross_Unit_Price",
+      "rawExpression": "@GROSSPRICE@='Y'",
+      "translated": "gROSSPRICE==true"
+    },
+    {
+      "name": "C_OrderLine-Gross_Unit_Price-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Gross Unit Price",
+      "column": "Gross_Unit_Price",
+      "rawExpression": "@Processed@='Y' | @GROSSPRICE@='N'",
+      "translated": "processed==true || gROSSPRICE==false"
+    },
+    {
+      "name": "C_OrderLine-LineNetAmt-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Line Net Amount",
+      "column": "LineNetAmt",
+      "rawExpression": "@Iseditlinenetamt@='N'|@GROSSPRICE@='Y'",
+      "translated": "iseditlinenetamt==false||gROSSPRICE==true"
+    },
+    {
+      "name": "purchase-order-Lines-Line_Gross_Amount-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Line Gross Amount",
+      "column": "Line_Gross_Amount",
+      "rawExpression": "@GROSSPRICE@='Y'",
+      "translated": "gROSSPRICE==true"
+    },
+    {
+      "name": "C_OrderLine-C_Tax_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Tax",
+      "column": "C_Tax_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-PriceList-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Net List Price",
+      "column": "PriceList",
+      "rawExpression": "@GROSSPRICE@='N'",
+      "translated": "gROSSPRICE==false"
+    },
+    {
+      "name": "C_OrderLine-PriceList-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Net List Price",
+      "column": "PriceList",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-GrossPriceList-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Gross List Price",
+      "column": "GrossPriceList",
+      "rawExpression": "@GROSSPRICE@='Y'",
+      "translated": "gROSSPRICE==true"
+    },
+    {
+      "name": "C_OrderLine-Discount-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Discount %",
+      "column": "Discount",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-Taxbaseamt-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Alternate Taxable Amount",
+      "column": "Taxbaseamt",
+      "rawExpression": "@UsesAlternate@='Y'",
+      "translated": "usesAlternate==true"
+    },
+    {
+      "name": "C_OrderLine-Taxbaseamt-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Alternate Taxable Amount",
+      "column": "Taxbaseamt",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_OrderLine-Iseditlinenetamt-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Edit Line Net Amount",
+      "column": "Iseditlinenetamt",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-grosspricestd-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Base Gross Unit Price",
+      "column": "grosspricestd",
+      "rawExpression": "@GROSSPRICE@='Y'",
+      "translated": "gROSSPRICE==true"
+    },
+    {
+      "name": "purchase-order-Lines-PriceStd-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Base Net Unit Price",
+      "column": "PriceStd",
+      "rawExpression": "@GROSSPRICE@='N'",
+      "translated": "gROSSPRICE==false"
+    },
+    {
+      "name": "purchase-order-Lines-M_Warehouse_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Warehouse",
+      "column": "M_Warehouse_ID",
+      "rawExpression": "@DirectShip@='N'",
+      "translated": "directShip==false"
+    },
+    {
+      "name": "C_OrderLine-M_Warehouse_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Warehouse",
+      "column": "M_Warehouse_ID",
+      "rawExpression": "@OrderType@!'SO'",
+      "translated": "orderType!='SO'"
+    },
+    {
+      "name": "purchase-order-Lines-QtyReserved-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Reserved Quantity",
+      "column": "QtyReserved",
+      "rawExpression": "@OrderType@='OB' | @OrderType@='SO' | @OrderType@='PO'",
+      "translated": "orderType=='OB' || orderType=='SO' || orderType=='PO'"
+    },
+    {
+      "name": "purchase-order-Lines-QtyDelivered-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Delivered Quantity",
+      "column": "QtyDelivered",
+      "rawExpression": "@Processed@='Y' & @IsStocked@ = 'Y'",
+      "translated": "processed==true && isStocked == true"
+    },
+    {
+      "name": "purchase-order-Lines-QtyInvoiced-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Invoiced Quantity",
+      "column": "QtyInvoiced",
+      "rawExpression": "@OrderType@='PO' | @Processed@='Y'",
+      "translated": "orderType=='PO' || processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-M_Shipper_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Shipping Company",
+      "column": "M_Shipper_ID",
+      "rawExpression": "@DeliveryViaRule@='S'",
+      "translated": "deliveryViaRule=='S'"
+    },
+    {
+      "name": "purchase-order-Lines-DateOrdered-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Order Date",
+      "column": "DateOrdered",
+      "rawExpression": "@showMRPandProductionFields@='Y'",
+      "translated": "showMRPandProductionFields==true"
+    },
+    {
+      "name": "purchase-order-Lines-DatePromised-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Scheduled Delivery Date",
+      "column": "DatePromised",
+      "rawExpression": "@showMRPandProductionFields@='Y'",
+      "translated": "showMRPandProductionFields==true"
+    },
+    {
+      "name": "C_OrderLine-C_BPartner_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Business Partner",
+      "column": "C_BPartner_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Lines-FreightAmt-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Freight Amount",
+      "column": "FreightAmt",
+      "rawExpression": "@FreightCostRule@='L'",
+      "translated": "freightCostRule=='L'"
+    },
+    {
+      "name": "C_OrderLine-C_Charge_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Charge",
+      "column": "C_Charge_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-QuantityOrder-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Order Quantity",
+      "column": "QuantityOrder",
+      "rawExpression": "(@HASSECONDUOM@=1 & @UomManagement@!'Y')  | (@UomManagement@='Y' & @M_Product_Uom_Id@!'')",
+      "translated": "(hASSECONDUOM==1 && uomManagement!=true)  || (uomManagement==true && m_Product_Uom_Id!='')"
+    },
+    {
+      "name": "C_OrderLine-QuantityOrder-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Order Quantity",
+      "column": "QuantityOrder",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-M_Product_Uom_Id-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Order UOM",
+      "column": "M_Product_Uom_Id",
+      "rawExpression": "(@HASSECONDUOM@=1 & @UomManagement@!'Y')  | (@UomManagement@='Y' & @M_Product_Uom_Id@!'')",
+      "translated": "(hASSECONDUOM==1 && uomManagement!=true)  || (uomManagement==true && m_Product_Uom_Id!='')"
+    },
+    {
+      "name": "C_OrderLine-M_Product_Uom_Id-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Order UOM",
+      "column": "M_Product_Uom_Id",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-Manage_Prereservation-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Manage Prereservation",
+      "column": "Manage_Prereservation",
+      "rawExpression": "@DOCSTATUS@='CO'&@StockReservations@!''",
+      "translated": "dOCSTATUS=='CO'&&stockReservations!=''"
+    },
+    {
+      "name": "purchase-order-Lines-AD_Org_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Organization",
+      "column": "AD_Org_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine-AD_Org_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Organization",
+      "column": "AD_Org_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Lines-C_Project_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Project",
+      "column": "C_Project_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine-C_Project_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Project",
+      "column": "C_Project_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Lines-C_Costcenter_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Cost Center",
+      "column": "C_Costcenter_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine-C_Costcenter_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Cost Center",
+      "column": "C_Costcenter_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Lines-A_Asset_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Asset",
+      "column": "A_Asset_ID",
+      "rawExpression": "@$Element_AS@='Y'",
+      "translated": "element_AS==true"
+    },
+    {
+      "name": "C_OrderLine-A_Asset_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Asset",
+      "column": "A_Asset_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Lines-User1_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "1st Dimension",
+      "column": "User1_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine-User1_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "1st Dimension",
+      "column": "User1_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Lines-User2_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "2nd Dimension",
+      "column": "User2_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine-User2_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "2nd Dimension",
+      "column": "User2_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Lines-Explode-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Explode",
+      "column": "Explode",
+      "rawExpression": "@IsStocked@='N' & @isBOM@='Y' & @explode@!'Y' & @Processed@='N'",
+      "translated": "isStocked==false && isBOM==true && explode!=true && processed==false"
+    },
+    {
+      "name": "C_OrderLine-AD_Client_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Client",
+      "column": "AD_Client_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Lines-ChargeAmt-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Lines",
+      "fieldName": "Charge Amount",
+      "column": "ChargeAmt",
+      "rawExpression": "@HasCharge@='Y'",
+      "translated": "hasCharge==true"
+    },
+    {
+      "name": "C_OrderLine-ChargeAmt-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Charge Amount",
+      "column": "ChargeAmt",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_OrderLine-DirectShip-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Direct shipment",
+      "column": "DirectShip",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_OrderLine-Create_Reservation-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine",
+      "fieldName": "Create Reservation",
+      "column": "Create_Reservation",
+      "rawExpression": "@processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Discounts and Promotions-Priceoffergross-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Discounts and Promotions",
+      "fieldName": "Base Gross Unit Price",
+      "column": "Priceoffergross",
+      "rawExpression": "@GROSSPRICE@='Y'",
+      "translated": "gROSSPRICE==true"
+    },
+    {
+      "name": "purchase-order-Discounts and Promotions-Priceoffer-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Discounts and Promotions",
+      "fieldName": "Base Net Unit Price",
+      "column": "Priceoffer",
+      "rawExpression": "@GROSSPRICE@='N'",
+      "translated": "gROSSPRICE==false"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-C_Incoterms_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Incoterms",
+      "column": "C_Incoterms_ID",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-Transaction_Type-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Transaction Type",
+      "column": "Transaction_Type",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-Transportation_Type-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Transportation Type",
+      "column": "Transportation_Type",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "purchase-order-Intrastat-Port-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Intrastat",
+      "fieldName": "Port/Airport",
+      "column": "Port",
+      "rawExpression": "@Transportation_Type@='1' | @Transportation_Type@='4'",
+      "translated": "transportation_Type=='1' || transportation_Type=='4'"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-Port-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Port/Airport",
+      "column": "Port",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-Statistical_Regime-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Statistical Regime",
+      "column": "Statistical_Regime",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-Orig_C_Country_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Country of Origin",
+      "column": "Orig_C_Country_ID",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-NC8_Code-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Commodity Code",
+      "column": "NC8_Code",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-Netmass_Kg-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Net Mass (Kg)",
+      "column": "Netmass_Kg",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-Hasunit-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Has Suplementary Unit",
+      "column": "Hasunit",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "purchase-order-Intrastat-Intr_C_Uom_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Intrastat",
+      "fieldName": "Supplementary UOM",
+      "column": "Intr_C_Uom_ID",
+      "rawExpression": "@Hasunit@='Y'",
+      "translated": "hasunit==true"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-Intr_C_Uom_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Supplementary UOM",
+      "column": "Intr_C_Uom_ID",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "purchase-order-Intrastat-Conversion-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Intrastat",
+      "fieldName": "Conversion Rate",
+      "column": "Conversion",
+      "rawExpression": "@Hasunit@='Y'",
+      "translated": "hasunit==true"
+    },
+    {
+      "name": "INTR_C_ORDERLINE-Conversion-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "INTR_C_ORDERLINE",
+      "fieldName": "Conversion Rate",
+      "column": "Conversion",
+      "rawExpression": "@INTR_ORDER@='Y'",
+      "translated": "iNTR_ORDER==true"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-Isactive-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Active",
+      "column": "Isactive",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-Amt-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Amount",
+      "column": "Amt",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-AD_Org_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "Organization",
+      "column": "AD_Org_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-AD_Org_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Organization",
+      "column": "AD_Org_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-C_Bpartner_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "Business Partner",
+      "column": "C_Bpartner_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-C_Bpartner_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Business Partner",
+      "column": "C_Bpartner_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-M_Product_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "Product",
+      "column": "M_Product_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-M_Product_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Product",
+      "column": "M_Product_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-C_Project_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "Project",
+      "column": "C_Project_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-C_Project_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Project",
+      "column": "C_Project_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-C_Costcenter_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "Cost Center",
+      "column": "C_Costcenter_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-C_Costcenter_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Cost Center",
+      "column": "C_Costcenter_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-A_Asset_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "Asset",
+      "column": "A_Asset_ID",
+      "rawExpression": "@$Element_AS@='Y'",
+      "translated": "element_AS==true"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-A_Asset_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Asset",
+      "column": "A_Asset_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-C_Activity_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "Activity",
+      "column": "C_Activity_ID",
+      "rawExpression": "@$Element_AY@='Y'",
+      "translated": "element_AY==true"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-C_Activity_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Activity",
+      "column": "C_Activity_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-C_Campaign_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "Sales Campaign",
+      "column": "C_Campaign_ID",
+      "rawExpression": "@$Element_MC@='Y'",
+      "translated": "element_MC==true"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-C_Campaign_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "Sales Campaign",
+      "column": "C_Campaign_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-User1_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "1st Dimension",
+      "column": "User1_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-User1_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "1st Dimension",
+      "column": "User1_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "purchase-order-Accounting dimension-User2_ID-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Accounting dimension",
+      "fieldName": "2nd Dimension",
+      "column": "User2_ID",
+      "rawExpression": "@ACCT_DIMENSION_DISPLAY@",
+      "translated": "aCCT_DIMENSION_DISPLAY"
+    },
+    {
+      "name": "C_OrderLine_AcctDimension-User2_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_OrderLine_AcctDimension",
+      "fieldName": "2nd Dimension",
+      "column": "User2_ID",
+      "rawExpression": "@Posted@='Y'",
+      "translated": "posted==true"
+    },
+    {
+      "name": "C_Order_Discount-Line-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order_Discount",
+      "fieldName": "Line No.",
+      "column": "Line",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order_Discount-C_Discount_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order_Discount",
+      "fieldName": "Basic Discount",
+      "column": "C_Discount_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order_Discount-Cascade-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order_Discount",
+      "fieldName": "Cascade",
+      "column": "Cascade",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order_Discount-Isactive-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order_Discount",
+      "fieldName": "Active",
+      "column": "Isactive",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order_Discount-AD_Client_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order_Discount",
+      "fieldName": "Client",
+      "column": "AD_Client_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "C_Order_Discount-AD_Org_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Order_Discount",
+      "fieldName": "Organization",
+      "column": "AD_Org_ID",
+      "rawExpression": "@Processed@='Y'",
+      "translated": "processed==true"
+    },
+    {
+      "name": "purchase-order-Payment Details-ExpectedConverted-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Payment Details",
+      "fieldName": "Expected (Account Currency)",
+      "column": "ExpectedConverted",
+      "rawExpression": "@C_Currency_ID@!@FinAcc_Currency_ID@",
+      "translated": "c_Currency_ID!=finAcc_Currency_ID"
+    },
+    {
+      "name": "purchase-order-Payment Details-PaidConverted-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Payment Details",
+      "fieldName": "Paid (Account Currency)",
+      "column": "PaidConverted",
+      "rawExpression": "@C_Currency_ID@!@FinAcc_Currency_ID@",
+      "translated": "c_Currency_ID!=finAcc_Currency_ID"
+    },
+    {
+      "name": "purchase-order-Payment Details-Finacc_Txn_Convert_Rate-displayLogic",
+      "type": "displayLogic",
+      "source": "AD_Field",
+      "window": "purchase-order",
+      "tab": "Payment Details",
+      "fieldName": "Exchange Rate",
+      "column": "Finacc_Txn_Convert_Rate",
+      "rawExpression": "@C_Currency_ID@!@FinAcc_Currency_ID@",
+      "translated": "c_Currency_ID!=finAcc_Currency_ID"
+    },
+    {
+      "name": "C_Debt_Payment-Amount-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Debt_Payment",
+      "fieldName": "Amount",
+      "column": "Amount",
+      "rawExpression": "@IsValid@='Y'",
+      "translated": "isValid==true"
+    },
+    {
+      "name": "C_Debt_Payment-C_Currency_ID-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Debt_Payment",
+      "fieldName": "Currency",
+      "column": "C_Currency_ID",
+      "rawExpression": "@IsValid@='Y'",
+      "translated": "isValid==true"
+    },
+    {
+      "name": "C_Debt_Payment-IsManual-readOnlyLogic",
+      "type": "readOnlyLogic",
+      "source": "AD_Column",
+      "table": "C_Debt_Payment",
+      "fieldName": "Manual",
+      "column": "IsManual",
+      "rawExpression": "@IsValid@='Y'",
+      "translated": "isValid==true"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "9EB2228A60684C0DBEC12D5CD8D85218",
+      "name": "Calculate Promotions",
+      "className": null,
+      "column": "Calculate_Promotions"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "800024",
+      "name": "Change Debt Payment",
+      "className": null,
+      "column": "Changesettlementcancel"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "211",
+      "name": "Copy Lines",
+      "className": "ad_actionButton/CopyFromOrder_FS.html",
+      "column": "CopyFrom"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "800022",
+      "name": "Copy Product Template",
+      "className": null,
+      "column": "Generatetemplate"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "FF80808133362F6A013336781FCE0066",
+      "name": "Create Invoice",
+      "className": null,
+      "column": "RM_CreateInvoice"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "A3FE1F9892394386A49FB707AA50A0FA",
+      "name": "Create Order",
+      "className": null,
+      "column": "Convertquotation"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "DFC78024B1F54CBB95DC73425BA6687F",
+      "name": "Explode",
+      "className": null,
+      "column": "Explode"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "23D1B163EC0B41F790CE39BF01DA320E",
+      "name": "Insert Orphan Line",
+      "className": null,
+      "column": "RM_AddOrphanLine"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "104",
+      "name": "Process Order",
+      "className": null,
+      "column": "Processing"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "104",
+      "name": "Process Order",
+      "className": null,
+      "column": "DocAction"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "classic_process",
+      "id": "FB740AB61B0E42B198D2C88D3A0D0CE6",
+      "name": "Update Payment Plan",
+      "className": null,
+      "column": "Update_Payment_Plan"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "hardcoded",
+      "id": null,
+      "name": "RM_ReceiveMaterials",
+      "className": null,
+      "column": "RM_ReceiveMaterials"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "9BED7889E1034FE68BD85D5D16857320",
+      "name": "Add Payment",
+      "className": "org.openbravo.advpaymentmngt.actionHandler.AddPaymentActionHandler",
+      "column": "EM_APRM_AddPayment"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "A2FAF49712D1445ABE750315CE1B473A",
+      "name": "Cancel and Replace Sales Order",
+      "className": "org.openbravo.common.actionhandler.CancelAndReplaceSalesOrder",
+      "column": "Cancelandreplace"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "0C2AFAEFB67B4CB8A1429195EB119A49",
+      "name": "Confirm Cancel and Replace Sales Order",
+      "className": "org.openbravo.common.actionhandler.ConfirmCancelAndReplaceSalesOrder",
+      "column": "Confirmcancelandreplace"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "8B81D80B06364566B87853FEECAB5DE0",
+      "name": "Copy from Orders",
+      "className": "org.openbravo.common.actionhandler.CopyFromOrdersActionHandler",
+      "column": "CopyFromPO"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "6995A4C2592D434A9E16B71E1694CBCA",
+      "name": "Create Purchase Order Lines",
+      "className": "org.openbravo.common.actionhandler.OrderCreatePOLines",
+      "column": "Create_POLines"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "70E42AD47E5F4698A9ACCCAF3EB72B9E",
+      "name": "Manage Prereservation Pick and Edit",
+      "className": "org.openbravo.common.actionhandler.ManagePrereservationActionHandler",
+      "column": "Manage_Prereservation"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "5F547560D3DE401AA0B570F22E2C6C06",
+      "name": "Manage Reservation Pick and Edit",
+      "className": "org.openbravo.common.actionhandler.ManageReservationActionHandler",
+      "column": "Manage_Reservation"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "57496FB9CF9E4E8F847224017941570E",
+      "name": "Post",
+      "className": "com.smf.jobs.defaults.Post",
+      "column": "Posted"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "A2C19D0EF6594D14A64BC62E99A89CC3",
+      "name": "RFC/RTV HQL Pick and Edit Lines",
+      "className": "org.openbravo.common.actionhandler.SRMOPickEditLines",
+      "column": "RM_PickFromShipment"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "A2C19D0EF6594D14A64BC62E99A89CC3",
+      "name": "RFC/RTV HQL Pick and Edit Lines",
+      "className": "org.openbravo.common.actionhandler.SRMOPickEditLines",
+      "column": "RM_Pickfromreceipt"
+    },
+    {
+      "type": "process",
+      "source": "OBUIAPP_Process",
+      "mechanism": "obuiapp_process",
+      "id": "C4265E27C8134096B49DFBF69369DFC6",
+      "name": "Service Order Line Relation Pick and Edit",
+      "className": "org.openbravo.common.actionhandler.ServiceOrderLineRelate",
+      "column": "Relate_Orderline"
+    },
+    {
+      "type": "process",
+      "source": "AD_Process",
+      "mechanism": "tab_process",
+      "id": "1000500002",
+      "name": "Print orders process",
+      "className": null,
+      "column": null
+    }
+  ],
+  "auxiliaryInputs": [
+    {
+      "name": "AEATSII_AcogidaSII3",
+      "code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)",
+      "tabName": "Header",
+      "tabId": "294"
+    },
+    {
+      "name": "APRM_OrderIsPaid",
+      "code": "@SQL=select case when ps.outstandingamt <> 0 then 'N' else 'Y' end\n          from fin_payment_scheduledetail fpsd\n              join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id\n              join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id\n              join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_order\n              join c_order co on co.c_order_id=ps.c_order_id\n                WHERE ps.c_order_id =@c_order_id@\n                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40\n                group by co.GrandTotal, ps.outstandingamt, ps.c_order_id",
+      "tabName": "Header",
+      "tabId": "294"
+    },
+    {
+      "name": "DOCBASETYPE",
+      "code": "@SQL=select coalesce(max(docbasetype), 'POO') from c_doctype where c_doctype_id = @c_doctypetarget_id@",
+      "tabName": "Header",
+      "tabId": "294"
+    },
+    {
+      "name": "ORDERTYPE",
+      "code": "@SQL=SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@",
+      "tabName": "Header",
+      "tabId": "294"
+    },
+    {
+      "name": "showAddPayment",
+      "code": "@SQL=select case when sum(fpsd.amount)=co.GrandTotal then 'N' else 'Y' end\n          from fin_payment_scheduledetail fpsd\n              join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id\n              join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id\n              join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_order\n              join c_order co on co.c_order_id=ps.c_order_id\n                WHERE ps.c_order_id =@c_order_id@\n                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40\n                group by co.GrandTotal",
+      "tabName": "Header",
+      "tabId": "294"
+    },
+    {
+      "name": "ATTRIBUTESET",
+      "code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "ATTRIBUTESETINSTANCIABLE",
+      "code": "@SQL=SELECT (CASE count(*) WHEN 0 THEN 'N' ELSE 'Y' END) from M_ATTRIBUTESET mats join M_PRODUCT mp on mats.M_AttributeSet_ID=mp.M_AttributeSet_ID WHERE mp.M_PRODUCT_ID=@M_Product_ID@ and (mats.IsLot='Y' or mats.IsSerNo='Y' or mats.IsGuaranteeDate='Y')",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "ATTRSETVALUETYPE",
+      "code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "DOCBASETYPE",
+      "code": "@SQL=select coalesce(max(dt.docbasetype), 'POO') from c_order ord join c_doctype dt on (ord.c_doctypetarget_id = dt.c_doctype_id)\nwhere ord.c_order_id = @c_order_id@",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "GROSSPRICE",
+      "code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "HASSECONDUOM",
+      "code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "isBOM",
+      "code": "@SQL=SELECT isBOM FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "isQuantityVariable",
+      "code": "@SQL=SELECT ISQUANTITYVARIABLE FROM M_PRODUCT where M_PRODUCT_ID = @M_Product_ID@",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "IsStocked",
+      "code": "@SQL=SELECT IsStocked FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "Parent_AD_Org",
+      "code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@\n",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "Posted",
+      "code": "@SQL=SELECT POSTED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "Processed",
+      "code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "UsesAlternate",
+      "code": "@SQL=SELECT CASE WHEN COUNT(C_TAX_ID)>0 THEN 'Y' ELSE 'N' END AS ISUSED FROM C_TAX WHERE C_TAX_ISMEMBER(@C_TAX_ID@, C_TAX_ID)=1 AND BASEAMOUNT IN ('TBA', 'TBATAX')",
+      "tabName": "Lines",
+      "tabId": "293"
+    },
+    {
+      "name": "GROSSPRICE",
+      "code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@",
+      "tabName": "Discounts and Promotions",
+      "tabId": "800221"
+    },
+    {
+      "name": "DOCBASETYPE",
+      "code": "@SQL=select coalesce(max(dt.docbasetype), 'POO') from c_orderline_acctdimension olacct \n                           join c_orderline ol on (olacct.c_orderline_id=ol.c_orderline_id)\n                           join c_order ord on (ol.c_order_id=ord.c_order_id)\n                           join c_doctype dt on (ord.c_doctypetarget_id = dt.c_doctype_id)\n                          where ord.c_order_id = @c_order_id@",
+      "tabName": "Accounting dimension",
+      "tabId": "4CA5324BD037430B8E682B41C1DAA8CC"
+    },
+    {
+      "name": "INTR_ORDER",
+      "code": "@SQL=SELECT processed FROM C_ORDER WHERE C_ORDER_ID IN (SELECT C_ORDER_ID FROM C_ORDERLINE WHERE C_ORDERLINE_ID=@C_Orderline_ID@)",
+      "tabName": "Intrastat",
+      "tabId": "15AB548E781248DBBAE32A7646B98AF8"
+    },
+    {
+      "name": "Processed",
+      "code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@",
+      "tabName": "Basic Discounts",
+      "tabId": "1011100001"
+    },
+    {
+      "name": "Processed",
+      "code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@",
+      "tabName": "Tax",
+      "tabId": "295"
+    }
+  ],
+  "summary": {
+    "callouts": 25,
+    "validations": 29,
+    "displayLogic": 66,
+    "readOnlyLogic": 97,
+    "processes": 24,
+    "auxiliaryInputs": 23,
+    "total": 240
+  }
+}

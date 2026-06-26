@@ -2,4 +2,4 @@
 
 | Window | Status | Notes |
 |--------|--------|-------|
-| (none yet) | — | Add entries as windows are onboarded |
+| purchase-order | onboarded | Smoke test window |

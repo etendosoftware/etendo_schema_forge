@@ -7,13 +7,14 @@ import { toCamelCase, toPropertyName, computeChecksum, generateVersion } from '.
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT = join(__dirname, '..', '..');
+const ROOT = process.env.SF_ROOT || process.cwd();
+const CLI_DIR = join(__dirname, '..', '..');
 
 /**
  * Load a JSON file from the core-maps directory.
  */
 async function loadCoreMap(filename) {
-  const raw = await readFile(join(ROOT, 'core-maps', filename), 'utf-8');
+  const raw = await readFile(join(CLI_DIR, 'core-maps', filename), 'utf-8');
   return JSON.parse(raw);
 }
 

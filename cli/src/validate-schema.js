@@ -4,7 +4,8 @@ import { dirname, join } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT = join(__dirname, '..', '..');
+const ROOT = process.env.SF_ROOT || process.cwd();
+const CLI_DIR = join(__dirname, '..', '..');
 
 // Valid enum values per TDD 3.3
 const VALID_VISIBILITY = ['editable', 'readOnly', 'system', 'discarded'];
@@ -27,7 +28,7 @@ const SEARCHABLE_TYPES = ['string', 'enum', 'foreignKey', 'date', 'dateTime'];
 let _systemColumnsCache = null;
 async function loadSystemColumns() {
   if (_systemColumnsCache) return _systemColumnsCache;
-  const raw = await readFile(join(ROOT, 'core-maps', 'system-columns.json'), 'utf-8');
+  const raw = await readFile(join(CLI_DIR, 'core-maps', 'system-columns.json'), 'utf-8');
   _systemColumnsCache = JSON.parse(raw);
   return _systemColumnsCache;
 }

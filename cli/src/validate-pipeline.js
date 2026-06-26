@@ -27,7 +27,7 @@ const execFileAsync = promisify(execFile);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT = join(__dirname, '..', '..');
+const ROOT = process.env.SF_ROOT || process.cwd();
 
 // Artifact dirs that are intentionally custom-only: they have decisions.json
 // but no contract pipeline (no contract.json, report-contract.json, etc.).

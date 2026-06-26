@@ -1,0 +1,124 @@
+name,displaylogic,displaylogic_server,displaylogicgrid,readonlylogic,columnname
+Discount %,,,,@Processed@='Y',Discount
+Product,,,,@Processed@='Y',M_Product_ID
+UOM,,,,@UomManagement@='Y',C_UOM_ID
+Ordered Quantity,,,,@Processed@='Y' | (@IsSOTrx@='Y' & @ISLINKEDTOPRODUCT@='Y' & @PRODUCTTYPE@='S') | @UomManagement@='Y',QtyOrdered
+Net List Price,@GROSSPRICE@='N',,,@Processed@='Y',PriceList
+Net Unit Price,,,,@Processed@='Y' | @GROSSPRICE@='Y',PriceActual
+Tax,,,,@Processed@='Y',C_Tax_ID
+Client,,,,@Processed@='Y',AD_Client_ID
+Line No.,,,,@Processed@='Y',Line
+Order Date,@showMRPandProductionFields@='Y',,,,DateOrdered
+Scheduled Delivery Date,@showMRPandProductionFields@='Y',,,,DatePromised
+Organization,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',AD_Org_ID
+Charge Amount,@HasCharge@='Y',,,@Processed@='Y',ChargeAmt
+Direct shipment,,,,@Processed@='Y',DirectShip
+Line Net Amount,,,,@Iseditlinenetamt@='N'|@GROSSPRICE@='Y',LineNetAmt
+Attribute Set Value,(@ATTRIBUTESET@!''&@ATTRSETVALUETYPE@!'F')|(@M_AttributeSetInstance_ID@!''&@M_AttributeSetInstance_ID@!'0'),,,@Processed@='Y' | @ATTRIBUTESETINSTANCIABLE@='Y',M_AttributeSetInstance_ID
+Project,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',C_Project_ID
+Operative Quantity,@M_Product_Uom_Id@='',@UomManagement@='Y',,@Processed@='Y',Aumqty
+Alternative UOM,@M_Product_Uom_Id@='',@UomManagement@='Y',,@Processed@='Y',C_Aum
+Line Gross Amount,@GROSSPRICE@='Y',,,,Line_Gross_Amount
+Asset,@$Element_AS@='Y',,,@Posted@='Y',A_Asset_ID
+Alternate Taxable Amount,@UsesAlternate@='Y',,,@Processed@='Y',Taxbaseamt
+2nd Dimension,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',User2_ID
+Gross Unit Price,@GROSSPRICE@='Y',,,@Processed@='Y' | @GROSSPRICE@='N',Gross_Unit_Price
+Gross List Price,@GROSSPRICE@='Y',,,,GrossPriceList
+Create Reservation,,,,@processed@='Y',Create_Reservation
+Manage Prereservation,@DOCSTATUS@='CO'&@StockReservations@!'',,,,Manage_Prereservation
+1st Dimension,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',User1_ID
+Explode,@IsStocked@='N' & @isBOM@='Y' & @explode@!'Y' & @Processed@='N',,,,Explode
+Cost Center,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',C_Costcenter_ID
+Warehouse,@DirectShip@='N',,,@OrderType@!'SO',M_Warehouse_ID
+Reserved Quantity,@OrderType@='OB' | @OrderType@='SO' | @OrderType@='PO',,,,QtyReserved
+Delivered Quantity,@Processed@='Y' & @IsStocked@ = 'Y',,,,QtyDelivered
+Invoiced Quantity,@OrderType@='PO' | @Processed@='Y',,,,QtyInvoiced
+Shipping Company,@DeliveryViaRule@='S',,,,M_Shipper_ID
+Business Partner,,,,@Posted@='Y',C_BPartner_ID
+Freight Amount,@FreightCostRule@='L',,,,FreightAmt
+Charge,,,,@Processed@='Y',C_Charge_ID
+Order Quantity,(@HASSECONDUOM@=1 & @UomManagement@!'Y')  | (@UomManagement@='Y' & @M_Product_Uom_Id@!''),,,@Processed@='Y',QuantityOrder
+Order UOM,(@HASSECONDUOM@=1 & @UomManagement@!'Y')  | (@UomManagement@='Y' & @M_Product_Uom_Id@!''),,,@Processed@='Y',M_Product_Uom_Id
+Base Net Unit Price,@GROSSPRICE@='N',,,,PriceStd
+Base Gross Unit Price,@GROSSPRICE@='Y',,,,grosspricestd
+Edit Line Net Amount,,,,@Processed@='Y',Iseditlinenetamt
+Business Partner,@ACCT_DIMENSION_DISPLAY@,,,@Processed@='Y' | @DocStatus@='TMP',C_BPartner_ID
+Price List,,,,@Processed@='Y' | @DocStatus@='TMP',M_PriceList_ID
+Client,,,,@Processed@='Y',AD_Client_ID
+Document No.,,,,@Processed@='Y' | @DocStatus@='TMP',DocumentNo
+Process Order,@DocStatus@!'CL'&@DocStatus@!'VO',,,,DocAction
+Transaction Document,,,,@Processed@='Y' | @DocStatus@='TMP',C_DocTypeTarget_ID
+Order Date,,,,@Processed@='Y',DateOrdered
+Scheduled Delivery Date,,,,@Processed@='Y',DatePromised
+Accounting Date,,,,@Posted@='Y',DateAcct
+Payment Terms,,,,@Processed@='Y',C_PaymentTerm_ID
+Invoice From,,,,@Processed@='Y' | @DocStatus@='TMP',BillTo_ID
+Delivery Method,,,,@Processed@='Y',DeliveryViaRule
+Priority,,,,@Processed@='Y',PriorityRule
+Warehouse,,,,@Processed@='Y',M_Warehouse_ID
+Organization,@ACCT_DIMENSION_DISPLAY@,,,@Processed@='Y',AD_Org_ID
+Charge Amount,,,,@Processed@='Y',ChargeAmt
+Charge,,,,@Processed@='Y',C_Charge_ID
+Partner Address,,,,@Processed@='Y' | @DocStatus@='TMP',C_BPartner_Location_ID
+Project,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',C_Project_ID
+Delivery Terms,,,,@Processed@='Y',DeliveryRule
+Form of Payment,@FinancialManagement@='',,,@Processed@='Y',PaymentRule
+Posted,@Processed@='Y' & @#ShowAcct@='Y',,,,Posted
+Drop Ship Contact,,,,@Processed@='Y',DropShip_User_ID
+Drop Ship Partner,,,,@Processed@='Y',DropShip_BPartner_ID
+Copy Lines,@processed@='N',,,,CopyFrom
+Drop Ship Location,,,,@Processed@='Y' | @DocStatus@='TMP',DropShip_Location_ID
+2nd Dimension,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',User2_ID
+1st Dimension,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',User1_ID
+Copy from Orders,@processed@='N',,,,CopyFromPO
+Reject Reason,,,,@DocStatus@='CJ'|@DocStatus@='CA',C_Reject_Reason_ID
+Cost Center,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',C_Costcenter_ID
+Create Lines,@processed@='N',,,,Create_POLines
+Asset,@$Element_AS@='Y',,,@Posted@='Y',A_Asset_ID
+Payment Method,,,,@Processed@='Y',FIN_Paymentmethod_ID
+Add Payment,@Processed@='Y' & (@showAddPayment@='Y' | @showAddPayment@ ='') & (@APRM_OrderIsPaid@='N' | @APRM_OrderIsPaid@ ='') & @GrandTotal@!0,,,,EM_APRM_AddPayment
+Cash VAT,,,,@Processed@='Y',Iscashvat
+SII Description,@AEATSII_AcogidaSII3@='Y',,,,EM_Aeatsii_Descripcion_Sii
+Operation date,@AEATSII_AcogidaSII3@='Y',,,,EM_Aeatsii_Fecha_Operacion
+Sales Campaign,@$Element_MC@='Y',,,@Posted@='Y',C_Campaign_ID
+User/Contact,,,,@Processed@='Y',AD_User_ID
+Activity,@$Element_AY@='Y',,,@Posted@='Y',C_Activity_ID
+Trx Organization,@$Element_OT@='Y',,,@Processed@='Y',AD_OrgTrx_ID
+Port/Airport,@Transportation_Type@='1' | @Transportation_Type@='4',,,@INTR_ORDER@='Y',Port
+Transaction Type,,,,@INTR_ORDER@='Y',Transaction_Type
+Has Suplementary Unit,,,,@INTR_ORDER@='Y',Hasunit
+Supplementary UOM,@Hasunit@='Y',,,@INTR_ORDER@='Y',Intr_C_Uom_ID
+Commodity Code,,,,@INTR_ORDER@='Y',NC8_Code
+Statistical Regime,,,,@INTR_ORDER@='Y',Statistical_Regime
+Country of Origin,,,,@INTR_ORDER@='Y',Orig_C_Country_ID
+Incoterms,,,,@INTR_ORDER@='Y',C_Incoterms_ID
+Conversion Rate,@Hasunit@='Y',,,@INTR_ORDER@='Y',Conversion
+Transportation Type,,,,@INTR_ORDER@='Y',Transportation_Type
+Net Mass (Kg),,,,@INTR_ORDER@='Y',Netmass_Kg
+Base Net Unit Price,@GROSSPRICE@='N',,,,Priceoffer
+Base Gross Unit Price,@GROSSPRICE@='Y',,,,Priceoffergross
+Client,,,,@Processed@='Y',AD_Client_ID
+Organization,,,,@Processed@='Y',AD_Org_ID
+Basic Discount,,,,@Processed@='Y',C_Discount_ID
+Cascade,,,,@Processed@='Y',Cascade
+Active,,,,@Processed@='Y',Isactive
+Line No.,,,,@Processed@='Y',Line
+1st Dimension,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',User1_ID
+Amount,,,,@Posted@='Y',Amt
+Cost Center,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',C_Costcenter_ID
+Sales Campaign,@$Element_MC@='Y',,,@Posted@='Y',C_Campaign_ID
+Product,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',M_Product_ID
+Project,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',C_Project_ID
+Organization,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',AD_Org_ID
+Asset,@$Element_AS@='Y',,,@Posted@='Y',A_Asset_ID
+Activity,@$Element_AY@='Y',,,@Posted@='Y',C_Activity_ID
+Active,,,,@Posted@='Y',Isactive
+2nd Dimension,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',User2_ID
+Business Partner,@ACCT_DIMENSION_DISPLAY@,,,@Posted@='Y',C_Bpartner_ID
+Customer,,,,@Posted@='Y',C_BPartner_ID
+Expected (Account Currency),@C_Currency_ID@!@FinAcc_Currency_ID@,,,,ExpectedConverted
+Paid (Account Currency),@C_Currency_ID@!@FinAcc_Currency_ID@,,,,PaidConverted
+Exchange Rate,@C_Currency_ID@!@FinAcc_Currency_ID@,,,,Finacc_Txn_Convert_Rate
+Amount,,,,@IsValid@='Y',Amount
+Manual,,,,@IsValid@='Y',IsManual
+Currency,,,,@IsValid@='Y',C_Currency_ID

@@ -3,4 +3,6 @@
 // Example (after running make regen ONLY=purchase-order):
 //   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
 
-export const windowLoaders = {};
+export const windowLoaders = {
+  'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
+};
