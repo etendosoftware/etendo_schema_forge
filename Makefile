@@ -453,7 +453,7 @@ switch-to-es: ## Switch active locale to Spain (ES)
 	@echo "Active locale: ES (Spain) — com.etendoerp.go"
 
 switch-to-ar: ## Switch active locale to Argentina (AR)
-	@cp tools/etendo-go-ar/.env.ar tools/etendo-go-ar/.env.local
+	@cp tools/etendo-go-ar/app-shell/.env.ar tools/etendo-go-ar/app-shell/.env.local
 	@echo ar > .active-locale
 	@echo "Active locale: AR (Argentina) — com.etendoerp.go.ar"
 
@@ -480,7 +480,7 @@ project-status: ## Show active locale and module ID
 		grep -s SF_MODULE_ID tools/app-shell/.env.local || echo "  .env.local missing — run: make switch-to-es"; \
 	elif [ "$$LOCALE" = "ar" ]; then \
 		echo "Module        : com.etendoerp.go.ar (Argentina)"; \
-		grep -s SF_MODULE_ID tools/etendo-go-ar/.env.local || echo "  .env.local missing — run: make switch-to-ar"; \
+		grep -s SF_MODULE_ID tools/etendo-go-ar/app-shell/.env.local || echo "  .env.local missing — run: make switch-to-ar"; \
 	fi
 
 # --- Cleanup ---
