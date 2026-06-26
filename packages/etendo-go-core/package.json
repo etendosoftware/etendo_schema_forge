@@ -9,7 +9,12 @@
   },
   "exports": {
     ".": "./src/index.js",
-    "./onboarding": "./src/onboarding/index.js"
+    "./onboarding": "./src/onboarding/index.js",
+    "./onboarding/api": "./src/onboarding/api.js",
+    "./onboarding/sso": "./src/onboarding/sso.js",
+    "./onboarding/state": "./src/onboarding/state.js",
+    "./onboarding/password-policy": "./src/onboarding/passwordPolicy.js",
+    "./onboarding/oauth-return-to": "./src/onboarding/oauthReturnTo.js"
   },
   "files": [
     "src",
