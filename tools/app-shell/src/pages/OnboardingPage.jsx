@@ -37,5 +37,5 @@ export default function OnboardingPage() {
     },
   };
 
-  return <OnboardingFlow steps={coreSteps} config={ES_CONFIG} />;
+  return <OnboardingFlow steps={coreSteps} config={ES_CONFIG} data-testid="OnboardingFlow__79cf84" />;
 }
