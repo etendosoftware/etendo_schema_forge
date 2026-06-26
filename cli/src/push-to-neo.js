@@ -23,6 +23,7 @@ import {
 } from './neo-writer.js';
 import { computeWindowDelta, serializeDelta } from './lib/neo-delta.js';
 import { loadEtgoXmlSnapshot } from './lib/etgo-xml-parser.js';
+import { GO_MODULE_ID } from './lib/constants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -148,8 +149,6 @@ export async function loadConfig(projectRoot) {
   return { url, user, password };
 }
 
-// com.etendoerp.go — the module that owns the NEO Headless config.
-const GO_MODULE_ID = '94E1B433CF55451EABB764750AC5902A';
 
 /**
  * Mark com.etendoerp.go as "in development" so AD changes can be applied.
@@ -246,7 +245,7 @@ export function formatDuplicateFieldsError(specName, duplicates) {
  * @param {object} [options] - Override options
  * @param {boolean} [options.dryRun] - If true, log planned actions without writing to DB
  * @param {string} [options.projectRoot] - Override project root path
- * @param {string} [options.moduleId='94E1B433CF55451EABB764750AC5902A'] - AD_Module_ID for new rows (defaults to com.etendoerp.go)
+ * @param {string} [options.moduleId=GO_MODULE_ID] - AD_Module_ID for new rows (defaults to com.etendoerp.go)
  * @param {object} [options.dbConfig] - Override DB pool config (passed to createDbPool)
  * @param {object} [options.audit] - Override audit defaults
  * @param {string} [options.etendoUrl] - Kept for backwards compat (dry-run plan display)
@@ -280,7 +279,7 @@ export async function pushToNeo(windowName, options = {}) {
     specAgentPrompt,
     specName,
     windowId,
-    moduleId: options.moduleId || '94E1B433CF55451EABB764750AC5902A',
+    moduleId: options.moduleId || process.env.SF_MODULE_ID || GO_MODULE_ID,
     auditOpts: options.audit || {},
     dbConfig: options.dbConfig,
   });
@@ -685,7 +684,7 @@ export async function stepExcludeNonContractFields(client, popResult, allFields,
  * @param {object} [options] - Override options
  * @param {boolean} [options.dryRun] - If true, log planned actions without writing to DB
  * @param {string} [options.projectRoot] - Override project root path
- * @param {string} [options.moduleId='94E1B433CF55451EABB764750AC5902A'] - AD_Module_ID for new rows (defaults to com.etendoerp.go)
+ * @param {string} [options.moduleId=GO_MODULE_ID] - AD_Module_ID for new rows (defaults to com.etendoerp.go)
  * @param {object} [options.dbConfig] - Override DB pool config
  * @param {object} [options.audit] - Override audit defaults
  * @param {string} [options.specType='P'] - Spec type: 'P' (process) or 'R' (report)
@@ -739,7 +738,7 @@ export async function pushProcessToNeo(processName, options = {}) {
   }
 
   // Live mode — write to DB via transaction
-  const moduleId = options.moduleId || '94E1B433CF55451EABB764750AC5902A';
+  const moduleId = options.moduleId || process.env.SF_MODULE_ID || GO_MODULE_ID;
   const auditOpts = options.audit || {};
   const pool = createDbPool(options.dbConfig);
   const client = await pool.connect();
@@ -813,7 +812,7 @@ export async function pushProcessToNeo(processName, options = {}) {
  * @param {object} [options] - Override options
  * @param {boolean} [options.dryRun] - If true, log planned actions without writing to DB
  * @param {string} [options.projectRoot] - Override project root path
- * @param {string} [options.moduleId='94E1B433CF55451EABB764750AC5902A'] - AD_Module_ID
+ * @param {string} [options.moduleId=GO_MODULE_ID] - AD_Module_ID
  * @param {object} [options.dbConfig] - Override DB pool config
  * @param {object} [options.audit] - Override audit defaults
  * @returns {object} Result summary
@@ -852,7 +851,7 @@ export async function pushReportToNeo(reportName, options = {}) {
   }
 
   // Live mode
-  const moduleId = options.moduleId || '94E1B433CF55451EABB764750AC5902A';
+  const moduleId = options.moduleId || process.env.SF_MODULE_ID || GO_MODULE_ID;
   const auditOpts = options.audit || {};
   const pool = createDbPool(options.dbConfig);
   const client = await pool.connect();
@@ -1012,13 +1011,16 @@ export async function pushCustomWindowToNeo(windowName, options = {}) {
     await setGoModuleInDevelopment(client);
 
     // Resolve module ID from DB — never hardcode
-    const modRes = await client.query(
-      `SELECT ad_module_id FROM ad_module WHERE javapackage = 'com.etendoerp.go'`,
-    );
-    if (modRes.rows.length === 0) {
-      throw new Error("Module 'com.etendoerp.go' not found in ad_module");
+    let moduleId = process.env.SF_MODULE_ID || null;
+    if (!moduleId) {
+      const modRes = await client.query(
+        `SELECT ad_module_id FROM ad_module WHERE javapackage = 'com.etendoerp.go'`,
+      );
+      if (modRes.rows.length === 0) {
+        throw new Error("Module 'com.etendoerp.go' not found in ad_module");
+      }
+      moduleId = modRes.rows[0].ad_module_id;
     }
-    const moduleId = modRes.rows[0].ad_module_id;
 
     // Step 1 — upsert spec
     console.log(`[1/2] Upserting spec '${specName}' (type=W)...`);
@@ -1122,7 +1124,7 @@ export async function dumpDelta(windowName, options) {
     throw new Error('dumpDelta: options.outPath is required');
   }
   const projectRoot = options.projectRoot || ROOT;
-  const moduleId = options.moduleId || '94E1B433CF55451EABB764750AC5902A';
+  const moduleId = options.moduleId || process.env.SF_MODULE_ID || GO_MODULE_ID;
   const artifactsDir = join(projectRoot, 'artifacts', windowName);
 
   // 1) Load the contract / schema-raw / decisions ----------------------------

@@ -10,6 +10,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { GO_MODULE_ID } from './lib/constants.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,7 +72,7 @@ export function auditDefaults(opts = {}) {
 export async function upsertSpec(client, params) {
   const {
     name,
-    moduleId,
+    moduleId = process.env.SF_MODULE_ID || GO_MODULE_ID,
     windowId = null,
     processId = null,
     specType = 'W',
@@ -155,7 +156,7 @@ export async function upsertEntity(client, params) {
   const {
     specId,
     tabId,
-    moduleId,
+    moduleId = process.env.SF_MODULE_ID || GO_MODULE_ID,
     entityId: existingId = null,
     isIncluded = 'Y',
     isGet = 'N',
@@ -240,7 +241,7 @@ export async function upsertEntity(client, params) {
 export async function upsertField(client, params) {
   const {
     entityId,
-    moduleId,
+    moduleId = process.env.SF_MODULE_ID || GO_MODULE_ID,
     fieldId: existingId = null,
     isIncluded = 'Y',
     isReadOnly = 'N',
@@ -346,7 +347,7 @@ export async function upsertField(client, params) {
 export async function populateSpec(client, params) {
   const {
     specId,
-    moduleId,
+    moduleId = process.env.SF_MODULE_ID || GO_MODULE_ID,
     excludeSystemColumns = true,
     includeAllMethods = false,
     audit = {},
