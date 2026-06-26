@@ -7,6 +7,8 @@ export
 # SF_ROOT tells the CLI that THIS directory is the project root,
 # so artifacts/ writes go to tools/etendo-go-ar/artifacts/ not cli/artifacts/
 export SF_ROOT := $(CURDIR)
+export SF_MODULE_ID
+export ETENDO_GRADLE_PROPERTIES
 
 ONLY ?=
 PUSH_TO_NEO ?= 0

@@ -246,3 +246,35 @@ describe('upsertSpec (duplicate name)', () => {
     assert.equal(client.updates.length, 0);
   });
 });
+
+describe('upsertSpec (moduleId)', () => {
+  it('uses SF_MODULE_ID env var if provided and moduleId is omitted', async () => {
+    const origModuleId = process.env.SF_MODULE_ID;
+    process.env.SF_MODULE_ID = 'ENV_MOD_123';
+    try {
+      const client = createMockClient();
+      await upsertSpec(client, { name: 'tax', windowId: 'WIN001' });
+      assert.equal(client.inserts[0][5], 'ENV_MOD_123'); // index 5 is ad_module_id
+    } finally {
+      if (origModuleId !== undefined) {
+        process.env.SF_MODULE_ID = origModuleId;
+      } else {
+        delete process.env.SF_MODULE_ID;
+      }
+    }
+  });
+
+  it('falls back to com.etendoerp.go module ID if both moduleId and SF_MODULE_ID env var are omitted', async () => {
+    const origModuleId = process.env.SF_MODULE_ID;
+    delete process.env.SF_MODULE_ID;
+    try {
+      const client = createMockClient();
+      await upsertSpec(client, { name: 'tax', windowId: 'WIN001' });
+      assert.equal(client.inserts[0][5], '94E1B433CF55451EABB764750AC5902A'); // default
+    } finally {
+      if (origModuleId !== undefined) {
+        process.env.SF_MODULE_ID = origModuleId;
+      }
+    }
+  });
+});

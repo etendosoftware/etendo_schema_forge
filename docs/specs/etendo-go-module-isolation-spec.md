@@ -1,6 +1,6 @@
 # Module Isolation Spec — Multi-Localization Architecture
 
-## Status: planned
+## Status: implemented
 ## Epic: ETP-4343
 ## Jira: ETP-4351
 ## Related: ETP-4346 (AR workspace), ETP-4347 (publish @schema-forge/cli)

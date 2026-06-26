@@ -20,6 +20,7 @@ tools/app-shell/dist/
 tools/app-shell/.env.local
 tools/app-shell/.env.development
 tools/app-shell/.env.development.local
+tools/etendo-go-ar/.env.local
 artifacts/e2e-report/
 # Artifacts: only decisions.json, contract*.json, and generated/ are tracked
 artifacts/*/schema-raw.json

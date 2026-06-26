@@ -1,0 +1,11 @@
+VITE_MOCK=false
+VITE_ETENDO_URL=/etendo
+ETENDO_URL=http://localhost:8080/etendo_sf2
+VITE_GOOGLE_CLIENT_ID=478597920773-k25dbj5mak3jqk3vnvj2m4accm8thgdj.apps.googleusercontent.com
+VITE_MIXPANEL_ENABLED=true
+VITE_MIXPANEL_TOKEN=607a4e54a2edf2b0e5b14ed4880114c4
+VITE_MIXPANEL_DEBUG=true
+VITE_MIXPANEL_API_HOST=https://api-eu.mixpanel.com
+
+# Spain (ES) Localization Module ID
+SF_MODULE_ID=94E1B433CF55451EABB764750AC5902A

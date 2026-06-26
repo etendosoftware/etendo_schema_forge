@@ -201,6 +201,20 @@ module.path=/path/to/etendo_ar/modules/com.etendoerp.go
 etendo.path=/path/to/etendo_ar
 ```
 
+### Required Environment Variables
+
+When multiple localization workspaces share the same Etendo installation, we must isolate their pipeline configuration records in the database. This is achieved using the `SF_MODULE_ID` environment variable:
+
+- **`SF_MODULE_ID`**: The target `AD_Module_ID` under which the `ETGO_SF_*` records (specs, entities, fields) will be inserted or updated. If not specified, the system defaults to Spain's core module (`com.etendoerp.go` ID: `94E1B433CF55451EABB764750AC5902A`).
+
+In each localization workspace, define this variable in `.env.local`:
+
+```bash
+# tools/etendo-go-ar/.env.local
+SF_MODULE_ID=48E18B28715944AEBDDDE0FBE3DE8C1F
+ETENDO_GRADLE_PROPERTIES=../../etendo_core_ar/gradle.properties
+```
+
 ### `Makefile`
 
 The Makefile delegates entirely to the CLI bins installed in `node_modules/.bin/`:
