@@ -40,32 +40,6 @@ function issue(level, code, message, path, severity = 'error') {
   return { level, code, message, path, severity };
 }
 
-function validateLevel1Fields(entity, errors, ePath) {
-  // Duplicate field names
-  const fieldNames = entity.fields.map(f => f.name);
-  const seenFields = new Set();
-  for (const name of fieldNames) {
-    if (seenFields.has(name)) {
-      errors.push(issue(1, 'DUPLICATE_FIELD', `Duplicate field name: ${name}`, `${ePath}.fields.${name}`));
-    }
-    seenFields.add(name);
-  }
-
-  for (const field of entity.fields) {
-    const fPath = `${ePath}.fields.${field.name}`;
-
-    // Valid visibility
-    if (field.visibility && !VALID_VISIBILITY.includes(field.visibility)) {
-      errors.push(issue(1, 'INVALID_ENUM', `Invalid visibility: ${field.visibility}`, `${fPath}.visibility`));
-    }
-
-    // Valid type
-    if (field.type && !VALID_TYPES.includes(field.type)) {
-      errors.push(issue(1, 'INVALID_ENUM', `Invalid field type: ${field.type}`, `${fPath}.type`));
-    }
-  }
-}
-
 function validateLevel1Entities(schema, errors) {
   // Duplicate entity names
   const entityNames = schema.entities.map(e => e.name);
@@ -85,9 +59,8 @@ function validateLevel1Entities(schema, errors) {
       errors.push(issue(1, 'INVALID_ENUM', `Invalid entity level: ${entity.level}`, `${ePath}.level`));
     }
 
-    // Field validation
     if (Array.isArray(entity.fields)) {
-      validateLevel1Fields(entity, errors, ePath);
+      checkL1EntityFields(entity, ePath, errors);
     }
   }
 }
