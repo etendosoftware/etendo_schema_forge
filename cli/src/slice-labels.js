@@ -55,8 +55,9 @@ export function sha256(value) {
 export function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
   if (value && typeof value === 'object') {
-    const keys = Object.keys(value).sort();
-    return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+    const keys = Object.keys(value).sort((a, b) => a.localeCompare(b));
+    const entries = keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`);
+    return `{${entries.join(',')}}`;
   }
   return JSON.stringify(value);
 }
@@ -74,7 +75,7 @@ export function collectWindowColumns(contract) {
       if (field?.column) cols.add(field.column);
     }
   }
-  return [...cols].sort();
+  return [...cols].sort((a, b) => a.localeCompare(b));
 }
 
 /**
@@ -136,7 +137,7 @@ export function labelsModuleSource(slice) {
 
 /** Checksum binding a window's columns to their label text across locales. */
 export function labelsChecksum(columns, slice) {
-  return sha256({ columns: [...columns].sort(), slice });
+  return sha256({ columns: [...columns].sort((a, b) => a.localeCompare(b)), slice });
 }
 
 // --- IO ---
@@ -147,7 +148,7 @@ export async function loadLocales() {
   const codes = entries
     .filter(e => e.isFile() && /^[a-z]{2}_[A-Z]{2}\.json$/.test(e.name))
     .map(e => e.name.replace(/\.json$/, ''))
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
   const dicts = {};
   for (const code of codes) {
     dicts[code] = JSON.parse(await readFile(join(LOCALES_DIR, `${code}.json`), 'utf-8'));
@@ -233,7 +234,7 @@ async function listWindows() {
       // no contract → not a window artifact
     }
   }
-  return names.sort();
+  return names.sort((a, b) => a.localeCompare(b));
 }
 
 // --- CLI ---
@@ -241,14 +242,56 @@ async function listWindows() {
 function parseArgs(argv) {
   const args = argv.slice(2);
   const opts = { window: null, all: false, core: true, dryRun: false, check: false };
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--window' && args[i + 1]) opts.window = args[++i];
-    else if (args[i] === '--all') opts.all = true;
-    else if (args[i] === '--no-core') opts.core = false;
-    else if (args[i] === '--dry-run') opts.dryRun = true;
-    else if (args[i] === '--check') { opts.check = true; opts.dryRun = true; }
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
+    if (arg === '--window' && args[i + 1]) {
+      opts.window = args[i + 1];
+      i += 2;
+    } else {
+      if (arg === '--all') opts.all = true;
+      else if (arg === '--no-core') opts.core = false;
+      else if (arg === '--dry-run') opts.dryRun = true;
+      else if (arg === '--check') { opts.check = true; opts.dryRun = true; }
+      i += 1;
+    }
   }
   return opts;
+}
+
+/** Build the `⚠ missing rendered label` note for one window (empty when none). */
+function formatMissingRendered(missingRendered) {
+  const parts = Object.entries(missingRendered).map(([locale, cols]) => `${locale}=${cols.join('/')}`);
+  return parts.length ? ` | ⚠ missing rendered label: ${parts.join(', ')}` : '';
+}
+
+/**
+ * Slice one window, log a one-line summary, and (under --check) report whether
+ * the committed labels.js is stale or missing. Returns true when stale/missing.
+ */
+async function processWindow(name, dicts, opts) {
+  const r = await sliceWindow(name, dicts, { dryRun: opts.dryRun });
+  console.log(`  ${r.name.padEnd(30)} ${String(r.columns).padStart(3)} cols${formatMissingRendered(r.missingRendered)}`);
+
+  if (!opts.check) return false;
+  let committed = null;
+  try {
+    committed = await readFile(join(windowGeneratedDir(name), 'labels.js'), 'utf-8');
+  } catch {
+    // labels.js not committed — treated as stale/missing below.
+  }
+  const stale = committed == null || committed !== labelsModuleSource(r.slice);
+  if (stale) console.error(`  ✗ STALE/MISSING slice: ${name}`);
+  return stale;
+}
+
+/** Emit (or preview) core.<locale>.json and log a one-line summary per locale. */
+async function emitAndReportCore(dicts, opts) {
+  const core = await emitCore(dicts, { dryRun: opts.dryRun });
+  for (const [locale, info] of Object.entries(core)) {
+    const kb = (info.bytes / 1024).toFixed(0);
+    console.log(`  core.${locale}.json  ~${kb} KB  ${info.checksum.slice(0, 12)}…`);
+  }
 }
 
 async function main() {
@@ -263,31 +306,11 @@ async function main() {
 
   const windows = opts.all ? await listWindows() : [opts.window];
   let staleOrMissing = 0;
-
   for (const name of windows) {
-    const r = await sliceWindow(name, dicts, { dryRun: opts.dryRun });
-    const missNote = Object.keys(r.missingRendered).length
-      ? ` | ⚠ missing rendered label: ${Object.entries(r.missingRendered).map(([l, c]) => `${l}=${c.join('/')}`).join(', ')}`
-      : '';
-    console.log(`  ${r.name.padEnd(30)} ${String(r.columns).padStart(3)} cols${missNote}`);
-
-    // --check: compare against the committed labels.js (stale detection).
-    if (opts.check) {
-      let committed = null;
-      try { committed = await readFile(join(windowGeneratedDir(name), 'labels.js'), 'utf-8'); } catch {}
-      if (committed == null || committed !== labelsModuleSource(r.slice)) {
-        console.error(`  ✗ STALE/MISSING slice: ${name}`);
-        staleOrMissing++;
-      }
-    }
+    if (await processWindow(name, dicts, opts)) staleOrMissing += 1;
   }
 
-  if (opts.core) {
-    const core = await emitCore(dicts, { dryRun: opts.dryRun });
-    for (const [locale, info] of Object.entries(core)) {
-      console.log(`  core.${locale}.json  ~${(info.bytes / 1024).toFixed(0)} KB  ${info.checksum.slice(0, 12)}…`);
-    }
-  }
+  if (opts.core) await emitAndReportCore(dicts, opts);
 
   if (opts.dryRun && !opts.check) console.log('\n(dry-run — nothing written)');
   if (opts.check && staleOrMissing) {
