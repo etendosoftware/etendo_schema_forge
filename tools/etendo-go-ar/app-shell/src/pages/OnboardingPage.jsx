@@ -2,7 +2,7 @@ import React from 'react';
 import { OnboardingFlow, coreSteps } from '@etendosoftware/etendo-go-core/onboarding';
 
 const AR_CONFIG = {
-  apiBase: import.meta.env.VITE_API_BASE || '',
+  apiBase: '',
   brandLabel: 'Etendo GO',
   localeCodes: ['es_AR', 'en_US'],
   countryCodes: ['AR'],
