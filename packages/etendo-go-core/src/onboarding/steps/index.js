@@ -1,30 +1,15 @@
-/**
- * coreSteps — the built-in steps shared across all locale workspaces.
- *
- * Refactor guide (move from tools/app-shell/src/pages/OnboardingPage.jsx):
- *
- *   loginStep     ← auth tab (login form + SSO) from OnboardingPage
- *   registerStep  ← register tab (signup form + password policy) from OnboardingPage
- *   envSelectStep ← environment / org selection step from OnboardingPage
- *
- * Each step file exports: { id, component }
- * The component receives: { config, stepData, onNext, onBack }
- */
+import LoginStep from './LoginStep.jsx';
+import RegisterStep from './RegisterStep.jsx';
+import EnvSelectStep from './EnvSelectStep.jsx';
+import ProfileStep from './ProfileStep.jsx';
+import CompanyStep from './CompanyStep.jsx';
+import SetupProgressStep from './SetupProgressStep.jsx';
 
-// Placeholders — replace with real imports as you move components over.
-const loginStep = {
-  id: 'login',
-  component: null, // TODO: import LoginStep from './LoginStep.jsx'
-};
-
-const registerStep = {
-  id: 'register',
-  component: null, // TODO: import RegisterStep from './RegisterStep.jsx'
-};
-
-const envSelectStep = {
-  id: 'env-select',
-  component: null, // TODO: import EnvSelectStep from './EnvSelectStep.jsx'
-};
-
-export const coreSteps = [loginStep, registerStep, envSelectStep];
+export const coreSteps = [
+  { id: 'login', component: LoginStep },
+  { id: 'register', component: RegisterStep },
+  { id: 'env-select', component: EnvSelectStep },
+  { id: 'profile', component: ProfileStep },
+  { id: 'company', component: CompanyStep },
+  { id: 'setup-progress', component: SetupProgressStep },
+];

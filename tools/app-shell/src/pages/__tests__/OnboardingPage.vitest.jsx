@@ -50,8 +50,17 @@ vi.mock('../../i18n/index.js', () => ({
   useMenuLabel: () => (key) => key,
 }));
 
+vi.mock('@etendosoftware/app-shell-core/i18n', () => ({
+  useUI: () => (key, params) => {
+    if (params) return `${key} ${JSON.stringify(params)}`;
+    return key;
+  },
+  useLocaleSwitch: () => localeSwitchMock,
+  useMenuLabel: () => (key) => key,
+}));
+
 // Mock onboarding API
-vi.mock('../onboarding/onboardingApi.js', () => ({
+vi.mock('../../../../../packages/etendo-go-core/src/onboarding/api.js', () => ({
   ONBOARDING_ERROR_CODES: {},
   changePassword: vi.fn(),
   confirmPasswordReset: vi.fn(),
@@ -69,7 +78,7 @@ vi.mock('../onboarding/onboardingApi.js', () => ({
 
 // One provider is returned so the module-level SSO_PROVIDERS list (evaluated at
 // import time) is non-empty and the SSO credential callback can be exercised.
-vi.mock('../onboarding/onboardingSso.js', () => ({
+vi.mock('../../../../../packages/etendo-go-core/src/onboarding/sso.js', () => ({
   getConfiguredSsoProviders: vi.fn(() => [{ id: 'google', clientId: 'test-client-id' }]),
   renderSsoProviderButton: vi.fn(() => Promise.resolve()),
 }));
@@ -80,7 +89,7 @@ vi.mock('../onboarding/onboardingReadiness.js', () => ({
 }));
 
 // Mock onboarding state
-vi.mock('../onboarding/onboardingState.js', () => ({
+vi.mock('../../../../../packages/etendo-go-core/src/onboarding/state.js', () => ({
   applyProgressMessage: (prev, message) =>
     prev.map((step) => (step.name === message.step ? { ...step, status: message.status } : step)),
   buildEnvironmentSessionStorage: () => ({}),
@@ -110,6 +119,16 @@ vi.mock('@/components/ui/label', () => ({
   Label: ({ children, ...props }) => <label {...props}>{children}</label>,
 }));
 
+vi.mock('@etendosoftware/app-shell-core/components/ui/button', () => ({
+  Button: ({ children, ...props }) => <button {...props}>{children}</button>,
+}));
+vi.mock('@etendosoftware/app-shell-core/components/ui/input', () => ({
+  Input: (props) => <input {...props} />,
+}));
+vi.mock('@etendosoftware/app-shell-core/components/ui/label', () => ({
+  Label: ({ children, ...props }) => <label {...props}>{children}</label>,
+}));
+
 import OnboardingPage from '../OnboardingPage.jsx';
 import {
   confirmPasswordReset,
@@ -123,8 +142,8 @@ import {
   requestPasswordReset,
   runOnboardingStream,
   saveOnboardingDraft,
-} from '../onboarding/onboardingApi.js';
-import { renderSsoProviderButton } from '../onboarding/onboardingSso.js';
+} from '../../../../../packages/etendo-go-core/src/onboarding/api.js';
+import { renderSsoProviderButton } from '../../../../../packages/etendo-go-core/src/onboarding/sso.js';
 import { checkSalesInvoiceReadiness } from '../onboarding/onboardingReadiness.js';
 import { track } from '../../lib/observability.js';
 
