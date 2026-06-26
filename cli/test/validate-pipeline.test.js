@@ -816,3 +816,82 @@ describe('ETP-3959 quality gates', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// F18 — stale per-window label slice (ETP-4300)
+// ---------------------------------------------------------------------------
+
+// Injected locale dictionaries so F18 tests never depend on the real repo
+// locale files. Shape matches what ruleF18 reads: dicts[locale].fields[col].label.
+const F18_LOCALES = {
+  codes: ['en_US', 'es_ES'],
+  dicts: {
+    en_US: { fields: { DocumentNo: { label: 'Document No.' }, C_BPartner_ID: { label: 'Business Partner' } } },
+    es_ES: { fields: { DocumentNo: { label: 'Nº documento' }, C_BPartner_ID: { label: 'Tercero' } } },
+  },
+};
+
+/**
+ * Run the validator on fixture artifacts WITH injected locales.
+ * The shared runOnFixtures helper does not pass `_locales`, so F18 needs its own
+ * entry point that mirrors the fixture root + mock registry while supplying
+ * deterministic locale dictionaries.
+ */
+async function runF18(windowNames, opts = {}) {
+  return validatePipeline({
+    scope: windowNames,
+    strict: opts.strict ?? false,
+    skip: opts.skip ?? [],
+    // root only matters when _locales is omitted — point it at a dir with no
+    // packages/app-shell-core/src/locales so loadLocaleDicts() returns null.
+    root: opts.root ?? FIXTURES,
+    registryPath: opts.registryPath ?? join(FIXTURES, 'mock-registry.js'),
+    _artifactsRoot: FIXTURES,
+    _locales: 'locales' in opts ? opts.locales : F18_LOCALES,
+  });
+}
+
+describe('Rule F18 — stale label slice', () => {
+  it('does not emit F18 when labels.js matches the recomputed slice', async () => {
+    const result = await runF18(['window-f18-ok']);
+    const f18Block = result.violations.find(v => v.rule === 'F18');
+    assert.ok(!f18Block, 'No F18 violation expected for window-f18-ok');
+  });
+
+  it('emits exactly one F18 BLOCK when labels.js is stale', async () => {
+    const result = await runF18(['window-f18-stale']);
+    const f18s = result.violations.filter(v => v.rule === 'F18');
+    assert.equal(f18s.length, 1, 'exactly one F18 violation expected');
+    assert.equal(f18s[0].severity, 'BLOCK');
+    assert.equal(f18s[0].artifact, 'window-f18-stale');
+    assert.match(f18s[0].message, /stale/);
+  });
+
+  it('emits a skipped entry (not a violation) when labels.js is absent', async () => {
+    // window-ok has generated/ but no labels.js → shadow-rollout skip.
+    const result = await runF18(['window-ok']);
+    const f18Block = result.violations.find(v => v.rule === 'F18');
+    assert.ok(!f18Block, 'No F18 violation expected when labels.js is absent');
+    const f18Skip = result.skipped.find(s => s.rule === 'F18');
+    assert.ok(f18Skip, 'F18 must emit a skipped entry when labels.js is absent');
+    assert.match(f18Skip.message, /sliced labels not committed yet/);
+  });
+
+  it('skips gracefully when locales are unavailable', async () => {
+    // _locales omitted (undefined) → validatePipeline falls back to loadLocaleDicts(root);
+    // root=FIXTURES has no packages/app-shell-core/src/locales dir → returns null → F18 skips.
+    const result = await runF18(['window-f18-stale'], { locales: undefined });
+    const f18Block = result.violations.find(v => v.rule === 'F18');
+    assert.ok(!f18Block, 'No F18 violation expected when locales are unavailable');
+    const f18Skip = result.skipped.find(s => s.rule === 'F18');
+    assert.ok(f18Skip, 'F18 must emit a skipped entry when locales are unavailable');
+  });
+
+  it('honors --skip=F18', async () => {
+    const result = await runF18(['window-f18-stale'], { skip: ['F18'] });
+    const f18 = result.violations.find(v => v.rule === 'F18');
+    assert.ok(!f18, 'F18 should be skipped');
+    const f18Skip = result.skipped.find(s => s.rule === 'F18');
+    assert.ok(!f18Skip, 'skipped rules should not appear as skipped entries either');
+  });
+});

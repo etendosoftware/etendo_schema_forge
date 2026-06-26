@@ -61,6 +61,7 @@ Rules are grouped by the artifact kind they apply to (see [Artifact Classificati
 | F15 | BLOCK | `contract.json` is missing `agentProfile`, or the profile references fields, selectors, or actions that do not exist in the generated contract, on contracts `0.7.0+`. | Re-run contract generation or fix the profile generator/curated metadata so references match generated contract metadata. |
 | F16 | BLOCK | A key file under `artifacts/<window>/generated/` is newer than `contract.json`, which indicates a possible manual edit to generated output. | Never edit generated output manually. Fix the generator or source metadata, then regenerate the artifact. |
 | F17 | BLOCK | `decisions.json` `window.balanceFooter` is missing `debitField`/`creditField`, or references a field that does not exist on the lines entity (validated against `frontendContract.entities.<lineEntity>.fields[].name`). | Set `window.balanceFooter` to `{ debitField, creditField }` using amount-typed line-entity field names that exist in the contract. |
+| F18 | BLOCK (skipped until slices are committed) | `artifacts/<window>/generated/web/<window>/labels.js` is stale — it does not match the per-window field-label slice recomputed from the current `contract.json` columns × the locale dictionaries (`packages/app-shell-core/src/locales/*.json`). Skipped when `labels.js` is absent (shadow rollout — sliced labels are emitted by `make regen` but only enforced once the runtime consumes them, ETP-4300 Phase 2). Translation-coverage gaps (rendered columns with no dictionary label) are NOT an F18 concern — they are surfaced by `slice-labels.js --check` / `make regen` output, not the validator. | Re-run `make regen ONLY=<window>` (or `node cli/src/slice-labels.js --window <window>`) to regenerate the label slice. |
 
 ### Report rules
 
@@ -99,7 +100,7 @@ Rules applied per kind:
 
 | Kind | Rules checked |
 |------|--------------|
-| window | F1, F2, F3, F4, F5, F6, F7, F10, F11, F12, F13, F14, F15, F16, F17 |
+| window | F1, F2, F3, F4, F5, F6, F7, F10, F11, F12, F13, F14, F15, F16, F17, F18 |
 | report | F8 |
 | aggregate | F9 |
 | aggregate-section | none (whitelisted) |

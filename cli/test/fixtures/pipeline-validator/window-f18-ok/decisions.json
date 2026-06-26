@@ -1,0 +1,16 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "window": { "title": "Window F18 OK" },
+  "entities": {
+    "header": {
+      "fields": {
+        "documentNo": { "visibility": "readOnly" },
+        "businessPartner": { "visibility": "editable" }
+      }
+    }
+  },
+  "rules": [],
+  "discardPatterns": [],
+  "excludedEntities": []
+}

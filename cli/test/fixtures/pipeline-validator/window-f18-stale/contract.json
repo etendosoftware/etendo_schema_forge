@@ -1,0 +1,14 @@
+{
+  "version": "0.5.0",
+  "checksum": "f18stale",
+  "frontendContract": {
+    "entities": {
+      "header": {
+        "fields": [
+          { "column": "DocumentNo" },
+          { "column": "C_BPartner_ID" }
+        ]
+      }
+    }
+  }
+}

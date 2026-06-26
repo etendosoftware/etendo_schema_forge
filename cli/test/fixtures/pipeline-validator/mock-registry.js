@@ -13,6 +13,9 @@ export const windowLoaders = {
   // F11 fixtures (ETP-3914 slice 3)
   'window-row-quick-actions-ok': () => Promise.resolve({}),
   'window-row-quick-actions-bad': () => Promise.resolve({}),
+  // F18 fixtures (ETP-4300 stale label slice)
+  'window-f18-ok': () => Promise.resolve({}),
+  'window-f18-stale': () => Promise.resolve({}),
 };
 
 export const customLoaders = {};

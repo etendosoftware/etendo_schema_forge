@@ -1,0 +1,7 @@
+{
+  "contractChecksum": "f18ok",
+  "contractVersion": "0.5.0",
+  "generatedAt": "2026-06-26T00:00:00Z",
+  "generator": "generate-frontend.js",
+  "files": ["index.jsx"]
+}

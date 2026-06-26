@@ -189,15 +189,20 @@ Window open:   registry lazy import window chunk → labels.js (its ~22 fields) 
 
 ### F18 — sliced-labels integrity
 
-Implemented in `cli/src/validate-pipeline.js`, modeled on **F2** (which already blocks on a stale `generated/.manifest.json`):
+**As built (v1, this PR).** `ruleF18` in `cli/src/validate-pipeline.js`, modeled on **F16** (deterministic regenerate-and-compare), NOT on a stored checksum — this is simpler, robust, and sidesteps depending on a manifest field that no real-window emitter writes yet:
 
-- **BLOCK** if a window has fields but its `labels.js` is missing — **except** windows in the `apiOnlyWindows` set (`registry.js:125`: `sii-config`, `tbai-config`, `verifactu-config`, `sii-monitor`, `monitor-verifactu`, `tbai-facturas-enviadas`), which have a contract but no UI chunk. Mirror how **F3** already exempts them, or F18 will false-positive.
-- **BLOCK** if `manifest.labelsChecksum` ≠ recomputed checksum (slice stale vs current contract columns or vs current locale label text).
-- **BLOCK** on core drift: `core.<locale>.json` checksum ≠ `(full locale minus fields)` checksum.
-- **BLOCK** if the **shared label set** (see §8) does not cover all columns used by shared cross-window components — so a shared modal's columns can never be dropped by Phase 3.
-- **WARN only (never BLOCK)** if a *rendered* column (`form || grid`) has no dictionary label. The Phase-1 slicer prototype showed ~35 windows already hit this — a **pre-existing translation-coverage gap** (GO-native CRM/PM windows like `deal`/`time-tracking`, and add-on `EM_*` columns) that the slicer faithfully reproduces (today these already fall back to the contract's raw label). It is **out of scope for ETP-4300** and must not gate the build; the warning feeds a separate i18n-coverage ticket.
-- Follow the existing **shadow-then-blocking** convention (cf. F1/F2 returning `skipped(...)` "until P2/P3"): ship reporting-only first, flip to blocking once all windows are backfilled.
-- Add fixtures under `cli/test/fixtures/pipeline-validator/` (mirror `window-ok` / `window-stale-generated` / `window-stale-decisions`), tests in `cli/test/validate-pipeline.test.js`, and document F18 in `docs/pipeline-validator-reference.md`.
+- Reproduces the expected slice from the committed `contract.json` columns × the locale dictionaries using the slicer's own pure functions (`collectWindowColumns` → `sliceLabels` → `labelsModuleSource`, imported from `slice-labels.js`, so the rule and the generator can never disagree), and compares to the committed `labels.js`.
+- **BLOCK** if the committed `labels.js` differs from that reproduction (slice is stale vs current contract columns or locale label text).
+- **SKIP** when `labels.js` is absent — the **shadow-rollout** state (cf. F1/F2 returning `skipped(...)`). Since Phase 1 commits tooling only (no slices), F18 skips on every window today; it starts blocking organically as slices land. api-only/backend-only windows have no UI chunk, hence no `labels.js`, so they skip automatically — no explicit allowlist needed in v1.
+- The locale dictionaries are loaded **once** per run (`loadLocaleDicts(root)`, threaded like `registryContent`); a `_locales` option allows test injection. If the locales dir is unavailable, F18 skips.
+- **Not** an F18 concern: translation-coverage gaps (rendered columns with no dictionary label). The Phase-1 slicer showed ~35 windows hit this (GO-native CRM/PM windows, add-on `EM_*` columns) — a **pre-existing gap**, out of scope for ETP-4300, surfaced by `slice-labels.js --check` / `make regen` output, not the validator. F18 stays purely about slice↔source consistency.
+
+**Deferred to Phase 2/3** (when slices are committed and the runtime consumes them):
+- Flip from skip → **BLOCK on missing `labels.js`** for registered windows, with the `apiOnlyWindows` exclusion (`sii-config`, `tbai-config`, `verifactu-config`, `sii-monitor`, `monitor-verifactu`, `tbai-facturas-enviadas`).
+- **Core-drift** check: `core.<locale>.json` ≠ `(full locale − fields)`.
+- **Shared-label-set** coverage assertion (see §8), so cross-window shared-modal columns can never be dropped by Phase 3.
+
+Fixtures under `cli/test/fixtures/pipeline-validator/` + tests in `cli/test/validate-pipeline.test.js`; F18 documented in `docs/pipeline-validator-reference.md` (canonical).
 
 ### Integration points
 

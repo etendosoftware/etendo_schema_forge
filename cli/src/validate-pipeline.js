@@ -789,6 +789,61 @@ function collectFrontendLineFields(contract) {
   return fields;
 }
 
+/**
+ * F18: per-window label slice (labels.js) is stale vs the contract columns ×
+ * locale labels (ETP-4300). Mirrors F16's approach: deterministically reproduce
+ * the expected slice from the committed contract + locale dictionaries and compare
+ * to the committed labels.js.
+ *
+ * Shadow rollout: SKIP (not BLOCK) when labels.js is not committed yet — the slices
+ * are emitted by `make regen` but only enforced once the runtime consumes them
+ * (Phase 2). api-only/backend-only windows have no UI chunk, hence no labels.js,
+ * so they are skipped here automatically.
+ *
+ * @param {string} artifactDir
+ * @param {string} artifactName
+ * @param {{codes:string[], dicts:object}|null} locales - loaded once by the caller
+ */
+async function ruleF18(artifactDir, artifactName, locales) {
+  const contractPath = join(artifactDir, 'contract.json');
+  if (!(await fileExists(contractPath))) return null;
+
+  const labelsPath = join(artifactDir, 'generated', 'web', artifactName, 'labels.js');
+  if (!(await fileExists(labelsPath))) {
+    return skipped('F18', artifactName, 'generated labels.js not present — sliced labels not committed yet (enforced once the runtime consumes slices, ETP-4300 Phase 2)');
+  }
+  if (!locales || !locales.dicts) {
+    return skipped('F18', artifactName, 'locale dictionaries not loadable — F18 check skipped');
+  }
+
+  let contract;
+  try {
+    contract = await readJSON(contractPath);
+  } catch {
+    return skipped('F18', artifactName, 'contract.json could not be parsed — F18 check skipped');
+  }
+
+  let expected;
+  try {
+    const { collectWindowColumns, sliceLabels, labelsModuleSource } = await import('./slice-labels.js');
+    const columns = collectWindowColumns(contract);
+    const { slice } = sliceLabels(columns, locales.dicts);
+    expected = labelsModuleSource(slice);
+  } catch {
+    return skipped('F18', artifactName, 'label slice could not be reproduced — F18 check skipped');
+  }
+
+  const actual = await readFile(labelsPath, 'utf-8');
+  if (actual !== expected) {
+    return violation(
+      'F18', artifactName, 'BLOCK',
+      `generated labels.js is stale — does not match the slice of the current contract columns against the locale dictionaries`,
+      `Re-run: make regen ONLY=${artifactName}  (or: node cli/src/slice-labels.js --window ${artifactName}) to regenerate the label slice.`,
+    );
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Artifact discovery
 // ---------------------------------------------------------------------------
@@ -831,6 +886,32 @@ async function loadRegistryContent(registryPath) {
   }
 }
 
+/**
+ * Load the full locale dictionaries once (for F18). Reads top-level locale JSONs
+ * from <root>/packages/app-shell-core/src/locales/ (no DB). Returns null if the
+ * directory is absent (e.g. test fixtures) so F18 emits a skipped entry.
+ *
+ * @param {string} root
+ * @returns {Promise<{codes:string[], dicts:object}|null>}
+ */
+async function loadLocaleDicts(root) {
+  try {
+    const dir = join(root, 'packages', 'app-shell-core', 'src', 'locales');
+    const entries = await readdir(dir, { withFileTypes: true });
+    const codes = entries
+      .filter(e => e.isFile() && /^[a-z]{2}_[A-Z]{2}\.json$/.test(e.name))
+      .map(e => e.name.replace(/\.json$/, ''));
+    if (codes.length === 0) return null;
+    const dicts = {};
+    for (const code of codes) {
+      dicts[code] = JSON.parse(await readFile(join(dir, `${code}.json`), 'utf-8'));
+    }
+    return { codes, dicts };
+  } catch {
+    return null;
+  }
+}
+
 async function resolveArtifactNames(scope, root, artifactsRoot) {
   if (scope === 'staged') {
     const staged = await getStagedArtifacts(root);
@@ -845,7 +926,7 @@ async function runEnabledChecks(checks, skipSet) {
   return (await Promise.all(pendingChecks)).filter(Boolean);
 }
 
-async function runWindowChecks(artifactDir, artifactName, registryContent, root, skipSet) {
+async function runWindowChecks(artifactDir, artifactName, registryContent, root, skipSet, locales) {
   return runEnabledChecks([
     { rule: 'F1', run: () => ruleF1(artifactDir, artifactName) },
     { rule: 'F2', run: () => ruleF2(artifactDir, artifactName) },
@@ -862,6 +943,7 @@ async function runWindowChecks(artifactDir, artifactName, registryContent, root,
     { rule: 'F15', run: () => ruleF15(artifactDir, artifactName) },
     { rule: 'F16', run: () => ruleF16(artifactDir, artifactName) },
     { rule: 'F17', run: () => ruleF17(artifactDir, artifactName) },
+    { rule: 'F18', run: () => ruleF18(artifactDir, artifactName, locales) },
   ], skipSet);
 }
 
@@ -881,10 +963,10 @@ async function runAggregateSectionChecks(artifactDir, artifactName, skipSet) {
   return [...f9Results, ...f4Results];
 }
 
-async function runChecksForArtifact({ kind, artifactDir, artifactName, registryContent, root, skipSet, strict }) {
+async function runChecksForArtifact({ kind, artifactDir, artifactName, registryContent, root, skipSet, strict, locales }) {
   if (kind === 'window') {
     return tagArtifactKind(
-      await runWindowChecks(artifactDir, artifactName, registryContent, root, skipSet),
+      await runWindowChecks(artifactDir, artifactName, registryContent, root, skipSet, locales),
       'window',
     );
   }
@@ -1001,10 +1083,12 @@ export async function validatePipeline({
   root = ROOT,
   registryPath,
   _artifactsRoot,
+  _locales,
 } = {}) {
   const artifactsRoot = _artifactsRoot ?? join(root, 'artifacts');
   const resolvedRegistryPath = registryPath ?? join(root, 'tools', 'app-shell', 'src', 'windows', 'registry.js');
   const registryContent = await loadRegistryContent(resolvedRegistryPath);
+  const locales = _locales ?? await loadLocaleDicts(root);
   const artifactNames = await resolveArtifactNames(scope, root, artifactsRoot);
   const skipSet = new Set(skip.map(s => s.toUpperCase()));
   const allResults = []; // mix of violations and skipped entries
@@ -1022,6 +1106,7 @@ export async function validatePipeline({
       root,
       skipSet,
       strict,
+      locales,
     }));
   }
 
