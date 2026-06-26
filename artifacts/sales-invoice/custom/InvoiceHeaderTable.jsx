@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useLocaleSwitch } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatCalendarDate } from '@/lib/dateOnly';
+import { formatCurrency } from '@/lib/formatCurrency';
 import {
   getDueDateState,
   getDueDateDotStyle,
@@ -11,6 +13,7 @@ import {
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge, normalizeVerifactuStatus } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
+import InvoiceCobroModal from '@/windows/custom/shared/InvoiceCobroModal.jsx';
 import { getArSubtype } from './invoiceSubtype';
 
 // ─── Invoice-specific status logic ───────────────────────────────
@@ -18,6 +21,11 @@ import { getArSubtype } from './invoiceSubtype';
 function isCreditNote(row) { return getArSubtype(row) === 'NC'; }
 function isReturn(row)     { return getArSubtype(row) === 'DEV'; }
 function isCreditType(row) { return isCreditNote(row) || isReturn(row); }
+
+function fmtAmt(val, currency) {
+  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
+  return formatCurrency(currency || 'EUR', n);
+}
 
 const FILTERS = ['documentNo', 'invoiceDate', 'businessPartner'];
 
@@ -36,7 +44,9 @@ export default function InvoiceHeaderTable(props) {
 
   const targets = useMemo(() => getInvoiceFiscalTargets('sales-invoice', profile), [profile]);
 
-  // Derive stable label strings from gl (avoids putting the unstable ui() fn in useMemo deps)
+  const [paymentRow, setPaymentRow] = useState(null);
+
+  // Derive stable label strings from gl
   const siiColLabel  = gl['invoiceList.col.siiStatus']       || 'SII Status';
   const tbaiColLabel = gl['invoiceList.col.tbaiStatus']      || 'TBAI Status';
   const vfColLabel   = gl['invoiceList.col.verifactuStatus'] || 'Verifactu Status';
@@ -82,18 +92,63 @@ export default function InvoiceHeaderTable(props) {
         },
       },
       { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
-      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusColumn') },
+      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn') },
       ...fiscalCols,
-      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-      { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: t('impTotal') },
+      {
+        key: 'outstandingAmount',
+        column: 'OutstandingAmt',
+        type: 'custom',
+        label: t('pendingPaymentColumn'),
+        render: (row) => {
+          const outstanding = parseFloat(row.outstandingAmount ?? 0);
+          const currency = row['currency$_identifier'] || 'EUR';
+          if (outstanding <= 0) {
+            return (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center',
+                fontSize: 11, fontWeight: 500,
+                padding: '2px 8px', borderRadius: 9999,
+                background: '#D1FAE5', color: '#065F46',
+              }}>
+                {t('cobrada')}
+              </span>
+            );
+          }
+          return (
+            <span className="inline-flex items-center gap-1.5" style={{ whiteSpace: 'nowrap' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B', flexShrink: 0, display: 'inline-block' }} />
+              <span className="tabular-nums" style={{ fontSize: 13, color: '#92400E', fontWeight: 500 }}>
+                {fmtAmt(outstanding, currency)}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
+                style={{
+                  width: 20, height: 20,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: '50%',
+                  border: '1px solid #F59E0B',
+                  background: 'transparent',
+                  color: '#92400E',
+                  fontSize: 14, lineHeight: 1,
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  padding: 0,
+                }}
+                aria-label={t('addCobro')}
+              >
+                +
+              </button>
+            </span>
+          );
+        },
+      },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
       {
         key: 'transactionDocument',
         column: 'C_DocTypeTarget_ID',
         type: 'custom',
-        // `labels` (priority 1 in resolveColumnLabel) must be set so this header
-        // outranks the AD-dictionary fallback translate('C_DocTypeTarget_ID'),
-        // which otherwise resolves to "Documento transacción".
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
         render: (row) => {
@@ -113,8 +168,28 @@ export default function InvoiceHeaderTable(props) {
           );
         },
       },
+      {
+        key: '_nav',
+        type: 'custom',
+        label: '',
+        render: () => <ChevronRight size={16} className="text-muted-foreground" />,
+      },
     ];
   }, [gl, locale, targets, siiColLabel, tbaiColLabel, vfColLabel]);
 
-  return <DataTable columns={columns} filters={FILTERS} {...props} />;
+  return (
+    <>
+      <DataTable columns={columns} filters={FILTERS} {...props} />
+      {paymentRow && (
+        <InvoiceCobroModal
+          invoiceId={paymentRow.id}
+          invoiceData={paymentRow}
+          specName="sales-invoice"
+          apiBaseUrl={apiBaseUrl}
+          onClose={() => setPaymentRow(null)}
+          onPaymentAdded={() => { setPaymentRow(null); props.onRefresh?.(); }}
+        />
+      )}
+    </>
+  );
 }
