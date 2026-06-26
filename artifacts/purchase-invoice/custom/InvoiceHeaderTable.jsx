@@ -7,7 +7,7 @@ import { formatCurrency } from '@/lib/formatCurrency';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
-import InvoiceCobroModal from '@/windows/custom/shared/InvoiceCobroModal.jsx';
+import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 
 function fmtAmt(val, currency) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -112,7 +112,7 @@ export default function InvoiceHeaderTable(props) {
     <>
       <DataTable columns={columns} filters={FILTERS} {...props} />
       {paymentRow && (
-        <InvoiceCobroModal
+        <InvoicePaymentHistoryModal
           invoiceId={paymentRow.id}
           invoiceData={paymentRow}
           specName="purchase-invoice"
