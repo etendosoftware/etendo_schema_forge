@@ -443,33 +443,33 @@ xml-regeneration-check: ## Compare original module XML vs export.database output
 
 # --- Project Context Switching ---
 # Active locale is tracked in .active-locale (gitignored). Default: es.
-# Usage: make switch LOCALE=ar  |  make switch LOCALE=es
+# Usage: make switch-to-ar  |  make switch-to-es  |  make switch LOCALE=ar
 
 LOCALE ?= $(shell cat .active-locale 2>/dev/null || echo es)
 
+switch-to-es: ## Switch active locale to Spain (ES)
+	@cp tools/app-shell/.env.es tools/app-shell/.env.local
+	@echo es > .active-locale
+	@echo "Active locale: ES (Spain) — com.etendoerp.go"
+
+switch-to-ar: ## Switch active locale to Argentina (AR)
+	@cp tools/etendo-go-ar/.env.ar tools/etendo-go-ar/.env.local
+	@echo ar > .active-locale
+	@echo "Active locale: AR (Argentina) — com.etendoerp.go.ar"
+
 switch: ## Switch active locale — LOCALE=es (default) | LOCALE=ar
 	@if [ "$(LOCALE)" = "es" ]; then \
-		cp tools/app-shell/.env.es tools/app-shell/.env.local; \
-		echo es > .active-locale; \
-		echo "Active locale: ES (Spain) — com.etendoerp.go"; \
+		$(MAKE) switch-to-es --no-print-directory; \
 	elif [ "$(LOCALE)" = "ar" ]; then \
-		cp tools/etendo-go-ar/.env.ar tools/etendo-go-ar/.env.local; \
-		echo ar > .active-locale; \
-		echo "Active locale: AR (Argentina) — com.etendoerp.go.ar"; \
+		$(MAKE) switch-to-ar --no-print-directory; \
 	else \
 		echo "Unknown locale '$(LOCALE)'. Use LOCALE=es or LOCALE=ar."; \
 		exit 1; \
 	fi
 
-switch-to-es: ## Alias — make switch LOCALE=es
-	@$(MAKE) switch LOCALE=es --no-print-directory
-
-switch-to-ar: ## Alias — make switch LOCALE=ar
-	@$(MAKE) switch LOCALE=ar --no-print-directory
-
 ensure-locale: ## Bootstrap ES locale if .active-locale does not exist (called automatically)
 	@if [ ! -f .active-locale ]; then \
-		$(MAKE) switch LOCALE=es --no-print-directory; \
+		$(MAKE) switch-to-es --no-print-directory; \
 	fi
 
 project-status: ## Show active locale and module ID
@@ -477,10 +477,10 @@ project-status: ## Show active locale and module ID
 	echo "Active locale : $$LOCALE"; \
 	if [ "$$LOCALE" = "es" ]; then \
 		echo "Module        : com.etendoerp.go (Spain)"; \
-		grep -s SF_MODULE_ID tools/app-shell/.env.local || echo "  .env.local missing — run: make switch LOCALE=es"; \
+		grep -s SF_MODULE_ID tools/app-shell/.env.local || echo "  .env.local missing — run: make switch-to-es"; \
 	elif [ "$$LOCALE" = "ar" ]; then \
 		echo "Module        : com.etendoerp.go.ar (Argentina)"; \
-		grep -s SF_MODULE_ID tools/etendo-go-ar/.env.local || echo "  .env.local missing — run: make switch LOCALE=ar"; \
+		grep -s SF_MODULE_ID tools/etendo-go-ar/.env.local || echo "  .env.local missing — run: make switch-to-ar"; \
 	fi
 
 # --- Cleanup ---
