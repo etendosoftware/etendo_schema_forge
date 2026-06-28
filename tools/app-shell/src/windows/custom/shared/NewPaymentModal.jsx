@@ -93,10 +93,13 @@ function CreditRow({ line, showTag = true, kindLabel, onToggle, onStep }) {
           </svg>
         )}
       </div>
-
       {/* Doc + metadata */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-        <CreditIcon kind={line.kind} size={15} color={tc.ink} />
+        <CreditIcon
+          kind={line.kind}
+          size={15}
+          color={tc.ink}
+          data-testid="CreditIcon__ba39f6" />
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: tc.inkDark, fontFamily: 'JetBrains Mono, monospace' }}>
@@ -111,12 +114,10 @@ function CreditRow({ line, showTag = true, kindLabel, onToggle, onStep }) {
           <div style={{ fontSize: 11, color: tc.inkSoft, marginTop: 1 }}>{line.date} · {line.note}</div>
         </div>
       </div>
-
       {/* Available */}
       <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 12, fontWeight: 500, color: tc.inkSoft }}>
         {fmt(line.avail, 'EUR')}
       </div>
-
       {/* Use amount / stepper */}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
         {line.sel ? (
@@ -355,7 +356,7 @@ export default function NewPaymentModal({
       >
         {/* ── Header ── */}
         <div style={{ display: 'flex', alignItems: 'flex-start', padding: '18px 24px 16px', gap: 12, borderBottom: '1px solid #E3E7EC', flexShrink: 0 }}>
-          <DirBadge dir={dir} size={36} />
+          <DirBadge dir={dir} size={36} data-testid="DirBadge__ba39f6" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#19191D', letterSpacing: '-0.01em' }}>
@@ -431,16 +432,16 @@ export default function NewPaymentModal({
                 {/* Método de pago */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   <label style={{ fontSize: 13, fontWeight: 500, color: '#55556D', lineHeight: '16px' }}>{ui('paymentMethodCol')}</label>
-                  <Select value={methodId} onValueChange={setMethodId}>
+                  <Select value={methodId} onValueChange={setMethodId} data-testid="Select__ba39f6">
                     <SelectTrigger
                       data-testid="NewPaymentModal__method-select"
                       style={{ height: 42, fontSize: 14, borderRadius: 8, border: '1px solid #D0D5DD' }}
                     >
-                      <SelectValue />
+                      <SelectValue data-testid="SelectValue__ba39f6" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent data-testid="SelectContent__ba39f6">
                       {PAYMENT_METHODS.map(m => (
-                        <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>
+                        <SelectItem key={m.id} value={m.id} data-testid="SelectItem__ba39f6">{m.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -449,16 +450,19 @@ export default function NewPaymentModal({
                 {/* Cuenta */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   <label style={{ fontSize: 13, fontWeight: 500, color: '#55556D', lineHeight: '16px' }}>{ui('paymentAccount')}</label>
-                  <Select value={accountId} onValueChange={setAccountId}>
+                  <Select
+                    value={accountId}
+                    onValueChange={setAccountId}
+                    data-testid="Select__ba39f6">
                     <SelectTrigger
                       data-testid="NewPaymentModal__account-select"
                       style={{ height: 42, fontSize: 14, borderRadius: 8, border: '1px solid #D0D5DD' }}
                     >
-                      <SelectValue placeholder={ui('selectAccount')} />
+                      <SelectValue placeholder={ui('selectAccount')} data-testid="SelectValue__ba39f6" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent data-testid="SelectContent__ba39f6">
                       {accounts.map(a => (
-                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                        <SelectItem key={a.id} value={a.id} data-testid="SelectItem__ba39f6">{a.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -486,7 +490,7 @@ export default function NewPaymentModal({
                       kindLabel={l.kind === 'credit' ? ui('creditKindCredit') : ui('creditKindAbono')}
                       onToggle={() => toggleLine(l.id)}
                       onStep={delta => stepLine(l.id, delta)}
-                    />
+                      data-testid="CreditRow__ba39f6" />
                   ))}
                 </div>
               )}

@@ -143,7 +143,7 @@ function PaymentSidebar({ dir, specName, apiBaseUrl, ui }) {
       <div>
         <div style={{ fontSize: 13, fontWeight: 500, color: '#55556D', marginBottom: 5 }}>{heroLabel}</div>
         {collectedValue === null ? (
-          <SidebarSkeleton />
+          <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         ) : (
           <>
             <div className="tabular-nums" style={{ fontSize: 28, fontWeight: 700, color: heroColor, letterSpacing: '-0.02em', lineHeight: '1.1' }}>
@@ -155,12 +155,11 @@ function PaymentSidebar({ dir, specName, apiBaseUrl, ui }) {
           </>
         )}
       </div>
-
       {/* Pending */}
       <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 18 }}>
         <div style={{ fontSize: 12, fontWeight: 500, color: '#828FA3', marginBottom: 4 }}>{pendLabel}</div>
         {pendingValue === null ? (
-          <SidebarSkeleton />
+          <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         ) : (
           <>
             <div className="tabular-nums" style={{ fontSize: 22, fontWeight: 700, color: '#C28800', letterSpacing: '-0.01em', lineHeight: '1.15' }}>
@@ -172,7 +171,6 @@ function PaymentSidebar({ dir, specName, apiBaseUrl, ui }) {
           </>
         )}
       </div>
-
       {/* Draft count — only shown if > 0 */}
       {draftCount > 0 && (
         <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 18 }}>
@@ -183,7 +181,6 @@ function PaymentSidebar({ dir, specName, apiBaseUrl, ui }) {
           <div style={{ fontSize: 12, color: '#828FA3', marginTop: 3 }}>{ui('borradoresSub')}</div>
         </div>
       )}
-
       {/* By method */}
       {methods.length > 0 && (
         <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 18 }}>
@@ -231,7 +228,7 @@ export default function PaymentHeaderTableBase({ dir, specName, ...props }) {
       key: '_dirBadge',
       type: 'custom',
       label: '',
-      render: () => <DirBadge dir={dir} size={34} />,
+      render: () => <DirBadge dir={dir} size={34} data-testid="DirBadge__743b1b" />,
     },
     {
       key: 'documentNo',
@@ -271,7 +268,11 @@ export default function PaymentHeaderTableBase({ dir, specName, ...props }) {
       column: 'Status',
       type: 'custom',
       label: ui('statusLabel'),
-      render: (row) => <PaymentStateTag status={row.status || ''} dir={dir} ui={ui} />,
+      render: (row) => <PaymentStateTag
+        status={row.status || ''}
+        dir={dir}
+        ui={ui}
+        data-testid="PaymentStateTag__743b1b" />,
     },
     {
       key: 'amount',
@@ -294,9 +295,18 @@ export default function PaymentHeaderTableBase({ dir, specName, ...props }) {
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-      <PaymentSidebar dir={dir} specName={specName} apiBaseUrl={apiBaseUrl} ui={ui} />
+      <PaymentSidebar
+        dir={dir}
+        specName={specName}
+        apiBaseUrl={apiBaseUrl}
+        ui={ui}
+        data-testid="PaymentSidebar__743b1b" />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <DataTable columns={columns} filters={FILTERS} {...props} />
+        <DataTable
+          columns={columns}
+          filters={FILTERS}
+          {...props}
+          data-testid="DataTable__743b1b" />
       </div>
     </div>
   );

@@ -97,10 +97,9 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           {heroSign}{formatCurrency(currency, totalAmount)}
         </div>
         <div style={{ marginTop: 8 }}>
-          <StateTag status={status} dir={dir} ui={ui} />
+          <StateTag status={status} dir={dir} ui={ui} data-testid="StateTag__624cef" />
         </div>
       </div>
-
       {/* Amount breakdown */}
       <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {[
@@ -116,7 +115,6 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           </div>
         ))}
       </div>
-
       {/* Activity timeline */}
       <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#19191D', marginBottom: 10 }}>{ui('activity')}</div>

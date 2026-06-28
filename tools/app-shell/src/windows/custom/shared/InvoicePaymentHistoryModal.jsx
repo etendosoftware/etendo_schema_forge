@@ -206,7 +206,7 @@ export default function InvoicePaymentHistoryModal({
               data-testid="InvoicePaymentHistoryModal__empty"
             >
               <div style={{ width: 48, height: 48, background: '#F3F4F6', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
-                <ReceiptIcon size={22} />
+                <ReceiptIcon size={22} data-testid="ReceiptIcon__b82d4f" />
               </div>
               <p style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', margin: 0 }}>
                 {isSales ? ui('noCobroYet') : ui('noPagoYet')}
@@ -243,7 +243,11 @@ export default function InvoicePaymentHistoryModal({
                         {fmt(p.amount, currency)}
                       </div>
                       <div>
-                        <PaymentStateTag status={p.status || ''} isSales={isSales} ui={ui} />
+                        <PaymentStateTag
+                          status={p.status || ''}
+                          isSales={isSales}
+                          ui={ui}
+                          data-testid="PaymentStateTag__b82d4f" />
                       </div>
                     </div>
                   );
@@ -270,7 +274,6 @@ export default function InvoicePaymentHistoryModal({
           )}
         </div>
       </div>
-
       {/* Step 2: new payment creation modal */}
       {showPaymentModal && createPortal(
         <NewPaymentModal
