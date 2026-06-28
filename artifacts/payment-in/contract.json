@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-06-24T20:46:47.740Z",
-  "checksum": "a228dd7831d60882",
+  "updatedAt": "2026-06-28T18:06:44.328Z",
+  "checksum": "3254902b86667d26",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -17,6 +17,7 @@
       "hideDeleteWhenComplete": true,
       "customTabsAfterBottom": true,
       "customComponents": {
+        "headerTable": "PaymentHeaderTable",
         "bottomSection": "PaymentBottomPanel",
         "topbarRight": "PaymentActivityToggle",
         "newRecordComponent": "NewPaymentModal"
@@ -652,6 +653,7 @@
       "hideDeleteWhenComplete": true,
       "customTabsAfterBottom": true,
       "customComponents": {
+        "headerTable": "PaymentHeaderTable",
         "bottomSection": "PaymentBottomPanel",
         "topbarRight": "PaymentActivityToggle",
         "newRecordComponent": "NewPaymentModal"
@@ -1053,14 +1055,6 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "psd2GenerateBankPayment",
-            "apiKey": "psd2GenerateBankPayment",
-            "column": "EM_Psd2_Generate_Bank_Payment",
-            "type": "button",
-            "visibility": "system",
-            "required": false
           },
           {
             "name": "etblkpAccountingstatus",
@@ -1590,14 +1584,6 @@
       },
       {
         "entity": "finPayment",
-        "field": "psd2GenerateBankPayment",
-        "column": "EM_Psd2_Generate_Bank_Payment",
-        "url": "/sws/neo/payment-in/finPayment/{id}/action/psd2GenerateBankPayment",
-        "processId": "0661406A983B4D8EA611F8596F114D52",
-        "processType": "obuiapp"
-      },
-      {
-        "entity": "finPayment",
         "field": "etblkpBulkposting",
         "column": "EM_Etblkp_Bulkposting",
         "url": "/sws/neo/payment-in/finPayment/{id}/action/etblkpBulkposting",
@@ -1719,14 +1705,6 @@
         "field": "posted",
         "runner": "node",
         "description": "Action endpoint for 'posted' in finPayment should exist"
-      },
-      {
-        "id": "t-action-endpoint-finPayment-psd2GenerateBankPayment",
-        "category": "action-endpoint",
-        "entity": "finPayment",
-        "field": "psd2GenerateBankPayment",
-        "runner": "node",
-        "description": "Action endpoint for 'psd2GenerateBankPayment' in finPayment should exist"
       },
       {
         "id": "t-crud-flags-finPayment",
@@ -2710,14 +2688,6 @@
         "description": "System field 'project' should exist in backend but not frontend for finPayment"
       },
       {
-        "id": "t-system-field-finPayment-psd2GenerateBankPayment",
-        "category": "system-field",
-        "entity": "finPayment",
-        "field": "psd2GenerateBankPayment",
-        "runner": "node",
-        "description": "System field 'psd2GenerateBankPayment' should exist in backend but not frontend for finPayment"
-      },
-      {
         "id": "t-system-field-finPayment-receipt",
         "category": "system-field",
         "entity": "finPayment",
@@ -3045,9 +3015,9 @@
       }
     ],
     "summary": {
-      "total": 179,
+      "total": 177,
       "byCategory": {
-        "action-endpoint": 11,
+        "action-endpoint": 10,
         "crud-flags": 2,
         "default-value-type": 7,
         "displaylogic-evaluable": 5,
@@ -3059,11 +3029,11 @@
         "rule-declared": 25,
         "searchable-filters": 3,
         "selector-endpoint": 5,
-        "system-field": 66,
+        "system-field": 65,
         "visibility": 2
       },
       "byRunner": {
-        "node": 179,
+        "node": 177,
         "junit": 0
       }
     }

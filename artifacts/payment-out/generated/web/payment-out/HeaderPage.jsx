@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
-import HeaderTable from './HeaderTable';
+import HeaderTable from '../../../custom/PaymentHeaderTable';
 import HeaderForm from './HeaderForm';
 import LinesTable from './LinesTable';
 import LinesForm from './LinesForm';
@@ -35,8 +35,6 @@ const extraBadges = [
 
 // @sf-generated-start processes:header
 const processes = [
-  { name: 'psd2GenerateBankPayment', label: 'Generate Bank Payment', style: 'positive',
-    displayLogicRaw: "@PSD2_HasPayments@=0 & @PSD2_ClientHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0 & @PSD2_FAIsBank@=1 & @PSD2_PMIsBankTransfer@=1" },
   { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
     displayLogicRaw: "@Status@!'RPAE' & @Status@!'RPVOID' & @Processed@='Y' & @#ShowAcct@='Y'" },
   { name: 'etprReactivatePayment', label: 'Advanced Reactivation', style: 'positive',
@@ -144,17 +142,6 @@ export const api = {
       "listUrl": "/sws/neo/payment-out/accounting",
       "detailUrl": "/sws/neo/payment-out/accounting/{id}",
       "supportedFilters": []
-    },
-    "bankPayments": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/payment-out/bankPayments",
-      "detailUrl": "/sws/neo/payment-out/bankPayments/{id}",
-      "supportedFilters": []
     }
   },
   "selectors": [
@@ -205,16 +192,7 @@ export const api = {
       "column": "C_Currency_ID",
       "reference": "Currency",
       "inputMode": "selector",
-      "url": "/sws/neo/payment-out/header/selectors/currency",
-      "context": {
-        "required": [
-          {
-            "param": "FIN_Financial_Account_ID",
-            "source": "parentField",
-            "field": "financialAccount"
-          }
-        ]
-      }
+      "url": "/sws/neo/payment-out/header/selectors/currency"
     },
     {
       "entity": "header",
@@ -479,22 +457,6 @@ export const api = {
       "reference": "User2",
       "inputMode": "selector",
       "url": "/sws/neo/payment-out/accounting/selectors/ndDimension"
-    },
-    {
-      "entity": "bankPayments",
-      "field": "currency",
-      "column": "C_Currency_ID",
-      "reference": "Currency",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/bankPayments/selectors/currency"
-    },
-    {
-      "entity": "bankPayments",
-      "field": "financialAccount",
-      "column": "FIN_Financial_Account_ID",
-      "reference": "Financial_Account",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/bankPayments/selectors/financialAccount"
     }
   ],
   "actions": [
@@ -552,14 +514,6 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "psd2GenerateBankPayment",
-      "column": "EM_Psd2_Generate_Bank_Payment",
-      "url": "/sws/neo/payment-out/header/{id}/action/psd2GenerateBankPayment",
-      "processId": "0661406A983B4D8EA611F8596F114D52",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "header",
       "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
       "url": "/sws/neo/payment-out/header/{id}/action/etblkpBulkposting",
@@ -580,14 +534,6 @@ export const api = {
       "column": "em_etpr_remove_payment",
       "url": "/sws/neo/payment-out/header/{id}/action/eTPRRemovePayment",
       "processId": "FB79E902A5384754990AD145F6CAC9FB",
-      "processType": "obuiapp"
-    },
-    {
-      "entity": "bankPayments",
-      "field": "refreshPayment",
-      "column": "Refresh_Payment",
-      "url": "/sws/neo/payment-out/bankPayments/{id}/action/refreshPayment",
-      "processId": "3894F258A80D4FAB8A5131B5172145AF",
       "processType": "obuiapp"
     }
   ],

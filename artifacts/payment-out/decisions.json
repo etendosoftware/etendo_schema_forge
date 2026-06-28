@@ -8,6 +8,7 @@
     "dateFilterKey": "paymentDate",
     "linesLayout": "inlineEditable",
     "customComponents": {
+      "headerTable": "PaymentHeaderTable",
       "bottomSection": "PaymentOutBottomPanel"
     }
   },

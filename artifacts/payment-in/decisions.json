@@ -10,6 +10,7 @@
     "relatedDocuments": true,
     "notesField": "description",
     "customComponents": {
+      "headerTable": "PaymentHeaderTable",
       "bottomSection": "PaymentBottomPanel",
       "topbarRight": "PaymentActivityToggle",
       "newRecordComponent": "NewPaymentModal"

@@ -1,8 +1,8 @@
 {
   "version": "0.5.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-06-24T20:46:47.740Z",
-  "contractChecksum": "a228dd7831d60882",
+  "updatedAt": "2026-06-28T18:06:44.328Z",
+  "contractChecksum": "3254902b86667d26",
   "apiPrediction": {
     "specName": "payment-in",
     "baseUrl": "/sws/neo/payment-in",
@@ -284,29 +284,6 @@
           "Required reference data is missing (price list, warehouse, etc.)"
         ],
         "processId": "EA02D79CA1DE4B46909EA6EF64A66B53",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "psd2GenerateBankPayment",
-        "actionType": "paymentAction",
-        "entity": "finPayment",
-        "column": "EM_Psd2_Generate_Bank_Payment",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/payment-in/finPayment/{id}/action/psd2GenerateBankPayment",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
-        "processId": "0661406A983B4D8EA611F8596F114D52",
         "processType": "obuiapp"
       },
       {
@@ -611,5 +588,5 @@
       "etprReactivatePayment"
     ]
   },
-  "checksum": "57b4be6cfea89acb"
+  "checksum": "7e23232020630484"
 }
