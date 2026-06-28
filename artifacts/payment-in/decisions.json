@@ -11,6 +11,7 @@
     "notesField": "description",
     "customComponents": {
       "headerTable": "PaymentHeaderTable",
+      "sidePanel": "PaymentDetailSidebar",
       "bottomSection": "PaymentBottomPanel",
       "topbarRight": "PaymentActivityToggle",
       "newRecordComponent": "NewPaymentModal"

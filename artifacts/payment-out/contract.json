@@ -1,8 +1,8 @@
 {
   "version": "0.8.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-06-28T18:06:44.469Z",
-  "checksum": "8c2875e78fe80fab",
+  "updatedAt": "2026-06-28T18:19:14.769Z",
+  "checksum": "f30f10736b57ffb4",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -13,6 +13,7 @@
       "relatedDocuments": true,
       "customComponents": {
         "headerTable": "PaymentHeaderTable",
+        "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentOutBottomPanel"
       },
       "dateFilterKey": "paymentDate",
@@ -1905,6 +1906,7 @@
       "relatedDocuments": true,
       "customComponents": {
         "headerTable": "PaymentHeaderTable",
+        "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentOutBottomPanel"
       },
       "dateFilterKey": "paymentDate",

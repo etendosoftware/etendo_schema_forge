@@ -7,6 +7,7 @@ import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import PaymentBottomPanel from '../../../custom/PaymentBottomPanel';
 import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
+import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import NewPaymentModal from '../../../custom/NewPaymentModal';
 import catalogs from './mockCatalogs';
 
@@ -263,6 +264,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Payment", config: {} } }]}
         bottomSection={PaymentBottomPanel}
         topbarRight={PaymentActivityToggle}
+        sidePanel={PaymentDetailSidebar}
         menuActions={({ status }) => [
           { key: 'reverse', label: 'Reverse Payment', destructive: true, visible: ["RPPC","RPR","RDNC"].includes(status), columnName: 'aPRMReversePayment',  }
         ]}

@@ -11,6 +11,7 @@ import ExecutionHistoryForm from './ExecutionHistoryForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import PaymentOutBottomPanel from '../../../custom/PaymentOutBottomPanel';
+import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import catalogs from './mockCatalogs';
 
 
@@ -584,6 +585,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Payment", config: {} } }]}
         bottomSection={PaymentOutBottomPanel}
+        sidePanel={PaymentDetailSidebar}
         requiredHeaderFields={requiredHeaderFields}
         linesLayout="inlineEditable"
         sendDocument

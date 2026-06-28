@@ -1,8 +1,8 @@
 {
   "version": "0.6.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-06-28T18:06:44.328Z",
-  "checksum": "3254902b86667d26",
+  "updatedAt": "2026-06-28T18:19:14.626Z",
+  "checksum": "494ece9266faa511",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -18,6 +18,7 @@
       "customTabsAfterBottom": true,
       "customComponents": {
         "headerTable": "PaymentHeaderTable",
+        "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentBottomPanel",
         "topbarRight": "PaymentActivityToggle",
         "newRecordComponent": "NewPaymentModal"
@@ -654,6 +655,7 @@
       "customTabsAfterBottom": true,
       "customComponents": {
         "headerTable": "PaymentHeaderTable",
+        "sidePanel": "PaymentDetailSidebar",
         "bottomSection": "PaymentBottomPanel",
         "topbarRight": "PaymentActivityToggle",
         "newRecordComponent": "NewPaymentModal"
