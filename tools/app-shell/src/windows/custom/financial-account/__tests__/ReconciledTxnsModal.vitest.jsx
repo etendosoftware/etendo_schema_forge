@@ -55,7 +55,7 @@ describe('ReconciledTxnsModal', () => {
 
   it('shows the balanced indicator when the sum equals the line net', () => {
     render(<ReconciledTxnsModal line={line()} currency="EUR" onClose={vi.fn()} />);
-    expect(screen.getByText('financeAccountStatementLinesTxnBalanced')).toBeInTheDocument();
+    expect(screen.getByText('financeAccountStatementLinesTxnBalancedShort')).toBeInTheDocument();
     expect(screen.queryByText(/financeAccountStatementLinesTxnDiff/)).not.toBeInTheDocument();
   });
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useLocale } from '@/i18n';
 import { statusLabel } from '@/lib/statusBadge.js';
 import { StatusTag } from '@/components/ui/status-tag';
+import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 function CloneIcon({ size = 18 }) {
   return (
@@ -125,6 +126,7 @@ export default function CloneOrderModal({
           return;
         }
         newIds.push(json?.response?.data?.id);
+        trackDocumentCreated();
       }
 
       const result = n > 1 ? newIds : newIds[0];

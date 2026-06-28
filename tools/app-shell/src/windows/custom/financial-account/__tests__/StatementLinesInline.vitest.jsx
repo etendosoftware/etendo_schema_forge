@@ -96,10 +96,10 @@ describe('StatementLinesInline', () => {
       loading: false,
     });
     render(<StatementLinesInline statementId="s1" />);
-    // Matched → success (green); unmatched "Sin conciliar" → info (blue), same as
-    // the statement-level status, instead of neutral grey.
+    // Matched → success (green); unmatched "Sin conciliar" → warning (amber),
+    // matching the Figma design.
     expect(screen.getByTestId('status-success')).toBeInTheDocument();
-    expect(screen.getByTestId('status-info')).toBeInTheDocument();
+    expect(screen.getByTestId('status-warning')).toBeInTheDocument();
     expect(
       screen.getByText('financeAccountStatementLinesStatusUnmatched'),
     ).toBeInTheDocument();
@@ -117,6 +117,30 @@ describe('StatementLinesInline', () => {
     const descIdx = labels.indexOf('financeAccountStatementLinesColDescription');
     expect(dateIdx).toBeGreaterThanOrEqual(0);
     expect(descIdx).toBe(dateIdx + 1);
+  });
+
+  it('orders Estado/Transacción before Salida/Entrada in the header (ETP-4342)', () => {
+    linesMock.mockReturnValue({ lines: [], loading: false });
+    render(<StatementLinesInline statementId="s1" />);
+    // ETP-4342: the lines table column order was reordered to match the Figma —
+    // the amount columns (Salida/Entrada) are pushed to the end, so the synthetic
+    // Estado + Transacción headers now sit BEFORE them.
+    const headers = screen.getAllByText(/financeAccountStatementLinesCol/);
+    const labels = headers.map((el) => el.textContent);
+    const estadoIdx = labels.indexOf('financeAccountStatementLinesColMatched');
+    const transaccionIdx = labels.indexOf('financeAccountStatementLinesColTransaction');
+    const salidaIdx = labels.indexOf('financeAccountStatementLinesColDramount');
+    const entradaIdx = labels.indexOf('financeAccountStatementLinesColCramount');
+    // All four headers are present.
+    expect(estadoIdx).toBeGreaterThanOrEqual(0);
+    expect(transaccionIdx).toBeGreaterThanOrEqual(0);
+    expect(salidaIdx).toBeGreaterThanOrEqual(0);
+    expect(entradaIdx).toBeGreaterThanOrEqual(0);
+    // Estado and Transacción precede both amount columns.
+    expect(estadoIdx).toBeLessThan(salidaIdx);
+    expect(estadoIdx).toBeLessThan(entradaIdx);
+    expect(transaccionIdx).toBeLessThan(salidaIdx);
+    expect(transaccionIdx).toBeLessThan(entradaIdx);
   });
 
   it('renders the line description value in its row', () => {

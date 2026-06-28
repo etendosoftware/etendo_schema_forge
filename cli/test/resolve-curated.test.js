@@ -594,3 +594,99 @@ describe('resolveCurated — businessCritical per-field flag (ETP-4233)', () => 
       'businessCritical should be absent when not declared in decisions');
   });
 });
+
+// ─── ETP-4277 — max constraint propagation ───────────────────────────────────
+describe('resolveCurated — max field constraint (ETP-4277)', () => {
+  const schemaRaw = {
+    window: { id: '800', name: 'Sales Order' },
+    entities: [{
+      name: 'cOrderLine',
+      tableName: 'C_OrderLine',
+      tabId: '20',
+      tabName: 'Lines',
+      fields: [
+        { name: 'discount', columnName: 'Discount', label: 'Discount', type: 'number', visibility: 'editable' },
+        { name: 'quantity', columnName: 'QtyOrdered', label: 'Quantity', type: 'number', visibility: 'editable' },
+      ],
+    }],
+  };
+
+  it('propagates max from field decision to curated field', async () => {
+    const decisions = {
+      version: 2,
+      window: { name: 'Sales Order' },
+      entities: {
+        cOrderLine: {
+          name: 'orderLine',
+          fields: {
+            discount: { max: 100 },
+            quantity: {},
+          },
+        },
+      },
+      rules: {},
+    };
+    const { schema } = await resolveCurated(schemaRaw, { rules: [] }, decisions);
+    const discount = schema.entities[0].fields.find(f => f.name === 'discount');
+    assert.equal(discount.max, 100);
+  });
+
+  it('does not add max property when not declared in field decision', async () => {
+    const decisions = {
+      version: 2,
+      window: { name: 'Sales Order' },
+      entities: {
+        cOrderLine: {
+          name: 'orderLine',
+          fields: {
+            discount: { max: 100 },
+            quantity: {},
+          },
+        },
+      },
+      rules: {},
+    };
+    const { schema } = await resolveCurated(schemaRaw, { rules: [] }, decisions);
+    const quantity = schema.entities[0].fields.find(f => f.name === 'quantity');
+    assert.equal(quantity.max, undefined);
+  });
+
+  it('propagates max: 0 (zero is a valid constraint)', async () => {
+    const decisions = {
+      version: 2,
+      window: { name: 'Sales Order' },
+      entities: {
+        cOrderLine: {
+          name: 'orderLine',
+          fields: {
+            discount: { max: 0 },
+          },
+        },
+      },
+      rules: {},
+    };
+    const { schema } = await resolveCurated(schemaRaw, { rules: [] }, decisions);
+    const discount = schema.entities[0].fields.find(f => f.name === 'discount');
+    assert.equal(discount.max, 0);
+  });
+
+  it('propagates both min and max when both are declared', async () => {
+    const decisions = {
+      version: 2,
+      window: { name: 'Sales Order' },
+      entities: {
+        cOrderLine: {
+          name: 'orderLine',
+          fields: {
+            discount: { min: 0, max: 100 },
+          },
+        },
+      },
+      rules: {},
+    };
+    const { schema } = await resolveCurated(schemaRaw, { rules: [] }, decisions);
+    const discount = schema.entities[0].fields.find(f => f.name === 'discount');
+    assert.equal(discount.min, 0);
+    assert.equal(discount.max, 100);
+  });
+});

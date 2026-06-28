@@ -80,6 +80,8 @@ Per-locale field label overrides. When the simplified interface needs to rename 
 | `breadcrumb` | string | `"{category} / {name}"` | Any string | Overrides the auto-generated breadcrumb path shown in the topbar. Useful when the default category/name combination is too verbose (e.g., `"Product"` instead of `"Reference / Product"`). |
 | `hidePrint` | boolean | `false` | — | Hides the print button in the detail view action bar. |
 | `hideMoreMenu` | boolean | `false` | — | Hides the triple-dot "more" menu in the detail view action bar. |
+| `hideStatusFilter` | boolean | `false` | — | Hides the status-filter dropdown ("All statuses") in the list toolbar, even when a `status`-typed column exists. The rest of the filter bar (date filter, Filters) is unaffected. |
+| `customListIcons` | boolean | `false` | — | Swaps the list toolbar sort/refresh icons for the shared `SortIcon` / `RefreshIcon` set (`@/components/ui/custom-icons`), matching Contacts/Warehouse. Emits `SortIconComponent` / `RefreshIconComponent` on `ListView`. |
 | `contentBg` | string | `"bg-white"` | Any Tailwind bg class | Background color of the main content card in the detail view (e.g., `"bg-slate-50"` for a light gray tone). |
 | `formCardPadding` | string | `null` | Any Tailwind padding class | Override the Tailwind padding class applied to the form card div in the detail view. When `null`, `DetailView` falls back to `p-6`. Use `"px-2 pb-2"` for tighter (8px horizontal) padding, for example on windows with dense form layouts. |
 | `hideDeleteWhenComplete` | boolean | `false` | — | Hides the delete button in the detail view when the document status is not Draft. Prevents accidental deletion of completed/processed records. |
@@ -466,8 +468,39 @@ Each override entry supports the following properties:
 | `columnName` | string | Column name to include in the action POST payload (used with `add: true` when the process maps to a specific column). |
 | `requiresLines` | boolean | If `true`, the button is disabled until at least one line exists. |
 | `requiresFieldMax` | array | Validation rules checked before firing the action. Each entry: `{ field, max, conditionalOnField?, conditionalValue?, errorKey }`. |
+| `params` | array | Parameter definitions for a pre-process dialog. When at least one non-hidden param is present, clicking the button opens `ProcessParamDialog` first; the collected values are passed to `handleProcess` as `paramValues`. Each entry: `{ key, type, label, required?, hidden?, options? }`. Supported `type`: `"select"` (renders a dropdown using `options: [{ value, label }]`). The first option is pre-selected. See [Process Parameter Dialog](#process-parameter-dialog-params) below. |
 
 When `style` is not specified, the generator defaults to `"destructive"` for processes whose names contain destructive keywords (e.g., `void`, `cancel`, `reverse`) and `"positive"` for all others.
+
+#### Process Parameter Dialog (`params`)
+
+When a `processOverrides` entry contains a `params` array with at least one entry where `hidden !== true`, the detail toolbar button opens `ProcessParamDialog` before invoking the process. The dialog collects the user's choices and passes them as `paramValues` to `hook.handleProcess(process, paramValues)`, which merges them into the `fieldValues` POST body.
+
+**Example — Open/Close Period Control:**
+
+```json
+"processOverrides": {
+  "openClose": {
+    "params": [
+      {
+        "key": "openClose",
+        "type": "select",
+        "label": "Action",
+        "required": true,
+        "options": [
+          { "value": "O", "label": "Open" },
+          { "value": "C", "label": "Closed" },
+          { "value": "P", "label": "Permanently closed" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The backend NeoHandler receives the chosen value via `context.getRequestBody().optJSONObject("fieldValues").optString("openClose", null)`.
+
+Hidden params (`hidden: true`) are excluded from the dialog but can be used in future for server-side context passing.
 
 ## Entity Properties (`entities.{entityName}.*`)
 
@@ -504,9 +537,11 @@ Enables a two-button save workflow: "Save Draft" (save only) + "Save & {label}" 
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
 | `enabled` | boolean | `false` | Activate draft mode for this entity. |
-| `processField` | string | `"documentAction"` | Field name that controls the process (sent in action POST). |
+| `processField` | string | `"documentAction"` | Field name that controls the process. Used both as the action endpoint name (`/action/{processField}`) and as the key inside `fieldValues`. |
 | `processValue` | string | `"CO"` | Value to submit for processing (e.g., `"CO"` = Complete). |
 | `label` | string | `"Process"` | Button label suffix: "Save & {label}". |
+| `extraParams` | object | `null` | Extra params merged at the **top level** of the action POST body (not inside `fieldValues`). Required when the AD process validates a mandatory parameter against the request root rather than `fieldValues` — e.g. `M_Internal_Consumption_Post` needs `{ "action": "CO" }`. Example: `"extraParams": { "action": "CO" }`. |
+| `completedStatuses` | string[] | _(falls back to `processed`/`documentStatus==='CO'`)_ | When set, only these `documentStatus` values hide the Save/Confirm pair. Omit to let the generic `processed === 'Y'` flag drive button hiding. |
 
 **When disabled** (default): single "Save" button.
 **When enabled**: "Save draft" + "Save & {label}" buttons, plus process buttons from `processEndpoints`.
@@ -639,6 +674,8 @@ Setting `dependsOn` automatically sets `inputMode` to `"dependent"`.
 |----------|------|---------|---------|
 | `name` | string | Raw field name | Override field's public API name. |
 | `required` | boolean | From AD mandatory | Force field as required. |
+| `min` | number | `undefined` | Minimum allowed value for numeric fields. On blur the UI autocorrects values below this limit to `min`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). |
+| `max` | number | `undefined` | Maximum allowed value for numeric fields. On blur the UI autocorrects values above this limit to `max`. Travels through the full pipeline (`decisions.json` → contract → generated FieldDefs). Example: `"max": 100` on a discount (%) field prevents values above 100. |
 | `readOnlyLogic` | string \| null | `null` | Expression for conditional read-only. Set `null` to omit. |
 | `displayLogic` | string \| null | `null` | Expression for conditional visibility. Set `null` to omit. |
 | `businessCritical` | boolean | `false` | Advisory-only metadata flag. When `true`, marks the field as business-critical data. This flag does **not** change any functional behavior (validation, read-only logic, visibility, etc.). It travels through the pipeline (`decisions.json` → `resolve-curated` → `contract.json` → `push-to-neo` → `ETGO_SF_FIELD.ISBUSINESSCRITICAL`) so that downstream consumers (e.g., AI agents reading `neo_schema`) know they must confirm with the user before creating or updating records that include this field. |

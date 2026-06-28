@@ -116,4 +116,23 @@ describe('FinancialSection', () => {
     render(<FinancialSection form={{ isCustomer: true }} onChange={vi.fn()} opts={minOpts} />);
     expect(screen.getByText('salesPriceListField')).toBeInTheDocument();
   });
+
+  // ETP-4321: the DynamicSelect trigger button consumes the TRIGGER_CLS (with the
+  // FIELD_HEIGHT `h-9` token) and the TRIGGER_STYLE module const (fontSize only —
+  // the inline height was removed so the token wins). Rendering the customer
+  // section mounts a trigger that exercises both module-level consts.
+  it('select trigger uses the h-9 density token and the fontSize-only TRIGGER_STYLE', () => {
+    const { container } = render(
+      <FinancialSection form={{ isCustomer: true }} onChange={vi.fn()} opts={OPTS} />
+    );
+    // The trigger is a button carrying TRIGGER_CLS; find the one with the height token.
+    const trigger = Array.from(container.querySelectorAll('button')).find(
+      b => b.className.includes('h-9')
+    );
+    expect(trigger).toBeTruthy();
+    expect(trigger.className).toContain('h-9');
+    // TRIGGER_STYLE keeps fontSize only (no inline height/minHeight overriding the token).
+    expect(trigger.style.fontSize).toBe('14px');
+    expect(trigger.style.height).toBe('');
+  });
 });

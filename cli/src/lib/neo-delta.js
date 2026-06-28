@@ -307,6 +307,13 @@ export function computeWindowDelta(args) {
     fieldUpserts,
   });
 
+  // ---- Mirror live-push behaviour: never create NEW records with ISINCLUDED=N
+  // stepExcludeNonContractFields only updates EXISTING rows; it never inserts
+  // a fresh ETGO_SF_FIELD record for a field that was never in the DB.
+  const prunedFieldUpserts = fieldUpserts.filter(
+    f => prevFieldByNatural.has(f._naturalKey) || f.ISINCLUDED === 'Y',
+  );
+
   // ---- Compute deletes from prev-XML -----------------------------------
 
   const { entityDeletes, fieldDeletes } = computeDeletesForSpec({
@@ -314,7 +321,7 @@ export function computeWindowDelta(args) {
     prevEntityByNatural,
     prevFieldByNatural,
     entityUpserts,
-    fieldUpserts,
+    fieldUpserts: prunedFieldUpserts,
   });
 
   // Spec is never auto-deleted by push-to-neo (the operator removes a spec
@@ -325,7 +332,7 @@ export function computeWindowDelta(args) {
     tables: {
       ETGO_SF_SPEC:   { upserts: [specUpsert],  deletes: [] },
       ETGO_SF_ENTITY: { upserts: entityUpserts, deletes: entityDeletes },
-      ETGO_SF_FIELD:  { upserts: fieldUpserts,  deletes: fieldDeletes },
+      ETGO_SF_FIELD:  { upserts: prunedFieldUpserts, deletes: fieldDeletes },
     },
   };
 }

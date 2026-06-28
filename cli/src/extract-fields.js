@@ -317,7 +317,7 @@ export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
         tabLevel: row.tablevel,
         tabSeq: row.tab_seq,
         uiPattern: row.ui_pattern,
-        tableName: row.tablename,
+        tableName: row.tab_tablename ?? row.tablename,
         entityClassname: row.entity_classname,
         entityAlias: row.entity_alias,
         entityJavaPackage: row.entity_javapackage,
@@ -341,7 +341,7 @@ export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
     const fields = tab.fields.map((row) => {
       const classification = classifyField(row, systemColumns);
       const schemaType = refMap[String(row.ad_reference_id)] ?? 'string';
-      const isPk = row.columnname === tab.tableName + '_ID';
+      const isPk = row.iskey === 'Y';
       const isCoreModule = isRowCoreModule(row);
       const apiKey = toPropertyName(row.obdal_name, { isPk, isCoreModule });
       const fieldDef = {
@@ -353,6 +353,14 @@ export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
         mandatory: row.ismandatory === 'Y',
         ...classification,
       };
+
+      // Property fields navigate through DAL associations (AD_Field.Property != null).
+      // Their column may not exist on the tab's primary table; tag for diagnostic use only.
+      // Do NOT override visibility — the column is often a valid user-visible field.
+      // PK correctness is guaranteed by IsKey='Y', not by this tag.
+      if (row.property != null) {
+        fieldDef.propertyField = true;
+      }
 
       // Add derivation from inferDerivation if not already set by classification
       if (!fieldDef.derivation && row.defaultvalue) {
@@ -383,12 +391,8 @@ export function buildSchema(rows, systemColumns, refMap, enumValuesMap = {}) {
       }
 
       // Add reference metadata for foreign key fields
-      if (schemaType === 'foreignKey') {
-        const reference = buildReference(row);
-        if (reference) {
-          fieldDef.reference = reference;
-        }
-      }
+      const reference = schemaType === 'foreignKey' ? buildReference(row) : null;
+      if (reference) fieldDef.reference = reference;
 
       // Add processId for button-type fields (AD_Reference_ID = 28)
       // Priority: OBUIAPP (modern) > Classic > Hardcoded (no ID)
@@ -514,12 +518,16 @@ SELECT
   NULL AS Precision,
   c.IsTranslated,
   COALESCE(f.Help, c.Help) AS help_text,
-  fg.Name AS field_group_name
+  fg.Name AS field_group_name,
+  f.Property,
+  c.IsKey,
+  tab_tbl.TableName AS tab_tablename
 FROM AD_Field f
 JOIN AD_Tab t ON f.AD_Tab_ID = t.AD_Tab_ID
 JOIN AD_Window w ON t.AD_Window_ID = w.AD_Window_ID
 JOIN AD_Column c ON f.AD_Column_ID = c.AD_Column_ID
 JOIN AD_Table tbl ON c.AD_Table_ID = tbl.AD_Table_ID
+JOIN AD_Table tab_tbl ON t.AD_Table_ID = tab_tbl.AD_Table_ID
 LEFT JOIN AD_Package pkg ON tbl.AD_Package_ID = pkg.AD_Package_ID
 LEFT JOIN AD_FieldGroup fg ON fg.AD_FieldGroup_ID = f.AD_FieldGroup_ID
 JOIN AD_Reference r ON c.AD_Reference_ID = r.AD_Reference_ID
@@ -584,7 +592,10 @@ SELECT
   NULL AS onchangefunction,
   c.IsIdentifier, c.IsSelectionColumn, c.AllowFiltering AS IsFilterable,
   NULL AS Precision, c.IsTranslated,
-  c.Help AS help_text, NULL AS field_group_name
+  c.Help AS help_text, NULL AS field_group_name,
+  NULL AS property,  -- orphan columns have no AD_Field, so Property is always null
+  c.IsKey,
+  tbl.TableName AS tab_tablename  -- tbl joins via t.AD_Table_ID so already canonical
 FROM AD_Tab t
 JOIN AD_Window w ON t.AD_Window_ID = w.AD_Window_ID
 JOIN AD_Table tbl ON t.AD_Table_ID = tbl.AD_Table_ID

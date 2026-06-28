@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-06-19T12:29:45.813Z",
-  "checksum": "6fcded41cfce3ebe",
+  "updatedAt": "2026-06-26T15:07:43.486Z",
+  "checksum": "b85f8403d9b8150f",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -361,6 +361,29 @@
             }
           },
           {
+            "name": "psd2Provider",
+            "apiKey": "psd2Provider",
+            "column": "EM_Psd2_Provider_ID",
+            "label": "Bank Provider",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "PSD2_Provider",
+            "inputMode": "search",
+            "displayLogic": {
+              "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@EM_PSD2_Connection_Status@='CO'",
+              "evaluable": true,
+              "js": "record['pSD2ConnectionStatus'] === 'CO'"
+            }
+          },
+          {
             "name": "pSD2ImportFromDate",
             "apiKey": "pSD2ImportFromDate",
             "column": "EM_PSD2_Import_From_Date",
@@ -372,7 +395,7 @@
             "grid": false,
             "form": true,
             "displayLogic": {
-              "raw": "@PSD2_ClientHasApiKey@=1",
+              "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
             }
           },
@@ -388,7 +411,7 @@
             "grid": false,
             "form": true,
             "displayLogic": {
-              "raw": "@PSD2_ClientHasApiKey@=1",
+              "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
             }
           },
@@ -396,7 +419,7 @@
             "name": "pSD2StatementFrequency",
             "apiKey": "pSD2StatementFrequency",
             "column": "EM_PSD2_Statement_Frequency",
-            "label": "Statement Frequency",
+            "label": "Statement Grouping",
             "type": "enum",
             "tsType": "string",
             "visibility": "editable",
@@ -405,29 +428,29 @@
             "form": true,
             "derivation": {
               "type": "computed",
-              "source": "1BE"
+              "source": "1BD"
             },
             "enumValues": [
               {
                 "value": "1BE",
-                "name": "One per run"
+                "name": "New statement each run"
               },
               {
                 "value": "1BD",
-                "name": "One per day"
+                "name": "Within 1 day"
               },
               {
                 "value": "1BW",
-                "name": "One per week"
+                "name": "Within 7 days"
               },
               {
                 "value": "1BM",
-                "name": "One per month"
+                "name": "Within 30 days"
               }
             ],
-            "defaultValue": "1BE",
+            "defaultValue": "1BD",
             "displayLogic": {
-              "raw": "@PSD2_ClientHasApiKey@=1",
+              "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
             }
           },
@@ -435,7 +458,7 @@
             "name": "pSD2GetConsent",
             "apiKey": "pSD2GetConsent",
             "column": "EM_PSD2_Get_Consent",
-            "label": "Connect Bank Account",
+            "label": "Connect Account",
             "type": "button",
             "tsType": "string",
             "visibility": "editable",
@@ -443,7 +466,7 @@
             "grid": false,
             "form": true,
             "displayLogic": {
-              "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasConnections@=0",
+              "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasConnections@=0 & @Type@!'C'",
               "evaluable": true
             }
           },
@@ -459,23 +482,7 @@
             "grid": false,
             "form": true,
             "displayLogic": {
-              "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1",
-              "evaluable": true
-            }
-          },
-          {
-            "name": "psd2RefreshConnections",
-            "apiKey": "psd2RefreshConnections",
-            "column": "EM_Psd2_Refresh_Connections",
-            "label": "Refresh Connections",
-            "type": "button",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "displayLogic": {
-              "raw": "@PSD2_HasConecctions@>0",
+              "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'",
               "evaluable": true
             }
           },
@@ -491,7 +498,7 @@
             "grid": false,
             "form": true,
             "displayLogic": {
-              "raw": "@PSD2_ClientHasApiKey@=1",
+              "raw": "@PSD2_ClientHasApiKey@=1 & @Type@!'C'",
               "evaluable": true
             }
           },
@@ -515,7 +522,7 @@
             "name": "pSD2ConnectionStatus",
             "apiKey": "pSD2ConnectionStatus",
             "column": "EM_PSD2_Connection_Status",
-            "label": "Connection Status",
+            "label": "Bank Connection Status",
             "type": "enum",
             "tsType": "string",
             "visibility": "readOnly",
@@ -524,19 +531,39 @@
             "form": true,
             "derivation": {
               "type": "computed",
-              "source": "'DC'"
+              "source": "DC"
             },
             "enumValues": [
               {
                 "value": "CO",
-                "name": "Connected"
+                "name": "Active"
               },
               {
                 "value": "DC",
-                "name": "Disconnected"
+                "name": "Inactive"
               }
             ],
-            "defaultValue": "'DC'"
+            "defaultValue": "DC",
+            "displayLogic": {
+              "raw": "@Type@!'C'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "psd2ReconnectFa",
+            "apiKey": "psd2ReconnectFa",
+            "column": "EM_Psd2_Reconnect_Fa",
+            "label": "Reconnect Account",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "displayLogic": {
+              "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasInactiveConnections@>0 & @Type@!'C'",
+              "evaluable": true
+            }
           }
         ],
         "searchableFields": [],
@@ -573,14 +600,14 @@
             "name": "pSD2StatementFrequency",
             "derivation": {
               "type": "computed",
-              "source": "1BE"
+              "source": "1BD"
             }
           },
           {
             "name": "pSD2ConnectionStatus",
             "derivation": {
               "type": "computed",
-              "source": "'DC'"
+              "source": "DC"
             }
           }
         ],
@@ -773,7 +800,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -854,6 +881,46 @@
             }
           },
           {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          },
+          {
             "name": "organization",
             "apiKey": "organization",
             "column": "AD_Org_ID",
@@ -889,7 +956,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -915,7 +982,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -940,7 +1007,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -965,7 +1032,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -990,7 +1057,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1015,7 +1082,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1040,7 +1107,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1065,7 +1132,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1090,7 +1157,167 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+            }
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "label": "Accounting Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "enumValues": [
+              {
+                "value": "NC",
+                "name": "Cost Not Calculated"
+              },
+              {
+                "value": "d",
+                "name": "Disabled For Background"
+              },
+              {
+                "value": "D",
+                "name": "Document Disabled"
+              },
+              {
+                "value": "L",
+                "name": "Document Locked"
+              },
+              {
+                "value": "E",
+                "name": "Error"
+              },
+              {
+                "value": "C",
+                "name": "Error, No cost"
+              },
+              {
+                "value": "i",
+                "name": "Invalid Account"
+              },
+              {
+                "value": "AD",
+                "name": "No Accounting Date"
+              },
+              {
+                "value": "DT",
+                "name": "No Document Type"
+              },
+              {
+                "value": "NO",
+                "name": "No Related PO"
+              },
+              {
+                "value": "b",
+                "name": "Not Balanced"
+              },
+              {
+                "value": "c",
+                "name": "Not Convertible (no rate)"
+              },
+              {
+                "value": "l",
+                "name": "Pending Refresh"
+              },
+              {
+                "value": "p",
+                "name": "Period Closed"
+              },
+              {
+                "value": "y",
+                "name": "Post Prepared"
+              },
+              {
+                "value": "Y",
+                "name": "Posted"
+              },
+              {
+                "value": "T",
+                "name": "Table Disabled"
+              },
+              {
+                "value": "N",
+                "name": "Unposted"
+              }
+            ],
+            "defaultValue": "N"
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "label": "Bulk Posting",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          },
+          {
+            "name": "etprReactivateTransaction",
+            "apiKey": "etprReactivateTransaction",
+            "column": "EM_Etpr_Reactivate_Transaction",
+            "label": "Reactivate Transaction",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "displayLogic": {
+              "raw": "@processed@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "etprRemoveTransaction",
+            "apiKey": "etprRemoveTransaction",
+            "column": "EM_Etpr_Remove_Transaction",
+            "label": "Remove Transaction",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "displayLogic": {
+              "raw": "@processed@='Y'",
+              "evaluable": true
             }
           }
         ],
@@ -1139,10 +1366,45 @@
             }
           },
           {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            }
+          },
+          {
             "name": "organization",
             "derivation": {
               "type": "fromConfig",
               "source": "context.organization"
+            }
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "etblkpBulkposting",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "etprReactivateTransaction",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "etprRemoveTransaction",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           }
         ]
@@ -1298,6 +1560,122 @@
             "grid": true,
             "form": true,
             "gridOrder": 4
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "label": "Accounting Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "enumValues": [
+              {
+                "value": "NC",
+                "name": "Cost Not Calculated"
+              },
+              {
+                "value": "d",
+                "name": "Disabled For Background"
+              },
+              {
+                "value": "D",
+                "name": "Document Disabled"
+              },
+              {
+                "value": "L",
+                "name": "Document Locked"
+              },
+              {
+                "value": "E",
+                "name": "Error"
+              },
+              {
+                "value": "C",
+                "name": "Error, No cost"
+              },
+              {
+                "value": "i",
+                "name": "Invalid Account"
+              },
+              {
+                "value": "AD",
+                "name": "No Accounting Date"
+              },
+              {
+                "value": "DT",
+                "name": "No Document Type"
+              },
+              {
+                "value": "NO",
+                "name": "No Related PO"
+              },
+              {
+                "value": "b",
+                "name": "Not Balanced"
+              },
+              {
+                "value": "c",
+                "name": "Not Convertible (no rate)"
+              },
+              {
+                "value": "l",
+                "name": "Pending Refresh"
+              },
+              {
+                "value": "p",
+                "name": "Period Closed"
+              },
+              {
+                "value": "y",
+                "name": "Post Prepared"
+              },
+              {
+                "value": "Y",
+                "name": "Posted"
+              },
+              {
+                "value": "T",
+                "name": "Table Disabled"
+              },
+              {
+                "value": "N",
+                "name": "Unposted"
+              }
+            ],
+            "defaultValue": "N"
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "label": "Bulk Posting",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
           }
         ],
         "searchableFields": [],
@@ -1328,6 +1706,20 @@
             "derivation": {
               "type": "computed",
               "source": "@#Date@"
+            }
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "etblkpBulkposting",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           }
         ]
@@ -1884,7 +2276,7 @@
             "apiKey": "psd2Provider",
             "column": "EM_Psd2_Provider_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -1940,7 +2332,7 @@
             "apiKey": "psd2RefreshConnections",
             "column": "EM_Psd2_Refresh_Connections",
             "type": "button",
-            "visibility": "editable",
+            "visibility": "system",
             "required": false
           },
           {
@@ -1972,14 +2364,6 @@
             "apiKey": "client",
             "column": "AD_Client_ID",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "account",
-            "apiKey": "account",
-            "column": "Fin_Financial_Account_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           },
@@ -2022,6 +2406,22 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Financial_Account_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "psd2ReconnectFa",
+            "apiKey": "psd2ReconnectFa",
+            "column": "EM_Psd2_Reconnect_Fa",
+            "type": "button",
+            "visibility": "editable",
+            "required": false
           }
         ],
         "javaQualifier": "financialAccountHeaderHandler"
@@ -2203,8 +2603,8 @@
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
-            "visibility": "system",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -2312,14 +2712,6 @@
             "required": true
           },
           {
-            "name": "transactionID",
-            "apiKey": "transactionID",
-            "column": "Fin_Finacc_Transaction_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -2348,6 +2740,54 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "eTGOAutoCreated",
+            "apiKey": "eTGOAutoCreated",
+            "column": "EM_ETGO_Auto_Created",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "etprReactivateTransaction",
+            "apiKey": "etprReactivateTransaction",
+            "column": "EM_Etpr_Reactivate_Transaction",
+            "type": "button",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "etprRemoveTransaction",
+            "apiKey": "etprRemoveTransaction",
+            "column": "EM_Etpr_Remove_Transaction",
+            "type": "button",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Finacc_Transaction_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -2471,14 +2911,6 @@
             "required": true
           },
           {
-            "name": "fINBankstatementID",
-            "apiKey": "fINBankstatementID",
-            "column": "FIN_Bankstatement_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "account",
             "apiKey": "account",
             "column": "FIN_Financial_Account_ID",
@@ -2571,6 +3003,30 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Bankstatement_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -2726,14 +3182,6 @@
             "required": true
           },
           {
-            "name": "fINBankstatementlineID",
-            "apiKey": "fINBankstatementlineID",
-            "column": "FIN_Bankstatementline_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -2770,6 +3218,22 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eTGOMatchGroup",
+            "apiKey": "eTGOMatchGroup",
+            "column": "EM_ETGO_Match_Group_ID",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Bankstatementline_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -2959,6 +3423,14 @@
         "url": "/sws/neo/financial-account-detail/account/selectors/currency"
       },
       {
+        "entity": "account",
+        "field": "psd2Provider",
+        "column": "EM_Psd2_Provider_ID",
+        "reference": "PSD2_Provider",
+        "inputMode": "search",
+        "url": "/sws/neo/financial-account-detail/account/selectors/psd2Provider"
+      },
+      {
         "entity": "transaction",
         "field": "gLItem",
         "column": "C_Glitem_ID",
@@ -3057,421 +3529,170 @@
     ],
     "actions": [
       {
-        "name": "aPRMImportBankFile",
-        "actionType": "paymentAction",
         "entity": "account",
+        "field": "aPRMImportBankFile",
         "column": "EM_APRM_ImportBankFile",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMImportBankFile",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "7AC7BE9024E448A0BB863C159DA762F9",
         "processType": "classic"
       },
       {
-        "name": "aPRMMatchTransactions",
-        "actionType": "paymentAction",
         "entity": "account",
+        "field": "aPRMMatchTransactions",
         "column": "EM_APRM_MatchTransactions",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactions",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "86F0B1EBE2BC48E3ACF458768D14CC99",
         "processType": "obuiapp"
       },
       {
-        "name": "aPRMMatchTransactionsForce",
-        "actionType": "paymentAction",
         "entity": "account",
+        "field": "aPRMMatchTransactionsForce",
         "column": "EM_APRM_MatchTrans_Force",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactionsForce",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "86F0B1EBE2BC48E3ACF458768D14CC99",
         "processType": "obuiapp"
       },
       {
-        "name": "aPRMReconcile",
-        "actionType": "paymentAction",
         "entity": "account",
+        "field": "aPRMReconcile",
         "column": "EM_APRM_Reconcile",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMReconcile",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "EB3D56BDD37E4229B67DBAB9F9A9B167",
         "processType": "classic"
       },
       {
-        "name": "aprmAddMultiplePayments",
-        "actionType": "paymentAction",
         "entity": "account",
+        "field": "aprmAddMultiplePayments",
         "column": "EM_Aprm_AddMultiplePayments",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddMultiplePayments",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "4CE463C04CA0412CAC57EF58FE0F8498",
         "processType": "obuiapp"
       },
       {
-        "name": "aprmAddtransactionpd",
-        "actionType": "paymentAction",
         "entity": "account",
+        "field": "aprmAddtransactionpd",
         "column": "EM_Aprm_Addtransactionpd",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddtransactionpd",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "E68790A7B65F4D45AB35E2BAE34C1F39",
         "processType": "obuiapp"
       },
       {
-        "name": "aprmFindtransactionspd",
-        "actionType": "paymentAction",
         "entity": "account",
+        "field": "aprmFindtransactionspd",
         "column": "EM_Aprm_Findtransactionspd",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFindtransactionspd",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "154CB4F9274A479CB38A285E16984539",
         "processType": "obuiapp"
       },
       {
-        "name": "aprmFundsTrans",
-        "actionType": "paymentAction",
         "entity": "account",
+        "field": "aprmFundsTrans",
         "column": "EM_Aprm_Funds_Trans",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFundsTrans",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "CC73C4845CDC487395804946EACB225F",
         "processType": "obuiapp"
       },
       {
-        "name": "pSD2GetConsent",
-        "actionType": "utilityAction",
         "entity": "account",
+        "field": "pSD2GetConsent",
         "column": "EM_PSD2_Get_Consent",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetConsent",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "C580B3B60DA5484387493A74CEB00D13",
         "processType": "obuiapp"
       },
       {
-        "name": "psd2GetConnections",
-        "actionType": "utilityAction",
         "entity": "account",
+        "field": "psd2GetConnections",
         "column": "EM_Psd2_Get_Connections",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2GetConnections",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "91C37692121944CA892C32316F56D9B4",
         "processType": "obuiapp"
       },
       {
-        "name": "pSD2GetBankstatement",
-        "actionType": "utilityAction",
         "entity": "account",
+        "field": "pSD2GetBankstatement",
         "column": "EM_PSD2_Get_Bankstatement",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetBankstatement",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "2B2635782D4C41FF9415D86C13D1E97D",
         "processType": "obuiapp"
       },
       {
-        "name": "psd2RefreshConnections",
-        "actionType": "utilityAction",
         "entity": "account",
+        "field": "psd2RefreshConnections",
         "column": "EM_Psd2_Refresh_Connections",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2RefreshConnections",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
         "processId": "83C5DBC9F05B4D38BBB3F5486B377427",
         "processType": "obuiapp"
       },
       {
-        "name": "posted",
-        "actionType": "documentAction",
-        "entity": "transaction",
-        "column": "Posted",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/posted",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ]
+        "entity": "account",
+        "field": "psd2ReconnectFa",
+        "column": "EM_Psd2_Reconnect_Fa",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2ReconnectFa",
+        "processId": "F3ABCD40BD0047AF9E76071CF7D3FF04",
+        "processType": "obuiapp"
       },
       {
-        "name": "aprmProcessed",
-        "actionType": "paymentAction",
         "entity": "transaction",
+        "field": "aprmProcessed",
         "column": "EM_Aprm_Processed",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/transaction/{id}/action/aprmProcessed",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "F68F2890E96D4D85A1DEF0274D105BCE",
         "processType": "classic"
       },
       {
-        "name": "posted",
-        "actionType": "documentAction",
-        "entity": "importedBankStatements",
-        "column": "Posted",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/posted",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ]
+        "entity": "transaction",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
       },
       {
-        "name": "aPRMProcessBankStatementForce",
-        "actionType": "paymentAction",
+        "entity": "transaction",
+        "field": "etprReactivateTransaction",
+        "column": "EM_Etpr_Reactivate_Transaction",
+        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprReactivateTransaction",
+        "processId": "BA47238DB98D4FE7A4B540760EC8226A",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "transaction",
+        "field": "etprRemoveTransaction",
+        "column": "EM_Etpr_Remove_Transaction",
+        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprRemoveTransaction",
+        "processId": "DC4FCAC608324CB78CF92F99C1A94AD0",
+        "processType": "obuiapp"
+      },
+      {
         "entity": "importedBankStatements",
+        "field": "posted",
+        "column": "Posted",
+        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/posted"
+      },
+      {
+        "entity": "importedBankStatements",
+        "field": "aPRMProcessBankStatementForce",
         "column": "EM_APRM_Process_BS_Force",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatementForce",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "2DDE7D3618034C38A4462B7F3456C28D",
         "processType": "classic"
       },
       {
-        "name": "aPRMProcessBankStatement",
-        "actionType": "paymentAction",
         "entity": "importedBankStatements",
+        "field": "aPRMProcessBankStatement",
         "column": "EM_APRM_Process_BS",
-        "requiresRecord": true,
-        "method": "POST",
         "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatement",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates or processes payment records",
-          "May update invoice/order payment status"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Payment amount exceeds remaining balance",
-          "Payment method is not configured for the business partner",
-          "Invoice is already fully paid"
-        ],
         "processId": "58A9261BACEF45DDA526F29D8557272D",
         "processType": "classic"
+      },
+      {
+        "entity": "importedBankStatements",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -3490,296 +3711,6 @@
     "window": {
       "category": "finance"
     }
-  },
-  "formState": {
-    "entities": {
-      "account": {
-        "fields": {
-          "name": {
-            "required": true
-          },
-          "currency": {
-            "required": true,
-            "readOnlyLogic": "@HasTransaction@>0"
-          },
-          "type": {
-            "required": true,
-            "defaultValue": "B"
-          },
-          "description": {},
-          "active": {
-            "defaultValue": "Y"
-          },
-          "currentBalance": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "0"
-          },
-          "iBAN": {},
-          "swiftCode": {},
-          "aPRMImportBankFile": {},
-          "aPRMMatchTransactions": {},
-          "aPRMMatchTransactionsForce": {},
-          "aPRMReconcile": {},
-          "aprmAddMultiplePayments": {
-            "defaultValue": "N"
-          },
-          "bankCode": {},
-          "branchCode": {},
-          "partialAccountNo": {},
-          "accountNo": {},
-          "aprmAddtransactionpd": {},
-          "aprmFindtransactionspd": {},
-          "aprmFundsTrans": {},
-          "pSD2ImportFromDate": {},
-          "pSD2ImportToDate": {},
-          "pSD2StatementFrequency": {
-            "defaultValue": "1BE"
-          },
-          "pSD2GetConsent": {},
-          "pSD2GetBankstatement": {},
-          "psd2RefreshConnections": {},
-          "pSD2SaltEdgeAccountID": {
-            "readOnly": true
-          },
-          "pSD2CardNumber": {
-            "readOnly": true
-          },
-          "pSD2ConnectionStatus": {
-            "readOnly": true,
-            "defaultValue": "'DC'"
-          }
-        }
-      },
-      "transaction": {
-        "fields": {
-          "transactionType": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "BPD"
-          },
-          "status": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "'RPAP'"
-          },
-          "transactionDate": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "@#Date@"
-          },
-          "documentNo": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "gLItem": {
-            "readOnly": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
-          },
-          "description": {
-            "readOnly": true
-          },
-          "depositAmount": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPW'",
-            "defaultValue": "0"
-          },
-          "paymentAmount": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPD'",
-            "defaultValue": "0"
-          },
-          "organization": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''",
-            "defaultValue": "@AD_Org_ID@"
-          },
-          "businessPartner": {
-            "readOnly": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
-          },
-          "project": {
-            "readOnly": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
-          },
-          "costCenter": {
-            "readOnly": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
-          },
-          "salesCampaign": {
-            "readOnly": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
-          },
-          "activity": {
-            "readOnly": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
-          },
-          "salesRegion": {
-            "readOnly": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
-          },
-          "stDimension": {
-            "readOnly": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
-          },
-          "ndDimension": {
-            "readOnly": true,
-            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
-          }
-        }
-      },
-      "importedBankStatements": {
-        "fields": {
-          "documentNo": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "name": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "active": {
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "Y"
-          },
-          "importdate": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "@#Date@"
-          },
-          "transactionDate": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "@#Date@"
-          },
-          "fileName": {
-            "readOnly": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "notes": {}
-        }
-      },
-      "bankStatementLines": {
-        "fields": {
-          "active": {
-            "readOnlyLogic": "@APRM_BSProcessed@='Y'",
-            "defaultValue": "Y"
-          },
-          "transactionDate": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@APRM_BSProcessed@='Y'",
-            "defaultValue": "@#Date@"
-          },
-          "referenceNo": {
-            "required": true,
-            "readOnlyLogic": "@APRM_BSProcessed@='Y'"
-          },
-          "bpartnername": {
-            "readOnlyLogic": "@APRM_BSProcessed@='Y'"
-          },
-          "businessPartner": {},
-          "gLItem": {},
-          "dramount": {
-            "required": true,
-            "readOnlyLogic": "@APRM_BSProcessed@='Y'",
-            "defaultValue": "0"
-          },
-          "cramount": {
-            "required": true,
-            "readOnlyLogic": "@APRM_BSProcessed@='Y'",
-            "defaultValue": "0"
-          },
-          "description": {}
-        }
-      }
-    },
-    "requiredSessionVariables": [],
-    "evaluationMode": "runtime"
-  },
-  "agentProfile": {
-    "purpose": "Manage financial account detail financial records.",
-    "whenToUse": [
-      "Use for financial account detail management."
-    ],
-    "minimumCreate": {
-      "headerFields": [
-        "name",
-        "currency",
-        "type"
-      ],
-      "lineFields": [
-        "name",
-        "referenceNo",
-        "dramount",
-        "cramount"
-      ],
-      "recommendedOrder": [
-        "createHeader",
-        "createLines"
-      ]
-    },
-    "selectorContexts": [],
-    "actions": [
-      "posted",
-      "posted"
-    ],
-    "workflow": [
-      "Create draft header with required fields",
-      "Add at least one valid line",
-      "Validate form state",
-      "Complete the document"
-    ],
-    "edgeCases": [
-      "Payment amount exceeds remaining balance",
-      "Payment method is not configured for the business partner",
-      "Invoice is already fully paid",
-      "Required context is missing",
-      "User lacks permission",
-      "Record is in an incompatible state",
-      "Document is already completed or closed",
-      "Document has pending lines or missing required fields",
-      "User lacks permission to execute the action",
-      "Required field without default value must be provided"
-    ],
-    "examples": [
-      {
-        "operation": "createHeader",
-        "description": "Create a draft header with the minimum required editable fields.",
-        "fields": [
-          "name",
-          "currency",
-          "type"
-        ]
-      },
-      {
-        "operation": "createLine",
-        "description": "Add a line after the header exists and parent context is available.",
-        "fields": [
-          "name",
-          "referenceNo",
-          "dramount",
-          "cramount"
-        ]
-      },
-      {
-        "operation": "completeDocument",
-        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
-        "action": "posted"
-      }
-    ],
-    "warnings": [],
-    "knownLimitations": [],
-    "dangerousOperations": []
   },
   "testManifest": {
     "tests": [
@@ -3872,6 +3803,14 @@
         "description": "Action endpoint for 'pSD2GetConsent' in account should exist"
       },
       {
+        "id": "t-action-endpoint-account-psd2ReconnectFa",
+        "category": "action-endpoint",
+        "entity": "account",
+        "field": "psd2ReconnectFa",
+        "runner": "node",
+        "description": "Action endpoint for 'psd2ReconnectFa' in account should exist"
+      },
+      {
         "id": "t-action-endpoint-account-psd2RefreshConnections",
         "category": "action-endpoint",
         "entity": "account",
@@ -3896,6 +3835,14 @@
         "description": "Action endpoint for 'aPRMProcessBankStatementForce' in importedBankStatements should exist"
       },
       {
+        "id": "t-action-endpoint-importedBankStatements-etblkpBulkposting",
+        "category": "action-endpoint",
+        "entity": "importedBankStatements",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Action endpoint for 'etblkpBulkposting' in importedBankStatements should exist"
+      },
+      {
         "id": "t-action-endpoint-importedBankStatements-posted",
         "category": "action-endpoint",
         "entity": "importedBankStatements",
@@ -3912,12 +3859,28 @@
         "description": "Action endpoint for 'aprmProcessed' in transaction should exist"
       },
       {
-        "id": "t-action-endpoint-transaction-posted",
+        "id": "t-action-endpoint-transaction-etblkpBulkposting",
         "category": "action-endpoint",
         "entity": "transaction",
-        "field": "posted",
+        "field": "etblkpBulkposting",
         "runner": "node",
-        "description": "Action endpoint for 'posted' in transaction should exist"
+        "description": "Action endpoint for 'etblkpBulkposting' in transaction should exist"
+      },
+      {
+        "id": "t-action-endpoint-transaction-etprReactivateTransaction",
+        "category": "action-endpoint",
+        "entity": "transaction",
+        "field": "etprReactivateTransaction",
+        "runner": "node",
+        "description": "Action endpoint for 'etprReactivateTransaction' in transaction should exist"
+      },
+      {
+        "id": "t-action-endpoint-transaction-etprRemoveTransaction",
+        "category": "action-endpoint",
+        "entity": "transaction",
+        "field": "etprRemoveTransaction",
+        "runner": "node",
+        "description": "Action endpoint for 'etprRemoveTransaction' in transaction should exist"
       },
       {
         "id": "t-crud-flags-account",
@@ -4036,6 +3999,22 @@
         "description": "Default value for 'active' in importedBankStatements should be a string"
       },
       {
+        "id": "t-default-value-type-importedBankStatements-etblkpAccountingstatus",
+        "category": "default-value-type",
+        "entity": "importedBankStatements",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "Default value for 'etblkpAccountingstatus' in importedBankStatements should be a string"
+      },
+      {
+        "id": "t-default-value-type-importedBankStatements-etblkpBulkposting",
+        "category": "default-value-type",
+        "entity": "importedBankStatements",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Default value for 'etblkpBulkposting' in importedBankStatements should be a string"
+      },
+      {
         "id": "t-default-value-type-importedBankStatements-importdate",
         "category": "default-value-type",
         "entity": "importedBankStatements",
@@ -4060,6 +4039,38 @@
         "description": "Default value for 'depositAmount' in transaction should be a string"
       },
       {
+        "id": "t-default-value-type-transaction-etblkpAccountingstatus",
+        "category": "default-value-type",
+        "entity": "transaction",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "Default value for 'etblkpAccountingstatus' in transaction should be a string"
+      },
+      {
+        "id": "t-default-value-type-transaction-etblkpBulkposting",
+        "category": "default-value-type",
+        "entity": "transaction",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Default value for 'etblkpBulkposting' in transaction should be a string"
+      },
+      {
+        "id": "t-default-value-type-transaction-etprReactivateTransaction",
+        "category": "default-value-type",
+        "entity": "transaction",
+        "field": "etprReactivateTransaction",
+        "runner": "node",
+        "description": "Default value for 'etprReactivateTransaction' in transaction should be a string"
+      },
+      {
+        "id": "t-default-value-type-transaction-etprRemoveTransaction",
+        "category": "default-value-type",
+        "entity": "transaction",
+        "field": "etprRemoveTransaction",
+        "runner": "node",
+        "description": "Default value for 'etprRemoveTransaction' in transaction should be a string"
+      },
+      {
         "id": "t-default-value-type-transaction-organization",
         "category": "default-value-type",
         "entity": "transaction",
@@ -4074,6 +4085,14 @@
         "field": "paymentAmount",
         "runner": "node",
         "description": "Default value for 'paymentAmount' in transaction should be a string"
+      },
+      {
+        "id": "t-default-value-type-transaction-posted",
+        "category": "default-value-type",
+        "entity": "transaction",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in transaction should be a string"
       },
       {
         "id": "t-default-value-type-transaction-status",
@@ -4204,6 +4223,14 @@
         "description": "Display logic for 'pSD2CardNumber' in account should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-account-pSD2ConnectionStatus",
+        "category": "displaylogic-evaluable",
+        "entity": "account",
+        "field": "pSD2ConnectionStatus",
+        "runner": "node",
+        "description": "Display logic for 'pSD2ConnectionStatus' in account should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-account-pSD2GetBankstatement",
         "category": "displaylogic-evaluable",
         "entity": "account",
@@ -4236,12 +4263,20 @@
         "description": "Display logic for 'pSD2ImportToDate' in account should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-account-psd2RefreshConnections",
+        "id": "t-displaylogic-evaluable-account-psd2Provider",
         "category": "displaylogic-evaluable",
         "entity": "account",
-        "field": "psd2RefreshConnections",
+        "field": "psd2Provider",
         "runner": "node",
-        "description": "Display logic for 'psd2RefreshConnections' in account should have evaluable flag"
+        "description": "Display logic for 'psd2Provider' in account should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-account-psd2ReconnectFa",
+        "category": "displaylogic-evaluable",
+        "entity": "account",
+        "field": "psd2ReconnectFa",
+        "runner": "node",
+        "description": "Display logic for 'psd2ReconnectFa' in account should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-account-pSD2SaltEdgeAccountID",
@@ -4266,6 +4301,14 @@
         "field": "swiftCode",
         "runner": "node",
         "description": "Display logic for 'swiftCode' in account should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-importedBankStatements-etblkpBulkposting",
+        "category": "displaylogic-evaluable",
+        "entity": "importedBankStatements",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Display logic for 'etblkpBulkposting' in importedBankStatements should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-transaction-activity",
@@ -4308,6 +4351,30 @@
         "description": "Display logic for 'description' in transaction should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-transaction-etblkpBulkposting",
+        "category": "displaylogic-evaluable",
+        "entity": "transaction",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Display logic for 'etblkpBulkposting' in transaction should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-transaction-etprReactivateTransaction",
+        "category": "displaylogic-evaluable",
+        "entity": "transaction",
+        "field": "etprReactivateTransaction",
+        "runner": "node",
+        "description": "Display logic for 'etprReactivateTransaction' in transaction should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-transaction-etprRemoveTransaction",
+        "category": "displaylogic-evaluable",
+        "entity": "transaction",
+        "field": "etprRemoveTransaction",
+        "runner": "node",
+        "description": "Display logic for 'etprRemoveTransaction' in transaction should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-transaction-gLItem",
         "category": "displaylogic-evaluable",
         "entity": "transaction",
@@ -4338,6 +4405,14 @@
         "field": "paymentAmount",
         "runner": "node",
         "description": "Display logic for 'paymentAmount' in transaction should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-transaction-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "transaction",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in transaction should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-transaction-project",
@@ -4492,6 +4567,14 @@
         "description": "Display logic for 'pSD2CardNumber' in account should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-account-pSD2ConnectionStatus",
+        "category": "displaylogic-valid",
+        "entity": "account",
+        "field": "pSD2ConnectionStatus",
+        "runner": "node",
+        "description": "Display logic for 'pSD2ConnectionStatus' in account should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-account-pSD2GetBankstatement",
         "category": "displaylogic-valid",
         "entity": "account",
@@ -4524,12 +4607,20 @@
         "description": "Display logic for 'pSD2ImportToDate' in account should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-account-psd2RefreshConnections",
+        "id": "t-displaylogic-valid-account-psd2Provider",
         "category": "displaylogic-valid",
         "entity": "account",
-        "field": "psd2RefreshConnections",
+        "field": "psd2Provider",
         "runner": "node",
-        "description": "Display logic for 'psd2RefreshConnections' in account should be valid JS"
+        "description": "Display logic for 'psd2Provider' in account should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-account-psd2ReconnectFa",
+        "category": "displaylogic-valid",
+        "entity": "account",
+        "field": "psd2ReconnectFa",
+        "runner": "node",
+        "description": "Display logic for 'psd2ReconnectFa' in account should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-account-pSD2SaltEdgeAccountID",
@@ -4554,6 +4645,14 @@
         "field": "swiftCode",
         "runner": "node",
         "description": "Display logic for 'swiftCode' in account should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-importedBankStatements-etblkpBulkposting",
+        "category": "displaylogic-valid",
+        "entity": "importedBankStatements",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Display logic for 'etblkpBulkposting' in importedBankStatements should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-transaction-activity",
@@ -4596,6 +4695,30 @@
         "description": "Display logic for 'description' in transaction should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-transaction-etblkpBulkposting",
+        "category": "displaylogic-valid",
+        "entity": "transaction",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Display logic for 'etblkpBulkposting' in transaction should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-transaction-etprReactivateTransaction",
+        "category": "displaylogic-valid",
+        "entity": "transaction",
+        "field": "etprReactivateTransaction",
+        "runner": "node",
+        "description": "Display logic for 'etprReactivateTransaction' in transaction should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-transaction-etprRemoveTransaction",
+        "category": "displaylogic-valid",
+        "entity": "transaction",
+        "field": "etprRemoveTransaction",
+        "runner": "node",
+        "description": "Display logic for 'etprRemoveTransaction' in transaction should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-transaction-gLItem",
         "category": "displaylogic-valid",
         "entity": "transaction",
@@ -4626,6 +4749,14 @@
         "field": "paymentAmount",
         "runner": "node",
         "description": "Display logic for 'paymentAmount' in transaction should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-transaction-posted",
+        "category": "displaylogic-valid",
+        "entity": "transaction",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in transaction should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-transaction-project",
@@ -4868,12 +4999,20 @@
         "description": "Field 'pSD2ImportToDate' should be present in account"
       },
       {
-        "id": "t-field-presence-account-psd2RefreshConnections",
+        "id": "t-field-presence-account-psd2Provider",
         "category": "field-presence",
         "entity": "account",
-        "field": "psd2RefreshConnections",
+        "field": "psd2Provider",
         "runner": "node",
-        "description": "Field 'psd2RefreshConnections' should be present in account"
+        "description": "Field 'psd2Provider' should be present in account"
+      },
+      {
+        "id": "t-field-presence-account-psd2ReconnectFa",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "psd2ReconnectFa",
+        "runner": "node",
+        "description": "Field 'psd2ReconnectFa' should be present in account"
       },
       {
         "id": "t-field-presence-account-pSD2SaltEdgeAccountID",
@@ -4996,6 +5135,22 @@
         "description": "Field 'documentNo' should be present in importedBankStatements"
       },
       {
+        "id": "t-field-presence-importedBankStatements-etblkpAccountingstatus",
+        "category": "field-presence",
+        "entity": "importedBankStatements",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "Field 'etblkpAccountingstatus' should be present in importedBankStatements"
+      },
+      {
+        "id": "t-field-presence-importedBankStatements-etblkpBulkposting",
+        "category": "field-presence",
+        "entity": "importedBankStatements",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Field 'etblkpBulkposting' should be present in importedBankStatements"
+      },
+      {
         "id": "t-field-presence-importedBankStatements-fileName",
         "category": "field-presence",
         "entity": "importedBankStatements",
@@ -5084,6 +5239,38 @@
         "description": "Field 'documentNo' should be present in transaction"
       },
       {
+        "id": "t-field-presence-transaction-etblkpAccountingstatus",
+        "category": "field-presence",
+        "entity": "transaction",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "Field 'etblkpAccountingstatus' should be present in transaction"
+      },
+      {
+        "id": "t-field-presence-transaction-etblkpBulkposting",
+        "category": "field-presence",
+        "entity": "transaction",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Field 'etblkpBulkposting' should be present in transaction"
+      },
+      {
+        "id": "t-field-presence-transaction-etprReactivateTransaction",
+        "category": "field-presence",
+        "entity": "transaction",
+        "field": "etprReactivateTransaction",
+        "runner": "node",
+        "description": "Field 'etprReactivateTransaction' should be present in transaction"
+      },
+      {
+        "id": "t-field-presence-transaction-etprRemoveTransaction",
+        "category": "field-presence",
+        "entity": "transaction",
+        "field": "etprRemoveTransaction",
+        "runner": "node",
+        "description": "Field 'etprRemoveTransaction' should be present in transaction"
+      },
+      {
         "id": "t-field-presence-transaction-gLItem",
         "category": "field-presence",
         "entity": "transaction",
@@ -5114,6 +5301,14 @@
         "field": "paymentAmount",
         "runner": "node",
         "description": "Field 'paymentAmount' should be present in transaction"
+      },
+      {
+        "id": "t-field-presence-transaction-posted",
+        "category": "field-presence",
+        "entity": "transaction",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in transaction"
       },
       {
         "id": "t-field-presence-transaction-project",
@@ -5364,12 +5559,20 @@
         "description": "Field 'pSD2ImportToDate' should have type 'string' in account"
       },
       {
-        "id": "t-field-type-account-psd2RefreshConnections",
+        "id": "t-field-type-account-psd2Provider",
         "category": "field-type",
         "entity": "account",
-        "field": "psd2RefreshConnections",
+        "field": "psd2Provider",
         "runner": "node",
-        "description": "Field 'psd2RefreshConnections' should have type 'string' in account"
+        "description": "Field 'psd2Provider' should have type 'string' in account"
+      },
+      {
+        "id": "t-field-type-account-psd2ReconnectFa",
+        "category": "field-type",
+        "entity": "account",
+        "field": "psd2ReconnectFa",
+        "runner": "node",
+        "description": "Field 'psd2ReconnectFa' should have type 'string' in account"
       },
       {
         "id": "t-field-type-account-pSD2SaltEdgeAccountID",
@@ -5492,6 +5695,22 @@
         "description": "Field 'documentNo' should have type 'string' in importedBankStatements"
       },
       {
+        "id": "t-field-type-importedBankStatements-etblkpAccountingstatus",
+        "category": "field-type",
+        "entity": "importedBankStatements",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "Field 'etblkpAccountingstatus' should have type 'string' in importedBankStatements"
+      },
+      {
+        "id": "t-field-type-importedBankStatements-etblkpBulkposting",
+        "category": "field-type",
+        "entity": "importedBankStatements",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Field 'etblkpBulkposting' should have type 'string' in importedBankStatements"
+      },
+      {
         "id": "t-field-type-importedBankStatements-fileName",
         "category": "field-type",
         "entity": "importedBankStatements",
@@ -5580,6 +5799,38 @@
         "description": "Field 'documentNo' should have type 'string' in transaction"
       },
       {
+        "id": "t-field-type-transaction-etblkpAccountingstatus",
+        "category": "field-type",
+        "entity": "transaction",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "Field 'etblkpAccountingstatus' should have type 'string' in transaction"
+      },
+      {
+        "id": "t-field-type-transaction-etblkpBulkposting",
+        "category": "field-type",
+        "entity": "transaction",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Field 'etblkpBulkposting' should have type 'string' in transaction"
+      },
+      {
+        "id": "t-field-type-transaction-etprReactivateTransaction",
+        "category": "field-type",
+        "entity": "transaction",
+        "field": "etprReactivateTransaction",
+        "runner": "node",
+        "description": "Field 'etprReactivateTransaction' should have type 'string' in transaction"
+      },
+      {
+        "id": "t-field-type-transaction-etprRemoveTransaction",
+        "category": "field-type",
+        "entity": "transaction",
+        "field": "etprRemoveTransaction",
+        "runner": "node",
+        "description": "Field 'etprRemoveTransaction' should have type 'string' in transaction"
+      },
+      {
         "id": "t-field-type-transaction-gLItem",
         "category": "field-type",
         "entity": "transaction",
@@ -5610,6 +5861,14 @@
         "field": "paymentAmount",
         "runner": "node",
         "description": "Field 'paymentAmount' should have type 'number' in transaction"
+      },
+      {
+        "id": "t-field-type-transaction-posted",
+        "category": "field-type",
+        "entity": "transaction",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in transaction"
       },
       {
         "id": "t-field-type-transaction-project",
@@ -5674,6 +5933,14 @@
         "field": "currency",
         "runner": "node",
         "description": "Read-only logic for 'currency' in account should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-account-psd2Provider",
+        "category": "readonlylogic-evaluable",
+        "entity": "account",
+        "field": "psd2Provider",
+        "runner": "node",
+        "description": "Read-only logic for 'psd2Provider' in account should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-bankStatementLines-active",
@@ -5898,6 +6165,14 @@
         "field": "currency",
         "runner": "node",
         "description": "Read-only logic for 'currency' in account should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-account-psd2Provider",
+        "category": "readonlylogic-valid",
+        "entity": "account",
+        "field": "psd2Provider",
+        "runner": "node",
+        "description": "Read-only logic for 'psd2Provider' in account should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-bankStatementLines-active",
@@ -6305,6 +6580,20 @@
         "description": "Rule 'C_DocType - Reconciliation' (validation) should be declared"
       },
       {
+        "id": "t-rule-declared-Connect-Account",
+        "category": "rule-declared",
+        "rule": "Connect Account",
+        "runner": "node",
+        "description": "Rule 'Connect Account' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Disconnect-Connection",
+        "category": "rule-declared",
+        "rule": "Disconnect Connection",
+        "runner": "node",
+        "description": "Rule 'Disconnect Connection' (process) should be declared"
+      },
+      {
         "id": "t-rule-declared-Document-currency",
         "category": "rule-declared",
         "rule": "Document currency",
@@ -6536,6 +6825,13 @@
         "description": "Rule 'FIN_Financial_Account-C_Currency_ID-readOnlyLogic' (readOnlyLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-FIN-Financial-Account-EM-Psd2-Provider-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "FIN_Financial_Account-EM_Psd2_Provider_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'FIN_Financial_Account-EM_Psd2_Provider_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-FIN-Payment-DocumentNo-readOnlyLogic",
         "category": "rule-declared",
         "rule": "FIN_Payment-DocumentNo-readOnlyLogic",
@@ -6690,6 +6986,13 @@
         "description": "Rule 'financial-account-Account-EM_APRM_Reconcile-displayLogic' (displayLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-financial-account-Account-EM-PSD2-Connection-Status-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Account-EM_PSD2_Connection_Status-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Account-EM_PSD2_Connection_Status-displayLogic' (displayLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-financial-account-Account-EM-PSD2-Get-Bankstatement-displayLogic",
         "category": "rule-declared",
         "rule": "financial-account-Account-EM_PSD2_Get_Bankstatement-displayLogic",
@@ -6737,6 +7040,13 @@
         "rule": "financial-account-Account-EM_Psd2_Provider_ID-displayLogic",
         "runner": "node",
         "description": "Rule 'financial-account-Account-EM_Psd2_Provider_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-financial-account-Account-EM-Psd2-Reconnect-Fa-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Account-EM_Psd2_Reconnect_Fa-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Account-EM_Psd2_Reconnect_Fa-displayLogic' (displayLogic) should be declared"
       },
       {
         "id": "t-rule-declared-financial-account-Account-EM-Psd2-Refresh-Connections-displayLogic",
@@ -7005,6 +7315,13 @@
         "description": "Rule 'financial-account-Imported Bank Statements-EM_APRM_Process_BS_Force-displayLogic' (displayLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-financial-account-Imported-Bank-Statements-EM-Etblkp-Bulkposting-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Imported Bank Statements-EM_Etblkp_Bulkposting-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Imported Bank Statements-EM_Etblkp_Bulkposting-displayLogic' (displayLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-financial-account-Imported-Bank-Statements-Posted-displayLogic",
         "category": "rule-declared",
         "rule": "financial-account-Imported Bank Statements-Posted-displayLogic",
@@ -7173,6 +7490,27 @@
         "description": "Rule 'financial-account-Reconciliations-EM_APRM_Process_Reconciliation-displayLogic' (displayLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-financial-account-Reconciliations-EM-Etblkp-Bulkposting-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Reconciliations-EM_Etblkp_Bulkposting-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Reconciliations-EM_Etblkp_Bulkposting-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-financial-account-Reconciliations-EM-Etpr-Reactivate-Recon-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Reconciliations-EM_Etpr_Reactivate_Recon-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Reconciliations-EM_Etpr_Reactivate_Recon-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-financial-account-Reconciliations-EM-Etpr-Remove-Reconciliation-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Reconciliations-EM_Etpr_Remove_Reconciliation-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Reconciliations-EM_Etpr_Remove_Reconciliation-displayLogic' (displayLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-financial-account-Reconciliations-old-Posted-displayLogic",
         "category": "rule-declared",
         "rule": "financial-account-Reconciliations old-Posted-displayLogic",
@@ -7292,6 +7630,34 @@
         "description": "Rule 'financial-account-Transaction-EM_Aprm_Finacc_Trans_Origin-displayLogic' (displayLogic) should be declared"
       },
       {
+        "id": "t-rule-declared-financial-account-Transaction-EM-Aprm-Processed-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Transaction-EM_Aprm_Processed-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Transaction-EM_Aprm_Processed-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-financial-account-Transaction-EM-Etblkp-Bulkposting-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Transaction-EM_Etblkp_Bulkposting-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Transaction-EM_Etblkp_Bulkposting-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-financial-account-Transaction-EM-Etpr-Reactivate-Transaction-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Transaction-EM_Etpr_Reactivate_Transaction-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Transaction-EM_Etpr_Reactivate_Transaction-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-financial-account-Transaction-EM-Etpr-Remove-Transaction-displayLogic",
+        "category": "rule-declared",
+        "rule": "financial-account-Transaction-EM_Etpr_Remove_Transaction-displayLogic",
+        "runner": "node",
+        "description": "Rule 'financial-account-Transaction-EM_Etpr_Remove_Transaction-displayLogic' (displayLogic) should be declared"
+      },
+      {
         "id": "t-rule-declared-financial-account-Transaction-Fin-Payment-ID-displayLogic",
         "category": "rule-declared",
         "rule": "financial-account-Transaction-Fin_Payment_ID-displayLogic",
@@ -7383,6 +7749,20 @@
         "description": "Rule 'Funds Transfer' (process) should be declared"
       },
       {
+        "id": "t-rule-declared-Get-Accounts",
+        "category": "rule-declared",
+        "rule": "Get Accounts",
+        "runner": "node",
+        "description": "Rule 'Get Accounts' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Get-Transactions",
+        "category": "rule-declared",
+        "rule": "Get Transactions",
+        "runner": "node",
+        "description": "Rule 'Get Transactions' (process) should be declared"
+      },
+      {
         "id": "t-rule-declared-Import-Statement",
         "category": "rule-declared",
         "rule": "Import Statement",
@@ -7411,6 +7791,13 @@
         "description": "Rule 'Payment OUT Accounts' (validation) should be declared"
       },
       {
+        "id": "t-rule-declared-Post",
+        "category": "rule-declared",
+        "rule": "Post",
+        "runner": "node",
+        "description": "Rule 'Post' (process) should be declared"
+      },
+      {
         "id": "t-rule-declared-Posted",
         "category": "rule-declared",
         "rule": "Posted",
@@ -7418,46 +7805,18 @@
         "description": "Rule 'Posted' (process) should be declared"
       },
       {
-        "id": "t-rule-declared-PSD2-Disconnect-Connection",
+        "id": "t-rule-declared-Reactivate-Reconciliation",
         "category": "rule-declared",
-        "rule": "PSD2 Disconnect Connection",
+        "rule": "Reactivate Reconciliation",
         "runner": "node",
-        "description": "Rule 'PSD2 Disconnect Connection' (process) should be declared"
+        "description": "Rule 'Reactivate Reconciliation' (process) should be declared"
       },
       {
-        "id": "t-rule-declared-PSD2-Get-Accounts",
+        "id": "t-rule-declared-Reactivate-Transaction",
         "category": "rule-declared",
-        "rule": "PSD2 Get Accounts",
+        "rule": "Reactivate Transaction",
         "runner": "node",
-        "description": "Rule 'PSD2 Get Accounts' (process) should be declared"
-      },
-      {
-        "id": "t-rule-declared-PSD2-Get-Consents",
-        "category": "rule-declared",
-        "rule": "PSD2 Get Consents",
-        "runner": "node",
-        "description": "Rule 'PSD2 Get Consents' (process) should be declared"
-      },
-      {
-        "id": "t-rule-declared-PSD2-Get-Reconnection",
-        "category": "rule-declared",
-        "rule": "PSD2 Get Reconnection",
-        "runner": "node",
-        "description": "Rule 'PSD2 Get Reconnection' (process) should be declared"
-      },
-      {
-        "id": "t-rule-declared-PSD2-Get-Transactions",
-        "category": "rule-declared",
-        "rule": "PSD2 Get Transactions",
-        "runner": "node",
-        "description": "Rule 'PSD2 Get Transactions' (process) should be declared"
-      },
-      {
-        "id": "t-rule-declared-PSD2-Refresh-Connections",
-        "category": "rule-declared",
-        "rule": "PSD2 Refresh Connections",
-        "runner": "node",
-        "description": "Rule 'PSD2 Refresh Connections' (process) should be declared"
+        "description": "Rule 'Reactivate Transaction' (process) should be declared"
       },
       {
         "id": "t-rule-declared-Reconcile",
@@ -7486,6 +7845,34 @@
         "rule": "Reconciliation Summary",
         "runner": "node",
         "description": "Rule 'Reconciliation Summary' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Reconnect-Account",
+        "category": "rule-declared",
+        "rule": "Reconnect Account",
+        "runner": "node",
+        "description": "Rule 'Reconnect Account' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Refresh-Connections",
+        "category": "rule-declared",
+        "rule": "Refresh Connections",
+        "runner": "node",
+        "description": "Rule 'Refresh Connections' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Remove-Reconciliation",
+        "category": "rule-declared",
+        "rule": "Remove Reconciliation",
+        "runner": "node",
+        "description": "Rule 'Remove Reconciliation' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Remove-Transaction",
+        "category": "rule-declared",
+        "rule": "Remove Transaction",
+        "runner": "node",
+        "description": "Rule 'Remove Transaction' (process) should be declared"
       },
       {
         "id": "t-rule-declared-SE-Amount-Transaction-Depositamt",
@@ -7587,6 +7974,14 @@
         "description": "Selector endpoint for 'currency' in account should exist"
       },
       {
+        "id": "t-selector-endpoint-account-psd2Provider",
+        "category": "selector-endpoint",
+        "entity": "account",
+        "field": "psd2Provider",
+        "runner": "node",
+        "description": "Selector endpoint for 'psd2Provider' in account should exist"
+      },
+      {
         "id": "t-selector-endpoint-bankStatementLines-businessPartner",
         "category": "selector-endpoint",
         "entity": "bankStatementLines",
@@ -7681,14 +8076,6 @@
         "field": "stDimension",
         "runner": "node",
         "description": "Selector endpoint for 'stDimension' in transaction should exist"
-      },
-      {
-        "id": "t-system-field-account-account",
-        "category": "system-field",
-        "entity": "account",
-        "field": "account",
-        "runner": "node",
-        "description": "System field 'account' should exist in backend but not frontend for account"
       },
       {
         "id": "t-system-field-account-accountDigitcontrol",
@@ -7795,6 +8182,14 @@
         "description": "System field 'genericAccountNo' should exist in backend but not frontend for account"
       },
       {
+        "id": "t-system-field-account-id",
+        "category": "system-field",
+        "entity": "account",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for account"
+      },
+      {
         "id": "t-system-field-account-iNENo",
         "category": "system-field",
         "entity": "account",
@@ -7859,12 +8254,12 @@
         "description": "System field 'psd2GetConnections' should exist in backend but not frontend for account"
       },
       {
-        "id": "t-system-field-account-psd2Provider",
+        "id": "t-system-field-account-psd2RefreshConnections",
         "category": "system-field",
         "entity": "account",
-        "field": "psd2Provider",
+        "field": "psd2RefreshConnections",
         "runner": "node",
-        "description": "System field 'psd2Provider' should exist in backend but not frontend for account"
+        "description": "System field 'psd2RefreshConnections' should exist in backend but not frontend for account"
       },
       {
         "id": "t-system-field-account-routingNo",
@@ -7947,6 +8342,14 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for bankStatementLines"
       },
       {
+        "id": "t-system-field-bankStatementLines-eTGOMatchGroup",
+        "category": "system-field",
+        "entity": "bankStatementLines",
+        "field": "eTGOMatchGroup",
+        "runner": "node",
+        "description": "System field 'eTGOMatchGroup' should exist in backend but not frontend for bankStatementLines"
+      },
+      {
         "id": "t-system-field-bankStatementLines-financialAccountTransaction",
         "category": "system-field",
         "entity": "bankStatementLines",
@@ -7955,12 +8358,12 @@
         "description": "System field 'financialAccountTransaction' should exist in backend but not frontend for bankStatementLines"
       },
       {
-        "id": "t-system-field-bankStatementLines-fINBankstatementlineID",
+        "id": "t-system-field-bankStatementLines-id",
         "category": "system-field",
         "entity": "bankStatementLines",
-        "field": "fINBankstatementlineID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'fINBankstatementlineID' should exist in backend but not frontend for bankStatementLines"
+        "description": "System field 'id' should exist in backend but not frontend for bankStatementLines"
       },
       {
         "id": "t-system-field-bankStatementLines-lineNo",
@@ -8123,20 +8526,20 @@
         "description": "System field 'eTGOTotalOut' should exist in backend but not frontend for importedBankStatements"
       },
       {
-        "id": "t-system-field-importedBankStatements-fINBankstatementID",
-        "category": "system-field",
-        "entity": "importedBankStatements",
-        "field": "fINBankstatementID",
-        "runner": "node",
-        "description": "System field 'fINBankstatementID' should exist in backend but not frontend for importedBankStatements"
-      },
-      {
         "id": "t-system-field-importedBankStatements-fINReconciliationID",
         "category": "system-field",
         "entity": "importedBankStatements",
         "field": "fINReconciliationID",
         "runner": "node",
         "description": "System field 'fINReconciliationID' should exist in backend but not frontend for importedBankStatements"
+      },
+      {
+        "id": "t-system-field-importedBankStatements-id",
+        "category": "system-field",
+        "entity": "importedBankStatements",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for importedBankStatements"
       },
       {
         "id": "t-system-field-importedBankStatements-organization",
@@ -8267,6 +8670,14 @@
         "description": "System field 'dateAcct' should exist in backend but not frontend for transaction"
       },
       {
+        "id": "t-system-field-transaction-eTGOAutoCreated",
+        "category": "system-field",
+        "entity": "transaction",
+        "field": "eTGOAutoCreated",
+        "runner": "node",
+        "description": "System field 'eTGOAutoCreated' should exist in backend but not frontend for transaction"
+      },
+      {
         "id": "t-system-field-transaction-finPaymentID",
         "category": "system-field",
         "entity": "transaction",
@@ -8299,20 +8710,20 @@
         "description": "System field 'foreignCurrency' should exist in backend but not frontend for transaction"
       },
       {
+        "id": "t-system-field-transaction-id",
+        "category": "system-field",
+        "entity": "transaction",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for transaction"
+      },
+      {
         "id": "t-system-field-transaction-lineNo",
         "category": "system-field",
         "entity": "transaction",
         "field": "lineNo",
         "runner": "node",
         "description": "System field 'lineNo' should exist in backend but not frontend for transaction"
-      },
-      {
-        "id": "t-system-field-transaction-posted",
-        "category": "system-field",
-        "entity": "transaction",
-        "field": "posted",
-        "runner": "node",
-        "description": "System field 'posted' should exist in backend but not frontend for transaction"
       },
       {
         "id": "t-system-field-transaction-processed",
@@ -8345,14 +8756,6 @@
         "field": "reconciliation",
         "runner": "node",
         "description": "System field 'reconciliation' should exist in backend but not frontend for transaction"
-      },
-      {
-        "id": "t-system-field-transaction-transactionID",
-        "category": "system-field",
-        "entity": "transaction",
-        "field": "transactionID",
-        "runner": "node",
-        "description": "System field 'transactionID' should exist in backend but not frontend for transaction"
       },
       {
         "id": "t-system-field-transaction-updated",
@@ -8400,24 +8803,24 @@
       }
     ],
     "summary": {
-      "total": 604,
+      "total": 665,
       "byCategory": {
-        "action-endpoint": 17,
+        "action-endpoint": 21,
         "crud-flags": 4,
-        "default-value-type": 19,
-        "displaylogic-evaluable": 36,
-        "displaylogic-valid": 36,
-        "field-presence": 62,
-        "field-type": 62,
-        "readonlylogic-evaluable": 28,
-        "readonlylogic-valid": 28,
-        "rule-declared": 209,
-        "selector-endpoint": 13,
-        "system-field": 86,
+        "default-value-type": 26,
+        "displaylogic-evaluable": 43,
+        "displaylogic-valid": 43,
+        "field-presence": 70,
+        "field-type": 70,
+        "readonlylogic-evaluable": 29,
+        "readonlylogic-valid": 29,
+        "rule-declared": 225,
+        "selector-endpoint": 14,
+        "system-field": 87,
         "visibility": 4
       },
       "byRunner": {
-        "node": 604,
+        "node": 665,
         "junit": 0
       }
     }

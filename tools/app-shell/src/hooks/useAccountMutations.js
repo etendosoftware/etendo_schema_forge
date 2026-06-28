@@ -58,6 +58,10 @@ function toDalBody(payload) {
   if ('currencyId' in payload) body.currency = payload.currencyId;
   if ('iban' in payload) body.iBAN = payload.iban;
   if ('swiftCode' in payload) body.swiftCode = payload.swiftCode;
+  // Optional Salt Edge provider chosen at offline creation — the backend upserts it and links it
+  // to the account so a later PSD2 connect can preselect that bank.
+  if (payload.providerCode) body.providerCode = payload.providerCode;
+  if (payload.providerName) body.providerName = payload.providerName;
   return body;
 }
 

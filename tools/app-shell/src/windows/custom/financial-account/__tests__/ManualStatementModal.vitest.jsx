@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -13,8 +13,29 @@ vi.mock('sonner', () => ({
 }));
 
 // Pass-through dialog: skip Radix portal/animation, render children when open.
+// The real component closes via the dialog X / Escape, both routed through
+// onOpenChange(false). With Radix mocked away there is no X to click, so we
+// capture the *main* modal's onOpenChange and invoke it to simulate a close
+// request (which triggers the discard-confirm flow when dirty). The component
+// renders the main Dialog first, then the discard Dialog; we reset a per-render
+// counter via a microtask so the first Dialog of each render pass is the main.
+let requestMainClose = null;
+let dialogIdx = 0;
+let resetScheduled = false;
 vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ open, children }) => (open ? <div data-testid="manual-modal">{children}</div> : null),
+  Dialog: ({ open, children, onOpenChange }) => {
+    const idx = dialogIdx;
+    dialogIdx += 1;
+    if (!resetScheduled) {
+      resetScheduled = true;
+      queueMicrotask(() => { dialogIdx = 0; resetScheduled = false; });
+    }
+    if (idx === 0) {
+      requestMainClose = () => onOpenChange?.(false);
+      return open ? <div data-testid="manual-modal">{children}</div> : null;
+    }
+    return open ? <div>{children}</div> : null;
+  },
   DialogContent: ({ children }) => <div>{children}</div>,
 }));
 
@@ -66,6 +87,28 @@ function renderModal(overrides = {}) {
   return { ...render(<ManualStatementModal {...props} />), props };
 }
 
+// Every row is always inline-editable; inputs share their testids across rows,
+// so scope a single editable row before reading its cells.
+function firstEditRow() {
+  return screen.getAllByTestId('manual-line-editrow')[0];
+}
+
+// Fills the (first) always-editable starter row with a complete set of values.
+async function fillFirstLine(user, { ref = 'REF-1', contact, desc, out, in: amountIn } = {}) {
+  const row = within(firstEditRow());
+  if (ref != null) await user.type(row.getByTestId('manual-line-ref'), ref);
+  if (contact != null) await user.type(row.getByTestId('manual-line-contactname'), contact);
+  if (desc != null) await user.type(row.getByTestId('manual-line-description'), desc);
+  if (out != null) {
+    await user.clear(row.getByTestId('manual-line-out'));
+    await user.type(row.getByTestId('manual-line-out'), out);
+  }
+  if (amountIn != null) {
+    await user.clear(row.getByTestId('manual-line-in'));
+    await user.type(row.getByTestId('manual-line-in'), amountIn);
+  }
+}
+
 describe('ManualStatementModal', () => {
   beforeEach(() => {
     createStatement.mockReset().mockResolvedValue({ id: 'stmt-1', name: 'X', lineCount: 1 });
@@ -77,13 +120,14 @@ describe('ManualStatementModal', () => {
     linesRef.loading = false;
   });
 
-  it('renders the header fields and the add-lines call-to-action when open', () => {
+  it('renders the header fields and one always-editable starter row when open', () => {
     renderModal();
     expect(screen.getByTestId('manual-statement-name')).toBeInTheDocument();
     expect(screen.getByTestId('manual-statement-trxdate')).toBeInTheDocument();
-    // Lines start collapsed behind a CTA — no editable rows yet.
-    expect(screen.getByTestId('manual-statement-add-lines')).toBeInTheDocument();
-    expect(screen.queryAllByTestId('manual-line-in')).toHaveLength(0);
+    // No CTA — the table is shown immediately with a single editable starter row.
+    expect(screen.queryByTestId('manual-statement-add-lines')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(1);
+    expect(screen.getAllByTestId('manual-line-in')).toHaveLength(1);
   });
 
   it('does not render when closed', () => {
@@ -91,96 +135,61 @@ describe('ManualStatementModal', () => {
     expect(screen.queryByTestId('manual-modal')).not.toBeInTheDocument();
   });
 
-  it('commits a complete line to a read-only row and reopens it to edit', { timeout: 15000 }, async () => {
+  it('every row is inline-editable — there is no display row or edit pencil', () => {
+    renderModal();
+    expect(screen.queryAllByTestId('manual-line-row')).toHaveLength(0);
+    expect(screen.queryByTestId('manual-line-edit')).not.toBeInTheDocument();
+    // The editable cells are present from the start.
+    const row = within(firstEditRow());
+    expect(row.getByTestId('manual-line-ref')).toBeInTheDocument();
+    expect(row.getByTestId('manual-line-description')).toBeInTheDocument();
+    expect(row.getByTestId('manual-line-date')).toBeInTheDocument();
+  });
+
+  it('adds a new editable row when clicking "Add line"', async () => {
     const user = userEvent.setup();
     renderModal();
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    // One editable row, no committed (display) rows yet.
-    expect(screen.getByTestId('manual-line-editrow')).toBeInTheDocument();
-    expect(screen.queryAllByTestId('manual-line-row')).toHaveLength(0);
-
-    // All required fields (date is pre-filled): Reference No + both amounts.
-    await user.type(screen.getByTestId('manual-line-ref'), 'REF-1');
-    await user.type(screen.getByTestId('manual-line-contactname'), 'Acme');
-    await user.type(screen.getByTestId('manual-line-out'), '0');
-    await user.type(screen.getByTestId('manual-line-in'), '100');
-    // "Add line" commits the complete current row and opens a fresh one.
+    expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(1);
     await user.click(screen.getByTestId('action-add-line'));
-
-    const committed = screen.getAllByTestId('manual-line-row');
-    expect(committed).toHaveLength(1);
-    expect(committed[0]).toHaveTextContent('Acme');
-    expect(screen.getByTestId('manual-line-editrow')).toBeInTheDocument();
-
-    // Reopening the committed row puts its values back into the edit row.
-    await user.click(screen.getByTestId('manual-line-edit'));
-    expect(screen.getByTestId('manual-line-contactname')).toHaveValue('Acme');
+    expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(2);
   });
 
-  it('commits a complete line to a read-only row when clicking outside it', async () => {
+  it('removes a line when clicking its delete button', async () => {
     const user = userEvent.setup();
     renderModal();
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    await user.type(screen.getByTestId('manual-line-ref'), 'REF-1');
-    await user.type(screen.getByTestId('manual-line-out'), '0');
-    await user.type(screen.getByTestId('manual-line-in'), '100');
-
-    // Clicking outside the edit row (on the header name field) commits it.
-    await user.click(screen.getByTestId('manual-statement-name'));
-    expect(screen.getAllByTestId('manual-line-row')).toHaveLength(1);
-    expect(screen.queryByTestId('manual-line-editrow')).not.toBeInTheDocument();
-  });
-
-  it('keeps an incomplete line editable when clicking outside it', async () => {
-    const user = userEvent.setup();
-    renderModal();
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    await user.type(screen.getByTestId('manual-line-in'), '100'); // amounts default to 0,00; Reference No is still missing
-
-    await user.click(screen.getByTestId('manual-statement-name'));
-    // Still editable (not committed), since required fields are missing.
-    expect(screen.getByTestId('manual-line-editrow')).toBeInTheDocument();
-    expect(screen.queryAllByTestId('manual-line-row')).toHaveLength(0);
-  });
-
-  it('keeps an incomplete line in edit mode and blocks save with an error toast', async () => {
-    const user = userEvent.setup();
-    renderModal();
-    await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    // Amounts default to 0,00; the line stays incomplete because Reference No is missing.
-    await user.type(screen.getByTestId('manual-line-in'), '100');
-    await user.click(screen.getByTestId('manual-statement-save'));
-    expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
-    expect(createStatement).not.toHaveBeenCalled();
-  });
-
-  it('removing the only line returns to the add-lines CTA', async () => {
-    const user = userEvent.setup();
-    renderModal();
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    await user.click(screen.getByTestId('manual-line-remove'));
-    expect(screen.getByTestId('manual-statement-add-lines')).toBeInTheDocument();
-    expect(screen.queryAllByTestId('manual-line-in')).toHaveLength(0);
+    await user.click(screen.getByTestId('action-add-line'));
+    expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(2);
+    await user.click(screen.getAllByTestId('manual-line-remove')[0]);
+    expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(1);
   });
 
   it('blocks saving with a blank name and surfaces an error toast', async () => {
     const user = userEvent.setup();
     renderModal();
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    await user.type(screen.getByTestId('manual-line-in'), '100');
+    await fillFirstLine(user, { ref: 'REF-1', in: '100' });
     await user.click(screen.getByTestId('manual-statement-save'));
     expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorName');
     expect(createStatement).not.toHaveBeenCalled();
   });
 
-  it('blocks saving when there is no usable line', async () => {
+  it('blocks saving when there is no usable line (only the blank starter row)', async () => {
     const user = userEvent.setup();
     renderModal();
-    // No line added (still on the CTA) — only the header name is filled.
+    // The starter row is blank, so it counts as 0 usable lines.
     await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
     await user.click(screen.getByTestId('manual-statement-save'));
     expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorLines');
+    expect(createStatement).not.toHaveBeenCalled();
+  });
+
+  it('blocks saving an incomplete line (missing Reference No) with an error toast', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+    // An amount makes the row non-blank, but the missing Reference No keeps it incomplete.
+    await fillFirstLine(user, { ref: null, in: '100' });
+    await user.click(screen.getByTestId('manual-statement-save'));
+    expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorIncompleteLine');
     expect(createStatement).not.toHaveBeenCalled();
   });
 
@@ -188,12 +197,7 @@ describe('ManualStatementModal', () => {
     const user = userEvent.setup();
     const { props } = renderModal();
     await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    await user.type(screen.getByTestId('manual-line-ref'), 'REF-1');
-    await user.type(screen.getByTestId('manual-line-contactname'), 'Acme');
-    // out keeps its "0,00" default; replace in's default before typing the amount.
-    await user.clear(screen.getByTestId('manual-line-in'));
-    await user.type(screen.getByTestId('manual-line-in'), '3500,00');
+    await fillFirstLine(user, { ref: 'REF-1', contact: 'Acme', in: '3500,00' });
     await user.click(screen.getByTestId('manual-statement-save'));
 
     await waitFor(() => expect(createStatement).toHaveBeenCalledTimes(1));
@@ -225,16 +229,12 @@ describe('ManualStatementModal', () => {
     const user = userEvent.setup();
     renderModal();
     await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
 
     // The editable line row exposes a Descripción input.
-    const descInput = screen.getByTestId('manual-line-description');
+    const descInput = within(firstEditRow()).getByTestId('manual-line-description');
     expect(descInput).toBeInTheDocument();
 
-    await user.type(descInput, 'Comisión banco');
-    await user.type(screen.getByTestId('manual-line-ref'), 'REF-1');
-    await user.clear(screen.getByTestId('manual-line-in'));
-    await user.type(screen.getByTestId('manual-line-in'), '100');
+    await fillFirstLine(user, { ref: 'REF-1', desc: 'Comisión banco', in: '100' });
     await user.click(screen.getByTestId('manual-statement-save'));
 
     await waitFor(() => expect(createStatement).toHaveBeenCalledTimes(1));
@@ -243,30 +243,11 @@ describe('ManualStatementModal', () => {
     expect(payload.lines[0].description).toBe('Comisión banco');
   });
 
-  it('shows a committed line description in its read-only display row', async () => {
-    const user = userEvent.setup();
-    renderModal();
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    await user.type(screen.getByTestId('manual-line-description'), 'Pago nómina');
-    await user.type(screen.getByTestId('manual-line-ref'), 'REF-1');
-    await user.type(screen.getByTestId('manual-line-out'), '0');
-    await user.type(screen.getByTestId('manual-line-in'), '100');
-    // Commit the line by adding a fresh one.
-    await user.click(screen.getByTestId('action-add-line'));
-
-    const committed = screen.getAllByTestId('manual-line-row');
-    expect(committed).toHaveLength(1);
-    expect(committed[0]).toHaveTextContent('Pago nómina');
-  });
-
   it('saves as a draft (process=false) from the split menu', async () => {
     const user = userEvent.setup();
     renderModal();
     await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    await user.type(screen.getByTestId('manual-line-ref'), 'REF-1');
-    await user.type(screen.getByTestId('manual-line-out'), '0');
-    await user.type(screen.getByTestId('manual-line-in'), '50');
+    await fillFirstLine(user, { ref: 'REF-1', in: '50' });
 
     await user.click(screen.getByTestId('manual-statement-save-split'));
     await user.click(screen.getByTestId('manual-statement-save-draft'));
@@ -280,27 +261,25 @@ describe('ManualStatementModal', () => {
     const user = userEvent.setup();
     renderModal();
     await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
-    await user.click(screen.getByTestId('manual-statement-add-lines'));
-    await user.type(screen.getByTestId('manual-line-ref'), 'REF-1');
-    await user.type(screen.getByTestId('manual-line-out'), '0');
-    await user.type(screen.getByTestId('manual-line-in'), '10');
+    await fillFirstLine(user, { ref: 'REF-1', in: '10' });
     await user.click(screen.getByTestId('manual-statement-save'));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualError'));
   });
 
-  it('closes directly when nothing was changed', async () => {
-    const user = userEvent.setup();
+  it('closes directly (no discard prompt) when nothing was changed', () => {
     const { props } = renderModal();
-    await user.click(screen.getByTestId('manual-statement-cancel'));
+    // A pristine modal closes immediately without the discard prompt.
+    act(() => { requestMainClose(); });
     expect(screen.queryByTestId('manual-discard-overlay')).not.toBeInTheDocument();
-    expect(props.onClose).toHaveBeenCalled();
+    expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
   it('asks to discard before closing when there are unsaved changes', async () => {
     const user = userEvent.setup();
     const { props } = renderModal();
     await user.type(screen.getByTestId('manual-statement-name'), 'Algo');
-    await user.click(screen.getByTestId('manual-statement-cancel'));
+    // Closing the dialog (X / Escape → onOpenChange) triggers the discard flow.
+    act(() => { requestMainClose(); });
     expect(screen.getByTestId('manual-discard-overlay')).toBeInTheDocument();
     expect(props.onClose).not.toHaveBeenCalled();
   });
@@ -309,7 +288,7 @@ describe('ManualStatementModal', () => {
     const user = userEvent.setup();
     const { props } = renderModal();
     await user.type(screen.getByTestId('manual-statement-name'), 'Algo');
-    await user.click(screen.getByTestId('manual-statement-cancel'));
+    act(() => { requestMainClose(); });
     await user.click(screen.getByTestId('manual-discard-confirm'));
     expect(props.onClose).toHaveBeenCalled();
   });
@@ -318,7 +297,7 @@ describe('ManualStatementModal', () => {
     const user = userEvent.setup();
     const { props } = renderModal();
     await user.type(screen.getByTestId('manual-statement-name'), 'Algo');
-    await user.click(screen.getByTestId('manual-statement-cancel'));
+    act(() => { requestMainClose(); });
     await user.click(screen.getByTestId('manual-discard-keep'));
     expect(screen.queryByTestId('manual-discard-overlay')).not.toBeInTheDocument();
     expect(props.onClose).not.toHaveBeenCalled();
@@ -332,7 +311,7 @@ describe('ManualStatementModal', () => {
       fileName: 'mayo.csv', notes: 'Notas',
     };
 
-    it('hydrates the header + lines from the draft and updates on save', async () => {
+    it('hydrates the header + lines from the draft into editable rows and updates on save', async () => {
       linesRef.value = [{
         id: 'ln-1', date: '2026-05-09T00:00:00Z', reference: 'REF9', description: '',
         bpartnerName: 'Acme', bpartnerId: 'bp-1', bpartnerFkName: 'Acme S.L.',
@@ -343,8 +322,10 @@ describe('ManualStatementModal', () => {
 
       // Header is seeded from the statement.
       expect(screen.getByTestId('manual-statement-name')).toHaveValue('Extracto mayo');
-      // The committed line is shown read-only (not the empty CTA).
-      expect(screen.getByTestId('manual-line-row')).toHaveTextContent('Acme');
+      // The draft line is hydrated into an editable row (no read-only display row).
+      const row = within(firstEditRow());
+      expect(row.getByTestId('manual-line-ref')).toHaveValue('REF9');
+      expect(row.getByTestId('manual-line-contactname')).toHaveValue('Acme');
 
       await user.click(screen.getByTestId('manual-statement-save'));
 

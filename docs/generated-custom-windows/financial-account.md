@@ -50,13 +50,60 @@ else to `B`; the frontend `ACCOUNT_TYPE.CARD` is `'CA'`.
 - Submit button: pill-shaped (`rounded-full`), black background, yellow hover, `#D1D4DB` when disabled.
 - Submit calls `createAccount(payload)` from `useAccountMutations`. On 409 the duplicate-name error shows as an inline validation message (not a toast).
 
-## Edit Account Modal
+## Edit Account Modal (unified, ETP-4097 / T3)
 
-`EditAccountModal.jsx` — rendered from the row kebab "Edit account" action.
+`EditAccountModal.jsx` — rendered from the row kebab "Edit account" action and the row-hover
+pencil. T3 merged the former separate "Edit PSD2 connection" modal into this one (both surfaced the
+same account data), so there is now a single edit entry point. Same modal chrome in every state —
+two-column grid (Name | Type, IBAN | Currency) + footer (Archive / Cancel / Save changes). What
+varies with the account's PSD2 state:
 
-- **Account data** section: editable Name, IBAN, BIC/SWIFT, Currency. Same field styling as the wizard form.
-- **Bank connection** section: labelled "Available in the next iteration" — shown but non-interactive (T3 PSD2 scope).
-- Submit calls `updateAccount(id, payload)`. Only fields present in the payload overwrite the stored value (IBAN / BIC omitted → server keeps existing values).
+- **Field editability:** Name is always editable. Type is always read-only. When the account is
+  **not** PSD2-connected, IBAN + Currency are editable (full edit); when **connected** they are
+  read-only (owned by the bank).
+- **Connection block** (non-cash only): connected → live PSD2 panel (provider, Sync now, Import
+  from/to dates, Statement grouping, re-authorization banner) + a Disconnect footer button; not
+  connected → a single "Connect to PSD2" button.
+- **Save** persists every changed field in one call: account fields via `updateAccount(id, payload)`
+  and PSD2 import settings via the bridge `import-settings` action. Enabled only when something is
+  dirty and Name/IBAN are valid.
+- The consent-expiry date in the re-auth banner is formatted with the active locale (dd/MM/yyyy in
+  Spanish).
+
+## PSD2 / Salt Edge bank connection (ETP-4097 / T3)
+
+Wires the PSD2 bank connection into the Accounts UI through a NEO Headless bridge
+(`financial-account-psd2` spec, `FinancialAccountPsd2Handler`). Account selection and success are
+native app-shell UI; only the bank login is an external popup.
+
+- **Connect entry points** (existing account): row kebab "Conectar PSD2", the inline "Conectar
+  PSD2" CTA under the account name, and the Edit modal's "Connect to PSD2" button — all run
+  `usePsd2ConnectFlow().startConnect(account)`.
+- **Connect with creation** (no account yet): the New Account wizard "Con conexión" card →
+  `startCreate(type)` (creates the FA from the chosen bank account, then links).
+- **Provider memory:** creating an account offline with a real Salt Edge provider selected stores
+  that provider on the FA (`psd2Provider` FK, metadata only — the account stays offline). A later
+  connect then preselects that bank, so the Salt Edge widget skips the bank picker.
+- **Sync statements:** PSD2-synced accounts run the existing PSD2 per-account statement fetch (the
+  Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
+  ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
+  "Sincronizar extractos" button that replaces the manual import/create split-button.
+- **Row actions:** account rows show on hover a pencil (Edit account) and, for connected accounts,
+  a sync icon, both with tooltips.
+- **Sidebar:** the "Pendientes por conciliar" card shows only "Cuentas con pendientes" (the former
+  "Sugerencias listas" / "Por regla" indicators were removed).
+
+Bridge actions: `connect` (optional `financialAccountId` → provider preselect) · `accounts` ·
+`providers` · `link` · `createAndLink` · `reconnect` · `disconnect` · `sync` · `import-settings` ·
+`status`. Frontend: `hooks/usePsd2Actions.js`, `hooks/usePsd2ConnectFlow.js`,
+`pages/Psd2CallbackPage.jsx`, `windows/custom/financial-account/Psd2ConnectFlowUI.jsx`.
+
+## Archive Dialog
+
+`ArchiveAccountDialog.jsx` — rendered from the row kebab "Archive account" action.
+
+- Confirmation dialog: title + body copy + Cancel / Archive buttons.
+- Archive calls `archiveAccount(id)`. On 409 (open reconciliations) the backend message surfaces as a toast error — the dialog stays open.
 
 ## Archive Dialog
 
@@ -258,18 +305,18 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         MovementRowKebab.jsx       — on-hover kebab (Unreconcile/Post disabled)
     ReconciliacionTab.jsx          — placeholder (T6)
     ImportedStatementsTab.jsx      — orchestrates list ↔ lines state machine
-      StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, import split-button (▾ → "Create manually")
-      StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name, notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements)
+      StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, import split-button (▾ → "+ Nuevo extracto")
+      StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name (rendered as a grey badge), notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements). Expanding a row keeps the parent row white and renders the lines inside a grey "Desplegado" area (lg drop shadow, raised above the next row via z-index) wrapping the white rounded lines card.
       statementAdvancedFilter.js   — column metadata + applyAdvancedFilter for the statements list (delegates to the shared advancedFilterApply evaluator)
       advancedFilterApply.js       — generic client-side evaluator for the AdvancedFilterBuilder condition tree (OPERATORS + applyConditions), shared by movements and statements
         StatementStatusBadge.jsx   — 3 status chips (COMPLETED / WITH_ISSUES / IN_PROGRESS)
         StatementRowKebab.jsx      — per-row "…" menu: Edit / Process / Delete, enabled ONLY for drafts (processed='N'); disabled with tooltip on processed statements
         ProgressRing              — SVG circular progress indicator (new primitive)
-      StatementLinesInline.jsx     — lines table shown in the expanded accordion row: date, description, contact name (free text), contact (BP FK name), G/L item (concepto contable), out, in, reconciled/unreconciled badge (Conciliado / Sin conciliar) and a **Movimiento** column (its reconciled movement(s); a 1:N group shows as a single "N movimientos" chip opening `ReconciledTxnsModal`)
+      StatementLinesInline.jsx     — lines table shown in the expanded accordion row (white rounded card): date, description, contact name (free text), contact (BP FK name), G/L item (concepto contable), Nº Referencia, **Estado** (badge: amber "Sin conciliar" / green "Conciliado"), **Transacción** (grey ↗ chip with the reconciled movement's doc no, opening `ReconciledTxnsModal`; a 1:N group shows as a single "N movimientos" chip), then **Salida · Entrada** last (amount headers left-aligned, values right-aligned)
       StatementLinesView.jsx       — sub-view: header with ← + lines table
         StatementLinesTable.jsx    — 7-column lines table (lineNo, date, desc, ref, bpartner, amount, matched)
-      ImportStatementModal.jsx     — multi-step import modal (Upload → Review → Done): dropzone, preview KPIs + lines, base64 POST. White surface (var(--surface-overlay)), borderless footer, round red-hover remove button.
-      ManualStatementModal.jsx     — "Create/Edit statement" modal (Classic field parity): header (name, transaction/import dates, file name, notes) + per-line grid (date, Reference No, contact name + Business Partner lookup, G/L item lookup, out, in) + live totals bar. Per line the required fields are **date, Reference No, out and in** (marked with `*`); contact/G/L item are optional. A line auto-commits to a read-only row when you click outside it (re-edit via the pencil), but only when complete — an incomplete line stays editable and blocks save. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved.
+      ImportStatementModal.jsx     — multi-step import wizard (Subir archivo → Revisar líneas → Importar) with a neutral palette and an animated `ProgressRing` while parsing/importing: dropzone (→ filled file card once a file is picked), review summary widget + lines table, base64 POST. Picking a file goes to the "selected" step (no backend call); Continue parses (analyzing ring) then shows the review; Importar persists and, on success, closes the modal and shows a success toast (there is no in-modal success screen). The format-error case shows a red alert listing the accepted formats.
+      ManualStatementModal.jsx     — "Nuevo extracto bancario" modal: a summary widget (Líneas / Entradas / Salidas / Saldo) on top, four header fields in one row (name, transaction date, import date, file name) + a Notas textarea, and a full-width lines table where **every row is inline-editable cell by cell — no edit/display pencil**. A blank starter row is seeded on open and counts as 0 until filled; amounts show the account currency symbol; Enter commits a cell (no submit), Esc exits it. The footer has only the "Guardar y procesar" split button (X / Esc close, with a discard prompt when there are unsaved changes). Per line the required fields are **date, Reference No, out/in**; contact / G/L item are optional. Create POSTs ?action=create; with a `statement` prop it hydrates from the draft and POSTs ?action=update. No file involved.
       StatementConfirmDialog.jsx   — shared confirm dialog for the Process / Delete row actions (destructive tone for delete)
       LookupPicker.jsx             — shared text-input + dropdown lookup (BP / G/L item), used by NewMovementDialog and ManualStatementModal.
 ```

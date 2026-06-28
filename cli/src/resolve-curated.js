@@ -279,6 +279,7 @@ function applyFieldDecisionProps(field, fieldDecision) {
   if (fieldDecision.businessCritical) field.businessCritical = true;
   if (fieldDecision.gridOrder != null) field.gridOrder = fieldDecision.gridOrder;
   if (fieldDecision.min !== undefined) field.min = fieldDecision.min;
+  if (fieldDecision.max !== undefined) field.max = fieldDecision.max;
   copyTruthyDecisionProps(field, fieldDecision, FIELD_DECISION_COPY_PROPS);
 }
 
@@ -369,6 +370,11 @@ function buildCuratedField(rawField, fieldDecision, discardPatterns) {
   if (Object.prototype.hasOwnProperty.call(fieldDecision, 'derivation') && fieldDecision.derivation === null) {
     delete field.derivation;
   }
+
+  // Decisions can override raw-copied process routing (e.g. swap obuiapp JS handler
+  // for a classic stored-procedure process that NEO can actually execute).
+  if (fieldDecision.processId) field.processId = fieldDecision.processId;
+  if (fieldDecision.processType) field.processType = fieldDecision.processType;
 
   return field;
 }
@@ -532,6 +538,9 @@ function buildDraftMode(draftModeDecision, enabled) {
   if (draftModeDecision.disableWhenEmpty) {
     draftMode.disableWhenEmpty = true;
   }
+  if (draftModeDecision.extraParams && typeof draftModeDecision.extraParams === 'object') {
+    draftMode.extraParams = draftModeDecision.extraParams;
+  }
   return draftMode;
 }
 
@@ -654,6 +663,7 @@ const WINDOW_TRUTHY_PROPS = [
   'statusPills',
   'statusField',
   'detailSortBy',
+  'listSortBy',
   'listKpiCards',
   'headerExtra',
   'labelOverrides',
@@ -668,6 +678,7 @@ const WINDOW_TRUTHY_PROPS = [
   'statusEnumLabels',
   'lockedAlert',
   'lineEntityConfig',
+  'actions',
   'rowQuickActions',
   'sendDocument',
   'linesLayout',
@@ -681,11 +692,14 @@ const WINDOW_BOOLEAN_TRUE_PROPS = [
   'hideDeleteWhenComplete',
   'customTabsAfterBottom',
   'hidePrint',
+  'hideCreate',
   'hideMoreMenu',
   'hideMoreDetails',
   'hideListFilters',
+  'hideStatusFilter',
   'hideLink',
   'hideEyeCount',
+  'customListIcons',
   'disableProcessedLock',
   'noHeaderBorder',
   'toolbarBorderBottom',
@@ -694,6 +708,8 @@ const WINDOW_BOOLEAN_TRUE_PROPS = [
   'hideFormCard',
   'sidebarAboveTabsOnly',
   'autoSaveOnBlur',
+  'hideDetailForm',
+  'hideDelete',
 ];
 
 // `attachments` is defined-only (not truthy) so an explicit `false` from
@@ -709,13 +725,13 @@ export const WINDOW_KEY_ORDER = [
   'id', 'name', 'primaryEntity', 'category', 'agentPrompt',
   'sidebarLayout', 'templateConfig',
   'documentPreview', 'notesField', 'relatedDocuments',
-  'hideDeleteWhenComplete', 'customTabsAfterBottom', 'hidePrint', 'hideSaveStatuses',
-  'hideMoreMenu', 'hideMoreDetails', 'contentBg',
-  'hideListFilters', 'hideLink', 'hideEyeCount', 'breadcrumb',
+  'hideDeleteWhenComplete', 'customTabsAfterBottom', 'hidePrint', 'hideCreate', 'hideSaveStatuses',
+  'hideMoreMenu', 'hideMoreDetails', 'hideDetailForm', 'hideDelete', 'contentBg',
+  'hideListFilters', 'hideStatusFilter', 'hideLink', 'hideEyeCount', 'customListIcons', 'breadcrumb',
   'customComponents', 'menuActions', 'processOverrides',
   'entityLabel', 'detailLabel', 'detailTabIndex', 'secondaryTabs',
   'detailEntity', 'statusBar', 'statusField', 'summaryFields',
-  'detailSortBy', 'salesTheme', 'listKpiCards', 'headerExtra',
+  'detailSortBy', 'listSortBy', 'salesTheme', 'listKpiCards', 'headerExtra',
   'labelOverrides', 'primaryTabs', 'othersLabel',
   'disableProcessedLock', 'titleField',
   'listViewOptions', 'listBaseFilter', 'quickFilters', 'subsetFilters',

@@ -1,8 +1,8 @@
 {
   "version": "0.14.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
-  "updatedAt": "2026-06-24T11:54:00.647Z",
-  "checksum": "a694a0ff450fec23",
+  "updatedAt": "2026-06-25T15:08:41.566Z",
+  "checksum": "6c3e83f688bec854",
   "frontendContract": {
     "window": {
       "id": "139",
@@ -615,7 +615,8 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "binContentsHandler"
       }
     }
   },
@@ -1449,7 +1450,8 @@
             "visibility": "readOnly",
             "required": false
           }
-        ]
+        ],
+        "javaQualifier": "binContentsHandler"
       }
     },
     "endpoints": [

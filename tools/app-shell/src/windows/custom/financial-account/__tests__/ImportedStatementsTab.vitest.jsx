@@ -22,6 +22,12 @@ vi.mock('@/hooks/useStatementActions', () => ({
   }),
 }));
 
+// usePsd2Actions calls useAuth internally; stub it so no AuthProvider is needed.
+const psd2Sync = vi.fn();
+vi.mock('@/hooks/usePsd2Actions', () => ({
+  usePsd2Actions: () => ({ sync: psd2Sync }),
+}));
+
 // Capture the confirm dialog props so we can assert which action was requested.
 const confirmProps = { value: null };
 vi.mock('../StatementConfirmDialog', () => ({
@@ -55,8 +61,15 @@ vi.mock('../StatementsToolbar', () => ({
   StatementsToolbar: ({
     search, onSearchChange, dateRange, onDateRangeChange,
     status, onStatusChange, onAdvancedFilterChange, onImportClick, onManualClick,
+    psd2Synced, onSyncClick, syncing,
   }) => (
-    <div data-testid="stub-toolbar" data-search={search} data-status={status ?? ''}>
+    <div
+      data-testid="stub-toolbar"
+      data-search={search}
+      data-status={status ?? ''}
+      data-psd2-synced={psd2Synced ? 'true' : 'false'}
+      data-syncing={syncing ? 'true' : 'false'}
+    >
       <button type="button" data-testid="toolbar-search" onClick={() => onSearchChange('mayo')} />
       <button type="button" data-testid="toolbar-status" onClick={() => onStatusChange('PARTIAL')} />
       <button type="button" data-testid="toolbar-daterange" onClick={() => onDateRangeChange({ presetId: 'last7' })} />
@@ -70,6 +83,7 @@ vi.mock('../StatementsToolbar', () => ({
       />
       <button type="button" data-testid="toolbar-import" onClick={onImportClick} />
       <button type="button" data-testid="toolbar-manual" onClick={onManualClick} />
+      <button type="button" data-testid="toolbar-sync" onClick={onSyncClick} />
     </div>
   ),
 }));
@@ -182,8 +196,24 @@ describe('ImportedStatementsTab', () => {
     processStatement.mockReset();
     reactivateStatement.mockReset();
     deleteStatement.mockReset();
+    psd2Sync.mockReset();
+    psd2Sync.mockResolvedValue({ status: 'OK', message: 'done' });
     toastSuccess.mockReset();
     toastError.mockReset();
+  });
+
+  it('forwards psd2Synced=false for a non-connected account', () => {
+    render(<ImportedStatementsTab account={ACCOUNT} />);
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-psd2-synced', 'false');
+  });
+
+  it('forwards psd2Synced=true and syncs statements when the toolbar emits onSyncClick', async () => {
+    const user = userEvent.setup();
+    render(<ImportedStatementsTab account={{ id: 'acc-1', currencyIso: 'USD', psd2Connected: true }} />);
+    expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-psd2-synced', 'true');
+    await user.click(screen.getByTestId('toolbar-sync'));
+    await waitFor(() => expect(psd2Sync).toHaveBeenCalledWith('acc-1'));
+    await waitFor(() => expect(reloadFn).toHaveBeenCalledTimes(1));
   });
 
   it('exposes the filtered headers and current selection via ref (for the export button)', async () => {

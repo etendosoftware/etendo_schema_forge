@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.14.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-06-24T20:46:48.245Z",
-  "checksum": "01a7ff0044f106df",
+  "updatedAt": "2026-06-26T12:27:56.322Z",
+  "checksum": "a34bd38ef101d3ac",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -2945,14 +2945,6 @@
             "required": true
           },
           {
-            "name": "mServicepriceruleVersionID",
-            "apiKey": "mServicepriceruleVersionID",
-            "column": "M_Servicepricerule_Version_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -2997,6 +2989,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Servicepricerule_Version_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4139,14 +4139,6 @@
             "required": false
           },
           {
-            "name": "mServicepriceruleVersionID",
-            "apiKey": "mServicepriceruleVersionID",
-            "column": "M_Servicepricerule_Version_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -4191,6 +4183,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Servicepricerule_Version_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -8142,12 +8142,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for categoryPriceRuleVersion"
       },
       {
-        "id": "t-system-field-categoryPriceRuleVersion-mServicepriceruleVersionID",
+        "id": "t-system-field-categoryPriceRuleVersion-id",
         "category": "system-field",
         "entity": "categoryPriceRuleVersion",
-        "field": "mServicepriceruleVersionID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'mServicepriceruleVersionID' should exist in backend but not frontend for categoryPriceRuleVersion"
+        "description": "System field 'id' should exist in backend but not frontend for categoryPriceRuleVersion"
       },
       {
         "id": "t-system-field-categoryPriceRuleVersion-organization",
@@ -8446,12 +8446,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for priceRuleVersion"
       },
       {
-        "id": "t-system-field-priceRuleVersion-mServicepriceruleVersionID",
+        "id": "t-system-field-priceRuleVersion-id",
         "category": "system-field",
         "entity": "priceRuleVersion",
-        "field": "mServicepriceruleVersionID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'mServicepriceruleVersionID' should exist in backend but not frontend for priceRuleVersion"
+        "description": "System field 'id' should exist in backend but not frontend for priceRuleVersion"
       },
       {
         "id": "t-system-field-priceRuleVersion-organization",

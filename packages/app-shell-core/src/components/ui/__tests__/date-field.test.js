@@ -43,8 +43,13 @@ describe('DateField — exports and dependencies', () => {
 });
 
 describe('DateField — input (trigger button) Figma styling', () => {
-  it('renders a 40px tall white card with 1px #D1D4DB border and rounded-lg', () => {
-    assert.match(src, /h-10/);
+  it('drives the field-control height from the shared FIELD_HEIGHT token (ETP-4321) so it lines up with Input/Select', () => {
+    // The control wrapper interpolates the density token; it must not hardcode a height.
+    assert.match(src, /import \{ FIELD_HEIGHT \} from '\.\/formDensity\.js'/);
+    assert.match(src, /\$\{FIELD_HEIGHT\} w-full rounded-lg border border-\[#D1D4DB\] bg-white px-2/);
+  });
+
+  it('field-control wrapper keeps the rounded-lg / #D1D4DB / bg-white card styling', () => {
     assert.match(src, /rounded-lg/);
     assert.match(src, /border-\[#D1D4DB\]/);
     assert.match(src, /bg-white/);

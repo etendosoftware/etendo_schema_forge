@@ -3,6 +3,7 @@ const DEFAULT_PREFIX = 'sf_auth';
 const SESSION_KEYS = {
   token: 'token',
   username: 'user',
+  clientId: 'client_id',
   roleList: 'rolelist',
   selectedRole: 'selected_role',
   selectedOrg: 'selected_org',
@@ -41,6 +42,7 @@ export function normalizeAuthSession(session = {}) {
   return {
     token: session.token || null,
     username: session.username || null,
+    clientId: session.clientId || null,
     roleList: Array.isArray(session.roleList) ? session.roleList : [],
     selectedRole: session.selectedRole || null,
     selectedOrg: session.selectedOrg || null,
@@ -69,6 +71,7 @@ export function createLocalAuthStorage({ prefix = DEFAULT_PREFIX, storage = getB
       return normalizeAuthSession({
         token: storage?.getItem(storageKey(prefix, 'token')),
         username: storage?.getItem(storageKey(prefix, 'username')),
+        clientId: storage?.getItem(storageKey(prefix, 'clientId')),
         roleList: readJson(storage, storageKey(prefix, 'roleList')),
         selectedRole: readJson(storage, storageKey(prefix, 'selectedRole')),
         selectedOrg: readJson(storage, storageKey(prefix, 'selectedOrg')),

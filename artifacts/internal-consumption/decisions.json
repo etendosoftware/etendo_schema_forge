@@ -10,23 +10,38 @@
       "bottomSection": "InternalConsumptionBottomPanel"
     },
     "dateFilterKey": "movementDate",
-    "linesLayout": "inlineEditable"
+    "linesLayout": "inlineEditable",
+    "hidePrint": true,
+    "hideLink": true,
+    "listViewOptions": {
+      "hideStatusFilter": true
+    },
+    "customListIcons": true,
+    "noHeaderBorder": true
   },
   "entities": {
     "header": {
       "name": "internalConsumption",
+      "draftMode": {
+        "enabled": true,
+        "processField": "processNow",
+        "processValue": "CO",
+        "label": "internalConsumptionProcess",
+        "extraParams": { "action": "CO" }
+      },
       "fields": {
         "name": {
           "grid": true,
-          "searchable": true
+          "searchable": true,
+          "readOnlyLogic": "@Processed@='Y'"
         },
         "movementDate": {
           "grid": true,
+          "dot": false,
           "defaultExpr": "@#Date@"
         },
         "description": {
-          "visibility": "editable",
-          "section": "other"
+          "visibility": "discarded"
         },
         "status": {
           "visibility": "editable",
@@ -45,8 +60,8 @@
           "reason": "Action endpoint must be active (system); button rendered via moreMenuContent with flat { action: 'CO' } body"
         },
         "posted": {
-          "visibility": "discarded",
-          "reason": "Accounting post action — not applicable to simplified UI"
+          "visibility": "system",
+          "reason": "Internal Consumption does not support posting to accounting"
         },
         "trxOrganization": {
           "visibility": "discarded",
@@ -83,7 +98,7 @@
       "javaQualifier": "internalConsumptionLineHandler",
       "fields": {
         "lineNo": {
-          "grid": true
+          "grid": false
         },
         "product": {
           "grid": true,
@@ -100,7 +115,8 @@
           ]
         },
         "movementQuantity": {
-          "grid": true
+          "grid": true,
+          "columnWidth": 160
         },
         "uOM": {
           "visibility": "readOnly",
@@ -171,14 +187,14 @@
       "type": "displayLogic",
       "entity": "internalConsumption",
       "decision": "Keep",
-      "description": "Process button visible when status != 'VO'. Implemented in InternalConsumptionActions custom component.",
-      "impactIfOmitted": "Process button would show on voided records."
+      "description": "Process button hidden once the record is processed (processed=Y), covering both Completed and Voided. Implemented via the native draftMode Save/Confirm pair on the header entity.",
+      "impactIfOmitted": "Process button would show on completed/voided records."
     },
     "DISPLAY_Posted": {
       "type": "displayLogic",
       "entity": "internalConsumption",
       "decision": "Omit",
-      "description": "Posted field display logic — Posted field is discarded."
+      "description": "Posted field display logic — not needed; badge always visible in grid."
     },
     "DISPLAY_AccountingDimensions": {
       "type": "displayLogic",
@@ -214,14 +230,14 @@
       "type": "process",
       "entity": "internalConsumption",
       "decision": "Keep",
-      "description": "Process Internal Consumption (M_Internal_Consumption_Post). Requires action='CO'. Implemented in InternalConsumptionActions moreMenuContent component with flat JSON body.",
-      "impactIfOmitted": "Users cannot complete consumptions from the UI."
+      "description": "Process Internal Consumption (M_Internal_Consumption_Post) via the /action/processNow endpoint. The mandatory `action` param accepts CO (Complete) and VO (Void). Complete is wired through the native draftMode workflow (Save + Process buttons, action=CO). Void is offered in the kebab (moreMenuContent → InternalConsumptionActions) only when status=CO, posting a flat { action: 'VO' } body.",
+      "impactIfOmitted": "Users cannot complete or void consumptions from the UI."
     },
     "PROCESS_Posted": {
       "type": "process",
       "entity": "internalConsumption",
       "decision": "Omit",
-      "description": "Posted hardcoded button — accounting posting handled through backend."
+      "description": "Internal Consumption does not support posting to accounting — post action removed."
     }
   },
   "discardPatterns": [

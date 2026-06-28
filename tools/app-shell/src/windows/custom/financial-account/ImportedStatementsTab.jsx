@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useBankStatements } from '@/hooks/useBankStatements';
 import { useStatementActions } from '@/hooks/useStatementActions';
+import { usePsd2Actions } from '@/hooks/usePsd2Actions';
 import { StatementsToolbar } from './StatementsToolbar';
 import { StatementsTable } from './StatementsTable';
 import { StatementLinesView } from './StatementLinesView';
@@ -29,9 +30,15 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   const ui = useUI();
   const accountId = account?.id ?? null;
   const currency = account?.currencyIso ?? 'EUR';
+  // PSD2-synced accounts get their statements only from Salt Edge, so manual import / manual
+  // line creation are not offered: the import split-button is replaced by a single "sync
+  // statements" action that runs the PSD2 fetch (Classic's "Get Bank Statement" equivalent).
+  const psd2Synced = account?.psd2Connected === true;
 
   const { statements, loading, reload } = useBankStatements(accountId);
   const { processStatement, reactivateStatement, deleteStatement, busy } = useStatementActions();
+  const { sync } = usePsd2Actions();
+  const [syncing, setSyncing] = useState(false);
 
   const [selectedStatementId, setSelectedStatementId] = useState(null);
   const [search, setSearch] = useState('');
@@ -67,6 +74,30 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   };
 
   const closeConfirm = () => setConfirm({ variant: null, statement: null });
+
+  // Runs the PSD2 statement fetch for this account (same backend action behind the kebab's
+  // "Sync now"). The bridge mirrors Classic's "Get Bank Statement": it returns a status
+  // (Success/WARNING/ERROR) plus the localized process message rather than throwing.
+  const handleSyncStatements = async () => {
+    if (!accountId || syncing) return;
+    setSyncing(true);
+    try {
+      const res = await sync(accountId);
+      reload();
+      const msg = res?.message;
+      if (res?.status === 'ERROR') {
+        toast.error(msg || ui('financeAccountsPsd2SyncError'));
+      } else if (res?.status === 'WARNING') {
+        toast.info(msg || ui('financeAccountsPsd2SyncDone'));
+      } else {
+        toast.success(msg || ui('financeAccountsPsd2SyncDone'));
+      }
+    } catch (err) {
+      toast.error(err?.message || ui('financeAccountsPsd2SyncError'));
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Per-variant wiring for the confirm dialog: the action to run plus its
   // success / error toast keys. Keeps runConfirm free of nested branching.
@@ -165,6 +196,9 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         rows={statements}
         onImportClick={() => setImportOpen(true)}
         onManualClick={() => setManualOpen(true)}
+        psd2Synced={psd2Synced}
+        onSyncClick={handleSyncStatements}
+        syncing={syncing}
         data-testid="StatementsToolbar__6f147a" />
       <div className="flex-1 overflow-y-auto [&>div]:overflow-visible">
         <StatementsTable

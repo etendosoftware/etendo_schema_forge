@@ -645,7 +645,6 @@ export const paymentPlan = [
     "numberOfPayments": 90,
     "description": "Standard order for Q1 delivery",
     "totalDebtAmount": 38907,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-001"
   },
   {
@@ -662,7 +661,6 @@ export const paymentPlan = [
     "numberOfPayments": 93,
     "description": "Rush order - priority shipping required",
     "totalDebtAmount": 9306,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-002"
   },
   {
@@ -679,7 +677,6 @@ export const paymentPlan = [
     "numberOfPayments": 8,
     "description": "Bulk purchase for warehouse restocking",
     "totalDebtAmount": 11544,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-003"
   },
   {
@@ -696,7 +693,6 @@ export const paymentPlan = [
     "numberOfPayments": 91,
     "description": "Sample order for client evaluation",
     "totalDebtAmount": 11872,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-004"
   },
   {
@@ -713,7 +709,6 @@ export const paymentPlan = [
     "numberOfPayments": 72,
     "description": "Recurring monthly supply order",
     "totalDebtAmount": 48460,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-005"
   },
   {
@@ -730,7 +725,6 @@ export const paymentPlan = [
     "numberOfPayments": 78,
     "description": "Special pricing agreement applies",
     "totalDebtAmount": 45418,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-006"
   },
   {
@@ -747,7 +741,6 @@ export const paymentPlan = [
     "numberOfPayments": 31,
     "description": "Consolidated order from multiple requests",
     "totalDebtAmount": 33840,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-007"
   },
   {
@@ -764,7 +757,6 @@ export const paymentPlan = [
     "numberOfPayments": 97,
     "description": "Trial order for new product line",
     "totalDebtAmount": 25716,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-008"
   },
   {
@@ -781,7 +773,6 @@ export const paymentPlan = [
     "numberOfPayments": 70,
     "description": "Replacement for damaged goods",
     "totalDebtAmount": 44780,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-009"
   },
   {
@@ -798,7 +789,6 @@ export const paymentPlan = [
     "numberOfPayments": 77,
     "description": "Pre-season inventory build-up",
     "totalDebtAmount": 12483,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-010"
   },
   {
@@ -815,7 +805,6 @@ export const paymentPlan = [
     "numberOfPayments": 32,
     "description": "Customer-specific configuration",
     "totalDebtAmount": 46022,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-011"
   },
   {
@@ -832,7 +821,6 @@ export const paymentPlan = [
     "numberOfPayments": 26,
     "description": "Government contract fulfillment",
     "totalDebtAmount": 38634,
-    "finPaymentScheduleID": "Sample finPaymentScheduleID",
     "headerId": "mock-header-012"
   }
 ];

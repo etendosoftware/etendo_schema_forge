@@ -86,7 +86,7 @@ describe('InlineLinesPanel — min-value validation (ETP-4005)', () => {
 
   it('does not call onUpdateRow when isValueBelowMin returns true', () => {
     // The early `return;` after toast.error must precede the onUpdateRow call.
-    const commit = src.match(/if \(isValueBelowMin\(col, value\)\) \{[\s\S]*?\}\s*pendingEditRef/);
+    const commit = src.match(/if \(isValueBelowMin\(col, value\)\) \{[\s\S]*?\}\s*(?:const effectiveValue[\s\S]*?)?\s*pendingEditRef/);
     assert.ok(commit, 'min-check + return block not found before pendingEditRef');
     assert.match(commit[0], /toast\.error\(ui\('fieldMinValueError'\)\);\s*return;/);
   });

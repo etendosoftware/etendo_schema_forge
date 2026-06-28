@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { trackTransactionPosted } from '@/lib/observability/health-events.js';
 
 /**
  * Invokes Etendo DocAction buttons via NEO Headless.
@@ -37,6 +38,7 @@ export function useDocumentAction({ apiBaseUrl, entity = 'header', token } = {})
       }
       const data = await res.json().catch(() => null);
       onSuccess?.(data);
+      trackTransactionPosted();
       return data;
     } catch (err) {
       setError(err.message || 'Action failed');

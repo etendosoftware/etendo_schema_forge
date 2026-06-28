@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-06-28T18:19:14.769Z",
-  "checksum": "f30f10736b57ffb4",
+  "updatedAt": "2026-06-28T22:31:25.603Z",
+  "checksum": "04e3a6fc1937e6a2",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -2191,14 +2191,6 @@
             "required": true
           },
           {
-            "name": "payment",
-            "apiKey": "payment",
-            "column": "Fin_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "processNow",
             "apiKey": "processNow",
             "column": "Processing",
@@ -2301,6 +2293,14 @@
             "type": "button",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ]
       },
@@ -2510,14 +2510,6 @@
             "required": false
           },
           {
-            "name": "fINPaymentScheduledetailID",
-            "apiKey": "fINPaymentScheduledetailID",
-            "column": "FIN_Payment_Scheduledetail_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -2578,6 +2570,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Payment_Scheduledetail_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7904,20 +7904,20 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-id",
+        "category": "system-field",
+        "entity": "header",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-organization",
         "category": "system-field",
         "entity": "header",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-payment",
-        "category": "system-field",
-        "entity": "header",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-posted",
@@ -8040,12 +8040,12 @@
         "description": "System field 'etvfacPaymentZero' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-fINPaymentScheduledetailID",
+        "id": "t-system-field-lines-id",
         "category": "system-field",
         "entity": "lines",
-        "field": "fINPaymentScheduledetailID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for lines"
+        "description": "System field 'id' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-invoicePaid",

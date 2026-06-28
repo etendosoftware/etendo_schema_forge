@@ -1,8 +1,8 @@
 {
-  "version": "0.27.0",
+  "version": "0.30.0",
   "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-06-25T00:34:53.375Z",
-  "checksum": "9580b26e2ed091ad",
+  "updatedAt": "2026-06-26T12:35:41.148Z",
+  "checksum": "0a7a1af01c417fdf",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -5741,14 +5741,6 @@
             "required": true
           },
           {
-            "name": "cBpCustomerAcctID",
-            "apiKey": "cBpCustomerAcctID",
-            "column": "C_Bp_Customer_Acct_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -5777,6 +5769,14 @@
             "apiKey": "updatedBy",
             "column": "UpdatedBy",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Customer_Acct_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -5868,14 +5868,6 @@
             "required": false
           },
           {
-            "name": "intrCBpartner",
-            "apiKey": "intrCBpartner",
-            "column": "Intr_C_Bpartner_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "country",
             "apiKey": "country",
             "column": "C_Country_ID",
@@ -5920,6 +5912,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Intr_C_Bpartner_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -6898,14 +6898,6 @@
             "required": true
           },
           {
-            "name": "cBpVendorAcctID",
-            "apiKey": "cBpVendorAcctID",
-            "column": "C_Bp_Vendor_Acct_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -6934,6 +6926,14 @@
             "apiKey": "updatedBy",
             "column": "UpdatedBy",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Vendor_Acct_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7025,14 +7025,6 @@
             "required": true
           },
           {
-            "name": "intrCBpartner",
-            "apiKey": "intrCBpartner",
-            "column": "Intr_C_Bpartner_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -7077,6 +7069,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Intr_C_Bpartner_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -8142,14 +8142,6 @@
             "required": true
           },
           {
-            "name": "cBpSalcategoryID",
-            "apiKey": "cBpSalcategoryID",
-            "column": "C_Bp_Salcategory_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "createdBy",
             "apiKey": "createdBy",
             "column": "Createdby",
@@ -8170,6 +8162,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Salcategory_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -8516,14 +8516,6 @@
             "required": true
           },
           {
-            "name": "cBpartnerDoctypeID",
-            "apiKey": "cBpartnerDoctypeID",
-            "column": "C_Bpartner_Doctype_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -8552,6 +8544,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bpartner_Doctype_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -9105,6 +9105,14 @@
             "type": "string",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "psd2ApiKey",
+            "apiKey": "psd2ApiKey",
+            "column": "EM_Psd2_Api_Key",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           }
         ]
       },
@@ -9170,14 +9178,6 @@
             "required": true
           },
           {
-            "name": "cBpartnerDiscountID",
-            "apiKey": "cBpartnerDiscountID",
-            "column": "C_Bpartner_Discount_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -9230,6 +9230,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bpartner_Discount_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -15311,14 +15319,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for basicDiscount"
       },
       {
-        "id": "t-system-field-basicDiscount-cBpartnerDiscountID",
-        "category": "system-field",
-        "entity": "basicDiscount",
-        "field": "cBpartnerDiscountID",
-        "runner": "node",
-        "description": "System field 'cBpartnerDiscountID' should exist in backend but not frontend for basicDiscount"
-      },
-      {
         "id": "t-system-field-basicDiscount-client",
         "category": "system-field",
         "entity": "basicDiscount",
@@ -15341,6 +15341,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for basicDiscount"
+      },
+      {
+        "id": "t-system-field-basicDiscount-id",
+        "category": "system-field",
+        "entity": "basicDiscount",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for basicDiscount"
       },
       {
         "id": "t-system-field-basicDiscount-organization",
@@ -16135,6 +16143,14 @@
         "description": "System field 'processNow' should exist in backend but not frontend for contact"
       },
       {
+        "id": "t-system-field-contact-psd2ApiKey",
+        "category": "system-field",
+        "entity": "contact",
+        "field": "psd2ApiKey",
+        "runner": "node",
+        "description": "System field 'psd2ApiKey' should exist in backend but not frontend for contact"
+      },
+      {
         "id": "t-system-field-contact-smfswsDefaultWsRole",
         "category": "system-field",
         "entity": "contact",
@@ -16199,14 +16215,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for costSalaryCategory"
       },
       {
-        "id": "t-system-field-costSalaryCategory-cBpSalcategoryID",
-        "category": "system-field",
-        "entity": "costSalaryCategory",
-        "field": "cBpSalcategoryID",
-        "runner": "node",
-        "description": "System field 'cBpSalcategoryID' should exist in backend but not frontend for costSalaryCategory"
-      },
-      {
         "id": "t-system-field-costSalaryCategory-client",
         "category": "system-field",
         "entity": "costSalaryCategory",
@@ -16229,6 +16237,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for costSalaryCategory"
+      },
+      {
+        "id": "t-system-field-costSalaryCategory-id",
+        "category": "system-field",
+        "entity": "costSalaryCategory",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for costSalaryCategory"
       },
       {
         "id": "t-system-field-costSalaryCategory-organization",
@@ -16983,14 +16999,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for customerAccounting"
       },
       {
-        "id": "t-system-field-customerAccounting-cBpCustomerAcctID",
-        "category": "system-field",
-        "entity": "customerAccounting",
-        "field": "cBpCustomerAcctID",
-        "runner": "node",
-        "description": "System field 'cBpCustomerAcctID' should exist in backend but not frontend for customerAccounting"
-      },
-      {
         "id": "t-system-field-customerAccounting-client",
         "category": "system-field",
         "entity": "customerAccounting",
@@ -17013,6 +17021,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for customerAccounting"
+      },
+      {
+        "id": "t-system-field-customerAccounting-id",
+        "category": "system-field",
+        "entity": "customerAccounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for customerAccounting"
       },
       {
         "id": "t-system-field-customerAccounting-organization",
@@ -17055,14 +17071,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for documentType"
       },
       {
-        "id": "t-system-field-documentType-cBpartnerDoctypeID",
-        "category": "system-field",
-        "entity": "documentType",
-        "field": "cBpartnerDoctypeID",
-        "runner": "node",
-        "description": "System field 'cBpartnerDoctypeID' should exist in backend but not frontend for documentType"
-      },
-      {
         "id": "t-system-field-documentType-client",
         "category": "system-field",
         "entity": "documentType",
@@ -17085,6 +17093,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for documentType"
+      },
+      {
+        "id": "t-system-field-documentType-id",
+        "category": "system-field",
+        "entity": "documentType",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for documentType"
       },
       {
         "id": "t-system-field-documentType-isForceAutomation",
@@ -18095,12 +18111,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for intrastatAdquisitions"
       },
       {
-        "id": "t-system-field-intrastatAdquisitions-intrCBpartner",
+        "id": "t-system-field-intrastatAdquisitions-id",
         "category": "system-field",
         "entity": "intrastatAdquisitions",
-        "field": "intrCBpartner",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'intrCBpartner' should exist in backend but not frontend for intrastatAdquisitions"
+        "description": "System field 'id' should exist in backend but not frontend for intrastatAdquisitions"
       },
       {
         "id": "t-system-field-intrastatAdquisitions-organization",
@@ -18199,12 +18215,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for intrastatShipments"
       },
       {
-        "id": "t-system-field-intrastatShipments-intrCBpartner",
+        "id": "t-system-field-intrastatShipments-id",
         "category": "system-field",
         "entity": "intrastatShipments",
-        "field": "intrCBpartner",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'intrCBpartner' should exist in backend but not frontend for intrastatShipments"
+        "description": "System field 'id' should exist in backend but not frontend for intrastatShipments"
       },
       {
         "id": "t-system-field-intrastatShipments-organization",
@@ -18367,14 +18383,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for vendorAccounting"
       },
       {
-        "id": "t-system-field-vendorAccounting-cBpVendorAcctID",
-        "category": "system-field",
-        "entity": "vendorAccounting",
-        "field": "cBpVendorAcctID",
-        "runner": "node",
-        "description": "System field 'cBpVendorAcctID' should exist in backend but not frontend for vendorAccounting"
-      },
-      {
         "id": "t-system-field-vendorAccounting-client",
         "category": "system-field",
         "entity": "vendorAccounting",
@@ -18397,6 +18405,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for vendorAccounting"
+      },
+      {
+        "id": "t-system-field-vendorAccounting-id",
+        "category": "system-field",
+        "entity": "vendorAccounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for vendorAccounting"
       },
       {
         "id": "t-system-field-vendorAccounting-organization",
@@ -19313,7 +19329,7 @@
       }
     ],
     "summary": {
-      "total": 1142,
+      "total": 1143,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
@@ -19325,11 +19341,11 @@
         "rule-declared": 103,
         "searchable-filters": 4,
         "selector-endpoint": 41,
-        "system-field": 514,
+        "system-field": 515,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1142,
+        "node": 1143,
         "junit": 0
       }
     }

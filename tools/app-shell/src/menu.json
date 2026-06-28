@@ -281,6 +281,12 @@
           "windowId": "118"
         },
         {
+          "name": "open-close-period-control",
+          "label": "Periods",
+          "favname": "Open/Close Period Control",
+          "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A"
+        },
+        {
           "name": "assets",
           "label": "Assets",
           "favname": "Assets",

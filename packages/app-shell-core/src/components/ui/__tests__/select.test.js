@@ -12,21 +12,26 @@ const src = readFileSync(join(__dirname, '..', 'select.jsx'), 'utf8');
 // way date-field.test.js does — the canonical class string is short and
 // changing it is a deliberate act we want to surface here.
 function extractTriggerBaseClass(source) {
-  // Pull the multi-line cn() string for SelectTrigger. Stops at the closing
-  // single-quoted string before className is appended.
-  const match = source.match(/SelectTrigger\s*=[\s\S]*?cn\(\s*\n\s*"([^"]+)"/);
+  // Pull the multi-line cn(`…`) template literal for SelectTrigger. Became a
+  // template literal in ETP-4321 so the density tokens can be interpolated.
+  const match = source.match(/SelectTrigger\s*=[\s\S]*?cn\(\s*\n\s*`([^`]+)`/);
   return match ? match[1] : null;
 }
 
-describe('SelectTrigger — Figma form-input dimensions (ETP-3893)', () => {
+describe('SelectTrigger — Figma form-input dimensions (ETP-3893 + ETP-4321)', () => {
   const triggerClass = extractTriggerBaseClass(src);
 
   it('source exposes a single canonical class string for the trigger', () => {
     assert.ok(triggerClass, 'could not extract SelectTrigger base className');
   });
 
-  it('is 40px tall (h-10) so it lines up with Input and DateField', () => {
-    assert.match(triggerClass, /(^|\s)h-10(\s|$)/);
+  it('drives height from the shared FIELD_HEIGHT token so it lines up with Input and DateField (ETP-4321)', () => {
+    assert.match(triggerClass, /\$\{FIELD_HEIGHT\}/);
+    assert.match(src, /import \{[^}]*FIELD_HEIGHT[^}]*\} from "\.\/formDensity\.js"/);
+  });
+
+  it('does NOT hardcode a trigger height — height must come from the token', () => {
+    assert.doesNotMatch(triggerClass, /(^|\s)h-\d+(\s|$)/);
   });
 
   it('uses 8px border-radius (rounded-lg)', () => {
@@ -37,16 +42,16 @@ describe('SelectTrigger — Figma form-input dimensions (ETP-3893)', () => {
     assert.match(triggerClass, /border-\[#D1D4DB\]/);
   });
 
-  it('uses 8px padding (p-2)', () => {
-    assert.match(triggerClass, /(^|\s)p-2(\s|$)/);
+  it('drives padding from the shared FIELD_PADDING token (ETP-4321)', () => {
+    assert.match(triggerClass, /\$\{FIELD_PADDING\}/);
+    assert.match(src, /import \{[^}]*FIELD_PADDING[^}]*\} from "\.\/formDensity\.js"/);
   });
 
   it('uses the Figma xs shadow', () => {
     assert.match(triggerClass, /shadow-\[0px_1px_2px_rgba\(18,18,23,0\.05\)\]/);
   });
 
-  it('does NOT regress to the legacy h-9 / rounded-md / shadow-sm trio', () => {
-    assert.doesNotMatch(triggerClass, /(^|\s)h-9(\s|$)/);
+  it('does NOT regress to the legacy rounded-md / shadow-sm pairing', () => {
     assert.doesNotMatch(triggerClass, /(^|\s)rounded-md(\s|$)/);
     assert.doesNotMatch(triggerClass, /(^|\s)shadow-sm(\s|$)/);
   });

@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
 import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
@@ -61,7 +62,7 @@ function resolveUiKey(ui, key) {
  */
 function resolveGridClass(cols, layout) {
   if (cols) return 'grid';
-  if (layout === 'horizontal') return 'grid grid-cols-2 gap-x-5 gap-y-5 md:grid-cols-4';
+  if (layout === 'horizontal') return `grid grid-cols-2 gap-x-5 ${ROW_GAP_Y} md:grid-cols-4`;
   return 'grid grid-cols-2 gap-3 md:grid-cols-3';
 }
 
@@ -78,7 +79,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         type="button"
         onClick={() => setOpen(true)}
         data-testid={`field-${field.key}`}
-        className="w-full h-10 text-sm rounded-lg border border-[#D1D4DB] bg-white p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[#D1D4DB] bg-white p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -254,7 +255,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
       — matching the SelectorInput inspector experience.
     */
     <div
-      className="relative flex h-10 w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary"
+      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary`}
       onClick={showChip ? handleChipClick : undefined}
     >
       {showChip ? (
@@ -483,7 +484,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className="w-full flex items-center gap-2 h-10 rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm text-left shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm text-left shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -551,7 +552,7 @@ function renderSelectField(f, data, label, isReadOnly, onChange, ctx) {
     selectValue = data?.[f.key] ?? '';
   }
   return (
-    <div key={f.key} className="space-y-1.5">
+    <div key={f.key} className={LABEL_GAP}>
       <Label
         htmlFor={f.key}
         className="text-sm text-foreground font-medium"
@@ -588,7 +589,7 @@ function renderSelectField(f, data, label, isReadOnly, onChange, ctx) {
 
 function PopupSearchField(props) {
   return (
-    <div className="space-y-1.5">
+    <div className={LABEL_GAP}>
       <Label
         className="text-sm text-foreground font-medium"
         data-testid="Label__a8d626">
@@ -671,7 +672,7 @@ function getInputStateClass(isReadOnly) {
 
 function DependentFkField(props) {
   return (
-    <div className="space-y-1.5">
+    <div className={LABEL_GAP}>
       <Label
         htmlFor={props.f.key}
         className="text-sm text-foreground font-medium"
@@ -830,7 +831,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   // complexity low. They close over the EntityForm scope; per-field values
   // (f, label, isReadOnly) are passed in.
   const renderReadOnlyFk = (f, label) => (
-    <div key={f.key} data-testid={`field-${f.key}`} className="space-y-1.5">
+    <div key={f.key} data-testid={`field-${f.key}`} className={LABEL_GAP}>
       <Label
         htmlFor={f.key}
         className="text-sm text-foreground font-medium"
@@ -869,7 +870,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
       ? resolveUiKey(ui, f.createTitleKey)
       : (resolveUiKey(ui, f.createLabelKey) ?? '');
     return (
-      <div key={f.key} className="space-y-1.5">
+      <div key={f.key} className={LABEL_GAP}>
         <Label
           htmlFor={f.key}
           className="text-sm text-foreground font-medium"
@@ -906,7 +907,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
       return renderSearchSelectField(f, label, selectorOnChange, selectorUrl);
     }
     return (
-      <div key={f.key} className="space-y-1.5">
+      <div key={f.key} className={LABEL_GAP}>
         <Label
           htmlFor={f.key}
           className="text-sm text-foreground font-medium"
@@ -961,7 +962,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     }
     if (f.lookup) {
       return (
-        <div key={f.key} className="space-y-1.5">
+        <div key={f.key} className={LABEL_GAP}>
           <Label
             htmlFor={f.key}
             className="text-sm text-foreground font-medium"
@@ -982,7 +983,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
       );
     }
     return (
-      <div key={f.key} className="space-y-1.5">
+      <div key={f.key} className={LABEL_GAP}>
         <Label
           htmlFor={f.key}
           className="text-sm text-foreground font-medium"
@@ -1011,7 +1012,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     const selOpt = f.options.find(o => o.value === (data?.[f.key] ?? ''));
     if (isReadOnly) {
       return (
-        <div key={f.key} data-testid={`field-${f.key}`} className="space-y-1.5">
+        <div key={f.key} data-testid={`field-${f.key}`} className={LABEL_GAP}>
           <Label
             htmlFor={f.key}
             className="text-sm text-foreground font-medium"
@@ -1027,7 +1028,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     }
     const staticOpts = f.options.map(o => ({ id: o.value, name: tMenu(o.label) }));
     return (
-      <div key={f.key} className="space-y-1.5">
+      <div key={f.key} className={LABEL_GAP}>
         <Label
           htmlFor={f.key}
           className="text-sm text-foreground font-medium"
@@ -1048,7 +1049,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
 
   // Date field (DateField wrapper).
   const renderDateField = (f, label, isReadOnly) => (
-    <div key={f.key} className="space-y-1.5">
+    <div key={f.key} className={LABEL_GAP}>
       <Label
         htmlFor={f.key}
         className="text-sm text-foreground font-medium"
@@ -1070,7 +1071,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
 
   // Default single-line text/number input (the fall-through renderer).
   const renderInputField = (f, label, isReadOnly, displayValue) => (
-    <div key={f.key} className="space-y-1.5">
+    <div key={f.key} className={LABEL_GAP}>
       <Label
         htmlFor={f.key}
         className="text-sm text-foreground font-medium"
@@ -1099,7 +1100,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     const minHeightClass = f.rows ? '' : ' min-h-[96px]';
     const placeholder = !isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined;
     return (
-      <div key={f.key} className="space-y-1.5">
+      <div key={f.key} className={LABEL_GAP}>
         <Label
           htmlFor={f.key}
           className="text-sm text-foreground font-medium"
@@ -1297,7 +1298,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     if (f.type === 'image') {
       const label = t(f.column) ?? f.label ?? f.key;
       const isReadOnly = formReadOnly || f.readOnly || displayLogic?.readOnly?.[f.key] === true || evalReadOnlyLogic(f, data);
-      const imageClass = ['space-y-1.5 row-span-2 flex flex-col', spanClass].filter(Boolean).join(' ');
+      const imageClass = [`${LABEL_GAP} row-span-2 flex flex-col`, spanClass].filter(Boolean).join(' ');
       return (
         <div key={f.key} className={imageClass}>
           <Label

@@ -1,8 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.11.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-06-25T19:58:31.553Z",
-  "checksum": "2a08ff0395e6cb73",
+  "updatedAt": "2026-06-26T23:07:09.028Z",
+  "checksum": "0e3d84ebeb261ed8",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -261,7 +261,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
             "reference": "Warehouse",
             "inputMode": "search",
@@ -681,6 +681,7 @@
             "section": "principal",
             "gridOrder": 5,
             "min": 0,
+            "max": 100,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },

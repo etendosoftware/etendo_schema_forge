@@ -10,6 +10,7 @@ import { Calendar } from './calendar.jsx';
 import { parseCalendarDate, formatCalendarDate } from '../../lib/dateOnly.js';
 import { useLocaleSwitch, useUI } from '../../i18n/index.js';
 import { cn } from '../../lib/utils.js';
+import { FIELD_HEIGHT } from './formDensity.js';
 
 function toIsoDate(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
@@ -398,7 +399,7 @@ export function DateField({
   }, [yearPageAnchor]);
 
   const wrapperClass = cn(
-    'flex items-center gap-2 h-10 w-full rounded-lg border border-[#D1D4DB] bg-white px-2',
+    `flex items-center gap-2 ${FIELD_HEIGHT} w-full rounded-lg border border-[#D1D4DB] bg-white px-2`,
     'shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
     disabled
       ? 'opacity-60 cursor-not-allowed bg-muted/50'

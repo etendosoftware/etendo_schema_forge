@@ -2,10 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from './modal-styles.js';
+import { LABEL_GAP, FIELD_HEIGHT } from '@/components/ui/formDensity';
 
 const TRIGGER_CLS =
-  'w-full flex items-center justify-between gap-2 rounded-md border border-input bg-white px-3 !text-[14px] text-left hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-primary transition-colors cursor-pointer';
-const TRIGGER_STYLE = { height: '40px', fontSize: '14px' };
+  `w-full ${FIELD_HEIGHT} flex items-center justify-between gap-2 rounded-md border border-input bg-white px-3 !text-[14px] text-left hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-primary transition-colors cursor-pointer`;
+// ETP-4321: height now comes from the FIELD_HEIGHT class (36px). Keep fontSize
+// only — the inline height would otherwise override the token.
+const TRIGGER_STYLE = { fontSize: '14px' };
 
 function Checkbox({ checked, onChange, label, small }) {
   return (
@@ -161,7 +164,7 @@ export default function FinancialSection({ form, onChange, opts }) {
         {form.isCustomer && (
           <div className="pl-6 space-y-3">
             <div className="grid grid-cols-4 gap-3">
-              <div className="space-y-1.5">
+              <div className={LABEL_GAP}>
                 <label style={MODAL_STYLES.fieldLabel}>{ui('salesPriceListField')}</label>
                 <DynamicSelect
                   {...dynProps('salesPriceLists')}
@@ -169,7 +172,7 @@ export default function FinancialSection({ form, onChange, opts }) {
                   onChange={v => onChange('salesPriceList', v)}
                   data-testid="DynamicSelect__4e3585" />
               </div>
-              <div className="space-y-1.5">
+              <div className={LABEL_GAP}>
                 <label style={MODAL_STYLES.fieldLabel}>{ui('paymentMethodField')}</label>
                 <DynamicSelect
                   {...dynProps('paymentMethods')}
@@ -177,7 +180,7 @@ export default function FinancialSection({ form, onChange, opts }) {
                   onChange={v => onChange('paymentMethod', v)}
                   data-testid="DynamicSelect__4e3585" />
               </div>
-              <div className="space-y-1.5">
+              <div className={LABEL_GAP}>
                 <label style={MODAL_STYLES.fieldLabel}>{ui('paymentTermField')}</label>
                 <DynamicSelect
                   {...dynProps('paymentTerms')}
@@ -185,7 +188,7 @@ export default function FinancialSection({ form, onChange, opts }) {
                   onChange={v => onChange('paymentTerm', v)}
                   data-testid="DynamicSelect__4e3585" />
               </div>
-              <div className="space-y-1.5">
+              <div className={LABEL_GAP}>
                 <label style={MODAL_STYLES.fieldLabel}>{ui('financialAccountField')}</label>
                 <DynamicSelect
                   {...dynProps('financialAccounts')}
@@ -213,7 +216,7 @@ export default function FinancialSection({ form, onChange, opts }) {
         {form.isVendor && (
           <div className="pl-6 space-y-3">
             <div className="grid grid-cols-4 gap-3">
-              <div className="space-y-1.5">
+              <div className={LABEL_GAP}>
                 <label style={MODAL_STYLES.fieldLabel}>{ui('purchasePriceListField')}</label>
                 <DynamicSelect
                   {...dynProps('purchasePriceLists')}
@@ -221,7 +224,7 @@ export default function FinancialSection({ form, onChange, opts }) {
                   onChange={v => onChange('purchasePriceList', v)}
                   data-testid="DynamicSelect__4e3585" />
               </div>
-              <div className="space-y-1.5">
+              <div className={LABEL_GAP}>
                 <label style={MODAL_STYLES.fieldLabel}>{ui('paymentMethodPOField')}</label>
                 <DynamicSelect
                   {...dynProps('paymentMethods')}
@@ -229,7 +232,7 @@ export default function FinancialSection({ form, onChange, opts }) {
                   onChange={v => onChange('paymentMethodPO', v)}
                   data-testid="DynamicSelect__4e3585" />
               </div>
-              <div className="space-y-1.5">
+              <div className={LABEL_GAP}>
                 <label style={MODAL_STYLES.fieldLabel}>{ui('paymentTermPOField')}</label>
                 <DynamicSelect
                   {...dynProps('paymentTerms')}
@@ -237,7 +240,7 @@ export default function FinancialSection({ form, onChange, opts }) {
                   onChange={v => onChange('paymentTermPO', v)}
                   data-testid="DynamicSelect__4e3585" />
               </div>
-              <div className="space-y-1.5">
+              <div className={LABEL_GAP}>
                 <label style={MODAL_STYLES.fieldLabel}>{ui('financialAccountPOField')}</label>
                 <DynamicSelect
                   {...dynProps('financialAccounts')}

@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
   "updatedAt": "2026-05-26T18:48:57.280Z",
-  "contractChecksum": "56046e99f3e5f238",
+  "contractChecksum": "f3aca9eab1fd8293",
   "apiPrediction": {
     "specName": "sii-config",
     "baseUrl": "/sws/neo/sii-config",

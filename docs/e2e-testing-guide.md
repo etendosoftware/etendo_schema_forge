@@ -675,6 +675,7 @@ test.describe('My feature — sales-order', () => {
 - **Match list vs detail by regex on the URL** — `/\/header\/[^/?]+/.test(url)` is the detail GET.
 - **Custom field keys** — some windows expose the document number under a different field (e.g. purchase-invoice uses `orderReference`, not `documentNo`). Mirror the value into both keys when mocking so a single locator works across windows.
 - **Per-window expected buttons** — if your overlay/feature is gated by the custom window file (`onClone`, `onEmail`, `menuActions`, `documentPreview`), parametrize the asserts so each window verifies its own wiring (catches regressions where a custom window stops passing a handler).
+- **Numeric field clearing normalises to `defaultValue`** — when a user clears a numeric inline-add or inline-edit field and moves focus away, `DataTable.jsx` and `InlineLinesPanel.jsx` automatically substitute the field's `defaultValue` (or `min` if `defaultValue` is absent) before the save payload is built. In tests, assert the intercepted POST/PATCH body contains the expected numeric value (e.g. `0` for discount, `1` for quantity), never `undefined` or `''`. Do not assert that the input displays empty after blur — it will display the normalised value. See `docs/feedback.md` (ETP-4277) for the full root-cause explanation.
 
 ### Canonical reference
 

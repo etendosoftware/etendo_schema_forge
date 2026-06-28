@@ -5,84 +5,72 @@ export const internalConsumption = [
     "id": "mock-internalConsumption-001",
     "movementDate": "2026-01-15",
     "name": "Sample name",
-    "description": "Standard order for Q1 delivery",
     "status": "DR"
   },
   {
     "id": "mock-internalConsumption-002",
     "movementDate": "2026-01-16",
     "name": "Sample name",
-    "description": "Rush order - priority shipping required",
     "status": "CO"
   },
   {
     "id": "mock-internalConsumption-003",
     "movementDate": "2026-01-17",
     "name": "Sample name",
-    "description": "Bulk purchase for warehouse restocking",
     "status": "VO"
   },
   {
     "id": "mock-internalConsumption-004",
     "movementDate": "2026-01-18",
     "name": "Sample name",
-    "description": "Sample order for client evaluation",
     "status": "IP"
   },
   {
     "id": "mock-internalConsumption-005",
     "movementDate": "2026-01-19",
     "name": "Sample name",
-    "description": "Recurring monthly supply order",
     "status": "DR"
   },
   {
     "id": "mock-internalConsumption-006",
     "movementDate": "2026-01-20",
     "name": "Sample name",
-    "description": "Special pricing agreement applies",
     "status": "CO"
   },
   {
     "id": "mock-internalConsumption-007",
     "movementDate": "2026-01-21",
     "name": "Sample name",
-    "description": "Consolidated order from multiple requests",
     "status": "VO"
   },
   {
     "id": "mock-internalConsumption-008",
     "movementDate": "2026-01-22",
     "name": "Sample name",
-    "description": "Trial order for new product line",
     "status": "IP"
   },
   {
     "id": "mock-internalConsumption-009",
     "movementDate": "2026-01-23",
     "name": "Sample name",
-    "description": "Replacement for damaged goods",
     "status": "DR"
   },
   {
     "id": "mock-internalConsumption-010",
     "movementDate": "2026-01-24",
     "name": "Sample name",
-    "description": "Pre-season inventory build-up",
     "status": "CO"
   },
   {
     "id": "mock-internalConsumption-011",
     "movementDate": "2026-01-25",
     "name": "Sample name",
-    "description": "Customer-specific configuration",
     "status": "VO"
   },
   {
     "id": "mock-internalConsumption-012",
     "movementDate": "2026-01-26",
     "name": "Sample name",
-    "description": "Government contract fulfillment",
     "status": "IP"
   }
 ];

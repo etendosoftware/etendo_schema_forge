@@ -156,9 +156,27 @@ describe('computeWindowDelta', () => {
   });
 
   it('includes system columns when excludeSystemColumns=false', () => {
-    const delta = minimalDelta({ excludeSystemColumns: false });
+    // C3 must be an existing row (in prevSnapshot) so the live-push parity
+    // filter does not prune it. New ISINCLUDED=N records are never created.
+    const prevSnapshot = {
+      spec:   [{ ETGO_SF_SPEC_ID: 'S1', NAME: 'test-window', ISACTIVE: 'Y' }],
+      entity: [{ ETGO_SF_ENTITY_ID: 'E1', ETGO_SF_SPEC_ID: 'S1', AD_TAB_ID: 'T1', NAME: 'header' }],
+      field:  [{ ETGO_SF_FIELD_ID: 'F3', ETGO_SF_ENTITY_ID: 'E1', AD_COLUMN_ID: 'C3' }],
+    };
+    const delta = minimalDelta({ excludeSystemColumns: false, prevSnapshot });
     const fields = delta.tables.ETGO_SF_FIELD.upserts;
     assert.equal(fields.length, 3);
+    const c3 = fields.find(f => f.AD_COLUMN_ID === 'C3');
+    assert.equal(c3.ISINCLUDED, 'N', 'system column not in contract → excluded');
+  });
+
+  it('does not create new ETGO_SF_FIELD records for non-contract fields', () => {
+    // New field with ISINCLUDED=N must be pruned (live push never inserts these).
+    const delta = minimalDelta({ excludeSystemColumns: false });
+    const fields = delta.tables.ETGO_SF_FIELD.upserts;
+    const colIds = fields.map(f => f.AD_COLUMN_ID);
+    assert.ok(!colIds.includes('C3'), 'new non-contract column must not appear in upserts');
+    assert.equal(fields.length, 2);
   });
 
   it('maps visibility correctly for contract fields', () => {
@@ -274,6 +292,8 @@ describe('computeWindowDelta', () => {
   });
 
   it('handles discarded visibility', () => {
+    // Field must be in prevSnapshot so it is treated as existing — the filter
+    // only prunes NEW records that would be ISINCLUDED=N.
     const delta = computeWindowDelta({
       specName: 'test',
       windowId: 'W1',
@@ -295,7 +315,11 @@ describe('computeWindowDelta', () => {
       decisions: {},
       adTabs: [{ ad_tab_id: 'T1', ad_table_id: 'TBL1', name: 'Header' }],
       adColumns: [{ ad_column_id: 'C1', ad_table_id: 'TBL1', columnname: 'HiddenCol' }],
-      prevSnapshot: { spec: [], entity: [], field: [] },
+      prevSnapshot: {
+        spec:   [{ ETGO_SF_SPEC_ID: 'S1', NAME: 'test', ISACTIVE: 'Y' }],
+        entity: [{ ETGO_SF_ENTITY_ID: 'E1', ETGO_SF_SPEC_ID: 'S1', AD_TAB_ID: 'T1', NAME: 'header' }],
+        field:  [{ ETGO_SF_FIELD_ID: 'F1', ETGO_SF_ENTITY_ID: 'E1', AD_COLUMN_ID: 'C1' }],
+      },
     });
     const field = delta.tables.ETGO_SF_FIELD.upserts[0];
     assert.equal(field.ISINCLUDED, 'N', 'discarded → ISINCLUDED=N');

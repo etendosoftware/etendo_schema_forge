@@ -2311,3 +2311,96 @@ describe('buildEntryFieldLine — skipDefault', () => {
     assert.ok(!accountLine.includes('skipDefault'), 'account must not carry skipDefault');
   });
 });
+
+// ---------------------------------------------------------------------------
+// ETP-4277 — max constraint in generated column and entry field literals
+// ---------------------------------------------------------------------------
+describe('generateTableComponent — max column prop (ETP-4277)', () => {
+  const maxContract = {
+    frontendContract: {
+      window: { id: '901', name: 'Sales Order', primaryEntity: 'header', category: 'sales' },
+      entities: {
+        header: {
+          fields: [
+            { name: 'documentNo', column: 'DocumentNo', type: 'string', tsType: 'string',
+              visibility: 'readOnly', required: true, grid: true, form: true },
+          ],
+          searchableFields: ['documentNo'],
+          computedFields: [],
+        },
+        line: {
+          fields: [
+            { name: 'discount', column: 'Discount', type: 'number', tsType: 'number',
+              visibility: 'editable', required: false, grid: true, form: true, max: 100 },
+            { name: 'quantity', column: 'QtyOrdered', type: 'number', tsType: 'number',
+              visibility: 'editable', required: false, grid: true, form: true },
+          ],
+          searchableFields: [],
+          computedFields: [],
+        },
+      },
+    },
+    backendContract: { processEndpoints: [] },
+  };
+
+  it('emits max: 100 in the column entry for a field with max declared', () => {
+    const code = generateTableComponent('line', maxContract);
+    const lines = code.split('\n');
+    const discountLine = lines.find(l => l.includes("key: 'discount'"));
+    assert.ok(discountLine, 'discount column should exist');
+    assert.ok(discountLine.includes(', max: 100'), 'discount column must include max: 100');
+  });
+
+  it('does not emit max in the column entry for a field without max', () => {
+    const code = generateTableComponent('line', maxContract);
+    const lines = code.split('\n');
+    const qtyLine = lines.find(l => l.includes("key: 'quantity'"));
+    assert.ok(qtyLine, 'quantity column should exist');
+    assert.ok(!qtyLine.includes(', max:'), 'quantity column must not include max');
+  });
+});
+
+describe('generatePageComponent — max entry prop (ETP-4277)', () => {
+  const maxPageContract = {
+    frontendContract: {
+      window: { id: '902', name: 'Sales Order', primaryEntity: 'header', category: 'sales' },
+      entities: {
+        header: {
+          fields: [
+            { name: 'documentNo', column: 'DocumentNo', type: 'string', tsType: 'string',
+              visibility: 'readOnly', required: true, grid: true, form: true },
+          ],
+          searchableFields: ['documentNo'],
+          computedFields: [],
+        },
+        line: {
+          fields: [
+            { name: 'discount', column: 'Discount', type: 'number', tsType: 'number',
+              visibility: 'editable', required: false, grid: true, form: true, max: 100 },
+            { name: 'quantity', column: 'QtyOrdered', type: 'number', tsType: 'number',
+              visibility: 'editable', required: true, grid: true, form: true },
+          ],
+          searchableFields: [],
+          computedFields: [],
+        },
+      },
+    },
+    backendContract: { processEndpoints: [] },
+  };
+
+  it('emits max: 100 in the addLineFields entry literal for a field with max declared', () => {
+    const code = generatePageComponent('header', 'line', maxPageContract);
+    const entryMatch = code.match(/entry: \[([\s\S]*?)\],/);
+    assert.ok(entryMatch, 'addLineFields.entry array present');
+    assert.match(entryMatch[1], /key: 'discount'[^}]*, max: 100/);
+  });
+
+  it('does not emit max in the addLineFields entry literal for a field without max', () => {
+    const code = generatePageComponent('header', 'line', maxPageContract);
+    const entryMatch = code.match(/entry: \[([\s\S]*?)\],/);
+    assert.ok(entryMatch, 'addLineFields.entry array present');
+    const qtyLine = entryMatch[1].split('\n').find(l => l.includes("key: 'quantity'"));
+    assert.ok(qtyLine, 'quantity entry present');
+    assert.ok(!qtyLine.includes(', max:'), 'quantity entry must not include max');
+  });
+});

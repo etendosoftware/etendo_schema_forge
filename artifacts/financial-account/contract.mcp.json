@@ -1,0 +1,1069 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-06-11T01:47:08.755Z",
+  "updatedAt": "2026-06-26T15:07:43.486Z",
+  "contractChecksum": "b85f8403d9b8150f",
+  "apiPrediction": {
+    "specName": "financial-account-detail",
+    "baseUrl": "/sws/neo/financial-account-detail",
+    "crud": {
+      "account": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/financial-account-detail/account",
+        "detailUrl": "/sws/neo/financial-account-detail/account/{id}",
+        "supportedFilters": []
+      },
+      "transaction": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/financial-account-detail/transaction",
+        "detailUrl": "/sws/neo/financial-account-detail/transaction/{id}",
+        "supportedFilters": []
+      },
+      "importedBankStatements": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/financial-account-detail/importedBankStatements",
+        "detailUrl": "/sws/neo/financial-account-detail/importedBankStatements/{id}",
+        "supportedFilters": []
+      },
+      "bankStatementLines": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/financial-account-detail/bankStatementLines",
+        "detailUrl": "/sws/neo/financial-account-detail/bankStatementLines/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "account",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/account/selectors/currency"
+      },
+      {
+        "entity": "account",
+        "field": "psd2Provider",
+        "column": "EM_Psd2_Provider_ID",
+        "reference": "PSD2_Provider",
+        "inputMode": "search",
+        "url": "/sws/neo/financial-account-detail/account/selectors/psd2Provider"
+      },
+      {
+        "entity": "transaction",
+        "field": "gLItem",
+        "column": "C_Glitem_ID",
+        "reference": "Glitem",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/gLItem"
+      },
+      {
+        "entity": "transaction",
+        "field": "organization",
+        "column": "AD_Org_ID",
+        "reference": "Org",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/organization"
+      },
+      {
+        "entity": "transaction",
+        "field": "businessPartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/businessPartner"
+      },
+      {
+        "entity": "transaction",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/project"
+      },
+      {
+        "entity": "transaction",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/costCenter"
+      },
+      {
+        "entity": "transaction",
+        "field": "salesCampaign",
+        "column": "C_Campaign_ID",
+        "reference": "Campaign",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/salesCampaign"
+      },
+      {
+        "entity": "transaction",
+        "field": "activity",
+        "column": "C_Activity_ID",
+        "reference": "Activity",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/activity"
+      },
+      {
+        "entity": "transaction",
+        "field": "salesRegion",
+        "column": "C_Salesregion_ID",
+        "reference": "Salesregion",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/salesRegion"
+      },
+      {
+        "entity": "transaction",
+        "field": "stDimension",
+        "column": "User1_ID",
+        "reference": "User1",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/stDimension"
+      },
+      {
+        "entity": "transaction",
+        "field": "ndDimension",
+        "column": "User2_ID",
+        "reference": "User2",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/transaction/selectors/ndDimension"
+      },
+      {
+        "entity": "bankStatementLines",
+        "field": "businessPartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BPartner",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/bankStatementLines/selectors/businessPartner"
+      },
+      {
+        "entity": "bankStatementLines",
+        "field": "gLItem",
+        "column": "C_Glitem_ID",
+        "reference": "Glitem",
+        "inputMode": "selector",
+        "url": "/sws/neo/financial-account-detail/bankStatementLines/selectors/gLItem"
+      }
+    ],
+    "actions": [
+      {
+        "name": "aPRMImportBankFile",
+        "actionType": "paymentAction",
+        "entity": "account",
+        "column": "EM_APRM_ImportBankFile",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMImportBankFile",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "7AC7BE9024E448A0BB863C159DA762F9",
+        "processType": "classic"
+      },
+      {
+        "name": "aPRMMatchTransactions",
+        "actionType": "paymentAction",
+        "entity": "account",
+        "column": "EM_APRM_MatchTransactions",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactions",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "86F0B1EBE2BC48E3ACF458768D14CC99",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aPRMMatchTransactionsForce",
+        "actionType": "paymentAction",
+        "entity": "account",
+        "column": "EM_APRM_MatchTrans_Force",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactionsForce",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "86F0B1EBE2BC48E3ACF458768D14CC99",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aPRMReconcile",
+        "actionType": "paymentAction",
+        "entity": "account",
+        "column": "EM_APRM_Reconcile",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMReconcile",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "EB3D56BDD37E4229B67DBAB9F9A9B167",
+        "processType": "classic"
+      },
+      {
+        "name": "aprmAddMultiplePayments",
+        "actionType": "paymentAction",
+        "entity": "account",
+        "column": "EM_Aprm_AddMultiplePayments",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddMultiplePayments",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "4CE463C04CA0412CAC57EF58FE0F8498",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aprmAddtransactionpd",
+        "actionType": "paymentAction",
+        "entity": "account",
+        "column": "EM_Aprm_Addtransactionpd",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddtransactionpd",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "E68790A7B65F4D45AB35E2BAE34C1F39",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aprmFindtransactionspd",
+        "actionType": "paymentAction",
+        "entity": "account",
+        "column": "EM_Aprm_Findtransactionspd",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFindtransactionspd",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "154CB4F9274A479CB38A285E16984539",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aprmFundsTrans",
+        "actionType": "paymentAction",
+        "entity": "account",
+        "column": "EM_Aprm_Funds_Trans",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFundsTrans",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "CC73C4845CDC487395804946EACB225F",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "pSD2GetConsent",
+        "actionType": "utilityAction",
+        "entity": "account",
+        "column": "EM_PSD2_Get_Consent",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetConsent",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "C580B3B60DA5484387493A74CEB00D13",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "psd2GetConnections",
+        "actionType": "utilityAction",
+        "entity": "account",
+        "column": "EM_Psd2_Get_Connections",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2GetConnections",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "91C37692121944CA892C32316F56D9B4",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "pSD2GetBankstatement",
+        "actionType": "utilityAction",
+        "entity": "account",
+        "column": "EM_PSD2_Get_Bankstatement",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetBankstatement",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "2B2635782D4C41FF9415D86C13D1E97D",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "psd2RefreshConnections",
+        "actionType": "utilityAction",
+        "entity": "account",
+        "column": "EM_Psd2_Refresh_Connections",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2RefreshConnections",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "83C5DBC9F05B4D38BBB3F5486B377427",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "psd2ReconnectFa",
+        "actionType": "utilityAction",
+        "entity": "account",
+        "column": "EM_Psd2_Reconnect_Fa",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2ReconnectFa",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "F3ABCD40BD0047AF9E76071CF7D3FF04",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aprmProcessed",
+        "actionType": "paymentAction",
+        "entity": "transaction",
+        "column": "EM_Aprm_Processed",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/aprmProcessed",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "F68F2890E96D4D85A1DEF0274D105BCE",
+        "processType": "classic"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "transaction",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etprReactivateTransaction",
+        "actionType": "documentAction",
+        "entity": "transaction",
+        "column": "EM_Etpr_Reactivate_Transaction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprReactivateTransaction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "BA47238DB98D4FE7A4B540760EC8226A",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etprRemoveTransaction",
+        "actionType": "utilityAction",
+        "entity": "transaction",
+        "column": "EM_Etpr_Remove_Transaction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprRemoveTransaction",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "DC4FCAC608324CB78CF92F99C1A94AD0",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "posted",
+        "actionType": "documentAction",
+        "entity": "importedBankStatements",
+        "column": "Posted",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/posted",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "aPRMProcessBankStatementForce",
+        "actionType": "paymentAction",
+        "entity": "importedBankStatements",
+        "column": "EM_APRM_Process_BS_Force",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatementForce",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "2DDE7D3618034C38A4462B7F3456C28D",
+        "processType": "classic"
+      },
+      {
+        "name": "aPRMProcessBankStatement",
+        "actionType": "paymentAction",
+        "entity": "importedBankStatements",
+        "column": "EM_APRM_Process_BS",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatement",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "58A9261BACEF45DDA526F29D8557272D",
+        "processType": "classic"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "importedBankStatements",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    }
+  },
+  "formState": {
+    "entities": {
+      "account": {
+        "fields": {
+          "name": {
+            "required": true
+          },
+          "currency": {
+            "required": true,
+            "readOnlyLogic": "@HasTransaction@>0"
+          },
+          "type": {
+            "required": true,
+            "defaultValue": "B"
+          },
+          "description": {},
+          "active": {
+            "defaultValue": "Y"
+          },
+          "currentBalance": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "0"
+          },
+          "iBAN": {},
+          "swiftCode": {},
+          "aPRMImportBankFile": {},
+          "aPRMMatchTransactions": {},
+          "aPRMMatchTransactionsForce": {},
+          "aPRMReconcile": {},
+          "aprmAddMultiplePayments": {
+            "defaultValue": "N"
+          },
+          "bankCode": {},
+          "branchCode": {},
+          "partialAccountNo": {},
+          "accountNo": {},
+          "aprmAddtransactionpd": {},
+          "aprmFindtransactionspd": {},
+          "aprmFundsTrans": {},
+          "psd2Provider": {
+            "readOnlyLogic": "@EM_PSD2_Connection_Status@='CO'"
+          },
+          "pSD2ImportFromDate": {},
+          "pSD2ImportToDate": {},
+          "pSD2StatementFrequency": {
+            "defaultValue": "1BD"
+          },
+          "pSD2GetConsent": {},
+          "pSD2GetBankstatement": {},
+          "pSD2SaltEdgeAccountID": {
+            "readOnly": true
+          },
+          "pSD2CardNumber": {
+            "readOnly": true
+          },
+          "pSD2ConnectionStatus": {
+            "readOnly": true,
+            "defaultValue": "DC"
+          },
+          "psd2ReconnectFa": {}
+        }
+      },
+      "transaction": {
+        "fields": {
+          "transactionType": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "BPD"
+          },
+          "status": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "'RPAP'"
+          },
+          "transactionDate": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "documentNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "gLItem": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
+          "description": {
+            "readOnly": true
+          },
+          "depositAmount": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPW'",
+            "defaultValue": "0"
+          },
+          "paymentAmount": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPD'",
+            "defaultValue": "0"
+          },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "organization": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''",
+            "defaultValue": "@AD_Org_ID@"
+          },
+          "businessPartner": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
+          "project": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
+          "costCenter": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
+          "salesCampaign": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
+          "activity": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
+          "salesRegion": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
+          "stDimension": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
+          "ndDimension": {
+            "readOnly": true,
+            "readOnlyLogic": "@Posted@='Y' | @Fin_Payment_ID@!''"
+          },
+          "etblkpAccountingstatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etblkpBulkposting": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etprReactivateTransaction": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etprRemoveTransaction": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "importedBankStatements": {
+        "fields": {
+          "documentNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "name": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "active": {
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "Y"
+          },
+          "importdate": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "transactionDate": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "fileName": {
+            "readOnly": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "notes": {},
+          "etblkpAccountingstatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etblkpBulkposting": {
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "bankStatementLines": {
+        "fields": {
+          "active": {
+            "readOnlyLogic": "@APRM_BSProcessed@='Y'",
+            "defaultValue": "Y"
+          },
+          "transactionDate": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@APRM_BSProcessed@='Y'",
+            "defaultValue": "@#Date@"
+          },
+          "referenceNo": {
+            "required": true,
+            "readOnlyLogic": "@APRM_BSProcessed@='Y'"
+          },
+          "bpartnername": {
+            "readOnlyLogic": "@APRM_BSProcessed@='Y'"
+          },
+          "businessPartner": {},
+          "gLItem": {},
+          "dramount": {
+            "required": true,
+            "readOnlyLogic": "@APRM_BSProcessed@='Y'",
+            "defaultValue": "0"
+          },
+          "cramount": {
+            "required": true,
+            "readOnlyLogic": "@APRM_BSProcessed@='Y'",
+            "defaultValue": "0"
+          },
+          "description": {}
+        }
+      }
+    },
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage financial account detail financial records.",
+    "whenToUse": [
+      "Use for financial account detail management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name",
+        "currency",
+        "type"
+      ],
+      "lineFields": [
+        "etprReactivateTransaction",
+        "etprRemoveTransaction",
+        "name",
+        "etblkpBulkposting",
+        "referenceNo",
+        "dramount",
+        "cramount"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "etblkpBulkposting",
+      "etprReactivateTransaction",
+      "posted",
+      "etblkpBulkposting"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Payment amount exceeds remaining balance",
+      "Payment method is not configured for the business partner",
+      "Invoice is already fully paid",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name",
+          "currency",
+          "type"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "etprReactivateTransaction",
+          "etprRemoveTransaction",
+          "name",
+          "etblkpBulkposting",
+          "referenceNo",
+          "dramount",
+          "cramount"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "etblkpBulkposting"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": [
+      "etprReactivateTransaction"
+    ]
+  },
+  "checksum": "b905b031c9091937"
+}

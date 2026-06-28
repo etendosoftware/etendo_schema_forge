@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -29,6 +29,8 @@ export default function SifSendingModal({
   const [phase, setPhase] = useState('confirm');
   const [results, setResults] = useState({});
   const [progress, setProgress] = useState(0);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   useEffect(() => {
     if (phase !== 'sending') return;
@@ -73,7 +75,7 @@ export default function SifSendingModal({
 
     setProgress(100);
     await new Promise(r => setTimeout(r, 400));
-    setPhase('results');
+    if (mountedRef.current) setPhase('results');
   }
 
   return (

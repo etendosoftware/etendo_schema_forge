@@ -31,6 +31,12 @@ const processes = [
 ];
 // @sf-generated-end processes:priceList
 
+// @sf-generated-start detailProcesses:priceListVersion
+const detailProcesses = [
+  { name: 'create', label: 'Create Price List', style: 'positive' },
+];
+// @sf-generated-end detailProcesses:priceListVersion
+
 // @sf-generated-start draftMode:priceList
 const draftMode = null;
 // @sf-generated-end draftMode:priceList
@@ -193,6 +199,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        detailProcesses={detailProcesses}
         addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Price List"

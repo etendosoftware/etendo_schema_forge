@@ -1,0 +1,1842 @@
+{
+  "version": "0.4.0",
+  "generatedAt": "2026-06-25T12:12:33.694Z",
+  "updatedAt": "2026-06-26T11:11:25.752Z",
+  "checksum": "bc1ebd3d542cf806",
+  "frontendContract": {
+    "window": {
+      "id": "E66E701CCBA14B8BA480CBDE37C50D7A",
+      "name": "Open/Close Period Control",
+      "primaryEntity": "periodControl",
+      "category": "finance",
+      "hidePrint": true,
+      "hideCreate": true,
+      "hideMoreMenu": true,
+      "hideDetailForm": true,
+      "hideDelete": true,
+      "processOverrides": {
+        "openClose": {
+          "label": "Open Close Period",
+          "detailLabel": "Open Close Document",
+          "params": [
+            {
+              "key": "openClose",
+              "type": "select",
+              "label": "Action",
+              "required": true,
+              "options": [
+                {
+                  "value": "O",
+                  "label": "Open"
+                },
+                {
+                  "value": "C",
+                  "label": "Closed"
+                },
+                {
+                  "value": "P",
+                  "label": "Permanently closed"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "detailEntity": "documents",
+      "listSortBy": "periodNo asc",
+      "labelOverrides": {
+        "es_ES": {
+          "Name": "Período",
+          "PeriodNo": "N.º período",
+          "StartDate": "Fecha inicio",
+          "EndDate": "Fecha fin",
+          "PeriodType": "Tipo",
+          "Status": "Estado",
+          "DocumentCategory": "Tipo de documento",
+          "PeriodStatus": "Estado período"
+        }
+      },
+      "statusEnumLabels": {
+        "O": "All Opened",
+        "N": "All Never Opened",
+        "C": "All Closed",
+        "P": "All Permanently Closed",
+        "M": "Mixed"
+      },
+      "layoutType": "default",
+      "actions": {
+        "openClose": {
+          "parameters": [
+            {
+              "name": "openClose",
+              "type": "string",
+              "required": true,
+              "description": "Period action: O=Open, C=Closed, P=Permanently closed"
+            }
+          ],
+          "preconditions": [],
+          "effects": [
+            "Updates the period or document-type status"
+          ],
+          "edgeCases": [
+            "Period is permanently closed (P) — cannot be re-opened",
+            "No accounting entries exist yet — transition may be restricted",
+            "User lacks period-control permission for the organization"
+          ]
+        }
+      }
+    },
+    "entities": {
+      "periodControl": {
+        "tableName": "C_Period",
+        "tabId": "E429CB8F5CDF4D8395B76D553E72A2D0",
+        "tabName": "Period Control",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "status",
+            "apiKey": "status",
+            "column": "Status",
+            "label": "Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "columnType": "enum",
+            "enumValues": [
+              {
+                "value": "C",
+                "name": "All Closed"
+              },
+              {
+                "value": "N",
+                "name": "All Never Opened"
+              },
+              {
+                "value": "O",
+                "name": "All Opened"
+              },
+              {
+                "value": "P",
+                "name": "All Permanently Closed"
+              },
+              {
+                "value": "M",
+                "name": "Mixed"
+              }
+            ],
+            "badge": true,
+            "enumVariants": {
+              "O": "green",
+              "N": "neutral",
+              "C": "neutral",
+              "P": "red",
+              "M": "orange"
+            },
+            "gridOrder": 1
+          },
+          {
+            "name": "calendar",
+            "apiKey": "calendar",
+            "column": "C_Calendar_ID",
+            "label": "Calendar",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Calendar",
+            "inputMode": "selector",
+            "gridOrder": 2
+          },
+          {
+            "name": "year",
+            "apiKey": "year",
+            "column": "C_Year_ID",
+            "label": "Year",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "Year",
+            "inputMode": "selector",
+            "gridOrder": 3
+          },
+          {
+            "name": "periodNo",
+            "apiKey": "periodNo",
+            "column": "PeriodNo",
+            "label": "Period No.",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "gridOrder": 5,
+            "readOnlyLogic": {
+              "raw": "@C_Period_Not_Editable@='Y'",
+              "evaluable": true,
+              "js": "record['c_Period_Not_Editable'] === 'Y'"
+            }
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "gridOrder": 4
+          },
+          {
+            "name": "startingDate",
+            "apiKey": "startingDate",
+            "column": "StartDate",
+            "label": "Starting Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "gridOrder": 6,
+            "readOnlyLogic": {
+              "raw": "@C_Period_Not_Editable@='Y'",
+              "evaluable": true,
+              "js": "record['c_Period_Not_Editable'] === 'Y'"
+            }
+          },
+          {
+            "name": "endingDate",
+            "apiKey": "endingDate",
+            "column": "EndDate",
+            "label": "Ending Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "readOnlyLogic": {
+              "raw": "@C_Period_Not_Editable@='Y'",
+              "evaluable": true,
+              "js": "record['c_Period_Not_Editable'] === 'Y'"
+            }
+          },
+          {
+            "name": "periodType",
+            "apiKey": "periodType",
+            "column": "PeriodType",
+            "label": "Period Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "S"
+            },
+            "enumValues": [
+              {
+                "value": "A",
+                "name": "Adjustment Period"
+              },
+              {
+                "value": "S",
+                "name": "Standard Calendar Period"
+              }
+            ],
+            "defaultValue": "S",
+            "readOnlyLogic": {
+              "raw": "@C_Period_Not_Editable@='Y'",
+              "evaluable": true,
+              "js": "record['c_Period_Not_Editable'] === 'Y'"
+            }
+          },
+          {
+            "name": "openClose",
+            "apiKey": "openClose",
+            "column": "OpenClose",
+            "label": "Open Close",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "O"
+            },
+            "defaultValue": "O",
+            "validationRule": {
+              "code": "Value<>'N'",
+              "contextParams": [],
+              "cascadeParams": []
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "periodType",
+            "derivation": {
+              "type": "computed",
+              "source": "S"
+            }
+          },
+          {
+            "name": "openClose",
+            "derivation": {
+              "type": "computed",
+              "source": "O"
+            }
+          }
+        ],
+        "javaQualifier": "period-openclose"
+      },
+      "documents": {
+        "tableName": "C_PeriodControl",
+        "tabId": "4AAC9E63C3B84B74AC4F35B5A1F8B54C",
+        "tabName": "Documents",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "periodStatus",
+            "apiKey": "periodStatus",
+            "column": "PeriodStatus",
+            "label": "Period Status",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "columnType": "enum",
+            "enumValues": [
+              {
+                "value": "C",
+                "name": "Closed"
+              },
+              {
+                "value": "N",
+                "name": "Never opened"
+              },
+              {
+                "value": "O",
+                "name": "Open"
+              },
+              {
+                "value": "P",
+                "name": "Permanently closed"
+              }
+            ],
+            "defaultValue": "N",
+            "badge": true,
+            "enumVariants": {
+              "O": "green",
+              "N": "neutral",
+              "C": "red",
+              "P": "red"
+            },
+            "gridOrder": 2
+          },
+          {
+            "name": "documentCategory",
+            "apiKey": "documentCategory",
+            "column": "DocBaseType",
+            "label": "Document Category",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "enumValues": [
+              {
+                "value": "---",
+                "name": "** New **"
+              },
+              {
+                "value": "APC",
+                "name": "AP Credit Memo"
+              },
+              {
+                "value": "API",
+                "name": "AP Invoice"
+              },
+              {
+                "value": "APP",
+                "name": "AP Payment"
+              },
+              {
+                "value": "APPP",
+                "name": "AP Payment Proposal"
+              },
+              {
+                "value": "ARC",
+                "name": "AR Credit Memo"
+              },
+              {
+                "value": "ARI",
+                "name": "AR Invoice"
+              },
+              {
+                "value": "ARF",
+                "name": "AR Pro Forma Invoice"
+              },
+              {
+                "value": "ARR",
+                "name": "AR Receipt"
+              },
+              {
+                "value": "ARRP",
+                "name": "AR Receivable Proposal"
+              },
+              {
+                "value": "ARI_RM",
+                "name": "AR Return Material Invoice"
+              },
+              {
+                "value": "AMZ",
+                "name": "Amortization"
+              },
+              {
+                "value": "CMB",
+                "name": "Bank Statement"
+              },
+              {
+                "value": "BSF",
+                "name": "Bank Statement File"
+              },
+              {
+                "value": "CMC",
+                "name": "Cash Journal"
+              },
+              {
+                "value": "CAD",
+                "name": "Cost Adjustment"
+              },
+              {
+                "value": "DPM",
+                "name": "Debt Payment Management"
+              },
+              {
+                "value": "DDB",
+                "name": "Doubtful Debt"
+              },
+              {
+                "value": "FAT",
+                "name": "Financial Account Transaction"
+              },
+              {
+                "value": "GLD",
+                "name": "GL Document"
+              },
+              {
+                "value": "GLJ",
+                "name": "GL Journal"
+              },
+              {
+                "value": "IAU",
+                "name": "Inventory Amount Update"
+              },
+              {
+                "value": "LDC",
+                "name": "Landed Cost"
+              },
+              {
+                "value": "LCC",
+                "name": "Landed Cost Cost"
+              },
+              {
+                "value": "OBCVAT_MS",
+                "name": "Manual Cash VAT Settlement"
+              },
+              {
+                "value": "MXI",
+                "name": "Match Invoice"
+              },
+              {
+                "value": "MXP",
+                "name": "Match PO"
+              },
+              {
+                "value": "MMS",
+                "name": "Material Delivery"
+              },
+              {
+                "value": "MIC",
+                "name": "Material Internal Consumption"
+              },
+              {
+                "value": "MMM",
+                "name": "Material Movement"
+              },
+              {
+                "value": "MMI",
+                "name": "Material Physical Inventory"
+              },
+              {
+                "value": "MMP",
+                "name": "Material Production"
+              },
+              {
+                "value": "MMR",
+                "name": "Material Receipt"
+              },
+              {
+                "value": "CMA",
+                "name": "Payment Allocation"
+              },
+              {
+                "value": "PPR",
+                "name": "Payment proposal"
+              },
+              {
+                "value": "PJI",
+                "name": "Project Issue"
+              },
+              {
+                "value": "POO",
+                "name": "Purchase Order"
+              },
+              {
+                "value": "POR",
+                "name": "Purchase Requisition"
+              },
+              {
+                "value": "REC",
+                "name": "Reconciliation"
+              },
+              {
+                "value": "SOO",
+                "name": "Sales Order"
+              },
+              {
+                "value": "STT",
+                "name": "Settlement"
+              },
+              {
+                "value": "STM",
+                "name": "Settlement manual"
+              },
+              {
+                "value": "WRE",
+                "name": "Work Requirement"
+              }
+            ],
+            "gridOrder": 1
+          },
+          {
+            "name": "openClose",
+            "apiKey": "openClose",
+            "column": "OpenClose",
+            "label": "Open Close",
+            "type": "button",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "O"
+            },
+            "defaultValue": "O",
+            "validationRule": {
+              "code": "Value<>'N'",
+              "contextParams": [],
+              "cascadeParams": []
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "periodStatus",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "openClose",
+            "derivation": {
+              "type": "computed",
+              "source": "O"
+            }
+          }
+        ],
+        "javaQualifier": "period-control-doc-openclose"
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "E66E701CCBA14B8BA480CBDE37C50D7A",
+      "name": "Open/Close Period Control",
+      "primaryEntity": "periodControl",
+      "category": "finance",
+      "hidePrint": true,
+      "hideCreate": true,
+      "hideMoreMenu": true,
+      "hideDetailForm": true,
+      "hideDelete": true,
+      "processOverrides": {
+        "openClose": {
+          "label": "Open Close Period",
+          "detailLabel": "Open Close Document",
+          "params": [
+            {
+              "key": "openClose",
+              "type": "select",
+              "label": "Action",
+              "required": true,
+              "options": [
+                {
+                  "value": "O",
+                  "label": "Open"
+                },
+                {
+                  "value": "C",
+                  "label": "Closed"
+                },
+                {
+                  "value": "P",
+                  "label": "Permanently closed"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "detailEntity": "documents",
+      "listSortBy": "periodNo asc",
+      "labelOverrides": {
+        "es_ES": {
+          "Name": "Período",
+          "PeriodNo": "N.º período",
+          "StartDate": "Fecha inicio",
+          "EndDate": "Fecha fin",
+          "PeriodType": "Tipo",
+          "Status": "Estado",
+          "DocumentCategory": "Tipo de documento",
+          "PeriodStatus": "Estado período"
+        }
+      },
+      "statusEnumLabels": {
+        "O": "All Opened",
+        "N": "All Never Opened",
+        "C": "All Closed",
+        "P": "All Permanently Closed",
+        "M": "Mixed"
+      },
+      "actions": {
+        "openClose": {
+          "parameters": [
+            {
+              "name": "openClose",
+              "type": "string",
+              "required": true,
+              "description": "Period action: O=Open, C=Closed, P=Permanently closed"
+            }
+          ],
+          "preconditions": [],
+          "effects": [
+            "Updates the period or document-type status"
+          ],
+          "edgeCases": [
+            "Period is permanently closed (P) — cannot be re-opened",
+            "No accounting entries exist yet — transition may be restricted",
+            "User lacks period-control permission for the organization"
+          ]
+        }
+      }
+    },
+    "entities": {
+      "periodControl": {
+        "tableName": "C_Period",
+        "tabId": "E429CB8F5CDF4D8395B76D553E72A2D0",
+        "tabName": "Period Control",
+        "fields": [
+          {
+            "name": "status",
+            "apiKey": "status",
+            "column": "Status",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "calendar",
+            "apiKey": "calendar",
+            "column": "C_Calendar_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "year",
+            "apiKey": "year",
+            "column": "C_Year_ID",
+            "type": "foreignKey",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "periodNo",
+            "apiKey": "periodNo",
+            "column": "PeriodNo",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "startingDate",
+            "apiKey": "startingDate",
+            "column": "StartDate",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "endingDate",
+            "apiKey": "endingDate",
+            "column": "EndDate",
+            "type": "date",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "periodType",
+            "apiKey": "periodType",
+            "column": "PeriodType",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "closingFactAcctGroupID",
+            "apiKey": "closingFactAcctGroupID",
+            "column": "Close_Fact_Acct_Group_ID",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "regularizationFactAcctGroupID",
+            "apiKey": "regularizationFactAcctGroupID",
+            "column": "Reg_Fact_Acct_Group_ID",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "divideupFactAcctGroupID",
+            "apiKey": "divideupFactAcctGroupID",
+            "column": "Divideup_Fact_Acct_Group_ID",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "openFactAcctGroupID",
+            "apiKey": "openFactAcctGroupID",
+            "column": "Open_Fact_Acct_Group_ID",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "openClose",
+            "apiKey": "openClose",
+            "column": "OpenClose",
+            "type": "button",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Period_ID",
+            "type": "id",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          }
+        ],
+        "javaQualifier": "period-openclose"
+      },
+      "documents": {
+        "tableName": "C_PeriodControl",
+        "tabId": "4AAC9E63C3B84B74AC4F35B5A1F8B54C",
+        "tabName": "Documents",
+        "fields": [
+          {
+            "name": "calendar",
+            "apiKey": "calendar",
+            "column": "C_Calendar_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "periodStatus",
+            "apiKey": "periodStatus",
+            "column": "PeriodStatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "documentCategory",
+            "apiKey": "documentCategory",
+            "column": "DocBaseType",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_PeriodControl_ID",
+            "type": "id",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "period",
+            "apiKey": "period",
+            "column": "C_Period_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "periodAction",
+            "apiKey": "periodAction",
+            "column": "PeriodAction",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "openClose",
+            "apiKey": "openClose",
+            "column": "OpenClose",
+            "type": "button",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "year",
+            "apiKey": "year",
+            "column": "C_Year_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ],
+        "javaQualifier": "period-control-doc-openclose"
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/periodControl",
+        "entity": "periodControl",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/periodControl/:id",
+        "entity": "periodControl",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/periodControl",
+        "entity": "periodControl",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/periodControl/:id",
+        "entity": "periodControl",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/periodControl/:id",
+        "entity": "periodControl",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/documents",
+        "entity": "documents",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/documents/:id",
+        "entity": "documents",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/documents",
+        "entity": "documents",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/documents/:id",
+        "entity": "documents",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/documents/:id",
+        "entity": "documents",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "open-close-period-control",
+    "baseUrl": "/sws/neo/open-close-period-control",
+    "crud": {
+      "periodControl": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/open-close-period-control/periodControl",
+        "detailUrl": "/sws/neo/open-close-period-control/periodControl/{id}",
+        "supportedFilters": []
+      },
+      "documents": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/open-close-period-control/documents",
+        "detailUrl": "/sws/neo/open-close-period-control/documents/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "periodControl",
+        "field": "calendar",
+        "column": "C_Calendar_ID",
+        "reference": "Calendar",
+        "inputMode": "selector",
+        "url": "/sws/neo/open-close-period-control/periodControl/selectors/calendar"
+      },
+      {
+        "entity": "periodControl",
+        "field": "year",
+        "column": "C_Year_ID",
+        "reference": "Year",
+        "inputMode": "selector",
+        "url": "/sws/neo/open-close-period-control/periodControl/selectors/year"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "periodControl",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/open-close-period-control/periodControl/{id}/action/processNow",
+        "processId": "167",
+        "processType": "classic"
+      },
+      {
+        "entity": "periodControl",
+        "field": "openClose",
+        "column": "OpenClose",
+        "url": "/sws/neo/open-close-period-control/periodControl/{id}/action/openClose",
+        "processId": "167",
+        "processType": "classic"
+      },
+      {
+        "entity": "documents",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/open-close-period-control/documents/{id}/action/processNow",
+        "processId": "168",
+        "processType": "classic"
+      },
+      {
+        "entity": "documents",
+        "field": "openClose",
+        "column": "OpenClose",
+        "url": "/sws/neo/open-close-period-control/documents/{id}/action/openClose",
+        "processId": "168",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Período",
+        "PeriodNo": "N.º período",
+        "StartDate": "Fecha inicio",
+        "EndDate": "Fecha fin",
+        "PeriodType": "Tipo",
+        "Status": "Estado",
+        "DocumentCategory": "Tipo de documento",
+        "PeriodStatus": "Estado período"
+      }
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-action-endpoint-documents-openClose",
+        "category": "action-endpoint",
+        "entity": "documents",
+        "field": "openClose",
+        "runner": "node",
+        "description": "Action endpoint for 'openClose' in documents should exist"
+      },
+      {
+        "id": "t-action-endpoint-documents-processNow",
+        "category": "action-endpoint",
+        "entity": "documents",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in documents should exist"
+      },
+      {
+        "id": "t-action-endpoint-periodControl-openClose",
+        "category": "action-endpoint",
+        "entity": "periodControl",
+        "field": "openClose",
+        "runner": "node",
+        "description": "Action endpoint for 'openClose' in periodControl should exist"
+      },
+      {
+        "id": "t-action-endpoint-periodControl-processNow",
+        "category": "action-endpoint",
+        "entity": "periodControl",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in periodControl should exist"
+      },
+      {
+        "id": "t-crud-flags-documents",
+        "category": "crud-flags",
+        "entity": "documents",
+        "runner": "node",
+        "description": "CRUD flags for 'documents' should all be booleans"
+      },
+      {
+        "id": "t-crud-flags-periodControl",
+        "category": "crud-flags",
+        "entity": "periodControl",
+        "runner": "node",
+        "description": "CRUD flags for 'periodControl' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-documents-openClose",
+        "category": "default-value-type",
+        "entity": "documents",
+        "field": "openClose",
+        "runner": "node",
+        "description": "Default value for 'openClose' in documents should be a string"
+      },
+      {
+        "id": "t-default-value-type-documents-periodStatus",
+        "category": "default-value-type",
+        "entity": "documents",
+        "field": "periodStatus",
+        "runner": "node",
+        "description": "Default value for 'periodStatus' in documents should be a string"
+      },
+      {
+        "id": "t-default-value-type-periodControl-openClose",
+        "category": "default-value-type",
+        "entity": "periodControl",
+        "field": "openClose",
+        "runner": "node",
+        "description": "Default value for 'openClose' in periodControl should be a string"
+      },
+      {
+        "id": "t-default-value-type-periodControl-periodType",
+        "category": "default-value-type",
+        "entity": "periodControl",
+        "field": "periodType",
+        "runner": "node",
+        "description": "Default value for 'periodType' in periodControl should be a string"
+      },
+      {
+        "id": "t-field-presence-documents-documentCategory",
+        "category": "field-presence",
+        "entity": "documents",
+        "field": "documentCategory",
+        "runner": "node",
+        "description": "Field 'documentCategory' should be present in documents"
+      },
+      {
+        "id": "t-field-presence-documents-openClose",
+        "category": "field-presence",
+        "entity": "documents",
+        "field": "openClose",
+        "runner": "node",
+        "description": "Field 'openClose' should be present in documents"
+      },
+      {
+        "id": "t-field-presence-documents-periodStatus",
+        "category": "field-presence",
+        "entity": "documents",
+        "field": "periodStatus",
+        "runner": "node",
+        "description": "Field 'periodStatus' should be present in documents"
+      },
+      {
+        "id": "t-field-presence-periodControl-calendar",
+        "category": "field-presence",
+        "entity": "periodControl",
+        "field": "calendar",
+        "runner": "node",
+        "description": "Field 'calendar' should be present in periodControl"
+      },
+      {
+        "id": "t-field-presence-periodControl-endingDate",
+        "category": "field-presence",
+        "entity": "periodControl",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Field 'endingDate' should be present in periodControl"
+      },
+      {
+        "id": "t-field-presence-periodControl-name",
+        "category": "field-presence",
+        "entity": "periodControl",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in periodControl"
+      },
+      {
+        "id": "t-field-presence-periodControl-openClose",
+        "category": "field-presence",
+        "entity": "periodControl",
+        "field": "openClose",
+        "runner": "node",
+        "description": "Field 'openClose' should be present in periodControl"
+      },
+      {
+        "id": "t-field-presence-periodControl-periodNo",
+        "category": "field-presence",
+        "entity": "periodControl",
+        "field": "periodNo",
+        "runner": "node",
+        "description": "Field 'periodNo' should be present in periodControl"
+      },
+      {
+        "id": "t-field-presence-periodControl-periodType",
+        "category": "field-presence",
+        "entity": "periodControl",
+        "field": "periodType",
+        "runner": "node",
+        "description": "Field 'periodType' should be present in periodControl"
+      },
+      {
+        "id": "t-field-presence-periodControl-startingDate",
+        "category": "field-presence",
+        "entity": "periodControl",
+        "field": "startingDate",
+        "runner": "node",
+        "description": "Field 'startingDate' should be present in periodControl"
+      },
+      {
+        "id": "t-field-presence-periodControl-status",
+        "category": "field-presence",
+        "entity": "periodControl",
+        "field": "status",
+        "runner": "node",
+        "description": "Field 'status' should be present in periodControl"
+      },
+      {
+        "id": "t-field-presence-periodControl-year",
+        "category": "field-presence",
+        "entity": "periodControl",
+        "field": "year",
+        "runner": "node",
+        "description": "Field 'year' should be present in periodControl"
+      },
+      {
+        "id": "t-field-type-documents-documentCategory",
+        "category": "field-type",
+        "entity": "documents",
+        "field": "documentCategory",
+        "runner": "node",
+        "description": "Field 'documentCategory' should have type 'string' in documents"
+      },
+      {
+        "id": "t-field-type-documents-openClose",
+        "category": "field-type",
+        "entity": "documents",
+        "field": "openClose",
+        "runner": "node",
+        "description": "Field 'openClose' should have type 'string' in documents"
+      },
+      {
+        "id": "t-field-type-documents-periodStatus",
+        "category": "field-type",
+        "entity": "documents",
+        "field": "periodStatus",
+        "runner": "node",
+        "description": "Field 'periodStatus' should have type 'string' in documents"
+      },
+      {
+        "id": "t-field-type-periodControl-calendar",
+        "category": "field-type",
+        "entity": "periodControl",
+        "field": "calendar",
+        "runner": "node",
+        "description": "Field 'calendar' should have type 'string' in periodControl"
+      },
+      {
+        "id": "t-field-type-periodControl-endingDate",
+        "category": "field-type",
+        "entity": "periodControl",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Field 'endingDate' should have type 'string' in periodControl"
+      },
+      {
+        "id": "t-field-type-periodControl-name",
+        "category": "field-type",
+        "entity": "periodControl",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in periodControl"
+      },
+      {
+        "id": "t-field-type-periodControl-openClose",
+        "category": "field-type",
+        "entity": "periodControl",
+        "field": "openClose",
+        "runner": "node",
+        "description": "Field 'openClose' should have type 'string' in periodControl"
+      },
+      {
+        "id": "t-field-type-periodControl-periodNo",
+        "category": "field-type",
+        "entity": "periodControl",
+        "field": "periodNo",
+        "runner": "node",
+        "description": "Field 'periodNo' should have type 'number' in periodControl"
+      },
+      {
+        "id": "t-field-type-periodControl-periodType",
+        "category": "field-type",
+        "entity": "periodControl",
+        "field": "periodType",
+        "runner": "node",
+        "description": "Field 'periodType' should have type 'string' in periodControl"
+      },
+      {
+        "id": "t-field-type-periodControl-startingDate",
+        "category": "field-type",
+        "entity": "periodControl",
+        "field": "startingDate",
+        "runner": "node",
+        "description": "Field 'startingDate' should have type 'string' in periodControl"
+      },
+      {
+        "id": "t-field-type-periodControl-status",
+        "category": "field-type",
+        "entity": "periodControl",
+        "field": "status",
+        "runner": "node",
+        "description": "Field 'status' should have type 'string' in periodControl"
+      },
+      {
+        "id": "t-field-type-periodControl-year",
+        "category": "field-type",
+        "entity": "periodControl",
+        "field": "year",
+        "runner": "node",
+        "description": "Field 'year' should have type 'string' in periodControl"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-periodControl-endingDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "periodControl",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'endingDate' in periodControl should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-periodControl-periodNo",
+        "category": "readonlylogic-evaluable",
+        "entity": "periodControl",
+        "field": "periodNo",
+        "runner": "node",
+        "description": "Read-only logic for 'periodNo' in periodControl should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-periodControl-periodType",
+        "category": "readonlylogic-evaluable",
+        "entity": "periodControl",
+        "field": "periodType",
+        "runner": "node",
+        "description": "Read-only logic for 'periodType' in periodControl should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-periodControl-startingDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "periodControl",
+        "field": "startingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'startingDate' in periodControl should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-valid-periodControl-endingDate",
+        "category": "readonlylogic-valid",
+        "entity": "periodControl",
+        "field": "endingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'endingDate' in periodControl should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-periodControl-periodNo",
+        "category": "readonlylogic-valid",
+        "entity": "periodControl",
+        "field": "periodNo",
+        "runner": "node",
+        "description": "Read-only logic for 'periodNo' in periodControl should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-periodControl-periodType",
+        "category": "readonlylogic-valid",
+        "entity": "periodControl",
+        "field": "periodType",
+        "runner": "node",
+        "description": "Read-only logic for 'periodType' in periodControl should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-periodControl-startingDate",
+        "category": "readonlylogic-valid",
+        "entity": "periodControl",
+        "field": "startingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'startingDate' in periodControl should be valid JS"
+      },
+      {
+        "id": "t-rule-declared-AD-Client-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Client Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-Org-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Org Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Org Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Allowed-PeriodActions",
+        "category": "rule-declared",
+        "rule": "Allowed PeriodActions",
+        "runner": "node",
+        "description": "Rule 'Allowed PeriodActions' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-EndDate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-EndDate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-EndDate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-PeriodNo-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-PeriodNo-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-PeriodNo-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-PeriodType-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-PeriodType-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-PeriodType-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Period-StartDate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Period-StartDate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Period-StartDate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Open-Close",
+        "category": "rule-declared",
+        "rule": "Open/Close",
+        "runner": "node",
+        "description": "Rule 'Open/Close' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Open-Close-All",
+        "category": "rule-declared",
+        "rule": "Open/Close All",
+        "runner": "node",
+        "description": "Rule 'Open/Close All' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Open-Close-Periods",
+        "category": "rule-declared",
+        "rule": "Open Close Periods",
+        "runner": "node",
+        "description": "Rule 'Open Close Periods' (process) should be declared"
+      },
+      {
+        "id": "t-selector-endpoint-periodControl-calendar",
+        "category": "selector-endpoint",
+        "entity": "periodControl",
+        "field": "calendar",
+        "runner": "node",
+        "description": "Selector endpoint for 'calendar' in periodControl should exist"
+      },
+      {
+        "id": "t-selector-endpoint-periodControl-year",
+        "category": "selector-endpoint",
+        "entity": "periodControl",
+        "field": "year",
+        "runner": "node",
+        "description": "Selector endpoint for 'year' in periodControl should exist"
+      },
+      {
+        "id": "t-system-field-documents-active",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-calendar",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "calendar",
+        "runner": "node",
+        "description": "System field 'calendar' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-client",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-createdBy",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-creationDate",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-id",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-organization",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-period",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "period",
+        "runner": "node",
+        "description": "System field 'period' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-periodAction",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "periodAction",
+        "runner": "node",
+        "description": "System field 'periodAction' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-processNow",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-updated",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-updatedBy",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-documents-year",
+        "category": "system-field",
+        "entity": "documents",
+        "field": "year",
+        "runner": "node",
+        "description": "System field 'year' should exist in backend but not frontend for documents"
+      },
+      {
+        "id": "t-system-field-periodControl-active",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-client",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-closingFactAcctGroupID",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "closingFactAcctGroupID",
+        "runner": "node",
+        "description": "System field 'closingFactAcctGroupID' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-createdBy",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-creationDate",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-divideupFactAcctGroupID",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "divideupFactAcctGroupID",
+        "runner": "node",
+        "description": "System field 'divideupFactAcctGroupID' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-id",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-openFactAcctGroupID",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "openFactAcctGroupID",
+        "runner": "node",
+        "description": "System field 'openFactAcctGroupID' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-organization",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-processNow",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-regularizationFactAcctGroupID",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "regularizationFactAcctGroupID",
+        "runner": "node",
+        "description": "System field 'regularizationFactAcctGroupID' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-updated",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-system-field-periodControl-updatedBy",
+        "category": "system-field",
+        "entity": "periodControl",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for periodControl"
+      },
+      {
+        "id": "t-visibility-documents",
+        "category": "visibility",
+        "entity": "documents",
+        "runner": "node",
+        "description": "Entity 'documents' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-visibility-periodControl",
+        "category": "visibility",
+        "entity": "periodControl",
+        "runner": "node",
+        "description": "Entity 'periodControl' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 82,
+      "byCategory": {
+        "action-endpoint": 4,
+        "crud-flags": 2,
+        "default-value-type": 4,
+        "field-presence": 12,
+        "field-type": 12,
+        "readonlylogic-evaluable": 4,
+        "readonlylogic-valid": 4,
+        "rule-declared": 10,
+        "selector-endpoint": 2,
+        "system-field": 26,
+        "visibility": 2
+      },
+      "byRunner": {
+        "node": 82,
+        "junit": 0
+      }
+    }
+  }
+}

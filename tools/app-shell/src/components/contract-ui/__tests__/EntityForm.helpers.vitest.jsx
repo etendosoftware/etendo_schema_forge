@@ -29,7 +29,7 @@ function evalDisplayLogic(field, data) {
 
 function resolveGridClass(cols, layout) {
   if (cols) return 'grid';
-  if (layout === 'horizontal') return 'grid grid-cols-2 gap-x-5 gap-y-5 md:grid-cols-4';
+  if (layout === 'horizontal') return 'grid grid-cols-2 gap-x-5 gap-y-3 md:grid-cols-4';
   return 'grid grid-cols-2 gap-3 md:grid-cols-3';
 }
 

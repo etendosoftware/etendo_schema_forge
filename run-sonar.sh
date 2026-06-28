@@ -269,10 +269,27 @@ rm -rf .scannerwork
 # ── Step 0.5: Run coverage if requested ────────────────────────────────────
 if [[ "$RUN_COVERAGE" == "true" ]]; then
   echo "==> Running unit tests with coverage..."
+  # Ensure Node 20 is active (coverage flags require Node >= 18.15; NVM default may be older).
+  if [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
+    # shellcheck source=/dev/null
+    source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+    nvm use 20 --silent 2>/dev/null || true
+  fi
   make test-all-coverage
 fi
 
 # ── Step 1: Run scanner ────────────────────────────────────────────
+echo "==> Running sonar-scanner..."
+# Resolve sonar-scanner: prefer global install, fall back to NVM node_modules.
+if ! command -v sonar-scanner &>/dev/null; then
+  NVM_ROOT="${NVM_DIR:-$HOME/.nvm}"
+  for _dir in "$NVM_ROOT"/versions/node/*/lib/node_modules/sonar-scanner/bin; do
+    if [ -x "$_dir/sonar-scanner" ]; then
+      export PATH="$_dir:$PATH"
+      break
+    fi
+  done
+fi
 # In PR-validation mode (--base-ref) analyze in PULL REQUEST mode so the server
 # computes "new code = diff vs base" exactly like CI's PR gate. This is ephemeral
 # (SonarQube auto-purges PR analyses) and never writes to the main branch — a
