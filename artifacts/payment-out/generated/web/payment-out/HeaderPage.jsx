@@ -6,7 +6,7 @@ import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finance / Payment Out';
+const breadcrumb = 'Finanzas / Pago';
 
 
 // @sf-generated-start summary:header
@@ -37,7 +37,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['documentNo', 'paymentMethod', 'account', 'currency', 'etblkpAccountingstatus', 'etblkpBulkposting', 'etprReactivatePayment'];
+const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines

@@ -6,7 +6,7 @@ import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finance / Payment In';
+const breadcrumb = 'Finanzas / Cobro';
 
 
 // @sf-generated-start summary:finPayment
