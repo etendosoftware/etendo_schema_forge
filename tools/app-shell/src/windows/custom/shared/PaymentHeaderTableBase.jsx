@@ -452,7 +452,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
   }, [data, search]);
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <PaymentSidebar dir={dir} data={data} ui={ui} data-testid="PaymentSidebar__743b1b" />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Toolbar ui={ui} search={search} onSearch={setSearch} />

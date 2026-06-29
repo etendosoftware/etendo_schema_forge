@@ -41,7 +41,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:finPayment
 
 // @sf-generated-start requiredHeaderFields:finPayment
-const requiredHeaderFields = ['etblkpAccountingstatus', 'etblkpBulkposting', 'etprReactivatePayment'];
+const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:finPayment
 
 
