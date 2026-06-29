@@ -151,7 +151,8 @@ function LinesTable({ data, token, apiBaseUrl }) {
 }
 
 // @sf-generated-start component:HeaderForm
-export default function HeaderForm({ data, token, apiBaseUrl, ...props }) {
+export default function HeaderForm({ data, token, apiBaseUrl, section, ...props }) {
+  if (section === 'other') return null;
   const isDraft = !DEPOSITED.has(data?.status || '');
 
   return (

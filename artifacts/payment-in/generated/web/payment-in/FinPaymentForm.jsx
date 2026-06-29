@@ -151,7 +151,8 @@ function AppliedLinesTable({ data, token, apiBaseUrl }) {
 }
 
 // @sf-generated-start component:FinPaymentForm
-export default function FinPaymentForm({ data, token, apiBaseUrl, ...props }) {
+export default function FinPaymentForm({ data, token, apiBaseUrl, section, ...props }) {
+  if (section === 'other') return null;
   const isDraft = !DEPOSITED.has(data?.status || '');
 
   return (

@@ -91,7 +91,7 @@ function RowMenu({ row, dir, onNavigate, onReactivate, ui }) {
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 200 }} />
           <div style={{ position: 'fixed', top: pos.y + 4, left: pos.x - 200, width: 200, zIndex: 201, background: '#fff', border: '1px solid #E3E7EC', borderRadius: 12, boxShadow: '0 10px 30px rgba(16,20,28,.16)', padding: 6 }}>
             <button
-              onClick={() => { setOpen(false); onNavigate && onNavigate(row.id, row); }}
+              onClick={() => { setOpen(false); onNavigate && onNavigate(row); }}
               style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', border: 0, background: 'transparent', cursor: 'pointer', font: '500 13px/1 Inter', color: '#19191D', padding: '9px 10px', borderRadius: 8, textAlign: 'left' }}
             >
               <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="#828FA3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -186,7 +186,7 @@ function PayRow({ row, dir, onNavigate, onReactivate, ui }) {
 
   return (
     <div
-      onClick={() => onNavigate && onNavigate(row.id, row)}
+      onClick={() => onNavigate && onNavigate(row)}
       data-testid="PayRow__743b1b"
       style={{ display: 'grid', gridTemplateColumns: FULL_COLS, gap: 16, alignItems: 'center', padding: '13px 24px', borderBottom: '1px solid #E3E7EC', cursor: 'pointer', transition: 'background .1s' }}
       onMouseEnter={e => { e.currentTarget.style.background = '#FAFAFA'; }}
