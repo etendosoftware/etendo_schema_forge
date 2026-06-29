@@ -1051,7 +1051,7 @@ export async function pushCustomWindowToNeo(windowName, options = {}) {
       const entityId = existingEntity.rows[0].etgo_sf_entity_id;
       await client.query(
         `UPDATE etgo_sf_entity
-         SET java_qualifier = $1, updated = now()
+         SET java_qualifier = $1, isget = 'Y', ispost = 'Y', updated = now()
          WHERE etgo_sf_entity_id = $2`,
         [javaQualifier, entityId],
       );

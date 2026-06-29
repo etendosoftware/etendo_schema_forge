@@ -14,6 +14,44 @@ function formatDate(raw) {
   return s.slice(0, 10);
 }
 
+function MultiSelect({ options, selected, onToggle }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handler(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectedLabels = options.filter(o => selected.has(o.value)).map(o => o.label);
+
+  return (
+    <div className="npd-multiselect" ref={ref}>
+      <button type="button" className="npd-multiselect-trigger" onClick={() => setOpen(v => !v)}>
+        <span className={selected.size === 0 ? 'npd-placeholder' : ''}>
+          {selected.size === 0 ? '—' : selectedLabels.join(', ')}
+        </span>
+        <svg className={`npd-chevron${open ? ' open' : ''}`} width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M1.5 3.5l3.5 3 3.5-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="npd-multiselect-dropdown">
+          {options.map(o => (
+            <label key={o.value} className="npd-multiselect-option">
+              <input type="checkbox" checked={selected.has(o.value)} onChange={() => onToggle(o.value)} />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const ui = useUI();
   // apiBaseUrl already points to the spec (e.g. .../swebsf/not-posted-documents)
@@ -30,11 +68,10 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     })
       .then(r => r.ok ? r.json() : null)
       .then(j => {
-        if (j?.response?.data?.[0]) {
-          const d = j.response.data[0];
+        if (j) {
           setFilterOptions({
-            documentTypes: d.documentTypes ?? [],
-            accountingStatuses: d.accountingStatuses ?? [],
+            documentTypes: j.documentTypes ?? [],
+            accountingStatuses: j.accountingStatuses ?? [],
           });
         }
       })
@@ -44,7 +81,15 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
 
   // ── Filter state ─────────────────────────────────────────────────────────────
   const [document, setDocument] = useState('');
-  const [accountingStatus, setAccountingStatus] = useState('');
+  const [accountingStatuses, setAccountingStatuses] = useState(new Set());
+
+  function toggleAccountingStatus(value) {
+    setAccountingStatuses(prev => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value); else next.add(value);
+      return next;
+    });
+  }
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
@@ -64,7 +109,8 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     try {
       const params = new URLSearchParams();
       if (filters.document) params.set('document', filters.document);
-      if (filters.accountingStatus) params.set('accountingStatus', filters.accountingStatus);
+      if (filters.accountingStatuses?.size > 0)
+        params.set('accountingStatus', [...filters.accountingStatuses].join(','));
       if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
       if (filters.dateTo) params.set('dateTo', filters.dateTo);
 
@@ -77,10 +123,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         if (fetchAbortRef.current === ctrl) setLoadError(json?.message || res.statusText);
         return;
       }
-      // Handler returns { response: { data: [{ rows: [...], total: N }] } } OR
-      // { response: { data: rows[] } } depending on NEO wrapper. Handle both.
-      const data = json?.response?.data;
-      const rowsData = Array.isArray(data) ? (data[0]?.rows ?? data) : [];
+      const rowsData = json?.rows ?? [];
       if (fetchAbortRef.current === ctrl) setRows(rowsData);
     } catch (e) {
       if (e.name !== 'AbortError' && fetchAbortRef.current === ctrl) setLoadError(e.message);
@@ -91,11 +134,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
 
   // ── Initial load ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    fetchRows({ document: '', accountingStatus: '', dateFrom: '', dateTo: '' });
+    fetchRows({ document: '', accountingStatuses: new Set(), dateFrom: '', dateTo: '' });
   }, [fetchRows]);
 
   function handleApply() {
-    fetchRows({ document, accountingStatus, dateFrom, dateTo });
+    fetchRows({ document, accountingStatuses, dateFrom, dateTo });
     setSelected(new Set());
   }
 
@@ -138,7 +181,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       const json = await res.json().catch(() => null);
       if (res.ok && json?.response?.data?.[0]?.success !== false) {
         toast.success(`${row.description ?? row.documentId} — ${ui('documentPosted')}`);
-        fetchRows({ document, accountingStatus, dateFrom, dateTo });
+        fetchRows({ document, accountingStatuses, dateFrom, dateTo });
         setSelected(p => { const n = new Set(p); n.delete(row.documentId); return n; });
       } else {
         toast.error(json?.response?.data?.[0]?.message || json?.message || ui('postingFailed'));
@@ -180,7 +223,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       } else {
         toast.error(ui('postingFailed'));
       }
-      fetchRows({ document, accountingStatus, dateFrom, dateTo });
+      fetchRows({ document, accountingStatuses, dateFrom, dateTo });
       setSelected(new Set());
     } catch {
       toast.error(ui('postingFailed'));
@@ -284,12 +327,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
 
         <div className="npd-filter-field">
           <label>{ui('filterAccountingStatus')}</label>
-          <select value={accountingStatus} onChange={e => setAccountingStatus(e.target.value)}>
-            <option value="">—</option>
-            {filterOptions.accountingStatuses.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          <MultiSelect
+            options={filterOptions.accountingStatuses}
+            selected={accountingStatuses}
+            onToggle={toggleAccountingStatus}
+          />
         </div>
 
         <div className="npd-filter-field">

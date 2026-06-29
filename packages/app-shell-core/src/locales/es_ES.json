@@ -21351,6 +21351,9 @@
     "Sales Order Report": {
       "label": "Pedidos "
     },
+    "Not Posted Documents": {
+      "label": "Documentos no contabilizados"
+    },
     "Not Posted Transaction Report": {
       "label": "Documentos no contabilizados"
     },
