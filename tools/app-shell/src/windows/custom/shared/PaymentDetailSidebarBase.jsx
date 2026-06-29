@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 
 function fmtAmt(val) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
   const abs = Math.abs(n).toFixed(2).split('.');
   abs[0] = abs[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' €';
+  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' €';
 }
 
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM']);
@@ -36,15 +37,23 @@ function StateTag({ status, dir, ui }) {
   );
 }
 
+const DocIcon = () => (
+  <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#828FA3" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+  </svg>
+);
+
 /**
  * Shared detail sidebar for payment-in and payment-out.
- * Shows: hero amount + status, amount breakdown, activity timeline.
+ * Shows: hero amount + status, amount breakdown, applied lines, activity timeline.
  * Consumed by the sidePanel customComponent slot in each window's decisions.json.
  * Props come from DetailView.renderSidePanel: { recordId, data, token, apiBaseUrl, api, isNew }
  */
 export default function PaymentDetailSidebarBase({ dir, specName, data, token, apiBaseUrl }) {
   const ui = useUI();
-  const [appliedAmount, setAppliedAmount] = useState(null);
+  const navigate = useNavigate();
+  const [lines, setLines] = useState(null);
 
   const isIn = dir === 'in';
   const status = data?.status || '';
@@ -63,18 +72,17 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           `${base}/${specName}/${linesEntity}?parentId=${data.id}&_startRow=0&_endRow=100`,
           { headers },
         );
-        if (!res.ok) { setAppliedAmount(0); return; }
+        if (!res.ok) { setLines([]); return; }
         const rows = (await res.json())?.response?.data || [];
-        const total = rows
-          .filter(d => d.invoicePaymentSchedule)
-          .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
-        setAppliedAmount(total);
-      } catch { setAppliedAmount(0); }
+        setLines(rows.filter(d => d.invoicePaymentSchedule || d.amount));
+      } catch { setLines([]); }
     })();
   }, [data?.id, token, apiBaseUrl, isIn, specName]);
 
-  const applied = appliedAmount ?? 0;
-  const unapplied = totalAmount - applied;
+  const appliedLines = lines ?? [];
+  const applied = appliedLines.reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+  const unapplied = Math.max(0, totalAmount - applied);
+
   const paymentDate = data?.paymentDate;
   const createdDate = data?.creationDate || data?.created || paymentDate;
   const updatedDate = data?.updated;
@@ -87,6 +95,13 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
     ...(!isDraft ? [{ label: ui(isIn ? 'cobroConfirmado' : 'pagoConfirmado'), date: paymentDate, dot: '#2DCA72' }] : []),
     ...(!isDraft && data?.posted === 'Y' ? [{ label: ui('asientoContabilizado'), date: updatedDate, dot: '#D0D5DD' }] : []),
   ];
+
+  const invoiceWindow = isIn ? 'sales-invoice' : 'purchase-invoice';
+
+  const handleLineClick = (row) => {
+    const invoiceId = row['invoicePaymentSchedule$invoice'] || row['invoice'];
+    if (invoiceId) navigate(`/${invoiceWindow}/${invoiceId}`);
+  };
 
   return (
     <div
@@ -105,12 +120,13 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           <StateTag status={status} dir={dir} ui={ui} data-testid="StateTag__624cef" />
         </div>
       </div>
+
       {/* Amount breakdown */}
       <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 11 }}>
         {[
           { label: ui('totalAmount'), value: fmtAmt(totalAmount), muted: false },
-          { label: ui('appliedToInvoices'), value: appliedAmount === null ? '...' : fmtAmt(applied), muted: false },
-          { label: ui('unallocated'), value: appliedAmount === null ? '...' : fmtAmt(Math.max(0, unapplied)), muted: true },
+          { label: ui('appliedToInvoices'), value: lines === null ? '...' : fmtAmt(applied), muted: false },
+          { label: ui('unallocated'), value: lines === null ? '...' : fmtAmt(unapplied), muted: true },
         ].map(({ label, value, muted }) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ font: '400 13px/18px Inter', color: '#828FA3' }}>{label}</span>
@@ -120,6 +136,57 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           </div>
         ))}
       </div>
+
+      {/* Applied lines */}
+      <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#19191D', marginBottom: 10 }}>
+          {isIn ? 'Facturas cobradas' : 'Facturas pagadas'}
+        </div>
+        {lines === null ? (
+          <div style={{ fontSize: 13, color: '#A9A9BC' }}>...</div>
+        ) : appliedLines.length === 0 ? (
+          <div style={{ fontSize: 13, color: '#A9A9BC' }}>
+            {isIn ? 'Sin facturas aplicadas' : 'Sin facturas aplicadas'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {appliedLines.map((row, i) => {
+              const identifier = row['invoicePaymentSchedule$_identifier'] || row['invoice$_identifier'] || fmtDate(row.dueDate) || `Línea ${i + 1}`;
+              const amount = parseFloat(row.amount) || 0;
+              const hasNav = !!(row['invoicePaymentSchedule$invoice'] || row['invoice']);
+              return (
+                <div
+                  key={row.id || i}
+                  onClick={() => hasNav && handleLineClick(row)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '9px 10px', borderRadius: 8,
+                    background: '#F9FAFB', border: '0.5px solid #E3E7EC',
+                    cursor: hasNav ? 'pointer' : 'default',
+                  }}
+                  data-testid={`PaymentDetailSidebar__line-${i}`}
+                >
+                  <DocIcon />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ font: '500 12px/16px JetBrains Mono, monospace', color: '#19191D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {identifier}
+                    </div>
+                    {row.dueDate && (
+                      <div style={{ font: '400 11px/15px Inter', color: '#828FA3', marginTop: 1 }}>
+                        {fmtDate(row.dueDate)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="tabular-nums" style={{ font: '600 13px/18px Inter', color: isIn ? '#17663A' : '#19191D', flexShrink: 0 }}>
+                    {fmtAmt(amount)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Activity timeline */}
       <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#19191D', marginBottom: 10 }}>{ui('activity')}</div>
