@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { formatCurrency } from '@/lib/formatCurrency';
 import NewPaymentModal from './NewPaymentModal';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  return formatCurrency(curr || 'EUR', n);
+  const abs = Math.abs(n).toFixed(2).split('.');
+  abs[0] = abs[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' ' + (curr || 'EUR');
 }
 
 function fmtDate(raw) {
@@ -27,7 +30,7 @@ function PaymentStateTag({ status, isSales, ui }) {
       <span
         data-testid="PaymentStateTag__deposited"
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 5,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '2px 10px', borderRadius: 6,
           background: '#E2F7EA', color: '#17663A',
           fontSize: 12, fontWeight: 500, lineHeight: '18px', whiteSpace: 'nowrap',
@@ -42,7 +45,7 @@ function PaymentStateTag({ status, isSales, ui }) {
     <span
       data-testid="PaymentStateTag__draft"
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5,
+        display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: '2px 10px', borderRadius: 6,
         background: '#F1F2F4', color: '#55556D',
         fontSize: 12, fontWeight: 500, lineHeight: '18px', whiteSpace: 'nowrap',
@@ -54,16 +57,30 @@ function PaymentStateTag({ status, isSales, ui }) {
   );
 }
 
-function ReceiptIcon({ size = 20 }) {
+function RowDirBadge({ isIn, size = 30 }) {
+  const bg = isIn ? '#E2F7EA' : '#FDE2E9';
+  const color = isIn ? '#17663A' : '#C5234A';
+  const half = Math.round(size * 0.5);
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <line x1="10" y1="9" x2="8" y2="9" />
-    </svg>
+    <div style={{ width: size, height: size, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
+      {isIn
+        ? <svg width={half} height={half} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><polyline points="19 12 12 19 5 12"/></svg>
+        : <svg width={half} height={half} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/></svg>}
+    </div>
   );
+}
+
+const METHOD_ICONS = {
+  transfer: <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7h18M3 7l4-4M3 7l4 4M21 17H3M21 17l-4-4M21 17l-4 4"/></svg>,
+  card:     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>,
+  cash:     <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>,
+  direct:   <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4v16M4 8h12a3 3 0 0 1 0 6H4M14 14l4 4M14 14l4-4"/></svg>,
+};
+
+function MethodIcon({ method }) {
+  const key = (method || '').toLowerCase();
+  const icon = METHOD_ICONS[key] || METHOD_ICONS.transfer;
+  return <span style={{ display: 'inline-flex', color: '#9CA3AF' }}>{icon}</span>;
 }
 
 /**
@@ -90,8 +107,17 @@ export default function InvoicePaymentHistoryModal({
   onPaymentAdded,
 }) {
   const ui = useUI();
+  const navigate = useNavigate();
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(base);
+
+  const isSales = specName === 'sales-invoice';
+  const paymentWindow = isSales ? 'payment-in' : 'payment-out';
+
+  const handleRowClick = useCallback((p) => {
+    onClose();
+    navigate(`/${paymentWindow}/${p.id}`);
+  }, [navigate, onClose, paymentWindow]);
 
   const currency = invoiceData?.['currency$_identifier'] || 'EUR';
   const grandTotal = parseFloat(invoiceData?.grandTotalAmount ?? 0);
@@ -99,7 +125,6 @@ export default function InvoicePaymentHistoryModal({
   const bpName = invoiceData?.['businessPartner$_identifier'] || invoiceData?.businessPartner || '';
   const docNo = invoiceData?.documentNo || '';
   const isCompleted = invoiceData?.documentStatus === 'CO';
-  const isSales = specName === 'sales-invoice';
 
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -141,21 +166,20 @@ export default function InvoicePaymentHistoryModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      style={{ padding: 24 }}
       onClick={handleClose}
       data-testid="InvoicePaymentHistoryModal__backdrop"
     >
       <div
         className="bg-white flex flex-col"
-        style={{ width: 520, maxHeight: '82vh', borderRadius: 14, border: '0.5px solid #E3E7EC', boxShadow: '0 20px 50px rgba(16,20,28,.18), 0 0 0 1px rgba(16,20,28,.06)' }}
+        style={{ width: 720, maxWidth: '100%', maxHeight: '100%', borderRadius: 14, border: '0.5px solid #E3E7EC', boxShadow: '0 20px 50px rgba(16,20,28,.18), 0 0 0 1px rgba(16,20,28,.06)', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
         data-testid="InvoicePaymentHistoryModal__panel"
       >
         {/* Header */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #E3E7EC', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
+        <div style={{ padding: '18px 24px 16px', borderBottom: '1px solid #E3E7EC', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: '#D1FAE5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#065F46', flexShrink: 0 }}>
-              <ReceiptIcon size={20} data-testid="ReceiptIcon__b82d4f" />
-            </div>
+            <RowDirBadge isIn={isSales} size={44} />
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>{title}</div>
               <div style={{ fontSize: 12, color: '#6B7280', marginTop: 1 }}>
@@ -174,9 +198,9 @@ export default function InvoicePaymentHistoryModal({
         </div>
 
         {/* Summary boxes */}
-        <div style={{ padding: '14px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, borderBottom: '0.5px solid #E3E7EC', flexShrink: 0 }}>
+        <div style={{ padding: '14px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, borderBottom: '0.5px solid #E3E7EC', flexShrink: 0 }}>
           <div style={{ background: '#F9FAFB', borderRadius: 10, padding: '12px 14px', border: '0.5px solid #E5E7EB' }}>
-            <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>{ui('totalAmount')}</div>
+            <div style={{ fontSize: 11, color: '#6B7280', marginBottom: 4 }}>{ui('importeTotal')}</div>
             <div className="tabular-nums" style={{ fontSize: 18, fontWeight: 600, color: '#111827' }}>{fmt(grandTotal, currency)}</div>
           </div>
           <div style={{
@@ -186,7 +210,7 @@ export default function InvoicePaymentHistoryModal({
             border: `0.5px solid ${outstandingAmt > 0 ? '#FDE68A' : '#BBF7D0'}`,
           }}>
             <div style={{ fontSize: 11, color: outstandingAmt > 0 ? '#92400E' : '#166534', marginBottom: 4 }}>
-              {ui('outstandingLabel')}
+              {ui('saldoPendiente')}
             </div>
             <div className="tabular-nums" style={{ fontSize: 18, fontWeight: 600, color: outstandingAmt > 0 ? '#92400E' : '#166534' }}>
               {fmt(outstandingAmt, currency)}
@@ -205,9 +229,7 @@ export default function InvoicePaymentHistoryModal({
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 20px', gap: 10 }}
               data-testid="InvoicePaymentHistoryModal__empty"
             >
-              <div style={{ width: 48, height: 48, background: '#F3F4F6', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
-                <ReceiptIcon size={22} data-testid="ReceiptIcon__b82d4f" />
-              </div>
+              <RowDirBadge isIn={isSales} size={48} />
               <p style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', margin: 0 }}>
                 {isSales ? ui('noCobroYet') : ui('noPagoYet')}
               </p>
@@ -215,32 +237,42 @@ export default function InvoicePaymentHistoryModal({
           ) : (
             <div>
               {/* Column headers */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 90px 140px', gap: 8, padding: '10px 20px 8px', borderBottom: '0.5px solid #E3E7EC' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '26px 1fr 80px 95px 115px 118px 14px', gap: 8, padding: '10px 24px 8px', borderBottom: '0.5px solid #E3E7EC' }}>
+                <div />
                 {[ui('documentNo'), ui('date'), ui('paymentMethodCol'), ui('amount'), ui('statusLabel')].map((h) => (
-                  <div key={h} style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF' }}>{h}</div>
+                  <div key={h} style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h}</div>
                 ))}
+                <div />
               </div>
               {/* Rows */}
               <div style={{ display: 'flex', flexDirection: 'column' }} data-testid="InvoicePaymentHistoryModal__list">
                 {payments.map((p) => {
-                  const method = p['paymentMethod$_identifier'] || p.paymentMethod || '—';
+                  const methodRaw = p['paymentMethod$_identifier'] || p.paymentMethod || '';
+                  const methodKey = methodRaw.toLowerCase().replace(/transferencia|transfer/,'transfer').replace(/tarjeta|card/,'card').replace(/efectivo|cash/,'cash').replace(/domiciliaci[oó]n|direct/,'direct');
+                  const amtSign = isSales ? '+ ' : '− ';
                   return (
                     <div
                       key={p.id}
-                      style={{ display: 'grid', gridTemplateColumns: '1fr 90px 90px 90px 140px', gap: 8, padding: '10px 20px', borderBottom: '0.5px solid #F3F4F6', alignItems: 'center' }}
+                      onClick={() => handleRowClick(p)}
+                      className="hover-row"
+                      style={{ display: 'grid', gridTemplateColumns: '26px 1fr 80px 95px 115px 118px 14px', gap: 8, padding: '13px 24px', borderBottom: '0.5px solid #F3F4F6', alignItems: 'center', cursor: 'pointer' }}
                       data-testid="InvoicePaymentHistoryModal__row"
                     >
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <RowDirBadge isIn={isSales} size={26} />
+                      </div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {p.documentNo || p.id}
                       </div>
                       <div className="tabular-nums" style={{ fontSize: 12, color: '#6B7280' }}>
                         {fmtDate(p.paymentDate)}
                       </div>
-                      <div style={{ fontSize: 12, color: '#6B7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {method}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#6B7280', overflow: 'hidden' }}>
+                        <MethodIcon method={methodKey} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{methodRaw || '—'}</span>
                       </div>
-                      <div className="tabular-nums" style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>
-                        {fmt(p.amount, currency)}
+                      <div className="tabular-nums" style={{ fontSize: 13, fontWeight: 600, color: isSales ? '#17663A' : '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {amtSign}{fmt(p.amount, currency)}
                       </div>
                       <div>
                         <PaymentStateTag
@@ -248,6 +280,9 @@ export default function InvoicePaymentHistoryModal({
                           isSales={isSales}
                           ui={ui}
                           data-testid="PaymentStateTag__b82d4f" />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', color: '#9CA3AF' }}>
+                        <ChevronRight size={14} />
                       </div>
                     </div>
                   );
@@ -258,20 +293,32 @@ export default function InvoicePaymentHistoryModal({
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '12px 20px', borderTop: '0.5px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ padding: '14px 24px', borderTop: '0.5px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <span style={{ fontSize: 12, color: '#6B7280' }}>
-            {payments.length} {isSales ? ui('cobrosRegistrados') : ui('pagosRegistrados')}
+            {payments.length} {isSales
+              ? (payments.length === 1 ? ui('cobroRegistrado') : ui('cobrosRegistrados'))
+              : (payments.length === 1 ? ui('pagoRegistrado') : ui('pagosRegistrados'))}
           </span>
-          {outstandingAmt > 0 && isCompleted && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
               type="button"
-              onClick={() => setShowPaymentModal(true)}
-              data-testid="InvoicePaymentHistoryModal__add-btn"
-              style={{ fontSize: 13, fontWeight: 500, padding: '6px 14px', borderRadius: 6, border: 'none', background: '#18181b', color: '#fff', cursor: 'pointer' }}
+              onClick={handleClose}
+              data-testid="InvoicePaymentHistoryModal__cerrar-btn"
+              style={{ fontSize: 13, fontWeight: 500, padding: '6px 14px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#fff', color: '#374151', cursor: 'pointer' }}
             >
-              + {isSales ? ui('addCobro') : ui('addPago')}
+              {ui('close') || 'Cerrar'}
             </button>
-          )}
+            {outstandingAmt > 0 && isCompleted && (
+              <button
+                type="button"
+                onClick={() => setShowPaymentModal(true)}
+                data-testid="InvoicePaymentHistoryModal__add-btn"
+                style={{ fontSize: 13, fontWeight: 500, padding: '6px 14px', borderRadius: 6, border: 'none', background: '#18181b', color: '#fff', cursor: 'pointer' }}
+              >
+                + {isSales ? ui('addCobro') : ui('addPago')}
+              </button>
+            )}
+          </div>
         </div>
       </div>
       {/* Step 2: new payment creation modal */}

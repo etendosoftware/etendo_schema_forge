@@ -11,6 +11,7 @@ import ExecutionHistoryForm from './ExecutionHistoryForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import PaymentOutBottomPanel from '../../../custom/PaymentOutBottomPanel';
+import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import catalogs from './mockCatalogs';
 
@@ -30,7 +31,7 @@ const statusField = 'status';
 
 // @sf-generated-start extraBadges:header
 const extraBadges = [
-
+  { key: 'conciliado', labelKey: 'conciliado', field: 'reconciled', condition: (data) => data?.reconciled === 'Y', style: 'info' },
 ];
 // @sf-generated-end extraBadges:header
 
@@ -585,6 +586,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Payment", config: {} } }]}
         bottomSection={PaymentOutBottomPanel}
+        topbarRight={PaymentActivityToggle}
         sidePanel={PaymentDetailSidebar}
         requiredHeaderFields={requiredHeaderFields}
         linesLayout="inlineEditable"

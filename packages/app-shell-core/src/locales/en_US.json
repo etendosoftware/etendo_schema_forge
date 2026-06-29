@@ -17165,8 +17165,12 @@
     "noPagoYet": "No payments recorded for this invoice yet",
     "addCobro": "Add payment",
     "addPago": "Add payment",
+    "cobroRegistrado": "payment recorded",
     "cobrosRegistrados": "payments recorded",
+    "pagoRegistrado": "payment recorded",
     "pagosRegistrados": "payments recorded",
+    "importeTotal": "Total amount",
+    "saldoPendiente": "Outstanding balance",
     "cobroDepositado": "Collection deposited",
     "pagoDepositado": "Payment deposited",
     "paymentMethodCol": "Method",
@@ -20265,7 +20269,14 @@
     "dismiss": "Dismiss",
     "ellipsis": "...",
     "priceUnit": "€ /",
-    "amountPlaceholder": "0.00"
+    "amountPlaceholder": "0.00",
+    "exportar": "Export",
+    "verDetalle": "View detail",
+    "anyDate": "Any date",
+    "searchDoc": "Search document or contact...",
+    "reactivar": "Reactivate",
+    "conciliado": "Reconciled",
+    "reactivarTodosModoss": "Reactivate anyway"
   },
   "menus": {
     "Currency": {

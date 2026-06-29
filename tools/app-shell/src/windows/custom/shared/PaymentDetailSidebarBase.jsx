@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { formatCurrency } from '@/lib/formatCurrency';
+
+function fmtAmt(val, curr) {
+  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
+  const abs = Math.abs(n).toFixed(2).split('.');
+  abs[0] = abs[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' ' + (curr || 'EUR');
+}
 
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM']);
 
@@ -93,23 +99,23 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
         <div style={{ fontSize: 11, fontWeight: 500, color: '#828FA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
           {ui('amountLabel')}
         </div>
-        <div className="tabular-nums" style={{ fontSize: 32, fontWeight: 700, color: heroColor, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-          {heroSign}{formatCurrency(currency, totalAmount)}
+        <div className="tabular-nums" style={{ font: '700 32px/38px Inter', color: heroColor, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+          {heroSign}{fmtAmt(totalAmount, currency)}
         </div>
         <div style={{ marginTop: 8 }}>
           <StateTag status={status} dir={dir} ui={ui} data-testid="StateTag__624cef" />
         </div>
       </div>
       {/* Amount breakdown */}
-      <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 11 }}>
         {[
-          { label: ui('totalAmount'), value: formatCurrency(currency, totalAmount), green: false },
-          { label: ui('appliedToInvoices'), value: appliedAmount === null ? '...' : formatCurrency(currency, applied), green: applied > 0 },
-          { label: ui('unallocated'), value: appliedAmount === null ? '...' : formatCurrency(currency, Math.max(0, unapplied)), green: false },
+          { label: ui('totalAmount'), value: fmtAmt(totalAmount, currency), green: false },
+          { label: ui('appliedToInvoices'), value: appliedAmount === null ? '...' : fmtAmt(applied, currency), green: applied > 0 },
+          { label: ui('unallocated'), value: appliedAmount === null ? '...' : fmtAmt(Math.max(0, unapplied), currency), green: false },
         ].map(({ label, value, green }) => (
           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ fontSize: 13, color: '#828FA3' }}>{label}</span>
-            <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 600, color: green ? '#17663A' : unapplied <= 0 && label === ui('unallocated') ? '#D0D5DD' : '#19191D' }}>
+            <span style={{ font: '400 13px/18px Inter', color: '#828FA3' }}>{label}</span>
+            <span className="tabular-nums" style={{ font: '600 13px/18px Inter', color: green ? '#17663A' : unapplied <= 0 && label === ui('unallocated') ? '#D0D5DD' : '#19191D' }}>
               {value}
             </span>
           </div>

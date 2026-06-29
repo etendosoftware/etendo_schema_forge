@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { ChevronRight, Check, Plus } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useLocaleSwitch } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -12,6 +13,7 @@ import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.
 import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
 import { FiscalStatusBadge } from '@/windows/custom/shared/FiscalStatusBadge.jsx';
 import { formatAmount } from '@/lib/formatAmount.js';
+import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 
 /* eslint-disable react/prop-types */
 
@@ -42,6 +44,8 @@ export default function PurchaseInvoiceHeaderTable(props) {
   const { profile } = useFiscalConfig(orgId, apiBaseUrl);
 
   const targets = useMemo(() => getInvoiceFiscalTargets('purchase-invoice', profile), [profile]);
+
+  const [paymentRow, setPaymentRow] = useState(null);
 
   const siiColLabel = gl['invoiceList.col.siiStatus'] || 'SII Status';
 
@@ -77,10 +81,11 @@ export default function PurchaseInvoiceHeaderTable(props) {
         },
       },
       { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
-      { key: 'documentStatus', column: 'DocStatus', type: 'status' },
+      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusDocColumn') },
       ...fiscalCols,
       {
         key: 'grandTotalAmount', column: 'GrandTotal', type: 'custom',
+        label: t('impTotal'),
         render: (row) => {
           const raw = row.grandTotalAmount;
           const currency = row['currency$_identifier'];
@@ -88,7 +93,36 @@ export default function PurchaseInvoiceHeaderTable(props) {
           return <span className="tabular-nums">{formatAmount(amount, currency)}</span>;
         },
       },
-      { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+      {
+        key: 'outstandingAmount',
+        column: 'OutstandingAmt',
+        type: 'custom',
+        label: t('pendingPaymentColumn'),
+        render: (row) => {
+          const outstanding = parseFloat(row.outstandingAmount ?? 0);
+          const currency = row['currency$_identifier'] || 'EUR';
+          if (isNcOrReturn(row)) return null;
+          if (outstanding <= 0) {
+            return (
+              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+                <Check size={12}/>{t('pagada')}
+              </span>
+            );
+          }
+          return (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
+              aria-label={t('addPago')}
+              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#FFF9EB',border:'1px solid #F2E2BC',color:'#8A6E25',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+            >
+              <span style={{width:8,height:8,borderRadius:'50%',background:'#F59E0B',flexShrink:0,display:'inline-block'}}/>
+              {formatAmount(outstanding, currency)}
+              <span style={{display:'inline-flex',alignItems:'center',color:'#A37700'}}><Plus size={13}/></span>
+            </button>
+          );
+        },
+      },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
       {
         key: 'transactionDocument',
@@ -113,14 +147,32 @@ export default function PurchaseInvoiceHeaderTable(props) {
           );
         },
       },
+      {
+        key: '_nav',
+        type: 'custom',
+        label: '',
+        render: () => <ChevronRight size={16} className="text-muted-foreground" />,
+      },
     ];
   }, [gl, locale, targets, siiColLabel]);
 
   return (
-    <DataTable
-      columns={columns}
-      filters={filters}
-      {...props}
-      data-testid="DataTable__6b7cdb" />
+    <>
+      <DataTable
+        columns={columns}
+        filters={filters}
+        {...props}
+        data-testid="DataTable__6b7cdb" />
+      {paymentRow && (
+        <InvoicePaymentHistoryModal
+          invoiceId={paymentRow.id}
+          invoiceData={paymentRow}
+          specName="purchase-invoice"
+          apiBaseUrl={apiBaseUrl}
+          onClose={() => setPaymentRow(null)}
+          onPaymentAdded={() => { setPaymentRow(null); props.onRefresh?.(); }}
+        />
+      )}
+    </>
   );
 }

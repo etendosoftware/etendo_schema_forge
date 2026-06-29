@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import { toast } from 'sonner';
 import FinPaymentTable from '../../../custom/PaymentHeaderTable';
@@ -8,7 +8,6 @@ import { AttachmentsTab } from '@/components/attachments';
 import PaymentBottomPanel from '../../../custom/PaymentBottomPanel';
 import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
-import NewPaymentModal from '../../../custom/NewPaymentModal';
 import catalogs from './mockCatalogs';
 
 
@@ -25,7 +24,7 @@ const statusField = 'status';
 
 // @sf-generated-start extraBadges:finPayment
 const extraBadges = [
-
+  { key: 'conciliado', labelKey: 'conciliado', field: 'reconciled', condition: (data) => data?.reconciled === 'Y', style: 'info' },
 ];
 // @sf-generated-end extraBadges:finPayment
 
@@ -241,7 +240,6 @@ export const api = {
 
 // @sf-generated-start component:FinPaymentPage
 export default function FinPaymentPage({ windowName, recordId, ...props }) {
-  const [showNewModal, setShowNewModal] = useState(false);
   if (recordId) {
     return (
       <DetailView
@@ -277,7 +275,6 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
   }
 
   return (
-    <>
     <ListView
       entity="finPayment"
       Table={FinPaymentTable}
@@ -289,10 +286,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
       rowQuickActions={{}}
       sendDocument
       {...props}
-      onNew={() => setShowNewModal(true)}
     />
-    {showNewModal && <NewPaymentModal token={props.token} apiBaseUrl={props.apiBaseUrl} windowName={windowName} onClose={() => setShowNewModal(false)} />}
-    </>
   );
 }
 // @sf-generated-end component:FinPaymentPage

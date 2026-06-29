@@ -17406,8 +17406,12 @@
     "noPagoYet": "Aún no hay pagos registrados para esta factura",
     "addCobro": "Añadir cobro",
     "addPago": "Añadir pago",
+    "cobroRegistrado": "cobro registrado",
     "cobrosRegistrados": "cobros registrados",
+    "pagoRegistrado": "pago registrado",
     "pagosRegistrados": "pagos registrados",
+    "importeTotal": "Importe total",
+    "saldoPendiente": "Saldo pendiente",
     "cobroDepositado": "Cobro depositado",
     "pagoDepositado": "Pago depositado",
     "paymentMethodCol": "Método",
@@ -20531,7 +20535,14 @@
     "dismiss": "Descartar",
     "ellipsis": "...",
     "priceUnit": "€ /",
-    "amountPlaceholder": "0.00"
+    "amountPlaceholder": "0.00",
+    "exportar": "Exportar",
+    "verDetalle": "Ver detalle",
+    "anyDate": "Cualquier fecha",
+    "searchDoc": "Buscar documento o contacto...",
+    "reactivar": "Reactivar",
+    "conciliado": "Conciliado",
+    "reactivarTodosModoss": "Reactivar de todos modos"
   },
   "menus": {
     "Goods Movement": {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Check, Plus } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useLocaleSwitch } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -105,42 +105,22 @@ export default function InvoiceHeaderTable(props) {
           const currency = row['currency$_identifier'] || 'EUR';
           if (outstanding <= 0) {
             return (
-              <span style={{
-                display: 'inline-flex', alignItems: 'center',
-                fontSize: 11, fontWeight: 500,
-                padding: '2px 8px', borderRadius: 9999,
-                background: '#D1FAE5', color: '#065F46',
-              }}>
-                {t('cobrada')}
+              <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
+                <Check size={12}/>{t('cobrada')}
               </span>
             );
           }
           return (
-            <span className="inline-flex items-center gap-1.5" style={{ whiteSpace: 'nowrap' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#F59E0B', flexShrink: 0, display: 'inline-block' }} />
-              <span className="tabular-nums" style={{ fontSize: 13, color: '#92400E', fontWeight: 500 }}>
-                {fmtAmt(outstanding, currency)}
-              </span>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
-                style={{
-                  width: 20, height: 20,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  borderRadius: '50%',
-                  border: '1px solid #F59E0B',
-                  background: 'transparent',
-                  color: '#92400E',
-                  fontSize: 14, lineHeight: 1,
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  padding: 0,
-                }}
-                aria-label={t('addCobro')}
-              >
-                +
-              </button>
-            </span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
+              aria-label={t('addCobro')}
+              style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#FFF9EB',border:'1px solid #F2E2BC',color:'#8A6E25',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+            >
+              <span style={{width:8,height:8,borderRadius:'50%',background:'#F59E0B',flexShrink:0,display:'inline-block'}}/>
+              {fmtAmt(outstanding, currency)}
+              <span style={{display:'inline-flex',alignItems:'center',color:'#A37700'}}><Plus size={13}/></span>
+            </button>
           );
         },
       },
