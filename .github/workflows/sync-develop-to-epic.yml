@@ -84,15 +84,28 @@ jobs:
 
           if [ -z "$existing" ]; then
             echo "No open sync PR found, creating one..."
-            if ! pr_url=$(gh pr create \
+            # Capture stdout+stderr so we can inspect the failure reason. On success
+            # gh prints the PR URL; on failure the message lands here too.
+            create_out=$(gh pr create \
                 --base epic/ETP-3504 \
                 --head develop \
                 --title "Epic ETP-3504: Sync develop into epic" \
                 --body "$PR_BODY" \
                 --label epic-sync \
-                --assignee sebastianbarrozo); then
+                --assignee sebastianbarrozo 2>&1) && create_rc=0 || create_rc=$?
+
+            if [ "$create_rc" -eq 0 ]; then
+              pr_url=$(printf '%s\n' "$create_out" | grep -Eo 'https://github\.com/[^ ]+/pull/[0-9]+' | tail -1)
+            elif printf '%s' "$create_out" | grep -qi 'No commits between'; then
+              # develop has nothing ahead of epic/ETP-3504 — the branches are already
+              # in sync, so there is no diff to open a PR for. This is the desired
+              # state, not an error: skip cleanly instead of failing the run.
+              echo "develop and epic/ETP-3504 are already in sync — nothing to PR. Skipping."
+              exit 0
+            else
               # A concurrent run may have created the PR between our list and create.
               echo "gh pr create failed — re-querying for an existing PR..."
+              printf '%s\n' "$create_out"
               pr_url=$(gh pr list \
                 --base epic/ETP-3504 \
                 --head develop \
