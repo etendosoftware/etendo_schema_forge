@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import NewPaymentModal from './NewPaymentModal';
+import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -323,14 +323,15 @@ export default function InvoicePaymentHistoryModal({
       </div>
       {/* Step 2: new payment creation modal */}
       {showPaymentModal && createPortal(
-        <NewPaymentModal
+        <NewPaymentEntryModal
+          dir={isSales ? 'in' : 'out'}
+          specName={specName}
           invoiceId={invoiceId}
           invoiceData={invoiceData}
-          specName={specName}
+          outstanding={outstandingAmt}
           apiBaseUrl={apiBaseUrl}
           onClose={() => setShowPaymentModal(false)}
-          onPaymentAdded={handlePaymentRegistered}
-          data-testid="NewPaymentModal__from-history"
+          onSaved={handlePaymentRegistered}
         />,
         document.body,
       )}
