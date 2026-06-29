@@ -120,14 +120,15 @@ function AppliedLinesTable({ data, token, apiBaseUrl }) {
       </div>
       {lines.map((row, i) => {
         const applied = parseFloat(row.amount) || 0;
-        const docDisplay = fmtDate(row.dueDate) || `Línea ${i + 1}`;
+        const docDisplay = row['invoicePaymentSchedule$_identifier'] || row.invoiceNo || `Línea ${i + 1}`;
+        const subText = row.dueDate ? `FV · ${fmtDate(row.dueDate)}` : 'FV';
         return (
           <div key={row.id || i} style={{ display: 'grid', gridTemplateColumns: DET_COLS, gap: 12, padding: '13px 14px', borderBottom: i < lines.length - 1 ? '1px solid #E3E7EC' : 'none', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
               <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="#828FA3" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               <div style={{ minWidth: 0 }}>
                 <div style={{ font: '600 13px/17px JetBrains Mono, monospace', color: '#19191D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{docDisplay}</div>
-                <div style={{ font: '400 11px/15px Inter', color: '#828FA3', marginTop: 1 }}>FV</div>
+                <div style={{ font: '400 11px/15px Inter', color: '#828FA3', marginTop: 1 }}>{subText}</div>
               </div>
             </div>
             <div style={{ textAlign: 'right', font: '500 14px/19px Inter', color: '#55556D', fontVariantNumeric: 'tabular-nums' }}>—</div>
