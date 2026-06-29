@@ -21,7 +21,9 @@ const statusField = 'pSD2ConnectionStatus';
 // @sf-generated-end summary:account
 
 // @sf-generated-start extraBadges:account
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:account
 
 // @sf-generated-start processes:account
@@ -41,14 +43,25 @@ const processes = [
     displayLogicRaw: "false" },
   { name: 'aprmFundsTrans', label: 'Funds Transfer', style: 'positive',
     displayLogicRaw: "@EM_Aprm_Isfundstrans_Enabled@='Y'" },
-  { name: 'pSD2GetConsent', label: 'Connect Bank Account', style: 'positive',
-    displayLogicRaw: "@PSD2_ClientHasApiKey@=1 & @PSD2_HasConnections@=0" },
+  { name: 'pSD2GetConsent', label: 'Connect Account', style: 'positive',
+    displayLogicRaw: "@PSD2_ClientHasApiKey@=1 & @PSD2_HasConnections@=0 & @Type@!'C'" },
   { name: 'pSD2GetBankstatement', label: 'Get Bank Statement', style: 'positive',
-    displayLogicRaw: "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1" },
-  { name: 'psd2RefreshConnections', label: 'Refresh Connections', style: 'positive',
-    displayLogicRaw: "@PSD2_HasConecctions@>0" },
+    displayLogicRaw: "@PSD2_ClientHasApiKey@=1 & @PSD2_HasActiveConnections@>=1 & @Type@!'C'" },
+  { name: 'psd2ReconnectFa', label: 'Reconnect Account', style: 'positive',
+    displayLogicRaw: "@PSD2_ClientHasApiKey@=1 & @PSD2_HasInactiveConnections@>0 & @Type@!'C'" },
 ];
 // @sf-generated-end processes:account
+
+// @sf-generated-start detailProcesses:transaction
+const detailProcesses = [
+  { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
+    displayLogicRaw: "@Processed@='Y' & @#ShowAcct@='Y'" },
+  { name: 'etprReactivateTransaction', label: 'Reactivate Transaction', style: 'positive',
+    displayLogicRaw: "@processed@='Y'" },
+  { name: 'etprRemoveTransaction', label: 'Remove Transaction', style: 'positive',
+    displayLogicRaw: "@processed@='Y'" },
+];
+// @sf-generated-end detailProcesses:transaction
 
 // @sf-generated-start draftMode:account
 const draftMode = null;
@@ -61,13 +74,14 @@ const requiredHeaderFields = ['name', 'currency', 'type', 'currentBalance'];
 // @sf-generated-start addLineFields:transaction
 const addLineFields = {
   entry: [
-
+    { key: 'etprReactivateTransaction', column: 'EM_Etpr_Reactivate_Transaction', type: 'text', required: true, label: 'Reactivate Transaction', defaultValue: 'N' },
+    { key: 'etprRemoveTransaction', column: 'EM_Etpr_Remove_Transaction', type: 'text', required: true, label: 'Remove Transaction', defaultValue: 'N' },
   ],
   derived: [
 
   ],
   hidden: [
-
+    { key: 'posted', value: 'N' },
   ],
 };
 // @sf-generated-end addLineFields:transaction
@@ -129,6 +143,14 @@ export const api = {
       "reference": "Currency",
       "inputMode": "selector",
       "url": "/sws/neo/financial-account-detail/account/selectors/currency"
+    },
+    {
+      "entity": "account",
+      "field": "psd2Provider",
+      "column": "EM_Psd2_Provider_ID",
+      "reference": "PSD2_Provider",
+      "inputMode": "search",
+      "url": "/sws/neo/financial-account-detail/account/selectors/psd2Provider"
     },
     {
       "entity": "transaction",
@@ -230,6 +252,7 @@ export const api = {
   "actions": [
     {
       "entity": "account",
+      "field": "aPRMImportBankFile",
       "column": "EM_APRM_ImportBankFile",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMImportBankFile",
       "processId": "7AC7BE9024E448A0BB863C159DA762F9",
@@ -237,6 +260,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "aPRMMatchTransactions",
       "column": "EM_APRM_MatchTransactions",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactions",
       "processId": "86F0B1EBE2BC48E3ACF458768D14CC99",
@@ -244,6 +268,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "aPRMMatchTransactionsForce",
       "column": "EM_APRM_MatchTrans_Force",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMMatchTransactionsForce",
       "processId": "86F0B1EBE2BC48E3ACF458768D14CC99",
@@ -251,6 +276,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "aPRMReconcile",
       "column": "EM_APRM_Reconcile",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/aPRMReconcile",
       "processId": "EB3D56BDD37E4229B67DBAB9F9A9B167",
@@ -258,6 +284,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "aprmAddMultiplePayments",
       "column": "EM_Aprm_AddMultiplePayments",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddMultiplePayments",
       "processId": "4CE463C04CA0412CAC57EF58FE0F8498",
@@ -265,6 +292,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "aprmAddtransactionpd",
       "column": "EM_Aprm_Addtransactionpd",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmAddtransactionpd",
       "processId": "E68790A7B65F4D45AB35E2BAE34C1F39",
@@ -272,6 +300,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "aprmFindtransactionspd",
       "column": "EM_Aprm_Findtransactionspd",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFindtransactionspd",
       "processId": "154CB4F9274A479CB38A285E16984539",
@@ -279,6 +308,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "aprmFundsTrans",
       "column": "EM_Aprm_Funds_Trans",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/aprmFundsTrans",
       "processId": "CC73C4845CDC487395804946EACB225F",
@@ -286,6 +316,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "pSD2GetConsent",
       "column": "EM_PSD2_Get_Consent",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetConsent",
       "processId": "C580B3B60DA5484387493A74CEB00D13",
@@ -293,6 +324,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "psd2GetConnections",
       "column": "EM_Psd2_Get_Connections",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2GetConnections",
       "processId": "91C37692121944CA892C32316F56D9B4",
@@ -300,6 +332,7 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "pSD2GetBankstatement",
       "column": "EM_PSD2_Get_Bankstatement",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/pSD2GetBankstatement",
       "processId": "2B2635782D4C41FF9415D86C13D1E97D",
@@ -307,30 +340,61 @@ export const api = {
     },
     {
       "entity": "account",
+      "field": "psd2RefreshConnections",
       "column": "EM_Psd2_Refresh_Connections",
       "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2RefreshConnections",
       "processId": "83C5DBC9F05B4D38BBB3F5486B377427",
       "processType": "obuiapp"
     },
     {
-      "entity": "transaction",
-      "column": "Posted",
-      "url": "/sws/neo/financial-account-detail/transaction/{id}/action/posted"
+      "entity": "account",
+      "field": "psd2ReconnectFa",
+      "column": "EM_Psd2_Reconnect_Fa",
+      "url": "/sws/neo/financial-account-detail/account/{id}/action/psd2ReconnectFa",
+      "processId": "F3ABCD40BD0047AF9E76071CF7D3FF04",
+      "processType": "obuiapp"
     },
     {
       "entity": "transaction",
+      "field": "aprmProcessed",
       "column": "EM_Aprm_Processed",
       "url": "/sws/neo/financial-account-detail/transaction/{id}/action/aprmProcessed",
       "processId": "F68F2890E96D4D85A1DEF0274D105BCE",
       "processType": "classic"
     },
     {
+      "entity": "transaction",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "transaction",
+      "field": "etprReactivateTransaction",
+      "column": "EM_Etpr_Reactivate_Transaction",
+      "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprReactivateTransaction",
+      "processId": "BA47238DB98D4FE7A4B540760EC8226A",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "transaction",
+      "field": "etprRemoveTransaction",
+      "column": "EM_Etpr_Remove_Transaction",
+      "url": "/sws/neo/financial-account-detail/transaction/{id}/action/etprRemoveTransaction",
+      "processId": "DC4FCAC608324CB78CF92F99C1A94AD0",
+      "processType": "obuiapp"
+    },
+    {
       "entity": "importedBankStatements",
+      "field": "posted",
       "column": "Posted",
       "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/posted"
     },
     {
       "entity": "importedBankStatements",
+      "field": "aPRMProcessBankStatementForce",
       "column": "EM_APRM_Process_BS_Force",
       "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatementForce",
       "processId": "2DDE7D3618034C38A4462B7F3456C28D",
@@ -338,10 +402,19 @@ export const api = {
     },
     {
       "entity": "importedBankStatements",
+      "field": "aPRMProcessBankStatement",
       "column": "EM_APRM_Process_BS",
       "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/aPRMProcessBankStatement",
       "processId": "58A9261BACEF45DDA526F29D8557272D",
       "processType": "classic"
+    },
+    {
+      "entity": "importedBankStatements",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/financial-account-detail/importedBankStatements/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -376,6 +449,7 @@ export default function AccountPage({ windowName, recordId, ...props }) {
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        detailProcesses={detailProcesses}
         addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Account"

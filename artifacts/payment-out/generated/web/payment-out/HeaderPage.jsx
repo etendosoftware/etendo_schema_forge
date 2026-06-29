@@ -36,7 +36,7 @@ const extraBadges = [
 // @sf-generated-start processes:header
 const processes = [
   { name: 'psd2GenerateBankPayment', label: 'Generate Bank Payment', style: 'positive',
-    displayLogicRaw: "@PSD2_HasPayments@=0 & @PSD2_ClientHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0 & @PSD2_FAIsBank@=1 & @PSD2_PMIsBankTransfer@=1" },
+    displayLogicRaw: "@PSD2_HasPayments@=0 & @PSD2_UserHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0" },
   { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
     displayLogicRaw: "@Status@!'RPAE' & @Status@!'RPVOID' & @Processed@='Y' & @#ShowAcct@='Y'" },
   { name: 'etprReactivatePayment', label: 'Advanced Reactivation', style: 'positive',

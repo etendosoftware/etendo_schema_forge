@@ -4,6 +4,7 @@ import { DateField } from '@/components/ui/date-field';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -295,6 +296,7 @@ export default function InvoicePaymentModal({
       amount: parseFloat(paymentData?.amount || 0),
       accountName: accountName || '',
     });
+    trackDocumentCreated(specName === 'purchase-invoice' ? 'payment-out' : 'payment-in');
     setLoadingPayments(true);
     fetchPayments();
     fetchInstallments();

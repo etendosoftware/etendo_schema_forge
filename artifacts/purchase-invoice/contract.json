@@ -1,8 +1,8 @@
 {
-  "version": "0.55.0",
+  "version": "0.58.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-06-25T19:58:30.549Z",
-  "checksum": "b8c453e4116f590f",
+  "updatedAt": "2026-06-26T23:07:08.933Z",
+  "checksum": "d7fcd27db7204e2f",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -1587,6 +1587,7 @@
             "section": "principal",
             "gridOrder": 5,
             "min": 0,
+            "max": 100,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -5945,14 +5946,6 @@
             "required": true
           },
           {
-            "name": "intrCInvoiceline",
-            "apiKey": "intrCInvoiceline",
-            "column": "Intr_C_Invoiceline_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -5981,6 +5974,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Intr_C_Invoiceline_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -6390,14 +6391,6 @@
             "required": false
           },
           {
-            "name": "cInvoicetaxCashvatVID",
-            "apiKey": "cInvoicetaxCashvatVID",
-            "column": "C_Invoicetax_Cashvat_V_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "invoice",
             "apiKey": "invoice",
             "column": "C_Invoice_ID",
@@ -6466,6 +6459,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Invoicetax_Cashvat_V_ID",
+            "type": "id",
             "visibility": "system",
             "required": false
           }
@@ -6613,14 +6614,6 @@
             "required": false
           },
           {
-            "name": "finPaymentScheduleID",
-            "apiKey": "finPaymentScheduleID",
-            "column": "Fin_Payment_Schedule_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -6689,6 +6682,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_Schedule_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -6884,14 +6885,6 @@
             "required": true
           },
           {
-            "name": "fINPaymentScheduledetailID",
-            "apiKey": "fINPaymentScheduledetailID",
-            "column": "FIN_Payment_Scheduledetail_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "costCenter",
             "apiKey": "costCenter",
             "column": "C_Costcenter_ID",
@@ -7002,6 +6995,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Payment_Scheduledetail_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ],
         "javaQualifier": "paymentDetailsHandler"
@@ -7676,14 +7677,6 @@
             "required": true
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -7712,6 +7705,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7763,14 +7764,6 @@
             "required": true
           },
           {
-            "name": "tbaiSyncinvoiceID",
-            "apiKey": "tbaiSyncinvoiceID",
-            "column": "Tbai_Syncinvoice_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -7807,6 +7800,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Tbai_Syncinvoice_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -14278,20 +14279,20 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for batuz"
       },
       {
+        "id": "t-system-field-batuz-id",
+        "category": "system-field",
+        "entity": "batuz",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for batuz"
+      },
+      {
         "id": "t-system-field-batuz-organization",
         "category": "system-field",
         "entity": "batuz",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for batuz"
-      },
-      {
-        "id": "t-system-field-batuz-tbaiSyncinvoiceID",
-        "category": "system-field",
-        "entity": "batuz",
-        "field": "tbaiSyncinvoiceID",
-        "runner": "node",
-        "description": "System field 'tbaiSyncinvoiceID' should exist in backend but not frontend for batuz"
       },
       {
         "id": "t-system-field-batuz-updated",
@@ -14334,14 +14335,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for cashVat"
       },
       {
-        "id": "t-system-field-cashVat-cInvoicetaxCashvatVID",
-        "category": "system-field",
-        "entity": "cashVat",
-        "field": "cInvoicetaxCashvatVID",
-        "runner": "node",
-        "description": "System field 'cInvoicetaxCashvatVID' should exist in backend but not frontend for cashVat"
-      },
-      {
         "id": "t-system-field-cashVat-cInvoiceTaxID",
         "category": "system-field",
         "entity": "cashVat",
@@ -14380,6 +14373,14 @@
         "field": "currency",
         "runner": "node",
         "description": "System field 'currency' should exist in backend but not frontend for cashVat"
+      },
+      {
+        "id": "t-system-field-cashVat-id",
+        "category": "system-field",
+        "entity": "cashVat",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for cashVat"
       },
       {
         "id": "t-system-field-cashVat-invoice",
@@ -15518,12 +15519,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for intrastat"
       },
       {
-        "id": "t-system-field-intrastat-intrCInvoiceline",
+        "id": "t-system-field-intrastat-id",
         "category": "system-field",
         "entity": "intrastat",
-        "field": "intrCInvoiceline",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'intrCInvoiceline' should exist in backend but not frontend for intrastat"
+        "description": "System field 'id' should exist in backend but not frontend for intrastat"
       },
       {
         "id": "t-system-field-intrastat-organization",
@@ -15974,12 +15975,12 @@
         "description": "System field 'expected' should exist in backend but not frontend for paymentDetails"
       },
       {
-        "id": "t-system-field-paymentDetails-fINPaymentScheduledetailID",
+        "id": "t-system-field-paymentDetails-id",
         "category": "system-field",
         "entity": "paymentDetails",
-        "field": "fINPaymentScheduledetailID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for paymentDetails"
+        "description": "System field 'id' should exist in backend but not frontend for paymentDetails"
       },
       {
         "id": "t-system-field-paymentDetails-invoiceAmount",
@@ -16166,12 +16167,12 @@
         "description": "System field 'fINPaymentPriorityID' should exist in backend but not frontend for paymentPlan"
       },
       {
-        "id": "t-system-field-paymentPlan-finPaymentScheduleID",
+        "id": "t-system-field-paymentPlan-id",
         "category": "system-field",
         "entity": "paymentPlan",
-        "field": "finPaymentScheduleID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'finPaymentScheduleID' should exist in backend but not frontend for paymentPlan"
+        "description": "System field 'id' should exist in backend but not frontend for paymentPlan"
       },
       {
         "id": "t-system-field-paymentPlan-invoice",
@@ -16270,12 +16271,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for siiData"
       },
       {
-        "id": "t-system-field-siiData-factura",
+        "id": "t-system-field-siiData-id",
         "category": "system-field",
         "entity": "siiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for siiData"
+        "description": "System field 'id' should exist in backend but not frontend for siiData"
       },
       {
         "id": "t-system-field-siiData-invoice",

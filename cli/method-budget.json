@@ -1,0 +1,12 @@
+{
+  "_comment": "Method-count ratchet. Fails ONLY IF a class grows past its baseline; never fails just for being over Sonar's limit. Pay debt down freely, then run `node cli/src/method-budget.js --update` to lock in the lower number. `baseline` is this guard's own consistent method count (see sonarReported for the value Sonar's S1448 reports — counting rules differ, but both move the same direction when a method is added/removed). `moduleFile` is relative to the com.etendoerp.go module root (resolved via --module-root / ETENDO_GO_ROOT / sibling default).",
+  "classes": [
+    {
+      "label": "NeoDefaultsService",
+      "moduleFile": "src/com/etendoerp/go/schemaforge/NeoDefaultsService.java",
+      "baseline": 44,
+      "sonarReported": 38,
+      "note": "ETP-4083: Sonar S1448 flags 38 > 35 authorized. Ratchet frozen so it cannot grow while we extract methods into helpers/handlers."
+    }
+  ]
+}

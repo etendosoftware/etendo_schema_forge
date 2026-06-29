@@ -42,9 +42,16 @@ const STATEMENT_CELL_RENDERERS = {
     width: 'minmax(0,1fr)',
     labelKey: 'financeAccountStatementsColFileName',
     render: (s) => (
-      <span className={cn('truncate', s.fileName ? 'text-[#121217]' : 'text-[#A8AAB8]')} title={s.fileName || ''}>
-        {s.fileName || '—'}
-      </span>
+      s.fileName ? (
+        <span
+          className="inline-flex max-w-full items-center truncate rounded-lg bg-[#F5F7F9] px-2 py-1 text-xs text-[#3F3F50]"
+          title={s.fileName}
+        >
+          {s.fileName}
+        </span>
+      ) : (
+        <span className="text-[#A8AAB8]">—</span>
+      )
     ),
   },
   notes: {
@@ -332,7 +339,7 @@ function StatementRow({
         className={cn(
           GRID_CLASS,
           'group relative cursor-pointer items-center bg-white px-4 py-3 text-sm transition-shadow',
-          open ? 'bg-[#F5F7F9]' : 'hover:z-10 hover:bg-white hover:shadow-lg',
+          open ? 'bg-white' : 'hover:z-10 hover:bg-white hover:shadow-lg',
         )}
         onClick={onToggle}
       >
@@ -389,7 +396,7 @@ function StatementRow({
         ) : null}
       </div>
       {open ? (
-        <div className="border-b border-[#E8EAEF] bg-[#F8F9FB] px-4 pb-4">
+        <div className="relative z-10 border-b border-[#E8EAEF] bg-[#F5F7F9] px-11 pb-8 pt-3 shadow-[0px_10px_15px_-3px_rgba(18,18,23,0.08),0px_4px_6px_-2px_rgba(18,18,23,0.05)]">
           <StatementLinesInline
             statementId={s.id}
             currency={currency}

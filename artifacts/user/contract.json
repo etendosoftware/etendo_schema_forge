@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.14.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-06-25T00:36:00.464Z",
-  "checksum": "13324a7107dca071",
+  "updatedAt": "2026-06-26T12:35:43.019Z",
+  "checksum": "4a2428b637c08470",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -1107,6 +1107,14 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "psd2ApiKey",
+            "apiKey": "psd2ApiKey",
+            "column": "EM_Psd2_Api_Key",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           }
         ]
       },
@@ -1363,14 +1371,6 @@
             "required": false
           },
           {
-            "name": "cPocConfigurationID",
-            "apiKey": "cPocConfigurationID",
-            "column": "C_Poc_Configuration_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -1407,6 +1407,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Poc_Configuration_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -2615,14 +2623,6 @@
         "description": "System field 'client' should exist in backend but not frontend for emailConfiguration"
       },
       {
-        "id": "t-system-field-emailConfiguration-cPocConfigurationID",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "cPocConfigurationID",
-        "runner": "node",
-        "description": "System field 'cPocConfigurationID' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
         "id": "t-system-field-emailConfiguration-createdBy",
         "category": "system-field",
         "entity": "emailConfiguration",
@@ -2653,6 +2653,14 @@
         "field": "emailConfigOrganization",
         "runner": "node",
         "description": "System field 'emailConfigOrganization' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-system-field-emailConfiguration-id",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for emailConfiguration"
       },
       {
         "id": "t-system-field-emailConfiguration-organization",
@@ -2855,6 +2863,14 @@
         "description": "System field 'processNow' should exist in backend but not frontend for user"
       },
       {
+        "id": "t-system-field-user-psd2ApiKey",
+        "category": "system-field",
+        "entity": "user",
+        "field": "psd2ApiKey",
+        "runner": "node",
+        "description": "System field 'psd2ApiKey' should exist in backend but not frontend for user"
+      },
+      {
         "id": "t-system-field-user-smfswsDefaultWsRole",
         "category": "system-field",
         "entity": "user",
@@ -2997,7 +3013,7 @@
       }
     ],
     "summary": {
-      "total": 165,
+      "total": 166,
       "byCategory": {
         "action-endpoint": 3,
         "crud-flags": 3,
@@ -3007,11 +3023,11 @@
         "rule-declared": 16,
         "searchable-filters": 5,
         "selector-endpoint": 8,
-        "system-field": 46,
+        "system-field": 47,
         "visibility": 3
       },
       "byRunner": {
-        "node": 165,
+        "node": 166,
         "junit": 0
       }
     }

@@ -1,0 +1,36 @@
+name: Ratchet Guards
+
+# Guardrails that prevent known tech debt from GROWING (never fail just for existing
+# debt — they fail only if a tracked count goes UP). This lets us pay debt down calmly.
+# See docs/reports/contract-ui-churn-analysis.md (§8, Ola 0).
+#
+# - window-leak-budget: window/entity-specific literals leaking into the GENERIC
+#   contract-ui components (DetailView.jsx, DataTable.jsx). Files live in THIS repo,
+#   so this is the real enforcement point for the contract-ui churn problem.
+#
+# The method-budget ratchet (NeoDefaultsService.java) is NOT enforced here: that file
+# lives in com.etendoerp.go and only changes via that repo's PRs, so it must be wired
+# into the etendo-go CI to catch growth. This workflow stays focused on schema_forge.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+jobs:
+  window-leak-budget:
+    name: window-leak-budget (contract-ui)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm install
+
+      - name: Window-specific leak ratchet (fail only if it grew)
+        run: node cli/src/window-leak-budget.js --list

@@ -1,0 +1,14 @@
+{
+  "_comment": "Ratchet for window/entity-specific literals leaking into GENERIC contract-ui components. Fails ONLY IF the count grows; the target is 0, reached gradually. Pay debt down by declarativizing leaks (see docs/reports/contract-ui-churn-analysis.md §8), then run `node cli/src/window-leak-budget.js --update`. Comments are ignored; string/JSX literals are scanned. Baseline 8 maps to L1 (custom: icons ×2), L2 (=== 'contact' ×1), L3 (field === 'product' ×4), L4 (internal-consumption-product ×1).",
+  "paths": [
+    "tools/app-shell/src/components/contract-ui/DetailView.jsx",
+    "tools/app-shell/src/components/contract-ui/DataTable.jsx"
+  ],
+  "extensions": [".js", ".jsx"],
+  "patterns": [
+    "(===|!==)\\s*['\"](contact|product|order|invoice|sif|internalConsumption|internal-consumption|asset|amortization|attachments)\\b",
+    "['\"]custom:[a-zA-Z]+['\"]",
+    "['\"]internal-consumption[a-z-]*['\"]"
+  ],
+  "baseline": 8
+}

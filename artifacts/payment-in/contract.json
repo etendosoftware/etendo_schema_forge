@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-06-24T20:46:47.740Z",
-  "checksum": "a228dd7831d60882",
+  "updatedAt": "2026-06-26T12:27:56.190Z",
+  "checksum": "50d8b17acc9f54b2",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -943,14 +943,6 @@
             "required": false
           },
           {
-            "name": "payment",
-            "apiKey": "payment",
-            "column": "Fin_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "aPRMReconcilePayment",
             "apiKey": "aPRMReconcilePayment",
             "column": "EM_APRM_Reconcile_Payment",
@@ -1093,6 +1085,14 @@
             "type": "button",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ]
       },
@@ -1310,14 +1310,6 @@
             "required": true
           },
           {
-            "name": "fINPaymentScheduledetailID",
-            "apiKey": "fINPaymentScheduledetailID",
-            "column": "FIN_Payment_Scheduledetail_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -1370,6 +1362,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Payment_Scheduledetail_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -2654,6 +2654,14 @@
         "description": "System field 'generatedCredit' should exist in backend but not frontend for finPayment"
       },
       {
+        "id": "t-system-field-finPayment-id",
+        "category": "system-field",
+        "entity": "finPayment",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for finPayment"
+      },
+      {
         "id": "t-system-field-finPayment-ndDimension",
         "category": "system-field",
         "entity": "finPayment",
@@ -2668,14 +2676,6 @@
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for finPayment"
-      },
-      {
-        "id": "t-system-field-finPayment-payment",
-        "category": "system-field",
-        "entity": "finPayment",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for finPayment"
       },
       {
         "id": "t-system-field-finPayment-posted",
@@ -2902,20 +2902,20 @@
         "description": "System field 'expected' should exist in backend but not frontend for finPaymentScheduleDetail"
       },
       {
-        "id": "t-system-field-finPaymentScheduleDetail-fINPaymentScheduledetailID",
-        "category": "system-field",
-        "entity": "finPaymentScheduleDetail",
-        "field": "fINPaymentScheduledetailID",
-        "runner": "node",
-        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for finPaymentScheduleDetail"
-      },
-      {
         "id": "t-system-field-finPaymentScheduleDetail-gLItem",
         "category": "system-field",
         "entity": "finPaymentScheduleDetail",
         "field": "gLItem",
         "runner": "node",
         "description": "System field 'gLItem' should exist in backend but not frontend for finPaymentScheduleDetail"
+      },
+      {
+        "id": "t-system-field-finPaymentScheduleDetail-id",
+        "category": "system-field",
+        "entity": "finPaymentScheduleDetail",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for finPaymentScheduleDetail"
       },
       {
         "id": "t-system-field-finPaymentScheduleDetail-invoiceAmount",

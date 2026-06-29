@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
+import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -307,6 +308,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('soNoLinesError') : rawMsg);
         }
         setOrderConfirmed(true);
+        trackTransactionPosted();
         window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
       } catch (e) {
         setError(e.message || ui('poErrorOccurred'));
@@ -338,6 +340,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           amount:     docObj?.grandTotalAmount ?? null,
         };
         setReceiptResult(currentReceipt);
+        trackDocumentCreated('goods-receipt');
       } catch (e) {
         errors.push(e.message || ui('poErrorOccurred'));
       }
@@ -361,6 +364,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           amount:     docObj?.grandTotalAmount ?? null,
         };
         setInvoiceResult(currentInvoice);
+        trackDocumentCreated('purchase-invoice');
       } catch (e) {
         errors.push(e.message || ui('poErrorOccurred'));
       }
@@ -585,6 +589,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
         result.receipt = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null };
+        trackDocumentCreated('goods-receipt');
       }
 
       if (createInvoice) {
@@ -597,6 +602,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
         result.invoice = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null };
+        trackDocumentCreated('purchase-invoice');
       }
 
       window.dispatchEvent(new CustomEvent('purchase-order:document-created'));

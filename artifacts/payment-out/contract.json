@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-06-25T19:58:29.654Z",
-  "checksum": "a77ebc90875e7211",
+  "updatedAt": "2026-06-26T12:27:56.245Z",
+  "checksum": "2b8740c4379a9916",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -670,7 +670,7 @@
             "grid": false,
             "form": true,
             "displayLogic": {
-              "raw": "@PSD2_HasPayments@=0 & @PSD2_ClientHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0 & @PSD2_FAIsBank@=1 & @PSD2_PMIsBankTransfer@=1",
+              "raw": "@PSD2_HasPayments@=0 & @PSD2_UserHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0",
               "evaluable": true
             }
           },
@@ -2412,14 +2412,6 @@
             "required": true
           },
           {
-            "name": "payment",
-            "apiKey": "payment",
-            "column": "Fin_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "processNow",
             "apiKey": "processNow",
             "column": "Processing",
@@ -2530,6 +2522,14 @@
             "type": "button",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ]
       },
@@ -2739,14 +2739,6 @@
             "required": false
           },
           {
-            "name": "fINPaymentScheduledetailID",
-            "apiKey": "fINPaymentScheduledetailID",
-            "column": "FIN_Payment_Scheduledetail_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -2807,6 +2799,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Payment_Scheduledetail_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -3886,14 +3886,6 @@
             "required": true
           },
           {
-            "name": "psd2PisPayment",
-            "apiKey": "psd2PisPayment",
-            "column": "Psd2_Pis_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -3930,6 +3922,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Psd2_Pis_Payment_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7787,18 +7787,18 @@
         "description": "Rule 'Print payments process' (process) should be declared"
       },
       {
+        "id": "t-rule-declared-PSD2-Refresh-Payment-Status",
+        "category": "rule-declared",
+        "rule": "PSD2 Refresh Payment Status",
+        "runner": "node",
+        "description": "Rule 'PSD2 Refresh Payment Status' (process) should be declared"
+      },
+      {
         "id": "t-rule-declared-Reactivate-Payment",
         "category": "rule-declared",
         "rule": "Reactivate Payment",
         "runner": "node",
         "description": "Rule 'Reactivate Payment' (process) should be declared"
-      },
-      {
-        "id": "t-rule-declared-Refresh-Payment-Status",
-        "category": "rule-declared",
-        "rule": "Refresh Payment Status",
-        "runner": "node",
-        "description": "Rule 'Refresh Payment Status' (process) should be declared"
       },
       {
         "id": "t-rule-declared-Remove-Payment",
@@ -8650,6 +8650,14 @@
         "description": "System field 'exchangeRate' should exist in backend but not frontend for bankPayments"
       },
       {
+        "id": "t-system-field-bankPayments-id",
+        "category": "system-field",
+        "entity": "bankPayments",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for bankPayments"
+      },
+      {
         "id": "t-system-field-bankPayments-lastCallbackAt",
         "category": "system-field",
         "entity": "bankPayments",
@@ -8728,14 +8736,6 @@
         "field": "paymentUrl",
         "runner": "node",
         "description": "System field 'paymentUrl' should exist in backend but not frontend for bankPayments"
-      },
-      {
-        "id": "t-system-field-bankPayments-psd2PisPayment",
-        "category": "system-field",
-        "entity": "bankPayments",
-        "field": "psd2PisPayment",
-        "runner": "node",
-        "description": "System field 'psd2PisPayment' should exist in backend but not frontend for bankPayments"
       },
       {
         "id": "t-system-field-bankPayments-returnToUrl",
@@ -9042,20 +9042,20 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-id",
+        "category": "system-field",
+        "entity": "header",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-organization",
         "category": "system-field",
         "entity": "header",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-payment",
-        "category": "system-field",
-        "entity": "header",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-posted",
@@ -9178,12 +9178,12 @@
         "description": "System field 'etvfacPaymentZero' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-fINPaymentScheduledetailID",
+        "id": "t-system-field-lines-id",
         "category": "system-field",
         "entity": "lines",
-        "field": "fINPaymentScheduledetailID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for lines"
+        "description": "System field 'id' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-invoicePaid",

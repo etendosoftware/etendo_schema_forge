@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-06-25T19:58:32.797Z",
-  "checksum": "ef02ebc6d0e2dd28",
+  "updatedAt": "2026-06-26T12:27:59.013Z",
+  "checksum": "85d0ee73a20ee2cd",
   "frontendContract": {
     "window": {
       "id": "27A453FA86974745977672F1A8DCCEFF",
@@ -275,14 +275,6 @@
             "required": true
           },
           {
-            "name": "verifactuConfig",
-            "apiKey": "verifactuConfig",
-            "column": "Etvfac_Verifactu_Config_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -327,6 +319,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Etvfac_Verifactu_Config_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -665,6 +665,14 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
       },
       {
+        "id": "t-system-field-cabeceraDeConfiguraci-nVerifactu-id",
+        "category": "system-field",
+        "entity": "cabeceraDeConfiguraciónVerifactu",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
+      },
+      {
         "id": "t-system-field-cabeceraDeConfiguraci-nVerifactu-isDevEnv",
         "category": "system-field",
         "entity": "cabeceraDeConfiguraciónVerifactu",
@@ -703,14 +711,6 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
-      },
-      {
-        "id": "t-system-field-cabeceraDeConfiguraci-nVerifactu-verifactuConfig",
-        "category": "system-field",
-        "entity": "cabeceraDeConfiguraciónVerifactu",
-        "field": "verifactuConfig",
-        "runner": "node",
-        "description": "System field 'verifactuConfig' should exist in backend but not frontend for cabeceraDeConfiguraciónVerifactu"
       },
       {
         "id": "t-visibility-cabeceraDeConfiguraci-nVerifactu",

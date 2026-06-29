@@ -69,7 +69,7 @@ export default function WarehouseWindow(props) {
       secondaryTabs={secondaryTabs}
       sidebarClassName="w-[30%] shrink-0 border-l border-[#E8EAEF] overflow-y-auto p-2"
       sidebarAboveTabsOnly
-      formScrollPaddingX="px-2"
+      formScrollPaddingX=""
       contentOverflow="hidden"
       secondaryTabContentPaddingT="p-2 overflow-y-auto max-h-[calc(100vh-380px)]"
       Table={WarehouseCustomTable}

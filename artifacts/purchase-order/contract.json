@@ -1,8 +1,8 @@
 {
-  "version": "0.26.0",
+  "version": "0.29.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-06-25T19:58:30.715Z",
-  "checksum": "d7f66bd2464b8525",
+  "updatedAt": "2026-06-26T23:07:08.974Z",
+  "checksum": "a4205bc35c4d20d8",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -240,7 +240,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
             "reference": "Warehouse",
             "inputMode": "selector",
@@ -1234,6 +1234,7 @@
             "section": "principal",
             "gridOrder": 5,
             "min": 0,
+            "max": 100,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -3812,14 +3813,6 @@
             "required": true
           },
           {
-            "name": "cOrderlinetaxID",
-            "apiKey": "cOrderlinetaxID",
-            "column": "C_Orderlinetax_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "salesOrderLine",
             "apiKey": "salesOrderLine",
             "column": "C_Orderline_ID",
@@ -3872,6 +3865,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Orderlinetax_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4170,14 +4171,6 @@
             "required": true
           },
           {
-            "name": "finPaymentDetailVID",
-            "apiKey": "finPaymentDetailVID",
-            "column": "Fin_Payment_Detail_V_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "invoiceAmount",
             "apiKey": "invoiceAmount",
             "column": "Invoicedamt",
@@ -4334,6 +4327,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_Detail_V_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -10675,14 +10676,6 @@
         "description": "System field 'client' should exist in backend but not frontend for lineTax"
       },
       {
-        "id": "t-system-field-lineTax-cOrderlinetaxID",
-        "category": "system-field",
-        "entity": "lineTax",
-        "field": "cOrderlinetaxID",
-        "runner": "node",
-        "description": "System field 'cOrderlinetaxID' should exist in backend but not frontend for lineTax"
-      },
-      {
         "id": "t-system-field-lineTax-createdBy",
         "category": "system-field",
         "entity": "lineTax",
@@ -10697,6 +10690,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for lineTax"
+      },
+      {
+        "id": "t-system-field-lineTax-id",
+        "category": "system-field",
+        "entity": "lineTax",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for lineTax"
       },
       {
         "id": "t-system-field-lineTax-organization",
@@ -10827,20 +10828,20 @@
         "description": "System field 'finaccCurrencyID' should exist in backend but not frontend for paymentDetails"
       },
       {
-        "id": "t-system-field-paymentDetails-finPaymentDetailVID",
-        "category": "system-field",
-        "entity": "paymentDetails",
-        "field": "finPaymentDetailVID",
-        "runner": "node",
-        "description": "System field 'finPaymentDetailVID' should exist in backend but not frontend for paymentDetails"
-      },
-      {
         "id": "t-system-field-paymentDetails-glitemname",
         "category": "system-field",
         "entity": "paymentDetails",
         "field": "glitemname",
         "runner": "node",
         "description": "System field 'glitemname' should exist in backend but not frontend for paymentDetails"
+      },
+      {
+        "id": "t-system-field-paymentDetails-id",
+        "category": "system-field",
+        "entity": "paymentDetails",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for paymentDetails"
       },
       {
         "id": "t-system-field-paymentDetails-invoiceAmount",

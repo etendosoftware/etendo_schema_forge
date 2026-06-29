@@ -383,6 +383,22 @@ function renderInputCell({
       handleFieldChange(field.key, raw);
     }
   };
+  const onBlur = isNumeric
+    ? () => {
+        const raw = values[field.key];
+        if (raw === '' || raw == null) {
+          // Empty numeric → restore defaultValue (or min) so the POST body never
+          // omits the field and lets the backend apply a wrong implicit default.
+          if (field.defaultValue !== undefined) handleFieldChange(field.key, String(field.defaultValue));
+          else if (field.min !== undefined) handleFieldChange(field.key, String(field.min));
+          return;
+        }
+        const num = Number(raw);
+        if (isNaN(num)) return;
+        if (field.max !== undefined && num > field.max) handleFieldChange(field.key, String(field.max));
+        if (field.min !== undefined && num < field.min) handleFieldChange(field.key, String(field.min));
+      }
+    : undefined;
   // Always type="text" — numeric type renders spinner buttons; the numeric
   // on-screen keyboard is preserved via inputMode.
   return (
@@ -394,6 +410,7 @@ function renderInputCell({
         inputMode={numericInputMode}
         value={displayValue}
         onChange={onChange}
+        onBlur={onBlur}
         onKeyDown={handleKeyDown}
         placeholder={fieldLabel}
         required={field.required}
@@ -513,6 +530,13 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       const inputEl = document.querySelector(`[data-testid="field-${firstMissing.key}"]`);
       inputEl?.focus?.({ preventScroll: true });
       return Promise.resolve(false);
+    }
+    // Clamp any above-max values before validation so submitLine is consistent
+    // with the onBlur autocorrect (guards the mousedown-before-blur race).
+    for (const f of fields) {
+      if (f.max === undefined) continue;
+      const num = Number(valuesRef.current[f.key]);
+      if (!isNaN(num) && num > f.max) valuesRef.current = { ...valuesRef.current, [f.key]: String(f.max) };
     }
     const belowMin = fields.filter(f => isBelowMin(f, valuesRef));
     if (belowMin.length > 0) {
@@ -918,14 +942,22 @@ function updateSnapshotWithSelectedItem(selectedItem, snapshot, handleChange, to
   }
 }
 
+function resolveNumericFieldValue(f, val) {
+  if (val === '' || val == null) {
+    if (f.defaultValue !== undefined) return f.defaultValue;
+    if (f.min !== undefined) return f.min;
+    return val;
+  }
+  const raw = String(val);
+  const parsed = f.type === 'integer' ? Number.parseInt(raw, 10) : Number.parseFloat(raw);
+  return Number.isNaN(parsed) ? val : parsed;
+}
+
 function coerceFieldValues(valuesRef, fields) {
   const coercedValues = { ...valuesRef.current };
   for (const f of fields) {
-    if (NUMERIC_FIELD_TYPES.has(f.type) && coercedValues[f.key] !== '' && coercedValues[f.key] != null) {
-      const raw = String(coercedValues[f.key]);
-      const parsed = f.type === 'integer' ? Number.parseInt(raw, 10) : Number.parseFloat(raw);
-      if (!Number.isNaN(parsed)) coercedValues[f.key] = parsed;
-    }
+    if (!NUMERIC_FIELD_TYPES.has(f.type)) continue;
+    coercedValues[f.key] = resolveNumericFieldValue(f, coercedValues[f.key]);
   }
   return coercedValues;
 }

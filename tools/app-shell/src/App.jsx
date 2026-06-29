@@ -17,6 +17,7 @@ import HrPage from './pages/HrPage.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import ReportViewerPage from './pages/ReportViewerPage.jsx';
 import FinancialAccountsPage from './pages/FinancialAccountsPage.jsx';
+import Psd2CallbackPage from './pages/Psd2CallbackPage.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { createMockFetch } from './lib/mockFetch.js';
 import { LocaleProvider } from './i18n/index.js';
@@ -109,6 +110,7 @@ async function loadAllMockData() {
     import('@generated/fiscal-models/custom/mockData.js'),
     import('@generated/conversion-rates/generated/web/conversion-rates/mockData.js'),
     import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/mockData.js'),
+    import('@generated/open-close-period-control/generated/web/open-close-period-control/mockData.js'),
   ]);
 
   const merged = {};
@@ -140,7 +142,7 @@ function AppRoutes({ menuGroups, windowMap }) {
   const location = useLocation();
 
   // Public routes render without waiting for menu data
-  const publicPaths = ['/onboarding'];
+  const publicPaths = ['/onboarding', '/financial-account/psd2-callback'];
   const isPublicRoute = publicPaths.some(p => location.pathname.startsWith(p));
 
   if (!isPublicRoute && menuGroups.length === 0) {
@@ -162,6 +164,10 @@ function AppRoutes({ menuGroups, windowMap }) {
       <Route
         path="/login"
         element={<Navigate to="/onboarding" replace data-testid="Navigate__ecaf3f" />}
+        data-testid="Route__ecaf3f" />
+      <Route
+        path="/financial-account/psd2-callback"
+        element={<Psd2CallbackPage data-testid="Psd2CallbackPage__ecaf3f" />}
         data-testid="Route__ecaf3f" />
       <Route
         element={

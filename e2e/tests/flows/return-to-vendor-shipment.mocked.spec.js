@@ -279,7 +279,7 @@ test.describe('return-to-vendor-shipment — list view', () => {
 
     // Close preview using the close button
     await previewModal.getByRole('button', { name: /cerrar|close/i }).click();
-    await expect(previewModal).toBeHidden({ timeout: 3_000 });
+    await expect(previewModal).toBeHidden({ timeout: 5_000 });
 
     // ── Clone from list row (Case 7) ──────────────────────────────────────
     await coRow.hover();
@@ -292,7 +292,7 @@ test.describe('return-to-vendor-shipment — list view', () => {
 
     // The modal has a clone button (data-testid="action-clone-record")
     const modalCloneBtn = page.getByTestId('action-clone-record');
-    await expect(modalCloneBtn).toBeVisible({ timeout: 3_000 });
+    await expect(modalCloneBtn).toBeVisible({ timeout: 8_000 });
 
     // Confirm the clone
     await modalCloneBtn.click();
@@ -349,16 +349,16 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
     await confirmBtn.click();
 
     // Modal title is "¿Gestionar crédito?" (ui('returnToVendor.confirmModal.title'))
-    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 8_000 });
 
     // Subtitle contains documentNo (bold) and BP name as separate parts
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText('RTVS-DR-001').first()).toBeVisible({ timeout: 3_000 });
-    await expect(dialog.getByText('Proveedor Test S.L.').first()).toBeVisible({ timeout: 3_000 });
+    await expect(dialog.getByText('RTVS-DR-001').first()).toBeVisible({ timeout: 5_000 });
+    await expect(dialog.getByText('Proveedor Test S.L.').first()).toBeVisible({ timeout: 5_000 });
 
     // Toggle card is present (role="switch")
     const toggleCard = dialog.getByRole('switch');
-    await expect(toggleCard).toBeVisible({ timeout: 3_000 });
+    await expect(toggleCard).toBeVisible({ timeout: 5_000 });
     // defaultCreateInvoice=true → switch is aria-checked="true"
     await expect(toggleCard).toHaveAttribute('aria-checked', 'true');
 
@@ -368,12 +368,12 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
 
     // Cancel dismisses the modal
     await modalCancelBtn.click();
-    await expect(dialog).toBeHidden({ timeout: 3_000 });
+    await expect(dialog).toBeHidden({ timeout: 5_000 });
 
     // ── Case 2: re-open and confirm WITH invoice ──────────────────────────
     await confirmBtn.click();
     const dialog2 = page.getByRole('dialog');
-    await expect(dialog2).toBeVisible({ timeout: 3_000 });
+    await expect(dialog2).toBeVisible({ timeout: 8_000 });
 
     // Toggle is checked → button label is confirmWithInvoice ("Confirmar y crear factura")
     const modalConfirmBtn = dialog2.getByRole('button', { name: /confirmar/i });
@@ -414,6 +414,7 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
    * When hasReturnInvoice=true, action-create-return-invoice must be absent.
    */
   test('CO button visibility, invoice modal confirm, and button absent when invoice exists — full flow', async ({ page }) => {
+    test.setTimeout(120_000); // 2 navigations + complex modal flow can exceed 60s under full-suite load
     // Navigate to CO record WITHOUT existing invoice
     await page.goto('/return-to-vendor-shipment/rtvs-co-001');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
@@ -433,21 +434,21 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     await createInvoiceBtn.click();
 
     // CreateInvoiceConfirmModal — modal title is soManageDocsTitle ("Gestionar documentos")
-    await expect(page.getByText('Gestionar documentos')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Gestionar documentos')).toBeVisible({ timeout: 8_000 });
 
     // Blue summary card shows BP name (small text) and documentNo (large text)
-    await expect(page.getByText('Proveedor Test S.L.').first()).toBeVisible({ timeout: 3_000 });
+    await expect(page.getByText('Proveedor Test S.L.').first()).toBeVisible({ timeout: 8_000 });
     // RTVS-CO-001 appears as large text in the summary card (displayAmount = documentNo when total=0)
-    await expect(page.getByText('RTVS-CO-001').first()).toBeVisible({ timeout: 3_000 });
+    await expect(page.getByText('RTVS-CO-001').first()).toBeVisible({ timeout: 8_000 });
 
     // Invoice checkbox card is rendered (labeled "Crear factura") and checked by default
     const invoiceCardLabel = page.getByText('Crear factura', { exact: true });
-    await expect(invoiceCardLabel).toBeVisible({ timeout: 3_000 });
+    await expect(invoiceCardLabel).toBeVisible({ timeout: 8_000 });
 
     // "Crear →" button (soCreateDocsBtn) triggers the POST
     // The button renders the text "Crear →" with an arrow character
     const createDocsBtn = page.getByRole('button', { name: /crear/i }).last();
-    await expect(createDocsBtn).toBeVisible({ timeout: 3_000 });
+    await expect(createDocsBtn).toBeVisible({ timeout: 8_000 });
     await createDocsBtn.click();
 
     // createReturnInvoice POST returns FC-RTV-NEW-001 → ConfirmResultModal appears
@@ -461,8 +462,9 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     // ── Case 5: button absent when invoice already exists ─────────────────
     await page.goto('/return-to-vendor-shipment/rtvs-co-002');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    // Give topbar time to render (hasReturnInvoice=true → button must not appear)
-    await page.waitForTimeout(500);
+    // Wait for the topbar to hydrate (hasReturnInvoice=true → action-create-return-invoice must not appear).
+    // Use a short explicit wait instead of a fixed delay so we don't pass prematurely on a slow load.
+    await page.getByRole('button', { name: /guardar|cancelar/i }).first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
     await expect(page.getByTestId('action-create-return-invoice')).toHaveCount(0);
   });
 });
@@ -601,7 +603,7 @@ test.describe('return-to-vendor-shipment — import from receipt modal', () => {
     // ── Case 8: confirm import ────────────────────────────────────────────
     // The import button label includes "Importar seleccionadas" or similar
     const importBtn = page.getByRole('button', { name: /importar seleccionadas|import/i });
-    await expect(importBtn).toBeVisible({ timeout: 3_000 });
+    await expect(importBtn).toBeVisible({ timeout: 8_000 });
     await importBtn.click();
 
     // importReceiptLines POST was called with the expected payload

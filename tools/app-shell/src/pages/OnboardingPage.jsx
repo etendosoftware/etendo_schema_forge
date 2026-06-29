@@ -32,6 +32,7 @@ import { getPasswordChecks, isStrongPassword, PASSWORD_RULES } from './onboardin
 import { useLocaleSwitch, useUI } from '../i18n/index.js';
 import { buildAppReturnToHref, getSafeReturnTo } from '../lib/oauthReturnTo.js';
 import { track } from '../lib/observability.js';
+import { trackSessionStarted } from '../lib/observability/health-events.js';
 import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '../lib/observability/events.js';
 import {
   applyProgressMessage,
@@ -966,6 +967,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
           action: 'enter_environment',
           status: 'success',
         });
+        await trackSessionStarted({ username: env.adminUserName || env.adminUser, clientId: env.clientId, clientName: env.clientName });
         window.location.href = buildAppReturnToHref(
           getSafeReturnTo(window.location.search),
           window.location.pathname

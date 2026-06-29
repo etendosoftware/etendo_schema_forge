@@ -1,0 +1,251 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "window": {
+    "category": "finance",
+    "name": "Open/Close Period Control",
+    "detailEntity": "documents",
+    "hideCreate": true,
+    "hideDetailForm": true,
+    "hideDelete": true,
+    "hidePrint": true,
+    "hideMoreMenu": true,
+    "listSortBy": "periodNo asc",
+    "statusEnumLabels": {
+      "O": "All Opened",
+      "N": "All Never Opened",
+      "C": "All Closed",
+      "P": "All Permanently Closed",
+      "M": "Mixed"
+    },
+    "processOverrides": {
+      "openClose": {
+        "label": "Open Close Period",
+        "detailLabel": "Open Close Document",
+        "params": [
+          {
+            "key": "openClose",
+            "type": "select",
+            "label": "Action",
+            "required": true,
+            "options": [
+              { "value": "O", "label": "Open" },
+              { "value": "C", "label": "Closed" },
+              { "value": "P", "label": "Permanently closed" }
+            ]
+          }
+        ]
+      }
+    },
+    "actions": {
+      "openClose": {
+        "parameters": [
+          {
+            "name": "openClose",
+            "type": "string",
+            "required": true,
+            "description": "Period action: O=Open, C=Closed, P=Permanently closed"
+          }
+        ],
+        "preconditions": [],
+        "effects": ["Updates the period or document-type status"],
+        "edgeCases": [
+          "Period is permanently closed (P) — cannot be re-opened",
+          "No accounting entries exist yet — transition may be restricted",
+          "User lacks period-control permission for the organization"
+        ]
+      }
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Período",
+        "PeriodNo": "N.º período",
+        "StartDate": "Fecha inicio",
+        "EndDate": "Fecha fin",
+        "PeriodType": "Tipo",
+        "Status": "Estado",
+        "DocumentCategory": "Tipo de documento",
+        "PeriodStatus": "Estado período"
+      }
+    }
+  },
+  "entities": {
+    "periodControl": {
+      "javaQualifier": "period-openclose",
+      "fields": {
+        "status": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "badge": true,
+          "columnType": "enum",
+          "enumVariants": {
+            "O": "green",
+            "N": "neutral",
+            "C": "neutral",
+            "P": "red",
+            "M": "orange"
+          },
+          "gridOrder": 1
+        },
+        "calendar": {
+          "grid": false,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 2
+        },
+        "year": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 3
+        },
+        "name": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 4
+        },
+        "periodNo": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 5
+        },
+        "startingDate": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 6
+        },
+        "endingDate": {
+          "grid": false,
+          "form": true,
+          "visibility": "readOnly"
+        },
+        "periodType": {
+          "grid": false,
+          "form": true,
+          "visibility": "readOnly"
+        },
+        "openClose": {
+          "form": true,
+          "visibility": "editable",
+          "processId": "167",
+          "processType": "classic"
+        },
+        "active": {
+          "visibility": "discarded"
+        },
+        "organization": {
+          "visibility": "discarded"
+        },
+        "client": {
+          "visibility": "discarded"
+        },
+        "id": {
+          "visibility": "discarded"
+        },
+        "creationDate": {
+          "visibility": "discarded"
+        },
+        "createdBy": {
+          "visibility": "discarded"
+        },
+        "updated": {
+          "visibility": "discarded"
+        },
+        "updatedBy": {
+          "visibility": "discarded"
+        },
+        "processNow": {
+          "visibility": "discarded"
+        },
+        "closingFactAcctGroupID": {
+          "visibility": "discarded"
+        },
+        "regularizationFactAcctGroupID": {
+          "visibility": "discarded"
+        },
+        "divideupFactAcctGroupID": {
+          "visibility": "discarded"
+        },
+        "openFactAcctGroupID": {
+          "visibility": "discarded"
+        }
+      }
+    },
+    "documents": {
+      "javaQualifier": "period-control-doc-openclose",
+      "fields": {
+        "documentCategory": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "gridOrder": 1
+        },
+        "periodStatus": {
+          "grid": true,
+          "form": true,
+          "visibility": "readOnly",
+          "badge": true,
+          "columnType": "enum",
+          "enumVariants": {
+            "O": "green",
+            "N": "neutral",
+            "C": "red",
+            "P": "red"
+          },
+          "gridOrder": 2
+        },
+        "openClose": {
+          "form": true,
+          "visibility": "editable",
+          "processId": "168",
+          "processType": "classic"
+        },
+        "calendar": {
+          "visibility": "discarded"
+        },
+        "period": {
+          "visibility": "discarded"
+        },
+        "periodControl": {
+          "visibility": "discarded"
+        },
+        "periodAction": {
+          "visibility": "discarded"
+        },
+        "processNow": {
+          "visibility": "discarded"
+        },
+        "id": {
+          "visibility": "discarded"
+        },
+        "active": {
+          "visibility": "discarded"
+        },
+        "organization": {
+          "visibility": "discarded"
+        },
+        "client": {
+          "visibility": "discarded"
+        },
+        "creationDate": {
+          "visibility": "discarded"
+        },
+        "createdBy": {
+          "visibility": "discarded"
+        },
+        "updated": {
+          "visibility": "discarded"
+        },
+        "updatedBy": {
+          "visibility": "discarded"
+        }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"]
+}

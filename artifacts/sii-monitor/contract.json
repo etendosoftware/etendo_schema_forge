@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
-  "updatedAt": "2026-06-24T20:46:50.413Z",
-  "checksum": "943a3f6ff97e2bd7",
+  "updatedAt": "2026-06-26T12:27:58.595Z",
+  "checksum": "247d5376dacc1023",
   "frontendContract": {
     "window": {
       "id": "FEF76C3E0F104F06A89AAD15A4A4A35C",
@@ -4194,14 +4194,6 @@
             "required": true
           },
           {
-            "name": "configuracinSII",
-            "apiKey": "configuracinSII",
-            "column": "Aeatsii_Config_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -4390,6 +4382,14 @@
             "apiKey": "validHash",
             "column": "Valid_Hash",
             "type": "button",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Config_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -5800,14 +5800,6 @@
             "required": false
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -5844,6 +5836,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7254,14 +7254,6 @@
             "required": false
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -7298,6 +7290,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7461,14 +7461,6 @@
             "required": false
           },
           {
-            "name": "aeatsiiPaymentCashvatV",
-            "apiKey": "aeatsiiPaymentCashvatV",
-            "column": "Aeatsii_Payment_Cashvat_V_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -7505,6 +7497,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Payment_Cashvat_V_ID",
+            "type": "id",
             "visibility": "system",
             "required": false
           }
@@ -7580,14 +7580,6 @@
             "required": true
           },
           {
-            "name": "aeatsiiPayment",
-            "apiKey": "aeatsiiPayment",
-            "column": "Aeatsii_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -7616,6 +7608,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Payment_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -9026,14 +9026,6 @@
             "required": false
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -9070,6 +9062,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -10488,14 +10488,6 @@
             "required": true
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -10524,6 +10516,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -17928,14 +17928,6 @@
         "description": "Selector endpoint for 'invoice' in receivedInvoicesSiiData should exist"
       },
       {
-        "id": "t-system-field-cashCriterionPayments-aeatsiiPaymentCashvatV",
-        "category": "system-field",
-        "entity": "cashCriterionPayments",
-        "field": "aeatsiiPaymentCashvatV",
-        "runner": "node",
-        "description": "System field 'aeatsiiPaymentCashvatV' should exist in backend but not frontend for cashCriterionPayments"
-      },
-      {
         "id": "t-system-field-cashCriterionPayments-client",
         "category": "system-field",
         "entity": "cashCriterionPayments",
@@ -17958,6 +17950,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for cashCriterionPayments"
+      },
+      {
+        "id": "t-system-field-cashCriterionPayments-id",
+        "category": "system-field",
+        "entity": "cashCriterionPayments",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for cashCriterionPayments"
       },
       {
         "id": "t-system-field-cashCriterionPayments-organization",
@@ -19784,12 +19784,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for issuedInvoices(previousPeriod)SiiData"
       },
       {
-        "id": "t-system-field-issuedInvoices-previousPeriod-SiiData-factura",
+        "id": "t-system-field-issuedInvoices-previousPeriod-SiiData-id",
         "category": "system-field",
         "entity": "issuedInvoices(previousPeriod)SiiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for issuedInvoices(previousPeriod)SiiData"
+        "description": "System field 'id' should exist in backend but not frontend for issuedInvoices(previousPeriod)SiiData"
       },
       {
         "id": "t-system-field-issuedInvoices-previousPeriod-SiiData-organization",
@@ -20344,12 +20344,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for issuedInvoicesSiiData"
       },
       {
-        "id": "t-system-field-issuedInvoicesSiiData-factura",
+        "id": "t-system-field-issuedInvoicesSiiData-id",
         "category": "system-field",
         "entity": "issuedInvoicesSiiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for issuedInvoicesSiiData"
+        "description": "System field 'id' should exist in backend but not frontend for issuedInvoicesSiiData"
       },
       {
         "id": "t-system-field-issuedInvoicesSiiData-organization",
@@ -20424,14 +20424,6 @@
         "description": "System field 'client' should exist in backend but not frontend for organizations"
       },
       {
-        "id": "t-system-field-organizations-configuracinSII",
-        "category": "system-field",
-        "entity": "organizations",
-        "field": "configuracinSII",
-        "runner": "node",
-        "description": "System field 'configuracinSII' should exist in backend but not frontend for organizations"
-      },
-      {
         "id": "t-system-field-organizations-createdBy",
         "category": "system-field",
         "entity": "organizations",
@@ -20470,6 +20462,14 @@
         "field": "guipuzcoa",
         "runner": "node",
         "description": "System field 'guipuzcoa' should exist in backend but not frontend for organizations"
+      },
+      {
+        "id": "t-system-field-organizations-id",
+        "category": "system-field",
+        "entity": "organizations",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for organizations"
       },
       {
         "id": "t-system-field-organizations-informeltimaConexinSII",
@@ -20592,14 +20592,6 @@
         "description": "System field 'validHash' should exist in backend but not frontend for organizations"
       },
       {
-        "id": "t-system-field-paymentsSiiData-aeatsiiPayment",
-        "category": "system-field",
-        "entity": "paymentsSiiData",
-        "field": "aeatsiiPayment",
-        "runner": "node",
-        "description": "System field 'aeatsiiPayment' should exist in backend but not frontend for paymentsSiiData"
-      },
-      {
         "id": "t-system-field-paymentsSiiData-client",
         "category": "system-field",
         "entity": "paymentsSiiData",
@@ -20622,6 +20614,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for paymentsSiiData"
+      },
+      {
+        "id": "t-system-field-paymentsSiiData-id",
+        "category": "system-field",
+        "entity": "paymentsSiiData",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for paymentsSiiData"
       },
       {
         "id": "t-system-field-paymentsSiiData-organization",
@@ -22432,12 +22432,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for receivedInvoices(previousPeriod)SiiData"
       },
       {
-        "id": "t-system-field-receivedInvoices-previousPeriod-SiiData-factura",
+        "id": "t-system-field-receivedInvoices-previousPeriod-SiiData-id",
         "category": "system-field",
         "entity": "receivedInvoices(previousPeriod)SiiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for receivedInvoices(previousPeriod)SiiData"
+        "description": "System field 'id' should exist in backend but not frontend for receivedInvoices(previousPeriod)SiiData"
       },
       {
         "id": "t-system-field-receivedInvoices-previousPeriod-SiiData-organization",
@@ -22992,12 +22992,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for receivedInvoicesSiiData"
       },
       {
-        "id": "t-system-field-receivedInvoicesSiiData-factura",
+        "id": "t-system-field-receivedInvoicesSiiData-id",
         "category": "system-field",
         "entity": "receivedInvoicesSiiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for receivedInvoicesSiiData"
+        "description": "System field 'id' should exist in backend but not frontend for receivedInvoicesSiiData"
       },
       {
         "id": "t-system-field-receivedInvoicesSiiData-organization",

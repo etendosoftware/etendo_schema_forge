@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { toast } from 'sonner';
 import InventoryTable from './InventoryTable';
 import InventoryForm from './InventoryForm';
 import InventoryLineTable from './InventoryLineTable';
@@ -168,12 +169,6 @@ export const api = {
     },
     {
       "entity": "inventory",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/physical-inventory/inventory/{id}/action/posted"
-    },
-    {
-      "entity": "inventory",
       "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
       "url": "/sws/neo/physical-inventory/inventory/{id}/action/etblkpBulkposting",
@@ -224,6 +219,9 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Inventory", config: {} } }]}
         bottomSection={PhysicalInventoryBottomPanel}
         customMenuContent={InventoryMenuContent}
+        menuActions={({ data, status }) => [
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+        ]}
         requiredHeaderFields={requiredHeaderFields}
         linesLayout="inlineEditable"
         {...props}

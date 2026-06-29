@@ -95,6 +95,26 @@ describe('DataTable inline add-row — submit validation and coercion', () => {
     expect(payload.qty).toBe(5.5);
   });
 
+  it('substitutes defaultValue for an empty numeric field on submit (ETP-4277)', async () => {
+    // When the user clears a numeric field with a defaultValue (e.g. discount), the
+    // POST payload must include the defaultValue (0), not omit the field entirely.
+    // Without this, the backend applies its own implicit default which can be wrong.
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    const fields = [
+      { key: 'product', label: 'Product', type: 'string', required: true },
+      { key: 'discount', label: 'Discount', type: 'number', min: 0, max: 100, defaultValue: 0 },
+    ];
+    renderAddRow(fields, onAdd);
+    fireEvent.change(screen.getByTestId('inline-add-field-product'), { target: { value: 'Agua' } });
+    // Leave discount empty (simulates the user clearing the default "0")
+    fireEvent.keyDown(screen.getByTestId('inline-add-field-discount'), { key: 'Enter' });
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    const payload = onAdd.mock.calls[0][0];
+    expect(payload.product).toBe('Agua');
+    // Empty discount → coerceFieldValues must substitute defaultValue 0, not leave ''.
+    expect(payload.discount).toBe(0);
+  });
+
   it('cancels the add-row on Escape', () => {
     const onCancel = vi.fn();
     const fields = [{ key: 'name', label: 'Name', type: 'string' }];

@@ -12,9 +12,7 @@ const fields = [
 
 // @sf-generated-start component:AccountForm
 export default function AccountForm(props) {
-  // @sf-custom-slot hooks:AccountForm
   return <EntityForm fields={fields} {...props} />;
 }
-// @sf-generated-end component:AccountForm
 
-// @sf-custom-slot section:AccountForm-custom
+// @sf-generated-end component:AccountForm

@@ -23,6 +23,7 @@ const DENYLISTED_PROPERTY_KEYS = new Set([
 ]);
 
 const SAFE_EVENT_PROPERTY_KEYS = new Set([
+  'account_id',
   'action',
   'accuracy',
   'app',
@@ -33,6 +34,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'correctCount',
   'count',
   'critical',
+  'document_type',
   'durationMs',
   'enabled',
   'entity',
@@ -41,6 +43,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'errorClass',
   'event',
   'flow',
+  'functional_area',
   'hostname',
   'kpiId',
   'locale',
@@ -60,6 +63,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'timestamp',
   'total',
   'type',
+  'username',
   'value',
   'windowName',
 ]);

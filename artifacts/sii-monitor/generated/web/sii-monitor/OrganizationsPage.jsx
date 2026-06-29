@@ -30,6 +30,17 @@ const processes = [
 ];
 // @sf-generated-end processes:organizations
 
+// @sf-generated-start detailProcesses:issuedInvoices
+const detailProcesses = [
+  { name: 'aeatsiiSend', label: 'Send to SII', style: 'positive',
+    displayLogicRaw: "@EM_Aeatsii_Error_Registral@='N'" },
+  { name: 'aeatsiiModif', label: 'Modification in SII', style: 'positive',
+    displayLogicRaw: "@EM_Aeatsii_Error_Registral@='Y'" },
+  { name: 'aeatsiiDup', label: 'Correct synchronization error', style: 'positive',
+    displayLogicRaw: "@EM_Aeatsii_Error_Code@='3000'" },
+];
+// @sf-generated-end detailProcesses:issuedInvoices
+
 // @sf-generated-start draftMode:organizations
 const draftMode = null;
 // @sf-generated-end draftMode:organizations
@@ -1212,6 +1223,7 @@ export default function OrganizationsPage({ windowName, recordId, ...props }) {
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        detailProcesses={detailProcesses}
         addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Organizations"

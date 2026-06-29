@@ -53,7 +53,7 @@ This folder is the entry point for documentation that describes how generated an
 | [product-category.md](product-category.md) | Generated product-category master/detail flow |
 | [physical-inventory.md](physical-inventory.md) | Generated physical-inventory flow with custom count-list actions |
 | [goods-movements.md](goods-movements.md) | Generated goods-movements flow for stock transfers |
-| [internal-consumption.md](internal-consumption.md) | Generated internal-consumption flow with custom process action |
+| [internal-consumption.md](internal-consumption.md) | Generated internal-consumption flow: draftMode Complete + kebab Void, trimmed list view |
 | [warehouse.md](warehouse.md) | Custom warehouse flow with products/transactions tabs |
 | [warehouse-storage-bins.md](warehouse-storage-bins.md) | Hidden route-only warehouse storage-bin master/detail window |
 
@@ -68,6 +68,7 @@ This folder is the entry point for documentation that describes how generated an
 | [match-rule.md](match-rule.md) | Bank Reconciliation matching-rules catalog ("Reglas de matcheo") — first `list-modal` window (grid + create/edit modal, no detail) on generic W CRUD + validation hook |
 | [transaction-type.md](transaction-type.md) | Backend-only user-definable lookup behind the match-rule "Tipo de transacción" field — no menu/route; created inline from the selector (W spec + `TransactionTypeHandler`) |
 | [chart-of-accounts.md](chart-of-accounts.md) | Generated chart-of-accounts maintenance window |
+| [open-close-period-control.md](open-close-period-control.md) | Generated open/close period control window for fiscal period status management |
 | [assets.md](assets.md) | Generated assets flow with custom setup, sidebar, and amortization surfaces |
 | [amortization.md](amortization.md) | Generated amortization master/detail flow (MVP read+draft, sidebar metrics, linked assets) |
 | [simple-g-l-journal.md](simple-g-l-journal.md) | Generated manual-journal (Asientos Manuales) master/detail flow with a debit/credit balance footer that blocks save until Σ debit = Σ credit (posting deferred) |

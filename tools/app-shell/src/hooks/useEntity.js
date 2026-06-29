@@ -4,6 +4,7 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 import { toast } from 'sonner';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
+import { trackDocumentCreated, trackTransactionPosted } from '@/lib/observability/health-events.js';
 import {
     isCompletionProcess,
     trackDocumentCompleted,
@@ -563,6 +564,8 @@ export function useEntity(entity, childEntity, {
     trailingFilter = null,
     refetchAfterSave = false,
     specName = null,
+    initialSortColumn = 'creationDate',
+    initialSortDirection = 'desc',
 }) {
     const { logout } = useAuth();
     const ui = useUI();
@@ -581,8 +584,8 @@ export function useEntity(entity, childEntity, {
     // are empty (either client-side or via backend MISSING_REQUIRED_FIELDS) so EntityForm
     // can highlight each input. Cleared on successful save and on field change.
     const [fieldErrors, setFieldErrors] = useState({});
-    const [sortColumn, setSortColumn] = useState('creationDate');
-    const [sortDirection, setSortDirection] = useState('desc');
+    const [sortColumn, setSortColumn] = useState(initialSortColumn);
+    const [sortDirection, setSortDirection] = useState(initialSortDirection);
     const startRowRef = useRef(0);
     const sampleRowRef = useRef(null);
     // Keys returned by the backend /defaults endpoint for the current new-record session.
@@ -909,6 +912,7 @@ export function useEntity(entity, childEntity, {
                 setFieldErrors({});
                 showSaveSuccessToast(silent, isNew, ui);
                 if (isNew) {
+                    trackDocumentCreated();
                     trackRecordCreated({ entity, specName });
                 } else {
                     trackRecordUpdated({ entity, specName });
@@ -1015,12 +1019,15 @@ export function useEntity(entity, childEntity, {
         const saved = await handleSave({ silent: true });
         if (!saved?.id) return null;
 
-        const { processField, processValue } = draftModeConfig;
+        const { processField, processValue, extraParams } = draftModeConfig;
         const url = `${apiBaseUrl}/${entity}/${saved.id}/action/${processField}`;
+        // `extraParams` are merged at the top level of the body (not inside fieldValues)
+        // so processes whose AD parameters are validated against the request root —
+        // e.g. M_Internal_Consumption_Post requiring `action` — receive them.
         const res = await fetch(url, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ fieldValues: { [processField]: processValue } }),
+            body: JSON.stringify({ fieldValues: { [processField]: processValue }, ...(extraParams || {}) }),
         });
         if (!res.ok) {
             const msg = await extractErrorMessage(res, ui);
@@ -1028,6 +1035,7 @@ export function useEntity(entity, childEntity, {
             return null;
         }
         toast.success(ui('recordProcessed'));
+        trackTransactionPosted();
         trackDocumentCompleted({
             entity,
             specName,

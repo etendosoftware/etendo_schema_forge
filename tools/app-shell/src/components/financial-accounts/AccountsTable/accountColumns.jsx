@@ -28,7 +28,7 @@ function chunkIban(iban) {
   return iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
 
-function NameCell({ account, ui }) {
+function NameCell({ account, ui, onConnect }) {
   const isCashLike = account.type === ACCOUNT_TYPE.CASH;
   // In T1 the PSD2 column is not yet populated, so anything not explicitly
   // psd2Connected === true is treated as offline for bank/card rows.
@@ -52,7 +52,10 @@ function NameCell({ account, ui }) {
               </span>
             ) : null}
           </div>
-          <SyncStatusInline account={account} data-testid="SyncStatusInline__dc050f" />
+          <SyncStatusInline
+            account={account}
+            onConnect={onConnect ? () => onConnect(account) : undefined}
+            data-testid="SyncStatusInline__dc050f" />
         </div>
       </div>
     </TableCell>
@@ -113,7 +116,7 @@ export const ACCOUNT_CELL_RENDERERS = {
   name: {
     headClass: 'w-[480px] pl-[84px] pr-2',
     labelKey: 'financeAccountsColAccount',
-    renderCell: (account, ctx) => <NameCell account={account} ui={ctx.ui} data-testid="NameCell__dc050f" />,
+    renderCell: (account, ctx) => <NameCell account={account} ui={ctx.ui} onConnect={ctx.onConnect} data-testid="NameCell__dc050f" />,
     renderSkeleton: (key) => (
       <TableCell key={key} className="w-[480px] p-0" data-testid="TableCell__dc050f">
         <div className="flex items-center">

@@ -1,8 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.19.0",
   "generatedAt": "2026-04-29T19:05:48.442Z",
-  "updatedAt": "2026-06-24T20:46:48.053Z",
-  "checksum": "c565f111166398bd",
+  "updatedAt": "2026-06-26T14:51:42.279Z",
+  "checksum": "b7e590415dd2a9b2",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -13,6 +13,17 @@
         "moreMenuContent": "InventoryMenuContent",
         "bottomSection": "PhysicalInventoryBottomPanel"
       },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
       "processOverrides": {
         "processNow": {
           "requiresLines": true
@@ -125,6 +136,46 @@
             }
           },
           {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          },
+          {
             "name": "inventoryType",
             "apiKey": "inventoryType",
             "column": "Inventory_Type",
@@ -179,7 +230,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -226,6 +277,13 @@
             "derivation": {
               "type": "computed",
               "source": "false"
+            }
+          },
+          {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
             }
           },
           {
@@ -475,6 +533,17 @@
         "moreMenuContent": "InventoryMenuContent",
         "bottomSection": "PhysicalInventoryBottomPanel"
       },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
       "processOverrides": {
         "processNow": {
           "requiresLines": true
@@ -558,8 +627,8 @@
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
-            "visibility": "system",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1078,12 +1147,6 @@
       },
       {
         "entity": "inventory",
-        "field": "posted",
-        "column": "Posted",
-        "url": "/sws/neo/physical-inventory/inventory/{id}/action/posted"
-      },
-      {
-        "entity": "inventory",
         "field": "etblkpBulkposting",
         "column": "EM_Etblkp_Bulkposting",
         "url": "/sws/neo/physical-inventory/inventory/{id}/action/etblkpBulkposting",
@@ -1125,14 +1188,6 @@
         "field": "generateList",
         "runner": "node",
         "description": "Action endpoint for 'generateList' in inventory should exist"
-      },
-      {
-        "id": "t-action-endpoint-inventory-posted",
-        "category": "action-endpoint",
-        "entity": "inventory",
-        "field": "posted",
-        "runner": "node",
-        "description": "Action endpoint for 'posted' in inventory should exist"
       },
       {
         "id": "t-action-endpoint-inventory-processNow",
@@ -1189,6 +1244,14 @@
         "description": "Default value for 'name' in inventory should be a string"
       },
       {
+        "id": "t-default-value-type-inventory-posted",
+        "category": "default-value-type",
+        "entity": "inventory",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in inventory should be a string"
+      },
+      {
         "id": "t-default-value-type-inventoryLine-lineNo",
         "category": "default-value-type",
         "entity": "inventoryLine",
@@ -1213,6 +1276,14 @@
         "description": "Default value for 'storageBin' in inventoryLine should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-inventory-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "inventory",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in inventory should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-inventory-processNow",
         "category": "displaylogic-evaluable",
         "entity": "inventory",
@@ -1235,6 +1306,14 @@
         "field": "quantityOrderBook",
         "runner": "node",
         "description": "Display logic for 'quantityOrderBook' in inventoryLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-inventory-posted",
+        "category": "displaylogic-valid",
+        "entity": "inventory",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in inventory should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-inventory-processNow",
@@ -1291,6 +1370,14 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should be present in inventory"
+      },
+      {
+        "id": "t-field-presence-inventory-posted",
+        "category": "field-presence",
+        "entity": "inventory",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in inventory"
       },
       {
         "id": "t-field-presence-inventory-processed",
@@ -1427,6 +1514,14 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should have type 'string' in inventory"
+      },
+      {
+        "id": "t-field-type-inventory-posted",
+        "category": "field-type",
+        "entity": "inventory",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in inventory"
       },
       {
         "id": "t-field-type-inventory-processed",
@@ -1922,14 +2017,6 @@
         "description": "System field 'organization' should exist in backend but not frontend for inventory"
       },
       {
-        "id": "t-system-field-inventory-posted",
-        "category": "system-field",
-        "entity": "inventory",
-        "field": "posted",
-        "runner": "node",
-        "description": "System field 'posted' should exist in backend but not frontend for inventory"
-      },
-      {
         "id": "t-system-field-inventory-salesCampaign",
         "category": "system-field",
         "entity": "inventory",
@@ -2097,25 +2184,25 @@
       }
     ],
     "summary": {
-      "total": 125,
+      "total": 128,
       "byCategory": {
-        "action-endpoint": 5,
+        "action-endpoint": 4,
         "crud-flags": 2,
-        "default-value-type": 6,
-        "displaylogic-evaluable": 3,
-        "displaylogic-valid": 3,
-        "field-presence": 17,
-        "field-type": 17,
+        "default-value-type": 7,
+        "displaylogic-evaluable": 4,
+        "displaylogic-valid": 4,
+        "field-presence": 18,
+        "field-type": 18,
         "readonlylogic-evaluable": 9,
         "readonlylogic-valid": 9,
         "rule-declared": 11,
         "searchable-filters": 3,
         "selector-endpoint": 5,
-        "system-field": 33,
+        "system-field": 32,
         "visibility": 2
       },
       "byRunner": {
-        "node": 125,
+        "node": 128,
         "junit": 0
       }
     }

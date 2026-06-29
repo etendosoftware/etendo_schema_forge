@@ -153,6 +153,33 @@ describe('ListFilterBar', () => {
     expect(screen.queryByText('1')).not.toBeInTheDocument();
     expect(screen.queryByText('2')).not.toBeInTheDocument();
   });
+
+  it('hides the status filter trigger when hideStatusFilter is true, even if a status column exists', () => {
+    render(
+      <ListFilterBar
+        columns={COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        hideStatusFilter
+      />
+    );
+    // The status filter button (data-testid="filter-status") must not render
+    expect(screen.queryByTestId('filter-status')).not.toBeInTheDocument();
+    // The allStatuses label must not appear either
+    expect(screen.queryByText('allStatuses')).not.toBeInTheDocument();
+  });
+
+  it('still renders the status filter when hideStatusFilter is false (default)', () => {
+    render(
+      <ListFilterBar
+        columns={COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        hideStatusFilter={false}
+      />
+    );
+    expect(screen.getByText('allStatuses')).toBeInTheDocument();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

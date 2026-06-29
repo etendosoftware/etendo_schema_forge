@@ -1397,5 +1397,53 @@
     ],
     "author": "pipeline",
     "date": "2026-06-25"
+  },
+  {
+    "from": "0.26.0",
+    "to": "0.26.1",
+    "level": "patch",
+    "reasons": [
+      "Field \"warehouse\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-26"
+  },
+  {
+    "from": "0.26.1",
+    "to": "0.27.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"cOrderlinetaxID\" removed from entity \"lineTax\" in backend",
+      "Field \"id\" added to entity \"lineTax\" in backend",
+      "Field \"finPaymentDetailVID\" removed from entity \"paymentDetails\" in backend",
+      "Field \"id\" added to entity \"paymentDetails\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-26"
+  },
+  {
+    "from": "0.27.0",
+    "to": "0.28.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"discount\" property \"max\" changed from \"undefined\" to \"100\" in frontend (additive)",
+      "Field \"tax\" property \"validationRule\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"cOrderlinetaxID\" removed from entity \"lineTax\" in backend",
+      "Field \"id\" added to entity \"lineTax\" in backend",
+      "Field \"finPaymentDetailVID\" removed from entity \"paymentDetails\" in backend",
+      "Field \"id\" added to entity \"paymentDetails\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-26"
+  },
+  {
+    "from": "0.28.0",
+    "to": "0.29.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"tax\" property \"validationRule\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-26"
   }
 ]

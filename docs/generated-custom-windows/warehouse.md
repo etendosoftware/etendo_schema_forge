@@ -104,7 +104,7 @@ Fetch sequence on warehouse selection:
 3. Flatten all bin contents, call `aggregateProducts(allContents, uomMap)` to produce the `products` array.
 4. Flatten all transaction rows, expose as `transactions`.
 
-`aggregateProducts` (`warehouseUtils.js`): deduplicates `M_Storage_Detail` rows by `product` ID, summing `quantityOnHand` and `etgoValuation`. Only products with `qty > 0` after summing are retained. UOM is resolved from the `uomMap` selector cache first, then from `uOM$_identifier`, then from the raw UOM ID.
+`aggregateProducts` (`warehouseUtils.js`): deduplicates `M_Storage_Detail` rows by `product` ID, summing `quantityOnHand` and `etgoValuation` (the latter injected live per row by `BinContentsHandler` — see Valuation mechanism). Only products with `qty > 0` after summing are retained. UOM is resolved from the `uomMap` selector cache first, then from `uOM$_identifier`, then from the raw UOM ID.
 
 The `WarehouseCustomTable` product-count cell runs the same fetch sequence independently (no shared state with the detail hook).
 
@@ -166,12 +166,43 @@ Calls `onCount(transactions.length)` after load.
 
 ## Valuation mechanism
 
-`EM_ETGO_VALUATION` is a column on `M_Storage_Detail` that stores `qtyonhand × current cost`. It is maintained by two EventHandlers in `com.etendoerp.go`:
+Each `binContents` row exposes `etgoValuation = qtyonhand × current cost`, where the
+current cost is the most recent permanent, active, not-yet-expired `M_Costing` row for
+the product. This value is **computed at read time**, not read from a persisted column.
 
-- **`StorageDetailValuationHandler`**: fires on stock change events, updates the valuation for affected `M_Storage_Detail` rows.
-- **`CostingValuationHandler`**: fires when the costing engine runs, uses a native SQL `UPDATE` (not Hibernate) to avoid session corruption during the costing batch. This ensures valuations stay consistent after retroactive cost changes.
+- **`BinContentsHandler`** (`@Named("binContentsHandler")`, NEO post-hook on the
+  `binContents` entity): `afterHandle` injects `etgoValuation` into every row of a GET
+  response via one batched native SQL query (`qtyonhand × current cost`). Because it
+  computes live from the current quantity on hand and the current cost, the value is
+  always correct regardless of how stock moved. The `binContents` entity declares
+  `javaQualifier: "binContentsHandler"` in `decisions.json`.
 
-The `binContents` entity in `decisions.json` exposes `etgoValuation` as a read-only grid column (`grid: true, form: false, visibility: "readOnly"`). The `aggregateProducts` helper sums this column across all bin-content rows for each product to produce the per-product and warehouse-total valuations shown in the sidebar and Products tab.
+### Why read-time (and not event handlers)
+
+The original design persisted the value in an `EM_ETGO_VALUATION` column maintained by
+EventHandlers, but that left the column stale after any stock-out. Two facts make DAL
+event handlers unreliable for stock valuation:
+
+1. Outbound documents (shipments, internal consumption) do **not** create an `M_Costing`
+   row in Average costing, so a costing-event handler never fires on a sale.
+2. `M_Storage_Detail.qtyonhand` is updated during document processing by the
+   `M_Update_Inventory` database routine (raw SQL), **not** through the Java DAL — so an
+   `EntityPersistenceEventObserver` on the storage detail never fires on a stock movement.
+
+As a result the persisted column only refreshed on inbound costing events (purchase
+receipt, physical inventory), never on sales. Both valuation EventHandlers
+(`StorageDetailValuationHandler` and `CostingValuationHandler`) were therefore removed —
+read-time computation is the single source of truth.
+
+The `EM_ETGO_VALUATION` column still exists on `M_Storage_Detail` (its AD definition is
+required for the `etgoValuation` field to exist in the contract), but nothing writes to
+it anymore — it stays inert/empty. The GO frontend always uses the live value injected by
+`BinContentsHandler`.
+
+The `binContents` entity in `decisions.json` exposes `etgoValuation` as a read-only grid
+column (`grid: true, form: false, visibility: "readOnly"`). The `aggregateProducts`
+helper sums it across all bin-content rows for each product to produce the per-product
+and warehouse-total valuations shown in the sidebar and Products tab.
 
 ## Known gaps
 

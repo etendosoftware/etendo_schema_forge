@@ -253,7 +253,7 @@ function DimensionsPanel({ movement, ui }) {
  *   onSelectionChange: (id: string) => void;
  * }} props
  */
-export function MovementsTable({ movements, loading, enabledDimensions = [], selectedIds, onSelectionChange, highlightTxnId = null }) {
+export function MovementsTable({ movements, loading, enabledDimensions = [], selectedIds, onSelectionChange, highlightTxnId = null, onReload }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale: appLocale } = useLocaleSwitch();
@@ -359,7 +359,7 @@ export function MovementsTable({ movements, loading, enabledDimensions = [], sel
           {/* Kebab — visible on row hover */}
           <TableCell onClick={(e) => e.stopPropagation()} data-testid="TableCell__ae5a16">
             <div className="opacity-0 transition-opacity group-hover:opacity-100">
-              <MovementRowKebab movement={movement} data-testid="MovementRowKebab__ae5a16" />
+              <MovementRowKebab movement={movement} onReload={onReload} data-testid="MovementRowKebab__ae5a16" />
             </div>
           </TableCell>
         </TableRow>

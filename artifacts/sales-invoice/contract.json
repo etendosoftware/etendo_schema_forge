@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.38.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-06-25T19:58:31.409Z",
-  "checksum": "d741bfffa992820d",
+  "updatedAt": "2026-06-26T23:07:09.003Z",
+  "checksum": "545d430f65c51cb0",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -1325,6 +1325,7 @@
             "section": "principal",
             "gridOrder": 5,
             "min": 0,
+            "max": 100,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1647,19 +1648,6 @@
               "source": "0"
             },
             "defaultValue": "0"
-          },
-          {
-            "name": "finPaymentScheduleID",
-            "apiKey": "finPaymentScheduleID",
-            "column": "Fin_Payment_Schedule_ID",
-            "label": "Fin_Payment_Schedule_ID",
-            "type": "id",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true
           }
         ],
         "searchableFields": [],
@@ -3866,14 +3854,6 @@
             "required": true
           },
           {
-            "name": "finPaymentScheduleID",
-            "apiKey": "finPaymentScheduleID",
-            "column": "Fin_Payment_Schedule_ID",
-            "type": "id",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
             "name": "order",
             "apiKey": "order",
             "column": "C_Order_ID",
@@ -3926,6 +3906,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_Schedule_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -5893,14 +5881,6 @@
         "description": "Field 'finPaymentmethodID' should be present in paymentPlan"
       },
       {
-        "id": "t-field-presence-paymentPlan-finPaymentScheduleID",
-        "category": "field-presence",
-        "entity": "paymentPlan",
-        "field": "finPaymentScheduleID",
-        "runner": "node",
-        "description": "Field 'finPaymentScheduleID' should be present in paymentPlan"
-      },
-      {
         "id": "t-field-presence-paymentPlan-lastPaymentDate",
         "category": "field-presence",
         "entity": "paymentPlan",
@@ -6387,14 +6367,6 @@
         "field": "finPaymentmethodID",
         "runner": "node",
         "description": "Field 'finPaymentmethodID' should have type 'string' in paymentPlan"
-      },
-      {
-        "id": "t-field-type-paymentPlan-finPaymentScheduleID",
-        "category": "field-type",
-        "entity": "paymentPlan",
-        "field": "finPaymentScheduleID",
-        "runner": "node",
-        "description": "Field 'finPaymentScheduleID' should have type 'string' in paymentPlan"
       },
       {
         "id": "t-field-type-paymentPlan-lastPaymentDate",
@@ -8701,6 +8673,14 @@
         "description": "System field 'fINPaymentPriorityID' should exist in backend but not frontend for paymentPlan"
       },
       {
+        "id": "t-system-field-paymentPlan-id",
+        "category": "system-field",
+        "entity": "paymentPlan",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for paymentPlan"
+      },
+      {
         "id": "t-system-field-paymentPlan-invoice",
         "category": "system-field",
         "entity": "paymentPlan",
@@ -8786,25 +8766,25 @@
       }
     ],
     "summary": {
-      "total": 514,
+      "total": 513,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 4,
         "default-value-type": 23,
         "displaylogic-evaluable": 21,
         "displaylogic-valid": 21,
-        "field-presence": 62,
-        "field-type": 62,
+        "field-presence": 61,
+        "field-type": 61,
         "readonlylogic-evaluable": 29,
         "readonlylogic-valid": 29,
         "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 16,
-        "system-field": 203,
+        "system-field": 204,
         "visibility": 4
       },
       "byRunner": {
-        "node": 514,
+        "node": 513,
         "junit": 0
       }
     }

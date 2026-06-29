@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.38.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-06-25T19:58:31.409Z",
-  "contractChecksum": "d741bfffa992820d",
+  "updatedAt": "2026-06-26T12:27:57.064Z",
+  "contractChecksum": "545d430f65c51cb0",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -1160,10 +1160,6 @@
           "totalDebtAmount": {
             "readOnly": true,
             "defaultValue": "0"
-          },
-          "finPaymentScheduleID": {
-            "readOnly": true,
-            "required": true
           }
         }
       },
@@ -1367,5 +1363,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "74f348cd7aa147cf"
+  "checksum": "e684554d768654fd"
 }
