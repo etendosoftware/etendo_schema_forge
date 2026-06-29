@@ -566,7 +566,10 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
-        processes={[]}
+        processes={[
+          { name: 'etprReactivatePayment', label: 'Reactivar', style: 'danger',
+            displayLogicRaw: "@Processed@='Y' & @Status@!'RPVOID'" },
+        ]}
         catalogs={catalogs}
         entityLabel="Header"
         windowName={windowName}

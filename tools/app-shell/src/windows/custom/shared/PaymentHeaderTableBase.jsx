@@ -146,6 +146,15 @@ function Toolbar({ ui, search, onSearch }) {
       <FilterPill
         icon={<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>}
         data-testid="FilterPill__743b1b">{ui('anyDate')}</FilterPill>
+      <button
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 30, padding: '0 10px', borderRadius: 7, border: '1px solid #E3E7EC', background: '#fff', color: '#55556D', font: '500 12px/1 Inter', cursor: 'pointer', whiteSpace: 'nowrap' }}
+        data-testid="FiltrosBtn__743b1b"
+      >
+        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+        </svg>
+        {ui('filtros')}
+      </button>
       <input
         type="text"
         placeholder={ui('searchDoc')}
@@ -282,7 +291,9 @@ function computeSidebarStats(rows) {
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   let thisMonth = 0;
+  let thisMonthCount = 0;
   let pending = 0;
+  let pendingCount = 0;
   let draftCount = 0;
   const methodMap = {};
 
@@ -290,24 +301,36 @@ function computeSidebarStats(rows) {
     const amt = parseFloat(r.amount ?? 0);
     const isDeposited = DEPOSITED_STATUSES.has(r.status || '');
     if (isDeposited) {
-      if ((r.paymentDate || '').startsWith(ym)) thisMonth += amt;
+      if ((r.paymentDate || '').startsWith(ym)) {
+        thisMonth += amt;
+        thisMonthCount += 1;
+      }
       const methodId = r['paymentMethod$_identifier'] || 'other';
       if (!methodMap[methodId]) methodMap[methodId] = 0;
       methodMap[methodId] += amt;
     } else {
       pending += amt;
+      pendingCount += 1;
       draftCount += 1;
     }
   });
 
   const methods = Object.entries(methodMap).map(([label, amount]) => ({ label, amount }));
-  return { thisMonth, pending, draftCount, methods };
+  return { thisMonth, thisMonthCount, pending, pendingCount, draftCount, methods };
+}
+
+function fmtMonthSub(thisMonthCount, isIn) {
+  const now = new Date();
+  const monthName = now.toLocaleDateString('es-ES', { month: 'long' });
+  const monthCap = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  const noun = isIn ? 'cobros' : 'pagos';
+  return `${monthCap} ${now.getFullYear()} · ${thisMonthCount} ${noun}`;
 }
 
 function PaymentSidebar({ dir, data, ui }) {
   const isIn = dir === 'in';
 
-  const { thisMonth, pending, draftCount, methods } = useMemo(
+  const { thisMonth, thisMonthCount, pending, pendingCount, draftCount, methods } = useMemo(
     () => computeSidebarStats(data),
     [data]
   );
@@ -337,6 +360,9 @@ function PaymentSidebar({ dir, data, ui }) {
             <div className="tabular-nums" style={{ font: '700 30px/36px Inter', color: heroColor, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
               {heroSign}{fmtAmt(collectedValue, 'EUR')}
             </div>
+            <div style={{ font: '400 12px/16px Inter', color: '#828FA3', marginTop: 4 }}>
+              {fmtMonthSub(thisMonthCount, isIn)}
+            </div>
           </>
         )}
       </div>
@@ -350,6 +376,11 @@ function PaymentSidebar({ dir, data, ui }) {
             <div className="tabular-nums" style={{ font: '700 22px/26px Inter', color: '#C28800', letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
               {fmtAmt(pendingValue, 'EUR')}
             </div>
+            {pendingCount > 0 && (
+              <div style={{ font: '400 12px/16px Inter', color: '#828FA3', marginTop: 3 }}>
+                {pendingCount} {ui('borradoresSub')}
+              </div>
+            )}
           </>
         )}
       </div>
