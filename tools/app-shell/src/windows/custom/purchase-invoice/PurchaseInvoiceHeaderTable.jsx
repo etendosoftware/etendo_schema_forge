@@ -102,6 +102,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
           const outstanding = parseFloat(row.outstandingAmount ?? 0);
           const currency = row['currency$_identifier'] || 'EUR';
           if (isNcOrReturn(row)) return null;
+          if (row.documentStatus !== 'CO') return <span className="text-muted-foreground">—</span>;
           if (outstanding <= 0) {
             return (
               <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
