@@ -18,6 +18,13 @@ import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { fetchByCriteria, fetchById } from '@/components/related-documents';
 
+function isCreditNote(invoice) {
+  if (!invoice) return false;
+  if (invoice.arInvoiceSubtype) return invoice.arInvoiceSubtype === 'NC' || invoice.arInvoiceSubtype === 'DEV';
+  const ident = (invoice['transactionDocument$_identifier'] || invoice['cDocTypeTargetId$_identifier'] || '').toLowerCase();
+  return ident.includes('credit') || ident.includes('memo') || ident.includes('crédito') || ident.includes('return') || ident.includes('devoluci');
+}
+
 /**
  * InvoicePreview — wires useInvoicePreview data into GenericPreviewModal.
  *
@@ -95,7 +102,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isFullyPaid, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
@@ -159,6 +166,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         totalOutstanding={totalOutstanding}
         canAddPayment={canAddPayment}
         isFullyPaid={isFullyPaid}
+        isCreditNote={isNC}
         loading={loadingPayments}
         onAddPayment={onAddPayment}
         specName={specName}
@@ -253,6 +261,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           canAddPayment={p.canAddPayment}
           isDraft={p.isDraft}
           isFullyPaid={p.isFullyPaid}
+          isCreditNote={isCreditNote(p.displayInvoice)}
           specName={specName}
           apiBaseUrl={apiBaseUrl}
           token={token}

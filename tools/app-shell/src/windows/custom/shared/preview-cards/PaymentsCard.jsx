@@ -95,6 +95,7 @@ export default function PaymentsCard({
   totalOutstanding = 0,
   canAddPayment = false,
   isFullyPaid = false,
+  isCreditNote = false,
   loading = false,
   onAddPayment,
   specName = 'purchase-invoice',
@@ -105,7 +106,14 @@ export default function PaymentsCard({
   const paymentWindow = isIn ? 'payment-in' : 'payment-out';
 
   let titleRight = null;
-  if (canAddPayment) {
+  if (isCreditNote) {
+    titleRight = (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, padding: '1px 8px', borderRadius: 5, background: '#EDE9FE', color: '#5B21B6' }}>
+        <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#7C3AED', flexShrink: 0 }} />
+        Saldo a favor
+      </span>
+    );
+  } else if (canAddPayment) {
     titleRight = (
       <button
         onClick={onAddPayment}
@@ -131,7 +139,7 @@ export default function PaymentsCard({
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px', gap: 8 }}>
         <DirBadge isIn={isIn} size={36} />
         <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', margin: 0 }}>
-          {isIn ? ui('noCobroYet') : ui('noPagoYet')}
+          {isCreditNote ? 'Sin aplicaciones registradas' : (isIn ? ui('noCobroYet') : ui('noPagoYet'))}
         </p>
       </div>
     );
