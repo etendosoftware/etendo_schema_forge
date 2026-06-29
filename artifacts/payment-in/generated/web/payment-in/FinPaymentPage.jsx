@@ -233,6 +233,19 @@ export const api = {
   }
 };
 
+function DirBadge({ data }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: '#DDFAEB', flexShrink: 0 }}>
+        <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#17663A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 5v14M5 12l7 7 7-7"/>
+        </svg>
+      </span>
+      <span style={{ font: '700 15px/20px Inter', color: '#19191D' }}>{data?.documentNo}</span>
+    </span>
+  );
+}
+
 // @sf-generated-start component:FinPaymentPage
 export default function FinPaymentPage({ windowName, recordId, ...props }) {
   if (recordId) {
@@ -249,12 +262,15 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
-      api={api}
+        api={api}
         hideDeleteWhenComplete
+        noHeaderBorder
+        formCardPadding="p-0"
+        topbarExtra={DirBadge}
         topbarRight={PaymentActivityToggle}
         sidePanel={PaymentDetailSidebar}
         menuActions={({ status }) => [
-          { key: 'reverse', label: 'Reverse Payment', destructive: true, visible: ["RPPC","RPR","RDNC"].includes(status), columnName: 'aPRMReversePayment',  }
+          { key: 'reverse', label: 'Reverse Payment', destructive: true, visible: ["RPPC","RPR","RDNC"].includes(status), columnName: 'aPRMReversePayment' }
         ]}
         requiredHeaderFields={requiredHeaderFields}
         sendDocument

@@ -543,6 +543,19 @@ export const api = {
   }
 };
 
+function DirBadge({ data }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: '#FDECEA', flexShrink: 0 }}>
+        <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#B91C1C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 19V5M5 12l7-7 7 7"/>
+        </svg>
+      </span>
+      <span style={{ font: '700 15px/20px Inter', color: '#19191D' }}>{data?.documentNo}</span>
+    </span>
+  );
+}
+
 // @sf-generated-start component:HeaderPage
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
@@ -560,6 +573,9 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
         api={api}
+        noHeaderBorder
+        formCardPadding="p-0"
+        topbarExtra={DirBadge}
         topbarRight={PaymentActivityToggle}
         sidePanel={PaymentDetailSidebar}
         requiredHeaderFields={requiredHeaderFields}
