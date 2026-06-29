@@ -272,6 +272,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     return (
       <button
         type="button"
+        data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
         style={{
@@ -293,6 +294,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       {/* Badge pill — sole entry point to payments modal */}
       <button
         type="button"
+        data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
         style={{

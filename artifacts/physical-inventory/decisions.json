@@ -15,6 +15,38 @@
     },
     "dateFilterKey": "movementDate",
     "linesLayout": "inlineEditable",
+    "hidePrint": true,
+    "hideLink": true,
+    "listViewOptions": {
+      "hideStatusFilter": true
+    },
+    "statusEnumLabels": {
+      "true": "statusProcessed",
+      "false": "statusDraft"
+    },
+    "summaryFields": [],
+    "noHeaderBorder": true,
+    "lockedAlert": {
+      "title": "goodsMovementsLockedTitle",
+      "message": "goodsMovementsLockedMessage",
+      "actionLabel": "goodsMovementsLockedAction",
+      "navigateTo": "/physical-inventory/new"
+    },
+    "draftMode": {
+      "enabled": true,
+      "processField": "processNow",
+      "processValue": "Y",
+      "label": "confirm",
+      "disableWhenEmpty": true
+    },
+    "labelOverrides": {
+      "en_US": {
+        "Processed": "Status"
+      },
+      "es_ES": {
+        "Processed": "Estado"
+      }
+    },
     "menuActions": [
       {
         "key": "post",
@@ -42,29 +74,35 @@
           "readOnlyLogic": null
         },
         "inventoryType": {
-          "grid": true,
-          "searchable": true,
+          "grid": false,
+          "searchable": false,
+          "form": false,
           "readOnlyLogic": null
         },
         "name": {
-          "grid": true
+          "grid": true,
+          "readOnlyLogic": "@Processed@='Y'"
         },
         "description": {
           "readOnlyLogic": null,
-          "section": "other"
+          "form": false
         },
         "processed": {
           "visibility": "readOnly",
           "label": "Status",
           "grid": true,
           "form": false,
-          "columnType": "status"
+          "columnType": "status",
+          "enumValues": [
+            { "value": "true", "name": "statusProcessed" },
+            { "value": "false", "name": "statusDraft" }
+          ]
         },
         "project": {
-          "section": "other"
+          "form": false
         },
         "processNow": {
-          "visibility": "editable"
+          "visibility": "discarded"
         },
         "generateList": {
           "visibility": "system"
@@ -105,24 +143,32 @@
         },
         "product": {
           "grid": true,
+          "gridOrder": 1,
+          "grow": true,
           "lookup": true,
           "forceCalloutFields": ["quantityCount", "bookQuantity"],
           "readOnlyLogic": null
         },
         "lineNo": {
-          "grid": true,
+          "grid": false,
           "readOnlyLogic": null
         },
         "bookQuantity": {
           "visibility": "readOnly",
           "label": "System Count",
           "grid": true,
+          "gridOrder": 3,
+          "grow": true,
+          "columnWidth": 192,
           "readOnlyLogic": null
         },
         "quantityCount": {
           "visibility": "editable",
           "label": "User Count",
           "grid": true,
+          "gridOrder": 4,
+          "grow": true,
+          "columnWidth": 192,
           "readOnlyLogic": null
         },
         "adjustmentQuantity": {
@@ -133,6 +179,9 @@
         "uOM": {
           "visibility": "readOnly",
           "grid": true,
+          "gridOrder": 2,
+          "grow": true,
+          "gridReadOnly": true,
           "inputMode": "selector",
           "readOnlyLogic": null
         },

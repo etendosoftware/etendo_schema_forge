@@ -8,7 +8,7 @@ const fields = [
   { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', label: 'Payment Terms', section: 'principal', reference: 'PaymentTerm', inputMode: 'selector' },
   { key: 'account', column: 'FIN_Financial_Account_ID', type: 'search', label: 'Financial Account', section: 'other', reference: 'Financial_Account', inputMode: 'search' },
   { key: 'salesRepresentative', column: 'SalesRep_ID', type: 'search', label: 'Sales Representative', section: 'other', reference: 'BPartner', inputMode: 'search' },
-  { key: 'invoiceTerms', column: 'InvoiceRule', type: 'select', label: 'Invoice Terms', section: 'other', options: [{ value: 'D', label: 'After Delivery' }, { value: 'O', label: 'After Order Delivered' }, { value: 'S', label: 'Customer Schedule After Delivery' }, { value: 'N', label: 'Do Not Invoice' }, { value: 'I', label: 'Immediate' }], defaultValue: 'I' },
+  { key: 'invoiceTerms', column: 'InvoiceRule', type: 'select', label: 'Invoice Terms', section: 'other', options: [{ value: 'D', label: 'After Delivery', labels: {"es_ES":"Después de entregado"} }, { value: 'O', label: 'After Order Delivered', labels: {"es_ES":"Pedido completamente entregado"} }, { value: 'S', label: 'Customer Schedule After Delivery', labels: {"es_ES":"Periódico después de entregado"} }, { value: 'N', label: 'Do Not Invoice', labels: {"es_ES":"No facturar"} }, { value: 'I', label: 'Immediate', labels: {"es_ES":"Inmediato"} }], defaultValue: 'I' },
   { key: 'invoiceSchedule', column: 'C_InvoiceSchedule_ID', type: 'selector', label: 'Invoice Schedule', section: 'other', reference: 'InvoiceSchedule', inputMode: 'selector' },
   { key: 'taxExempt', column: 'IsTaxExempt', type: 'checkbox', label: 'Tax Exempt', section: 'other' },
   { key: 'customerBlocking', column: 'Customer_Blocking', type: 'checkbox', label: 'On Hold', required: true, section: 'other' },
@@ -23,7 +23,7 @@ const fields = [
   { key: 'birthDay', column: 'Birthday', type: 'date', label: 'Birthdate', section: 'other' },
   { key: 'birthPlace', column: 'Birthplace', type: 'text', label: 'Birthplace', section: 'other' },
   { key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey', type: 'checkbox', label: 'Default Key', required: true, section: 'other' },
-  { key: 'aeatsiiSiikeylist', column: 'EM_Aeatsii_Siikeylist', type: 'select', label: 'Invoice type key', section: 'other', options: [{ value: 'R', label: 'Corrective invoice' }, { value: 'F1', label: 'Invoice' }, { value: 'F2', label: 'Simplified invoice' }, { value: 'F4', label: 'Simplified invoices summary' }], defaultValue: 'F1' },
+  { key: 'aeatsiiSiikeylist', column: 'EM_Aeatsii_Siikeylist', type: 'select', label: 'Invoice type key', section: 'other', options: [{ value: 'R', label: 'Corrective invoice', labels: {"es_ES":"Factura rectificativa"} }, { value: 'F1', label: 'Invoice', labels: {"es_ES":"Factura"} }, { value: 'F2', label: 'Simplified invoice', labels: {"es_ES":"Factura simplificada"} }, { value: 'F4', label: 'Simplified invoices summary', labels: {"es_ES":"Asiento resumen facturas simplificadas"} }], defaultValue: 'F1' },
 ];
 // @sf-generated-end fields:customer
 

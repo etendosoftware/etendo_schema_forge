@@ -447,7 +447,8 @@ function buildReadOnlyLogicPart(f) {
 }
 
 function getS(o) {
-  return `{ value: '${o.value}', label: '${o.name.replace(/'/g, "\\'")}' }`;
+  const labelsPart = o.labels ? `, labels: ${JSON.stringify(o.labels)}` : '';
+  return `{ value: '${o.value}', label: '${o.name.replace(/'/g, "\\'")}'${labelsPart} }`;
 }
 
 function getOptionsPart(type, f) {
@@ -467,6 +468,7 @@ export function generateFormComponent(entityName, contract) {
   const entity = contract.frontendContract.entities[entityName];
   const formCols = entity.formCols ?? null;
   const colsProp = formCols != null ? ` cols={${formCols}}` : '';
+  const specName = contract.apiPrediction?.specName;
   // Sort by seq override if present (stable sort: fields without seq keep natural DB order)
   const formFields = entity.fields
     .filter(f => f.form && f.type !== 'button' && f.visibility !== 'discarded')
@@ -532,7 +534,8 @@ export function generateFormComponent(entityName, contract) {
     const spanPart = (f.span && f.span > 1) ? `, span: ${f.span}` : '';
     const rowsPart = f.rows != null ? `, rows: ${f.rows}` : '';
     const clearablePart = f.clearable === false ? ', clearable: false' : '';
-    const fieldLine = `  { key: '${f.name}', column: '${f.column}', type: '${type}'${formLabelPart}${requiredPart}${lookupPart}${popupPart}${readOnlyPart}${inlinePart}${sectionPart}${referencePart}${inputModePart}${searchSelectPart}${allowCreatePart}${createPart}${dependsOnPart}${optionsPart}${valueTypePart}${defaultValuePart}${helpPart}${placeholderPart}${emptyOptionPart}${fieldGroupPart}${precisionPart}${displayLogicPart}${readOnlyLogicPart}${spanPart}${rowsPart}${clearablePart} },`;
+    const customRendererPart = f.customRenderer ? `, customRenderer: ${f.customRenderer}` : '';
+    const fieldLine = `  { key: '${f.name}', column: '${f.column}', type: '${type}'${formLabelPart}${requiredPart}${lookupPart}${popupPart}${readOnlyPart}${inlinePart}${sectionPart}${referencePart}${inputModePart}${searchSelectPart}${allowCreatePart}${createPart}${dependsOnPart}${optionsPart}${valueTypePart}${defaultValuePart}${helpPart}${placeholderPart}${emptyOptionPart}${fieldGroupPart}${precisionPart}${displayLogicPart}${readOnlyLogicPart}${spanPart}${rowsPart}${clearablePart}${customRendererPart} },`;
     return [...slotLines, fieldLine].join('\n');
   }).join('\n');
 
@@ -542,7 +545,15 @@ export function generateFormComponent(entityName, contract) {
     ? `// Field groups: ${uniqueGroups.join(', ')}\n`
     : '';
 
-  return `import { EntityForm } from '@/components/contract-ui';
+  // Collect unique customRenderer component names and emit imports.
+  // Append after the EntityForm import when present; otherwise omit the block entirely
+  // so no extra blank line appears in windows that don't use customRenderer.
+  const customRenderers = [...new Set(formFields.map(f => f.customRenderer).filter(Boolean))];
+  const rendererImportLines = customRenderers.length > 0 && specName
+    ? '\n' + customRenderers.map(comp => `import ${comp} from ${resolveCustomImport(specName, comp)};`).join('\n')
+    : '';
+
+  return `import { EntityForm } from '@/components/contract-ui';${rendererImportLines}
 
 ${MARKERS.GENERATED_START(`fields:${entityName}`)}
 ${fieldGroupsComment}const fields = [
@@ -786,7 +797,7 @@ function resolveSendDocumentConfig(windowConfig, allEntityFields) {
   return sendDocument;
 }
 
-function buildCustomComponentImportsAndProps(customComponents, specName, customPanelTabs, newActionsConfig) {
+function buildCustomComponentImportsAndProps(customComponents, specName, customPanelTabs, newActionsConfig, menuActionsConfig = []) {
   const customComponentImports = [];
   const customComponentProps = [];
   if (customComponents.bottomSection) {
@@ -825,6 +836,9 @@ function buildCustomComponentImportsAndProps(customComponents, specName, customP
   // newActions — import component modals if declared
   const newActionsWithComponents = newActionsConfig.filter(a => a.component);
   for (const action of newActionsWithComponents) {
+    customComponentImports.push(`import ${action.component} from ${resolveCustomImport(specName, action.component)};`);
+  }
+  for (const action of menuActionsConfig.filter(a => a.component)) {
     customComponentImports.push(`import ${action.component} from ${resolveCustomImport(specName, action.component)};`);
   }
   const customCompImportBlock = customComponentImports.length > 0
@@ -879,6 +893,10 @@ export function getMenuActionsProp(menuActionsConfig, menuActionsFnParams) {
         handler = `columnName: '${a.columnName}', `;
       } else if (a.action) {
         handler = `neoAction: '${a.action}', `;
+      } else if (a.component) {
+        const stateSetter = `set${capitalize(a.key.replace(/-./g, m => m[1].toUpperCase()))}MenuModal`;
+        const contextSetter = `set${capitalize(a.key.replace(/-./g, m => m[1].toUpperCase()))}MenuContext`;
+        handler = `onClick: () => { ${contextSetter}(data ?? null); ${stateSetter}(true); },`;
       } else {
         handler = `onClick: () => {},`;
       }
@@ -2013,14 +2031,14 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
     newActionsWithComponents,
     customCompImportBlock,
     customCompPropsBlock
-  } = buildCustomComponentImportsAndProps(customComponents, specName, customPanelTabs, newActionsConfig);
+  } = buildCustomComponentImportsAndProps(customComponents, specName, customPanelTabs, newActionsConfig, menuActionsConfig);
 
   // Custom headerTable override
   const customHeaderTable = customComponents.headerTable ?? null;
   const headerTableImport = getHeaderTableImport(customHeaderTable, headerName, specName);
 
   // menuActions prop
-  const menuActionsNeedsData = menuActionsConfig.some(a => a.visibleWhenFieldFalse || a.visibleWhenFieldTrue);
+  const menuActionsNeedsData = menuActionsConfig.some(a => a.visibleWhenFieldFalse || a.visibleWhenFieldTrue || a.component);
   const menuActionsFnParams = getMenuActionsFnParams(menuActionsNeedsData);
   const menuActionsProp = getMenuActionsProp(menuActionsConfig, menuActionsFnParams);
 
@@ -2141,7 +2159,19 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
     return `    {${stateName} && <${a.component} token={props.token} apiBaseUrl={props.apiBaseUrl} windowName={windowName} onClose={() => ${setterName}(false)} />}`;
   }).join('\n');
 
-  const needsUseState = customComponents.newRecordComponent || newActionsWithComponents.length > 0 || !!confirmModalName;
+  const menuActionsWithComponents = menuActionsConfig.filter(a => a.component);
+  const menuActionStateStatements = menuActionsWithComponents.map(a => {
+    const name = capitalize(a.key.replace(/-./g, m => m[1].toUpperCase()));
+    const camelKey = name.charAt(0).toLowerCase() + name.slice(1);
+    return `  const [show${name}MenuModal, set${name}MenuModal] = useState(false);\n  const [${camelKey}MenuContext, set${name}MenuContext] = useState(null);`;
+  }).join('\n');
+  const menuActionModals = menuActionsWithComponents.map(a => {
+    const name = capitalize(a.key.replace(/-./g, m => m[1].toUpperCase()));
+    const camelKey = name.charAt(0).toLowerCase() + name.slice(1);
+    return `      {show${name}MenuModal && <${a.component} isOpen={show${name}MenuModal} token={props.token} apiBaseUrl={api.baseUrl} currentRecord={${camelKey}MenuContext} onClose={() => set${name}MenuModal(false)} onSaved={() => { set${name}MenuModal(false); window.location.reload(); }} />}`;
+  }).join('\n');
+
+  const needsUseState = customComponents.newRecordComponent || newActionsWithComponents.length > 0 || menuActionsWithComponents.length > 0 || !!confirmModalName;
   const needsFragment = customComponents.newRecordComponent || newActionsWithComponents.length > 0;
 
   const galleryComponentName = `${headerName}Gallery`;
@@ -2210,12 +2240,13 @@ ${MARKERS.GENERATED_END(`addLineFields:${detailEntity}`)}` : ''}
 ${apiBlock}
 ${labelOverridesBlock}${MARKERS.GENERATED_START(`component:${compName}`)}
 export default function ${compName}({ windowName, recordId, ...props }) {${fragmentIf(customComponents.newRecordComponent, `
-  const [showNewModal, setShowNewModal] = useState(false);`)}${fragmentIf(newActionsWithComponents.length > 0, `\n${newActionsStatements}`)}${fragmentIf(confirmModalName, `
+  const [showNewModal, setShowNewModal] = useState(false);`)}${fragmentIf(newActionsWithComponents.length > 0, `\n${newActionsStatements}`)}${fragmentIf(menuActionsWithComponents.length > 0, `
+${menuActionStateStatements}`)}${fragmentIf(confirmModalName, `
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const draftModeWithConfirm = { ...draftMode, onConfirm: () => setShowConfirmModal(true) };`)}
   if (recordId) {
-    return (${fragmentIf(confirmModalName, `
-      <>`)}
+    return (
+      <>
       <DetailView
         entity="${headerEntity}"${buildDetailEntityAttr(detailEntity)}
         Form={${headerName}Form}${detailTableAndFormProps}
@@ -2231,7 +2262,8 @@ export default function ${compName}({ windowName, recordId, ...props }) {${fragm
         recordId={recordId}
         breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${customLinesProp}${primaryTabsProp}${othersLabelProp}${documentPreviewProp}${hideDeleteProp}${customTabsAfterBottomProp}${hidePrintProp}${hideSaveStatusesProp}${hideMoreMenuProp}${hideMoreDetailsProp}${noHeaderBorderProp}${toolbarBorderBottomProp}${compactSidebarPaddingProp}${whiteFormBackgroundProp}${autoSaveOnBlurProp}${hideFormCardProp}${sidebarAboveTabsOnlyProp}${sidebarClassNameProp}${tabsBarPaddingXProp}${primaryTabsVariantProp}${toolbarPaddingXProp}${toolbarButtonSizeProp}${contentBgProp}${formCardPaddingProp}${formScrollPaddingXProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${requiredHeaderFieldsProp}${addLineGuardProp}${headerContentProp}${detailSortByProp}${titleFieldProp}${salesThemeProp}${disableProcessedLockProp}${statusEnumLabelsProp}${lockedAlertProp}${showDetailFooterTotalsProp}${labelOverridesProp}${lineConfigProp}${linesLayoutProp}${balanceFooterProp}${sendDocumentDetailProp}${selectorPriceCurrencyProp}
         {...props}${sidebarContentProp}
-      />${confirmModalName ? `
+      />
+${menuActionModals}${confirmModalName ? `
       {showConfirmModal && (
         <${confirmModalName}
           recordId={recordId}
@@ -2243,7 +2275,7 @@ export default function ${compName}({ windowName, recordId, ...props }) {${fragm
           }}
         />
       )}
-      </>` : ''}
+` : ''}      </>
     );
   }
 

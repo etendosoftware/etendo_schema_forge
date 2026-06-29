@@ -65,28 +65,6 @@ export default function InvoiceHeaderTable(props) {
 
     return [
       { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false },
-      { key: 'documentNo', column: 'DocumentNo', type: 'string', label: gl['documentNo'] || 'Document No.' },
-      {
-        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
-        render: (row) => {
-          const d = row.eTGODueDate;
-          if (!d) return <span className="text-muted-foreground">—</span>;
-          if (isCreditType(row)) return <span className="text-muted-foreground">{formatCalendarDate(d, locale)}</span>;
-          const state = getDueDateState(d, row.outstandingAmount);
-          return (
-            <span className="inline-flex items-center gap-1.5" style={getDueDateTextStyle(state)}>
-              <span className="inline-block h-2 w-2 rounded-full shrink-0" style={getDueDateDotStyle(state)} />
-              {formatCalendarDate(d, locale)}
-            </span>
-          );
-        },
-      },
-      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
-      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusColumn') },
-      ...fiscalCols,
-      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
-      { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
-      { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
       {
         key: 'transactionDocument',
         column: 'C_DocTypeTarget_ID',
@@ -113,6 +91,28 @@ export default function InvoiceHeaderTable(props) {
           );
         },
       },
+      { key: 'documentNo', column: 'DocumentNo', type: 'string', label: gl['documentNo'] || 'Document No.' },
+      {
+        key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
+        render: (row) => {
+          const d = row.eTGODueDate;
+          if (!d) return <span className="text-muted-foreground">—</span>;
+          if (isCreditType(row)) return <span className="text-muted-foreground">{formatCalendarDate(d, locale)}</span>;
+          const state = getDueDateState(d, row.outstandingAmount);
+          return (
+            <span className="inline-flex items-center gap-1.5" style={getDueDateTextStyle(state)}>
+              <span className="inline-block h-2 w-2 rounded-full shrink-0" style={getDueDateDotStyle(state)} />
+              {formatCalendarDate(d, locale)}
+            </span>
+          );
+        },
+      },
+      { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
+      { key: 'documentStatus', column: 'DocStatus', type: 'status', label: t('statusColumn') },
+      ...fiscalCols,
+      { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount' },
+      { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
+      { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
   }, [gl, locale, targets, siiColLabel, tbaiColLabel, vfColLabel]);
 

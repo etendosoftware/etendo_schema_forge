@@ -255,6 +255,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
       — matching the SelectorInput inspector experience.
     */
     <div
+      data-testid={`field-${field.key}-wrapper`}
       className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary`}
       onClick={showChip ? handleChipClick : undefined}
     >
@@ -536,7 +537,8 @@ function applyLookupAuxData(auxData, isGross, onChange, f) {
 }
 
 function renderSelectField(f, data, label, isReadOnly, onChange, ctx) {
-  const { ui, tMenu, optionalSuffix = false } = ctx;
+  const { ui, tMenu, optionalSuffix = false, locale = 'es_ES' } = ctx;
+  const optionLabel = (opt) => opt.labels?.[locale] ?? tMenu(opt.label);
   let selectValue;
   if (f.valueType === 'boolean') {
     if (data?.[f.key] === true || data?.[f.key] === 'Y' || data?.[f.key] === 'true') {
@@ -579,7 +581,7 @@ function renderSelectField(f, data, label, isReadOnly, onChange, ctx) {
         <SelectContent data-testid="SelectContent__a8d626">
           {!f.required && <SelectItem value="__empty__" data-testid="SelectItem__a8d626">&nbsp;</SelectItem>}
           {f.options.map(opt => (
-              <SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__a8d626">{tMenu(opt.label)}</SelectItem>
+              <SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__a8d626">{optionLabel(opt)}</SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -746,6 +748,12 @@ function getInputType(f) {
   return f.type === 'number' ? 'number' : 'text';
 }
 
+function isCurrencyRateSelectorField(entity, apiBaseUrl, f) {
+  return f.column === 'C_Currency_ID'
+    && (entity === 'header' || entity === 'quotation')
+    && /\/(sales-order|purchase-order|sales-quotation)(\/|$)/.test(apiBaseUrl || '');
+}
+
 
 function getFieldValue(isReadOnly, displayValue, data, f) {
   return isReadOnly ? displayValue : (data?.[f.key] ?? '');
@@ -753,6 +761,97 @@ function getFieldValue(isReadOnly, displayValue, data, f) {
 
 function getReadOnlyBgClass(isReadOnly) {
   return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-white';
+}
+
+/**
+ * Commit-on-blur text/number input (opt-in via `field.calloutOn === 'blur'`).
+ *
+ * Unlike the default input — which is fully controlled by `data` and commits every
+ * keystroke to the parent form state — this variant keeps a LOCAL draft buffer while
+ * the field is focused and commits to the parent `onChange` ONLY on blur. The single
+ * blur commit both updates the form state (`hook.editing`) AND fires the column callout
+ * through the normal `onChange` path, so EVERYTHING that reads `editing` live (e.g. the
+ * Assets "Depreciation Summary" sidebar mirroring `assetValue`) stays stable until the
+ * user leaves the field — one mechanism for both the callout deferral and the mirror
+ * deferral.
+ *
+ * Controlled-input sync rules (classic "controlled input with local draft"):
+ *  - Initialize the buffer from `committedValue`.
+ *  - While UNFOCUSED, follow `committedValue` (callout results, record load/switch,
+ *    defaults applied externally) so the displayed value stays correct.
+ *  - While FOCUSED, hold the buffer untouched so external churn never clobbers the
+ *    user's in-progress typing.
+ *  - On blur, commit the buffer to the parent in a single `onChange(key, value, column)`.
+ *
+ * `committedValue` is the same `data?.[f.key] ?? ''` the default path reads, so the
+ * value semantics are identical — only the commit TIMING differs.
+ */
+function DeferredInput({ f, committedValue, onCommit, onFieldBlur, placeholder, className, required, disabled }) {
+  const [buffer, setBuffer] = useState(committedValue);
+  const focusedRef = useRef(false);
+  // The last value the USER actually committed (or that arrived externally while the field
+  // was idle). The on-blur "did it change?" gate compares against THIS, not committedValue
+  // (= hook.editing). committedValue is mutated by callout collateral writes behind the
+  // user's back — e.g. editing AssetValue makes the callout write DepreciationAmt and a 0
+  // Residual into editing; if we gated on committedValue, clearing AssetValue (→ '0') when a
+  // collateral 0 already sits in editing would compare 0 === 0 and SKIP the commit, so the
+  // Residual recompute never fires. Tracking the user's own last value fixes that. ETP-4333.
+  const lastUserValueRef = useRef(committedValue);
+
+  // While the field is not focused, follow the committed value so external updates
+  // (callout results, record switch, defaults) are reflected. While focused, the
+  // user's draft wins and we ignore committed-value changes to avoid clobbering input.
+  // Idle external changes also become the new "last value" baseline so they are not
+  // mistaken for a user edit on the next blur.
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setBuffer(committedValue);
+      lastUserValueRef.current = committedValue;
+    }
+  }, [committedValue]);
+
+  const isNumber = getInputType(f) === 'number';
+  const sameAsLast = (v) => {
+    const prev = lastUserValueRef.current;
+    return isNumber ? Number(v) === Number(prev ?? '') : String(v) === String(prev ?? '');
+  };
+
+  return (
+    <Input
+      id={f.key}
+      name={f.key}
+      data-testid={`field-${f.key}`}
+      type={getInputType(f)}
+      value={buffer ?? ''}
+      onFocus={() => { focusedRef.current = true; }}
+      onChange={(e) => setBuffer(e.target.value)}
+      onBlur={(e) => {
+        focusedRef.current = false;
+        // For NUMBER fields, coerce a cleared/blank value to '0' on commit. Otherwise the
+        // empty string short-circuits the generic fireCallout guard (`if (!value) return`)
+        // in DetailView, so clearing the field would leave dependent amounts (e.g. the
+        // Assets Residual) stale. Committing '0' fires the callout with 0 and leaves the
+        // input showing 0. Text fields keep their raw value (no coercion). ETP-4333.
+        const raw = e.target.value;
+        const v = (isNumber && raw.trim() === '') ? '0' : raw;
+        // Re-sync the displayed buffer to the (possibly coerced) committed value.
+        setBuffer(v);
+        // Only COMMIT (fires the callout via onChange) when the value differs from the
+        // value the USER last committed — so a no-op blur (focus then leave untouched)
+        // does nothing, while a genuine edit (including clearing back to 0 after a
+        // collateral write) always fires. Record the new user value either way so the
+        // next blur compares against the correct baseline. ETP-4333.
+        const changed = !sameAsLast(v);
+        lastUserValueRef.current = v;
+        if (changed) onCommit?.(f.key, v, f.column);
+        onFieldBlur?.(f.key);
+      }}
+      placeholder={placeholder}
+      className={className}
+      required={required}
+      disabled={disabled}
+    />
+  );
 }
 
 /**
@@ -906,6 +1005,15 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     if (f.searchSelect) {
       return renderSearchSelectField(f, label, selectorOnChange, selectorUrl);
     }
+    const optionTranslator = f.reference === 'DocumentType'
+      ? (name) => {
+          const lower = name.toLowerCase();
+          if (lower.includes('reversed')) return null;
+          if (lower.includes('credit') || lower.includes('memo')) return ui('creditNotesTab');
+          if (lower.includes('return') || lower.includes('devoluci')) return ui('returnsTab');
+          return ui('invoicesTab');
+        }
+      : undefined;
     return (
       <div key={f.key} className={LABEL_GAP}>
         <Label
@@ -925,6 +1033,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
           selectorUrl={selectorUrl}
           selectorContext={effectiveSelectorContext}
           token={token}
+          optionTranslator={optionTranslator}
           data-testid="SelectorInput__a8d626" />
       </div>
     );
@@ -1070,29 +1179,51 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   );
 
   // Default single-line text/number input (the fall-through renderer).
-  const renderInputField = (f, label, isReadOnly, displayValue) => (
-    <div key={f.key} className={LABEL_GAP}>
-      <Label
-        htmlFor={f.key}
-        className="text-sm text-foreground font-medium"
-        data-testid="Label__a8d626">
-        {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
-      </Label>
-      <Input
-        id={f.key}
-        name={f.key}
-        data-testid={`field-${f.key}`}
-        type={getInputType(f)}
-        value={getFieldValue(isReadOnly, displayValue, data, f)}
-        onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
-        onBlur={() => onFieldBlur?.(f.key)}
-        placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
-        className={getInputStateClass(isReadOnly)}
-        required={f.required && !isReadOnly}
-        disabled={isReadOnly || savingField === f.key}
-      />
-    </div>
-  );
+  // Opt-in `calloutOn: 'blur'` switches to a commit-on-blur input (DeferredInput): while
+  // typing, only a LOCAL buffer updates — the parent form state (`hook.editing`) and the
+  // column callout are NOT touched. On blur, a single onChange commits the value, which
+  // both updates `editing` (so anything mirroring it, e.g. the Assets sidebar, defers too)
+  // AND fires the callout in one shot. Fields without the flag keep the default fully
+  // controlled path: every keystroke commits and fires the callout immediately.
+  const renderInputField = (f, label, isReadOnly, displayValue) => {
+    const calloutOnBlur = f.calloutOn === 'blur';
+    return (
+      <div key={f.key} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
+        </Label>
+        {calloutOnBlur && !isReadOnly ? (
+          <DeferredInput
+            f={f}
+            committedValue={data?.[f.key] ?? ''}
+            onCommit={onChange}
+            onFieldBlur={onFieldBlur}
+            placeholder={resolveUiKey(ui, f.placeholderKey)}
+            className={getInputStateClass(isReadOnly)}
+            required={f.required && !isReadOnly}
+            disabled={isReadOnly || savingField === f.key}
+            data-testid="DeferredInput__a8d626" />
+        ) : (
+          <Input
+            id={f.key}
+            name={f.key}
+            data-testid={`field-${f.key}`}
+            type={getInputType(f)}
+            value={getFieldValue(isReadOnly, displayValue, data, f)}
+            onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
+            onBlur={() => onFieldBlur?.(f.key)}
+            placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
+            className={getInputStateClass(isReadOnly)}
+            required={f.required && !isReadOnly}
+            disabled={isReadOnly || savingField === f.key}
+          />
+        )}
+      </div>
+    );
+  };
 
   // Multi-line text field. `rows` controls height; absent rows gets a min-height.
   const renderTextareaField = (f, label, isReadOnly, displayValue) => {
@@ -1235,6 +1366,30 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     // Strip floating-point noise (e.g. 243.20999999999998 → 243.21) for read-only number fields.
     // toFixed(10) preserves up to 10 significant decimal places while eliminating IEEE 754 drift.
     const displayValue = formatReadOnlyDisplayValue(f, isReadOnly, rawDisplayValue);
+    // Custom field renderer: when a field declares `customRenderer` (a React component reference),
+    // delegate rendering entirely to that component. This is an escape hatch for fields that
+    // require specialized input UIs that cannot be expressed through the standard field types
+    // (e.g. a split prefix+suffix input for account codes).
+    // The component receives: value, onChange(newValue), record (full form data), readOnly.
+    if (f.customRenderer) {
+      const Renderer = f.customRenderer;
+      return (
+        <div key={f.key} className="space-y-1.5">
+          <Label
+            htmlFor={f.key}
+            className="text-sm text-foreground font-medium"
+            data-testid="Label__a8d626">
+            {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
+          </Label>
+          <Renderer
+            value={data?.[f.key] ?? ''}
+            onChange={(v) => onChange?.(f.key, v, f.column)}
+            record={data}
+            readOnly={isReadOnly}
+            data-testid="Renderer__a8d626" />
+        </div>
+      );
+    }
     if (f.type === 'checkbox' && f.toggle) {
       return renderToggleField(f, label, isReadOnly);
     }
@@ -1246,11 +1401,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     }
     if (f.type === 'selector') {
       // Currency selector on order header: use CurrencyRatePicker for searchable rate display
-      if (
-        f.column === 'C_Currency_ID' &&
-        (entity === 'header' || entity === 'quotation') &&
-        /\/(sales-order|purchase-order|sales-quotation)(\/|$)/.test(apiBaseUrl || '')
-      ) {
+      if (isCurrencyRateSelectorField(entity, apiBaseUrl, f)) {
         const isRateReadOnly = formReadOnly || f.readOnly || displayLogic?.readOnly?.[f.key] === true || evalReadOnlyLogic(f, data);
         return (
           <CurrencyRatePicker
@@ -1277,7 +1428,7 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
       return renderStaticCreatableSelect(f, label, isReadOnly);
     }
     if (isSelectFieldWithOptions(f)) {
-      return renderSelectField(f, data, label, isReadOnly, onChange, { ui, tMenu, optionalSuffix });
+      return renderSelectField(f, data, label, isReadOnly, onChange, { ui, tMenu, optionalSuffix, locale });
     }
     if (f.type === 'textarea') {
       return renderTextareaField(f, label, isReadOnly, displayValue);

@@ -1,322 +1,298 @@
-// Mock heavy dependencies BEFORE any imports
-vi.mock('@/components/contract-ui', () => ({
-  LinesBottomSection: ({ children, relatedDocuments, showTotals, ...props }) => (
-    <div
-      data-testid="lines-bottom-section"
-      data-show-totals={String(showTotals)}
-      data-has-related-docs={relatedDocuments ? 'true' : 'false'}
-    >
-      {children}
-    </div>
-  ),
-  LinesEmptyState: ({ description, secondaryAction, data, onAddLine }) => (
-    <div data-testid="lines-empty-state">
-      <span data-testid="description">{description}</span>
-      <div data-testid="secondary-action">{secondaryAction}</div>
-    </div>
-  ),
-}));
-
-vi.mock('../ImportFromPurchaseOrderModal.jsx', () => ({
-  default: ({ onClose }) => (
-    <div data-testid="import-po-modal">
-      <button onClick={onClose}>Close</button>
-    </div>
-  ),
-}));
-
-vi.mock('../ImportFromPurchaseInvoiceModal.jsx', () => ({
-  default: ({ onClose }) => (
-    <div data-testid="import-invoice-modal">
-      <button onClick={onClose}>Close</button>
-    </div>
-  ),
-}));
-
-vi.mock('../RelatedDocuments.jsx', () => ({
-  default: () => <div data-testid="related-documents" />,
-}));
+// Mocks must come before imports (Vitest hoisting)
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useMenuLabel: () => (key) => key,
+  useLabel: () => (key) => key,
 }));
 
-// Make createPortal render inline so portals appear in the RTL tree
-vi.mock('react-dom', async (importOriginal) => {
-  const actual = await importOriginal();
-  return { ...actual, createPortal: (node) => node };
-});
+// Render LinesBottomSection as a transparent passthrough so we can assert the
+// props the panel forwards (relatedDocuments / showTotals) without pulling in
+// the full generic component and its dependency tree.
+vi.mock('@/components/contract-ui', () => ({
+  LinesBottomSection: (props) => (
+    <div
+      data-testid="lines-bottom-section"
+      data-show-totals={String(props.showTotals)}
+      data-has-related={String(!!props.relatedDocuments)}
+    />
+  ),
+}));
 
-import React from 'react';
-import { render, screen, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import GoodsReceiptBottomPanel from '../GoodsReceiptBottomPanel.jsx';
+vi.mock('@/windows/custom/goods-receipt/RelatedDocuments', () => ({
+  default: () => <div data-testid="related-documents" />,
+}));
 
-const ReceiptLinesEmptyState = GoodsReceiptBottomPanel.linesEmptyState;
-const ReceiptLineActions = GoodsReceiptBottomPanel.detailExtraActions;
+// The import modals are heavy (fetch + ImportLinesModal). Stub them so we can
+// assert they get rendered (via portal) with the right props.
+vi.mock('@generated/goods-receipt/custom/ImportFromPurchaseOrderModal', () => ({
+  default: (props) => (
+    <div data-testid="import-order-modal" data-invoice-id={props.invoiceId} data-bp={props.bpId} />
+  ),
+}));
 
-// ---------------------------------------------------------------------------
-// GoodsReceiptBottomPanel — default export
-// ---------------------------------------------------------------------------
-describe('GoodsReceiptBottomPanel (default export)', () => {
-  it('renders LinesBottomSection', () => {
-    render(<GoodsReceiptBottomPanel />);
-    expect(screen.getByTestId('lines-bottom-section')).toBeInTheDocument();
+vi.mock('@generated/goods-receipt/custom/ImportFromPurchaseInvoiceModal', () => ({
+  default: (props) => (
+    <div data-testid="import-invoice-modal" data-invoice-id={props.invoiceId} data-bp={props.bpId} />
+  ),
+}));
+
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { useRef } from 'react';
+import GoodsReceiptBottomPanel from '@generated/goods-receipt/custom/GoodsReceiptBottomPanel';
+
+const EmptyState = GoodsReceiptBottomPanel.linesEmptyState;
+const LineActions = GoodsReceiptBottomPanel.detailExtraActions;
+
+const draftData = { documentStatus: 'DR', businessPartner: 'bp-1' };
+
+function renderEmptyState(overrides = {}) {
+  const props = {
+    data: draftData,
+    onAddLine: vi.fn(),
+    canAddLine: true,
+    recordId: 'receipt-1',
+    token: 'tok',
+    apiBaseUrl: '/api/goods-receipt',
+    onSave: vi.fn(),
+    onRefresh: vi.fn(),
+    ...overrides,
+  };
+  return { props, ...render(<EmptyState {...props} />) };
+}
+
+describe('GoodsReceiptBottomPanel (default export / static slots)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders LinesBottomSection with showTotals=false and a relatedDocuments component', () => {
+    render(<GoodsReceiptBottomPanel data={draftData} />);
+    const section = screen.getByTestId('lines-bottom-section');
+    expect(section).toHaveAttribute('data-show-totals', 'false');
+    expect(section).toHaveAttribute('data-has-related', 'true');
   });
 
-  it('passes showTotals={false} to LinesBottomSection', () => {
-    render(<GoodsReceiptBottomPanel />);
-    expect(screen.getByTestId('lines-bottom-section')).toHaveAttribute('data-show-totals', 'false');
-  });
-
-  it('passes relatedDocuments prop to LinesBottomSection', () => {
-    render(<GoodsReceiptBottomPanel />);
-    expect(screen.getByTestId('lines-bottom-section')).toHaveAttribute('data-has-related-docs', 'true');
-  });
-
-  it('static prop showLineTotals is false', () => {
+  it('exposes showLineTotals === false as a static flag', () => {
     expect(GoodsReceiptBottomPanel.showLineTotals).toBe(false);
   });
+});
 
-  it('static slot linesEmptyState is assigned', () => {
-    expect(GoodsReceiptBottomPanel.linesEmptyState).toBeDefined();
-    expect(typeof GoodsReceiptBottomPanel.linesEmptyState).toBe('function');
+describe('GoodsReceiptBottomPanel.linesEmptyState', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns null (renders nothing) when document is not draft', () => {
+    const { container } = renderEmptyState({ data: { documentStatus: 'CO', businessPartner: 'bp-1' } });
+    expect(container).toBeEmptyDOMElement();
   });
 
-  it('static slot detailExtraActions is assigned', () => {
-    expect(GoodsReceiptBottomPanel.detailExtraActions).toBeDefined();
+  it('renders the Add Lines button but NOT import buttons when there is no business partner', () => {
+    renderEmptyState({ data: { documentStatus: 'DR' } });
+    expect(screen.getByRole('button', { name: /addLines/ })).toBeInTheDocument();
+    expect(screen.queryByText('importFromPurchaseOrder')).not.toBeInTheDocument();
+    expect(screen.queryByText('importFromPurchaseInvoice')).not.toBeInTheDocument();
+  });
+
+  it('renders both import buttons when a business partner is set', () => {
+    renderEmptyState();
+    expect(screen.getByText('importFromPurchaseOrder')).toBeInTheDocument();
+    expect(screen.getByText('importFromPurchaseInvoice')).toBeInTheDocument();
+  });
+
+  it('hides the add/import action row when canAddLine is false', () => {
+    renderEmptyState({ canAddLine: false });
+    expect(screen.queryByText('addLines')).not.toBeInTheDocument();
+    expect(screen.queryByText('importFromPurchaseOrder')).not.toBeInTheDocument();
+  });
+
+  describe('save-first flow (fixed behavior)', () => {
+    it('calls onSave("order") FIRST and does NOT open the modal locally when onSave returns falsy', async () => {
+      const onSave = vi.fn().mockResolvedValue(false);
+      renderEmptyState({ onSave });
+      await act(async () => {
+        fireEvent.click(screen.getByText('importFromPurchaseOrder'));
+      });
+      expect(onSave).toHaveBeenCalledWith('order');
+      expect(screen.queryByTestId('import-order-modal')).not.toBeInTheDocument();
+    });
+
+    it('calls onSave("invoice") FIRST and does NOT open the modal locally when onSave returns falsy', async () => {
+      const onSave = vi.fn().mockResolvedValue(false);
+      renderEmptyState({ onSave });
+      await act(async () => {
+        fireEvent.click(screen.getByText('importFromPurchaseInvoice'));
+      });
+      expect(onSave).toHaveBeenCalledWith('invoice');
+      expect(screen.queryByTestId('import-invoice-modal')).not.toBeInTheDocument();
+    });
+
+    it('opens the order modal locally when onSave returns truthy (existing-record path)', async () => {
+      const onSave = vi.fn().mockResolvedValue(true);
+      renderEmptyState({ onSave });
+      await act(async () => {
+        fireEvent.click(screen.getByText('importFromPurchaseOrder'));
+      });
+      expect(onSave).toHaveBeenCalledWith('order');
+      const modal = screen.getByTestId('import-order-modal');
+      expect(modal).toHaveAttribute('data-invoice-id', 'receipt-1');
+      expect(modal).toHaveAttribute('data-bp', 'bp-1');
+    });
+
+    it('opens the invoice modal locally when onSave returns truthy', async () => {
+      const onSave = vi.fn().mockResolvedValue(true);
+      renderEmptyState({ onSave });
+      await act(async () => {
+        fireEvent.click(screen.getByText('importFromPurchaseInvoice'));
+      });
+      expect(screen.getByTestId('import-invoice-modal')).toBeInTheDocument();
+    });
+  });
+
+  describe('forceOpen prop (post save+navigate path)', () => {
+    it('auto-opens the invoice modal when forceOpen==="invoice" and calls onForceOpenHandled', () => {
+      const onForceOpenHandled = vi.fn();
+      renderEmptyState({ forceOpen: 'invoice', onForceOpenHandled });
+      expect(screen.getByTestId('import-invoice-modal')).toBeInTheDocument();
+      expect(screen.queryByTestId('import-order-modal')).not.toBeInTheDocument();
+      expect(onForceOpenHandled).toHaveBeenCalled();
+    });
+
+    it('auto-opens the order modal for any other forceOpen value', () => {
+      const onForceOpenHandled = vi.fn();
+      renderEmptyState({ forceOpen: 'order', onForceOpenHandled });
+      expect(screen.getByTestId('import-order-modal')).toBeInTheDocument();
+      expect(screen.queryByTestId('import-invoice-modal')).not.toBeInTheDocument();
+      expect(onForceOpenHandled).toHaveBeenCalled();
+    });
+  });
+
+  it('invokes onAddLine when the Add Lines button is clicked', () => {
+    const onAddLine = vi.fn();
+    renderEmptyState({ onAddLine });
+    fireEvent.click(screen.getByRole('button', { name: /addLines/ }));
+    expect(onAddLine).toHaveBeenCalled();
   });
 });
 
-// ---------------------------------------------------------------------------
-// lineMenuActions
-// ---------------------------------------------------------------------------
-describe('lineMenuActions', () => {
-  const importRef = { current: { openImportModal: vi.fn(), openImportInvoiceModal: vi.fn() } };
+describe('GoodsReceiptBottomPanel.detailExtraActions (GoodsReceiptLineActions)', () => {
+  beforeEach(() => vi.clearAllMocks());
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+  function renderActions(overrides = {}) {
+    const props = {
+      data: draftData,
+      recordId: 'receipt-1',
+      token: 'tok',
+      apiBaseUrl: '/api/goods-receipt',
+      onSave: vi.fn(),
+      onRefresh: vi.fn(),
+      ...overrides,
+    };
+    return { props, ...render(<LineActions {...props} />) };
+  }
+
+  it('returns null when not draft', () => {
+    const { container } = renderActions({ data: { documentStatus: 'CO', businessPartner: 'bp-1' } });
+    expect(container).toBeEmptyDOMElement();
   });
 
-  it('returns empty array when documentStatus is not DR', () => {
-    const result = GoodsReceiptBottomPanel.lineMenuActions({
-      data: { documentStatus: 'CO', businessPartner: 'bp-1' },
-      importRef,
+  it('returns null when no business partner', () => {
+    const { container } = renderActions({ data: { documentStatus: 'DR' } });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('renders the inline trigger buttons by default', () => {
+    renderActions();
+    expect(screen.getByText('importFromPurchaseOrder')).toBeInTheDocument();
+    expect(screen.getByText('importFromPurchaseInvoice')).toBeInTheDocument();
+  });
+
+  it('hides inline trigger buttons when hideTrigger is true', () => {
+    renderActions({ hideTrigger: true });
+    expect(screen.queryByText('importFromPurchaseOrder')).not.toBeInTheDocument();
+    expect(screen.queryByText('importFromPurchaseInvoice')).not.toBeInTheDocument();
+  });
+
+  describe('inline trigger save-first flow', () => {
+    it('calls onSave("order") and does not open modal when onSave returns falsy', async () => {
+      const onSave = vi.fn().mockResolvedValue(false);
+      renderActions({ onSave });
+      await act(async () => {
+        fireEvent.click(screen.getByText('importFromPurchaseOrder'));
+      });
+      expect(onSave).toHaveBeenCalledWith('order');
+      expect(screen.queryByTestId('import-order-modal')).not.toBeInTheDocument();
     });
-    expect(result).toEqual([]);
-  });
 
-  it('returns empty array when bpId is null', () => {
-    const result = GoodsReceiptBottomPanel.lineMenuActions({
-      data: { documentStatus: 'DR', businessPartner: null },
-      importRef,
+    it('opens the order modal when onSave returns truthy', async () => {
+      const onSave = vi.fn().mockResolvedValue(true);
+      renderActions({ onSave });
+      await act(async () => {
+        fireEvent.click(screen.getByText('importFromPurchaseOrder'));
+      });
+      expect(screen.getByTestId('import-order-modal')).toBeInTheDocument();
     });
-    expect(result).toEqual([]);
   });
 
-  it('returns empty array when data is null', () => {
-    const result = GoodsReceiptBottomPanel.lineMenuActions({ data: null, importRef });
-    expect(result).toEqual([]);
-  });
+  describe('imperative handle (openImportOrderModal / openImportInvoiceModal)', () => {
+    function HarnessHost({ actionProps }) {
+      const ref = useRef(null);
+      return (
+        <>
+          <LineActions ref={ref} {...actionProps} />
+          <button data-testid="trigger-order" onClick={() => ref.current?.openImportOrderModal?.()}>order</button>
+          <button data-testid="trigger-invoice" onClick={() => ref.current?.openImportInvoiceModal?.()}>invoice</button>
+        </>
+      );
+    }
 
-  it('returns 2 items when isDraft and bpId exist', () => {
-    const result = GoodsReceiptBottomPanel.lineMenuActions({
-      data: { documentStatus: 'DR', businessPartner: 'bp-1' },
-      importRef,
+    it('openImportOrderModal calls onSave first then opens when truthy', async () => {
+      const onSave = vi.fn().mockResolvedValue(true);
+      render(<HarnessHost actionProps={{ data: draftData, recordId: 'receipt-1', token: 'tok', apiBaseUrl: '/api/goods-receipt', onSave, hideTrigger: true }} />);
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('trigger-order'));
+      });
+      expect(onSave).toHaveBeenCalledWith('order');
+      expect(screen.getByTestId('import-order-modal')).toBeInTheDocument();
     });
-    expect(result).toHaveLength(2);
-  });
 
-  it('first item has key=import-purchase-order', () => {
-    const result = GoodsReceiptBottomPanel.lineMenuActions({
-      data: { documentStatus: 'DR', businessPartner: 'bp-1' },
-      importRef,
+    it('openImportInvoiceModal does not open when onSave returns falsy', async () => {
+      const onSave = vi.fn().mockResolvedValue(false);
+      render(<HarnessHost actionProps={{ data: draftData, recordId: 'receipt-1', token: 'tok', apiBaseUrl: '/api/goods-receipt', onSave, hideTrigger: true }} />);
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('trigger-invoice'));
+      });
+      expect(onSave).toHaveBeenCalledWith('invoice');
+      expect(screen.queryByTestId('import-invoice-modal')).not.toBeInTheDocument();
     });
-    expect(result[0].key).toBe('import-purchase-order');
-  });
-
-  it('first item onClick calls importRef.current.openImportModal', () => {
-    const result = GoodsReceiptBottomPanel.lineMenuActions({
-      data: { documentStatus: 'DR', businessPartner: 'bp-1' },
-      importRef,
-    });
-    result[0].onClick();
-    expect(importRef.current.openImportModal).toHaveBeenCalledTimes(1);
-  });
-
-  it('second item has key=import-purchase-invoice', () => {
-    const result = GoodsReceiptBottomPanel.lineMenuActions({
-      data: { documentStatus: 'DR', businessPartner: 'bp-1' },
-      importRef,
-    });
-    expect(result[1].key).toBe('import-purchase-invoice');
-  });
-
-  it('second item onClick calls importRef.current.openImportInvoiceModal', () => {
-    const result = GoodsReceiptBottomPanel.lineMenuActions({
-      data: { documentStatus: 'DR', businessPartner: 'bp-1' },
-      importRef,
-    });
-    result[1].onClick();
-    expect(importRef.current.openImportInvoiceModal).toHaveBeenCalledTimes(1);
   });
 });
 
-// ---------------------------------------------------------------------------
-// ReceiptLinesEmptyState
-// ---------------------------------------------------------------------------
-describe('ReceiptLinesEmptyState', () => {
-  const baseProps = {
-    data: { businessPartner: 'bp-1' },
-    onAddLine: vi.fn(),
-    recordId: 'rec-1',
-    token: 'tok',
-    apiBaseUrl: '/sws/neo/goods-receipt',
-    onRefresh: vi.fn(),
-  };
-
-  it('renders LinesEmptyState', () => {
-    render(<ReceiptLinesEmptyState {...baseProps} />);
-    expect(screen.getByTestId('lines-empty-state')).toBeInTheDocument();
+describe('GoodsReceiptBottomPanel.lineMenuActions', () => {
+  it('returns [] when document is not draft', () => {
+    expect(GoodsReceiptBottomPanel.lineMenuActions({ data: { documentStatus: 'CO', businessPartner: 'bp-1' }, importRef: { current: {} } })).toEqual([]);
   });
 
-  it('passes i18n description key to LinesEmptyState', () => {
-    render(<ReceiptLinesEmptyState {...baseProps} />);
-    expect(screen.getByTestId('description')).toHaveTextContent(
-      'addLinesManuallyOrImportFromPurchaseOrderOrInvoice',
-    );
+  it('returns [] when there is no business partner', () => {
+    expect(GoodsReceiptBottomPanel.lineMenuActions({ data: { documentStatus: 'DR' }, importRef: { current: {} } })).toEqual([]);
   });
 
-  it('does NOT render import buttons when bpId is null', () => {
-    render(<ReceiptLinesEmptyState {...baseProps} data={{ businessPartner: null }} />);
-    expect(screen.queryByTestId('action-import-purchase-order-empty-state')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('action-import-purchase-invoice-empty-state')).not.toBeInTheDocument();
+  it('returns import-order and import-invoice items when draft with a business partner', () => {
+    const items = GoodsReceiptBottomPanel.lineMenuActions({ data: draftData, importRef: { current: {} } });
+    expect(items.map((i) => i.key)).toEqual(['import-order', 'import-invoice']);
   });
 
-  it('renders both import buttons when bpId is set', () => {
-    render(<ReceiptLinesEmptyState {...baseProps} />);
-    expect(screen.getByTestId('action-import-purchase-order-empty-state')).toBeInTheDocument();
-    expect(screen.getByTestId('action-import-purchase-invoice-empty-state')).toBeInTheDocument();
+  it('wires onClick to the imperative handle methods', () => {
+    const openImportOrderModal = vi.fn();
+    const openImportInvoiceModal = vi.fn();
+    const importRef = { current: { openImportOrderModal, openImportInvoiceModal } };
+    const [orderItem, invoiceItem] = GoodsReceiptBottomPanel.lineMenuActions({ data: draftData, importRef });
+    orderItem.onClick();
+    invoiceItem.onClick();
+    expect(openImportOrderModal).toHaveBeenCalled();
+    expect(openImportInvoiceModal).toHaveBeenCalled();
   });
 
-  it('shows ImportFromPurchaseOrderModal when import PO button is clicked', async () => {
-    const user = userEvent.setup();
-    render(<ReceiptLinesEmptyState {...baseProps} />);
-    expect(screen.queryByTestId('import-po-modal')).not.toBeInTheDocument();
-    await user.click(screen.getByTestId('action-import-purchase-order-empty-state'));
-    expect(screen.getByTestId('import-po-modal')).toBeInTheDocument();
-  });
-
-  it('shows ImportFromPurchaseInvoiceModal when import invoice button is clicked', async () => {
-    const user = userEvent.setup();
-    render(<ReceiptLinesEmptyState {...baseProps} />);
-    expect(screen.queryByTestId('import-invoice-modal')).not.toBeInTheDocument();
-    await user.click(screen.getByTestId('action-import-purchase-invoice-empty-state'));
-    expect(screen.getByTestId('import-invoice-modal')).toBeInTheDocument();
-  });
-
-  it('closes PO modal when onClose is called', async () => {
-    const user = userEvent.setup();
-    render(<ReceiptLinesEmptyState {...baseProps} />);
-    await user.click(screen.getByTestId('action-import-purchase-order-empty-state'));
-    expect(screen.getByTestId('import-po-modal')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Close' }));
-    expect(screen.queryByTestId('import-po-modal')).not.toBeInTheDocument();
-  });
-
-  it('closes invoice modal when onClose is called', async () => {
-    const user = userEvent.setup();
-    render(<ReceiptLinesEmptyState {...baseProps} />);
-    await user.click(screen.getByTestId('action-import-purchase-invoice-empty-state'));
-    expect(screen.getByTestId('import-invoice-modal')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Close' }));
-    expect(screen.queryByTestId('import-invoice-modal')).not.toBeInTheDocument();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// ReceiptLineActions
-// ---------------------------------------------------------------------------
-describe('ReceiptLineActions', () => {
-  const baseProps = {
-    data: { documentStatus: 'DR', businessPartner: 'bp-1' },
-    recordId: 'rec-1',
-    token: 'tok',
-    apiBaseUrl: '/sws/neo/goods-receipt',
-    onRefresh: vi.fn(),
-  };
-
-  it('returns null when documentStatus is not DR', () => {
-    const { container } = render(
-      <ReceiptLineActions {...baseProps} data={{ documentStatus: 'CO', businessPartner: 'bp-1' }} />,
-    );
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('returns null when bpId is null', () => {
-    const { container } = render(
-      <ReceiptLineActions {...baseProps} data={{ documentStatus: 'DR', businessPartner: null }} />,
-    );
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('renders both import buttons when isDraft and bpId are present', () => {
-    render(<ReceiptLineActions {...baseProps} />);
-    // Two inline buttons (no data-testid on these, check by type/text)
-    const buttons = screen.getAllByRole('button');
-    expect(buttons.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it('with hideTrigger=true renders no visible buttons', () => {
-    render(<ReceiptLineActions {...baseProps} hideTrigger={true} />);
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-  });
-
-  it('exposes openImportModal via imperative handle', async () => {
-    const ref = React.createRef();
-    render(<ReceiptLineActions {...baseProps} ref={ref} />);
-    expect(typeof ref.current?.openImportModal).toBe('function');
-    await act(async () => {
-      ref.current.openImportModal();
-    });
-    expect(screen.getByTestId('import-po-modal')).toBeInTheDocument();
-  });
-
-  it('exposes openImportInvoiceModal via imperative handle', async () => {
-    const ref = React.createRef();
-    render(<ReceiptLineActions {...baseProps} ref={ref} />);
-    expect(typeof ref.current?.openImportInvoiceModal).toBe('function');
-    await act(async () => {
-      ref.current.openImportInvoiceModal();
-    });
-    expect(screen.getByTestId('import-invoice-modal')).toBeInTheDocument();
-  });
-
-  it('with hideTrigger=true: portals render modals when triggered imperatively', async () => {
-    const ref = React.createRef();
-    render(<ReceiptLineActions {...baseProps} hideTrigger={true} ref={ref} />);
-    // No buttons visible
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    // But imperative handle opens the modal
-    await act(async () => {
-      ref.current.openImportModal();
-    });
-    expect(screen.getByTestId('import-po-modal')).toBeInTheDocument();
-  });
-
-  it('shows import PO modal when inline PO button is clicked', async () => {
-    const user = userEvent.setup();
-    render(<ReceiptLineActions {...baseProps} />);
-    const buttons = screen.getAllByRole('button');
-    await user.click(buttons[0]);
-    expect(screen.getByTestId('import-po-modal')).toBeInTheDocument();
-  });
-
-  it('shows import invoice modal when inline invoice button is clicked', async () => {
-    const user = userEvent.setup();
-    render(<ReceiptLineActions {...baseProps} />);
-    const buttons = screen.getAllByRole('button');
-    await user.click(buttons[1]);
-    expect(screen.getByTestId('import-invoice-modal')).toBeInTheDocument();
+  it('does not throw when importRef.current is empty', () => {
+    const [orderItem] = GoodsReceiptBottomPanel.lineMenuActions({ data: draftData, importRef: { current: null } });
+    expect(() => orderItem.onClick()).not.toThrow();
   });
 });

@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-06-26T15:07:43.486Z",
-  "checksum": "b85f8403d9b8150f",
+  "updatedAt": "2026-06-29T12:08:12.003Z",
+  "checksum": "120f4ddca5a9339e",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -71,7 +71,10 @@
             "enumValues": [
               {
                 "value": "B",
-                "name": "Bank"
+                "name": "Bank",
+                "labels": {
+                  "es_ES": "Banco"
+                }
               },
               {
                 "value": "CA",
@@ -79,7 +82,10 @@
               },
               {
                 "value": "C",
-                "name": "Cash"
+                "name": "Cash",
+                "labels": {
+                  "es_ES": "Caja"
+                }
               }
             ],
             "defaultValue": "B",
@@ -638,15 +644,24 @@
             "enumValues": [
               {
                 "value": "BPD",
-                "name": "BP Deposit"
+                "name": "BP Deposit",
+                "labels": {
+                  "es_ES": "Cobro"
+                }
               },
               {
                 "value": "BPW",
-                "name": "BP Withdrawal"
+                "name": "BP Withdrawal",
+                "labels": {
+                  "es_ES": "Pago"
+                }
               },
               {
                 "value": "BF",
-                "name": "Bank fee"
+                "name": "Bank fee",
+                "labels": {
+                  "es_ES": "Tasa de Banco"
+                }
               }
             ],
             "defaultValue": "BPD",
@@ -679,35 +694,59 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment"
+                "name": "Awaiting Payment",
+                "labels": {
+                  "es_ES": "A Pagar"
+                }
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution"
+                "name": "Awaiting Execution",
+                "labels": {
+                  "es_ES": "A Ejecutar"
+                }
               },
               {
                 "value": "RPVOID",
-                "name": "Void"
+                "name": "Void",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "PPM",
-                "name": "Payment Made"
+                "name": "Payment Made",
+                "labels": {
+                  "es_ES": "Pagado"
+                }
               },
               {
                 "value": "RPR",
-                "name": "Payment Received"
+                "name": "Payment Received",
+                "labels": {
+                  "es_ES": "Cobrado"
+                }
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared"
+                "name": "Deposited not Cleared",
+                "labels": {
+                  "es_ES": "Cobro depositado"
+                }
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared"
+                "name": "Withdrawn not Cleared",
+                "labels": {
+                  "es_ES": "Pago reintegrado"
+                }
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared"
+                "name": "Payment Cleared",
+                "labels": {
+                  "es_ES": "Conciliado"
+                }
               }
             ],
             "defaultValue": "'RPAP'",

@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-06-26T12:27:57.606Z",
-  "checksum": "f3aca9eab1fd8293",
+  "updatedAt": "2026-06-29T12:09:17.864Z",
+  "checksum": "b15c1d1763c3ce05",
   "frontendContract": {
     "window": {
       "id": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A",
@@ -326,11 +326,17 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Issued"
+                "name": "Issued",
+                "labels": {
+                  "es_ES": "Emitidas"
+                }
               },
               {
                 "value": "R",
-                "name": "Received"
+                "name": "Received",
+                "labels": {
+                  "es_ES": "Recibidas"
+                }
               }
             ]
           },
@@ -360,51 +366,87 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - January"
+                "name": "1 - January",
+                "labels": {
+                  "es_ES": "1 - Enero"
+                }
               },
               {
                 "value": "10",
-                "name": "10 - October"
+                "name": "10 - October",
+                "labels": {
+                  "es_ES": "10 - Octubre"
+                }
               },
               {
                 "value": "11",
-                "name": "11 - November"
+                "name": "11 - November",
+                "labels": {
+                  "es_ES": "11 - Noviembre"
+                }
               },
               {
                 "value": "12",
-                "name": "12 - December"
+                "name": "12 - December",
+                "labels": {
+                  "es_ES": "12 - Diciembre"
+                }
               },
               {
                 "value": "2",
-                "name": "2 - February"
+                "name": "2 - February",
+                "labels": {
+                  "es_ES": "2 - Febrero"
+                }
               },
               {
                 "value": "3",
-                "name": "3 - March"
+                "name": "3 - March",
+                "labels": {
+                  "es_ES": "3 - Marzo"
+                }
               },
               {
                 "value": "4",
-                "name": "4 - April"
+                "name": "4 - April",
+                "labels": {
+                  "es_ES": "4 - Abril"
+                }
               },
               {
                 "value": "5",
-                "name": "5 - May"
+                "name": "5 - May",
+                "labels": {
+                  "es_ES": "5 - Mayo"
+                }
               },
               {
                 "value": "6",
-                "name": "6 - June"
+                "name": "6 - June",
+                "labels": {
+                  "es_ES": "6 - Junio"
+                }
               },
               {
                 "value": "7",
-                "name": "7 - July"
+                "name": "7 - July",
+                "labels": {
+                  "es_ES": "7 - Julio"
+                }
               },
               {
                 "value": "8",
-                "name": "8 - August"
+                "name": "8 - August",
+                "labels": {
+                  "es_ES": "8 - Agosto"
+                }
               },
               {
                 "value": "9",
-                "name": "9 - September"
+                "name": "9 - September",
+                "labels": {
+                  "es_ES": "9 - Septiembre"
+                }
               }
             ]
           },

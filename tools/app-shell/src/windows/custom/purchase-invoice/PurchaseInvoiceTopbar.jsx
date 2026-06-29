@@ -98,7 +98,8 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
             <span
               className="inline-flex items-center gap-1.5 text-[13px] font-medium"
               style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#d1fae5', color: '#065f46', cursor: 'pointer' }}
-              onClick={handleBadgeClick}
+              data-testid="payment-status-badge"
+            onClick={handleBadgeClick}
             >
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#10b981' }} />
               {ui('statusPaid')}
@@ -111,6 +112,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           <span
             className="inline-flex items-center gap-1.5 text-[13px] font-medium"
             style={{ padding: '4px 12px', borderRadius: '6px', backgroundColor: '#fef3c7', color: '#78350f', cursor: 'pointer' }}
+            data-testid="payment-status-badge"
             onClick={handleBadgeClick}
           >
             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#f59e0b' }} />

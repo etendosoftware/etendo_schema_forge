@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // --- Mocks ----------------------------------------------------------------
 
@@ -14,7 +14,7 @@ vi.mock('@/components/ui/select', () => ({
   Select: ({ children }) => <div data-testid="select">{children}</div>,
   SelectContent: ({ children }) => <div>{children}</div>,
   SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
-  SelectTrigger: ({ children }) => <button>{children}</button>,
+  SelectTrigger: ({ children }) => <button type="button">{children}</button>,
   SelectValue: ({ placeholder }) => <span>{placeholder}</span>,
 }));
 
@@ -26,6 +26,11 @@ vi.mock('@/components/ui/date-field', () => ({
 
 vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: (baseUrl = '') => (path, options) => fetch(`${baseUrl}${path}`, options),
+}));
+
+// Step 2 modal is exercised by its own spec; stub it so step-1 tests stay focused.
+vi.mock('../NewPaymentEntryModal.jsx', () => ({
+  default: () => <div data-testid="new-payment-modal">new-payment</div>,
 }));
 
 // --- Import under test ----------------------------------------------------
@@ -40,20 +45,25 @@ const sampleInvoice = {
   documentStatus: 'CO',
   grandTotalAmount: 1000,
   'currency$_identifier': 'USD',
-  'paymentMethod$_identifier': 'Wire Transfer',
+  'businessPartner$_identifier': 'NCA Group',
   businessPartner: 'bp-1',
 };
 
 const sampleInstallments = [
-  {
-    id: 'inst-1',
-    finPaymentScheduleID: 'sched-1',
-    amount: '1000',
-    paidAmount: '0',
-    outstandingAmount: '1000',
-    dueDate: '2024-06-15',
-  },
+  { id: 'inst-1', finPaymentScheduleID: 'sched-1', amount: '1000', paidAmount: '0', outstandingAmount: '1000', dueDate: '2024-06-15' },
 ];
+
+function mockFetch({ payments = [], installments = sampleInstallments } = {}) {
+  global.fetch = vi.fn((url) => {
+    if (url.includes('paymentPlan')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: installments } }) });
+    }
+    if (url.includes('invoicePayments')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: payments } }) });
+    }
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+  });
+}
 
 function renderModal(overrides = {}) {
   const defaults = {
@@ -68,46 +78,24 @@ function renderModal(overrides = {}) {
 
 // --- Tests ----------------------------------------------------------------
 
-describe('InvoicePaymentModal', () => {
-  beforeEach(() => {
-    global.fetch = vi.fn((url) => {
-      if (url.includes('paymentPlan')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ response: { data: sampleInstallments } }),
-        });
-      }
-      if (url.includes('invoicePayments')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ response: { data: [] } }),
-        });
-      }
-      if (url.includes('invoiceAccounts')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ items: [{ id: 'acc-1', label: 'Main Account' }] }),
-        });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
-    });
-  });
+describe('InvoicePaymentModal (step 1 — Cobros/Pagos de la factura)', () => {
+  beforeEach(() => mockFetch());
+  afterEach(() => vi.restoreAllMocks());
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('renders the modal with invoice number', () => {
+  it('renders the collections title for sales invoices', () => {
     renderModal();
-    expect(screen.getByText('payments')).toBeInTheDocument();
+    expect(screen.getByText('cpCollectionsOfInvoice')).toBeInTheDocument();
   });
 
-  it('shows the close button', () => {
+  it('renders the payments title for purchase invoices', () => {
+    renderModal({ specName: 'purchase-invoice' });
+    expect(screen.getByText('cpPaymentsOfInvoice')).toBeInTheDocument();
+  });
+
+  it('shows total and pending-balance stats', () => {
     renderModal();
-    expect(screen.getByText('close')).toBeInTheDocument();
+    expect(screen.getByText('cpTotalAmount')).toBeInTheDocument();
+    expect(screen.getByText('pendingBalanceLabel')).toBeInTheDocument();
   });
 
   it('shows loading state initially', () => {
@@ -115,43 +103,59 @@ describe('InvoicePaymentModal', () => {
     expect(screen.getByText('loading')).toBeInTheDocument();
   });
 
-  it('displays installment after data loads', async () => {
+  it('shows the empty state when there are no movements', async () => {
     renderModal();
-    await screen.findByText(/installment/);
-    expect(screen.getByText(/installment/)).toBeInTheDocument();
+    expect(await screen.findByText('cpNoCollectionsYet')).toBeInTheDocument();
   });
 
-  it('shows paid and outstanding amounts in summary', async () => {
+  it('shows the registered-count footer', async () => {
     renderModal();
-    await screen.findByText(/installment/);
-    // Summary shows paidAmount and outstandingLabel
-    expect(screen.getByText(/paidAmount/)).toBeInTheDocument();
-    expect(screen.getByText(/outstandingLabel/)).toBeInTheDocument();
+    expect(await screen.findByText('cpCollectionsRegisteredCount')).toBeInTheDocument();
   });
 
-  it('shows register payment button for outstanding installments', async () => {
+  it('shows the "+ Añadir cobro" button for a completed invoice with outstanding balance', async () => {
     renderModal();
-    await screen.findByText(/registerPayment/);
-    expect(screen.getByText(/registerPayment/)).toBeInTheDocument();
+    expect(await screen.findByText('cpAddCollection')).toBeInTheDocument();
   });
 
-  it('calls onClose when close button is clicked', async () => {
+  it('uses "+ Añadir pago" label for purchase invoices', async () => {
+    renderModal({ specName: 'purchase-invoice' });
+    expect(await screen.findByText('cpAddPayment')).toBeInTheDocument();
+  });
+
+  it('hides the add button when the invoice is fully paid', async () => {
+    mockFetch({ installments: [{ ...sampleInstallments[0], paidAmount: '1000', outstandingAmount: '0' }] });
+    renderModal();
+    await screen.findByText('cpCollectionsRegisteredCount');
+    expect(screen.queryByText('cpAddCollection')).not.toBeInTheDocument();
+  });
+
+  it('opens the step-2 modal when the add button is clicked', async () => {
+    renderModal();
+    const addBtn = await screen.findByText('cpAddCollection');
+    fireEvent.click(addBtn);
+    expect(await screen.findByTestId('new-payment-modal')).toBeInTheDocument();
+  });
+
+  it('calls onClose when the Cerrar button is clicked', () => {
     const { props } = renderModal();
-    const closeBtn = screen.getByText('close');
-    closeBtn.click();
+    fireEvent.click(screen.getByText('close'));
     expect(props.onClose).toHaveBeenCalled();
   });
 
-  it('calls onClose when backdrop is clicked', () => {
+  it('calls onClose when the backdrop is clicked', () => {
     const { props, container } = renderModal();
-    // The outermost div is the backdrop
-    const backdrop = container.firstChild;
-    backdrop.click();
+    fireEvent.click(container.firstChild);
     expect(props.onClose).toHaveBeenCalled();
   });
 
   it('accepts an optional onPaymentAdded prop without error', () => {
-    const onPaymentAdded = vi.fn();
-    expect(() => renderModal({ onPaymentAdded })).not.toThrow();
+    expect(() => renderModal({ onPaymentAdded: vi.fn() })).not.toThrow();
+  });
+
+  it('renders registered movements with a deposited badge', async () => {
+    mockFetch({ payments: [{ id: 'p1', documentNo: 'PAY-1', amount: '1000', paymentDate: '2024-06-20', processed: true }] });
+    renderModal();
+    await waitFor(() => expect(screen.getByText('cpStatusDeposited')).toBeInTheDocument());
   });
 });

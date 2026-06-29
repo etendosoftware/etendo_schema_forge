@@ -1,8 +1,8 @@
 {
-  "version": "0.58.0",
+  "version": "0.59.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-06-26T23:07:08.933Z",
-  "checksum": "d7fcd27db7204e2f",
+  "updatedAt": "2026-06-29T12:09:16.568Z",
+  "checksum": "f9f0a1390a47943c",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -443,43 +443,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR",
@@ -885,19 +915,31 @@
             "enumValues": [
               {
                 "value": "F6",
-                "name": "Accounting document"
+                "name": "Accounting document",
+                "labels": {
+                  "es_ES": "Justificante contable"
+                }
               },
               {
                 "value": "LC",
-                "name": "Aduanas - Liquidación complementaria"
+                "name": "Aduanas - Liquidación complementaria",
+                "labels": {
+                  "es_ES": "Aduanas - Liquidación complementaria"
+                }
               },
               {
                 "value": "F5",
-                "name": "Import (DUA)"
+                "name": "Import (DUA)",
+                "labels": {
+                  "es_ES": "Importación (DUA)"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -986,35 +1028,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
@@ -2001,71 +2067,122 @@
             "enumValues": [
               {
                 "value": "INTRES_15",
-                "name": "Arrendamiento financiero (alquiler­compra)"
+                "name": "Arrendamiento financiero (alquiler­compra)",
+                "labels": {
+                  "es_ES": "Arrendamiento financiero (alquiler­compra)"
+                }
               },
               {
                 "value": "INTRES_11",
-                "name": "Compra/venta en firme"
+                "name": "Compra/venta en firme",
+                "labels": {
+                  "es_ES": "Compra/venta en firme"
+                }
               },
               {
                 "value": "INTRES_14",
-                "name": "Compras por particulares"
+                "name": "Compras por particulares",
+                "labels": {
+                  "es_ES": "Compras por particulares"
+                }
               },
               {
                 "value": "INTRES_21",
-                "name": "Devolución de mercancías,"
+                "name": "Devolución de mercancías,",
+                "labels": {
+                  "es_ES": "Devolución de mercancías,"
+                }
               },
               {
                 "value": "INTRES_12",
-                "name": "Entrega para venta a la vista o de prueba"
+                "name": "Entrega para venta a la vista o de prueba",
+                "labels": {
+                  "es_ES": "Entrega para venta a la vista o de prueba"
+                }
               },
               {
                 "value": "INTRES_31",
-                "name": "Mercancías suministradas financiados CE"
+                "name": "Mercancías suministradas financiados CE",
+                "labels": {
+                  "es_ES": "Mercancías suministradas financiados CE"
+                }
               },
               {
                 "value": "INTRES_40",
-                "name": "Operaciones con miras al trabajo por encargo"
+                "name": "Operaciones con miras al trabajo por encargo",
+                "labels": {
+                  "es_ES": "Operaciones con miras al trabajo por encargo"
+                }
               },
               {
                 "value": "INTRES_70",
-                "name": "Operaciones en programas comunes de defensa/intergubernament"
+                "name": "Operaciones en programas comunes de defensa/intergubernament",
+                "labels": {
+                  "es_ES": "Operaciones en programas comunes de defensa/intergubernament"
+                }
               },
               {
                 "value": "INTRES_50",
-                "name": "Operaciones tras el trabajo por encargo"
+                "name": "Operaciones tras el trabajo por encargo",
+                "labels": {
+                  "es_ES": "Operaciones tras el trabajo por encargo"
+                }
               },
               {
                 "value": "INTRES_33",
-                "name": "Otras entregas de ayuda (particulares, orgs. no gubernamenta"
+                "name": "Otras entregas de ayuda (particulares, orgs. no gubernamenta",
+                "labels": {
+                  "es_ES": "Otras entregas de ayuda (particulares, orgs. no gubernamenta"
+                }
               },
               {
                 "value": "INTRES_32",
-                "name": "Otras entregas de ayuda gubernamental"
+                "name": "Otras entregas de ayuda gubernamental",
+                "labels": {
+                  "es_ES": "Otras entregas de ayuda gubernamental"
+                }
               },
               {
                 "value": "INTRES_90",
-                "name": "Otras transacciones"
+                "name": "Otras transacciones",
+                "labels": {
+                  "es_ES": "Otras transacciones"
+                }
               },
               {
                 "value": "INTRES_34",
-                "name": "Otros"
+                "name": "Otros",
+                "labels": {
+                  "es_ES": "Otros"
+                }
               },
               {
                 "value": "INTRES_80",
-                "name": "Suministro de materiales de construcción y maquinaria"
+                "name": "Suministro de materiales de construcción y maquinaria",
+                "labels": {
+                  "es_ES": "Suministro de materiales de construcción y maquinaria"
+                }
               },
               {
                 "value": "INTRES_22",
-                "name": "Sustitución de mercancías devueltas"
+                "name": "Sustitución de mercancías devueltas",
+                "labels": {
+                  "es_ES": "Sustitución de mercancías devueltas"
+                }
               },
               {
                 "value": "INTRES_23",
-                "name": "Sustitución de mercancías no devueltas,"
+                "name": "Sustitución de mercancías no devueltas,",
+                "labels": {
+                  "es_ES": "Sustitución de mercancías no devueltas,"
+                }
               },
               {
                 "value": "INTRES_13",
-                "name": "Trueque (compensación en especie)"
+                "name": "Trueque (compensación en especie)",
+                "labels": {
+                  "es_ES": "Trueque (compensación en especie)"
+                }
               }
             ],
             "readOnlyLogic": {
@@ -2088,35 +2205,59 @@
             "enumValues": [
               {
                 "value": "4",
-                "name": "Air transport"
+                "name": "Air transport",
+                "labels": {
+                  "es_ES": "Transporte Aéreo"
+                }
               },
               {
                 "value": "7",
-                "name": "Fixed transport installations"
+                "name": "Fixed transport installations",
+                "labels": {
+                  "es_ES": "Instalaciones fijas de transporte"
+                }
               },
               {
                 "value": "8",
-                "name": "Inland waterway transport"
+                "name": "Inland waterway transport",
+                "labels": {
+                  "es_ES": "Transporte de navegación interior"
+                }
               },
               {
                 "value": "9",
-                "name": "Own propulsion"
+                "name": "Own propulsion",
+                "labels": {
+                  "es_ES": "Autopropulsión"
+                }
               },
               {
                 "value": "5",
-                "name": "Postal consignment"
+                "name": "Postal consignment",
+                "labels": {
+                  "es_ES": "Envíos postales"
+                }
               },
               {
                 "value": "2",
-                "name": "Rail transport"
+                "name": "Rail transport",
+                "labels": {
+                  "es_ES": "Transporte por ferrocaril"
+                }
               },
               {
                 "value": "3",
-                "name": "Road transport"
+                "name": "Road transport",
+                "labels": {
+                  "es_ES": "Transporte por Carretera"
+                }
               },
               {
                 "value": "1",
-                "name": "Sea transport"
+                "name": "Sea transport",
+                "labels": {
+                  "es_ES": "Transporte marítimo"
+                }
               }
             ],
             "readOnlyLogic": {
@@ -2139,239 +2280,416 @@
             "enumValues": [
               {
                 "value": "INTRES_0101",
-                "name": "ALAVA AEROPUERTO"
+                "name": "ALAVA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALAVA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0717",
-                "name": "ALCUDIA MARITIMA"
+                "name": "ALCUDIA MARITIMA",
+                "labels": {
+                  "es_ES": "ALCUDIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1131",
-                "name": "ALGECIRAS MARITIMA"
+                "name": "ALGECIRAS MARITIMA",
+                "labels": {
+                  "es_ES": "ALGECIRAS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0301",
-                "name": "ALICANTE AEROPUERTO"
+                "name": "ALICANTE AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALICANTE AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0311",
-                "name": "ALICANTE MARITIMA"
+                "name": "ALICANTE MARITIMA",
+                "labels": {
+                  "es_ES": "ALICANTE MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0401",
-                "name": "ALMERIA AEROPUERTO"
+                "name": "ALMERIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALMERIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0411",
-                "name": "ALMERIA MARITIMA"
+                "name": "ALMERIA MARITIMA",
+                "labels": {
+                  "es_ES": "ALMERIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3301",
-                "name": "ASTURIAS AEROPUERTO"
+                "name": "ASTURIAS AEROPUERTO",
+                "labels": {
+                  "es_ES": "ASTURIAS AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3331",
-                "name": "AVILES MARITIMA"
+                "name": "AVILES MARITIMA",
+                "labels": {
+                  "es_ES": "AVILES MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0801",
-                "name": "BARCELONA AEROPUERTO"
+                "name": "BARCELONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "BARCELONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_812",
-                "name": "BARCELONA MARITIMA EXP"
+                "name": "BARCELONA MARITIMA EXP",
+                "labels": {
+                  "es_ES": "BARCELONA MARITIMA EXP"
+                }
               },
               {
                 "value": "INTRES_0811",
-                "name": "BARCELONA MARITIMA IMP"
+                "name": "BARCELONA MARITIMA IMP",
+                "labels": {
+                  "es_ES": "BARCELONA MARITIMA IMP"
+                }
               },
               {
                 "value": "INTRES_4801",
-                "name": "BILBAO AEROPUERTO"
+                "name": "BILBAO AEROPUERTO",
+                "labels": {
+                  "es_ES": "BILBAO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4811",
-                "name": "BILBAO MARITIMA"
+                "name": "BILBAO MARITIMA",
+                "labels": {
+                  "es_ES": "BILBAO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1111",
-                "name": "CADIZ MARITIMA"
+                "name": "CADIZ MARITIMA",
+                "labels": {
+                  "es_ES": "CADIZ MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3011",
-                "name": "CARTAGENA MARITIMA"
+                "name": "CARTAGENA MARITIMA",
+                "labels": {
+                  "es_ES": "CARTAGENA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1211",
-                "name": "CASTELLON MARIMA"
+                "name": "CASTELLON MARIMA",
+                "labels": {
+                  "es_ES": "CASTELLON MARIMA"
+                }
               },
               {
                 "value": "INTRES_1521",
-                "name": "EL FERROL MARITIMA"
+                "name": "EL FERROL MARITIMA",
+                "labels": {
+                  "es_ES": "EL FERROL MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4631",
-                "name": "GANDIA MARITIMA"
+                "name": "GANDIA MARITIMA",
+                "labels": {
+                  "es_ES": "GANDIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1701",
-                "name": "GERONA AEROPUERTO"
+                "name": "GERONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GERONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3311",
-                "name": "GIJON MARITIMA"
+                "name": "GIJON MARITIMA",
+                "labels": {
+                  "es_ES": "GIJON MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1801",
-                "name": "GRANDA AEROPUERTO"
+                "name": "GRANDA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GRANDA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2001",
-                "name": "GUIPUZCOA AEROPUERTO"
+                "name": "GUIPUZCOA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GUIPUZCOA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2111",
-                "name": "HUELVA MARITIMA"
+                "name": "HUELVA MARITIMA",
+                "labels": {
+                  "es_ES": "HUELVA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0707",
-                "name": "IBIZA AEROPUERTO"
+                "name": "IBIZA AEROPUERTO",
+                "labels": {
+                  "es_ES": "IBIZA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0721",
-                "name": "IBIZA MARITIMA"
+                "name": "IBIZA MARITIMA",
+                "labels": {
+                  "es_ES": "IBIZA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1101",
-                "name": "JEREZ AEROPUERTO"
+                "name": "JEREZ AEROPUERTO",
+                "labels": {
+                  "es_ES": "JEREZ AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1501",
-                "name": "LA CORUNA AEROPUERTO"
+                "name": "LA CORUNA AEROPUERTO",
+                "labels": {
+                  "es_ES": "LA CORUNA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1511",
-                "name": "LA CORUNA MARITIMA"
+                "name": "LA CORUNA MARITIMA",
+                "labels": {
+                  "es_ES": "LA CORUNA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_2801",
-                "name": "MADRID AEROPUERTO"
+                "name": "MADRID AEROPUERTO",
+                "labels": {
+                  "es_ES": "MADRID AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2901",
-                "name": "MALAGA AEROPUERTO"
+                "name": "MALAGA AEROPUERTO",
+                "labels": {
+                  "es_ES": "MALAGA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2911",
-                "name": "MALAGA MARITIMA"
+                "name": "MALAGA MARITIMA",
+                "labels": {
+                  "es_ES": "MALAGA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3621",
-                "name": "MARTIN MARITIMA"
+                "name": "MARTIN MARITIMA",
+                "labels": {
+                  "es_ES": "MARTIN MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0708",
-                "name": "MOHAN AEROPUERTO"
+                "name": "MOHAN AEROPUERTO",
+                "labels": {
+                  "es_ES": "MOHAN AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0731",
-                "name": "MOHAN MARITIMA"
+                "name": "MOHAN MARITIMA",
+                "labels": {
+                  "es_ES": "MOHAN MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1811",
-                "name": "MORIL MARIMA"
+                "name": "MORIL MARIMA",
+                "labels": {
+                  "es_ES": "MORIL MARIMA"
+                }
               },
               {
                 "value": "INTRES_3001",
-                "name": "MURCIA AEROPUERTO"
+                "name": "MURCIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "MURCIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0711",
-                "name": "P . MALLORCA MARITIMA"
+                "name": "P . MALLORCA MARITIMA",
+                "labels": {
+                  "es_ES": "P . MALLORCA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0701",
-                "name": "P. MALLORCA AEROPUERTO"
+                "name": "P. MALLORCA AEROPUERTO",
+                "labels": {
+                  "es_ES": "P. MALLORCA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1711",
-                "name": "PALAMOS MARITIMA"
+                "name": "PALAMOS MARITIMA",
+                "labels": {
+                  "es_ES": "PALAMOS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_2011",
-                "name": "PASAJES MARITIMA"
+                "name": "PASAJES MARITIMA",
+                "labels": {
+                  "es_ES": "PASAJES MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1121",
-                "name": "PUERTO DE SANTA MARIA"
+                "name": "PUERTO DE SANTA MARIA",
+                "labels": {
+                  "es_ES": "PUERTO DE SANTA MARIA"
+                }
               },
               {
                 "value": "INTRES_2711",
-                "name": "RIBADEO MARITIMA"
+                "name": "RIBADEO MARITIMA",
+                "labels": {
+                  "es_ES": "RIBADEO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4621",
-                "name": "SAGUNTO MARITIMA"
+                "name": "SAGUNTO MARITIMA",
+                "labels": {
+                  "es_ES": "SAGUNTO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4321",
-                "name": "SAN CARLOS MARITIMA"
+                "name": "SAN CARLOS MARITIMA",
+                "labels": {
+                  "es_ES": "SAN CARLOS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3901",
-                "name": "SANTANDER AUEROPUERTO"
+                "name": "SANTANDER AUEROPUERTO",
+                "labels": {
+                  "es_ES": "SANTANDER AUEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3911",
-                "name": "SANTANDER MARITIMA"
+                "name": "SANTANDER MARITIMA",
+                "labels": {
+                  "es_ES": "SANTANDER MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1507",
-                "name": "SANTIAGO AEROPUERTO"
+                "name": "SANTIAGO AEROPUERTO",
+                "labels": {
+                  "es_ES": "SANTIAGO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4101",
-                "name": "SEVILLA AEROPUERTO"
+                "name": "SEVILLA AEROPUERTO",
+                "labels": {
+                  "es_ES": "SEVILLA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4111",
-                "name": "SEVILLA MARITIMA"
+                "name": "SEVILLA MARITIMA",
+                "labels": {
+                  "es_ES": "SEVILLA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4301",
-                "name": "TARRAGONA AEROPUERTO"
+                "name": "TARRAGONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "TARRAGONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4311",
-                "name": "TARRAGONA MARITIMA"
+                "name": "TARRAGONA MARITIMA",
+                "labels": {
+                  "es_ES": "TARRAGONA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4601",
-                "name": "VALENCIA AEROPUERTO"
+                "name": "VALENCIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "VALENCIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4611",
-                "name": "VALENCIA MARITIMA"
+                "name": "VALENCIA MARITIMA",
+                "labels": {
+                  "es_ES": "VALENCIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4701",
-                "name": "VALLADOLID AEROPUERTO"
+                "name": "VALLADOLID AEROPUERTO",
+                "labels": {
+                  "es_ES": "VALLADOLID AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3601",
-                "name": "VIGO AEROPUERTO"
+                "name": "VIGO AEROPUERTO",
+                "labels": {
+                  "es_ES": "VIGO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3611",
-                "name": "VIGO MARITIMA"
+                "name": "VIGO MARITIMA",
+                "labels": {
+                  "es_ES": "VIGO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3631",
-                "name": "VILLAGARCIA MARITIMA"
+                "name": "VILLAGARCIA MARITIMA",
+                "labels": {
+                  "es_ES": "VILLAGARCIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_5001",
-                "name": "ZARAGOZA AEROPUERTO"
+                "name": "ZARAGOZA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ZARAGOZA AEROPUERTO"
+                }
               }
             ],
             "displayLogic": {
@@ -2398,43 +2716,73 @@
             "enumValues": [
               {
                 "value": "INTRES_Acq_1",
-                "name": "Comunitarias destino final Estado miembro introducción"
+                "name": "Comunitarias destino final Estado miembro introducción",
+                "labels": {
+                  "es_ES": "Comunitarias destino final Estado miembro introducción"
+                }
               },
               {
                 "value": "INTRES_Acq_4",
-                "name": "Comunitarias devueltas al mismo estado expedidas"
+                "name": "Comunitarias devueltas al mismo estado expedidas",
+                "labels": {
+                  "es_ES": "Comunitarias devueltas al mismo estado expedidas"
+                }
               },
               {
                 "value": "INTRES_Acq_5",
-                "name": "Comunitarias devueltas transformadas"
+                "name": "Comunitarias devueltas transformadas",
+                "labels": {
+                  "es_ES": "Comunitarias devueltas transformadas"
+                }
               },
               {
                 "value": "INTRES_Del_5",
-                "name": "Salida de mercancías tras transformación"
+                "name": "Salida de mercancías tras transformación",
+                "labels": {
+                  "es_ES": "Salida de mercancías tras transformación"
+                }
               },
               {
                 "value": "INTRES_Del_1",
-                "name": "Salida mercancías a estado miembro"
+                "name": "Salida mercancías a estado miembro",
+                "labels": {
+                  "es_ES": "Salida mercancías a estado miembro"
+                }
               },
               {
                 "value": "INTRES_Del_4",
-                "name": "Salida para devolución de mercancías"
+                "name": "Salida para devolución de mercancías",
+                "labels": {
+                  "es_ES": "Salida para devolución de mercancías"
+                }
               },
               {
                 "value": "INTRES_Del_2",
-                "name": "Salida temporal para reintroducir en el mismo estado"
+                "name": "Salida temporal para reintroducir en el mismo estado",
+                "labels": {
+                  "es_ES": "Salida temporal para reintroducir en el mismo estado"
+                }
               },
               {
                 "value": "INTRES_Del_3",
-                "name": "Salida temporal para reintroducir tras transformación"
+                "name": "Salida temporal para reintroducir tras transformación",
+                "labels": {
+                  "es_ES": "Salida temporal para reintroducir tras transformación"
+                }
               },
               {
                 "value": "INTRES_Acq_3",
-                "name": "Temporales a otro Estado miembro con transformación"
+                "name": "Temporales a otro Estado miembro con transformación",
+                "labels": {
+                  "es_ES": "Temporales a otro Estado miembro con transformación"
+                }
               },
               {
                 "value": "INTRES_Acq_2",
-                "name": "Temporales para ser reexpedidas a un Estado miembro"
+                "name": "Temporales para ser reexpedidas a un Estado miembro",
+                "labels": {
+                  "es_ES": "Temporales para ser reexpedidas a un Estado miembro"
+                }
               }
             ],
             "readOnlyLogic": {
@@ -2869,35 +3217,59 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment"
+                "name": "Awaiting Payment",
+                "labels": {
+                  "es_ES": "A Pagar"
+                }
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution"
+                "name": "Awaiting Execution",
+                "labels": {
+                  "es_ES": "A Ejecutar"
+                }
               },
               {
                 "value": "RPVOID",
-                "name": "Void"
+                "name": "Void",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "PPM",
-                "name": "Payment Made"
+                "name": "Payment Made",
+                "labels": {
+                  "es_ES": "Pagado"
+                }
               },
               {
                 "value": "RPR",
-                "name": "Payment Received"
+                "name": "Payment Received",
+                "labels": {
+                  "es_ES": "Cobrado"
+                }
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared"
+                "name": "Deposited not Cleared",
+                "labels": {
+                  "es_ES": "Cobro depositado"
+                }
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared"
+                "name": "Withdrawn not Cleared",
+                "labels": {
+                  "es_ES": "Pago reintegrado"
+                }
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared"
+                "name": "Payment Cleared",
+                "labels": {
+                  "es_ES": "Conciliado"
+                }
               }
             ]
           },
@@ -3638,19 +4010,31 @@
             "enumValues": [
               {
                 "value": "A",
-                "name": "Actual"
+                "name": "Actual",
+                "labels": {
+                  "es_ES": "Real"
+                }
               },
               {
                 "value": "B",
-                "name": "Budget"
+                "name": "Budget",
+                "labels": {
+                  "es_ES": "Presupuesto"
+                }
               },
               {
                 "value": "E",
-                "name": "Encumbrance"
+                "name": "Encumbrance",
+                "labels": {
+                  "es_ES": "Gravamen"
+                }
               },
               {
                 "value": "S",
-                "name": "Statistical"
+                "name": "Statistical",
+                "labels": {
+                  "es_ES": "Estadística"
+                }
               }
             ]
           }
@@ -3706,35 +4090,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ]
           },
@@ -3752,15 +4160,24 @@
             "enumValues": [
               {
                 "value": "A0",
-                "name": "Alta en SII (A0)"
+                "name": "Alta en SII (A0)",
+                "labels": {
+                  "es_ES": "Alta en SII (A0)"
+                }
               },
               {
                 "value": "A1",
-                "name": "Modification to SII (A1)"
+                "name": "Modification to SII (A1)",
+                "labels": {
+                  "es_ES": "Modificación a SII (A1)"
+                }
               },
               {
                 "value": "Q",
-                "name": "SII Query"
+                "name": "SII Query",
+                "labels": {
+                  "es_ES": "Consulta SII"
+                }
               }
             ]
           },
@@ -3790,23 +4207,38 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - Not contrastable"
+                "name": "1 - Not contrastable",
+                "labels": {
+                  "es_ES": "1 - No contrastable"
+                }
               },
               {
                 "value": "2",
-                "name": "2 - In contrasting process"
+                "name": "2 - In contrasting process",
+                "labels": {
+                  "es_ES": "2 - En proceso de contraste"
+                }
               },
               {
                 "value": "3",
-                "name": "3 - Not contrasted"
+                "name": "3 - Not contrasted",
+                "labels": {
+                  "es_ES": "3 - No contrastada"
+                }
               },
               {
                 "value": "4",
-                "name": "4 - Partially contrasted"
+                "name": "4 - Partially contrasted",
+                "labels": {
+                  "es_ES": "4 - Parcialmente constrastada"
+                }
               },
               {
                 "value": "5",
-                "name": "5 - Contrasted"
+                "name": "5 - Contrasted",
+                "labels": {
+                  "es_ES": "5 - Contrastada"
+                }
               }
             ]
           },

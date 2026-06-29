@@ -209,6 +209,11 @@ const FIELD_DECISION_COPY_PROPS = [
   // Opt-in: when true on a searchSelect field, the combobox shows the inline
   // "+ create" action. Requires createSpec/createEntity to know where to POST.
   'allowCreate',
+  // Custom React component to use as the field renderer inside EntityForm.
+  // Value is the component name (string); the generator emits an import + the
+  // reference in the fields array. EntityForm renders <ComponentName value={...}
+  // onChange={...} record={data} readOnly={isReadOnly} /> instead of the default input.
+  'customRenderer',
   // i18n key for the inline "+ create" action label (e.g. "+ New transaction type").
   'createLabelKey',
   // i18n keys for the inline-create modal: dialog title + name-input placeholder.
@@ -691,8 +696,8 @@ const WINDOW_TRUTHY_PROPS = [
 const WINDOW_BOOLEAN_TRUE_PROPS = [
   'hideDeleteWhenComplete',
   'customTabsAfterBottom',
-  'hidePrint',
   'hideCreate',
+  'hidePrint',
   'hideMoreMenu',
   'hideMoreDetails',
   'hideListFilters',

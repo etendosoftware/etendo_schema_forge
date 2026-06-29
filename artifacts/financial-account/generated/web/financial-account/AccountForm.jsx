@@ -4,7 +4,7 @@ import { EntityForm } from '@/components/contract-ui';
 const fields = [
   { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
   { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: 'Currency', required: true, section: 'principal', reference: 'Currency', inputMode: 'selector', readOnlyLogic: (record) => Number(record['hasTransaction']) > 0 },
-  { key: 'type', column: 'Type', type: 'select', label: 'Type', required: true, section: 'principal', options: [{ value: 'B', label: 'Bank' }, { value: 'CA', label: 'Card' }, { value: 'C', label: 'Cash' }], defaultValue: 'B' },
+  { key: 'type', column: 'Type', type: 'select', label: 'Type', required: true, section: 'principal', options: [{ value: 'B', label: 'Bank', labels: {"es_ES":"Banco"} }, { value: 'CA', label: 'Card' }, { value: 'C', label: 'Cash', labels: {"es_ES":"Caja"} }], defaultValue: 'B' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal' },
   { key: 'active', column: 'Isactive', type: 'checkbox', label: 'Active', section: 'other', defaultValue: 'Y' },
   { key: 'currentBalance', column: 'Currentbalance', type: 'number', label: 'Current Balance', required: true, readOnly: true, section: 'other', defaultValue: '0' },

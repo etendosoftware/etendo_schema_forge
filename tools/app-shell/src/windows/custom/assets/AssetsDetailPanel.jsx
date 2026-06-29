@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { useUI } from '@/i18n';
@@ -48,16 +48,112 @@ function isDepreciate(record) {
   return record?.depreciate === true || record?.depreciate === 'Y';
 }
 
-export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange }) {
+// The Asset amount fields handled by the local recompute below.
+const AMOUNT_FIELDS = new Set(['assetValue', 'residualAssetValue', 'depreciationAmt']);
+
+// Round a currency amount to 2 decimals, avoiding JS float drift (e.g. 0.1 + 0.2).
+function round2(n) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Local, synchronous replica of the core SL_Assets callout arithmetic.
+ *
+ * SOURCE OF TRUTH: org.openbravo.erpCommon.ad_callouts.SL_Assets#execute
+ * (Etendo Classic, .../src/org/openbravo/erpCommon/ad_callouts/SL_Assets.java, lines 43-63).
+ * If that Java arithmetic ever changes, THIS MUST CHANGE TOO — they must stay in sync.
+ *
+ * We compute locally instead of firing the async `/assets/callout` for these three fields
+ * because the round-trip is racy: the Java `assetValue` branch only recomputes residual
+ * `if (amort != 0)`, so a stale `amort=0` posted mid-race leaves residual unchanged
+ * (the "Asset Value 4000 keeps Residual at -2000" bug). Local compute from the up-to-date
+ * editing state is deterministic and faithful. ETP-4333.
+ *
+ * @param field one of 'assetValue' | 'residualAssetValue' | 'depreciationAmt'
+ * @param asset/residual/amort current numeric values (callers coerce null/'' → 0)
+ * @returns { assetValue, residualAssetValue, depreciationAmt } the recomputed triple
+ */
+export function computeAssetAmounts(field, asset, residual, amort) {
+  let a = asset;
+  let r = residual;
+  let m = amort;
+  if (field === 'assetValue') {
+    // SL_Assets: if (amort != 0) residual = asset - amort;  then  amort = asset - residual;
+    if (m !== 0) r = a - m;
+    m = a - r;
+  } else if (field === 'residualAssetValue') {
+    // SL_Assets: amort = asset - residual;
+    m = a - r;
+  } else if (field === 'depreciationAmt') {
+    // SL_Assets: residual = asset - amort;
+    r = a - m;
+  }
+  return { assetValue: round2(a), residualAssetValue: round2(r), depreciationAmt: round2(m) };
+}
+
+export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange, onLocalChange }) {
   const ui = useUI();
   const d = data ?? {};
   const depreciate = isDepreciate(d);
 
-  useEffect(() => {
-    if (!d?.id && d?.currency) {
-      onChange?.('currency', d.currency);
+  // Commit handler for the three Asset amount fields (assetValue, residualAssetValue,
+  // depreciationAmt). Instead of firing the async SL_Assets callout, we replicate its
+  // arithmetic LOCALLY and synchronously (computeAssetAmounts) and write the recomputed
+  // triple straight into the form state via onLocalChange (= hook.handleChange, a local
+  // setter that does NOT fire a callout). This is deterministic — no async round-trip to
+  // race — and updates the sidebar "Current Value" and the sibling inputs immediately.
+  // DeferredInput still defers each field's commit to blur; only the commit TARGET changed
+  // from "fire callout" to "local recompute". Other fields keep the normal onChange (which
+  // still fires the real callout). ETP-4333. See computeAssetAmounts for the Java source.
+  const localSetterRef = useRef(onLocalChange);
+  localSetterRef.current = onLocalChange;
+  const fallbackOnChangeRef = useRef(onChange);
+  fallbackOnChangeRef.current = onChange;
+  function handleAmountChange(field, value, column) {
+    if (!AMOUNT_FIELDS.has(field)) {
+      onChange?.(field, value, column);
+      return;
     }
-  }, [d?.id, d?.currency, onChange]);
+    const setter = localSetterRef.current ?? fallbackOnChangeRef.current;
+    const num = (x) => Number(x) || 0;
+    const next = computeAssetAmounts(
+      field,
+      field === 'assetValue' ? num(value) : num(d.assetValue),
+      field === 'residualAssetValue' ? num(value) : num(d.residualAssetValue),
+      field === 'depreciationAmt' ? num(value) : num(d.depreciationAmt),
+    );
+    // Apply the full triple so the sidebar and all three inputs stay consistent. Writing
+    // every field (even the unchanged trigger) keeps editing authoritative in one shot.
+    setter?.('assetValue', next.assetValue);
+    setter?.('residualAssetValue', next.residualAssetValue);
+    setter?.('depreciationAmt', next.depreciationAmt);
+  }
+
+  // Echo the backend-provided default currency into the form's change handler exactly
+  // once per new-record session. `onChange` (DetailView's handleChangeWithCallout) is
+  // re-created whenever `hook.editing` changes identity, so including it in the deps —
+  // or re-emitting on every render where currency is set — drives an effect→onChange→
+  // setEditing→new onChange→effect feedback loop. That loop never trips React's
+  // synchronous "Maximum update depth" guard (it cycles through the passive-effect
+  // phase, one commit per frame), so it silently starves the render queue and freezes
+  // route transitions (Cancel / sidebar navigation stop unmounting the detail view).
+  // Guarding with a ref and excluding `onChange`/`d.currency` from the deps keeps the
+  // echo to a single fire. See ETP-4333.
+  const currencyEchoedRef = useRef(false);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const isNewRecord = !d?.id;
+  useEffect(() => {
+    if (!isNewRecord) {
+      currencyEchoedRef.current = false;
+      return;
+    }
+    if (currencyEchoedRef.current) return;
+    if (d?.currency) {
+      currencyEchoedRef.current = true;
+      onChangeRef.current?.('currency', d.currency);
+    }
+  }, [isNewRecord, d?.currency]);
 
   const common = { data: d, onChange, catalogs, api, token, apiBaseUrl, entity: 'assets', layout: 'horizontal' };
 
@@ -80,9 +176,17 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
 
   const group2Fields = [
     { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: ui('assetsCurrencyLabel'), section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: (record) => Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0 },
-    { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal' },
-    { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'number', label: ui('assetsResidualValueLabel'), section: 'principal' },
-    { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: ui('assetsDepreciationAmtLabel'), section: 'principal' },
+    // The Asset amount triple (AssetValue, ResidualAssetValue, DepreciationAmt). ETP-4333:
+    //  • calloutOn: 'blur' — EntityForm renders these via DeferredInput: typing only updates a
+    //    local buffer; on blur a single onChange commits the value. The deferral-to-blur UX
+    //    stays; only the commit TARGET changed — see handleAmountChange below.
+    //  • They do NOT fire the async /assets/callout. handleAmountChange (passed as this group's
+    //    onChange) replicates the SL_Assets arithmetic LOCALLY and synchronously
+    //    (computeAssetAmounts) and writes the recomputed triple via onLocalChange. Deterministic,
+    //    no async round-trip to race. The Java remains the source of truth (see computeAssetAmounts).
+    { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
+    { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'number', label: ui('assetsResidualValueLabel'), section: 'principal', calloutOn: 'blur' },
+    { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: ui('assetsDepreciationAmtLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'number', label: ui('assetsPrevDepreciatedLabel'), section: 'principal', defaultValue: '0' },
   ];
 
@@ -169,6 +273,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
             <EntityForm
               fields={group2Fields}
               {...common}
+              onChange={handleAmountChange}
               displayLogic={readOnlyAll}
               data-testid="EntityForm__8e32ca" />
             <EntityForm

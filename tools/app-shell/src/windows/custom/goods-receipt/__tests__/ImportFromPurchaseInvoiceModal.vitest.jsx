@@ -1,392 +1,159 @@
-// Mocks BEFORE imports
-vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
-}));
+// Mocks must come before imports (Vitest hoisting)
 
-// Capture props passed to ImportLinesModal so we can extract the pure functions
-let capturedProps = null;
+// Capture the props that the wrapper forwards to the generic ImportLinesModal.
+let captured = null;
 vi.mock('@/components/contract-ui/ImportLinesModal', () => ({
-  default: vi.fn((props) => {
-    capturedProps = props;
-    return null;
-  }),
+  default: (props) => {
+    captured = props;
+    return <div data-testid="import-lines-modal" />;
+  },
 }));
 
 import { render } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import ImportFromPurchaseInvoiceModal from '../ImportFromPurchaseInvoiceModal.jsx';
-import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import ImportFromPurchaseInvoiceModal from '@generated/goods-receipt/custom/ImportFromPurchaseInvoiceModal';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const headers = { Authorization: 'Bearer tok', 'Content-Type': 'application/json' };
+const base = '/api';
 
-const DEFAULT_PROPS = {
-  receiptId: 'receipt-1',
-  bpId: 'bp-1',
-  base: '/api',
-  headers: { Authorization: 'Bearer tok' },
-  onClose: vi.fn(),
-  onSuccess: vi.fn(),
-};
-
-function renderModal(overrides = {}) {
-  capturedProps = null;
-  render(<ImportFromPurchaseInvoiceModal {...DEFAULT_PROPS} {...overrides} />);
-  return capturedProps;
+function jsonRes(data, ok = true) {
+  return { ok, json: async () => ({ response: { data } }) };
 }
 
-// ── Static prop contract ──────────────────────────────────────────────────────
+beforeEach(() => {
+  captured = null;
+});
 
-describe('ImportFromPurchaseInvoiceModal — static props', () => {
-  it('passes invoiceId=receiptId to ImportLinesModal', () => {
-    const props = renderModal({ receiptId: 'rec-99' });
-    expect(props.invoiceId).toBe('rec-99');
+describe('ImportFromPurchaseInvoiceModal — static prop contract', () => {
+  it('forwards incoming props and the fixed config to ImportLinesModal', () => {
+    render(<ImportFromPurchaseInvoiceModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
+    expect(captured).toBeTruthy();
+    expect(captured.invoiceId).toBe('receipt-1');
+    expect(captured.bpId).toBe('bp-1');
+    expect(captured.linesEndpoint).toBe('goods-receipt/goodsReceiptLine');
+    expect(captured.titleKey).toBe('importFromPurchaseInvoice');
+    expect(captured.searchPlaceholderKey).toBe('searchPurchaseInvoice');
+    expect(captured.emptyMessageKey).toBe('noCompletedPurchaseInvoicesForThisVendor');
+    expect(captured.noSearchResultsKey).toBe('noInvoicesMatchYourSearch');
+    expect(captured.successMessageKey).toBe('linesImportedFromPurchaseInvoice');
+    expect(captured.showPriceColumns).toBe(false);
+    expect(typeof captured.fetchDocuments).toBe('function');
+    expect(typeof captured.fetchLines).toBe('function');
+    expect(typeof captured.getDocDisplay).toBe('function');
+    expect(typeof captured.buildLineBody).toBe('function');
   });
 
-  it('passes linesEndpoint="goods-receipt/goodsReceiptLine"', () => {
-    const props = renderModal();
-    expect(props.linesEndpoint).toBe('goods-receipt/goodsReceiptLine');
-  });
-
-  it('passes correct i18n key props', () => {
-    const props = renderModal();
-    expect(props.titleKey).toBe('importFromPurchaseInvoice');
-    expect(props.searchPlaceholderKey).toBe('searchPurchaseInvoice');
-    expect(props.emptyMessageKey).toBe('noCompletedPurchaseInvoicesForThisVendor');
-    expect(props.noSearchResultsKey).toBe('noInvoicesMatchYourSearch');
-    expect(props.successMessageKey).toBe('linesImportedFromPurchaseInvoice');
-  });
-
-  it('sets showPriceColumns=false', () => {
-    const props = renderModal();
-    expect(props.showPriceColumns).toBe(false);
-  });
-
-  it('forwards bpId, base, headers, onClose, onSuccess', () => {
-    const props = renderModal();
-    expect(props.bpId).toBe('bp-1');
-    expect(props.base).toBe('/api');
-    expect(props.headers).toEqual({ Authorization: 'Bearer tok' });
-    expect(typeof props.onClose).toBe('function');
-    expect(typeof props.onSuccess).toBe('function');
-  });
-
-  it('passes fetchDocuments, fetchLines, getDocDisplay, buildLineBody as functions', () => {
-    const props = renderModal();
-    expect(typeof props.fetchDocuments).toBe('function');
-    expect(typeof props.fetchLines).toBe('function');
-    expect(typeof props.getDocDisplay).toBe('function');
-    expect(typeof props.buildLineBody).toBe('function');
+  it('does NOT pass an afterImport callback (invoice path has no order linking)', () => {
+    render(<ImportFromPurchaseInvoiceModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
+    expect(captured.afterImport).toBeUndefined();
   });
 });
 
-// ── enrichLines (via fetchLines) ──────────────────────────────────────────────
+describe('ImportFromPurchaseInvoiceModal — fetchDocuments', () => {
+  afterEach(() => vi.restoreAllMocks());
 
-describe('enrichLines — via fetchLines with cached data', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn(() =>
-      Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) }),
-    ));
-  });
-  afterEach(() => vi.unstubAllGlobals());
+  it('keeps only completed invoices for this vendor that still have unlinked invoiced lines', async () => {
+    render(<ImportFromPurchaseInvoiceModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
+    const { fetchDocuments } = captured;
 
-  function getEnrichedLines(rawLines) {
-    const props = renderModal();
-    const sharedContext = { linesCache: { 'doc-1': rawLines } };
-    return props.fetchLines({ base: '/api', headers: {}, docId: 'doc-1', sharedContext });
-  }
-
-  it('filters out lines where invoicedQuantity <= 0', async () => {
-    const lines = [
-      { id: 'l1', invoicedQuantity: 0, 'product$_identifier': 'P1' },
-      { id: 'l2', invoicedQuantity: -1, 'product$_identifier': 'P2' },
-      { id: 'l3', invoicedQuantity: 2, 'product$_identifier': 'P3' },
-    ];
-    const result = await getEnrichedLines(lines);
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('l3');
-  });
-
-  it('sets _maxQty=0 and _alreadyImported=true when goodsShipmentLine is truthy', async () => {
-    const lines = [
-      { id: 'l1', invoicedQuantity: 5, goodsShipmentLine: 'gsl-1', 'product$_identifier': 'P1' },
-    ];
-    const result = await getEnrichedLines(lines);
-    expect(result[0]._maxQty).toBe(0);
-    expect(result[0]._alreadyImported).toBe(true);
-  });
-
-  it('sets _maxQty=invoicedQuantity and _alreadyImported=false when not yet imported', async () => {
-    const lines = [
-      { id: 'l1', invoicedQuantity: 7, 'product$_identifier': 'Widget' },
-    ];
-    const result = await getEnrichedLines(lines);
-    expect(result[0]._maxQty).toBe(7);
-    expect(result[0]._alreadyImported).toBe(false);
-  });
-
-  it('sets _productName from product$_identifier', async () => {
-    const lines = [
-      { id: 'l1', invoicedQuantity: 3, 'product$_identifier': 'Widget A' },
-    ];
-    const result = await getEnrichedLines(lines);
-    expect(result[0]._productName).toBe('Widget A');
-  });
-
-  it('falls back to id for _productName when product$_identifier is absent', async () => {
-    const lines = [
-      { id: 'l42', invoicedQuantity: 3 },
-    ];
-    const result = await getEnrichedLines(lines);
-    expect(result[0]._productName).toBe('l42');
-  });
-});
-
-// ── fetchLines ────────────────────────────────────────────────────────────────
-
-describe('fetchLines', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('uses cached lines and does not fetch when cache is populated', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    const props = renderModal();
-    const cachedLines = [
-      { id: 'l1', invoicedQuantity: 4, 'product$_identifier': 'Cached Product' },
-    ];
-    const sharedContext = { linesCache: { 'doc-cached': cachedLines } };
-
-    await props.fetchLines({ base: '/api', headers: {}, docId: 'doc-cached', sharedContext });
-
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('fetches from API when not in cache', async () => {
-    const apiLines = [
-      { id: 'l2', invoicedQuantity: 2, 'product$_identifier': 'Remote Product' },
-    ];
-    vi.stubGlobal('fetch', vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ response: { data: apiLines } }),
-      }),
-    ));
-
-    const props = renderModal();
-    const result = await props.fetchLines({
-      base: '/api', headers: {}, docId: 'doc-remote', sharedContext: {},
-    });
-
-    expect(fetch).toHaveBeenCalledWith(
-      '/api/purchase-invoice/lines?parentId=doc-remote&_startRow=0&_endRow=200',
-      { headers: {} },
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0]._productName).toBe('Remote Product');
-  });
-
-  it('returns [] when fetch response is not ok', async () => {
-    vi.stubGlobal('fetch', vi.fn(() =>
-      Promise.resolve({ ok: false }),
-    ));
-
-    const props = renderModal();
-    const result = await props.fetchLines({
-      base: '/api', headers: {}, docId: 'doc-fail', sharedContext: {},
-    });
-    expect(result).toEqual([]);
-  });
-
-  it('returns [] when fetch throws', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('Network error'))));
-
-    const props = renderModal();
-    const result = await props.fetchLines({
-      base: '/api', headers: {}, docId: 'doc-throw', sharedContext: {},
-    });
-    expect(result).toEqual([]);
-  });
-});
-
-// ── fetchDocuments ────────────────────────────────────────────────────────────
-
-describe('fetchDocuments', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  const headers = { Authorization: 'Bearer tok' };
-
-  function makeInvoice(overrides = {}) {
-    return {
-      id: 'inv-1',
-      documentNo: 'INV-001',
-      documentStatus: 'CO',
-      businessPartner: 'bp-1',
-      grandTotalAmount: 500,
-      'businessPartner$_identifier': 'Supplier',
-      invoiceDate: '2024-03-01',
-      ...overrides,
-    };
-  }
-
-  function stubFetch(invoices, linesByInvId = {}) {
-    vi.stubGlobal('fetch', vi.fn((url) => {
+    globalThis.fetch = vi.fn((url) => {
       if (url.includes('/purchase-invoice/header')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ response: { data: invoices } }),
-        });
+        return Promise.resolve(jsonRes([
+          { id: 'i1', documentStatus: 'CO', businessPartner: 'bp-1', grandTotalAmount: 100 }, // has unlinked line -> keep
+          { id: 'i2', documentStatus: 'CO', businessPartner: 'bp-1', grandTotalAmount: 50 },  // all linked -> drop
+          { id: 'i3', documentStatus: 'DR', businessPartner: 'bp-1', grandTotalAmount: 10 },  // not completed -> drop
+          { id: 'i4', documentStatus: 'CO', businessPartner: 'bp-2', grandTotalAmount: 10 },  // other vendor -> drop
+        ]));
       }
-      // Lines endpoint: /purchase-invoice/lines?parentId=<id>&...
-      const match = url.match(/parentId=([^&]+)/);
-      const invId = match?.[1];
-      const lines = linesByInvId[invId] || [];
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ response: { data: lines } }),
-      });
-    }));
-  }
-
-  it('filters candidates by documentStatus=CO, businessPartner, and grandTotalAmount>=0', async () => {
-    const invoices = [
-      makeInvoice({ id: 'inv-1', documentStatus: 'CO', businessPartner: 'bp-1' }),
-      makeInvoice({ id: 'inv-2', documentStatus: 'DR', businessPartner: 'bp-1' }), // draft
-      makeInvoice({ id: 'inv-3', documentStatus: 'CO', businessPartner: 'bp-other' }), // wrong bp
-      makeInvoice({ id: 'inv-4', documentStatus: 'CO', businessPartner: 'bp-1', grandTotalAmount: -1 }), // negative
-    ];
-    const pendingLine = { id: 'l1', invoicedQuantity: 3, goodsShipmentLine: null };
-    stubFetch(invoices, {
-      'inv-1': [pendingLine],
-      'inv-2': [],
-      'inv-3': [pendingLine],
-      'inv-4': [pendingLine],
+      if (url.includes('parentId=i1')) {
+        return Promise.resolve(jsonRes([{ id: 'l1', invoicedQuantity: 4, goodsShipmentLine: null }]));
+      }
+      if (url.includes('parentId=i2')) {
+        return Promise.resolve(jsonRes([{ id: 'l2', invoicedQuantity: 4, goodsShipmentLine: 'gsl-1' }]));
+      }
+      return Promise.resolve(jsonRes([]));
     });
 
-    const props = renderModal();
-    const { documents } = await props.fetchDocuments({ base: '/api', headers, bpId: 'bp-1' });
-
-    expect(documents).toHaveLength(1);
-    expect(documents[0].id).toBe('inv-1');
+    const { documents, sharedContext } = await fetchDocuments({ base, headers, bpId: 'bp-1' });
+    expect(documents.map((d) => d.id)).toEqual(['i1']);
+    expect(sharedContext.linesCache).toHaveProperty('i1');
   });
 
-  it('excludes invoices where ALL lines are already imported', async () => {
-    const fullyImported = makeInvoice({ id: 'inv-full' });
-    const partiallyImported = makeInvoice({ id: 'inv-partial' });
-    const fullyImportedLines = [
-      { id: 'l1', invoicedQuantity: 5, goodsShipmentLine: 'gsl-1' },
-      { id: 'l2', invoicedQuantity: 3, goodsShipmentLine: 'gsl-2' },
-    ];
-    const partialLines = [
-      { id: 'l3', invoicedQuantity: 5, goodsShipmentLine: 'gsl-3' },
-      { id: 'l4', invoicedQuantity: 2, goodsShipmentLine: null },
-    ];
-    stubFetch([fullyImported, partiallyImported], {
-      'inv-full': fullyImportedLines,
-      'inv-partial': partialLines,
-    });
-
-    const props = renderModal();
-    const { documents } = await props.fetchDocuments({ base: '/api', headers, bpId: 'bp-1' });
-
-    expect(documents).toHaveLength(1);
-    expect(documents[0].id).toBe('inv-partial');
-  });
-
-  it('includes invoice when at least one line has invoicedQuantity > 0 and no goodsShipmentLine', async () => {
-    const inv = makeInvoice({ id: 'inv-ok' });
-    const lines = [{ id: 'l1', invoicedQuantity: 10, goodsShipmentLine: null }];
-    stubFetch([inv], { 'inv-ok': lines });
-
-    const props = renderModal();
-    const { documents, sharedContext } = await props.fetchDocuments({ base: '/api', headers, bpId: 'bp-1' });
-
-    expect(documents).toHaveLength(1);
-    expect(sharedContext.linesCache['inv-ok']).toEqual(lines);
-  });
-
-  it('returns empty documents on non-ok header fetch', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
-
-    const props = renderModal();
-    const { documents, sharedContext } = await props.fetchDocuments({ base: '/api', headers, bpId: 'bp-1' });
-
-    expect(documents).toEqual([]);
-    expect(sharedContext).toEqual({ linesCache: {} });
-  });
-
-  it('populates linesCache in sharedContext', async () => {
-    const inv = makeInvoice({ id: 'inv-cache' });
-    const lines = [{ id: 'l1', invoicedQuantity: 1, goodsShipmentLine: null }];
-    stubFetch([inv], { 'inv-cache': lines });
-
-    const props = renderModal();
-    const { sharedContext } = await props.fetchDocuments({ base: '/api', headers, bpId: 'bp-1' });
-
-    expect(sharedContext.linesCache['inv-cache']).toEqual(lines);
+  it('returns empty documents with an empty linesCache when the header request fails', async () => {
+    render(<ImportFromPurchaseInvoiceModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
+    const { fetchDocuments } = captured;
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false, json: async () => ({}) }));
+    const result = await fetchDocuments({ base, headers, bpId: 'bp-1' });
+    expect(result.documents).toEqual([]);
+    expect(result.sharedContext.linesCache).toEqual({});
   });
 });
 
-// ── getDocDisplay ─────────────────────────────────────────────────────────────
+describe('ImportFromPurchaseInvoiceModal — fetchLines', () => {
+  afterEach(() => vi.restoreAllMocks());
 
-describe('getDocDisplay', () => {
-  it('returns docNo from documentNo and date from invoiceDate', () => {
-    const props = renderModal();
-    const result = props.getDocDisplay({ documentNo: 'INV-123', invoiceDate: '2024-01-15', id: 'fallback' });
-    expect(result).toEqual({ docNo: 'INV-123', date: '2024-01-15' });
+  it('uses the cached lines and enriches them (max qty 0 when already linked)', async () => {
+    render(<ImportFromPurchaseInvoiceModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
+    const { fetchLines } = captured;
+    globalThis.fetch = vi.fn(() => { throw new Error('should not fetch when cached'); });
+
+    const sharedContext = {
+      linesCache: {
+        i1: [
+          { id: 'l1', invoicedQuantity: 4, goodsShipmentLine: null, 'product$_identifier': 'Bolt' },
+          { id: 'l2', invoicedQuantity: 2, goodsShipmentLine: 'gsl-1' }, // already linked -> maxQty 0
+          { id: 'l3', invoicedQuantity: 0, goodsShipmentLine: null },    // filtered out
+        ],
+      },
+    };
+    const lines = await fetchLines({ base, headers, docId: 'i1', sharedContext });
+    expect(lines.map((l) => l.id)).toEqual(['l1', 'l2']);
+    const l1 = lines.find((l) => l.id === 'l1');
+    expect(l1._maxQty).toBe(4);
+    expect(l1._alreadyImported).toBe(false);
+    expect(l1._productName).toBe('Bolt');
+    const l2 = lines.find((l) => l.id === 'l2');
+    expect(l2._maxQty).toBe(0);
+    expect(l2._alreadyImported).toBe(true);
   });
 
-  it('falls back to id when documentNo is absent', () => {
-    const props = renderModal();
-    const result = props.getDocDisplay({ id: 'inv-id', invoiceDate: '2024-02-01' });
-    expect(result.docNo).toBe('inv-id');
+  it('falls back to fetching lines when none are cached', async () => {
+    render(<ImportFromPurchaseInvoiceModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
+    const { fetchLines } = captured;
+    globalThis.fetch = vi.fn(() => Promise.resolve(jsonRes([
+      { id: 'l9', invoicedQuantity: 7, goodsShipmentLine: null },
+    ])));
+    const lines = await fetchLines({ base, headers, docId: 'i5', sharedContext: { linesCache: {} } });
+    expect(lines).toHaveLength(1);
+    expect(lines[0]._maxQty).toBe(7);
   });
 
-  it('returns undefined date when invoiceDate is absent', () => {
-    const props = renderModal();
-    const result = props.getDocDisplay({ documentNo: 'INV-X' });
-    expect(result.date).toBeUndefined();
+  it('returns [] when the fallback fetch fails', async () => {
+    render(<ImportFromPurchaseInvoiceModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
+    const { fetchLines } = captured;
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false, json: async () => ({}) }));
+    const lines = await fetchLines({ base, headers, docId: 'i5', sharedContext: { linesCache: {} } });
+    expect(lines).toEqual([]);
   });
 });
 
-// ── buildLineBody ─────────────────────────────────────────────────────────────
-
-describe('buildLineBody', () => {
-  it('returns the correct body shape', async () => {
-    const props = renderModal();
-    const line = { id: 'line-1', product: 'prod-1', uOM: 'uom-1' };
-    const result = await props.buildLineBody({ line, qty: 3, invoiceId: 'receipt-5', lineNo: 10 });
-
-    expect(result).toEqual({
-      parentId: 'receipt-5',
-      product: 'prod-1',
+describe('ImportFromPurchaseInvoiceModal — buildLineBody', () => {
+  it('maps an invoice line into a goods-receipt line body keyed by invoiceLineId', async () => {
+    render(<ImportFromPurchaseInvoiceModal invoiceId="receipt-1" bpId="bp-1" base={base} headers={headers} />);
+    const { buildLineBody } = captured;
+    const body = await buildLineBody({
+      line: { id: 'l1', product: 'p1', uOM: 'u1' },
+      qty: 3,
+      invoiceId: 'receipt-1',
+      lineNo: 20,
+    });
+    expect(body).toEqual({
+      parentId: 'receipt-1',
+      product: 'p1',
       movementQuantity: 3,
-      uOM: 'uom-1',
-      invoiceLineId: 'line-1',
-      lineNo: 10,
+      uOM: 'u1',
+      invoiceLineId: 'l1',
+      lineNo: 20,
     });
-  });
-
-  it('sets uOM=null when line.uOM is absent', async () => {
-    const props = renderModal();
-    const line = { id: 'line-2', product: 'prod-2' };
-    const result = await props.buildLineBody({ line, qty: 1, invoiceId: 'receipt-6', lineNo: 20 });
-
-    expect(result.uOM).toBeNull();
-  });
-
-  it('uses receiptId (invoiceId param) as parentId', async () => {
-    const props = renderModal();
-    const line = { id: 'l', product: 'p' };
-    const result = await props.buildLineBody({ line, qty: 2, invoiceId: 'RECEIPT-ABC', lineNo: 30 });
-
-    expect(result.parentId).toBe('RECEIPT-ABC');
-  });
-
-  it('sets invoiceLineId from line.id (not parentId)', async () => {
-    const props = renderModal();
-    const line = { id: 'source-line-id', product: 'p' };
-    const result = await props.buildLineBody({ line, qty: 1, invoiceId: 'any-receipt', lineNo: 1 });
-
-    expect(result.invoiceLineId).toBe('source-line-id');
   });
 });

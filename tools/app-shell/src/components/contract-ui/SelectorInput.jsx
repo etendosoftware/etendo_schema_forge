@@ -164,11 +164,13 @@ export function SelectorInput({
             {displayValue}
           </SelectItem>
         )}
-        {baseOptions.map(opt => (
-          <SelectItem key={opt.id} value={opt.id} data-testid={`option-${field.key}-${opt.id}`}>
-            {optionTranslator ? optionTranslator(opt.name) : opt.name}
-          </SelectItem>
-        ))}
+        {baseOptions
+          .filter(opt => !optionTranslator || optionTranslator(opt.name) !== null)
+          .map(opt => (
+            <SelectItem key={opt.id} value={opt.id} data-testid={`option-${field.key}-${opt.id}`}>
+              {optionTranslator ? optionTranslator(opt.name) : opt.name}
+            </SelectItem>
+          ))}
         {hasMore && selectorUrl && (
           <div className="py-1 text-center text-xs text-muted-foreground select-none pointer-events-none">{ui('loading')}</div>
         )}

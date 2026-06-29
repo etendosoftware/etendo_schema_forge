@@ -1549,6 +1549,15 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
  * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api }`
  * plus any keys declared in the optional `props` object.
  */
+export function hasUnsavedEdits(editing, selected) {
+  if (!editing || !selected) return false;
+  return Object.entries(editing).some(([k, v]) => k !== 'id' && v !== selected[k]);
+}
+
+export function mergeLineEdits(lineEdits, selectedLine) {
+  return lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine;
+}
+
 export function DetailView({
   entity,
   detailEntity,
@@ -1715,13 +1724,15 @@ export function DetailView({
     primaryFetchChildDefaults?.(parentRecordId);
   }, [primaryHandlesDefaults, parentRecordId, primaryFetchChildDefaults]);
 
+  // Ref updated on every render so the callback always reads the latest hook state,
+  // even when called from a setTimeout scheduled before the React re-render committed.
+  const handleFieldBlurRef = useRef(null);
+  handleFieldBlurRef.current = () => {
+    hasUnsavedEdits(hook.editing, hook.selected) && hook.handleSave();
+  };
   const handleFieldBlur = useCallback(() => {
-    if (!hook.editing || !hook.selected) return;
-    const hasChanges = Object.entries(hook.editing).some(
-      ([key, value]) => key !== 'id' && value !== hook.selected[key]
-    );
-    if (hasChanges) hook.handleSave();
-  }, [hook]);
+    handleFieldBlurRef.current?.();
+  }, []);
   // Depend on the single scalar the memo reads from editing/selected, not the whole objects.
   // Keeps original semantics: prefer editing when present (even if priceList is null), else selected.
   const priceListId = (hook.editing || hook.selected)?.priceList ?? null;
@@ -2341,7 +2352,7 @@ export function DetailView({
     }
     if (handledOpenImportRef.current) return;
     handledOpenImportRef.current = true;
-    setForceOpenImport(true);
+    setForceOpenImport(location.state.openImportModal);
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.state?.openImportModal, isNew, hook.editing, navigate, location.pathname]);
 
@@ -2375,14 +2386,16 @@ export function DetailView({
   }, [isNew, hook, navigate, windowName, addingLine]);
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
-  const handleImportClick = useCallback(async () => {
+  // modalType ('order' | 'invoice') is forwarded in navigation state so the destination component
+  // knows which modal to auto-open via the forceOpen mechanism.
+  const handleImportClick = useCallback(async (modalType = 'order') => {
     if (isNew) {
       const saved = await hook.handleSave();
       if (!saved?.id) return false;
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
-        state: { openImportModal: true, justSaved: saved },
+        state: { openImportModal: modalType, justSaved: saved },
       });
       return false;
     }
@@ -2553,15 +2566,12 @@ export function DetailView({
     // only applies to lines added AFTER the saved currency change.
   }, [calloutResult]);
 
-  // Wrapped onChange that triggers callout for user-initiated FK changes
-  const handleChangeWithCallout = useCallback((field, value) => {
-    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
-    // revert the dropdown if the rate check fails. The closure preserves the old
-    // hook.editing reference, but capturing explicitly keeps intent clear.
-    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
-
-    hook.handleChange(field, value);
-
+  // Fire the callout (and related validation) for a user-initiated field change.
+  // Extracted from handleChangeWithCallout so the same logic can be triggered either
+  // synchronously on change (default) or deferred to blur (opt-in: field.calloutOn === 'blur').
+  // `previousCurrency` is the currency value captured BEFORE hook.handleChange ran, used
+  // only by the currency rate-validation path; pass null when not a currency change.
+  const fireCallout = useCallback((field, value, previousCurrency = null) => {
     // Skip companion/auxiliary fields — they don't have callouts
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
@@ -2627,6 +2637,21 @@ export function DetailView({
     // Trigger callout — the backend returns empty if no callout is registered
     executeCallout(field, value, hook.editing);
   }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui]);
+
+  // Wrapped onChange that updates local form state and triggers the callout synchronously.
+  // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
+  // EntityForm's DeferredInput, which calls this same onChange once on blur — so the
+  // deferral lives entirely in the input component and this handler stays uniform.
+  const handleChangeWithCallout = useCallback((field, value) => {
+    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
+    // revert the dropdown if the rate check fails. The closure preserves the old
+    // hook.editing reference, but capturing explicitly keeps intent clear.
+    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
+
+    hook.handleChange(field, value);
+
+    fireCallout(field, value, previousCurrency);
+  }, [hook.handleChange, hook.editing, fireCallout]);
 
   // Execute callout for child entity (line-level) fields and apply results via callback.
   // Merges parent header data into formState so callouts have full context (e.g., priceList).
@@ -2903,6 +2928,7 @@ export function DetailView({
     ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
   };
+  const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="detail-view" data-doc-status={_headerData?.documentStatus}>
@@ -3302,7 +3328,7 @@ export function DetailView({
               const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
               return activeTab?.Panel ? (
                 <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX)}`}>
-                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} />
+                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} />
                 </div>
               ) : null;
             })() : null}
@@ -3446,7 +3472,7 @@ export function DetailView({
                         {/* Form footer: inline content below form, above tabs */}
                         {formFooter && (
                           <div className={embedded ? 'pointer-events-none' : ''}>
-                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, catalogs, api, token, apiBaseUrl, editing: hook.editing })}
+                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing })}
                           </div>
                         )}
                       </>
@@ -3464,7 +3490,10 @@ export function DetailView({
 
                   {/* Tabs: child entities + Others */}
                   {tabs.length > 0 && (
-                    <div className={getLinesTabsSectionClassName(linesLayout)}>
+                    <div
+                      className={getLinesTabsSectionClassName(linesLayout)}
+                      onMouseDown={autoSaveOnBlur && linesLayout === 'inlineEditable' ? () => handleFieldBlurRef.current?.() : undefined}
+                    >
                       <div className={`flex items-center justify-between border-b border-border/50 ${(getInlineEditableShrinkClassName(linesLayout))}`}>
                         <div className="flex items-center gap-0">
                           {tabs.map((tab, idx) => {
@@ -4206,7 +4235,7 @@ export function DetailView({
                           setNotesFocused={setNotesFocused}
                           lines={hook.children}
                           pendingLine={pendingLineValues}
-                          editingLine={lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine}
+                          editingLine={balanceFooterEditingLine}
                           lineConfig={lineConfig}
                           totalDiscountPct={Number(data?.etgoTotalDiscount ?? 0)}
                           onTotalDiscountChange={handleTotalDiscountChange}
@@ -4220,7 +4249,7 @@ export function DetailView({
                           balanceFooter,
                           children: hook.children,
                           pendingLine: pendingLineValues,
-                          editingLine: lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine,
+                          editingLine: balanceFooterEditingLine,
                           lineConfig,
                           formatAmount,
                           currency: data['currency$_identifier'],

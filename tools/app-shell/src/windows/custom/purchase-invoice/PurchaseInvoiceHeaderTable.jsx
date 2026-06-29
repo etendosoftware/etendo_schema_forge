@@ -58,6 +58,29 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
     return [
       { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false },
+      {
+        key: 'transactionDocument',
+        column: 'C_DocTypeTarget_ID',
+        type: 'custom',
+        // `labels` (priority 1 in resolveColumnLabel) must be set so this header
+        // outranks the AD-dictionary fallback translate('C_DocTypeTarget_ID'),
+        // which otherwise resolves to "Documento transacción".
+        labels: { [locale]: t('documentType') },
+        label: t('documentType'),
+        render: (row) => {
+          const adName = row['transactionDocument$_identifier'];
+          const cfg = DOC_TYPE_BADGE[adName];
+          if (!cfg) return <span className="text-muted-foreground">—</span>;
+          return (
+            <span
+              className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+              style={{ color: cfg.color, backgroundColor: cfg.bg }}
+            >
+              {t(cfg.label)}
+            </span>
+          );
+        },
+      },
       { key: 'orderReference', column: 'POReference', type: 'string' },
       {
         key: 'eTGODueDate', column: 'EM_Etgo_Due_Date', type: 'custom', label: t('dueDate'),
@@ -90,29 +113,6 @@ export default function PurchaseInvoiceHeaderTable(props) {
       },
       { key: 'outstandingAmount', column: 'OutstandingAmt', type: 'amount' },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
-      {
-        key: 'transactionDocument',
-        column: 'C_DocTypeTarget_ID',
-        type: 'custom',
-        // `labels` (priority 1 in resolveColumnLabel) must be set so this header
-        // outranks the AD-dictionary fallback translate('C_DocTypeTarget_ID'),
-        // which otherwise resolves to "Documento transacción".
-        labels: { [locale]: t('documentType') },
-        label: t('documentType'),
-        render: (row) => {
-          const adName = row['transactionDocument$_identifier'];
-          const cfg = DOC_TYPE_BADGE[adName];
-          if (!cfg) return <span className="text-muted-foreground">—</span>;
-          return (
-            <span
-              className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
-              style={{ color: cfg.color, backgroundColor: cfg.bg }}
-            >
-              {t(cfg.label)}
-            </span>
-          );
-        },
-      },
     ];
   }, [gl, locale, targets, siiColLabel]);
 

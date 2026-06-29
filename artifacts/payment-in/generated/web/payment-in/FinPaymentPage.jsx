@@ -251,6 +251,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
   const [showNewModal, setShowNewModal] = useState(false);
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="finPayment"
         Form={FinPaymentForm}
@@ -279,6 +280,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         sendDocument
         {...props}
       />
+      </>
     );
   }
 

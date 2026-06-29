@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-06-26T12:27:56.245Z",
-  "checksum": "2b8740c4379a9916",
+  "updatedAt": "2026-06-29T12:09:15.883Z",
+  "checksum": "b0be7c943af86da5",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -457,35 +457,59 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment"
+                "name": "Awaiting Payment",
+                "labels": {
+                  "es_ES": "A Pagar"
+                }
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution"
+                "name": "Awaiting Execution",
+                "labels": {
+                  "es_ES": "A Ejecutar"
+                }
               },
               {
                 "value": "RPVOID",
-                "name": "Void"
+                "name": "Void",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "PPM",
-                "name": "Payment Made"
+                "name": "Payment Made",
+                "labels": {
+                  "es_ES": "Pagado"
+                }
               },
               {
                 "value": "RPR",
-                "name": "Payment Received"
+                "name": "Payment Received",
+                "labels": {
+                  "es_ES": "Cobrado"
+                }
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared"
+                "name": "Deposited not Cleared",
+                "labels": {
+                  "es_ES": "Cobro depositado"
+                }
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared"
+                "name": "Withdrawn not Cleared",
+                "labels": {
+                  "es_ES": "Pago reintegrado"
+                }
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared"
+                "name": "Payment Cleared",
+                "labels": {
+                  "es_ES": "Conciliado"
+                }
               }
             ],
             "defaultValue": "RPAP",
@@ -670,7 +694,7 @@
             "grid": false,
             "form": true,
             "displayLogic": {
-              "raw": "@PSD2_HasPayments@=0 & @PSD2_UserHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0",
+              "raw": "@PSD2_HasPayments@=0 & @PSD2_ClientHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0 & @PSD2_FAIsBank@=1 & @PSD2_PMIsBankTransfer@=1",
               "evaluable": true
             }
           },
@@ -1369,15 +1393,24 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Executed"
+                "name": "Executed",
+                "labels": {
+                  "es_ES": "Ejecutado"
+                }
               },
               {
                 "value": "PE",
-                "name": "Partially Executed"
+                "name": "Partially Executed",
+                "labels": {
+                  "es_ES": "Ejecutado Parcialmente"
+                }
               },
               {
                 "value": "P",
-                "name": "Pending"
+                "name": "Pending",
+                "labels": {
+                  "es_ES": "Pendiente"
+                }
               }
             ]
           },
@@ -1407,27 +1440,45 @@
             "enumValues": [
               {
                 "value": "AIP",
-                "name": "Automatically from Invoice Process"
+                "name": "Automatically from Invoice Process",
+                "labels": {
+                  "es_ES": "Automáticamente desde Procesar Factura"
+                }
               },
               {
                 "value": "APP",
-                "name": "Automatically from Payment Process"
+                "name": "Automatically from Payment Process",
+                "labels": {
+                  "es_ES": "Automáticamente desde el Proceso de Pago"
+                }
               },
               {
                 "value": "MF",
-                "name": "Execute Payments Form"
+                "name": "Execute Payments Form",
+                "labels": {
+                  "es_ES": "Ejecutar formas de Pago"
+                }
               },
               {
                 "value": "OTHER",
-                "name": "Other Source"
+                "name": "Other Source",
+                "labels": {
+                  "es_ES": "Otra fuente"
+                }
               },
               {
                 "value": "PPW",
-                "name": "Payment Proposal Window"
+                "name": "Payment Proposal Window",
+                "labels": {
+                  "es_ES": "Ventana de Propuesta de Pago"
+                }
               },
               {
                 "value": "PW",
-                "name": "Payments Window"
+                "name": "Payments Window",
+                "labels": {
+                  "es_ES": "Ventana Pagos"
+                }
               }
             ]
           },
@@ -1445,15 +1496,24 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Error"
+                "name": "Error",
+                "labels": {
+                  "es_ES": "Error"
+                }
               },
               {
                 "value": "P",
-                "name": "Pending"
+                "name": "Pending",
+                "labels": {
+                  "es_ES": "Pendiente"
+                }
               },
               {
                 "value": "S",
-                "name": "Successful"
+                "name": "Successful",
+                "labels": {
+                  "es_ES": "Éxito"
+                }
               }
             ]
           },
@@ -7787,18 +7847,18 @@
         "description": "Rule 'Print payments process' (process) should be declared"
       },
       {
-        "id": "t-rule-declared-PSD2-Refresh-Payment-Status",
-        "category": "rule-declared",
-        "rule": "PSD2 Refresh Payment Status",
-        "runner": "node",
-        "description": "Rule 'PSD2 Refresh Payment Status' (process) should be declared"
-      },
-      {
         "id": "t-rule-declared-Reactivate-Payment",
         "category": "rule-declared",
         "rule": "Reactivate Payment",
         "runner": "node",
         "description": "Rule 'Reactivate Payment' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Refresh-Payment-Status",
+        "category": "rule-declared",
+        "rule": "Refresh Payment Status",
+        "runner": "node",
+        "description": "Rule 'Refresh Payment Status' (process) should be declared"
       },
       {
         "id": "t-rule-declared-Remove-Payment",

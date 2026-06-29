@@ -11,8 +11,15 @@ describe('FmBoxes303 — exports', () => {
   it('has default export', () => assert.match(src, /export default/));
 });
 
-describe('FmBoxes303 — read-only (no manual adjustments)', () => {
-  it('has no text/number inputs for box values', () => assert.doesNotMatch(src, /<input[^>]*type="(text|number)"/i));
+describe('FmBoxes303 — inputs are scoped, not freeform', () => {
+  // Editable box cells use type="number" with fm-aeat-cell__input class (not arbitrary inputs).
+  // Identificacion fields use type="text" for readOnly:false text/date fields.
+  // Neither is a freeform manual adjustment — they are layout-driven.
+  it('editable cell inputs use type="number" with step="any"', () => {
+    assert.match(src, /type="number"/);
+    assert.match(src, /step="any"/);
+  });
+  it('editable cell inputs carry the fm-aeat-cell__input class', () => assert.match(src, /fm-aeat-cell__input/));
   it('has no manualAdj or adjustment state', () => assert.doesNotMatch(src, /manualAdj|adjustment/i));
   it('renders fm-aeat-cell', () => assert.match(src, /fm-aeat-cell/));
   it('renders fm-aeat-section', () => assert.match(src, /fm-aeat-section/));

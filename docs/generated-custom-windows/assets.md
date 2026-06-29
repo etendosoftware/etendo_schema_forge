@@ -98,6 +98,41 @@ The Assets window should let a finance user register fixed assets, define how ea
 - No assets-specific browser or component test file was found in `tools/app-shell/test` or `tools/app-shell/src/**/__tests__`, so the automated evidence is structural/code-backed rather than end-to-end behavioral proof.
 - The generated `AssetsPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `A_Asset` AD table.
 
+## ETP-4333 — DeferredInput amount fields and currency-echo freeze fix
+
+### DeferredInput for the three amount fields
+
+`assetValue`, `residualAssetValue`, and `depreciationAmt` now use `calloutOn: 'blur'` in `AssetsDetailPanel.jsx`. `EntityForm` renders these fields via `DeferredInput`: typing only updates a local buffer inside the input; the commit fires on blur, not per keystroke. This prevents the async `SL_Assets` callout from racing against partially-typed values (the "Asset Value 4000 keeps Residual at -2000" race bug).
+
+When the user blurs one of these fields, the commit does **not** fire the async `/assets/callout`. Instead, `AssetsDetailPanel.handleAmountChange` calls the exported `computeAssetAmounts()` function, which replicates the `SL_Assets` Java callout arithmetic locally and synchronously:
+
+- `assetValue` changed: if `depreciationAmt ≠ 0` then `residualAssetValue = assetValue − depreciationAmt`; then `depreciationAmt = assetValue − residualAssetValue`.
+- `residualAssetValue` changed: `depreciationAmt = assetValue − residualAssetValue`.
+- `depreciationAmt` changed: `residualAssetValue = assetValue − depreciationAmt`.
+
+All three fields are written together via `onLocalChange` (which calls `handleChange` without triggering a callout), so the sidebar "Current Value" and sibling inputs update immediately and consistently. All results are rounded to 2 decimal places via `round2()` (avoids JS float drift).
+
+**Source of truth:** `org.openbravo.erpCommon.ad_callouts.SL_Assets#execute` (lines 43–63 in Etendo Classic). If that Java arithmetic ever changes, `computeAssetAmounts` in `AssetsDetailPanel.jsx` **must** be updated in sync — they are not automatically linked.
+
+### Currency-echo freeze fix
+
+`AssetsDetailPanel` contains a `useEffect` that echoes the backend-provided default currency (`@C_Currency_ID@`) into the form change handler exactly once per new-record session. Without a guard, this creates a passive-effect feedback loop:
+
+> `onChange` fires → `setEditing` updates identity → new `onChange` reference is created → effect re-runs because `onChange` was in its deps → repeat
+
+Because this cycles through React's passive-effect phase (one commit per frame), it never trips the synchronous "Maximum update depth" guard — it silently starves the render queue and freezes route transitions (Cancel and sidebar navigation stop unmounting the detail view).
+
+The fix uses two `useRef` guards:
+- `currencyEchoedRef` — set to `true` after the first echo; reset to `false` when the record gains an `id` (saved, no longer a new record).
+- `onChangeRef` — stores the latest `onChange` so it can be called inside the effect without being listed in the dependency array.
+
+The effect only re-runs when `isNewRecord` or `d.currency` changes, not when `onChange` identity rotates.
+
+### Tests
+
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanel.test.js` — unit tests for `computeAssetAmounts` covering all three field paths and the `round2` rounding.
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanelCurrencyEcho.vitest.jsx` — regression test for the currency-echo freeze fix: verifies the effect fires exactly once per new-record session and does not loop.
+
 ## ETP-4103 changes
 
 Changes landed in `feature/ETP-4103`. Covers visual polish, full-form restructure, sidebar updates, and list-view adjustments specific to the Assets window.

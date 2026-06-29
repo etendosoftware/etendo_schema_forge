@@ -1,8 +1,8 @@
 {
-  "version": "0.38.0",
+  "version": "0.40.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-06-26T23:07:09.003Z",
-  "checksum": "545d430f65c51cb0",
+  "updatedAt": "2026-06-29T17:06:06.473Z",
+  "checksum": "c8dc4e4ab20ae380",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -154,45 +154,6 @@
               "raw": "@Processed@='Y'",
               "evaluable": true,
               "js": "record['processed'] === true"
-            }
-          },
-          {
-            "name": "cDocTypeTargetId",
-            "apiKey": "cDocTypeTargetId",
-            "column": "C_DocTypeTarget_ID",
-            "label": "Transaction Document",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "fromConfig",
-              "source": "doctype.salesOrder"
-            },
-            "reference": "DocumentType",
-            "inputMode": "selector",
-            "section": "principal",
-            "seq": 15,
-            "validationRule": {
-              "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
-              "contextParams": [
-                "AD_Client_ID"
-              ],
-              "cascadeParams": [
-                "IsSOTrx",
-                "AD_Org_ID"
-              ]
-            },
-            "callout": {
-              "className": "com.etendoerp.verifactu.ad_callouts.AddDefaultInfo"
-            },
-            "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
-              "evaluable": true,
-              "js": "!!record.id"
             }
           },
           {
@@ -396,43 +357,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR",
@@ -783,19 +774,31 @@
             "enumValues": [
               {
                 "value": "R",
-                "name": "Corrective invoice"
+                "name": "Corrective invoice",
+                "labels": {
+                  "es_ES": "Factura rectificativa"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               },
               {
                 "value": "F2",
-                "name": "Simplified invoice"
+                "name": "Simplified invoice",
+                "labels": {
+                  "es_ES": "Factura simplificada"
+                }
               },
               {
                 "value": "F4",
-                "name": "Simplified invoices summary"
+                "name": "Simplified invoices summary",
+                "labels": {
+                  "es_ES": "Asiento resumen facturas simplificadas"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -884,35 +887,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
@@ -1065,6 +1092,45 @@
             "grid": true,
             "form": false,
             "gridOrder": 8
+          },
+          {
+            "name": "transactionDocument",
+            "apiKey": "transactionDocument",
+            "column": "C_DocTypeTarget_ID",
+            "label": "Transaction Document",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "doctype.salesOrder"
+            },
+            "reference": "DocumentType",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 15,
+            "validationRule": {
+              "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+              "contextParams": [
+                "AD_Client_ID"
+              ],
+              "cascadeParams": [
+                "IsSOTrx",
+                "AD_Org_ID"
+              ]
+            },
+            "callout": {
+              "className": "com.etendoerp.verifactu.ad_callouts.AddDefaultInfo"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "!!record.id"
+            }
           }
         ],
         "searchableFields": [
@@ -1080,13 +1146,6 @@
             "derivation": {
               "type": "fromConfig",
               "source": "context.organization"
-            }
-          },
-          {
-            "name": "cDocTypeTargetId",
-            "derivation": {
-              "type": "fromConfig",
-              "source": "doctype.salesOrder"
             }
           },
           {
@@ -1192,6 +1251,13 @@
             "derivation": {
               "type": "computed",
               "source": "false"
+            }
+          },
+          {
+            "name": "transactionDocument",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "doctype.salesOrder"
             }
           }
         ],
@@ -1923,14 +1989,6 @@
             "column": "AD_Org_ID",
             "type": "foreignKey",
             "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "cDocTypeTargetId",
-            "apiKey": "cDocTypeTargetId",
-            "column": "C_DocTypeTarget_ID",
-            "type": "foreignKey",
-            "visibility": "editable",
             "required": true
           },
           {
@@ -3220,6 +3278,14 @@
             "type": "button",
             "visibility": "discarded",
             "required": true
+          },
+          {
+            "name": "transactionDocument",
+            "apiKey": "transactionDocument",
+            "column": "C_DocTypeTarget_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
           }
         ],
         "javaQualifier": "salesInvoiceHeaderHandler"
@@ -3371,22 +3437,6 @@
             "column": "M_AttributeSetInstance_ID",
             "type": "productAttribute",
             "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "cOrderlineId",
-            "apiKey": "cOrderlineId",
-            "column": "C_OrderLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "mInoutlineId",
-            "apiKey": "mInoutlineId",
-            "column": "M_InOutLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
             "required": false
           },
           {
@@ -3692,6 +3742,22 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "goodsShipmentLine",
+            "apiKey": "goodsShipmentLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesOrderLine",
+            "apiKey": "salesOrderLine",
+            "column": "C_OrderLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
           }
         ],
         "javaQualifier": "invoiceLineHandler"
@@ -4264,27 +4330,6 @@
       },
       {
         "entity": "header",
-        "field": "cDocTypeTargetId",
-        "column": "C_DocTypeTarget_ID",
-        "reference": "DocumentType",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/cDocTypeTargetId",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
         "field": "businessPartner",
         "column": "C_BPartner_ID",
         "reference": "BusinessPartner",
@@ -4371,6 +4416,27 @@
         "reference": "aeatsii_cause_exemption",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
+      },
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "column": "C_DocTypeTarget_ID",
+        "reference": "DocumentType",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
       },
       {
         "entity": "lines",
@@ -5553,14 +5619,6 @@
         "description": "Field 'businessPartner' should be present in header"
       },
       {
-        "id": "t-field-presence-header-cDocTypeTargetId",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "runner": "node",
-        "description": "Field 'cDocTypeTargetId' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-currency",
         "category": "field-presence",
         "entity": "header",
@@ -5751,6 +5809,14 @@
         "field": "tbaiSequence",
         "runner": "node",
         "description": "Field 'tbaiSequence' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-transactionDocument",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Field 'transactionDocument' should be present in header"
       },
       {
         "id": "t-field-presence-lines-description",
@@ -6041,14 +6107,6 @@
         "description": "Field 'businessPartner' should have type 'string' in header"
       },
       {
-        "id": "t-field-type-header-cDocTypeTargetId",
-        "category": "field-type",
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "runner": "node",
-        "description": "Field 'cDocTypeTargetId' should have type 'string' in header"
-      },
-      {
         "id": "t-field-type-header-currency",
         "category": "field-type",
         "entity": "header",
@@ -6239,6 +6297,14 @@
         "field": "tbaiSequence",
         "runner": "node",
         "description": "Field 'tbaiSequence' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-transactionDocument",
+        "category": "field-type",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Field 'transactionDocument' should have type 'string' in header"
       },
       {
         "id": "t-field-type-lines-description",
@@ -6513,14 +6579,6 @@
         "description": "Read-only logic for 'businessPartner' in header should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-header-cDocTypeTargetId",
-        "category": "readonlylogic-evaluable",
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "runner": "node",
-        "description": "Read-only logic for 'cDocTypeTargetId' in header should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-header-documentNo",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -6583,6 +6641,14 @@
         "field": "priceList",
         "runner": "node",
         "description": "Read-only logic for 'priceList' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-transactionDocument",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Read-only logic for 'transactionDocument' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-lines-etgoDiscount",
@@ -6745,14 +6811,6 @@
         "description": "Read-only logic for 'businessPartner' in header should be valid JS"
       },
       {
-        "id": "t-readonlylogic-valid-header-cDocTypeTargetId",
-        "category": "readonlylogic-valid",
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "runner": "node",
-        "description": "Read-only logic for 'cDocTypeTargetId' in header should be valid JS"
-      },
-      {
         "id": "t-readonlylogic-valid-header-documentNo",
         "category": "readonlylogic-valid",
         "entity": "header",
@@ -6815,6 +6873,14 @@
         "field": "priceList",
         "runner": "node",
         "description": "Read-only logic for 'priceList' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-transactionDocument",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Read-only logic for 'transactionDocument' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-lines-etgoDiscount",
@@ -7025,14 +7091,6 @@
         "description": "Selector endpoint for 'businessPartner' in header should exist"
       },
       {
-        "id": "t-selector-endpoint-header-cDocTypeTargetId",
-        "category": "selector-endpoint",
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "runner": "node",
-        "description": "Selector endpoint for 'cDocTypeTargetId' in header should exist"
-      },
-      {
         "id": "t-selector-endpoint-header-currency",
         "category": "selector-endpoint",
         "entity": "header",
@@ -7071,6 +7129,14 @@
         "field": "priceList",
         "runner": "node",
         "description": "Selector endpoint for 'priceList' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-transactionDocument",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Selector endpoint for 'transactionDocument' in header should exist"
       },
       {
         "id": "t-selector-endpoint-lines-product",
@@ -8329,14 +8395,6 @@
         "description": "System field 'cInvoiceId' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-cOrderlineId",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "cOrderlineId",
-        "runner": "node",
-        "description": "System field 'cOrderlineId' should exist in backend but not frontend for lines"
-      },
-      {
         "id": "t-system-field-lines-costcenter",
         "category": "system-field",
         "entity": "lines",
@@ -8417,6 +8475,14 @@
         "description": "System field 'financialInvoiceLine' should exist in backend but not frontend for lines"
       },
       {
+        "id": "t-system-field-lines-goodsShipmentLine",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "goodsShipmentLine",
+        "runner": "node",
+        "description": "System field 'goodsShipmentLine' should exist in backend but not frontend for lines"
+      },
+      {
         "id": "t-system-field-lines-grossListPrice",
         "category": "system-field",
         "entity": "lines",
@@ -8463,14 +8529,6 @@
         "field": "matchLCCosts",
         "runner": "node",
         "description": "System field 'matchLCCosts' should exist in backend but not frontend for lines"
-      },
-      {
-        "id": "t-system-field-lines-mInoutlineId",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "mInoutlineId",
-        "runner": "node",
-        "description": "System field 'mInoutlineId' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-ndDimension",
@@ -8567,6 +8625,14 @@
         "field": "resourceAssignment",
         "runner": "node",
         "description": "System field 'resourceAssignment' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-salesOrderLine",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "salesOrderLine",
+        "runner": "node",
+        "description": "System field 'salesOrderLine' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-standardPrice",

@@ -36,6 +36,13 @@
 
 ---
 
+## c_elementvalue code structure (GOClient chart of accounts)
+
+- **2026-06-26 — Numeric codes are strictly hierarchical and 3/4/5 digits:** `issummary='Y'` rows carry 3-digit (584 rows) and 4-digit (1140 rows) group codes; `issummary='N'` rows carry 5-digit posting codes (1312 rows). Non-numeric codes (1088 rows: section labels like `A`, `PYG`, `A.B.II.1`, `P.G.D`) also exist in both element trees and must never be padded.
+- **2026-06-26 — Naive RPAD(value, 8, '0') on all numeric codes causes 1140 UNIQUE violations:** `100`, `1000`, and `10000` share the prefix `10000000` under the same `c_element_id`. The UNIQUE constraint is `C_ELEMENTVALUE_VALUE (c_element_id, value)`. **Apply:** always scope right-padding to `issummary='N'` AND `value ~ '^[0-9]+$'`. This yields 0 collisions (confirmed by query).
+- **2026-06-26 — Two element trees for GOClient, both with 1790 rows each:** "Arbol de cuentas GO" (`BB9B64C5B6534A40A36F7C0F45C2CC0B`) and "GOOrg Account Tree" (`91D04C02EF8F4975B9E4F5E07543B6EA`). The 1312 posting-account count is the total across both trees (656 per tree). The UNIQUE constraint is per element, not per client — codes are safe to update in one pass scoped by `ad_client_id`.
+- **2026-06-26 — ETP-4247 requires all posting account codes to be 8 digits.** Corrective: R8 data-fix (`20260626T120000Z__R8-account-codes-8digits.sql`). Preventive: the A1 onboarding step (when built) must seed 8-digit codes from the start.
+
 ## Idempotency gotchas
 
 - **2026-06-11 — Two-layer rule.** A fix's `@check` query gates whether `@apply` runs at all; the `@apply` body must ALSO be guarded (`WHERE NOT EXISTS`). Don't rely on only one layer — partial/interrupted runs leave inconsistent state otherwise.

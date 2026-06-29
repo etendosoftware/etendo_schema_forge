@@ -405,11 +405,16 @@ export default function FmDebugPanel({ view, setView }) {
               <div style={divider} />
               <div style={sectionLabel}>Modelo 303</div>
               {[
-                { label: '2026 T1 · draft',          patch: { status: 'draft', incidents: { blocking: 0, warning: 0, items: [] } } },
-                { label: '2026 T1 · 2 blocking',      patch: { status: 'draft', incidents: { blocking: 2, warning: 3, items: [...MOCK_INCIDENTS.blocking, ...MOCK_INCIDENTS.warning] } } },
-                { label: '2026 T1 · ready + file',    patch: { status: 'ready', file: MOCK_FILE, incidents: { blocking: 0, warning: 0, items: [] } } },
-                { label: '2026 T1 · submitted_ack',   patch: { status: 'submitted_ack', file: MOCK_FILE, incidents: { blocking: 0, warning: 0, items: [] } } },
-                { label: '2025 T4 · complementaria',  patch: { year: 2025, period: 'T4', type: 'comp', status: 'pending' } },
+                { label: '2026 T1 · draft',           patch: { year: 2026, period: 'T1', status: 'draft', incidents: { blocking: 0, warning: 0, items: [] } } },
+                { label: '2026 T1 · 2 blocking',      patch: { year: 2026, period: 'T1', status: 'draft', incidents: { blocking: 2, warning: 3, items: [...MOCK_INCIDENTS.blocking, ...MOCK_INCIDENTS.warning] } } },
+                { label: '2026 T1 · ready + file',    patch: { year: 2026, period: 'T1', status: 'ready', file: MOCK_FILE, incidents: { blocking: 0, warning: 0, items: [] } } },
+                { label: '2026 T1 · submitted_ack',   patch: { year: 2026, period: 'T1', status: 'submitted_ack', file: MOCK_FILE, incidents: { blocking: 0, warning: 0, items: [] } } },
+                { label: '2025 T1 · draft',           patch: { year: 2025, period: 'T1', status: 'draft' } },
+                { label: '2024 T4 · rectificativa',   patch: { year: 2024, period: 'T4', status: 'draft' } },
+                { label: '2024 T1 · complementaria',  patch: { year: 2024, period: 'T1', status: 'draft' } },
+                { label: '2023 T1 · complementaria',  patch: { year: 2023, period: 'T1', status: 'draft' } },
+                { label: '2022 T1 · complementaria',  patch: { year: 2022, period: 'T1', status: 'draft' } },
+                { label: '2021 T1 · complementaria',  patch: { year: 2021, period: 'T1', status: 'draft' } },
               ].map(({ label, patch }) => (
                 <button
                   key={label}

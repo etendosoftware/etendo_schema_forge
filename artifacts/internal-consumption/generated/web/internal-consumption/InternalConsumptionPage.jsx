@@ -170,6 +170,7 @@ export const api = {
 export default function InternalConsumptionPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="internalConsumption"
         detailEntity="internalConsumptionLine"
@@ -198,6 +199,7 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 

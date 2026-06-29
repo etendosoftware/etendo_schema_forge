@@ -25,6 +25,7 @@ const windowLoaders = {
   'product': () => import('@/windows/custom/product/index.jsx'),
   'product-category': () => import('@/windows/custom/product-category/index.jsx'),
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
+  'tax-category': () => import('@generated/tax-category/generated/web/tax-category/index.jsx'),
   'user': () => import('@generated/user/generated/web/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
@@ -158,6 +159,7 @@ const customLoaders = {
   'quick-order-sales': () => import('./quick-order/index.jsx'),
   'quick-order-purchase': () => import('./quick-order/index.jsx'),
   'financial-account': () => import('./custom/financial-account/index.jsx'),
+  'general-ledger-configuration': () => import('./custom/general-ledger-configuration/index.jsx'),
   'return-to-vendor-shipment': () => import('./custom/return-to-vendor-shipment/index.jsx'),
   'not-posted-documents': () => import('./custom/not-posted-documents/index.jsx'),
 };

@@ -15,6 +15,7 @@ const columnsBlock =
 
 const expectedKeysInOrder = [
   'invoiceDate',
+  'transactionDocument',
   'documentNo',
   'eTGODueDate',
   'businessPartner',
@@ -22,7 +23,6 @@ const expectedKeysInOrder = [
   'grandTotalAmount',
   'outstandingAmount',
   'eTGODeliveryStatus',
-  'transactionDocument',
 ];
 
 describe('Sales InvoiceHeaderTable — columns', () => {

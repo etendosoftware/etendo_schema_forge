@@ -54,6 +54,7 @@ export default function ReturnWindowShell({
         apiBaseUrl={apiBaseUrl}
         token={token}
         hidePrint={true}
+        autoSaveOnBlur={true}
         {...pageProps}
         data-testid="PageComponent__3ea846" />
     );

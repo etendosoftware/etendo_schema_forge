@@ -1213,6 +1213,7 @@ export const api = {
 export default function OrganizationsPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="organizations"
         detailEntity="issuedInvoices"
@@ -1235,6 +1236,7 @@ export default function OrganizationsPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

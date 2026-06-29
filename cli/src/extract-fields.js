@@ -705,8 +705,11 @@ export async function main(windowId, windowName) {
         // Force C collation on Name + add Value as final tiebreaker so the
         // option order is identical across DBs with different lc_collate
         // (e.g. C vs es_ES.UTF-8, which treat punctuation differently).
-        `SELECT rl.AD_Reference_ID, rl.Value, rl.Name
+        `SELECT rl.AD_Reference_ID, rl.Value, rl.Name, rlt_es.Name AS name_es
          FROM AD_Ref_List rl
+         LEFT JOIN AD_Ref_List_Trl rlt_es
+           ON rlt_es.AD_Ref_List_ID = rl.AD_Ref_List_ID
+          AND rlt_es.AD_Language = 'es_ES'
          WHERE rl.AD_Reference_ID = ANY($1)
            AND rl.IsActive = 'Y'
          ORDER BY rl.SeqNo NULLS LAST, rl.Name COLLATE "C", rl.Value COLLATE "C"`,
@@ -715,7 +718,11 @@ export async function main(windowId, windowName) {
       for (const row of enumResult.rows) {
         const refId = row.ad_reference_id;
         if (!enumValuesMap[refId]) enumValuesMap[refId] = [];
-        enumValuesMap[refId].push({ value: row.value, name: row.name });
+        enumValuesMap[refId].push({
+          value: row.value,
+          name: row.name,
+          ...(row.name_es ? { labels: { es_ES: row.name_es } } : {}),
+        });
       }
     }
 

@@ -27,6 +27,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const [menuOpen, setMenuOpen] = useState(false);
   const [showClone, setShowClone] = useState(false);
   const menuRef = useRef(null);
+  const resultNavigatedRef = useRef(false);
 
   const isCompleted = data?.documentStatus === 'CO';
   const isFullyInvoiced = data?.invoiceStatus >= 100;
@@ -91,7 +92,14 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${recordId}&_startRow=0&_endRow=200`, { headers });
+        const res = await fetch(
+          `${base}/return-material-receipt/returnMaterialReceipt/_/action/availableShipmentLines`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ shipmentId: recordId }),
+          },
+        );
         if (!res.ok || cancelled) return;
         const json = await res.json();
         if (!cancelled) setReturnLines(json?.response?.data || []);
@@ -221,19 +229,35 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         </div>
       )}
 
-      {!isCompleted && showConfirmModal && (
-        <GoodsShipmentConfirmModal
-          base={base}
-          headers={headers}
-          recordId={recordId}
-          data={data}
-          onConfirmed={({ invoice }) => {
-            setShowConfirmModal(false);
-            setInvoiceResult({ invoice: invoice || null });
-          }}
-          onClose={() => setShowConfirmModal(false)}
-        />
-      )}
+      {!isCompleted && showConfirmModal && isFullyInvoiced
+        ? createPortal(
+            <ConfirmShipmentInvoicedModal
+              base={base}
+              headers={headers}
+              recordId={recordId}
+              data={data}
+              onConfirmed={() => {
+                setShowConfirmModal(false);
+                setInvoiceResult({ invoice: null });
+              }}
+              onClose={() => setShowConfirmModal(false)}
+            />,
+            document.body,
+          )
+        : !isCompleted && showConfirmModal && (
+            <GoodsShipmentConfirmModal
+              base={base}
+              headers={headers}
+              recordId={recordId}
+              data={data}
+              onConfirmed={({ invoice }) => {
+                setShowConfirmModal(false);
+                setInvoiceResult({ invoice: invoice || null });
+              }}
+              onClose={() => setShowConfirmModal(false)}
+            />
+          )
+      }
 
       {showInvoiceConfirm && (
         <CreateInvoiceConfirmModal
@@ -254,8 +278,14 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           }
           primary={ui('soViewInvoice')}
           currency={data?.['currency$_identifier'] || ''}
-          navigate={navigate}
-          onClose={() => { setInvoiceResult(null); window.location.reload(); }}
+          navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
+          onClose={() => {
+            setInvoiceResult(null);
+            setTimeout(() => {
+              if (!resultNavigatedRef.current) window.location.reload();
+              resultNavigatedRef.current = false;
+            }, 0);
+          }}
         />,
         document.body,
       )}
@@ -274,6 +304,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       )}
 
       <style>{`@keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }`}</style>
+
 
       <ReturnWizard
         open={wizardOpen}
@@ -311,4 +342,140 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   );
 }
 
+// ── ConfirmShipmentInvoicedModal (shipment already fully invoiced — confirm only) ──
 
+function ConfirmShipmentInvoicedModal({ data, base, headers, recordId, onConfirmed, onClose }) {
+  const ui = useUI();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const invoices = Array.isArray(data?.linkedInvoices) ? data.linkedInvoices : [];
+  const firstInvoice = invoices[0] || null;
+  const extraCount = invoices.length - 1;
+  const docNo = data?.documentNo || '';
+  const bpName = data?.['businessPartner$_identifier'] || '';
+
+  const fmtAmount = (v, currency) => {
+    if (v == null) return '';
+    return `${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency || ''}`.trim();
+  };
+
+  const statusLabel = { CO: ui('orderStatusCompleted'), DR: ui('orderStatusDraft') };
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `${base}/goods-shipment/goodsShipment/${recordId}/action/documentAction`,
+        { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.response?.message || body?.message || `Error (${res.status})`);
+      }
+      onConfirmed();
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(20,26,38,.45)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 460, borderRadius: 14, background: '#fff', boxShadow: '0 24px 60px -12px rgba(20,26,38,.35)', overflow: 'hidden' }}>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 14px' }}>
+          <span style={{ fontWeight: 600, fontSize: 15, color: '#1f2733' }}>{ui('goodsShipment.confirmModal.titleConfirm')}</span>
+          <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#9aa1aa' }}>&times;</button>
+        </div>
+
+        <div style={{ padding: '0 20px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#1f2733' }}>{docNo}</span>
+            {bpName && <><span style={{ color: '#9aa1aa', fontSize: 13 }}>·</span><span style={{ fontSize: 13, color: '#6b7480' }}>{bpName}</span></>}
+          </div>
+
+          {firstInvoice && (
+            <div style={{ border: '1px solid #e7e9ec', borderRadius: 11, padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 9, background: '#f3f0ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c5cff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="16" y1="13" x2="8" y2="13"/>
+                  <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#1f2733' }}>{ui('goodsShipment.confirmModal.invoiceRef')} {firstInvoice.documentNo}</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 9px', borderRadius: 6, background: '#e6f6ec', color: '#1f9d57', whiteSpace: 'nowrap' }}>
+                    {statusLabel[firstInvoice.documentStatus] || firstInvoice.documentStatus}
+                  </span>
+                </div>
+                {firstInvoice.grandTotalAmount != null && (
+                  <div style={{ fontSize: 13, color: '#6b7480', marginTop: 2 }}>
+                    {fmtAmount(firstInvoice.grandTotalAmount, firstInvoice['currency$_identifier'])}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => { onClose(); navigate(`/sales-invoice/${firstInvoice.id}`); }}
+                style={{ all: 'unset', fontSize: 13, fontWeight: 600, color: '#2f73d6', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
+                onMouseEnter={e => { e.currentTarget.style.color = '#2a67c2'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = '#2f73d6'; }}
+              >
+                {ui('goodsShipment.confirmModal.viewInvoice')}
+              </button>
+            </div>
+          )}
+
+          {extraCount > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: '#f8f9fb', borderRadius: 9, border: '1px solid #e7e9ec' }}>
+              <span style={{ fontWeight: 700, fontSize: 12, color: '#2f73d6', background: '#eff5fe', borderRadius: 99, padding: '2px 9px', border: '1px solid #cadffb', flexShrink: 0 }}>+{extraCount}</span>
+              <span style={{ fontSize: 13, color: '#6b7480' }}>{ui('goodsShipment.confirmModal.moreInvoices')}</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f9d57" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <p style={{ fontSize: 13, color: '#6b7480', lineHeight: 1.5, margin: 0 }}>
+              {ui('goodsShipment.confirmModal.fullyInvoicedInfo')}{' '}
+              <strong style={{ color: '#1f2733' }}>{ui('goodsShipment.confirmModal.noNewInvoice')}</strong>
+            </p>
+          </div>
+
+          {error && (
+            <div style={{ fontSize: 12, color: '#DC2626', background: '#FEF2F2', padding: '8px 12px', borderRadius: 6 }}>
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', background: '#fbfcfd', borderTop: '1px solid #eef0f2' }}>
+          <button type="button" onClick={onClose} disabled={loading} style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid #e7e9ec', background: 'transparent', color: '#6b7480', cursor: 'pointer', opacity: loading ? 0.5 : 1 }}>
+            {ui('cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={loading}
+            style={{ height: 40, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: loading ? '#aac4e8' : '#2f73d6', color: '#fff', cursor: loading ? 'not-allowed' : 'pointer' }}
+            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = '#2a67c2'; }}
+            onMouseLeave={e => { if (!loading) e.currentTarget.style.background = '#2f73d6'; }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            {loading ? ui('processing') : ui('goodsShipment.confirmModal.confirmBtn')}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
