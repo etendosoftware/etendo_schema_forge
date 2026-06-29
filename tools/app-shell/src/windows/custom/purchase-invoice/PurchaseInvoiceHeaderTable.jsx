@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight, Check, Plus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
 import { useLocale, useLocaleSwitch } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -147,12 +147,6 @@ export default function PurchaseInvoiceHeaderTable(props) {
             </span>
           );
         },
-      },
-      {
-        key: '_nav',
-        type: 'custom',
-        label: '',
-        render: () => <ChevronRight size={16} className="text-muted-foreground" />,
       },
     ];
   }, [gl, locale, targets, siiColLabel]);
