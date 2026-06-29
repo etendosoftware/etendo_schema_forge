@@ -119,6 +119,7 @@ export const api = {
 export default function AssetCategoryPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="assetCategory"
         Form={AssetCategoryForm}
@@ -142,6 +143,7 @@ export default function AssetCategoryPage({ windowName, recordId, ...props }) {
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 

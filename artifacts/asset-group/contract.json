@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-06-29T19:22:05.431Z",
-  "checksum": "be0ed7a921414ea3",
+  "updatedAt": "2026-06-29T20:44:04.437Z",
+  "checksum": "256550c56ea48e6b",
   "frontendContract": {
     "window": {
       "id": "252",
@@ -82,7 +82,10 @@
             "enumValues": [
               {
                 "value": "LI",
-                "name": "Linear"
+                "name": "Linear",
+                "labels": {
+                  "es_ES": "Lineal"
+                }
               }
             ],
             "section": "principal",
@@ -107,11 +110,17 @@
             "enumValues": [
               {
                 "value": "PE",
-                "name": "Percentage"
+                "name": "Percentage",
+                "labels": {
+                  "es_ES": "Porcentaje"
+                }
               },
               {
                 "value": "TI",
-                "name": "Time"
+                "name": "Time",
+                "labels": {
+                  "es_ES": "Tiempo"
+                }
               }
             ],
             "section": "principal",
@@ -154,11 +163,17 @@
             "enumValues": [
               {
                 "value": "MO",
-                "name": "Monthly"
+                "name": "Monthly",
+                "labels": {
+                  "es_ES": "Mensualmente"
+                }
               },
               {
                 "value": "YE",
-                "name": "Yearly"
+                "name": "Yearly",
+                "labels": {
+                  "es_ES": "Anualmente"
+                }
               }
             ],
             "section": "principal",
