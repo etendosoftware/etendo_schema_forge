@@ -243,7 +243,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
-        processes={processes}
+        processes={[]}
         catalogs={catalogs}
         entityLabel="Fin Payment"
         windowName={windowName}

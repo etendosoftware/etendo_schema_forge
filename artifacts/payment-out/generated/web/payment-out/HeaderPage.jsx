@@ -557,7 +557,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
-        processes={processes}
+        processes={[]}
         catalogs={catalogs}
         entityLabel="Header"
         windowName={windowName}
