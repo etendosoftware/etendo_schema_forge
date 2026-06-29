@@ -164,27 +164,19 @@ function windowGeneratedDir(name) {
   return join(ARTIFACTS_DIR, name, 'generated', 'web', name);
 }
 
-async function updateManifestChecksum(name, checksum) {
-  const manifestPath = join(ARTIFACTS_DIR, name, 'generated', '.manifest.json');
-  let manifest = {};
-  try {
-    manifest = JSON.parse(await readFile(manifestPath, 'utf-8'));
-  } catch {
-    // No manifest yet (real-window manifest emitter is the pending P2 patch).
-  }
-  manifest.labelsChecksum = checksum;
-  await writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf-8');
-}
-
 /**
  * Slice one window. Returns a summary object. Writes nothing when dryRun.
+ *
+ * Emits only `labels.js` — the slice is a build-time artifact (gitignored, see
+ * .gitignore), regenerated on every build, so there is no committed slice to go
+ * stale and no manifest checksum to maintain. F18 validates by reproducing and
+ * comparing the slice content directly (not via a stored checksum).
  */
 export async function sliceWindow(name, dicts, { dryRun = false } = {}) {
   const contract = await readContract(name);
   const columns = collectWindowColumns(contract);
   const rendered = collectRenderedColumns(contract);
   const { slice, missing } = sliceLabels(columns, dicts);
-  const checksum = labelsChecksum(columns, slice);
 
   // A missing label only matters for rendered columns — that is the F18 signal.
   const missingRendered = {};
@@ -197,9 +189,8 @@ export async function sliceWindow(name, dicts, { dryRun = false } = {}) {
     const dir = windowGeneratedDir(name);
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, 'labels.js'), labelsModuleSource(slice), 'utf-8');
-    await updateManifestChecksum(name, checksum);
   }
-  return { name, columns: columns.length, missing, missingRendered, checksum, slice };
+  return { name, columns: columns.length, missing, missingRendered, slice };
 }
 
 /** Emit core.<locale>.json for every locale. Writes nothing when dryRun. */

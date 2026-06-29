@@ -113,7 +113,7 @@ async function readPreviousWindowContracts(name) {
 /**
  * Run the full pipeline for one window.
  */
-async function runPipeline(name, windowId, { pushToNeo, skipExtract, locales }) {
+async function runPipeline(name, windowId, { pushToNeo, skipExtract }) {
   // Step 1: extract-from-db (raw CSVs)
   if (!skipExtract) {
     console.log(`  [F0] Extracting raw data from DB...`);
@@ -226,16 +226,6 @@ async function runPipeline(name, windowId, { pushToNeo, skipExtract, locales }) 
 
   const count = Object.keys(files).filter(k => !k.startsWith('__')).length;
   console.log(`    ${count} components generated`);
-
-  // Step 8: slice labels (ETP-4300) — emit per-window labels.js + labelsChecksum.
-  // Pure transform over the just-written contract.json + the locale dicts (no DB).
-  console.log(`  [F9] Slicing window labels...`);
-  const { sliceWindow } = await import('./slice-labels.js');
-  const slice = await sliceWindow(name, locales.dicts);
-  const missNote = Object.keys(slice.missingRendered).length
-    ? ` (⚠ ${Object.values(slice.missingRendered)[0].length} rendered cols without a dictionary label)`
-    : '';
-  console.log(`    ${slice.columns} columns sliced${missNote}`);
 }
 
 async function configureCacheMode(opts) {
@@ -276,15 +266,10 @@ async function runAllPipelines(windows, opts) {
   let passed = 0;
   let failed = 0;
   const errors = [];
-
-  // Load the locale dictionaries ONCE (≈1.5 MB) and reuse across every window.
-  const { loadLocales, emitCore } = await import('./slice-labels.js');
-  const locales = await loadLocales();
-
   for (const { name, windowId } of windows) {
     console.log(`\n[${passed + failed + 1}/${windows.length}] ${name}`);
     try {
-      await runPipeline(name, windowId, { pushToNeo: opts.pushToNeo, skipExtract: opts.skipExtract, locales });
+      await runPipeline(name, windowId, { pushToNeo: opts.pushToNeo, skipExtract: opts.skipExtract });
       passed++;
       console.log(`  ✓ done`);
     } catch (err) {
@@ -293,16 +278,6 @@ async function runAllPipelines(windows, opts) {
       console.error(`  ✗ FAILED: ${err.message}`);
     }
   }
-
-  // Emit the shared core.<locale>.json ONCE after the loop. It is global (derived
-  // from the full locale dicts, not from any single window), so it runs regardless
-  // of --only / --skip-extract and even if some windows failed above.
-  console.log(`\n[core] Emitting shared core.<locale>.json (fields stripped)...`);
-  const core = await emitCore(locales.dicts);
-  for (const [locale, info] of Object.entries(core)) {
-    console.log(`    core.${locale}.json  ~${(info.bytes / 1024).toFixed(0)} KB`);
-  }
-
   return { passed, failed, errors };
 }
 
