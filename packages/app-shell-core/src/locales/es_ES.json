@@ -14020,7 +14020,8 @@
       "label": "Proceso de Ejecución"
     },
     "Asset Group": {
-      "label": "Categoría de Activos"
+      "label": "Categoría de Activos",
+      "newLabel": "Nueva categoría"
     },
     "Employee Expenses": {
       "label": "Gastos no reembolsados"

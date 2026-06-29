@@ -1,0 +1,1271 @@
+{
+  "version": "0.8.0",
+  "generatedAt": "2026-06-29T17:22:42.125Z",
+  "updatedAt": "2026-06-29T19:22:05.431Z",
+  "checksum": "be0ed7a921414ea3",
+  "frontendContract": {
+    "window": {
+      "id": "252",
+      "name": "Asset Group",
+      "primaryEntity": "assetCategory",
+      "category": "finance",
+      "hidePrint": true,
+      "hideLink": true,
+      "customListIcons": true,
+      "detailEntity": null,
+      "noHeaderBorder": true,
+      "layoutType": "default",
+      "linesLayout": "inlineEditable"
+    },
+    "entities": {
+      "assetCategory": {
+        "tableName": "A_Asset_Group",
+        "tabId": "452",
+        "tabName": "Asset Category",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "gridOrder": 1
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "span": 2,
+            "rows": 1,
+            "gridOrder": 2
+          },
+          {
+            "name": "depreciate",
+            "apiKey": "depreciate",
+            "column": "IsDepreciated",
+            "label": "Depreciate",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal"
+          },
+          {
+            "name": "depreciationType",
+            "apiKey": "depreciationType",
+            "column": "Amortizationtype",
+            "label": "Depreciation Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "enumValues": [
+              {
+                "value": "LI",
+                "name": "Linear"
+              }
+            ],
+            "section": "principal",
+            "displayLogic": {
+              "raw": "@IsDepreciated@='Y'",
+              "evaluable": true,
+              "js": "record.depreciate === true || record.depreciate === 'Y'"
+            }
+          },
+          {
+            "name": "calculateType",
+            "apiKey": "calculateType",
+            "column": "Amortizationcalctype",
+            "label": "Calculate Type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "enumValues": [
+              {
+                "value": "PE",
+                "name": "Percentage"
+              },
+              {
+                "value": "TI",
+                "name": "Time"
+              }
+            ],
+            "section": "principal",
+            "displayLogic": {
+              "raw": "@IsDepreciated@='Y'",
+              "evaluable": true,
+              "js": "record.depreciate === true || record.depreciate === 'Y'"
+            }
+          },
+          {
+            "name": "annualDepreciation",
+            "apiKey": "annualDepreciation",
+            "column": "Annualamortizationpercentage",
+            "label": "Annual Depreciation %",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "displayLogic": {
+              "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@!'TI'",
+              "evaluable": true,
+              "js": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'PE'"
+            }
+          },
+          {
+            "name": "amortize",
+            "apiKey": "amortize",
+            "column": "Assetschedule",
+            "label": "Amortize",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "enumValues": [
+              {
+                "value": "MO",
+                "name": "Monthly"
+              },
+              {
+                "value": "YE",
+                "name": "Yearly"
+              }
+            ],
+            "section": "principal",
+            "displayLogic": {
+              "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI'",
+              "evaluable": true,
+              "js": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
+            }
+          },
+          {
+            "name": "usableLifeMonths",
+            "apiKey": "usableLifeMonths",
+            "column": "UseLifeMonths",
+            "label": "Usable Life - Months",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "displayLogic": {
+              "raw": "@IsDepreciated@='Y' & @Amortizationcalctype@='TI' & @Assetschedule@='MO'",
+              "evaluable": true,
+              "js": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": []
+      },
+      "accounting": {
+        "tableName": "A_Asset_Group_Acct",
+        "tabId": "800204",
+        "tabName": "Accounting",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "accumulatedDepreciation",
+            "apiKey": "accumulatedDepreciation",
+            "column": "A_Accumdepreciation_Acct",
+            "label": "Accumulated Depreciation",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "lookup": true,
+            "gridOrder": 1,
+            "grow": true
+          },
+          {
+            "name": "depreciation",
+            "apiKey": "depreciation",
+            "column": "A_Depreciation_Acct",
+            "label": "Depreciation",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "lookup": true,
+            "gridOrder": 2,
+            "grow": true
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": []
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "252",
+      "name": "Asset Group",
+      "primaryEntity": "assetCategory",
+      "category": "finance",
+      "hidePrint": true,
+      "hideLink": true,
+      "customListIcons": true,
+      "detailEntity": null,
+      "noHeaderBorder": true,
+      "linesLayout": "inlineEditable"
+    },
+    "entities": {
+      "assetCategory": {
+        "tableName": "A_Asset_Group",
+        "tabId": "452",
+        "tabName": "Asset Category",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "helpComment",
+            "apiKey": "helpComment",
+            "column": "Help",
+            "type": "text",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "depreciate",
+            "apiKey": "depreciate",
+            "column": "IsDepreciated",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "depreciationType",
+            "apiKey": "depreciationType",
+            "column": "Amortizationtype",
+            "type": "enum",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "calculateType",
+            "apiKey": "calculateType",
+            "column": "Amortizationcalctype",
+            "type": "enum",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "annualDepreciation",
+            "apiKey": "annualDepreciation",
+            "column": "Annualamortizationpercentage",
+            "type": "decimal",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "amortize",
+            "apiKey": "amortize",
+            "column": "Assetschedule",
+            "type": "enum",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "usableLifeYears",
+            "apiKey": "usableLifeYears",
+            "column": "UseLifeYears",
+            "type": "integer",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "usableLifeMonths",
+            "apiKey": "usableLifeMonths",
+            "column": "UseLifeMonths",
+            "type": "integer",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "everyMonthIs30Days",
+            "apiKey": "everyMonthIs30Days",
+            "column": "Is30DayMonth",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "A_Asset_Group_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "owned",
+            "apiKey": "owned",
+            "column": "Isowned",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "accounting": {
+        "tableName": "A_Asset_Group_Acct",
+        "tabId": "800204",
+        "tabName": "Accounting",
+        "fields": [
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "accumulatedDepreciation",
+            "apiKey": "accumulatedDepreciation",
+            "column": "A_Accumdepreciation_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "depreciation",
+            "apiKey": "depreciation",
+            "column": "A_Depreciation_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "disposalGain",
+            "apiKey": "disposalGain",
+            "column": "A_Disposal_Gain",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "disposalLoss",
+            "apiKey": "disposalLoss",
+            "column": "A_Disposal_Loss",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "A_Asset_Group_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "assetCategory",
+            "apiKey": "assetCategory",
+            "column": "A_Asset_Group_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/assetCategory",
+        "entity": "assetCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/assetCategory/:id",
+        "entity": "assetCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/assetCategory",
+        "entity": "assetCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/assetCategory/:id",
+        "entity": "assetCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/assetCategory/:id",
+        "entity": "assetCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "asset-group",
+    "baseUrl": "/sws/neo/asset-group",
+    "crud": {
+      "assetCategory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/asset-group/assetCategory",
+        "detailUrl": "/sws/neo/asset-group/assetCategory/{id}",
+        "supportedFilters": []
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/asset-group/accounting",
+        "detailUrl": "/sws/neo/asset-group/accounting/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "accounting",
+        "field": "accumulatedDepreciation",
+        "column": "A_Accumdepreciation_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/asset-group/accounting/selectors/accumulatedDepreciation"
+      },
+      {
+        "entity": "accounting",
+        "field": "depreciation",
+        "column": "A_Depreciation_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/asset-group/accounting/selectors/depreciation"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "accounting",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/asset-group/accounting/{id}/action/processNow",
+        "processId": "800136",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-action-endpoint-accounting-processNow",
+        "category": "action-endpoint",
+        "entity": "accounting",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in accounting should exist"
+      },
+      {
+        "id": "t-crud-flags-accounting",
+        "category": "crud-flags",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "CRUD flags for 'accounting' should all be booleans"
+      },
+      {
+        "id": "t-crud-flags-assetCategory",
+        "category": "crud-flags",
+        "entity": "assetCategory",
+        "runner": "node",
+        "description": "CRUD flags for 'assetCategory' should all be booleans"
+      },
+      {
+        "id": "t-displaylogic-evaluable-assetCategory-amortize",
+        "category": "displaylogic-evaluable",
+        "entity": "assetCategory",
+        "field": "amortize",
+        "runner": "node",
+        "description": "Display logic for 'amortize' in assetCategory should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-assetCategory-annualDepreciation",
+        "category": "displaylogic-evaluable",
+        "entity": "assetCategory",
+        "field": "annualDepreciation",
+        "runner": "node",
+        "description": "Display logic for 'annualDepreciation' in assetCategory should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-assetCategory-calculateType",
+        "category": "displaylogic-evaluable",
+        "entity": "assetCategory",
+        "field": "calculateType",
+        "runner": "node",
+        "description": "Display logic for 'calculateType' in assetCategory should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-assetCategory-depreciationType",
+        "category": "displaylogic-evaluable",
+        "entity": "assetCategory",
+        "field": "depreciationType",
+        "runner": "node",
+        "description": "Display logic for 'depreciationType' in assetCategory should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-assetCategory-usableLifeMonths",
+        "category": "displaylogic-evaluable",
+        "entity": "assetCategory",
+        "field": "usableLifeMonths",
+        "runner": "node",
+        "description": "Display logic for 'usableLifeMonths' in assetCategory should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-assetCategory-amortize",
+        "category": "displaylogic-valid",
+        "entity": "assetCategory",
+        "field": "amortize",
+        "runner": "node",
+        "description": "Display logic for 'amortize' in assetCategory should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-assetCategory-annualDepreciation",
+        "category": "displaylogic-valid",
+        "entity": "assetCategory",
+        "field": "annualDepreciation",
+        "runner": "node",
+        "description": "Display logic for 'annualDepreciation' in assetCategory should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-assetCategory-calculateType",
+        "category": "displaylogic-valid",
+        "entity": "assetCategory",
+        "field": "calculateType",
+        "runner": "node",
+        "description": "Display logic for 'calculateType' in assetCategory should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-assetCategory-depreciationType",
+        "category": "displaylogic-valid",
+        "entity": "assetCategory",
+        "field": "depreciationType",
+        "runner": "node",
+        "description": "Display logic for 'depreciationType' in assetCategory should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-assetCategory-usableLifeMonths",
+        "category": "displaylogic-valid",
+        "entity": "assetCategory",
+        "field": "usableLifeMonths",
+        "runner": "node",
+        "description": "Display logic for 'usableLifeMonths' in assetCategory should be valid JS"
+      },
+      {
+        "id": "t-field-presence-accounting-accumulatedDepreciation",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "accumulatedDepreciation",
+        "runner": "node",
+        "description": "Field 'accumulatedDepreciation' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-depreciation",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "depreciation",
+        "runner": "node",
+        "description": "Field 'depreciation' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-assetCategory-amortize",
+        "category": "field-presence",
+        "entity": "assetCategory",
+        "field": "amortize",
+        "runner": "node",
+        "description": "Field 'amortize' should be present in assetCategory"
+      },
+      {
+        "id": "t-field-presence-assetCategory-annualDepreciation",
+        "category": "field-presence",
+        "entity": "assetCategory",
+        "field": "annualDepreciation",
+        "runner": "node",
+        "description": "Field 'annualDepreciation' should be present in assetCategory"
+      },
+      {
+        "id": "t-field-presence-assetCategory-calculateType",
+        "category": "field-presence",
+        "entity": "assetCategory",
+        "field": "calculateType",
+        "runner": "node",
+        "description": "Field 'calculateType' should be present in assetCategory"
+      },
+      {
+        "id": "t-field-presence-assetCategory-depreciate",
+        "category": "field-presence",
+        "entity": "assetCategory",
+        "field": "depreciate",
+        "runner": "node",
+        "description": "Field 'depreciate' should be present in assetCategory"
+      },
+      {
+        "id": "t-field-presence-assetCategory-depreciationType",
+        "category": "field-presence",
+        "entity": "assetCategory",
+        "field": "depreciationType",
+        "runner": "node",
+        "description": "Field 'depreciationType' should be present in assetCategory"
+      },
+      {
+        "id": "t-field-presence-assetCategory-description",
+        "category": "field-presence",
+        "entity": "assetCategory",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in assetCategory"
+      },
+      {
+        "id": "t-field-presence-assetCategory-name",
+        "category": "field-presence",
+        "entity": "assetCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in assetCategory"
+      },
+      {
+        "id": "t-field-presence-assetCategory-usableLifeMonths",
+        "category": "field-presence",
+        "entity": "assetCategory",
+        "field": "usableLifeMonths",
+        "runner": "node",
+        "description": "Field 'usableLifeMonths' should be present in assetCategory"
+      },
+      {
+        "id": "t-field-type-accounting-accumulatedDepreciation",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "accumulatedDepreciation",
+        "runner": "node",
+        "description": "Field 'accumulatedDepreciation' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-depreciation",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "depreciation",
+        "runner": "node",
+        "description": "Field 'depreciation' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-assetCategory-amortize",
+        "category": "field-type",
+        "entity": "assetCategory",
+        "field": "amortize",
+        "runner": "node",
+        "description": "Field 'amortize' should have type 'string' in assetCategory"
+      },
+      {
+        "id": "t-field-type-assetCategory-annualDepreciation",
+        "category": "field-type",
+        "entity": "assetCategory",
+        "field": "annualDepreciation",
+        "runner": "node",
+        "description": "Field 'annualDepreciation' should have type 'number' in assetCategory"
+      },
+      {
+        "id": "t-field-type-assetCategory-calculateType",
+        "category": "field-type",
+        "entity": "assetCategory",
+        "field": "calculateType",
+        "runner": "node",
+        "description": "Field 'calculateType' should have type 'string' in assetCategory"
+      },
+      {
+        "id": "t-field-type-assetCategory-depreciate",
+        "category": "field-type",
+        "entity": "assetCategory",
+        "field": "depreciate",
+        "runner": "node",
+        "description": "Field 'depreciate' should have type 'boolean' in assetCategory"
+      },
+      {
+        "id": "t-field-type-assetCategory-depreciationType",
+        "category": "field-type",
+        "entity": "assetCategory",
+        "field": "depreciationType",
+        "runner": "node",
+        "description": "Field 'depreciationType' should have type 'string' in assetCategory"
+      },
+      {
+        "id": "t-field-type-assetCategory-description",
+        "category": "field-type",
+        "entity": "assetCategory",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in assetCategory"
+      },
+      {
+        "id": "t-field-type-assetCategory-name",
+        "category": "field-type",
+        "entity": "assetCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in assetCategory"
+      },
+      {
+        "id": "t-field-type-assetCategory-usableLifeMonths",
+        "category": "field-type",
+        "entity": "assetCategory",
+        "field": "usableLifeMonths",
+        "runner": "node",
+        "description": "Field 'usableLifeMonths' should have type 'number' in assetCategory"
+      },
+      {
+        "id": "t-rule-declared-asset-group-Accounting-A-Disposal-Gain-displayLogic",
+        "category": "rule-declared",
+        "rule": "asset-group-Accounting-A_Disposal_Gain-displayLogic",
+        "runner": "node",
+        "description": "Rule 'asset-group-Accounting-A_Disposal_Gain-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-asset-group-Accounting-A-Disposal-Loss-displayLogic",
+        "category": "rule-declared",
+        "rule": "asset-group-Accounting-A_Disposal_Loss-displayLogic",
+        "runner": "node",
+        "description": "Rule 'asset-group-Accounting-A_Disposal_Loss-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-asset-group-Asset-Category-Amortizationcalctype-displayLogic",
+        "category": "rule-declared",
+        "rule": "asset-group-Asset Category-Amortizationcalctype-displayLogic",
+        "runner": "node",
+        "description": "Rule 'asset-group-Asset Category-Amortizationcalctype-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-asset-group-Asset-Category-Amortizationtype-displayLogic",
+        "category": "rule-declared",
+        "rule": "asset-group-Asset Category-Amortizationtype-displayLogic",
+        "runner": "node",
+        "description": "Rule 'asset-group-Asset Category-Amortizationtype-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-asset-group-Asset-Category-Annualamortizationpercentage-displayLogic",
+        "category": "rule-declared",
+        "rule": "asset-group-Asset Category-Annualamortizationpercentage-displayLogic",
+        "runner": "node",
+        "description": "Rule 'asset-group-Asset Category-Annualamortizationpercentage-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-asset-group-Asset-Category-Assetschedule-displayLogic",
+        "category": "rule-declared",
+        "rule": "asset-group-Asset Category-Assetschedule-displayLogic",
+        "runner": "node",
+        "description": "Rule 'asset-group-Asset Category-Assetschedule-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-asset-group-Asset-Category-Is30DayMonth-displayLogic",
+        "category": "rule-declared",
+        "rule": "asset-group-Asset Category-Is30DayMonth-displayLogic",
+        "runner": "node",
+        "description": "Rule 'asset-group-Asset Category-Is30DayMonth-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-asset-group-Asset-Category-UseLifeMonths-displayLogic",
+        "category": "rule-declared",
+        "rule": "asset-group-Asset Category-UseLifeMonths-displayLogic",
+        "runner": "node",
+        "description": "Rule 'asset-group-Asset Category-UseLifeMonths-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-asset-group-Asset-Category-UseLifeYears-displayLogic",
+        "category": "rule-declared",
+        "rule": "asset-group-Asset Category-UseLifeYears-displayLogic",
+        "runner": "node",
+        "description": "Rule 'asset-group-Asset Category-UseLifeYears-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Copy-Accounts",
+        "category": "rule-declared",
+        "rule": "Copy Accounts",
+        "runner": "node",
+        "description": "Rule 'Copy Accounts' (process) should be declared"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-accumulatedDepreciation",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "accumulatedDepreciation",
+        "runner": "node",
+        "description": "Selector endpoint for 'accumulatedDepreciation' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-depreciation",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "depreciation",
+        "runner": "node",
+        "description": "Selector endpoint for 'depreciation' in accounting should exist"
+      },
+      {
+        "id": "t-system-field-accounting-accountingSchema",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-active",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-assetCategory",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "assetCategory",
+        "runner": "node",
+        "description": "System field 'assetCategory' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-client",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-createdBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-creationDate",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-disposalGain",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "disposalGain",
+        "runner": "node",
+        "description": "System field 'disposalGain' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-disposalLoss",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "disposalLoss",
+        "runner": "node",
+        "description": "System field 'disposalLoss' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-id",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-organization",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-processNow",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updated",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updatedBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-assetCategory-active",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-client",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-createdBy",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-creationDate",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-everyMonthIs30Days",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "everyMonthIs30Days",
+        "runner": "node",
+        "description": "System field 'everyMonthIs30Days' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-helpComment",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "helpComment",
+        "runner": "node",
+        "description": "System field 'helpComment' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-id",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-organization",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-owned",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "owned",
+        "runner": "node",
+        "description": "System field 'owned' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-updated",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-updatedBy",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-system-field-assetCategory-usableLifeYears",
+        "category": "system-field",
+        "entity": "assetCategory",
+        "field": "usableLifeYears",
+        "runner": "node",
+        "description": "System field 'usableLifeYears' should exist in backend but not frontend for assetCategory"
+      },
+      {
+        "id": "t-visibility-accounting",
+        "category": "visibility",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "Entity 'accounting' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-visibility-assetCategory",
+        "category": "visibility",
+        "entity": "assetCategory",
+        "runner": "node",
+        "description": "Entity 'assetCategory' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 72,
+      "byCategory": {
+        "action-endpoint": 1,
+        "crud-flags": 2,
+        "displaylogic-evaluable": 5,
+        "displaylogic-valid": 5,
+        "field-presence": 10,
+        "field-type": 10,
+        "rule-declared": 10,
+        "selector-endpoint": 2,
+        "system-field": 25,
+        "visibility": 2
+      },
+      "byRunner": {
+        "node": 72,
+        "junit": 0
+      }
+    }
+  }
+}

@@ -13804,7 +13804,8 @@
       "label": "Invoiceable Expenses"
     },
     "Asset Group": {
-      "label": "Asset Group"
+      "label": "Asset Category",
+      "newLabel": "New category"
     },
     "Employee Expenses": {
       "label": "Employee Expenses"
@@ -20801,7 +20802,7 @@
       "label": "Create AP Expense Invoices"
     },
     "Asset Group": {
-      "label": "Asset Group"
+      "label": "Asset Category"
     },
     "Create Shipments from Orders": {
       "label": "Create Shipments from Orders"
