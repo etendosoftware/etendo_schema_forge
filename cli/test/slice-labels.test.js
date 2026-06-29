@@ -7,9 +7,11 @@ import {
   collectRenderedColumns,
   sliceLabels,
   buildCore,
+  pickSharedLabels,
   labelsModuleSource,
   labelsChecksum,
 } from '../src/slice-labels.js';
+import { SHARED_LABEL_COLUMNS } from '../src/shared-label-columns.js';
 
 // --- stableStringify ---
 
@@ -335,6 +337,90 @@ describe('buildCore', () => {
   it('handles a dict with no fields key (returns a clone of all keys)', () => {
     const core = buildCore({ ui: { ok: 'OK' } });
     assert.deepEqual(core, { ui: { ok: 'OK' } });
+  });
+});
+
+// --- pickSharedLabels ---
+
+describe('pickSharedLabels', () => {
+  it('includes a column that is BOTH shared and present in the input', () => {
+    const out = pickSharedLabels({ M_Product_ID: { label: 'Product' } });
+    assert.deepEqual(out.M_Product_ID, { label: 'Product' });
+  });
+
+  it('excludes a non-shared column even when present in the input', () => {
+    // DocumentNo is NOT in SHARED_LABEL_COLUMNS — must be dropped.
+    const out = pickSharedLabels({
+      DocumentNo: { label: 'Document No' },
+      IsShipTo: { label: 'Ship To' },
+    });
+    assert.equal(out.DocumentNo, undefined);
+    assert.deepEqual(out.IsShipTo, { label: 'Ship To' });
+  });
+
+  it('drops the description (label-only output)', () => {
+    const out = pickSharedLabels({
+      M_Product_ID: { label: 'Product', description: 'the product reference' },
+    });
+    assert.deepEqual(out.M_Product_ID, { label: 'Product' });
+    assert.deepEqual(Object.keys(out.M_Product_ID), ['label']);
+  });
+
+  it('skips a shared column absent from the input fields', () => {
+    // Only IsShipTo provided — IsBillTo (also shared) must not appear.
+    const out = pickSharedLabels({ IsShipTo: { label: 'Ship To' } });
+    assert.equal(out.IsBillTo, undefined);
+    assert.deepEqual(Object.keys(out), ['IsShipTo']);
+  });
+
+  it('skips a shared column with an empty-string label', () => {
+    const out = pickSharedLabels({ M_Product_ID: { label: '' } });
+    assert.equal(out.M_Product_ID, undefined);
+    assert.deepEqual(out, {});
+  });
+
+  it('skips a shared column with a null label', () => {
+    const out = pickSharedLabels({ M_Product_ID: { label: null } });
+    assert.equal(out.M_Product_ID, undefined);
+    assert.deepEqual(out, {});
+  });
+
+  it('returns {} for an empty input object', () => {
+    assert.deepEqual(pickSharedLabels({}), {});
+  });
+
+  it('returns {} when called with no argument (param defaults to {})', () => {
+    assert.deepEqual(pickSharedLabels(), {});
+  });
+
+  it('returns {} for undefined input', () => {
+    assert.deepEqual(pickSharedLabels(undefined), {});
+  });
+
+  it('picks multiple shared columns and drops the lone non-shared one', () => {
+    const out = pickSharedLabels({
+      C_BPartner_ID: { label: 'Business Partner', description: 'bp' },
+      M_Product_ID: { label: 'Product' },
+      IsShipTo: { label: 'Ship To' },
+      DocumentNo: { label: 'Document No' }, // not shared
+    });
+    assert.deepEqual(out, {
+      C_BPartner_ID: { label: 'Business Partner' },
+      M_Product_ID: { label: 'Product' },
+      IsShipTo: { label: 'Ship To' },
+    });
+  });
+
+  it('only ever emits keys drawn from SHARED_LABEL_COLUMNS', () => {
+    // Feed a label for every shared column plus a non-shared one; every output
+    // key must be a member of SHARED_LABEL_COLUMNS.
+    const fields = { NotShared: { label: 'nope' } };
+    for (const col of SHARED_LABEL_COLUMNS) fields[col] = { label: `lbl-${col}` };
+    const out = pickSharedLabels(fields);
+    for (const key of Object.keys(out)) {
+      assert.ok(SHARED_LABEL_COLUMNS.includes(key), `${key} must be a shared column`);
+    }
+    assert.equal(out.NotShared, undefined);
   });
 });
 

@@ -29,6 +29,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SHARED_LABEL_COLUMNS } from './shared-label-columns.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..'); // schema_forge root (cli/src → ../../)
@@ -128,6 +129,21 @@ export function buildCore(dict) {
   return core;
 }
 
+/**
+ * Label-only `fields` subset for the shared label set (ETP-4300): columns
+ * referenced by a literal `t('<Column>')` in shared/cross-window components, which
+ * per-window slices do not cover. Merged into `core.*` so they resolve everywhere.
+ * Columns absent from the dictionary are skipped. See shared-label-columns.js.
+ */
+export function pickSharedLabels(fields = {}) {
+  const out = {};
+  for (const col of SHARED_LABEL_COLUMNS) {
+    const label = fields[col]?.label;
+    if (label != null && label !== '') out[col] = { label };
+  }
+  return out;
+}
+
 /** Render the generated labels.js module source for a window slice. */
 export function labelsModuleSource(slice) {
   return [
@@ -201,7 +217,9 @@ export async function emitCore(dicts, { dryRun = false } = {}) {
   const result = {};
   if (!dryRun) await mkdir(GENERATED_LOCALES_DIR, { recursive: true });
   for (const [locale, dict] of Object.entries(dicts)) {
-    const core = buildCore(dict);
+    // core = full dictionary minus `fields`, plus the shared-label `fields` subset
+    // so cross-window components keep their labels once the monolith leaves the bundle.
+    const core = { ...buildCore(dict), fields: pickSharedLabels(dict.fields) };
     const checksum = sha256(core);
     if (!dryRun) {
       await writeFile(
