@@ -3,7 +3,7 @@ import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet, MoreVert
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
 import { getLatestInstallmentDueDate } from '@/lib/invoiceDueDate';
-import InvoicePaymentHistoryModal from './InvoicePaymentHistoryModal.jsx';
+import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
 import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
@@ -313,14 +313,16 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
         actionButtons={actionButtons}
         data-testid="GenericPreviewModal__cf88e6" />
       {p.showPaymentModal && (
-        <InvoicePaymentHistoryModal
+        <NewPaymentEntryModal
+          dir={specName === 'sales-invoice' ? 'in' : 'out'}
+          specName={specName}
           invoiceId={p.displayInvoice?.id}
           invoiceData={p.displayInvoice}
-          specName={specName}
+          outstanding={p.totalOutstanding}
           apiBaseUrl={apiBaseUrl}
           onClose={() => p.setShowPaymentModal(false)}
-          onPaymentAdded={() => { p.setShowPaymentModal(false); p.fetchPayments(); }}
-          data-testid="InvoicePaymentHistoryModal__cf88e6" />
+          onSaved={() => { p.setShowPaymentModal(false); p.fetchPayments(); }}
+          data-testid="NewPaymentEntryModal__cf88e6" />
       )}
       {p.showSifModal && (
         <SifSendingModal
