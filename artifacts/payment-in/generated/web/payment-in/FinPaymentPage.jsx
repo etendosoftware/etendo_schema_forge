@@ -1,11 +1,6 @@
-import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
-import { toast } from 'sonner';
 import FinPaymentTable from '../../../custom/PaymentHeaderTable';
 import FinPaymentForm from './FinPaymentForm';
-import RelatedDocuments from '../../../custom/RelatedDocuments';
-import { AttachmentsTab } from '@/components/attachments';
-import PaymentBottomPanel from '../../../custom/PaymentBottomPanel';
 import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import catalogs from './mockCatalogs';
@@ -255,19 +250,13 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        documentPreview={{ titlePrefix: 'Payment', pdfUrl: null }}
         hideDeleteWhenComplete
-        customTabsAfterBottom
-        notesField="description"
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Payment", config: {} } }]}
-        bottomSection={PaymentBottomPanel}
         topbarRight={PaymentActivityToggle}
         sidePanel={PaymentDetailSidebar}
         menuActions={({ status }) => [
           { key: 'reverse', label: 'Reverse Payment', destructive: true, visible: ["RPPC","RPR","RDNC"].includes(status), columnName: 'aPRMReversePayment',  }
         ]}
         requiredHeaderFields={requiredHeaderFields}
-        salesTheme
         sendDocument
         {...props}
       />

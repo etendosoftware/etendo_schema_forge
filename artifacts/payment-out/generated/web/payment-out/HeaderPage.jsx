@@ -1,16 +1,6 @@
-import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import HeaderTable from '../../../custom/PaymentHeaderTable';
 import HeaderForm from './HeaderForm';
-import LinesTable from './LinesTable';
-import LinesForm from './LinesForm';
-import AccountingTable from './AccountingTable';
-import AccountingForm from './AccountingForm';
-import ExecutionHistoryTable from './ExecutionHistoryTable';
-import ExecutionHistoryForm from './ExecutionHistoryForm';
-import RelatedDocuments from '../../../custom/RelatedDocuments';
-import { AttachmentsTab } from '@/components/attachments';
-import PaymentOutBottomPanel from '../../../custom/PaymentOutBottomPanel';
 import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import catalogs from './mockCatalogs';
@@ -563,33 +553,20 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
     return (
       <DetailView
         entity="header"
-        detailEntity="lines"
         Form={HeaderForm}
-        DetailTable={LinesTable}
-        DetailForm={LinesForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Header"
-        detailLabel="Lines"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
-      api={api}
-        secondaryTabs={[
-          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm },
-          { key: 'executionHistory', label: 'Execution History', Table: ExecutionHistoryTable, Form: ExecutionHistoryForm },
-        ]}
-        notesField="description"
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Payment", config: {} } }]}
-        bottomSection={PaymentOutBottomPanel}
+        api={api}
         topbarRight={PaymentActivityToggle}
         sidePanel={PaymentDetailSidebar}
         requiredHeaderFields={requiredHeaderFields}
-        linesLayout="inlineEditable"
         sendDocument
         {...props}
       />
