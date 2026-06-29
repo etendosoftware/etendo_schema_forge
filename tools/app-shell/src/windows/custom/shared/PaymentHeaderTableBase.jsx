@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useUI } from '@/i18n';
-import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /* eslint-disable react/prop-types */
 
@@ -267,38 +266,42 @@ const METHOD_ICONS = {
 
 // ─── PaymentSidebar ───────────────────────────────────────────────────────────
 
-function PaymentSidebar({ dir, specName, apiBaseUrl, ui }) {
-  const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-  const apiFetch = useApiFetch(base);
+function computeSidebarStats(rows) {
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  let thisMonth = 0;
+  let pending = 0;
+  let draftCount = 0;
+  const methodMap = {};
+
+  (rows || []).forEach(r => {
+    const amt = parseFloat(r.amount ?? 0);
+    const isDeposited = DEPOSITED_STATUSES.has(r.status || '');
+    if (isDeposited) {
+      if ((r.paymentDate || '').startsWith(ym)) thisMonth += amt;
+      const methodId = r['paymentMethod$_identifier'] || 'other';
+      if (!methodMap[methodId]) methodMap[methodId] = 0;
+      methodMap[methodId] += amt;
+    } else {
+      pending += amt;
+      draftCount += 1;
+    }
+  });
+
+  const methods = Object.entries(methodMap).map(([label, amount]) => ({ label, amount }));
+  return { thisMonth, pending, draftCount, methods };
+}
+
+function PaymentSidebar({ dir, data, ui }) {
   const isIn = dir === 'in';
 
-  const [stats, setStats] = useState(null);
-  const [drafts, setDrafts] = useState(null);
+  const { thisMonth, pending, draftCount, methods } = useMemo(
+    () => computeSidebarStats(data),
+    [data]
+  );
 
-  useEffect(() => {
-    if (!base) return;
-    (async () => {
-      try {
-        const [statsRes, draftsRes] = await Promise.allSettled([
-          apiFetch(`/${specName}/header/action/paymentStats`, { method: 'POST', body: '{}' }),
-          apiFetch(`/${specName}/header?status=RPAP&_startRow=0&_endRow=0`),
-        ]);
-        if (statsRes.status === 'fulfilled' && statsRes.value.ok) {
-          const json = await statsRes.value.json();
-          setStats(json.response?.data || json);
-        }
-        if (draftsRes.status === 'fulfilled' && draftsRes.value.ok) {
-          const json = await draftsRes.value.json();
-          setDrafts(json.response?.totalRows ?? 0);
-        }
-      } catch { /* silent */ }
-    })();
-  }, [apiFetch, base, specName]);
-
-  const collectedValue = stats?.collectedThisMonth ?? stats?.totalThisMonth ?? null;
-  const pendingValue = stats?.pendingCollection ?? stats?.pending ?? null;
-  const methods = stats?.methodBreakdown || [];
-  const draftCount = drafts ?? stats?.drafts ?? null;
+  const collectedValue = data ? thisMonth : null;
+  const pendingValue = data ? pending : null;
 
   const heroColor = isIn ? '#17663A' : '#19191D';
   const heroLabel = isIn ? ui('cobradoEsteMes') : ui('pagadoEsteMes');
@@ -322,9 +325,6 @@ function PaymentSidebar({ dir, specName, apiBaseUrl, ui }) {
             <div className="tabular-nums" style={{ font: '700 30px/36px Inter', color: heroColor, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
               {heroSign}{fmtAmt(collectedValue, 'EUR')}
             </div>
-            {stats?.collectedThisMonthSub && (
-              <div style={{ font: '400 12px/16px Inter', color: '#828FA3', marginTop: 4 }}>{stats.collectedThisMonthSub}</div>
-            )}
           </>
         )}
       </div>
@@ -339,9 +339,6 @@ function PaymentSidebar({ dir, specName, apiBaseUrl, ui }) {
             <div className="tabular-nums" style={{ font: '700 22px/26px Inter', color: '#C28800', letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
               {fmtAmt(pendingValue, 'EUR')}
             </div>
-            {stats?.pendingSub && (
-              <div style={{ font: '400 12px/16px Inter', color: '#828FA3', marginTop: 3 }}>{stats.pendingSub}</div>
-            )}
           </>
         )}
       </div>
@@ -362,10 +359,10 @@ function PaymentSidebar({ dir, specName, apiBaseUrl, ui }) {
         <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 18 }}>
           <div style={{ font: '600 13px/17px Inter', color: '#19191D', marginBottom: 10 }}>{ui('porMetodo')}</div>
           {methods.map((m) => (
-            <div key={m.method || m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
+            <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, font: '500 13px/18px Inter', color: '#55556D' }}>
-                <span style={{ color: '#828FA3' }}>{METHOD_ICONS[m.method] || METHOD_ICONS.transfer}</span>
-                {m.label || m.method}
+                <span style={{ color: '#828FA3' }}>{METHOD_ICONS.transfer}</span>
+                {m.label}
               </span>
               <span className="tabular-nums" style={{ font: '500 13px/18px Inter', color: '#828FA3', fontVariantNumeric: 'tabular-nums' }}>
                 {fmtAmt(m.amount || 0, 'EUR')}
@@ -456,7 +453,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-      <PaymentSidebar dir={dir} specName={specName} apiBaseUrl={apiBaseUrl} ui={ui} data-testid="PaymentSidebar__743b1b" />
+      <PaymentSidebar dir={dir} data={data} ui={ui} data-testid="PaymentSidebar__743b1b" />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Toolbar ui={ui} search={search} onSearch={setSearch} />
         <ColHeaders ui={ui} />
