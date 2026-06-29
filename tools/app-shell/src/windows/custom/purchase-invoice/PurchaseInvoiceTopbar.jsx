@@ -120,7 +120,6 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           </span>
         );
       })()}
-
       {showPaymentModal && (
         <InvoicePaymentHistoryModal
           invoiceId={data.id}
@@ -129,7 +128,7 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           apiBaseUrl={apiBaseUrl}
           onClose={handleModalClose}
           onPaymentAdded={handleModalClose}
-        />
+          data-testid="InvoicePaymentHistoryModal__8addd1" />
       )}
     </>
   );

@@ -108,8 +108,8 @@ export default function PurchaseInvoiceHeaderTable(props) {
             if (outstandingAbs < 0.001) {
               return (
                 <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
-                  <Check size={12}/>Aplicada
-                </span>
+                  <Check size={12} data-testid="Check__6b7cdb" />Aplicada
+                                  </span>
               );
             }
             const isNoneApplied = totalAbs < 0.001 || outstandingAbs >= totalAbs * 0.99;
@@ -127,7 +127,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
           if (outstanding <= 0) {
             return (
               <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
-                <Check size={12}/>{t('pagada')}
+                <Check size={12} data-testid="Check__6b7cdb" />{t('pagada')}
               </span>
             );
           }
@@ -140,7 +140,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
             >
               <span style={{width:8,height:8,borderRadius:'50%',background:'#F59E0B',flexShrink:0,display:'inline-block'}}/>
               {formatAmount(outstanding, currency)}
-              <span style={{display:'inline-flex',alignItems:'center',color:'#A37700'}}><Plus size={13}/></span>
+              <span style={{display:'inline-flex',alignItems:'center',color:'#A37700'}}><Plus size={13} data-testid="Plus__6b7cdb" /></span>
             </button>
           );
         },
@@ -187,7 +187,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
           apiBaseUrl={apiBaseUrl}
           onClose={() => setPaymentRow(null)}
           onPaymentAdded={() => { setPaymentRow(null); props.onRefresh?.(); }}
-        />
+          data-testid="InvoicePaymentHistoryModal__6b7cdb" />
       )}
     </>
   );

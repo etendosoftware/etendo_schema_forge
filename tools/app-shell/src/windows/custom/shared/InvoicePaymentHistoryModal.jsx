@@ -179,7 +179,7 @@ export default function InvoicePaymentHistoryModal({
         {/* Header */}
         <div style={{ padding: '18px 24px 16px', borderBottom: '1px solid #E3E7EC', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <RowDirBadge isIn={isSales} size={44} />
+            <RowDirBadge isIn={isSales} size={44} data-testid="RowDirBadge__b82d4f" />
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, color: '#111827' }}>{title}</div>
               <div style={{ fontSize: 12, color: '#6B7280', marginTop: 1 }}>
@@ -229,7 +229,7 @@ export default function InvoicePaymentHistoryModal({
               style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 20px', gap: 10 }}
               data-testid="InvoicePaymentHistoryModal__empty"
             >
-              <RowDirBadge isIn={isSales} size={48} />
+              <RowDirBadge isIn={isSales} size={48} data-testid="RowDirBadge__b82d4f" />
               <p style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', margin: 0 }}>
                 {isSales ? ui('noCobroYet') : ui('noPagoYet')}
               </p>
@@ -259,7 +259,7 @@ export default function InvoicePaymentHistoryModal({
                       data-testid="InvoicePaymentHistoryModal__row"
                     >
                       <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <RowDirBadge isIn={isSales} size={26} />
+                        <RowDirBadge isIn={isSales} size={26} data-testid="RowDirBadge__b82d4f" />
                       </div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: '#374151', fontFamily: 'JetBrains Mono, monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {p.documentNo || p.id}
@@ -268,7 +268,7 @@ export default function InvoicePaymentHistoryModal({
                         {fmtDate(p.paymentDate)}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#6B7280', overflow: 'hidden' }}>
-                        <MethodIcon method={methodKey} />
+                        <MethodIcon method={methodKey} data-testid="MethodIcon__b82d4f" />
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{methodRaw || '—'}</span>
                       </div>
                       <div className="tabular-nums" style={{ fontSize: 13, fontWeight: 600, color: isSales ? '#17663A' : '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -282,7 +282,7 @@ export default function InvoicePaymentHistoryModal({
                           data-testid="PaymentStateTag__b82d4f" />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', color: '#9CA3AF' }}>
-                        <ChevronRight size={14} />
+                        <ChevronRight size={14} data-testid="ChevronRight__b82d4f" />
                       </div>
                     </div>
                   );
@@ -332,7 +332,7 @@ export default function InvoicePaymentHistoryModal({
           apiBaseUrl={apiBaseUrl}
           onClose={() => setShowPaymentModal(false)}
           onSaved={handlePaymentRegistered}
-        />,
+          data-testid="NewPaymentEntryModal__b82d4f" />,
         document.body,
       )}
     </div>

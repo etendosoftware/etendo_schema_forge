@@ -120,7 +120,6 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           <StateTag status={status} dir={dir} ui={ui} data-testid="StateTag__624cef" />
         </div>
       </div>
-
       {/* Amount breakdown */}
       <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 11 }}>
         {[
@@ -136,7 +135,6 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           </div>
         ))}
       </div>
-
       {/* Applied lines */}
       <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#19191D', marginBottom: 10 }}>
@@ -166,7 +164,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
                   }}
                   data-testid={`PaymentDetailSidebar__line-${i}`}
                 >
-                  <DocIcon />
+                  <DocIcon data-testid="DocIcon__624cef" />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ font: '500 12px/16px JetBrains Mono, monospace', color: '#19191D', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {identifier}
@@ -186,7 +184,6 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           </div>
         )}
       </div>
-
       {/* Activity timeline */}
       <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#19191D', marginBottom: 10 }}>{ui('activity')}</div>

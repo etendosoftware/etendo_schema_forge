@@ -137,7 +137,7 @@ export default function PaymentsCard({
   } else if (payments.length === 0) {
     content = (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px', gap: 8 }}>
-        <DirBadge isIn={isIn} size={36} />
+        <DirBadge isIn={isIn} size={36} data-testid="DirBadge__c6fe34" />
         <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', margin: 0 }}>
           {isCreditNote ? 'Sin aplicaciones registradas' : (isIn ? ui('noCobroYet') : ui('noPagoYet'))}
         </p>
@@ -168,7 +168,7 @@ export default function PaymentsCard({
               className="hover:bg-gray-50 transition-colors"
               data-testid={`PaymentsCard__row-${idx}`}
             >
-              <DirBadge isIn={isIn} />
+              <DirBadge isIn={isIn} data-testid="DirBadge__c6fe34" />
               <div style={{ minWidth: 0 }}>
                 <div style={{ font: '600 12px/16px JetBrains Mono, monospace', color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {p.documentNo || p.id}
@@ -184,7 +184,7 @@ export default function PaymentsCard({
                 <span className="tabular-nums" style={{ font: '600 13px/17px Inter', color: amtColor, whiteSpace: 'nowrap' }}>
                   {amtSign}{fmt(p.amount)} {currency}
                 </span>
-                <StateTag status={p.status || ''} isIn={isIn} />
+                <StateTag status={p.status || ''} isIn={isIn} data-testid="StateTag__c6fe34" />
               </div>
             </div>
           );

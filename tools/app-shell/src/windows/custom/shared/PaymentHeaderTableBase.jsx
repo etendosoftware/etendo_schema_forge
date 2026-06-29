@@ -140,10 +140,12 @@ function FilterPill({ children, icon }) {
 function Toolbar({ ui, search, onSearch }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderBottom: '1px solid #E3E7EC', flexWrap: 'wrap' }}>
-      <ReadonlyNote ui={ui} />
+      <ReadonlyNote ui={ui} data-testid="ReadonlyNote__743b1b" />
       <div style={{ flex: 1 }} />
-      <FilterPill>{ui('allStatuses')}</FilterPill>
-      <FilterPill icon={<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>}>{ui('anyDate')}</FilterPill>
+      <FilterPill data-testid="FilterPill__743b1b">{ui('allStatuses')}</FilterPill>
+      <FilterPill
+        icon={<svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>}
+        data-testid="FilterPill__743b1b">{ui('anyDate')}</FilterPill>
       <input
         type="text"
         placeholder={ui('searchDoc')}
@@ -192,7 +194,7 @@ function PayRow({ row, dir, onNavigate, onReactivate, ui }) {
       onMouseEnter={e => { e.currentTarget.style.background = '#FAFAFA'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
     >
-      <DirBadge dir={dir} size={34} />
+      <DirBadge dir={dir} size={34} data-testid="DirBadge__743b1b" />
       <div style={{ font: '600 13px/17px JetBrains Mono, monospace', color: '#19191D', letterSpacing: '.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {row.documentNo || row.id}
       </div>
@@ -204,12 +206,22 @@ function PayRow({ row, dir, onNavigate, onReactivate, ui }) {
         <div style={{ font: '400 11px/15px Inter', color: '#828FA3', marginTop: 2 }}>{origin}</div>
       </div>
       <div>
-        <PaymentStateTag status={row.status || ''} dir={dir} ui={ui} />
+        <PaymentStateTag
+          status={row.status || ''}
+          dir={dir}
+          ui={ui}
+          data-testid="PaymentStateTag__743b1b" />
       </div>
       <div style={{ textAlign: 'right', font: '700 15px/20px Inter', color: amtColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
         {dir === 'in' ? '+ ' : '− '}{fmtAmt(amount, currency)}
       </div>
-      <RowMenu row={row} dir={dir} onNavigate={onNavigate} onReactivate={onReactivate} ui={ui} />
+      <RowMenu
+        row={row}
+        dir={dir}
+        onNavigate={onNavigate}
+        onReactivate={onReactivate}
+        ui={ui}
+        data-testid="RowMenu__743b1b" />
     </div>
   );
 }
@@ -219,7 +231,7 @@ function PayRow({ row, dir, onNavigate, onReactivate, ui }) {
 function EmptyState({ dir, ui }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, color: '#828FA3' }}>
-      <DirBadge dir={dir} size={48} />
+      <DirBadge dir={dir} size={48} data-testid="DirBadge__743b1b" />
       <div style={{ marginTop: 16, font: '500 14px/20px Inter', color: '#55556D' }}>
         {dir === 'in' ? 'No hay cobros registrados' : 'No hay pagos registrados'}
       </div>
@@ -319,7 +331,7 @@ function PaymentSidebar({ dir, data, ui }) {
           <h2 style={{ margin: 0, font: '700 20px/24px Inter', letterSpacing: '-0.01em', color: '#19191D' }}>{heroLabel}</h2>
         </div>
         {collectedValue === null ? (
-          <SidebarSkeleton />
+          <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         ) : (
           <>
             <div className="tabular-nums" style={{ font: '700 30px/36px Inter', color: heroColor, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
@@ -328,12 +340,11 @@ function PaymentSidebar({ dir, data, ui }) {
           </>
         )}
       </div>
-
       {/* Pending */}
       <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 18 }}>
         <div style={{ font: '500 12px/16px Inter', color: '#828FA3', marginBottom: 4 }}>{pendLabel}</div>
         {pendingValue === null ? (
-          <SidebarSkeleton />
+          <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         ) : (
           <>
             <div className="tabular-nums" style={{ font: '700 22px/26px Inter', color: '#C28800', letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
@@ -342,7 +353,6 @@ function PaymentSidebar({ dir, data, ui }) {
           </>
         )}
       </div>
-
       {/* Draft count — only shown if > 0 */}
       {(draftCount ?? 0) > 0 && (
         <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 18 }}>
@@ -353,7 +363,6 @@ function PaymentSidebar({ dir, data, ui }) {
           <div style={{ font: '400 12px/16px Inter', color: '#828FA3', marginTop: 3 }}>{ui('borradoresSub')}</div>
         </div>
       )}
-
       {/* By method */}
       {methods.length > 0 && (
         <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 18 }}>
@@ -455,11 +464,15 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <PaymentSidebar dir={dir} data={data} ui={ui} data-testid="PaymentSidebar__743b1b" />
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <Toolbar ui={ui} search={search} onSearch={setSearch} />
-        <ColHeaders ui={ui} />
+        <Toolbar
+          ui={ui}
+          search={search}
+          onSearch={setSearch}
+          data-testid="Toolbar__743b1b" />
+        <ColHeaders ui={ui} data-testid="ColHeaders__743b1b" />
         <div style={{ flex: 1, overflowY: 'auto', background: '#fff' }}>
           {rows.length === 0
-            ? <EmptyState dir={dir} ui={ui} />
+            ? <EmptyState dir={dir} ui={ui} data-testid="EmptyState__743b1b" />
             : rows.map(row => (
               <PayRow
                 key={row.id}
@@ -468,7 +481,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
                 onNavigate={onNavigate}
                 onReactivate={setReactivateRow}
                 ui={ui}
-              />
+                data-testid="PayRow__743b1b" />
             ))
           }
         </div>
@@ -479,7 +492,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
           dir={dir}
           onClose={() => setReactivateRow(null)}
           ui={ui}
-        />
+          data-testid="ReactivarModal__743b1b" />
       )}
     </div>
   );
