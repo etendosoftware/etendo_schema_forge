@@ -8,6 +8,7 @@ import schemaApiPlugin from './vite-plugins/schema-api.js';
 import reportApiPlugin from './vite-plugins/report-api.js';
 import mcpRetryProxy from './vite-plugins/mcp-proxy.js';
 import appsSpikePlugin from './vite-plugins/apps-spike.js';
+import sliceLabelsPlugin from './vite-plugins/slice-labels.js';
 
 // Read ETENDO_URL from .env.local for proxy config only (not exposed to client)
 function readEnvFile() {
@@ -149,6 +150,7 @@ export default defineConfig(({ mode }) => {
   return {
   base: '/',
   plugins: [
+    sliceLabelsPlugin(),
     react(),
     schemaApiPlugin(),
     reportApiPlugin(),

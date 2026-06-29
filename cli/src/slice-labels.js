@@ -1,4 +1,7 @@
-#!/usr/bin/env node
+// No shebang: this module is BOTH a CLI (invoked via `node cli/src/slice-labels.js`)
+// AND imported by the Vite build (tools/app-shell/vite-plugins/slice-labels.js).
+// esbuild rejects a shebang in an imported file, and the CLI never relies on it
+// (it is always run through `node`, never as `./slice-labels.js`).
 /**
  * slice-labels.js — build-time label slicer (ETP-4300, Approach G).
  *
@@ -210,6 +213,22 @@ export async function emitCore(dicts, { dryRun = false } = {}) {
     result[locale] = { bytes: stableStringify(core).length, checksum };
   }
   return result;
+}
+
+/**
+ * Slice every window + emit the shared core. Programmatic entry point for the
+ * build prebuild (Vite plugin) — loads locales once, writes each window's
+ * labels.js and the core.<locale>.json. Pure transform, no DB.
+ * @returns {Promise<{windows: number, locales: string[]}>}
+ */
+export async function sliceAll() {
+  const { codes, dicts } = await loadLocales();
+  const windows = await listWindows();
+  for (const name of windows) {
+    await sliceWindow(name, dicts);
+  }
+  await emitCore(dicts);
+  return { windows: windows.length, locales: codes };
 }
 
 /** List window artifact names that have a contract.json (excludes API-only). */
