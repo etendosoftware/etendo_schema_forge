@@ -5,11 +5,11 @@ import { useState, useEffect } from 'react';
 const DEPOSITED = new Set(['RPR', 'RPPC', 'RDNC', 'PPM']);
 const DET_COLS = '1.8fr 1fr 1fr 1fr';
 
-function fmtAmt(val, curr) {
+function fmtAmt(val) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
   const abs = Math.abs(n).toFixed(2).split('.');
   abs[0] = abs[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' ' + (curr || 'EUR');
+  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' €';
 }
 
 function fmtDate(raw) {
@@ -83,7 +83,6 @@ function GeneralFields({ data }) {
 
 function LinesTable({ data, token, apiBaseUrl }) {
   const [lines, setLines] = useState(null);
-  const currency = data?.['currency$_identifier'] || 'EUR';
   const totalPayment = parseFloat(data?.amount ?? 0);
 
   useEffect(() => {
@@ -122,9 +121,10 @@ function LinesTable({ data, token, apiBaseUrl }) {
       </div>
       {lines.map((row, i) => {
         const applied = parseFloat(row.amount) || 0;
-        const ident = row['invoicePaymentSchedule$_identifier'] || '';
-        const docDisplay = ident.split(' - ')[0] || ident || `Línea ${i + 1}`;
-        const subText = ident.includes(' - ') ? ident.split(' - ').slice(1).join(' - ') : '';
+        const invoiceTotal = parseFloat(row.invoiceAmount) || 0;
+        const docDisplay = row.invoiceNo || `Línea ${i + 1}`;
+        const subText = `FC · ${fmtDate(row.dueDate)}`;
+        const pendingAmt = Math.max(0, invoiceTotal - applied);
         return (
           <div key={row.id || i} style={{ display: 'grid', gridTemplateColumns: DET_COLS, gap: 12, padding: '13px 14px', borderBottom: i < lines.length - 1 ? '1px solid #E3E7EC' : 'none', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
@@ -134,17 +134,17 @@ function LinesTable({ data, token, apiBaseUrl }) {
                 {subText && <div style={{ font: '400 11px/15px Inter', color: '#828FA3', marginTop: 1 }}>{subText}</div>}
               </div>
             </div>
-            <div style={{ textAlign: 'right', font: '500 14px/19px Inter', color: '#55556D', fontVariantNumeric: 'tabular-nums' }}>—</div>
-            <div style={{ textAlign: 'right', font: '600 14px/19px Inter', color: '#19191D', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied, currency)}</div>
-            <div style={{ textAlign: 'right', font: '500 14px/19px Inter', color: '#828FA3', fontVariantNumeric: 'tabular-nums' }}>—</div>
+            <div style={{ textAlign: 'right', font: '500 14px/19px Inter', color: '#55556D', fontVariantNumeric: 'tabular-nums' }}>{invoiceTotal > 0 ? fmtAmt(invoiceTotal) : '—'}</div>
+            <div style={{ textAlign: 'right', font: '600 14px/19px Inter', color: '#19191D', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(applied)}</div>
+            <div style={{ textAlign: 'right', font: '500 14px/19px Inter', color: '#828FA3', fontVariantNumeric: 'tabular-nums' }}>{invoiceTotal > 0 ? fmtAmt(pendingAmt) : '—'}</div>
           </div>
         );
       })}
       <div style={{ display: 'grid', gridTemplateColumns: DET_COLS, gap: 12, padding: '12px 14px', background: '#FCFCFD', borderTop: '1px solid #E3E7EC', alignItems: 'center' }}>
         <div style={{ font: '600 13px/18px Inter', color: '#19191D' }}>Total aplicado</div>
-        <div style={{ textAlign: 'right', font: '500 13px/18px Inter', color: '#828FA3', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalPayment, currency)}</div>
-        <div style={{ textAlign: 'right', font: '700 14px/19px Inter', color: '#19191D', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied, currency)}</div>
-        <div style={{ textAlign: 'right', font: '500 13px/18px Inter', color: '#828FA3', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(remaining, currency)}</div>
+        <div style={{ textAlign: 'right', font: '500 13px/18px Inter', color: '#828FA3', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalPayment)}</div>
+        <div style={{ textAlign: 'right', font: '700 14px/19px Inter', color: '#19191D', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(totalApplied)}</div>
+        <div style={{ textAlign: 'right', font: '500 13px/18px Inter', color: '#828FA3', fontVariantNumeric: 'tabular-nums' }}>{fmtAmt(remaining)}</div>
       </div>
     </div>
   );

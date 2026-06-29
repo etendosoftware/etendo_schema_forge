@@ -10,11 +10,7 @@ const breadcrumb = 'Finance / Payment Out';
 
 
 // @sf-generated-start summary:header
-const summary = [
-  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'etblkpAccountingstatus', column: 'EM_Etblkp_Accountingstatus', type: 'status' },
-  { key: 'etblkpBulkposting', column: 'EM_Etblkp_Bulkposting', type: 'string' },
-];
+const summary = [];
 
 const statusField = 'status';
 // @sf-generated-end summary:header
