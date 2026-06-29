@@ -3,7 +3,7 @@ import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet, MoreVert
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
 import { getLatestInstallmentDueDate } from '@/lib/invoiceDueDate';
-import InvoicePaymentModal from './InvoicePaymentModal.jsx';
+import InvoicePaymentHistoryModal from './InvoicePaymentHistoryModal.jsx';
 import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
@@ -161,6 +161,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         isFullyPaid={isFullyPaid}
         loading={loadingPayments}
         onAddPayment={onAddPayment}
+        specName={specName}
         data-testid="PaymentsCard__cf88e6" />
       {specName !== 'purchase-invoice' && <EmailsCard onSend={onSend} data-testid="EmailsCard__cf88e6" />}
       <RelatedDocumentsCard
@@ -312,16 +313,14 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
         actionButtons={actionButtons}
         data-testid="GenericPreviewModal__cf88e6" />
       {p.showPaymentModal && (
-        <InvoicePaymentModal
+        <InvoicePaymentHistoryModal
           invoiceId={p.displayInvoice?.id}
           invoiceData={p.displayInvoice}
           specName={specName}
           apiBaseUrl={apiBaseUrl}
-          onClose={() => {
-            p.setShowPaymentModal(false);
-            p.fetchPayments();
-          }}
-          data-testid="InvoicePaymentModal__cf88e6" />
+          onClose={() => p.setShowPaymentModal(false)}
+          onPaymentAdded={() => { p.setShowPaymentModal(false); p.fetchPayments(); }}
+          data-testid="InvoicePaymentHistoryModal__cf88e6" />
       )}
       {p.showSifModal && (
         <SifSendingModal
