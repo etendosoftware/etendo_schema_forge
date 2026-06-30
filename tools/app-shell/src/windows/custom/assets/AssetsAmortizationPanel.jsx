@@ -265,7 +265,8 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
         closeTitle={ui('close') ?? 'Cerrar'}
         onDelete={handleDeleteSelected}
         onClose={clearSelection}
-        compact />
+        compact
+        data-testid="LinesSelectionBar__34159c" />
     </div>
   );
 }
