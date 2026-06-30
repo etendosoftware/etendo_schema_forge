@@ -1,43 +1,17 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { AuthProvider, useAuth } from './auth/AuthContext.jsx';
+import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 import AppLayout from './layout/AppLayout.jsx';
-import WindowLoader from './windows/WindowLoader.jsx';
-import PreviewPage from './preview/PreviewPage.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
-import FirstStepsPage from './pages/FirstStepsPage.jsx';
-import SalesPage from './pages/SalesPage.jsx';
-import InventoryPage from './pages/InventoryPage.jsx';
-import PurchasesPage from './pages/PurchasesPage.jsx';
-import AccountingPage from './pages/AccountingPage.jsx';
-import ReportsPage from './pages/ReportsPage.jsx';
-import CrmPage from './pages/CrmPage.jsx';
-import HrPage from './pages/HrPage.jsx';
-import ProjectsPage from './pages/ProjectsPage.jsx';
-import ReportViewerPage from './pages/ReportViewerPage.jsx';
-import FinancialAccountsPage from './pages/FinancialAccountsPage.jsx';
-import Psd2CallbackPage from './pages/Psd2CallbackPage.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
+import { buildRuntimeRoutes } from './runtime-routes.jsx';
 import { createMockFetch } from './lib/mockFetch.js';
-import { LocaleProvider } from './i18n/index.js';
 import { useLocaleState } from './i18n/useLocaleState.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
-import { CurrencyProvider } from './hooks/useCurrency.jsx';
 import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
-
-import ArtifactViewerPage from './pages/ArtifactViewerPage.jsx';
-
-const OnboardingPage = lazy(() => import('./pages/OnboardingPage.jsx'));
-const SmartScanPage = lazy(() => import('./pages/SmartScanPage.jsx'));
-const OAuth2ClientsPage = lazy(() => import('./pages/OAuth2ClientsPage.jsx'));
-const AuthorizePage = lazy(() => import('./pages/AuthorizePage.jsx'));
-const QuickSalesOrderPage = lazy(() => import('./pages/QuickSalesOrderPage.jsx'));
-const QuickPurchaseOrderPage = lazy(() => import('./pages/QuickPurchaseOrderPage.jsx'));
-const AppStorePage = lazy(() => import('./pages/AppStorePage.jsx'));
 
 function detectBasePath() {
   const envBase = import.meta.env.VITE_API_BASE;
@@ -127,221 +101,42 @@ async function loadAllMockData() {
   return merged;
 }
 
-function AuthGuard({ children }) {
-  const { isAuthenticated } = useAuth();
+function UnauthenticatedRedirect() {
   const location = useLocation();
-  if (!isAuthenticated) {
-    return (
-      <Navigate
-        to={buildOnboardingReturnTo(location)}
-        replace
-        data-testid="Navigate__ecaf3f" />
-    );
-  }
-  return children;
-}
-
-function AppRoutes({ menuGroups, windowMap }) {
-  const location = useLocation();
-
-  // Public routes render without waiting for menu data
-  const publicPaths = ['/onboarding', '/financial-account/psd2-callback'];
-  const isPublicRoute = publicPaths.some(p => location.pathname.startsWith(p));
-
-  if (!isPublicRoute && menuGroups.length === 0) {
-    return <div className="p-8 text-muted-foreground">Loading...</div>;
-  }
-
   return (
-    <Routes data-testid="Routes__ecaf3f">
-      <Route
-        path="/onboarding"
-        element={
-          <Suspense
-            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
-            data-testid="Suspense__ecaf3f">
-            <OnboardingPage data-testid="OnboardingPage__ecaf3f" />
-          </Suspense>
-        }
-        data-testid="Route__ecaf3f" />
-      <Route
-        path="/login"
-        element={<Navigate to="/onboarding" replace data-testid="Navigate__ecaf3f" />}
-        data-testid="Route__ecaf3f" />
-      <Route
-        path="/financial-account/psd2-callback"
-        element={<Psd2CallbackPage data-testid="Psd2CallbackPage__ecaf3f" />}
-        data-testid="Route__ecaf3f" />
-      <Route
-        element={
-          <AuthGuard data-testid="AuthGuard__ecaf3f">
-            <AppLayout menuGroups={menuGroups} data-testid="AppLayout__ecaf3f" />
-          </AuthGuard>
-        }
-        data-testid="Route__ecaf3f">
-        <Route
-          index
-          element={<Navigate to="/dashboard" replace data-testid="Navigate__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="dashboard"
-          element={<DashboardPage apiBaseUrl={API_BASE_URL} data-testid="DashboardPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="first-steps"
-          element={<FirstStepsPage data-testid="FirstStepsPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="preview"
-          element={<PreviewPage data-testid="PreviewPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="sales"
-          element={<SalesPage data-testid="SalesPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="inventory"
-          element={<InventoryPage data-testid="InventoryPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="purchases"
-          element={<PurchasesPage data-testid="PurchasesPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="accounting"
-          element={<AccountingPage data-testid="AccountingPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="finance/accounts"
-          element={<FinancialAccountsPage data-testid="FinancialAccountsPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="reports"
-          element={<ReportsPage data-testid="ReportsPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="report-viewer"
-          element={<ReportViewerPage data-testid="ReportViewerPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="crm"
-          element={<CrmPage data-testid="CrmPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="hr"
-          element={<HrPage data-testid="HrPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="projects"
-          element={<ProjectsPage data-testid="ProjectsPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="smart-scan"
-          element={<Suspense
-            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
-            data-testid="Suspense__ecaf3f"><SmartScanPage data-testid="SmartScanPage__ecaf3f" /></Suspense>}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="oauth2-clients"
-          element={<Suspense
-            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
-            data-testid="Suspense__ecaf3f"><OAuth2ClientsPage data-testid="OAuth2ClientsPage__ecaf3f" /></Suspense>}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="authorize"
-          element={<Suspense
-            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
-            data-testid="Suspense__ecaf3f"><AuthorizePage data-testid="AuthorizePage__ecaf3f" /></Suspense>}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="quick-sales-order"
-          element={<Suspense
-            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
-            data-testid="Suspense__ecaf3f"><QuickSalesOrderPage apiBaseUrl={API_BASE_URL} data-testid="QuickSalesOrderPage__ecaf3f" /></Suspense>}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="quick-purchase-order"
-          element={<Suspense
-            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
-            data-testid="Suspense__ecaf3f"><QuickPurchaseOrderPage apiBaseUrl={API_BASE_URL} data-testid="QuickPurchaseOrderPage__ecaf3f" /></Suspense>}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="app-store"
-          element={<Suspense
-            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
-            data-testid="Suspense__ecaf3f"><AppStorePage data-testid="AppStorePage__ecaf3f" /></Suspense>}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="artifacts"
-          element={<ArtifactViewerPage data-testid="ArtifactViewerPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path="artifacts/:windowName"
-          element={<ArtifactViewerPage data-testid="ArtifactViewerPage__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path=":windowName/:recordId"
-          element={<WindowLoader
-            key="with-record"
-            windowMap={windowMap}
-            apiBaseUrl={API_BASE_URL}
-            data-testid="WindowLoader__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-        <Route
-          path=":windowName"
-          element={<WindowLoader
-            key="list"
-            windowMap={windowMap}
-            apiBaseUrl={API_BASE_URL}
-            data-testid="WindowLoader__ecaf3f" />}
-          data-testid="Route__ecaf3f" />
-      </Route>
-    </Routes>
+    <Navigate
+      to={buildOnboardingReturnTo(location)}
+      replace
+      data-testid="Navigate__ecaf3f" />
   );
 }
 
-/**
- * Listens for the magic phrases "playstoreon" / "playstoreoff" anywhere in
- * the shell and toggles the Marketplace group visibility. When unlocking,
- * navigates straight to /app-store so the new surface is visible.
- */
 function AppStoreKeyWatcher() {
   const navigate = useNavigate();
   useEffect(() => {
     return attachKeySequenceWatcher({
       onUnlock: () => {
-        toast.success('App Store unlocked', {
-          description: 'Type "playstoreoff" to hide it again.',
-        });
+        toast.success('App Store unlocked', { description: 'Type "playstoreoff" to hide it again.' });
         navigate('/app-store');
       },
-      onLock: () => {
-        toast('App Store hidden');
-      },
+      onLock: () => toast('App Store hidden'),
     });
   }, [navigate]);
   return null;
 }
 
-/** Checks for SW updates on route changes; reload is automatic via controllerchange */
 function ServiceWorkerManager() {
   const location = useLocation();
   const { checkForUpdate } = useServiceWorker();
-
-  // Check for updates on every route change
   useEffect(() => {
     checkForUpdate();
   }, [location.pathname, checkForUpdate]);
-
   return null;
 }
 
 export default function App() {
   const installedApps = useInstalledApps();
   const appStoreUnlocked = useAppStoreUnlock();
-  // Rebuild the menu whenever the installed-apps set or the App Store
-  // unlock flag changes; windowMap is static because it already registers
-  // loaders for every known SDK app.
   const menuGroups = buildMenuGroups(installedApps, { appStoreUnlocked });
   const [windowMap] = useState(() => buildWindowMap());
   const [locale, setLocale] = useLocaleState();
@@ -360,24 +155,22 @@ export default function App() {
     }
   }, []);
 
+  const routes = buildRuntimeRoutes({ windowMap, apiBaseUrl: API_BASE_URL });
+
   return (
-    <BrowserRouter basename={routerBase} data-testid="BrowserRouter__ecaf3f">
+    <AppShellRuntime
+      basename={routerBase}
+      menuGroups={menuGroups}
+      routes={routes}
+      layout={AppLayout}
+      auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" /> }}
+      locale={locale}
+      setLocale={setLocale}
+      notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
+      data-testid="AppShellRuntime__ecaf3f">
       <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
       <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
       <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
-      <LocaleProvider
-        locale={locale}
-        setLocale={setLocale}
-        data-testid="LocaleProvider__ecaf3f">
-        <AuthProvider data-testid="AuthProvider__ecaf3f">
-          <CurrencyProvider data-testid="CurrencyProvider__ecaf3f">
-            <AppRoutes
-              menuGroups={menuGroups}
-              windowMap={windowMap}
-              data-testid="AppRoutes__ecaf3f" />
-          </CurrencyProvider>
-        </AuthProvider>
-      </LocaleProvider>
-    </BrowserRouter>
+    </AppShellRuntime>
   );
 }

@@ -32,8 +32,8 @@ function lazyRoute(path, Component, extraProps = {}) {
     path,
     public: false,
     element: (
-      <Suspense fallback={LOADING_FALLBACK}>
-        <Component {...extraProps} />
+      <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d">
+        <Component {...extraProps} data-testid="Component__e8c60d" />
       </Suspense>
     ),
   };
@@ -41,38 +41,46 @@ function lazyRoute(path, Component, extraProps = {}) {
 
 export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
   return [
-    { index: true, public: false, element: <Navigate to="/dashboard" replace /> },
+    { index: true, public: false, element: <Navigate to="/dashboard" replace data-testid="Navigate__e8c60d" /> },
     { path: 'onboarding', public: true, element: (
-        <Suspense fallback={LOADING_FALLBACK}><OnboardingPage /></Suspense>
+        <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><OnboardingPage data-testid="OnboardingPage__e8c60d" /></Suspense>
       ) },
-    { path: 'login', public: true, element: <Navigate to="/onboarding" replace /> },
-    { path: 'financial-account/psd2-callback', public: true, element: <Psd2CallbackPage /> },
-    { path: 'dashboard', public: false, element: <DashboardPage apiBaseUrl={apiBaseUrl} /> },
-    { path: 'first-steps', public: false, element: <FirstStepsPage /> },
-    { path: 'preview', public: false, element: <PreviewPage /> },
-    { path: 'sales', public: false, element: <SalesPage /> },
-    { path: 'inventory', public: false, element: <InventoryPage /> },
-    { path: 'purchases', public: false, element: <PurchasesPage /> },
-    { path: 'accounting', public: false, element: <AccountingPage /> },
-    { path: 'finance/accounts', public: false, element: <FinancialAccountsPage /> },
-    { path: 'reports', public: false, element: <ReportsPage /> },
-    { path: 'report-viewer', public: false, element: <ReportViewerPage /> },
-    { path: 'crm', public: false, element: <CrmPage /> },
-    { path: 'hr', public: false, element: <HrPage /> },
-    { path: 'projects', public: false, element: <ProjectsPage /> },
+    { path: 'login', public: true, element: <Navigate to="/onboarding" replace data-testid="Navigate__e8c60d" /> },
+    { path: 'financial-account/psd2-callback', public: true, element: <Psd2CallbackPage data-testid="Psd2CallbackPage__e8c60d" /> },
+    { path: 'dashboard', public: false, element: <DashboardPage apiBaseUrl={apiBaseUrl} data-testid="DashboardPage__e8c60d" /> },
+    { path: 'first-steps', public: false, element: <FirstStepsPage data-testid="FirstStepsPage__e8c60d" /> },
+    { path: 'preview', public: false, element: <PreviewPage data-testid="PreviewPage__e8c60d" /> },
+    { path: 'sales', public: false, element: <SalesPage data-testid="SalesPage__e8c60d" /> },
+    { path: 'inventory', public: false, element: <InventoryPage data-testid="InventoryPage__e8c60d" /> },
+    { path: 'purchases', public: false, element: <PurchasesPage data-testid="PurchasesPage__e8c60d" /> },
+    { path: 'accounting', public: false, element: <AccountingPage data-testid="AccountingPage__e8c60d" /> },
+    { path: 'finance/accounts', public: false, element: <FinancialAccountsPage data-testid="FinancialAccountsPage__e8c60d" /> },
+    { path: 'reports', public: false, element: <ReportsPage data-testid="ReportsPage__e8c60d" /> },
+    { path: 'report-viewer', public: false, element: <ReportViewerPage data-testid="ReportViewerPage__e8c60d" /> },
+    { path: 'crm', public: false, element: <CrmPage data-testid="CrmPage__e8c60d" /> },
+    { path: 'hr', public: false, element: <HrPage data-testid="HrPage__e8c60d" /> },
+    { path: 'projects', public: false, element: <ProjectsPage data-testid="ProjectsPage__e8c60d" /> },
     lazyRoute('smart-scan', SmartScanPage),
     lazyRoute('oauth2-clients', OAuth2ClientsPage),
     lazyRoute('authorize', AuthorizePage),
     lazyRoute('quick-sales-order', QuickSalesOrderPage, { apiBaseUrl }),
     lazyRoute('quick-purchase-order', QuickPurchaseOrderPage, { apiBaseUrl }),
     lazyRoute('app-store', AppStorePage),
-    { path: 'artifacts', public: false, element: <ArtifactViewerPage /> },
-    { path: 'artifacts/:windowName', public: false, element: <ArtifactViewerPage /> },
+    { path: 'artifacts', public: false, element: <ArtifactViewerPage data-testid="ArtifactViewerPage__e8c60d" /> },
+    { path: 'artifacts/:windowName', public: false, element: <ArtifactViewerPage data-testid="ArtifactViewerPage__e8c60d" /> },
     { path: ':windowName/:recordId', public: false, element: (
-        <WindowLoader key="with-record" windowMap={windowMap} apiBaseUrl={apiBaseUrl} />
+        <WindowLoader
+          key="with-record"
+          windowMap={windowMap}
+          apiBaseUrl={apiBaseUrl}
+          data-testid="WindowLoader__e8c60d" />
       ) },
     { path: ':windowName', public: false, element: (
-        <WindowLoader key="list" windowMap={windowMap} apiBaseUrl={apiBaseUrl} />
+        <WindowLoader
+          key="list"
+          windowMap={windowMap}
+          apiBaseUrl={apiBaseUrl}
+          data-testid="WindowLoader__e8c60d" />
       ) },
   ];
 }
