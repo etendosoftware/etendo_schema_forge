@@ -1,10 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { useCurrency } from '@/hooks/useCurrency';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { Checkbox } from '@/components/ui/checkbox';
+import LinesSelectionBar from '@/components/contract-ui/LinesSelectionBar.jsx';
 
 function PeriodLink({ label, onClick }) {
   return (
@@ -39,6 +41,64 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   const [loading, setLoading] = useState(false);
   const recordId = recordIdProp ?? data?.id;
 
+  const [selectedRows, setSelectedRows] = useState(new Set());
+  const [barVisible, setBarVisible] = useState(false);
+  const [barClosing, setBarClosing] = useState(false);
+  const [barRect, setBarRect] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const barAnchorRef = useRef(null);
+
+  useEffect(() => {
+    if (!barVisible) return;
+    const el = barAnchorRef.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setBarRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    };
+    measure();
+    let ro = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+    }
+    window.addEventListener('scroll', measure, true);
+    window.addEventListener('resize', measure, true);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('scroll', measure, true);
+      window.removeEventListener('resize', measure, true);
+    };
+  }, [barVisible]);
+
+  useEffect(() => {
+    if (selectedRows.size > 0) {
+      setBarVisible(true);
+      setBarClosing(false);
+    } else {
+      setBarClosing(true);
+      const t = setTimeout(() => { setBarVisible(false); setBarClosing(false); }, 250);
+      return () => clearTimeout(t);
+    }
+  }, [selectedRows.size]);
+
+  useEffect(() => { setSelectedRows(new Set()); }, [lines]);
+
+  const allSelected = lines.length > 0 && selectedRows.size === lines.length;
+  const someSelected = selectedRows.size > 0 && !allSelected;
+
+  const toggleRow = (id) => setSelectedRows(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = (checked) => setSelectedRows(
+    checked ? new Set(lines.map(l => l.id ?? l.sEQNoAsset)) : new Set()
+  );
+
+  const clearSelection = () => setSelectedRows(new Set());
+
   const fetchLines = useCallback(() => {
     if (!recordId || !apiBaseUrl) return;
     setLoading(true);
@@ -68,6 +128,25 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
       .catch(() => setLines([]))
       .finally(() => setLoading(false));
   }, [recordId, apiBaseUrl, token]);
+
+  const handleDeleteSelected = useCallback(async () => {
+    if (!apiBaseUrl || selectedRows.size === 0) return;
+    setDeleting(true);
+    try {
+      await Promise.allSettled(
+        [...selectedRows].map(id =>
+          fetch(`${apiBaseUrl}/amortizationLine/${id}`, {
+            method: 'DELETE',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })
+        )
+      );
+      clearSelection();
+      fetchLines();
+    } finally {
+      setDeleting(false);
+    }
+  }, [apiBaseUrl, token, selectedRows, fetchLines]);
 
   useEffect(() => {
     fetchLines();
@@ -110,6 +189,14 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50">
+                <th className="py-2.5 pr-2" style={{ width: 40, flexShrink: 0 }}>
+                  <Checkbox
+                    aria-label={ui('selectAll')}
+                    checked={allSelected}
+                    indeterminate={someSelected}
+                    onChange={() => toggleAll(!allSelected)}
+                    data-testid="Checkbox__amort-all" />
+                </th>
                 <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">{ui('assetsPeriod')}</th>
                 <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">{ui('assetsPercentage')}</th>
                 <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">{ui('amount')}</th>
@@ -117,35 +204,46 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {lines.map((line) => (
-                <tr
-                  key={line.id ?? line.sEQNoAsset}
-                  className="hover:bg-muted/30"
-                >
-                  <td className="py-3 pr-4">
-                    {line.amortization ? (
-                      <PeriodLink
-                        label={line['amortization$_identifier'] ?? line.amortization}
-                        onClick={() => navigate(`/amortization/${line.amortization}`)}
-                        data-testid="PeriodLink__34159c" />
-                    ) : (
-                      <span className="text-foreground">{line['amortization$_identifier'] ?? '—'}</span>
-                    )}
-                  </td>
-                  <td className="py-3 pr-4 text-foreground">
-                    {line.amortizationPercentage != null
-                      ? `${Number(line.amortizationPercentage).toFixed(2)}%`
-                      : '—'}
-                  </td>
-                  <td className="py-3 pr-4 text-foreground">{formatCurrency(orgCurrency, line.amortizationAmount)}</td>
-                  <td className="py-3">
-                    <StatusBadge
-                      isProcessed={processedMap.get(line.amortization) ?? false}
-                      ui={ui}
-                      data-testid="StatusBadge__34159c" />
-                  </td>
-                </tr>
-              ))}
+              {lines.map((line) => {
+                const rowId = line.id ?? line.sEQNoAsset;
+                const isSelected = selectedRows.has(rowId);
+                return (
+                  <tr
+                    key={rowId}
+                    className="hover:bg-muted/30"
+                  >
+                    <td className="py-3 pr-2" style={{ width: 40 }}>
+                      <Checkbox
+                        aria-label={ui('selectRow') ?? 'Select row'}
+                        checked={isSelected}
+                        onChange={() => toggleRow(rowId)}
+                        data-testid={`Checkbox__amort-row-${rowId}`} />
+                    </td>
+                    <td className="py-3 pr-4">
+                      {line.amortization ? (
+                        <PeriodLink
+                          label={line['amortization$_identifier'] ?? line.amortization}
+                          onClick={() => navigate(`/amortization/${line.amortization}`)}
+                          data-testid="PeriodLink__34159c" />
+                      ) : (
+                        <span className="text-foreground">{line['amortization$_identifier'] ?? '—'}</span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-4 text-foreground">
+                      {line.amortizationPercentage != null
+                        ? `${Number(line.amortizationPercentage).toFixed(2)}%`
+                        : '—'}
+                    </td>
+                    <td className="py-3 pr-4 text-foreground">{formatCurrency(orgCurrency, line.amortizationAmount)}</td>
+                    <td className="py-3">
+                      <StatusBadge
+                        isProcessed={processedMap.get(line.amortization) ?? false}
+                        ui={ui}
+                        data-testid="StatusBadge__34159c" />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -155,6 +253,19 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
   return (
     <div className="pt-2 pb-5">
       {renderBody()}
+      <div ref={barAnchorRef} style={{ height: 48 }} />
+      <LinesSelectionBar
+        visible={barVisible}
+        closing={barClosing}
+        barRect={barRect}
+        count={selectedRows.size}
+        selectedLabel={ui('selected', { count: selectedRows.size }) ?? `${selectedRows.size} Seleccionados`}
+        deleting={deleting}
+        deleteTitle={ui('delete') ?? 'Eliminar'}
+        closeTitle={ui('close') ?? 'Cerrar'}
+        onDelete={handleDeleteSelected}
+        onClose={clearSelection}
+        compact />
     </div>
   );
 }

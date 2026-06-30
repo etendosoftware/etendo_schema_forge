@@ -94,8 +94,8 @@ The Assets window should let a finance user register fixed assets, define how ea
 - `tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx` fetches amortization lines by `parentId`, refreshes on `neo:processSuccess`, and renders a table of scheduled lines. Navigation to the Amortization document is scoped to the **Período** cell only — a `PeriodLink` component renders the period identifier as an underlined link with an `ArrowUpRight` icon; clicking elsewhere on the row does nothing. No footer total is shown (the information is already in the "Depreciación planificada" sidebar card).
 - `tools/app-shell/src/windows/custom/assets/AssetsSidebar.jsx` reads `data.etgoAmortizationStatus` (the DB-backed percentage) directly — no frontend math. The `depreciatedPlan` variable is kept only for the "Planned Depreciation" monetary card.
 - `artifacts/assets/decisions.json` discards `fullyDepreciated` (ISFULLYDEPRECIATED is no longer maintained) and adds `etgoAmortizationStatus` with `cellType: "depreciationProgress"`, `columnType: "number"`, and `filterable: true`. The `statusField: "none"` setting disables the auto-detected status field to prevent the "All statuses" toolbar button from appearing. `labelOverrides` includes `EM_Etgo_Amortization_Status` → `"Estado de amortización"` (es_ES) so the grid column header is translated via `useLabel(labelOverrides)` in `DataTable`.
-- `renderDepreciationProgress` in `cli/src/generate-frontend.js` reads `row.etgoAmortizationStatus` directly instead of computing `depreciatedValue / depreciationAmt` on the frontend.
-- No assets-specific browser or component test file was found in `tools/app-shell/test` or `tools/app-shell/src/**/__tests__`, so the automated evidence is structural/code-backed rather than end-to-end behavioral proof.
+- `renderDepreciationProgress` in `cli/src/generate-frontend.js` reads `row.etgoAmortizationStatus` directly instead of computing `depreciatedValue / depreciationAmt` on the frontend. It returns `null` (empty cell) only when `pct == null`; assets with a status of `0` render a 0 % bar rather than a blank cell.
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsTable.test.js` covers the `renderDepreciationProgress` helper, including the case where `pct === 0` (bar rendered at 0% instead of hidden).
 - The generated `AssetsPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `A_Asset` AD table.
 
 ## ETP-4333 — DeferredInput amount fields and currency-echo freeze fix
@@ -296,3 +296,65 @@ all windows; everything else is scoped to Assets via `decisions.json` or a custo
 - `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new `saveBeforeProcesses`
   prop (default `false`). When set, `renderSaveActions` is rendered before the process-button
   block instead of after it. Default-off, so no behavioral change for any other window.
+
+## ETP-4335 — Amortization status bar fix, plan tab row selection, and Search Key list column (feature/ETP-4335)
+
+### Amortization status bar — 0% renders instead of blank
+
+`renderDepreciationProgress` in `cli/src/generate-frontend.js` (line 327 template) previously
+returned `null` when `pct === 0`, leaving the grid cell empty for assets with no amortization
+progress yet. The guard was tightened to `pct == null`, so the function only hides the cell
+when the status field is genuinely absent. Assets with a DB-backed `etgoAmortizationStatus`
+of `0` now show a 0 % progress bar.
+
+- **File changed:** `cli/src/generate-frontend.js` — `renderDepreciationProgress` template
+- **Generated output updated:** `artifacts/assets/generated/web/assets/AssetsTable.jsx`
+- **Test added:** `tools/app-shell/src/windows/custom/assets/__tests__/AssetsTable.test.js` —
+  new case "renders bar at 0% instead of hiding it when pct is 0"
+
+The `AssetsSidebar.jsx` "Depreciado %" card is unaffected — it reads the same
+`etgoAmortizationStatus` field but delegates rendering to `ProgressCard`, which already
+handled zero correctly.
+
+### Amortization Plan tab — row selection and bulk delete
+
+`AssetsAmortizationPanel.jsx` now supports full row selection on the "Plan de amortización"
+tab, using the same `LinesSelectionBar` portal pattern as Sales Order and Physical Inventory.
+
+**Select-all checkbox** — first column header contains a `Checkbox` with three states:
+unchecked (nothing selected), checked (all rows selected), and indeterminate (some rows
+selected). Driven by `allSelected` / `someSelected` flags derived from the `selectedRows` Set
+and the current `lines` array length.
+
+**Per-row checkbox** — each row has a `Checkbox` in the first column. Clicking toggles the
+row's id in `selectedRows`.
+
+**`LinesSelectionBar` floating bar** — rendered via portal (position tracked by a
+`ResizeObserver` on a `barAnchorRef` div inside the table container). Appears when
+`selectedRows.size > 0`, with a 250 ms exit animation when selection drops to zero. Displays
+selection count, a **Delete** button, and a **Close** button.
+
+**Bulk delete** — `handleDeleteSelected` fires `Promise.allSettled` with parallel `DELETE
+/amortizationLine/{id}` requests for every selected row id. On completion, selection is
+cleared and `fetchLines()` is called to refresh the table. The `LinesSelectionBar` shows a
+loading spinner (`deleting` flag) while requests are in flight.
+
+**Automatic selection clear** — a `useEffect` on `[lines]` calls `setSelectedRows(new Set())`
+whenever the lines array is replaced (e.g. after "Create Amortization" triggers a
+`neo:processSuccess` refresh). This prevents stale ids from persisting across plan
+regenerations.
+
+- **File changed:** `tools/app-shell/src/windows/custom/assets/AssetsAmortizationPanel.jsx`
+
+### Search Key — first column in the assets list view
+
+`searchKey` already had `"searchable": true` and `"form": false` in `decisions.json`. Adding
+`"grid": true` registers it as a visible list column. Because the `columns` array in the
+generator output preserves the field order from `decisions.json`, and `searchKey` is the first
+field declared under `entities.assets.fields`, it becomes the first entry in the generated
+`columns` array.
+
+- **File changed:** `artifacts/assets/decisions.json` — `searchKey` field gains `"grid": true`
+- **Generated output updated:** `artifacts/assets/generated/web/assets/AssetsTable.jsx` —
+  `searchKey` is now the first column in the `columns` array, appearing as **Search Key** in
+  the list/grid view

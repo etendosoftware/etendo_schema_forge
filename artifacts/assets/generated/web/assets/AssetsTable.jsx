@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 function renderDepreciationProgress(row) {
   const pct = row.etgoAmortizationStatus ?? null;
-  if (pct == null || pct === 0) return null;
+  if (pct == null) return null;
   const color = pct === 100 ? '#10b981' : '#f59e0b';
   return (
     <div className="flex items-center gap-1.5" style={{ minWidth: 80 }}>
@@ -17,12 +17,13 @@ function renderDepreciationProgress(row) {
 
 // @sf-generated-start columns:assets
 const columns = [
+  { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true },
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
   { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: 'Asset Category', required: true },
   { key: 'purchaseDate', column: 'Datepurchased', type: 'date', label: 'Purchase Date', dot: false },
   { key: 'depreciationStartDate', column: 'Amortizationstartdate', type: 'date', label: 'Depreciation Start Date', dot: false },
-  { key: 'assetValue', column: 'AssetValueAmt', type: 'amount', label: 'Asset Value', summable: true },
   { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'amount', label: 'Depreciation Amt.', summable: true },
+  { key: 'assetValue', column: 'AssetValueAmt', type: 'amount', label: 'Asset Value', summable: true },
   { key: 'depreciatedValue', column: 'Depreciatedvalue', type: 'amount', label: 'Depreciated Value', summable: true },
   { key: 'etgoAmortizationStatus', column: 'EM_Etgo_Amortization_Status', type: 'number', label: 'Amortization Status', render: renderDepreciationProgress },
 ];

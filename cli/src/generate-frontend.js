@@ -324,7 +324,7 @@ export function generateTableComponent(entityName, contract) {
   const depreciationProgressHelper = neededCellTypes.has('depreciationProgress') ? `
 function renderDepreciationProgress(row) {
   const pct = row.etgoAmortizationStatus ?? null;
-  if (pct == null || pct === 0) return null;
+  if (pct == null) return null;
   const color = pct === 100 ? '#10b981' : '#f59e0b';
   return (
     <div className="flex items-center gap-1.5" style={{ minWidth: 80 }}>

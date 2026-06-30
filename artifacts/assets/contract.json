@@ -1,8 +1,8 @@
 {
-  "version": "0.36.0",
+  "version": "0.36.1",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-06-29T20:07:16.268Z",
-  "checksum": "b69d42afd8ba293b",
+  "updatedAt": "2026-06-30T11:52:45.953Z",
+  "checksum": "69c0f8096afd15d6",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -104,7 +104,7 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": false,
             "sourceRequired": true
           },
