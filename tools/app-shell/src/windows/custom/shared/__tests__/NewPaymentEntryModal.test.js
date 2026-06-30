@@ -37,12 +37,19 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
     assert.match(src, /paymentPlan/);
   });
 
-  it('renders the credit / saldo-a-favor section as split adaptive groups', () => {
-    assert.match(src, /function CreditGroup/);
-    assert.match(src, /ui\('cpCreditGroupTitle'\)/);
-    assert.match(src, /ui\('cpFavorGroupTitle'\)/);
-    // each group only renders when it has rows
+  it('renders the unified credit / saldo-a-favor section with per-kind badges', () => {
+    assert.match(src, /function CreditSection/);
+    assert.match(src, /ui\('cpCreditSectionTitle'\)/);
+    assert.match(src, /ui\('cpCreditSectionHint'\)/);
+    // both kinds live in one section, distinguished by a badge per row
+    assert.match(src, /ui\('cpCreditBadge'\)/);
+    assert.match(src, /ui\('cpFavorBadge'\)/);
+    // the section only renders when it has rows
     assert.match(src, /if \(!rows\.length\) return null/);
+    // the old split-group structure must be gone
+    assert.doesNotMatch(src, /function CreditGroup/);
+    assert.doesNotMatch(src, /ui\('cpCreditGroupTitle'\)/);
+    assert.doesNotMatch(src, /ui\('cpFavorGroupTitle'\)/);
   });
 
   it('only shows the credit section when there are consumable sources', () => {

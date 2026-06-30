@@ -23,10 +23,6 @@ vi.mock('@/components/ui/date-field', () => ({
   ),
 }));
 
-vi.mock('../paymentModalUi.jsx', () => ({
-  DirBadge: ({ dir }) => <div data-testid={`dir-badge-${dir}`} />,
-}));
-
 // apiFetch is provided per-test via a module-level mock fn so each test can
 // shape the catalog + submit responses independently.
 let mockApiFetch;
@@ -106,14 +102,15 @@ describe('NewPaymentEntryModal', () => {
     it('shows the collection title for dir "in"', () => {
       renderModal({ dir: 'in' });
       expect(screen.getByText('cpNewCollection')).toBeInTheDocument();
-      expect(screen.getByText('cpBadgeCollection')).toBeInTheDocument();
+      // header is title-only now (no type/draft badges)
+      expect(screen.queryByText('cpNewPayment')).not.toBeInTheDocument();
     });
 
     it('shows the payment title for dir "out"', () => {
       mockApiFetch = buildApiFetch();
       renderModal({ dir: 'out' });
       expect(screen.getByText('cpNewPayment')).toBeInTheDocument();
-      expect(screen.getByText('cpBadgePayment')).toBeInTheDocument();
+      expect(screen.queryByText('cpNewCollection')).not.toBeInTheDocument();
     });
 
     it('renders the invoice document number', () => {
@@ -137,12 +134,47 @@ describe('NewPaymentEntryModal', () => {
       expect(screen.queryByText('cpCreditSectionTitle')).not.toBeInTheDocument();
     });
 
-    it('shows the credit section when sources are present', async () => {
+    it('shows the unified credit section when sources are present', async () => {
       mockApiFetch = buildApiFetch({
         sources: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 200 }],
       });
       renderModal();
-      expect(await screen.findByText('cpCreditGroupTitle')).toBeInTheDocument();
+      expect(await screen.findByText('cpCreditSectionTitle')).toBeInTheDocument();
+      // hint renders inline as "· cpCreditSectionHint", so match a substring
+      expect(screen.getByText(/cpCreditSectionHint/)).toBeInTheDocument();
+      expect(screen.getByTestId('cp-credit-row-s1')).toBeInTheDocument();
+      // credit rows are badged "Crédito" (purple)
+      expect(screen.getByText('cpCreditBadge')).toBeInTheDocument();
+    });
+
+    it('renders credit and abono rows together in the unified section', async () => {
+      mockApiFetch = buildApiFetch({
+        sources: [
+          { id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 200 },
+          { id: 's2', kind: 'abono', doc: 'SF-2', date: '2024-02-01', avail: 50 },
+        ],
+      });
+      renderModal();
+      // both kinds live under a single section title
+      expect(await screen.findByText('cpCreditSectionTitle')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-credit-row-s1')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-credit-row-s2')).toBeInTheDocument();
+      // each kind keeps its own badge: credit -> Crédito, abono -> Saldo a favor
+      expect(screen.getByText('cpCreditBadge')).toBeInTheDocument();
+      expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
+    });
+
+    it('toggles a credit row into the balance when clicked', async () => {
+      mockApiFetch = buildApiFetch({
+        sources: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 200 }],
+      });
+      renderModal();
+      const row = await screen.findByTestId('cp-credit-row-s1');
+      // unselected rows show the "unused" hint
+      expect(screen.getByText('cpUnused')).toBeInTheDocument();
+      fireEvent.click(row);
+      // selecting the row consumes the credit and removes the unused hint
+      await waitFor(() => expect(screen.queryByText('cpUnused')).not.toBeInTheDocument());
     });
   });
 
