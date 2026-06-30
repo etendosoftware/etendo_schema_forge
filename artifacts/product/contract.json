@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-06-26T12:27:56.322Z",
-  "checksum": "a34bd38ef101d3ac",
+  "updatedAt": "2026-06-29T12:09:16.248Z",
+  "checksum": "abd729593e86f1be",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -248,19 +248,31 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Expense type"
+                "name": "Expense type",
+                "labels": {
+                  "es_ES": "Gasto"
+                }
               },
               {
                 "value": "I",
-                "name": "Item"
+                "name": "Item",
+                "labels": {
+                  "es_ES": "Artículo"
+                }
               },
               {
                 "value": "R",
-                "name": "Resource"
+                "name": "Resource",
+                "labels": {
+                  "es_ES": "Recurso"
+                }
               },
               {
                 "value": "S",
-                "name": "Service"
+                "name": "Service",
+                "labels": {
+                  "es_ES": "Servicio"
+                }
               }
             ],
             "defaultValue": "I",
@@ -737,11 +749,17 @@
             "enumValues": [
               {
                 "value": "AVA",
-                "name": "Average"
+                "name": "Average",
+                "labels": {
+                  "es_ES": "Promedio"
+                }
               },
               {
                 "value": "STA",
-                "name": "Standard"
+                "name": "Standard",
+                "labels": {
+                  "es_ES": "Estándar"
+                }
               }
             ]
           },
@@ -1039,43 +1057,73 @@
             "enumValues": [
               {
                 "value": "V+",
-                "name": "Vendor Receipts"
+                "name": "Vendor Receipts",
+                "labels": {
+                  "es_ES": "Albarán proveedor"
+                }
               },
               {
                 "value": "I+",
-                "name": "Inventory In"
+                "name": "Inventory In",
+                "labels": {
+                  "es_ES": "Entrada inventario"
+                }
               },
               {
                 "value": "M-",
-                "name": "Movement From"
+                "name": "Movement From",
+                "labels": {
+                  "es_ES": "Mover desde"
+                }
               },
               {
                 "value": "M+",
-                "name": "Movement To"
+                "name": "Movement To",
+                "labels": {
+                  "es_ES": "Mover a"
+                }
               },
               {
                 "value": "I-",
-                "name": "Inventory Out"
+                "name": "Inventory Out",
+                "labels": {
+                  "es_ES": "Salida inventario"
+                }
               },
               {
                 "value": "P-",
-                "name": "Production -"
+                "name": "Production -",
+                "labels": {
+                  "es_ES": "Producción -"
+                }
               },
               {
                 "value": "P+",
-                "name": "Production +"
+                "name": "Production +",
+                "labels": {
+                  "es_ES": "Producción +"
+                }
               },
               {
                 "value": "C-",
-                "name": "Customer Shipment"
+                "name": "Customer Shipment",
+                "labels": {
+                  "es_ES": "Albarán cliente"
+                }
               },
               {
                 "value": "D-",
-                "name": "Internal Consumption -"
+                "name": "Internal Consumption -",
+                "labels": {
+                  "es_ES": "Consumo Interno -"
+                }
               },
               {
                 "value": "D+",
-                "name": "Internal Consumption +"
+                "name": "Internal Consumption +",
+                "labels": {
+                  "es_ES": "Consumo Interno +"
+                }
               }
             ]
           },
@@ -1241,11 +1289,17 @@
             "enumValues": [
               {
                 "value": "PURCHASE",
-                "name": "Purchase Price List"
+                "name": "Purchase Price List",
+                "labels": {
+                  "es_ES": "Tarifa de ventas"
+                }
               },
               {
                 "value": "SALES",
-                "name": "Sales Price List"
+                "name": "Sales Price List",
+                "labels": {
+                  "es_ES": "Tarifa de ventas"
+                }
               }
             ],
             "defaultValue": "SALES",
@@ -1615,15 +1669,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
             "defaultValue": "S"
@@ -1647,15 +1710,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
             "defaultValue": "S"
@@ -1679,15 +1751,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
             "defaultValue": "S"

@@ -1,0 +1,107 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-06-26T17:01:05.650Z",
+  "contractChecksum": "5672b79e18d4062d",
+  "apiPrediction": {
+    "specName": "tax-category",
+    "baseUrl": "/sws/neo/tax-category",
+    "crud": {
+      "taxCategory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/tax-category/taxCategory",
+        "detailUrl": "/sws/neo/tax-category/taxCategory/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "configuration"
+    }
+  },
+  "formState": {
+    "entities": {
+      "taxCategory": {
+        "fields": {
+          "name": {
+            "required": true
+          },
+          "description": {},
+          "default": {
+            "required": true
+          },
+          "asbom": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "obsptiTaxtype": {},
+          "obsptiTransactiontype": {},
+          "obsptiRatetype": {},
+          "aeatsiiDeclarable": {
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage tax category records.",
+    "whenToUse": [
+      "Use for tax category management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name",
+        "default",
+        "asbom",
+        "aeatsiiDeclarable"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name",
+          "default",
+          "asbom",
+          "aeatsiiDeclarable"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "7c67a30fd997c1d7"
+}

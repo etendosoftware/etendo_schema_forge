@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "generatedAt": "2026-04-29T18:12:11.134Z",
-  "updatedAt": "2026-05-20T11:45:15.272Z",
-  "checksum": "b0c07294925ffebf",
+  "updatedAt": "2026-06-29T12:09:16.125Z",
+  "checksum": "63eaa5de5087a0a2",
   "frontendContract": {
     "window": {
       "id": "146",
@@ -396,7 +396,10 @@
             "enumValues": [
               {
                 "value": "S",
-                "name": "Standard"
+                "name": "Standard",
+                "labels": {
+                  "es_ES": "Estándar"
+                }
               }
             ],
             "defaultValue": "S",

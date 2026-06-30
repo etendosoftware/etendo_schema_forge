@@ -21,6 +21,8 @@ const fields = [
   { key: 'pSD2SaltEdgeAccountID', column: 'EM_PSD2_Salt_Edge_Account_ID', type: 'text', label: 'Salt Edge Account ID', readOnly: true, section: 'other' },
   { key: 'pSD2CardNumber', column: 'EM_PSD2_Masked_Pan', type: 'text', label: 'Card Number', readOnly: true, section: 'other' },
   { key: 'pSD2ConnectionStatus', column: 'EM_PSD2_Connection_Status', type: 'select', label: 'Bank Connection Status', readOnly: true, section: 'other', options: [{ value: 'CO', label: 'Active' }, { value: 'DC', label: 'Inactive' }], defaultValue: 'DC' },
+  { key: 'eTGOAmountTolerance', column: 'EM_ETGO_Amount_Tolerance', type: 'number', label: 'EM_ETGO_Amount Tolerance', section: 'other', defaultValue: '0' },
+  { key: 'eTGODateTolerance', column: 'EM_ETGO_Date_Tolerance', type: 'number', label: 'Date Tolerance', section: 'other', defaultValue: '3' },
 ];
 // @sf-generated-end fields:account
 

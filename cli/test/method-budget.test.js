@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
+import { fileURLToPath } from 'node:url';
 import { countMethods, stripCommentsAndLiterals, evaluate, resolveModuleRoot } from '../src/method-budget.js';
 
 describe('stripCommentsAndLiterals', () => {
@@ -44,7 +45,7 @@ describe('countMethods', () => {
 });
 
 describe('evaluate (ratchet status)', () => {
-  const fakeFile = new URL('./fixtures-method-budget-sample.java', import.meta.url).pathname;
+  const fakeFile = fileURLToPath(new URL('./fixtures-method-budget-sample.java', import.meta.url));
 
   it('flags growth, improvement, and parity', async () => {
     const { writeFileSync, rmSync } = await import('node:fs');

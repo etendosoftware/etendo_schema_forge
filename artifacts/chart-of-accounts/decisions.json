@@ -1,0 +1,63 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "accounting",
+    "name": "Chart of Accounts",
+    "hideCreate": true,
+    "titleField": "searchKey",
+    "customComponents": {
+      "headerTable": "AccountTreeView"
+    },
+    "menuActions": [
+      { "key": "newSubAccount", "label": "New Sub-account", "labelKey": "newSubAccount", "component": "NewAccountModal" }
+    ]
+  },
+  "entities": {
+    "element": {
+      "exclude": true
+    },
+    "elementValue": {
+      "javaQualifier": "chart-of-accounts",
+      "orderBy": [{ "field": "searchKey", "direction": "ASC" }],
+      "fields": {
+        "searchKey":             { "visibility": "editable",  "grid": true,  "form": true, "customRenderer": "AccountCodeField", "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'" },
+        "name":                  { "visibility": "editable",  "grid": true,  "form": true, "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'" },
+        "description":           { "visibility": "editable",  "grid": false, "form": true, "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'" },
+        "accountType":           { "visibility": "editable",  "grid": true,  "form": true, "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'" },
+        "summaryLevel":          { "visibility": "system" },
+        "active":                { "visibility": "readOnly",  "grid": true,  "form": true },
+        "organization":          { "visibility": "system" },
+        "id":                    { "visibility": "system" },
+        "client":                { "visibility": "system" },
+        "accountingElement":     { "visibility": "system" },
+        "accountSign":           { "visibility": "discarded" },
+        "elementLevel":          { "visibility": "discarded" },
+        "accountType2":          { "visibility": "discarded" },
+        "showValueCondition":    { "visibility": "discarded" },
+        "elementShown":          { "visibility": "discarded" },
+        "titleNode":             { "visibility": "discarded" },
+        "bankAccount":           { "visibility": "discarded" },
+        "foreignCurrencyAccount":{ "visibility": "discarded" },
+        "currency":              { "visibility": "discarded" },
+        "isBankAccount":         { "visibility": "discarded" },
+        "postActual":            { "visibility": "discarded" },
+        "postBudget":            { "visibility": "discarded" },
+        "postStatistical":       { "visibility": "discarded" },
+        "documentControlled":    { "visibility": "discarded" },
+        "validFromDate":         { "visibility": "discarded" },
+        "validToDate":           { "visibility": "discarded" },
+        "postEncumbrance":       { "visibility": "discarded" },
+        "creationDate":          { "visibility": "system" },
+        "createdBy":             { "visibility": "system" },
+        "updated":               { "visibility": "system" },
+        "updatedBy":             { "visibility": "system" }
+      }
+    },
+    "customizedElements": {
+      "exclude": true
+    },
+    "translation": {
+      "exclude": true
+    }
+  }
+}

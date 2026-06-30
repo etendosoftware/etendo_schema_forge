@@ -141,6 +141,7 @@ export const api = {
 export default function SiiConfigurationPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="siiConfiguration"
         detailEntity="logHash"
@@ -162,6 +163,7 @@ export default function SiiConfigurationPage({ windowName, recordId, ...props })
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

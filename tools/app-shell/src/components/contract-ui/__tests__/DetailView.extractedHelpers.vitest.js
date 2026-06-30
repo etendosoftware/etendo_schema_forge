@@ -152,6 +152,8 @@ import {
   parseBackendErrorMessage,
   getAddLineMenuActions,
   buildLineRowClickHandler,
+  mergeLineEdits,
+  hasUnsavedEdits,
 } from '../DetailView.jsx';
 
 describe('mergeSelectorContextFields', () => {
@@ -1420,5 +1422,133 @@ describe('buildLineRowClickHandler', () => {
     const arg = setSelectedLine.mock.calls[0][0];
     expect(arg).toEqual(expect.objectContaining({ id: 'l1' }));
     expect(arg).not.toBe(row);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mergeLineEdits
+// ---------------------------------------------------------------------------
+
+describe('mergeLineEdits', () => {
+  it('returns selectedLine unchanged when lineEdits is null', () => {
+    const line = { id: 'L1', qty: 3 };
+    expect(mergeLineEdits(null, line)).toBe(line);
+  });
+
+  it('returns selectedLine unchanged when lineEdits is undefined', () => {
+    const line = { id: 'L1', qty: 3 };
+    expect(mergeLineEdits(undefined, line)).toBe(line);
+  });
+
+  it('returns selectedLine unchanged when selectedLine is null', () => {
+    expect(mergeLineEdits({ qty: 5 }, null)).toBeNull();
+  });
+
+  it('returns selectedLine unchanged when selectedLine is undefined', () => {
+    expect(mergeLineEdits({ qty: 5 }, undefined)).toBeUndefined();
+  });
+
+  it('returns null when both lineEdits and selectedLine are null', () => {
+    expect(mergeLineEdits(null, null)).toBeNull();
+  });
+
+  it('merges lineEdits over selectedLine when both are present', () => {
+    const line = { id: 'L1', qty: 3, price: 10 };
+    const edits = { qty: 7 };
+    const result = mergeLineEdits(edits, line);
+    expect(result).toEqual({ id: 'L1', qty: 7, price: 10 });
+  });
+
+  it('does not mutate the original selectedLine', () => {
+    const line = { id: 'L1', qty: 3 };
+    const edits = { qty: 9 };
+    mergeLineEdits(edits, line);
+    expect(line.qty).toBe(3);
+  });
+
+  it('lineEdits keys override all matching selectedLine keys', () => {
+    const line = { id: 'L1', qty: 1, price: 5, product: 'P-old' };
+    const edits = { qty: 2, price: 8, product: 'P-new' };
+    const result = mergeLineEdits(edits, line);
+    expect(result).toEqual({ id: 'L1', qty: 2, price: 8, product: 'P-new' });
+  });
+
+  it('adds new keys from lineEdits not present in selectedLine', () => {
+    const line = { id: 'L1', qty: 1 };
+    const edits = { description: 'extra' };
+    const result = mergeLineEdits(edits, line);
+    expect(result.description).toBe('extra');
+    expect(result.qty).toBe(1);
+  });
+
+  it('merges with an empty lineEdits object (no-op overlay)', () => {
+    const line = { id: 'L1', qty: 3 };
+    const result = mergeLineEdits({}, line);
+    expect(result).toEqual({ id: 'L1', qty: 3 });
+    expect(result).not.toBe(line);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hasUnsavedEdits
+// ---------------------------------------------------------------------------
+
+describe('hasUnsavedEdits', () => {
+  it('returns false when editing is null', () => {
+    expect(hasUnsavedEdits(null, { id: 'L1', qty: 3 })).toBe(false);
+  });
+
+  it('returns false when editing is undefined', () => {
+    expect(hasUnsavedEdits(undefined, { id: 'L1', qty: 3 })).toBe(false);
+  });
+
+  it('returns false when selected is null', () => {
+    expect(hasUnsavedEdits({ qty: 3 }, null)).toBe(false);
+  });
+
+  it('returns false when selected is undefined', () => {
+    expect(hasUnsavedEdits({ qty: 3 }, undefined)).toBe(false);
+  });
+
+  it('returns false when both editing and selected are null', () => {
+    expect(hasUnsavedEdits(null, null)).toBe(false);
+  });
+
+  it('returns false when editing has only an id key (id is excluded from comparison)', () => {
+    expect(hasUnsavedEdits({ id: 'L1' }, { id: 'L1', qty: 3 })).toBe(false);
+  });
+
+  it('returns false when every non-id editing value matches selected', () => {
+    const editing = { id: 'L1', qty: 3, price: 10 };
+    const selected = { id: 'L1', qty: 3, price: 10 };
+    expect(hasUnsavedEdits(editing, selected)).toBe(false);
+  });
+
+  it('returns true when a non-id editing value differs from selected', () => {
+    const editing = { id: 'L1', qty: 5 };
+    const selected = { id: 'L1', qty: 3 };
+    expect(hasUnsavedEdits(editing, selected)).toBe(true);
+  });
+
+  it('returns true when editing has a key absent in selected (undefined !== value)', () => {
+    const editing = { id: 'L1', description: 'new text' };
+    const selected = { id: 'L1' };
+    expect(hasUnsavedEdits(editing, selected)).toBe(true);
+  });
+
+  it('returns true when a field changed from a truthy to a falsy value', () => {
+    const editing = { id: 'L1', qty: 0 };
+    const selected = { id: 'L1', qty: 3 };
+    expect(hasUnsavedEdits(editing, selected)).toBe(true);
+  });
+
+  it('returns false when editing is an empty object (no keys to compare)', () => {
+    expect(hasUnsavedEdits({}, { id: 'L1', qty: 3 })).toBe(false);
+  });
+
+  it('ignores the id field even when they differ', () => {
+    const editing = { id: 'NEW-ID', qty: 3 };
+    const selected = { id: 'L1', qty: 3 };
+    expect(hasUnsavedEdits(editing, selected)).toBe(false);
   });
 });

@@ -23,10 +23,10 @@ const STEPPER_INDEX = {
 
 // Casillas tab — left sidebar nav + content area
 const CASILLAS_SECTIONS = [
-  { id: 'identificacion',  titleKey: 'fm.page.identificacion',  sections: ['identificacion'] },
+  { id: 'identificacion',  titleKey: 'fm.page.identificacion',  sections: ['identificacion', 'datos_bancarios'] },
   { id: 'liquidacion',     titleKey: 'fm.page.liquidacion',     sections: ['iva_devengado', 'iva_deducible', 'resultado'] },
   { id: 'info_adicional',  titleKey: 'fm.page.info_adicional',  sections: ['info_adicional'] },
-  { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final'] },
+  { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final', 'sin_actividad', 'rectificativa'] },
 ];
 
 function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t }) {
@@ -151,7 +151,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [showCompare, setShowCompare] = useState(false);
   const [orgIdent, setOrgIdent] = useState({ nif: '', nombre: '' });
   const [identChecks, setIdentChecks] = useState(decl.identification ?? {});
-  const handleIdentChange = (id, value) => setIdentChecks(prev => ({ ...prev, [id]: value }));
+  const handleIdentChange = (id, value) => {
+    setIdentChecks(prev => ({ ...prev, [id]: value }));
+    if (id === 'motivo_rectificacion' && value !== 'D') {
+      setManualOverrides(prev => { const n = { ...prev }; delete n[108]; return n; });
+      setLiveBoxes(prev => {
+        if (prev == null) return prev;
+        const arr = toBoxArray(prev).filter(b => b.num !== 108);
+        return recomputeDerivedBoxes(arr);
+      });
+    }
+  };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
   const [manualOverrides, setManualOverrides] = useState({});
 
@@ -171,6 +181,32 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     return result;
   }
 
+  // Recompute all derived resultado_final boxes from the current merged box array.
+  // Formulas follow the official AEAT 303 labels:
+  //   45 = 29+31+33+35+37+39+41+42+43+44
+  //   46 = 27 − 45
+  //   64 = 46 + 58 + 76   (suma resultados)
+  //   66 = 64 × 65 / 100  (atribuible Estado)
+  //   69 = 66 + 77 − 78 + 68 + 108
+  //   71 = 69 − 70 + 109
+  function recomputeDerivedBoxes(boxArr) {
+    const r2 = v => Math.round(v * 100) / 100;
+    const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+    const box65entry = boxArr.find(b => b.num === 65);
+    const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
+    const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
+    const box46 = r2(get(27) - box45);
+    const box64 = r2(box46 + get(58) + get(76));
+    const box66 = r2(box64 * box65 / 100);
+    const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
+    const box71 = r2(box69 - get(70) + get(109) - get(112));
+    const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+    return [
+      ...boxArr.filter(b => !(b.num in derived)),
+      ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+    ];
+  }
+
   function handleBoxChange(boxNum, rawValue) {
     const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
     const value = isNaN(numVal) ? null : numVal;
@@ -178,7 +214,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     setLiveBoxes(prev => {
       const base = prev != null ? toBoxArray(prev) : toBoxArray(decl._precomputed?.boxes ?? decl.boxes);
       const filtered = base.filter(b => b.num !== boxNum);
-      return value != null ? [...filtered, { num: boxNum, value }] : filtered;
+      const updated = value != null ? [...filtered, { num: boxNum, value }] : filtered;
+      return recomputeDerivedBoxes(updated);
     });
   }
 
@@ -192,7 +229,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     try {
       const res = await computeBoxes303(decl, { token, apiBaseUrl });
       if (res) {
-        setLiveBoxes(applyOverrides(res.boxes, manualOverrides));
+        setLiveBoxes(recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides)));
         setLiveSummary(res.summary);
         if (res.sources) setLiveSources(res.sources);
       }

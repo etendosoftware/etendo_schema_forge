@@ -1,0 +1,769 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-06-26T17:01:05.650Z",
+  "updatedAt": "2026-06-29T15:37:58.697Z",
+  "checksum": "5672b79e18d4062d",
+  "frontendContract": {
+    "window": {
+      "id": "138",
+      "name": "Tax Category",
+      "primaryEntity": "taxCategory",
+      "category": "configuration",
+      "hidePrint": true,
+      "hideMoreMenu": true,
+      "detailEntity": null,
+      "layoutType": "default"
+    },
+    "entities": {
+      "taxCategory": {
+        "tableName": "C_TaxCategory",
+        "tabId": "176",
+        "tabName": "Tax Category",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal",
+            "seq": 1
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 2
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "label": "Default",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal",
+            "seq": 3
+          },
+          {
+            "name": "asbom",
+            "apiKey": "asbom",
+            "column": "Asbom",
+            "label": "As per BOM",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "section": "principal",
+            "seq": 4
+          },
+          {
+            "name": "obsptiTaxtype",
+            "apiKey": "obsptiTaxtype",
+            "column": "EM_Obspti_Taxtype",
+            "label": "Tax type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "IGIC",
+                "name": "IGIC",
+                "labels": {
+                  "es_ES": "IGIC"
+                }
+              },
+              {
+                "value": "IPSI",
+                "name": "IPSI",
+                "labels": {
+                  "es_ES": "IPSI"
+                }
+              },
+              {
+                "value": "IVA",
+                "name": "IVA",
+                "labels": {
+                  "es_ES": "IVA"
+                }
+              },
+              {
+                "value": "VAT",
+                "name": "VAT",
+                "labels": {
+                  "es_ES": "IVA"
+                }
+              }
+            ],
+            "section": "principal",
+            "seq": 5
+          },
+          {
+            "name": "obsptiTransactiontype",
+            "apiKey": "obsptiTransactiontype",
+            "column": "EM_Obspti_Transactiontype",
+            "label": "Transaction type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "BI",
+                "name": "Entrega/Adquisición de bienes",
+                "labels": {
+                  "es_ES": "Entrega/Adquisición de bienes"
+                }
+              },
+              {
+                "value": "SE",
+                "name": "Prestación de Servicios",
+                "labels": {
+                  "es_ES": "Prestación de Servicios"
+                }
+              },
+              {
+                "value": "IN",
+                "name": "Transmisión/Adquisición B.Inmuebles",
+                "labels": {
+                  "es_ES": "Transmisión/Adquisición B.Inmuebles"
+                }
+              }
+            ],
+            "section": "principal",
+            "seq": 6
+          },
+          {
+            "name": "obsptiRatetype",
+            "apiKey": "obsptiRatetype",
+            "column": "EM_Obspti_Ratetype",
+            "label": "Rate type",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "CE",
+                "name": "Cero",
+                "labels": {
+                  "es_ES": "Cero"
+                }
+              },
+              {
+                "value": "EX",
+                "name": "Exento",
+                "labels": {
+                  "es_ES": "Exento"
+                }
+              },
+              {
+                "value": "GE",
+                "name": "General",
+                "labels": {
+                  "es_ES": "General"
+                }
+              },
+              {
+                "value": "I1",
+                "name": "Incrementado 1",
+                "labels": {
+                  "es_ES": "Incrementado 1"
+                }
+              },
+              {
+                "value": "I2",
+                "name": "Incrementado 2",
+                "labels": {
+                  "es_ES": "Incrementado 2"
+                }
+              },
+              {
+                "value": "NS",
+                "name": "No sujeto",
+                "labels": {
+                  "es_ES": "No sujeto"
+                }
+              },
+              {
+                "value": "NO",
+                "name": "Normal",
+                "labels": {
+                  "es_ES": "Normal"
+                }
+              },
+              {
+                "value": "RE",
+                "name": "Reducido",
+                "labels": {
+                  "es_ES": "Reducido"
+                }
+              },
+              {
+                "value": "SR",
+                "name": "Super reducido",
+                "labels": {
+                  "es_ES": "Super reducido"
+                }
+              }
+            ],
+            "section": "principal",
+            "seq": 7
+          },
+          {
+            "name": "aeatsiiDeclarable",
+            "apiKey": "aeatsiiDeclarable",
+            "column": "EM_Aeatsii_Declarable",
+            "label": "SII declarable",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            },
+            "defaultValue": "Y",
+            "section": "principal",
+            "seq": 8
+          }
+        ],
+        "searchableFields": [
+          "name"
+        ],
+        "computedFields": [
+          {
+            "name": "asbom",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "aeatsiiDeclarable",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "138",
+      "name": "Tax Category",
+      "primaryEntity": "taxCategory",
+      "category": "configuration",
+      "hidePrint": true,
+      "hideMoreMenu": true,
+      "detailEntity": null
+    },
+    "entities": {
+      "taxCategory": {
+        "tableName": "C_TaxCategory",
+        "tabId": "176",
+        "tabName": "Tax Category",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "asbom",
+            "apiKey": "asbom",
+            "column": "Asbom",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "obsptiTaxtype",
+            "apiKey": "obsptiTaxtype",
+            "column": "EM_Obspti_Taxtype",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "obsptiTransactiontype",
+            "apiKey": "obsptiTransactiontype",
+            "column": "EM_Obspti_Transactiontype",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "obsptiRatetype",
+            "apiKey": "obsptiRatetype",
+            "column": "EM_Obspti_Ratetype",
+            "type": "enum",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "aeatsiiDeclarable",
+            "apiKey": "aeatsiiDeclarable",
+            "column": "EM_Aeatsii_Declarable",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_TaxCategory_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/taxCategory",
+        "entity": "taxCategory",
+        "supportedFilters": [
+          "name"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/taxCategory/:id",
+        "entity": "taxCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/taxCategory",
+        "entity": "taxCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/taxCategory/:id",
+        "entity": "taxCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/taxCategory/:id",
+        "entity": "taxCategory",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "tax-category",
+    "baseUrl": "/sws/neo/tax-category",
+    "crud": {
+      "taxCategory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/tax-category/taxCategory",
+        "detailUrl": "/sws/neo/tax-category/taxCategory/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "configuration"
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-crud-flags-taxCategory",
+        "category": "crud-flags",
+        "entity": "taxCategory",
+        "runner": "node",
+        "description": "CRUD flags for 'taxCategory' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-taxCategory-aeatsiiDeclarable",
+        "category": "default-value-type",
+        "entity": "taxCategory",
+        "field": "aeatsiiDeclarable",
+        "runner": "node",
+        "description": "Default value for 'aeatsiiDeclarable' in taxCategory should be a string"
+      },
+      {
+        "id": "t-default-value-type-taxCategory-asbom",
+        "category": "default-value-type",
+        "entity": "taxCategory",
+        "field": "asbom",
+        "runner": "node",
+        "description": "Default value for 'asbom' in taxCategory should be a string"
+      },
+      {
+        "id": "t-field-presence-taxCategory-aeatsiiDeclarable",
+        "category": "field-presence",
+        "entity": "taxCategory",
+        "field": "aeatsiiDeclarable",
+        "runner": "node",
+        "description": "Field 'aeatsiiDeclarable' should be present in taxCategory"
+      },
+      {
+        "id": "t-field-presence-taxCategory-asbom",
+        "category": "field-presence",
+        "entity": "taxCategory",
+        "field": "asbom",
+        "runner": "node",
+        "description": "Field 'asbom' should be present in taxCategory"
+      },
+      {
+        "id": "t-field-presence-taxCategory-default",
+        "category": "field-presence",
+        "entity": "taxCategory",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should be present in taxCategory"
+      },
+      {
+        "id": "t-field-presence-taxCategory-description",
+        "category": "field-presence",
+        "entity": "taxCategory",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in taxCategory"
+      },
+      {
+        "id": "t-field-presence-taxCategory-name",
+        "category": "field-presence",
+        "entity": "taxCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in taxCategory"
+      },
+      {
+        "id": "t-field-presence-taxCategory-obsptiRatetype",
+        "category": "field-presence",
+        "entity": "taxCategory",
+        "field": "obsptiRatetype",
+        "runner": "node",
+        "description": "Field 'obsptiRatetype' should be present in taxCategory"
+      },
+      {
+        "id": "t-field-presence-taxCategory-obsptiTaxtype",
+        "category": "field-presence",
+        "entity": "taxCategory",
+        "field": "obsptiTaxtype",
+        "runner": "node",
+        "description": "Field 'obsptiTaxtype' should be present in taxCategory"
+      },
+      {
+        "id": "t-field-presence-taxCategory-obsptiTransactiontype",
+        "category": "field-presence",
+        "entity": "taxCategory",
+        "field": "obsptiTransactiontype",
+        "runner": "node",
+        "description": "Field 'obsptiTransactiontype' should be present in taxCategory"
+      },
+      {
+        "id": "t-field-type-taxCategory-aeatsiiDeclarable",
+        "category": "field-type",
+        "entity": "taxCategory",
+        "field": "aeatsiiDeclarable",
+        "runner": "node",
+        "description": "Field 'aeatsiiDeclarable' should have type 'boolean' in taxCategory"
+      },
+      {
+        "id": "t-field-type-taxCategory-asbom",
+        "category": "field-type",
+        "entity": "taxCategory",
+        "field": "asbom",
+        "runner": "node",
+        "description": "Field 'asbom' should have type 'boolean' in taxCategory"
+      },
+      {
+        "id": "t-field-type-taxCategory-default",
+        "category": "field-type",
+        "entity": "taxCategory",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should have type 'boolean' in taxCategory"
+      },
+      {
+        "id": "t-field-type-taxCategory-description",
+        "category": "field-type",
+        "entity": "taxCategory",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in taxCategory"
+      },
+      {
+        "id": "t-field-type-taxCategory-name",
+        "category": "field-type",
+        "entity": "taxCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in taxCategory"
+      },
+      {
+        "id": "t-field-type-taxCategory-obsptiRatetype",
+        "category": "field-type",
+        "entity": "taxCategory",
+        "field": "obsptiRatetype",
+        "runner": "node",
+        "description": "Field 'obsptiRatetype' should have type 'string' in taxCategory"
+      },
+      {
+        "id": "t-field-type-taxCategory-obsptiTaxtype",
+        "category": "field-type",
+        "entity": "taxCategory",
+        "field": "obsptiTaxtype",
+        "runner": "node",
+        "description": "Field 'obsptiTaxtype' should have type 'string' in taxCategory"
+      },
+      {
+        "id": "t-field-type-taxCategory-obsptiTransactiontype",
+        "category": "field-type",
+        "entity": "taxCategory",
+        "field": "obsptiTransactiontype",
+        "runner": "node",
+        "description": "Field 'obsptiTransactiontype' should have type 'string' in taxCategory"
+      },
+      {
+        "id": "t-rule-declared-AD-Client-Security-validation",
+        "category": "rule-declared",
+        "rule": "AD_Client Security validation",
+        "runner": "node",
+        "description": "Rule 'AD_Client Security validation' (validation) should be declared"
+      },
+      {
+        "id": "t-searchable-filters-taxCategory-name",
+        "category": "searchable-filters",
+        "entity": "taxCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for taxCategory"
+      },
+      {
+        "id": "t-system-field-taxCategory-active",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for taxCategory"
+      },
+      {
+        "id": "t-system-field-taxCategory-client",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for taxCategory"
+      },
+      {
+        "id": "t-system-field-taxCategory-createdBy",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for taxCategory"
+      },
+      {
+        "id": "t-system-field-taxCategory-creationDate",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for taxCategory"
+      },
+      {
+        "id": "t-system-field-taxCategory-id",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for taxCategory"
+      },
+      {
+        "id": "t-system-field-taxCategory-organization",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for taxCategory"
+      },
+      {
+        "id": "t-system-field-taxCategory-updated",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for taxCategory"
+      },
+      {
+        "id": "t-system-field-taxCategory-updatedBy",
+        "category": "system-field",
+        "entity": "taxCategory",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for taxCategory"
+      },
+      {
+        "id": "t-visibility-taxCategory",
+        "category": "visibility",
+        "entity": "taxCategory",
+        "runner": "node",
+        "description": "Entity 'taxCategory' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 30,
+      "byCategory": {
+        "crud-flags": 1,
+        "default-value-type": 2,
+        "field-presence": 8,
+        "field-type": 8,
+        "rule-declared": 1,
+        "searchable-filters": 1,
+        "system-field": 8,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 30,
+        "junit": 0
+      }
+    }
+  }
+}

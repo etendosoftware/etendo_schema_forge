@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import GoodsReceiptTable from '@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptTable';
 import GeneratedApp from '@generated/goods-receipt/generated/web/goods-receipt/index.jsx';
-import GoodsReceiptBottomPanel from './GoodsReceiptBottomPanel.jsx';
+import GoodsReceiptBottomPanel from '@generated/goods-receipt/custom/GoodsReceiptBottomPanel';
 import GoodsReceiptPreview from './GoodsReceiptPreview.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
@@ -20,6 +20,7 @@ const HEADER_COLUMNS = [
   { key: 'orderReference', column: 'POReference', type: 'string' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
   { key: 'documentStatus', column: 'DocStatus', type: 'status' },
+  { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector' },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent' },
 ];
@@ -135,6 +136,7 @@ export default function GoodsReceiptWindow(props) {
     <>
       <GeneratedApp
         {...props}
+        autoSaveOnBlur={true}
         Table={CustomHeaderTable}
         labelOverrides={LABEL_OVERRIDES}
         initialColumnFilters={docStatus ? { documentStatus: { mode: 'enumLabel', value: [docStatus] } } : undefined}

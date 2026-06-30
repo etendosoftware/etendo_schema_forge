@@ -1,23 +1,16 @@
 import { forwardRef } from 'react';
 import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
-// @sf-generated-start columns:account
+// @sf-generated-start columns:General
 const columns = [
-  { key: 'code', column: 'Code', type: 'string', required: true },
-  { key: 'name', column: 'Name', type: 'string', required: true },
-  { key: 'accountType', column: 'AccountType', type: 'string', required: true },
-  { key: 'parentAccount', column: 'Parent_ID', type: 'selector' },
-  { key: 'debit', column: 'Debit', type: 'amount', required: true },
-  { key: 'credit', column: 'Credit', type: 'amount', required: true },
-  { key: 'balance', column: 'Balance', type: 'amount', required: true },
-  { key: 'isActive', column: 'IsActive', type: 'boolean', required: true },
+
 ];
-// @sf-generated-end columns:account
+// @sf-generated-end columns:General
 
-const filters = ['code', 'name', 'accountType'];
+const filters = [];
 
-// @sf-generated-start component:AccountTable
-const AccountTable = forwardRef(function AccountTable(props, ref) {
+// @sf-generated-start component:GeneralTable
+const GeneralTable = forwardRef(function GeneralTable(props, ref) {
   // Inline-editable layout always uses InlineLinesPanel for existing rows so column
   // widths (flex layout) never shift when the add-row form opens. When addRow is
   // active we render a header-hidden, data-hidden DataTable below for just the
@@ -38,5 +31,5 @@ const AccountTable = forwardRef(function AccountTable(props, ref) {
   return <DataTable columns={columns} filters={filters} {...props} />;
 });
 
-export default AccountTable;
-// @sf-generated-end component:AccountTable
+export default GeneralTable;
+// @sf-generated-end component:GeneralTable

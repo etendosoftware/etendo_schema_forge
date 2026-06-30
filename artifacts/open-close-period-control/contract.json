@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-06-25T12:12:33.694Z",
-  "updatedAt": "2026-06-26T11:11:25.752Z",
-  "checksum": "bc1ebd3d542cf806",
+  "updatedAt": "2026-06-29T12:09:15.647Z",
+  "checksum": "a8473151bae8abe4",
   "frontendContract": {
     "window": {
       "id": "E66E701CCBA14B8BA480CBDE37C50D7A",
@@ -108,23 +108,38 @@
             "enumValues": [
               {
                 "value": "C",
-                "name": "All Closed"
+                "name": "All Closed",
+                "labels": {
+                  "es_ES": "Todos cerrados"
+                }
               },
               {
                 "value": "N",
-                "name": "All Never Opened"
+                "name": "All Never Opened",
+                "labels": {
+                  "es_ES": "Ningún periodo abierto."
+                }
               },
               {
                 "value": "O",
-                "name": "All Opened"
+                "name": "All Opened",
+                "labels": {
+                  "es_ES": "Todos abiertos"
+                }
               },
               {
                 "value": "P",
-                "name": "All Permanently Closed"
+                "name": "All Permanently Closed",
+                "labels": {
+                  "es_ES": "Todos permanentemente cerrados"
+                }
               },
               {
                 "value": "M",
-                "name": "Mixed"
+                "name": "Mixed",
+                "labels": {
+                  "es_ES": "Mixto"
+                }
               }
             ],
             "badge": true,
@@ -257,11 +272,17 @@
             "enumValues": [
               {
                 "value": "A",
-                "name": "Adjustment Period"
+                "name": "Adjustment Period",
+                "labels": {
+                  "es_ES": "Cambio periodo"
+                }
               },
               {
                 "value": "S",
-                "name": "Standard Calendar Period"
+                "name": "Standard Calendar Period",
+                "labels": {
+                  "es_ES": "Calendario Periodo estándar"
+                }
               }
             ],
             "defaultValue": "S",
@@ -339,19 +360,31 @@
             "enumValues": [
               {
                 "value": "C",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "N",
-                "name": "Never opened"
+                "name": "Never opened",
+                "labels": {
+                  "es_ES": "Nunca abierto"
+                }
               },
               {
                 "value": "O",
-                "name": "Open"
+                "name": "Open",
+                "labels": {
+                  "es_ES": "Abierto"
+                }
               },
               {
                 "value": "P",
-                "name": "Permanently closed"
+                "name": "Permanently closed",
+                "labels": {
+                  "es_ES": "Cerrado permanente"
+                }
               }
             ],
             "defaultValue": "N",
@@ -379,175 +412,304 @@
             "enumValues": [
               {
                 "value": "---",
-                "name": "** New **"
+                "name": "** New **",
+                "labels": {
+                  "es_ES": "** Nuevo **"
+                }
               },
               {
                 "value": "APC",
-                "name": "AP Credit Memo"
+                "name": "AP Credit Memo",
+                "labels": {
+                  "es_ES": "AP Nota de crédito"
+                }
               },
               {
                 "value": "API",
-                "name": "AP Invoice"
+                "name": "AP Invoice",
+                "labels": {
+                  "es_ES": "AP factura"
+                }
               },
               {
                 "value": "APP",
-                "name": "AP Payment"
+                "name": "AP Payment",
+                "labels": {
+                  "es_ES": "AP pago"
+                }
               },
               {
                 "value": "APPP",
-                "name": "AP Payment Proposal"
+                "name": "AP Payment Proposal",
+                "labels": {
+                  "es_ES": "AP Propuesta de pago"
+                }
               },
               {
                 "value": "ARC",
-                "name": "AR Credit Memo"
+                "name": "AR Credit Memo",
+                "labels": {
+                  "es_ES": "AR Nota de crédito"
+                }
               },
               {
                 "value": "ARI",
-                "name": "AR Invoice"
+                "name": "AR Invoice",
+                "labels": {
+                  "es_ES": "AR factura"
+                }
               },
               {
                 "value": "ARF",
-                "name": "AR Pro Forma Invoice"
+                "name": "AR Pro Forma Invoice",
+                "labels": {
+                  "es_ES": "AR Pro forma factura"
+                }
               },
               {
                 "value": "ARR",
-                "name": "AR Receipt"
+                "name": "AR Receipt",
+                "labels": {
+                  "es_ES": "AR Recibo"
+                }
               },
               {
                 "value": "ARRP",
-                "name": "AR Receivable Proposal"
+                "name": "AR Receivable Proposal",
+                "labels": {
+                  "es_ES": "AR Propuesta de Cobro"
+                }
               },
               {
                 "value": "ARI_RM",
-                "name": "AR Return Material Invoice"
+                "name": "AR Return Material Invoice",
+                "labels": {
+                  "es_ES": "AR factura de devolución de material"
+                }
               },
               {
                 "value": "AMZ",
-                "name": "Amortization"
+                "name": "Amortization",
+                "labels": {
+                  "es_ES": "Amortización"
+                }
               },
               {
                 "value": "CMB",
-                "name": "Bank Statement"
+                "name": "Bank Statement",
+                "labels": {
+                  "es_ES": "Extracto bancario"
+                }
               },
               {
                 "value": "BSF",
-                "name": "Bank Statement File"
+                "name": "Bank Statement File",
+                "labels": {
+                  "es_ES": "Fichero de extracto bancario"
+                }
               },
               {
                 "value": "CMC",
-                "name": "Cash Journal"
+                "name": "Cash Journal",
+                "labels": {
+                  "es_ES": "Diario de caja"
+                }
               },
               {
                 "value": "CAD",
-                "name": "Cost Adjustment"
+                "name": "Cost Adjustment",
+                "labels": {
+                  "es_ES": "Ajuste de Costes"
+                }
               },
               {
                 "value": "DPM",
-                "name": "Debt Payment Management"
+                "name": "Debt Payment Management",
+                "labels": {
+                  "es_ES": "Gestión de efectos"
+                }
               },
               {
                 "value": "DDB",
-                "name": "Doubtful Debt"
+                "name": "Doubtful Debt",
+                "labels": {
+                  "es_ES": "Dudoso cobro"
+                }
               },
               {
                 "value": "FAT",
-                "name": "Financial Account Transaction"
+                "name": "Financial Account Transaction",
+                "labels": {
+                  "es_ES": "Transacciones de la cuenta financiera"
+                }
               },
               {
                 "value": "GLD",
-                "name": "GL Document"
+                "name": "GL Document",
+                "labels": {
+                  "es_ES": "Documento libro mayor"
+                }
               },
               {
                 "value": "GLJ",
-                "name": "GL Journal"
+                "name": "GL Journal",
+                "labels": {
+                  "es_ES": "Diario"
+                }
               },
               {
                 "value": "IAU",
-                "name": "Inventory Amount Update"
+                "name": "Inventory Amount Update",
+                "labels": {
+                  "es_ES": "Actualización Valor Inventario"
+                }
               },
               {
                 "value": "LDC",
-                "name": "Landed Cost"
+                "name": "Landed Cost",
+                "labels": {
+                  "es_ES": "Landed Cost"
+                }
               },
               {
                 "value": "LCC",
-                "name": "Landed Cost Cost"
+                "name": "Landed Cost Cost",
+                "labels": {
+                  "es_ES": "Coste Landed Cost"
+                }
               },
               {
                 "value": "OBCVAT_MS",
-                "name": "Manual Cash VAT Settlement"
+                "name": "Manual Cash VAT Settlement",
+                "labels": {
+                  "es_ES": "Manual Cash VAT Settlement"
+                }
               },
               {
                 "value": "MXI",
-                "name": "Match Invoice"
+                "name": "Match Invoice",
+                "labels": {
+                  "es_ES": "Factura comprobada"
+                }
               },
               {
                 "value": "MXP",
-                "name": "Match PO"
+                "name": "Match PO",
+                "labels": {
+                  "es_ES": "Pedido de compra comprobado"
+                }
               },
               {
                 "value": "MMS",
-                "name": "Material Delivery"
+                "name": "Material Delivery",
+                "labels": {
+                  "es_ES": "Entrega material"
+                }
               },
               {
                 "value": "MIC",
-                "name": "Material Internal Consumption"
+                "name": "Material Internal Consumption",
+                "labels": {
+                  "es_ES": "Consumo Interno de Material"
+                }
               },
               {
                 "value": "MMM",
-                "name": "Material Movement"
+                "name": "Material Movement",
+                "labels": {
+                  "es_ES": "Movimiento de almacén"
+                }
               },
               {
                 "value": "MMI",
-                "name": "Material Physical Inventory"
+                "name": "Material Physical Inventory",
+                "labels": {
+                  "es_ES": "Inventario físico"
+                }
               },
               {
                 "value": "MMP",
-                "name": "Material Production"
+                "name": "Material Production",
+                "labels": {
+                  "es_ES": "Producción"
+                }
               },
               {
                 "value": "MMR",
-                "name": "Material Receipt"
+                "name": "Material Receipt",
+                "labels": {
+                  "es_ES": "Recibo material"
+                }
               },
               {
                 "value": "CMA",
-                "name": "Payment Allocation"
+                "name": "Payment Allocation",
+                "labels": {
+                  "es_ES": "Asignación de pagos"
+                }
               },
               {
                 "value": "PPR",
-                "name": "Payment proposal"
+                "name": "Payment proposal",
+                "labels": {
+                  "es_ES": "Propuesta de pago"
+                }
               },
               {
                 "value": "PJI",
-                "name": "Project Issue"
+                "name": "Project Issue",
+                "labels": {
+                  "es_ES": "Asunto de proyecto"
+                }
               },
               {
                 "value": "POO",
-                "name": "Purchase Order"
+                "name": "Purchase Order",
+                "labels": {
+                  "es_ES": "Pedido de compra"
+                }
               },
               {
                 "value": "POR",
-                "name": "Purchase Requisition"
+                "name": "Purchase Requisition",
+                "labels": {
+                  "es_ES": "Pre-pedido compra"
+                }
               },
               {
                 "value": "REC",
-                "name": "Reconciliation"
+                "name": "Reconciliation",
+                "labels": {
+                  "es_ES": "Conciliación"
+                }
               },
               {
                 "value": "SOO",
-                "name": "Sales Order"
+                "name": "Sales Order",
+                "labels": {
+                  "es_ES": "Pedido venta"
+                }
               },
               {
                 "value": "STT",
-                "name": "Settlement"
+                "name": "Settlement",
+                "labels": {
+                  "es_ES": "Liquidación"
+                }
               },
               {
                 "value": "STM",
-                "name": "Settlement manual"
+                "name": "Settlement manual",
+                "labels": {
+                  "es_ES": "Liquidación manual"
+                }
               },
               {
                 "value": "WRE",
-                "name": "Work Requirement"
+                "name": "Work Requirement",
+                "labels": {
+                  "es_ES": "Orden de fabricación"
+                }
               }
             ],
             "gridOrder": 1

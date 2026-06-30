@@ -62,6 +62,9 @@ function toDalBody(payload) {
   // to the account so a later PSD2 connect can preselect that bank.
   if (payload.providerCode) body.providerCode = payload.providerCode;
   if (payload.providerName) body.providerName = payload.providerName;
+  // Reconciliation tolerance fields (only sent when explicitly changed in the edit modal).
+  if ('dateTolerance' in payload) body.eMETGODateTolerance = payload.dateTolerance;
+  if ('amountTolerance' in payload) body.eMETGOAmountTolerance = payload.amountTolerance;
   return body;
 }
 

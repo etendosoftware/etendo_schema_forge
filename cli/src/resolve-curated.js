@@ -209,6 +209,11 @@ const FIELD_DECISION_COPY_PROPS = [
   // Opt-in: when true on a searchSelect field, the combobox shows the inline
   // "+ create" action. Requires createSpec/createEntity to know where to POST.
   'allowCreate',
+  // Custom React component to use as the field renderer inside EntityForm.
+  // Value is the component name (string); the generator emits an import + the
+  // reference in the fields array. EntityForm renders <ComponentName value={...}
+  // onChange={...} record={data} readOnly={isReadOnly} /> instead of the default input.
+  'customRenderer',
   // i18n key for the inline "+ create" action label (e.g. "+ New transaction type").
   'createLabelKey',
   // i18n keys for the inline-create modal: dialog title + name-input placeholder.
@@ -691,8 +696,8 @@ const WINDOW_TRUTHY_PROPS = [
 const WINDOW_BOOLEAN_TRUE_PROPS = [
   'hideDeleteWhenComplete',
   'customTabsAfterBottom',
-  'hidePrint',
   'hideCreate',
+  'hidePrint',
   'hideMoreMenu',
   'hideMoreDetails',
   'hideListFilters',
@@ -707,6 +712,7 @@ const WINDOW_BOOLEAN_TRUE_PROPS = [
   'whiteFormBackground',
   'hideFormCard',
   'sidebarAboveTabsOnly',
+  'tabsSeparator',
   'autoSaveOnBlur',
   'hideDetailForm',
   'hideDelete',
@@ -735,7 +741,7 @@ export const WINDOW_KEY_ORDER = [
   'labelOverrides', 'primaryTabs', 'othersLabel',
   'disableProcessedLock', 'titleField',
   'listViewOptions', 'listBaseFilter', 'quickFilters', 'subsetFilters',
-  'dateFilterKey', 'statusEnumLabels', 'lockedAlert', 'noHeaderBorder', 'toolbarBorderBottom', 'compactSidebarPadding', 'whiteFormBackground', 'hideFormCard', 'sidebarClassName', 'formCardPadding', 'formScrollPaddingX', 'tabsBarPaddingX', 'primaryTabsVariant', 'toolbarPaddingX', 'toolbarButtonSize', 'listbarPaddingX', 'tablePaddingX', 'lineEntityConfig',
+  'dateFilterKey', 'statusEnumLabels', 'lockedAlert', 'noHeaderBorder', 'toolbarBorderBottom', 'compactSidebarPadding', 'whiteFormBackground', 'hideFormCard', 'sidebarAboveTabsOnly', 'tabsSeparator', 'sidebarClassName', 'formCardPadding', 'formScrollPaddingX', 'tabsBarPaddingX', 'primaryTabsVariant', 'toolbarPaddingX', 'toolbarButtonSize', 'listbarPaddingX', 'tablePaddingX', 'lineEntityConfig',
   'extraTabs', 'attachments', 'customPanelTabs', 'rowQuickActions',
   'sendDocument',
   'layoutType', 'linesLayout', 'balanceFooter', 'selectorPriceCurrency',

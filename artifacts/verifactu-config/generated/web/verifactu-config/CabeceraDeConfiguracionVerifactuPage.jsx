@@ -92,6 +92,7 @@ export const api = {
 export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="cabeceraDeConfiguraciónVerifactu"
         Form={CabeceraDeConfiguracionVerifactuForm}
@@ -108,6 +109,7 @@ export default function CabeceraDeConfiguracionVerifactuPage({ windowName, recor
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

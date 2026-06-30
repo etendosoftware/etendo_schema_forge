@@ -152,6 +152,7 @@ export const api = {
 export default function ProductCategoryPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="productCategory"
         detailEntity="accounting"
@@ -185,6 +186,7 @@ export default function ProductCategoryPage({ windowName, recordId, ...props }) 
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 

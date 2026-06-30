@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Star, Play, ArrowUpRight, Info, OctagonAlert, TriangleAlert, X, Check } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -214,7 +215,8 @@ export function NewDeclModal({ onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
   const [model, setModel] = useState('303');
-  const [year, setYear] = useState(new Date().getFullYear());
+  const _cy = new Date().getFullYear();
+  const [year, setYear] = useState(SUPPORTED_YEARS.includes(_cy) ? _cy : SUPPORTED_YEARS[SUPPORTED_YEARS.length - 1]);
   const [period, setPeriod] = useState('T1');
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true">
@@ -230,14 +232,15 @@ export function NewDeclModal({ onConfirm, onClose }) {
           </label>
           <label style={{ fontSize: 12, color: '#374151' }}>
             {t('fm.new_decl.year')}
-            <input
-              type="number"
+            <select
               value={year}
               onChange={e => setYear(Number(e.target.value))}
-              min={2020}
-              max={2099}
-              style={{ marginLeft: 8, fontSize: 12, width: 70 }}
-            />
+              style={{ marginLeft: 8, fontSize: 12 }}
+            >
+              {SUPPORTED_YEARS.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
           </label>
           <label style={{ fontSize: 12, color: '#374151' }}>
             {t('fm.new_decl.period')}

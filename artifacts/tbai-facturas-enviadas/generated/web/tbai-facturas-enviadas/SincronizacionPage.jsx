@@ -114,6 +114,7 @@ export const api = {
 export default function SincronizacionPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="sincronización"
         detailEntity="resultadoValidación"
@@ -135,6 +136,7 @@ export default function SincronizacionPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

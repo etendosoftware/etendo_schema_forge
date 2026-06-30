@@ -928,5 +928,15 @@
     ],
     "author": "pipeline",
     "date": "2026-06-24"
+  },
+  {
+    "from": "0.19.0",
+    "to": "0.20.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-29"
   }
 ]

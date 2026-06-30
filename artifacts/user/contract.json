@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-06-26T12:35:43.019Z",
-  "checksum": "4a2428b637c08470",
+  "updatedAt": "2026-06-29T12:09:18.745Z",
+  "checksum": "1f2437953a5289b4",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -538,15 +538,24 @@
             "enumValues": [
               {
                 "value": "N",
-                "name": "None"
+                "name": "None",
+                "labels": {
+                  "es_ES": "Ninguna"
+                }
               },
               {
                 "value": "STARTTLS",
-                "name": "STARTTLS"
+                "name": "STARTTLS",
+                "labels": {
+                  "es_ES": "STARTTLS"
+                }
               },
               {
                 "value": "SSL",
-                "name": "SSL"
+                "name": "SSL",
+                "labels": {
+                  "es_ES": "SSL"
+                }
               }
             ],
             "section": "server",
@@ -1107,14 +1116,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "psd2ApiKey",
-            "apiKey": "psd2ApiKey",
-            "column": "EM_Psd2_Api_Key",
-            "type": "string",
-            "visibility": "discarded",
-            "required": false
           }
         ]
       },
@@ -2863,14 +2864,6 @@
         "description": "System field 'processNow' should exist in backend but not frontend for user"
       },
       {
-        "id": "t-system-field-user-psd2ApiKey",
-        "category": "system-field",
-        "entity": "user",
-        "field": "psd2ApiKey",
-        "runner": "node",
-        "description": "System field 'psd2ApiKey' should exist in backend but not frontend for user"
-      },
-      {
         "id": "t-system-field-user-smfswsDefaultWsRole",
         "category": "system-field",
         "entity": "user",
@@ -3013,7 +3006,7 @@
       }
     ],
     "summary": {
-      "total": 166,
+      "total": 165,
       "byCategory": {
         "action-endpoint": 3,
         "crud-flags": 3,
@@ -3023,11 +3016,11 @@
         "rule-declared": 16,
         "searchable-filters": 5,
         "selector-endpoint": 8,
-        "system-field": 47,
+        "system-field": 46,
         "visibility": 3
       },
       "byRunner": {
-        "node": 166,
+        "node": 165,
         "junit": 0
       }
     }

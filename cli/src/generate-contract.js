@@ -500,6 +500,7 @@ const FIELD_ATTR_SPECS = [
   ['displayFromCatalog', 'verbatim'],
   ['forceCalloutFields', 'array'],
   ['excludeValueOf', 'verbatim'],
+  ['customRenderer', 'verbatim'],
 ];
 
 function mapFieldAttributes(f, mapped) {

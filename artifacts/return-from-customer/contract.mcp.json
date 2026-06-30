@@ -1,8 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-29T19:46:12.773Z",
   "updatedAt": "2026-06-25T00:35:57.588Z",
-  "contractChecksum": "b91daa5e114ca59a",
+  "contractChecksum": "165aaea670dfa29e",
   "apiPrediction": {
     "specName": "returns",
     "baseUrl": "/sws/neo/returns",

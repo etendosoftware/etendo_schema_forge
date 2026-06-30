@@ -74,6 +74,7 @@ This folder is the entry point for documentation that describes how generated an
 | [simple-g-l-journal.md](simple-g-l-journal.md) | Generated manual-journal (Asientos Manuales) master/detail flow with a debit/credit balance footer that blocks save until Σ debit = Σ credit (posting deferred) |
 | [recurring-invoice.md](recurring-invoice.md) | Hidden route-only recurring-invoice template window |
 | [conversion-rates.md](conversion-rates.md) | General currency conversion-rate catalog; auto-downloaded rates lock as Synced and feed the invoice completion guard |
+| [general-ledger-configuration.md](general-ledger-configuration.md) | Custom 4-tab accounting schema setup window aligned to the Figma-first ETP-4246 scope |
 
 ## Projects
 
@@ -98,6 +99,7 @@ This folder is the entry point for documentation that describes how generated an
 | [price-list.md](price-list.md) | Custom price-list flow with product-price workspace |
 | [payment-term.md](payment-term.md) | Generated payment-term maintenance window |
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
+| [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
 | [user.md](user.md) | Generated user window with roles child surface and defaults dependencies |
 | [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance |
 | [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349) with auto-compute and file generation |

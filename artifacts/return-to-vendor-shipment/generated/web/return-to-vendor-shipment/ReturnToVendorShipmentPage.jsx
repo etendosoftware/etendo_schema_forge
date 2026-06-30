@@ -284,6 +284,7 @@ const labelOverrides = api.labelOverrides;
 export default function ReturnToVendorShipmentPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="returnToVendorShipment"
         detailEntity="returnToVendorShipmentLine"
@@ -314,6 +315,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         sendDocument
         {...props}
       />
+      </>
     );
   }
 

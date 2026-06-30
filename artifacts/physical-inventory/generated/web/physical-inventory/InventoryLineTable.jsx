@@ -3,11 +3,10 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:inventoryLine
 const columns = [
-  { key: 'lineNo', column: 'Line', type: 'number', label: 'Line No.' },
-  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true, lookup: true },
-  { key: 'quantityCount', column: 'QtyCount', type: 'number', label: 'User Count', required: true },
-  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true },
-  { key: 'bookQuantity', column: 'QtyBook', type: 'number', label: 'System Count', required: true },
+  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true, lookup: true, grow: true },
+  { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true, grow: true, readOnly: true },
+  { key: 'bookQuantity', column: 'QtyBook', type: 'number', label: 'System Count', required: true, grow: true, minWidth: 192 },
+  { key: 'quantityCount', column: 'QtyCount', type: 'number', label: 'User Count', required: true, grow: true, minWidth: 192 },
 ];
 // @sf-generated-end columns:inventoryLine
 

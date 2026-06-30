@@ -218,6 +218,7 @@ export const api = {
 export default function CabeceraDeEmisorPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="cabeceraDeEmisor"
         detailEntity="facturasRechazadas"
@@ -239,6 +240,7 @@ export default function CabeceraDeEmisorPage({ windowName, recordId, ...props })
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

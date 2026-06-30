@@ -4,14 +4,14 @@ import { DateField } from '@/components/ui/date-field';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
+import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
+import { DirBadge } from './paymentModalUi.jsx';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
-const STATUS_LABELS = {
-  RPAP: 'Awaiting Payment', RPPC: 'Payment Cleared', RPR: 'Payment Received',
-  RDNC: 'Deposited not Cleared', RPVOID: 'Voided', PPM: 'Payment Made',
-};
+// APRM payment statuses considered "deposited" (processed against an account).
+const DEPOSITED_STATUSES = ['RPR', 'RPPC', 'RDNC', 'PPM'];
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -26,13 +26,6 @@ function fmtDate(raw) {
   return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-const BADGE_STYLES = {
-  paid:    { bg: '#d1fae5', color: '#065f46', dot: '#10b981', accent: '#10b981' },
-  partial: { bg: '#dbeafe', color: '#1e3a5f', dot: '#3b82f6', accent: '#3b82f6' },
-  overdue: { bg: '#fee2e2', color: '#991b1b', dot: '#ef4444', accent: '#ef4444' },
-  pending: { bg: '#fef3c7', color: '#78350f', dot: '#f59e0b', accent: '#f59e0b' },
-};
-
 /**
  * Returns the payment direction prefix for a given specName.
  * sales-invoice -> payment-in
@@ -42,7 +35,21 @@ function paymentPrefix(specName) {
   return specName === 'purchase-invoice' ? 'payment-out' : 'payment-in';
 }
 
+/** True when a listed payment has been processed/deposited. */
+function isDeposited(p) {
+  if (typeof p.processed === 'boolean') return p.processed;
+  return DEPOSITED_STATUSES.includes(p.status || '');
+}
+
+/** Toast message after a save: draft saved, or deposited (by direction). */
+function savedToastMessage(state, isReceipt, ui) {
+  if (state !== 'deposited') return ui('cpDraftSaved');
+  return isReceipt ? ui('cpCollectionDeposited') : ui('cpPaymentDeposited');
+}
+
 // ─── PAYMENT REGISTER FORM ──────────────────────────────────────────────────
+// Retained for backward compatibility and standalone use (and its validation
+// test). The two-step Cobros/Pagos flow uses NewPaymentEntryModal instead.
 
 /**
  * PaymentRegisterForm — form to register a single payment against an installment.
@@ -199,20 +206,75 @@ export function PaymentRegisterForm({
   );
 }
 
-// ─── INVOICE PAYMENT MODAL ──────────────────────────────────────────────────
+// ─── INVOICE PAYMENT MODAL (Paso 1 — Cobros/Pagos de la factura) ─────────────
+
+const INK = '#121217';
+const GREEN_FG = '#17663A';
+const GREEN_BG = '#E2F7EA';
+const AMBER = '#A37700';
+
+/** Renders the history body: loading, empty state, or the movements list. */
+function MovementsBody({ isLoading, payments, emptyLabel, currency, ui, onView }) {
+  if (isLoading) {
+    return (
+      <div style={{ font: '400 13px/18px Inter', color: '#9ca3af', textAlign: 'center', padding: '32px 0' }}>{ui('loading')}</div>
+    );
+  }
+  if (payments.length === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '36px 0' }}>
+        <div style={{ width: 44, height: 44, borderRadius: 10, background: '#F1F2F4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9CA3AF' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="13" x2="15" y2="13" /><line x1="9" y1="17" x2="13" y2="17" /></svg>
+        </div>
+        <div style={{ font: '400 13px/18px Inter', color: '#6C6C89', textAlign: 'center' }}>{emptyLabel}</div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {payments.map(p => {
+        const deposited = isDeposited(p);
+        const badge = deposited
+          ? { bg: GREEN_BG, fg: GREEN_FG, label: ui('cpStatusDeposited') }
+          : { bg: '#F1F2F4', fg: '#55556D', label: ui('cpStatusDraft') };
+        const method = p.paymentMethod || p['paymentMethod$_identifier'] || '';
+        return (
+          <div key={p.id} data-testid={`cp-movement-${p.id}`} style={{ border: '1px solid #E8E8ED', borderRadius: 10, padding: '10px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                <span className="tabular-nums" style={{ font: '600 14px/18px Inter', color: INK }}>{fmt(p.amount, currency)}</span>
+                <span style={{ font: '500 10px/14px Inter', padding: '1px 8px', borderRadius: 9999, background: badge.bg, color: badge.fg }}>{badge.label}</span>
+              </div>
+              <button type="button" onClick={() => onView(p.id)}
+                style={{ font: '500 11px/1 Inter', color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                {ui('viewArrow')}
+              </button>
+            </div>
+            <div style={{ font: '400 11px/15px Inter', color: '#9ca3af', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              #{p.documentNo || p.id}{method ? ` · ${method}` : ''} · {fmtDate(p.paymentDate)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
- * InvoicePaymentModal — installment-aware payment modal, shared across invoice types.
+ * InvoicePaymentModal — step 1 of the two-step Cobros/Pagos flow.
  *
- * Shows per-installment breakdown, existing payment history, and payment registration form.
- * Parameterized by specName so it works for both sales-invoice and purchase-invoice.
+ * Shows the invoice's collection/payment history ("Cobros/Pagos de la factura")
+ * with total + pending stats, and a "+ Añadir cobro/pago" button that opens
+ * NewPaymentEntryModal (step 2). Parameterized by specName so it works for both
+ * sales-invoice (cobro / dir 'in') and purchase-invoice (pago / dir 'out').
  *
  * Props:
  *   invoiceId   — string, the invoice record ID
  *   invoiceData — object, full invoice record (amounts, currency, bp, etc.)
  *   specName    — "sales-invoice" | "purchase-invoice"
- *   apiBaseUrl  — string, full base URL including spec, e.g. http://host/sws/neo/sales-invoice
+ *   apiBaseUrl  — string, full base URL including spec
  *   onClose     — callback
+ *   onPaymentAdded — callback after a payment is saved/confirmed
  */
 export default function InvoicePaymentModal({
   invoiceId,
@@ -223,39 +285,35 @@ export default function InvoicePaymentModal({
   onPaymentAdded,
 }) {
   const ui = useUI();
-  // Strip the spec name suffix to get the API root (e.g. http://host/sws/neo)
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const apiFetch = useApiFetch(base);
 
+  const isReceipt = specName !== 'purchase-invoice';
+  const dir = isReceipt ? 'in' : 'out';
+
   const currency = invoiceData?.['currency$_identifier'] || '';
-  const grandTotal = invoiceData?.grandTotalAmount ?? 0;
+  const grandTotal = parseFloat(invoiceData?.grandTotalAmount) || 0;
   const isCompleted = invoiceData?.documentStatus === 'CO';
-  const paymentMethodName = invoiceData?.['paymentMethod$_identifier'] || '';
+  const party = invoiceData?.['businessPartner$_identifier'] || '';
   const docNo = invoiceData?.documentNo || '';
 
-  const [localInstallments, setLocalInstallments] = useState([]);
   const [payments, setPayments] = useState([]);
-  const [loadingInstallments, setLoadingInstallments] = useState(true);
+  const [installments, setInstallments] = useState([]);
   const [loadingPayments, setLoadingPayments] = useState(true);
-  const [activeFormScheduleId, setActiveFormScheduleId] = useState(null);
-  const [confirmation, setConfirmation] = useState(null);
-  const [highlightId, setHighlightId] = useState(null);
+  const [loadingInstallments, setLoadingInstallments] = useState(true);
+  const [showNew, setShowNew] = useState(false);
 
-  const localPaid = useMemo(
-    () => localInstallments.reduce((s, i) => s + (parseFloat(i.paidAmount) || 0), 0),
-    [localInstallments],
+  const outstanding = useMemo(
+    () => installments.reduce((s, i) => s + (parseFloat(i.outstandingAmount) || 0), 0),
+    [installments],
   );
-  const localOutstanding = useMemo(
-    () => localInstallments.reduce((s, i) => s + (parseFloat(i.outstandingAmount) || 0), 0),
-    [localInstallments],
-  );
-  const localTotal = useMemo(
-    () => localInstallments.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0),
-    [localInstallments],
-  );
+  const totalAmount = useMemo(() => {
+    const t = installments.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+    return t || grandTotal;
+  }, [installments, grandTotal]);
 
   const fetchPayments = useCallback(async () => {
-    if (!invoiceId || !base) return;
+    if (!invoiceId || !base) { setLoadingPayments(false); return; }
     try {
       const res = await apiFetch(
         `/${specName}/header/${invoiceId}/action/invoicePayments`,
@@ -270,262 +328,130 @@ export default function InvoicePaymentModal({
     if (!invoiceId || !base) { setLoadingInstallments(false); return; }
     try {
       const res = await apiFetch(`/${specName}/paymentPlan?parentId=${invoiceId}&_startRow=0&_endRow=50`);
-      if (res.ok) setLocalInstallments((await res.json())?.response?.data || []);
+      if (res.ok) setInstallments((await res.json())?.response?.data || []);
     } catch { /* silent */ }
     finally { setLoadingInstallments(false); }
   }, [apiFetch, base, invoiceId, specName]);
 
   useEffect(() => {
-    fetchInstallments();
     fetchPayments();
-  }, [fetchInstallments, fetchPayments]);
+    fetchInstallments();
+  }, [fetchPayments, fetchInstallments]);
 
-  const fullyPaid = localOutstanding <= 0;
+  const pendingScheduleId = useMemo(() => {
+    const sorted = [...installments].sort((a, b) => {
+      const da = a.dueDate ? new Date(a.dueDate) : new Date(0);
+      const db = b.dueDate ? new Date(b.dueDate) : new Date(0);
+      return da - db;
+    });
+    const p = sorted.find(i => parseFloat(i.outstandingAmount) > 0) || sorted[0];
+    return p ? (p.finPaymentScheduleID || p.id) : '';
+  }, [installments]);
 
   const navToPayment = (id) => {
-    const prefix = paymentPrefix(specName);
-    window.location.href = `/${prefix}/${id}`;
+    window.location.href = `/${paymentPrefix(specName)}/${id}`;
   };
 
-  const handlePaymentSuccess = (paymentData, accountName, scheduleId) => {
-    setActiveFormScheduleId(null);
-    setHighlightId(paymentData?.id);
-    setConfirmation({
-      id: paymentData?.id,
-      documentNo: paymentData?.documentNo,
-      amount: parseFloat(paymentData?.amount || 0),
-      accountName: accountName || '',
-    });
+  const handleSaved = (result, state) => {
+    setShowNew(false);
     trackDocumentCreated(specName === 'purchase-invoice' ? 'payment-out' : 'payment-in');
     setLoadingPayments(true);
     fetchPayments();
     fetchInstallments();
     onPaymentAdded?.();
+    const msg = savedToastMessage(state, isReceipt, ui);
+    window.dispatchEvent(new CustomEvent('neo:toast', { detail: { type: 'success', message: msg } }));
   };
 
-  const sorted = useMemo(
-    () => [...localInstallments].sort((a, b) => {
-      const da = a.dueDate ? new Date(a.dueDate) : new Date(0);
-      const db = b.dueDate ? new Date(b.dueDate) : new Date(0);
-      return da - db;
-    }),
-    [localInstallments],
-  );
-
-  const isLoading = loadingInstallments || loadingPayments;
+  const isLoading = loadingPayments || loadingInstallments;
+  const canAdd = isCompleted && outstanding > 0;
+  const count = payments.length;
+  const countLabel = isReceipt
+    ? ui('cpCollectionsRegisteredCount', { count })
+    : ui('cpPaymentsRegisteredCount', { count });
+  const addLabel = isReceipt ? ui('cpAddCollection') : ui('cpAddPayment');
+  const title = isReceipt ? ui('cpCollectionsOfInvoice') : ui('cpPaymentsOfInvoice');
+  const emptyLabel = isReceipt ? ui('cpNoCollectionsYet') : ui('cpNoPaymentsYet');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={onClose}>
-      <div
-        className="bg-white rounded-xl shadow-lg max-h-[80vh] flex flex-col overflow-hidden"
-        style={{ width: 440, border: '0.5px solid #E5E7EB' }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div style={{ padding: '12px 14px', borderBottom: '1px solid #E5E7EB' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+    <>
+      {!showNew && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(16,20,28,.46)', padding: 24 }} onClick={onClose}>
+        <div
+          className="bg-white flex flex-col overflow-hidden"
+          style={{ width: 520, maxWidth: '100%', maxHeight: '85vh', borderRadius: 14, boxShadow: '0 20px 50px rgba(16,20,28,.18), 0 0 0 1px rgba(16,20,28,.06)' }}
+          data-testid="cp-history-modal"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '18px 22px 16px', borderBottom: '1px solid #E8E8ED' }}>
+            <DirBadge dir={dir} size={36} data-testid="DirBadge__284351" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h2 style={{ margin: 0, font: '700 17px/22px Inter', color: INK, letterSpacing: '-0.01em' }}>{title}</h2>
+              <div style={{ font: '400 12px/16px Inter', color: '#6C6C89', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {party}{party && docNo ? ' · ' : ''}<span style={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 600, color: '#3F3F50' }}>{docNo}</span>
+              </div>
+            </div>
+            <button type="button" onClick={onClose} aria-label={ui('close')}
+              style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+          </div>
+
+          {/* Stats */}
+          <div style={{ display: 'flex', gap: 32, padding: '14px 22px', borderBottom: '1px solid #E8E8ED', background: '#FCFCFD' }}>
             <div>
-              <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 2 }}>{ui('invoiceNumber')}{docNo}</div>
-              <div style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>{ui('payments')}</div>
+              <div style={{ font: '400 11px/14px Inter', color: '#6C6C89' }}>{ui('cpTotalAmount')}</div>
+              <div className="tabular-nums" style={{ font: '700 19px/24px Inter', color: INK }}>{fmt(totalAmount, currency)}</div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, border: '0.5px solid #E5E7EB', background: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, lineHeight: 1 }}
-            >
-              &times;
-            </button>
-          </div>
-        </div>
-
-        {/* Summary */}
-        <div style={{ padding: '12px 14px', borderBottom: '0.5px solid #d1d5db', background: '#F8F9FA' }}>
-          <div className="tabular-nums" style={{ fontSize: 20, fontWeight: 500, color: '#111827' }}>
-            {fmt(localTotal || grandTotal, currency)}
-          </div>
-          <div style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ color: '#10b981' }}>{ui('paidAmount')} {fmt(localPaid, currency)}</span>
-            <span style={{ color: '#9ca3af' }}>&middot;</span>
-            <span style={{ color: localOutstanding > 0 ? '#f59e0b' : '#9ca3af' }}>
-              {ui('outstandingLabel')} {fmt(localOutstanding, currency)}
-            </span>
-          </div>
-        </div>
-
-        {/* Scrollable content — per installment */}
-        <div className="flex-1 overflow-y-auto" style={{ padding: '12px 12px 16px' }}>
-          {isLoading ? (
-            <div style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center', padding: '24px 0' }}>{ui('loading')}</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {sorted.map((inst, idx) => {
-                const scheduleId = inst.finPaymentScheduleID || inst.id;
-                const instOutstanding = parseFloat(inst.outstandingAmount) || 0;
-                const instPaid = parseFloat(inst.paidAmount) || 0;
-                const instAmount = parseFloat(inst.amount) || 0;
-                const status = instOutstanding <= 0 ? 'paid' : (instPaid > 0 ? 'partial' : 'pending');
-                const badgeStyle = BADGE_STYLES[status];
-                const isFormOpen = activeFormScheduleId === scheduleId;
-                // Only first installment shows payments (same behavior as source)
-                const instPayments = idx === 0 ? payments : [];
-
-                return (
-                  <div key={scheduleId} style={{ border: '0.5px solid #d1d5db', borderRadius: 10, overflow: 'hidden' }}>
-                    {/* Card header */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', background: '#F8F9FA', flexWrap: 'wrap', gap: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 500, color: '#374151' }}>{ui('installment')} {idx + 1}</span>
-                        <span style={{ color: '#d1d5db' }}>&middot;</span>
-                        <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 500, color: '#111827' }}>{fmt(instAmount, currency)}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span className="tabular-nums" style={{ fontSize: 11, color: '#6B7280' }}>{fmtDate(inst.dueDate)}</span>
-                        <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 8px', borderRadius: 9999, backgroundColor: badgeStyle.bg, color: badgeStyle.color }}>
-                          {status === 'paid'
-                            ? ui('statusPaid')
-                            : status === 'partial'
-                              ? ui('statusPartiallyExecuted')
-                              : ui('statusPending')}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Card body */}
-                    <div style={{ borderTop: '0.5px solid #d1d5db', background: '#fff' }}>
-                      {/* Payments for this installment */}
-                      {instPayments.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          {instPayments.map(p => {
-                            const pStatus = p.status || '';
-                            const isPaid = ['RPR', 'RPPC', 'RDNC', 'PPM'].includes(pStatus);
-                            const pBadge = isPaid ? BADGE_STYLES.paid : BADGE_STYLES.pending;
-                            const isNew = p.id === highlightId;
-                            const rawAcctName = p.accountName || p['account$_identifier'] || '';
-                            const acctCurrency = p.accountCurrency || '';
-                            const acctLabel = rawAcctName ? (acctCurrency ? `${rawAcctName} \u00b7 ${acctCurrency}` : rawAcctName) : '';
-                            return (
-                              <div key={p.id} style={{ padding: '8px 14px', borderBottom: '0.5px solid #f3f4f6', background: isNew ? '#f0fdf4' : '#fff' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 500 }}>{fmt(p.amount, currency)}</span>
-                                    <span style={{ fontSize: 10, fontWeight: 500, padding: '1px 8px', borderRadius: 9999, backgroundColor: pBadge.bg, color: pBadge.color }}>
-                                      {isPaid ? ui('statusPaid') : ui('statusPending')}
-                                    </span>
-                                    <span className="tabular-nums" style={{ fontSize: 11, color: '#6B7280' }}>{fmtDate(p.paymentDate)}</span>
-                                  </div>
-                                  <button type="button" onClick={() => navToPayment(p.id)}
-                                    style={{ fontSize: 11, fontWeight: 500, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                                    {ui('viewArrow')}
-                                  </button>
-                                </div>
-                                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  #{p.documentNo || p.id}{acctLabel ? ` \u00b7 ${acctLabel}` : ''}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Register button */}
-                      {instOutstanding > 0 && isCompleted && !isFormOpen && !confirmation && (
-                        <div style={{ padding: '10px 14px' }}>
-                          <button
-                            type="button"
-                            onClick={() => setActiveFormScheduleId(scheduleId)}
-                            style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '0.5px dashed #d1d5db', background: 'transparent', fontSize: 12, color: '#6B7280', cursor: 'pointer', textAlign: 'center' }}
-                          >
-                            + {ui('registerPayment')} &middot; {fmt(instOutstanding, currency)} {ui('outstandingLabel').toLowerCase()}
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Register form */}
-                      {isFormOpen && (
-                        <div style={{ padding: '10px 14px' }}>
-                          <PaymentRegisterForm
-                            invoiceId={invoiceId}
-                            invoiceData={invoiceData}
-                            scheduleId={scheduleId}
-                            outstanding={instOutstanding}
-                            currency={currency}
-                            specName={specName}
-                            apiFetch={apiFetch}
-                            onCancel={() => setActiveFormScheduleId(null)}
-                            onSuccess={(pd, an) => handlePaymentSuccess(pd, an, scheduleId)}
-                            data-testid="PaymentRegisterForm__284351" />
-                        </div>
-                      )}
-
-                      {/* Empty state for paid installments with no payment data */}
-                      {instPayments.length === 0 && instOutstanding <= 0 && (
-                        <div style={{ padding: '10px 14px', fontSize: 12, color: '#9ca3af' }}>{ui('fullyPaid')}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+            <div style={{ paddingLeft: 32, borderLeft: '1px solid #E8E8ED' }}>
+              <div style={{ font: '400 11px/14px Inter', color: '#6C6C89' }}>{ui('pendingBalanceLabel')}</div>
+              <div className="tabular-nums" style={{ font: '700 19px/24px Inter', color: outstanding > 0 ? AMBER : GREEN_FG }}>{fmt(outstanding, currency)}</div>
             </div>
-          )}
+          </div>
 
-          {/* Register another payment — shown between list and confirmation when partially paid */}
-          {confirmation && !fullyPaid && (
-            <div style={{ marginTop: 8 }}>
-              <button type="button" onClick={() => {
-                const nextInst = sorted.find(i => parseFloat(i.outstandingAmount) > 0);
-                const nextScheduleId = nextInst ? (nextInst.finPaymentScheduleID || nextInst.id) : null;
-                setConfirmation(null);
-                if (nextScheduleId) setActiveFormScheduleId(nextScheduleId);
-              }}
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '0.5px dashed #d1d5db', background: 'transparent', fontSize: 12, color: '#6B7280', cursor: 'pointer', textAlign: 'center' }}>
-                + {ui('registerPayment')} &middot; {fmt(localOutstanding, currency)} {ui('outstandingLabel').toLowerCase()}
+          {/* Body — movements list / empty state */}
+          <div className="flex-1 overflow-y-auto" style={{ padding: '14px 22px' }}>
+            <MovementsBody
+              isLoading={isLoading}
+              payments={payments}
+              emptyLabel={emptyLabel}
+              currency={currency}
+              ui={ui}
+              onView={navToPayment}
+              data-testid="MovementsBody__284351" />
+          </div>
+
+          {/* Footer */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 22px', borderTop: '1px solid #E8E8ED', background: '#fff' }}>
+            <span style={{ font: '400 12px/16px Inter', color: '#9ca3af' }}>{countLabel}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button type="button" onClick={onClose}
+                style={{ font: '500 13px/1 Inter', padding: '8px 16px', borderRadius: 8, border: '1px solid #D1D1DB', background: '#fff', color: '#3F3F50', cursor: 'pointer' }}>
+                {ui('close')}
               </button>
+              {canAdd && (
+                <button type="button" data-testid="cp-add-payment" onClick={() => setShowNew(true)}
+                  style={{ font: '600 13px/1 Inter', padding: '8px 16px', borderRadius: 8, border: 'none', background: INK, color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 15, lineHeight: 1 }}>+</span>{addLabel}
+                </button>
+              )}
             </div>
-          )}
-
-          {/* Confirmation block */}
-          {confirmation && (
-            <div style={{ marginTop: 12, textAlign: 'center', padding: '8px 0' }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#d1fae5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
-                {fullyPaid ? ui('invoiceFullyPaid') : ui('paymentRegistered')}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6 }}>
-                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 9999, background: '#f3f4f6', color: '#374151' }}>
-                  {fmt(confirmation.amount, currency)}
-                </span>
-                {paymentMethodName && (
-                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 9999, background: '#f3f4f6', color: '#374151' }}>
-                    {paymentMethodName}
-                  </span>
-                )}
-                {confirmation.accountName && (
-                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 9999, background: '#f3f4f6', color: '#374151' }}>
-                    {confirmation.accountName}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: confirmation ? 'space-between' : 'flex-end', background: '#fff', borderTop: '0.5px solid #d1d5db', padding: '10px 14px' }}>
-          <button type="button" onClick={onClose}
-            style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: '0.5px solid #E5E7EB', background: 'transparent', color: '#6B7280', cursor: 'pointer' }}>
-            {ui('close')}
-          </button>
-          {confirmation && (
-            <button type="button" onClick={() => navToPayment(confirmation.id)}
-              style={{ fontSize: 13, fontWeight: 500, padding: '5px 14px', borderRadius: 6, border: 'none', background: '#18181b', color: '#fff', cursor: 'pointer' }}>
-              {ui('viewArrow')}
-            </button>
-          )}
+          </div>
         </div>
       </div>
-    </div>
+      )}
+      {showNew && (
+        <NewPaymentEntryModal
+          dir={dir}
+          specName={specName}
+          invoiceId={invoiceId}
+          invoiceData={invoiceData}
+          scheduleId={pendingScheduleId}
+          outstanding={outstanding}
+          apiBaseUrl={apiBaseUrl}
+          onClose={() => setShowNew(false)}
+          onSaved={handleSaved}
+          data-testid="NewPaymentEntryModal__284351" />
+      )}
+    </>
   );
 }

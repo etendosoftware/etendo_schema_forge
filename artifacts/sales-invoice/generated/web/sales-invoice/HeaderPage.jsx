@@ -51,7 +51,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['cDocTypeTargetId', 'documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'priceList'];
+const requiredHeaderFields = ['documentNo', 'invoiceDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'paymentMethod', 'grandTotalAmount', 'summedLineAmount', 'priceList', 'transactionDocument'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -141,27 +141,6 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "cDocTypeTargetId",
-      "column": "C_DocTypeTarget_ID",
-      "reference": "DocumentType",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-invoice/header/selectors/cDocTypeTargetId",
-      "context": {
-        "required": [
-          {
-            "param": "IsSOTrx",
-            "source": "windowCategory"
-          },
-          {
-            "param": "AD_Org_ID",
-            "source": "field",
-            "field": "adOrgId"
-          }
-        ]
-      }
-    },
-    {
-      "entity": "header",
       "field": "businessPartner",
       "column": "C_BPartner_ID",
       "reference": "BusinessPartner",
@@ -248,6 +227,27 @@ export const api = {
       "reference": "aeatsii_cause_exemption",
       "inputMode": "selector",
       "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
+    },
+    {
+      "entity": "header",
+      "field": "transactionDocument",
+      "column": "C_DocTypeTarget_ID",
+      "reference": "DocumentType",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+      "context": {
+        "required": [
+          {
+            "param": "IsSOTrx",
+            "source": "windowCategory"
+          },
+          {
+            "param": "AD_Org_ID",
+            "source": "field",
+            "field": "adOrgId"
+          }
+        ]
+      }
     },
     {
       "entity": "lines",
@@ -558,6 +558,7 @@ const labelOverrides = api.labelOverrides;
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         detailEntity="lines"
@@ -603,6 +604,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         sendDocument
         {...props}
       />
+      </>
     );
   }
 

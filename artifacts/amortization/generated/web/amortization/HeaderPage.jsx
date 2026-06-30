@@ -313,6 +313,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         linesLayout="inlineEditable"
         {...props}
       />
+
       {showConfirmModal && (
         <AmortizationConfirmModal
           recordId={recordId}

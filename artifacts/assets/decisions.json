@@ -17,7 +17,9 @@
     "toolbarPaddingX": "px-2",
     "toolbarButtonSize": "default",
     "sidebarAboveTabsOnly": true,
+    "tabsSeparator": true,
     "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+    "formScrollPaddingX": "px-2",
     "hideListFilters": false,
     "hideLink": true,
     "hideEyeCount": true,
@@ -160,6 +162,7 @@
         "purchaseDate": {
           "grid": true,
           "form": false,
+          "dot": false,
           "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
         },
         "cancellationDate": {

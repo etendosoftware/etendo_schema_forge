@@ -445,6 +445,7 @@ const labelOverrides = api.labelOverrides;
 export default function QuotationPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="quotation"
         detailEntity="quotationLine"
@@ -483,6 +484,7 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         selectorPriceCurrency="org"
         {...props}
       />
+      </>
     );
   }
 
