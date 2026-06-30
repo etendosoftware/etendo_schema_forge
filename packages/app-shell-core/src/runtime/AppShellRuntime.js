@@ -65,6 +65,8 @@ export function AppShellRuntime({
   breadcrumb,
   rightExtras,
   notFoundElement = <Navigate to="/" replace />,
+  layout: Layout = ShellLayout,
+  children,
 }) {
   const runtime = createAppShellConfig({
     ...config,
@@ -91,11 +93,12 @@ export function AppShellRuntime({
   return (
     <BrowserRouter basename={basename}>
       <AppShellProviders auth={runtimeAuth} locale={locale} setLocale={setLocale} currency={currency}>
+        {children}
         <Routes>
           <Route
             element={
               <AuthGate loginPath={runtimeAuth.loginPath} fallback={runtimeAuth.unauthenticatedFallback}>
-                <ShellLayout
+                <Layout
                   menuGroups={runtime.menuGroups}
                   title={title}
                   breadcrumb={breadcrumb}
