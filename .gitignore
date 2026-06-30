@@ -67,3 +67,4 @@ tools/etendo-go-ar/artifacts/*/processes.json
 tools/etendo-go-ar/artifacts/*/raw-query-results/
 
 etendo_core_ar/
+tools/etendo-go-ar/app-shell/.env.local
