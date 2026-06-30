@@ -70,7 +70,6 @@ export function AppShellRuntime({
 }) {
   const runtime = createAppShellConfig({
     ...config,
-    menuGroups: menuGroups || config?.menuGroups,
     reports: reports || config?.reports,
     routes: routes || config?.routes,
     auth: auth || config?.auth,
@@ -99,7 +98,7 @@ export function AppShellRuntime({
             element={
               <AuthGate loginPath={runtimeAuth.loginPath} fallback={runtimeAuth.unauthenticatedFallback}>
                 <Layout
-                  menuGroups={runtime.menuGroups}
+                  menuGroups={menuGroups || runtime.menuGroups}
                   title={title}
                   breadcrumb={breadcrumb}
                   rightExtras={rightExtras}
