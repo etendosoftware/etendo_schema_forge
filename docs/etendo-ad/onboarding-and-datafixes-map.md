@@ -71,7 +71,8 @@ Flow inside `handleOnboarding` (approx. lines):
 | 3 | `markOrgReady` (~1131) | `OnboardingMarkOrgReadyService.java` | `MarkOrgReadyStep` |
 | 4 | `setupFiscalData` (~1148) | `OnboardingFiscalDataSetupService.java` | — (D1 legal-entity area) |
 | 5 | `ensureDefaultCustomer` (~1165) | `OnboardingDefaultCustomerService.java` | — |
-| 6 | `registerBaseline` (~1202) | `OnboardingBaselineService.java` **(WIRED LIVE 2026-06-11)** | — (no step; service is the single source) |
+| 6 | `schedulePsd2Sync` | `OnboardingPsd2SyncService.java` **(WIRED LIVE 2026-06-28)** | — (no step; non-fatal + post-commit, see note) |
+| 7 | `registerBaseline` (~1202) | `OnboardingBaselineService.java` **(WIRED LIVE 2026-06-11)** | — (no step; service is the single source) |
 
 Each helper: sends `sendProgress(... IN_PROGRESS)`, calls its service, sends `done`, returns `true`; on exception sends `PROGRESS_ERROR` + `sendFinalResult(false, …)` and returns `false` (which aborts `ensureOnboardingDataset`, so the outer `catch`/rollback fires).
 
@@ -81,7 +82,10 @@ Service files (all in `modules/com.etendoerp.go/src/com/etendoerp/go/onboarding/
 - `OnboardingMarkOrgReadyService.java`
 - `OnboardingFiscalDataSetupService.java`
 - `OnboardingDefaultCustomerService.java`
-- `OnboardingBaselineService.java` — **step 6, wired live 2026-06-11** (stamps the data-fix `BASELINE`; single source of truth — there is no `RegisterBaselineStep`, it was removed to avoid duplicating the SQL)
+- `OnboardingPsd2SyncService.java` — **step 6, wired live 2026-06-28** (creates one daily `AD_Process_Request` per client that runs PSD2 `Get Bank Statements` ~03:00–06:00, so Salt Edge-connected accounts auto-import statements; see the deviation note below)
+- `OnboardingBaselineService.java` — **step 7, wired live 2026-06-11** (stamps the data-fix `BASELINE`; single source of truth — there is no `RegisterBaselineStep`, it was removed to avoid duplicating the SQL)
+
+> **PSD2-sync deviations from the helper pattern (step 6):** `schedulePsd2Sync` is intentionally **non-fatal** — it always returns `true` and swallows errors (logging + `done` "skipped"), because the automatic statement sync is a convenience that must never block tenant onboarding. PSD2 is a hard dependency of `com.etendoerp.go` (`build.gradle` → `com.etendoerp:psd2.bank.integration`), so the AD_Process `PSD2_GetBankStatements` is expected to exist; the service still resolves it **by search key via DAL** (it is module sourcedata, not an importable Java symbol — never hardcode its UUID) and only `warn`-skips if it is missing (an unconfigured/partially-`update.database`d DB). It also has a **post-commit companion**: `OnboardingPsd2SyncService.activateSchedule(clientId)` is called in `handleOnboarding` **right after `commitDalChanges`** (not inside the chain), because the Quartz scheduler reads the `AD_Process_Request` row on its own DB connection, which cannot see uncommitted rows. If that immediate activation fails, the row's `SCH` status means Etendo's scheduler still picks it up on the next initialization. This is **not** a corrective data-fix gap, so it does **not** bump `ONBOARDING_PROVISIONED_THROUGH`.
 
 > **Baseline exception to the helper pattern:** `registerBaseline` (~1202) deliberately does NOT catch-and-return-false. A genuine SQL error **propagates** so `handleOnboarding`'s outer `catch` performs a clean `rollbackDalChanges`; swallowing it would poison the shared transaction and abort the otherwise-successful commit. The expected `ON CONFLICT DO NOTHING` → 0-rows outcome never throws (DETECTED conserved). See `OnboardingBaselineService` javadoc for the full failure-semantics contract.
 

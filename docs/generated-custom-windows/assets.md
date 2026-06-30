@@ -245,3 +245,54 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - `depreciationEndDate` is intentionally excluded — it is auto-computed by
   `AssetsHandler` from `depreciationStartDate + usableLifeMonths` and should not be
   requested from the user.
+
+## ETP-4334 — Visual & toolbar refinements (feature/ETP-4334)
+
+Window-scoped polish plus two cross-cutting changes. Items flagged **(global)** affect
+all windows; everything else is scoped to Assets via `decisions.json` or a custom component.
+
+### Window-scoped changes
+
+- `decisions.json` — `purchaseDate` now has `"dot": false`, removing the red status dot
+  from the grid cell (same treatment already applied to `depreciationStartDate`). The dot
+  was meaningless for this date column.
+- `decisions.json` — `"tabsSeparator": true` added. Draws a full-width `border-b` between
+  the form/sidebar region and the secondary tabs (Amortization Plan / Attachments),
+  spanning across the sidebar column too. Only takes effect together with the existing
+  `sidebarAboveTabsOnly` + sidebar content (both already present). See the generator note below.
+- `decisions.json` — `"formScrollPaddingX": "px-2"` added. The detail content container
+  (form + sidebar + tabs) now uses 8 px horizontal padding instead of the `px-6` (24 px)
+  default. `formScrollPaddingX` was already a generator passthrough; Assets simply did not
+  set it before.
+- `tools/app-shell/src/windows/custom/assets/index.jsx` — **new** custom wrapper (mirrors
+  the generated `index.jsx`) that passes `saveBeforeProcesses` to `AssetsPage`. This renders
+  the **Save** button before the process buttons (e.g. **Create Amortization**) in the
+  toolbar, so the order becomes `[delete] [Save] [Create Amortization]`. The flag is kept out
+  of the global generator vocabulary on purpose — it is an Assets-only toolbar preference.
+- `tools/app-shell/src/windows/registry.js` — `assets` entry added to `customLoaders` so the
+  route resolves to the custom wrapper above (overrides the generated `windowLoaders` entry;
+  `customLoaders` wins). `registry.js` is hand-maintained / pipeline-appended, so the override
+  survives regeneration.
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` — the Depreciation Config
+  grid is now always `grid grid-cols-2 gap-4` (was `grid-cols-1 max-w-sm` when depreciation
+  was off). The **Depreciate** ToggleCard previously resized when toggled because the grid
+  switched column templates; it now keeps a constant width in both states, and the
+  **Every month is 30 days** card simply appears in the second column when depreciation is enabled.
+
+### Cross-cutting changes
+
+- `cli/src/generate-frontend.js` + `cli/src/resolve-curated.js` — `tabsSeparator` wired as a
+  first-class `decisions.json` window prop (passthrough + `fragmentIf` emission, mirroring
+  `sidebarAboveTabsOnly`). Additive: defaults to `false`, so no other window's generated
+  output changes. Consumed by `DetailView.jsx` (the full-width border only renders when
+  `sidebarAboveTabsOnly && sidebarContent && tabsSeparator`).
+- **(global)** `tools/app-shell/src/components/contract-ui/DetailView.jsx`
+  (`renderExistingRecordSaveAction`) — the existing-record **Save** button now uses the
+  `Save` (floppy) icon with the light/outline style (`variant="outline"`,
+  `bg-white border-[#D1D4DB] text-[#121217]`, icon color `#64748B`) instead of the `Check`
+  icon on the dark primary button. This affects **all non-draft windows** and aligns the
+  existing-record Save with the new-record Save (which already used the floppy icon) and the
+  draft-mode "Save Draft" button.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new `saveBeforeProcesses`
+  prop (default `false`). When set, `renderSaveActions` is rendered before the process-button
+  block instead of after it. Default-off, so no behavioral change for any other window.

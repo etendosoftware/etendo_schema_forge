@@ -1,8 +1,8 @@
 {
-  "version": "0.59.0",
+  "version": "0.60.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-06-29T12:09:16.568Z",
-  "checksum": "f9f0a1390a47943c",
+  "updatedAt": "2026-06-29T19:54:37.694Z",
+  "checksum": "b370f896543f140f",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -527,7 +527,7 @@
             "grid": true,
             "form": false,
             "sourceRequired": true,
-            "gridOrder": 5
+            "gridOrder": 6
           },
           {
             "name": "summedLineAmount",
@@ -643,6 +643,7 @@
               "source": "0"
             },
             "defaultValue": "0",
+            "gridOrder": 7,
             "displayLogic": {
               "raw": "@Processed@='Y' & @Ispaid@='N'",
               "evaluable": true
@@ -761,6 +762,7 @@
               "true": "green",
               "false": "orange"
             },
+            "gridOrder": 5,
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -1343,7 +1345,7 @@
             "required": false,
             "grid": true,
             "form": false,
-            "gridOrder": 7
+            "gridOrder": 8
           },
           {
             "name": "eTGODeliveryStatus",
@@ -1356,7 +1358,7 @@
             "required": false,
             "grid": true,
             "form": false,
-            "gridOrder": 8
+            "gridOrder": 9
           }
         ],
         "searchableFields": [

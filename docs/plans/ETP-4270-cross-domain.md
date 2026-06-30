@@ -1,41 +1,49 @@
 # ETP-4270 — Cross-Domain Plan
 
-This branch (`feature/ETP-4270`) merges `epic/ETP-3504` and intentionally touches
-two domains in a single push. This plan documents that crossing so the domain
-boundary gate can be approved with the `cross-domain-approved` label.
+This branch (`feature/ETP-4270`) intentionally touches two windows in a single
+push. This plan documents that crossing so the domain boundary gate can be
+approved with the `cross-domain-approved` label.
 
 ## Domains
 
-1. **`window:physical-inventory`** (primary)
-   - The Physical Inventory UI redesign for ETP-4270 plus the integration of the
-     epic's `menuActions.post` action into `decisions.json`.
-   - Affected: `artifacts/physical-inventory/**`,
-     `docs/generated-custom-windows/physical-inventory.md`,
-     `e2e/tests/flows/physical-inventory.spec.js`,
-     `tools/app-shell/src/windows/custom/physical-inventory/**`.
+Both windows belong to the same `inventory` vertical. The change is a single,
+identical bug fix applied to each.
 
-2. **`generator-change`** (incidental)
-   - One latent test-infra fix: `cli/test/method-budget.test.js` used
-     `URL.pathname`, which leaves `%20` in filesystem paths when the repo lives in
-     a directory whose name contains spaces. Switched to `fileURLToPath`.
-   - This fix unblocks the local pre-push hook itself; it has no behavioral impact
-     on the Physical Inventory window. It rides along in this branch rather than a
-     separate PR because it is a one-line, behavior-preserving correction.
+1. **`window:physical-inventory`**
+   - `processNow` field visibility changed from `discarded` to `system` in
+     `decisions.json` so the draft-mode Process/Confirm action is registered in
+     NEO Headless (`isIncluded = Y`) instead of returning `404 Action not found`.
+   - Affected: `artifacts/physical-inventory/decisions.json`,
+     `artifacts/physical-inventory/contract.json`,
+     `artifacts/physical-inventory/contract.mcp.json`.
+
+2. **`window:goods-movements`**
+   - Same fix: `processNow` visibility `discarded` → `system` so the
+     `action/processNow` endpoint resolves.
+   - Affected: `artifacts/goods-movements/decisions.json`,
+     `artifacts/goods-movements/contract.json`,
+     `artifacts/goods-movements/contract.mcp.json`.
+
+### Root cause
+
+`push-to-neo.js mapVisibility()` maps `discarded` → `isIncluded: 'N'`. NEO's
+`NeoButtonActionHelper.findButtonColumn()` only scans included fields, so a
+`discarded` button column is never found and the action 404s. `system` keeps the
+field in the backend (executable action) while staying out of the frontend form.
 
 ## Tests
 
-- Full CLI suite: `node --test cli/test/*.test.js` → **16131 pass, 0 fail**.
-- Physical Inventory regenerated from `decisions.json` via
-  `make regen ONLY=physical-inventory` → contract `0.27.0`, 126 contract tests.
-- Pipeline validator: `node cli/src/validate-pipeline.js --scope=physical-inventory`
-  → **0 violations**.
+- `make regen ONLY=goods-movements,physical-inventory PUSH_TO_NEO=1` →
+  regenerated cleanly; **no `generated/` changes** (the button is not a form
+  field either way), confirming the fix is backend-only.
+- Manual: Process/Confirm button on both windows no longer returns 404; the
+  document processes successfully.
+- Contract integrity: `processNow` now resolves to `visibility: "system"`
+  (`isIncluded: 'Y'`, `isReadOnly: 'Y'`) in both contracts.
 
 ## Rollback
 
-- The generator-change fix is isolated in commit
-  `Feature ETP-4270: Fix method-budget test path decoding on spaced paths`.
-  Revert that single commit to drop the test-infra change without touching the
-  window work.
-- The Physical Inventory changes are reproducible from `decisions.json`; reverting
-  the merge of `epic/ETP-3504` and re-running `make regen ONLY=physical-inventory`
-  restores the previous window state.
+- The fix is reproducible from `decisions.json`. To revert, set
+  `processNow.visibility` back to `discarded` in both windows' `decisions.json`,
+  re-run `make regen ONLY=goods-movements,physical-inventory PUSH_TO_NEO=1`, and
+  `./gradlew export.database`. No schema or data migration is involved.

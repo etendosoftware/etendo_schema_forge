@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.1",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-06-26T15:07:43.486Z",
-  "contractChecksum": "120f4ddca5a9339e",
+  "updatedAt": "2026-06-29T19:59:03.963Z",
+  "contractChecksum": "becdfd5824068e14",
   "apiPrediction": {
     "specName": "financial-account-detail",
     "baseUrl": "/sws/neo/financial-account-detail",
@@ -788,7 +788,13 @@
             "readOnly": true,
             "defaultValue": "DC"
           },
-          "psd2ReconnectFa": {}
+          "psd2ReconnectFa": {},
+          "eTGOAmountTolerance": {
+            "defaultValue": "0"
+          },
+          "eTGODateTolerance": {
+            "defaultValue": "3"
+          }
         }
       },
       "transaction": {
@@ -1065,5 +1071,5 @@
       "etprReactivateTransaction"
     ]
   },
-  "checksum": "b905b031c9091937"
+  "checksum": "34f019c02a8ae48a"
 }

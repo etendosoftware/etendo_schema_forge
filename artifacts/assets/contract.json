@@ -1,8 +1,8 @@
 {
   "version": "0.36.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-06-29T12:08:11.612Z",
-  "checksum": "641891e714be07c1",
+  "updatedAt": "2026-06-29T20:07:16.268Z",
+  "checksum": "b69d42afd8ba293b",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -71,7 +71,10 @@
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
       "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
       "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
       "listbarPaddingX": "px-2",
@@ -83,8 +86,7 @@
           "component": "AssetsAmortizationPanel"
         }
       ],
-      "layoutType": "default",
-      "sidebarAboveTabsOnly": true
+      "layoutType": "default"
     },
     "entities": {
       "assets": {
@@ -373,6 +375,7 @@
             "required": false,
             "grid": true,
             "form": false,
+            "dot": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -1079,7 +1082,10 @@
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
       "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
       "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
       "listbarPaddingX": "px-2",
@@ -1090,8 +1096,7 @@
           "labelKey": "assetsAmortizationPlanTab",
           "component": "AssetsAmortizationPanel"
         }
-      ],
-      "sidebarAboveTabsOnly": true
+      ]
     },
     "entities": {
       "assets": {

@@ -1,7 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-
-// ─── Mocks ────────────────────────────────────────────────────────────────────
-
+// Mocks must be hoisted before imports (Vitest hoisting)
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
@@ -26,6 +23,10 @@ vi.mock('@/components/ui/date-field', () => ({
   ),
 }));
 
+vi.mock('../paymentModalUi.jsx', () => ({
+  DirBadge: ({ dir }) => <div data-testid={`dir-badge-${dir}`} />,
+}));
+
 // apiFetch is provided per-test via a module-level mock fn so each test can
 // shape the catalog + submit responses independently.
 let mockApiFetch;
@@ -33,6 +34,8 @@ vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: () => (...args) => mockApiFetch(...args),
 }));
 
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import NewPaymentEntryModal from '../NewPaymentEntryModal.jsx';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -139,7 +142,6 @@ describe('NewPaymentEntryModal', () => {
         sources: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 200 }],
       });
       renderModal();
-      // Split-adaptive design: a "credit" source renders the credit group title.
       expect(await screen.findByText('cpCreditGroupTitle')).toBeInTheDocument();
     });
   });
@@ -149,7 +151,6 @@ describe('NewPaymentEntryModal', () => {
       renderModal();
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       const confirm = screen.getByText('cpConfirm').closest('button');
-      // Confirm is gated on `loading`; wait until the catalog fetch settles.
       await waitFor(() => expect(confirm).not.toBeDisabled());
     });
 
@@ -165,7 +166,6 @@ describe('NewPaymentEntryModal', () => {
       renderModal({ dir: 'in', outstanding: 1000 });
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '1200' } });
-      // The credit/refund radios appear in the excess band.
       fireEvent.click(screen.getByText('cpLeaveCredit').closest('button'));
       const confirm = screen.getByText('cpConfirm').closest('button');
       await waitFor(() => expect(confirm).not.toBeDisabled());
@@ -251,7 +251,6 @@ describe('NewPaymentEntryModal', () => {
       renderModal();
       await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
       const confirm = screen.getByTestId('cp-confirm');
-      // Prefilled with today on mount → enabled (exact balance).
       await waitFor(() => expect(confirm).not.toBeDisabled());
 
       fireEvent.change(screen.getByTestId('date-field'), { target: { value: '' } });
@@ -265,7 +264,6 @@ describe('NewPaymentEntryModal', () => {
 
       fireEvent.click(screen.getByTestId('cp-save-draft'));
 
-      // The useUI mock returns the key as-is, so assert the i18n key.
       expect(await screen.findByText('paymentDateRequired')).toBeInTheDocument();
     });
 

@@ -244,7 +244,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
         description={ui('assetsConfigDesc')}
         data-testid="GroupDivider__8e32ca" />
       <div className="mb-5 space-y-4">
-        <div className={`grid gap-4 ${depreciate ? 'grid-cols-2' : 'grid-cols-1 max-w-sm'}`}>
+        <div className="grid grid-cols-2 gap-4">
           <ToggleCard
             label={ui('assetsDepreciateLabel')}
             description={ui('assetsDepreciateDesc')}

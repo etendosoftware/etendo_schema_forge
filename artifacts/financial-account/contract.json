@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.1",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-06-29T12:08:12.003Z",
-  "checksum": "120f4ddca5a9339e",
+  "updatedAt": "2026-06-29T19:59:03.963Z",
+  "checksum": "becdfd5824068e14",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -71,10 +71,7 @@
             "enumValues": [
               {
                 "value": "B",
-                "name": "Bank",
-                "labels": {
-                  "es_ES": "Banco"
-                }
+                "name": "Bank"
               },
               {
                 "value": "CA",
@@ -82,10 +79,7 @@
               },
               {
                 "value": "C",
-                "name": "Cash",
-                "labels": {
-                  "es_ES": "Caja"
-                }
+                "name": "Cash"
               }
             ],
             "defaultValue": "B",
@@ -570,6 +564,40 @@
               "raw": "@PSD2_ClientHasApiKey@=1 & @PSD2_HasInactiveConnections@>0 & @Type@!'C'",
               "evaluable": true
             }
+          },
+          {
+            "name": "eTGOAmountTolerance",
+            "apiKey": "eTGOAmountTolerance",
+            "column": "EM_ETGO_Amount_Tolerance",
+            "label": "EM_ETGO_Amount Tolerance",
+            "type": "decimal",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "defaultValue": "0"
+          },
+          {
+            "name": "eTGODateTolerance",
+            "apiKey": "eTGODateTolerance",
+            "column": "EM_ETGO_Date_Tolerance",
+            "label": "Date Tolerance",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "derivation": {
+              "type": "computed",
+              "source": "3"
+            },
+            "defaultValue": "3"
           }
         ],
         "searchableFields": [],
@@ -615,6 +643,20 @@
               "type": "computed",
               "source": "DC"
             }
+          },
+          {
+            "name": "eTGOAmountTolerance",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          },
+          {
+            "name": "eTGODateTolerance",
+            "derivation": {
+              "type": "computed",
+              "source": "3"
+            }
           }
         ],
         "javaQualifier": "financialAccountHeaderHandler"
@@ -644,24 +686,15 @@
             "enumValues": [
               {
                 "value": "BPD",
-                "name": "BP Deposit",
-                "labels": {
-                  "es_ES": "Cobro"
-                }
+                "name": "BP Deposit"
               },
               {
                 "value": "BPW",
-                "name": "BP Withdrawal",
-                "labels": {
-                  "es_ES": "Pago"
-                }
+                "name": "BP Withdrawal"
               },
               {
                 "value": "BF",
-                "name": "Bank fee",
-                "labels": {
-                  "es_ES": "Tasa de Banco"
-                }
+                "name": "Bank fee"
               }
             ],
             "defaultValue": "BPD",
@@ -694,59 +727,35 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment",
-                "labels": {
-                  "es_ES": "A Pagar"
-                }
+                "name": "Awaiting Payment"
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution",
-                "labels": {
-                  "es_ES": "A Ejecutar"
-                }
+                "name": "Awaiting Execution"
               },
               {
                 "value": "RPVOID",
-                "name": "Void",
-                "labels": {
-                  "es_ES": "Anulado"
-                }
+                "name": "Void"
               },
               {
                 "value": "PPM",
-                "name": "Payment Made",
-                "labels": {
-                  "es_ES": "Pagado"
-                }
+                "name": "Payment Made"
               },
               {
                 "value": "RPR",
-                "name": "Payment Received",
-                "labels": {
-                  "es_ES": "Cobrado"
-                }
+                "name": "Payment Received"
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared",
-                "labels": {
-                  "es_ES": "Cobro depositado"
-                }
+                "name": "Deposited not Cleared"
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared",
-                "labels": {
-                  "es_ES": "Pago reintegrado"
-                }
+                "name": "Withdrawn not Cleared"
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared",
-                "labels": {
-                  "es_ES": "Conciliado"
-                }
+                "name": "Payment Cleared"
               }
             ],
             "defaultValue": "'RPAP'",
@@ -2461,6 +2470,22 @@
             "type": "button",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "eTGOAmountTolerance",
+            "apiKey": "eTGOAmountTolerance",
+            "column": "EM_ETGO_Amount_Tolerance",
+            "type": "decimal",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "eTGODateTolerance",
+            "apiKey": "eTGODateTolerance",
+            "column": "EM_ETGO_Date_Tolerance",
+            "type": "integer",
+            "visibility": "editable",
+            "required": false
           }
         ],
         "javaQualifier": "financialAccountHeaderHandler"
@@ -3974,6 +3999,22 @@
         "description": "Default value for 'currentBalance' in account should be a string"
       },
       {
+        "id": "t-default-value-type-account-eTGOAmountTolerance",
+        "category": "default-value-type",
+        "entity": "account",
+        "field": "eTGOAmountTolerance",
+        "runner": "node",
+        "description": "Default value for 'eTGOAmountTolerance' in account should be a string"
+      },
+      {
+        "id": "t-default-value-type-account-eTGODateTolerance",
+        "category": "default-value-type",
+        "entity": "account",
+        "field": "eTGODateTolerance",
+        "runner": "node",
+        "description": "Default value for 'eTGODateTolerance' in account should be a string"
+      },
+      {
         "id": "t-default-value-type-account-pSD2ConnectionStatus",
         "category": "default-value-type",
         "entity": "account",
@@ -4966,6 +5007,22 @@
         "description": "Field 'description' should be present in account"
       },
       {
+        "id": "t-field-presence-account-eTGOAmountTolerance",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "eTGOAmountTolerance",
+        "runner": "node",
+        "description": "Field 'eTGOAmountTolerance' should be present in account"
+      },
+      {
+        "id": "t-field-presence-account-eTGODateTolerance",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "eTGODateTolerance",
+        "runner": "node",
+        "description": "Field 'eTGODateTolerance' should be present in account"
+      },
+      {
         "id": "t-field-presence-account-iBAN",
         "category": "field-presence",
         "entity": "account",
@@ -5524,6 +5581,22 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in account"
+      },
+      {
+        "id": "t-field-type-account-eTGOAmountTolerance",
+        "category": "field-type",
+        "entity": "account",
+        "field": "eTGOAmountTolerance",
+        "runner": "node",
+        "description": "Field 'eTGOAmountTolerance' should have type 'number' in account"
+      },
+      {
+        "id": "t-field-type-account-eTGODateTolerance",
+        "category": "field-type",
+        "entity": "account",
+        "field": "eTGODateTolerance",
+        "runner": "node",
+        "description": "Field 'eTGODateTolerance' should have type 'number' in account"
       },
       {
         "id": "t-field-type-account-iBAN",
@@ -8842,15 +8915,15 @@
       }
     ],
     "summary": {
-      "total": 665,
+      "total": 671,
       "byCategory": {
         "action-endpoint": 21,
         "crud-flags": 4,
-        "default-value-type": 26,
+        "default-value-type": 28,
         "displaylogic-evaluable": 43,
         "displaylogic-valid": 43,
-        "field-presence": 70,
-        "field-type": 70,
+        "field-presence": 72,
+        "field-type": 72,
         "readonlylogic-evaluable": 29,
         "readonlylogic-valid": 29,
         "rule-declared": 225,
@@ -8859,7 +8932,7 @@
         "visibility": 4
       },
       "byRunner": {
-        "node": 665,
+        "node": 671,
         "junit": 0
       }
     }

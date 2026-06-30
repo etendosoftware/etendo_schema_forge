@@ -21,6 +21,7 @@ const COLUMNS = [
     },
   },
   { key: 'processed', column: 'Processed', type: 'status', enumLabels: { 'true': 'statusProcessed', 'false': 'statusDraft' } },
+  { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
 ];
 
 function CustomInventoryTable(props) {

@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
+  "version": "0.29.1",
   "generatedAt": "2026-06-29T12:25:17.116Z",
-  "updatedAt": "2026-06-29T17:06:06.204Z",
-  "checksum": "df22c8e80ad8cb12",
+  "updatedAt": "2026-06-29T22:43:32.117Z",
+  "checksum": "74ff606db3b82619",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -57,7 +57,15 @@
       },
       "noHeaderBorder": true,
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "inventory": {
@@ -83,6 +91,7 @@
               "source": "@#Date@"
             },
             "defaultValue": "@#Date@",
+            "gridOrder": 1,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -106,6 +115,7 @@
               "source": "@#Date@"
             },
             "defaultValue": "@#Date@",
+            "gridOrder": 2,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -126,6 +136,7 @@
             "sourceRequired": true,
             "reference": "Warehouse",
             "inputMode": "search",
+            "gridOrder": 3,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -177,6 +188,7 @@
               "true": "green",
               "false": "orange"
             },
+            "gridOrder": 5,
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -276,7 +288,8 @@
                 "value": "false",
                 "name": "statusDraft"
               }
-            ]
+            ],
+            "gridOrder": 4
           }
         ],
         "searchableFields": [
@@ -613,7 +626,15 @@
         "navigateTo": "/physical-inventory/new"
       },
       "noHeaderBorder": true,
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "inventory": {
@@ -682,7 +703,7 @@
             "apiKey": "processNow",
             "column": "Processing",
             "type": "button",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {

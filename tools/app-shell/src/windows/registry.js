@@ -162,6 +162,7 @@ const customLoaders = {
   'general-ledger-configuration': () => import('./custom/general-ledger-configuration/index.jsx'),
   'return-to-vendor-shipment': () => import('./custom/return-to-vendor-shipment/index.jsx'),
   'not-posted-documents': () => import('./custom/not-posted-documents/index.jsx'),
+  'assets': () => import('./custom/assets/index.jsx'),
 };
 
 /**

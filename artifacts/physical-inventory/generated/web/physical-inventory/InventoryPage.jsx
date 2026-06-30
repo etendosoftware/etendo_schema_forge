@@ -24,7 +24,7 @@ const statusField = 'processed';
 
 // @sf-generated-start extraBadges:inventory
 const extraBadges = [
-
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
 ];
 // @sf-generated-end extraBadges:inventory
 

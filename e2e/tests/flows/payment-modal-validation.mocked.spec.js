@@ -20,6 +20,11 @@ import { login } from '../helpers/auth.js';
  *
  * Runs in mock mode — no Etendo backend required.
  *
+ * Flow (updated for the two-step payment UI):
+ *   1. Badge click → opens InvoicePaymentHistoryModal (step 1).
+ *   2. "+ Añadir pago" button → opens NewPaymentEntryModal (step 2).
+ *   3. Date field interactions and confirm button validations happen inside step 2.
+ *
  * Locale note: the app loads real locale files in mock mode and defaults to
  * es_ES for anonymous sessions. All text assertions use /EN|ES/i style regexes
  * to remain locale-agnostic.
@@ -110,20 +115,25 @@ async function openPaymentModal(page) {
   const badge = page.locator('[style*="cursor: pointer"]').filter({ hasText: /500/ }).first();
   await expect(badge).toBeVisible({ timeout: 5_000 });
   await badge.click();
-  await expect(page.getByTestId('cp-history-modal')).toBeVisible({ timeout: 5_000 });
+  await expect(
+    page.getByTestId('InvoicePaymentHistoryModal__panel')
+  ).toBeVisible({ timeout: 5_000 });
 }
 
-/** Step 2 — click "+ Add payment" and assert the new-payment modal is visible. */
+/** Step 2 — click "Añadir pago" and assert the new-payment modal is visible. */
 async function openNewPaymentModal(page) {
-  const addBtn = page.getByTestId('cp-add-payment');
-  await expect(addBtn).toBeVisible({ timeout: 8_000 });
-  await addBtn.click();
-  await expect(page.getByTestId('cp-new-payment-modal')).toBeVisible({ timeout: 5_000 });
+  const addPaymentBtn = page.getByTestId('InvoicePaymentHistoryModal__add-btn');
+  await expect(addPaymentBtn).toBeVisible({ timeout: 8_000 });
+  await addPaymentBtn.click();
+  await expect(
+    page.locator('[data-testid="cp-new-payment-modal"]')
+  ).toBeVisible({ timeout: 3_000 });
 }
 
 /** Clear the date field inside the new-payment modal. */
 async function clearDateField(page) {
-  const dateInput = page.getByTestId('DateField__7727b3');
+  const modal = page.locator('[data-testid="cp-new-payment-modal"]');
+  const dateInput = modal.locator('input[type="text"][inputmode="numeric"]').first();
   await dateInput.click({ clickCount: 3 });
   await page.keyboard.press('Delete');
   await page.keyboard.press('Tab');
@@ -146,7 +156,9 @@ test.describe('Payment modal date validation (mocked)', () => {
 
   test('clicking the payment badge opens the payment history modal', async ({ page }) => {
     await openPaymentModal(page);
-    await expect(page.getByTestId('cp-history-modal')).toBeVisible({ timeout: 3_000 });
+    await expect(
+      page.getByTestId('InvoicePaymentHistoryModal__panel')
+    ).toBeVisible({ timeout: 3_000 });
   });
 
   test('Confirm is disabled when the date field is cleared', async ({ page }) => {

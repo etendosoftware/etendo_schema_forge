@@ -35,6 +35,7 @@ function openCommandPalette() {
 export default function TopBar({
   onBack,
   title,
+  titleExtra,
   breadcrumb,
   recordCount,
   menuAction,
@@ -89,6 +90,9 @@ export default function TopBar({
                   <span className="inline-flex items-center justify-center w-7 h-6 px-2 py-1 text-xs font-medium text-muted-foreground bg-page-bg border border-[#D1D4DB] rounded-lg shrink-0">
                     {recordCount}
                   </span>
+                )}
+                {titleExtra && (
+                  <span className="flex items-center shrink-0">{titleExtra}</span>
                 )}
               </div>
               {breadcrumb && (

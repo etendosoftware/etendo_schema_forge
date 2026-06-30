@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import SendToSifButton from '../shared/SendToSifButton.jsx';
-import InvoicePaymentModal from '../shared/InvoicePaymentModal.jsx';
+import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import CloneButton from '../shared/CloneButton.jsx';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency';
@@ -122,15 +122,15 @@ export default function PurchaseInvoiceTopbar({ data, recordId, token, apiBaseUr
           </span>
         );
       })()}
-
       {showPaymentModal && (
-        <InvoicePaymentModal
+        <InvoicePaymentHistoryModal
           invoiceId={data.id}
           invoiceData={data}
           specName="purchase-invoice"
           apiBaseUrl={apiBaseUrl}
           onClose={handleModalClose}
-          data-testid="InvoicePaymentModal__8addd1" />
+          onPaymentAdded={handleModalClose}
+          data-testid="InvoicePaymentHistoryModal__8addd1" />
       )}
     </>
   );

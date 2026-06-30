@@ -51,7 +51,7 @@ for (const { tag, artifactDir, labelEs, labelEn } of SCOPES) {
       assert.ok(cfg, 'expected entities.header.fields.eTGODeliveryStatus');
       assert.equal(cfg.visibility, 'readOnly');
       assert.equal(cfg.grid, true);
-      assert.equal(cfg.gridOrder, 8);
+      assert.equal(cfg.gridOrder, 9);
       assert.equal(cfg.form, false);
     });
 
@@ -69,7 +69,7 @@ for (const { tag, artifactDir, labelEs, labelEn } of SCOPES) {
       assert.ok(field, 'expected header.fields entry for apiKey "eTGODeliveryStatus"');
       assert.equal(field.column, 'em_etgo_delivery_status');
       assert.equal(field.grid, true);
-      assert.equal(field.gridOrder, 8);
+      assert.equal(field.gridOrder, 9);
     });
 
     it('contract.json carries the labelOverrides forward', () => {

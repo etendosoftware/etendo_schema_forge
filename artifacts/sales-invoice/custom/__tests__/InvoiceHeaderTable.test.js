@@ -20,6 +20,7 @@ const expectedKeysInOrder = [
   'eTGODueDate',
   'businessPartner',
   'documentStatus',
+  'posted',
   'grandTotalAmount',
   'outstandingAmount',
   'eTGODeliveryStatus',
@@ -30,7 +31,7 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     assert.ok(columnsBlock, 'expected `const columns = useMemo(() => [...], [])` block');
   });
 
-  it('renders the nine expected columns in order', () => {
+  it('renders the ten expected columns in order', () => {
     const block = columnsBlock[1];
     const keys = [...block.matchAll(/key:\s*'([^']+)'/g)].map(m => m[1]);
     assert.deepEqual(keys, expectedKeysInOrder);
@@ -43,7 +44,7 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     assert.match(src, /key: 'businessPartner', column: 'C_BPartner_ID'/);
     assert.match(src, /key: 'documentStatus', column: 'DocStatus'/);
     assert.match(src, /key: 'grandTotalAmount', column: 'GrandTotal'/);
-    assert.match(src, /key: 'outstandingAmount', column: 'OutstandingAmt'/);
+    assert.match(src, /key: 'outstandingAmount',[\s\S]{0,30}column: 'OutstandingAmt'/);
     assert.match(src, /key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status'/);
   });
 
@@ -92,7 +93,7 @@ describe('Sales InvoiceHeaderTable — type filter (ETP-4035 rework)', () => {
   });
 
   it('renders DataTable with FILTERS (no wrapping div with custom toolbar)', () => {
-    assert.match(src, /return <DataTable columns=\{columns\} filters=\{FILTERS\}/,
+    assert.match(src, /<DataTable columns=\{columns\} filters=\{FILTERS\}/,
       'Component must render DataTable directly without a custom filter wrapper');
   });
 });

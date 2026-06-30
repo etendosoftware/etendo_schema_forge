@@ -225,6 +225,7 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
+          "gridOrder": 5,
           "badge": true,
           "badgeLabels": {
             "true": {
@@ -245,7 +246,7 @@
         "grandTotalAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 5,
+          "gridOrder": 6,
           "section": "summary"
         },
         "summedLineAmount": {
@@ -255,21 +256,21 @@
         "outstandingAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "form": false,
           "section": "summary"
         },
         "eTGODueDate": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": false,
           "searchable": true
         },
         "eTGODeliveryStatus": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 8,
+          "gridOrder": 9,
           "form": false
         },
         "isPaid": {
