@@ -171,7 +171,7 @@ describe('AssetsAmortizationPanel', () => {
     });
     // The percentage cell should show a dash
     const tds = container.querySelectorAll('td');
-    const pctCell = tds[1]; // second td is percentage
+    const pctCell = tds[2]; // third td is percentage (tds[0] is checkbox)
     expect(pctCell.textContent).toContain('\u2014');
   });
 
@@ -188,7 +188,7 @@ describe('AssetsAmortizationPanel', () => {
       expect(screen.getByText('EUR 100')).toBeInTheDocument();
     });
     const tds = container.querySelectorAll('td');
-    const periodCell = tds[0];
+    const periodCell = tds[1]; // tds[0] is checkbox
     expect(periodCell.textContent).toContain('\u2014');
   });
 
