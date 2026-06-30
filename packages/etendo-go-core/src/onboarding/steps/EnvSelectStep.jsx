@@ -54,6 +54,9 @@ export function EnvSelectStep({ config, stepData, onNext, onBack, goToStep, toke
           action: 'enter_environment',
           status: 'success',
         });
+        if (config.onSessionStarted) {
+          await config.onSessionStarted(env);
+        }
         window.location.href = buildAppReturnToHref(
           getSafeReturnTo(window.location.search),
           window.location.pathname

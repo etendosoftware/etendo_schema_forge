@@ -4,6 +4,7 @@ import { useUI } from '@etendosoftware/app-shell-core/i18n';
 import { checkSalesInvoiceReadiness } from './onboarding/onboardingReadiness.js';
 import { track } from '../lib/observability.js';
 import { buildObservabilityEvent } from '../lib/observability/events.js';
+import { trackSessionStarted } from '../lib/observability/health-events.js';
 
 export default function OnboardingPage() {
   const ui = useUI();
@@ -35,6 +36,11 @@ export default function OnboardingPage() {
       const name = event.name || (typeof eventDefinition === 'string' ? eventDefinition : eventDefinition?.name);
       return track(name, { ...properties, ...event.properties });
     },
+    onSessionStarted: (env) => trackSessionStarted({
+      username: env.adminUserName || env.adminUser,
+      clientId: env.clientId,
+      clientName: env.clientName,
+    }),
   };
 
   return <OnboardingFlow steps={coreSteps} config={ES_CONFIG} data-testid="OnboardingFlow__79cf84" />;
