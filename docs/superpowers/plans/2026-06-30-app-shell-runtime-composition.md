@@ -623,6 +623,113 @@ git add docs/superpowers/specs/2026-06-30-schema-forge-core-split-design.md
 git commit -m "Feature ETP-4346: Mark App Shell Composition Spike acceptance criteria as verified"
 ```
 
+## Task 5: Close Minor follow-ups from the final whole-branch review
+
+The final review (after Tasks 1-4 landed) approved the branch with no Critical/Important findings, but flagged two Minor items worth closing before treating Phase 0 as fully done — both are small, scoped additions, not new design decisions.
+
+**Files:**
+- Create: `tools/app-shell/src/__tests__/runtime-routes-integration.vitest.js` — renders the real `AppShellRuntime` with the real `buildRuntimeRoutes()` output and proves each route class actually mounts.
+- Modify: `packages/app-shell-core/src/runtime/AppShellRuntime.jsx` — add a one-line doc comment on the `layout`/`menuGroups` relationship.
+
+**Interfaces:**
+- Consumes: `AppShellRuntime` from `@etendosoftware/app-shell-core/runtime`; `buildRuntimeRoutes` from `../runtime-routes.jsx`; `windowMap` fixture data shaped like `buildWindowMap()`'s output (`{ [windowName]: { ...config } }`, consumed by `WindowLoader`).
+- Produces: nothing new consumed elsewhere — this is a leaf test file and a comment, no behavior change.
+
+- [ ] **Step 1: Write the integration test**
+
+The final review's exact gap: `runtime-routes.vitest.js` (Task 2) never renders anything, `AppShellRuntime.test.jsx` (Task 1) only renders trivial `<div>` routes, and `App.vitest.jsx` (Task 3) mocks `AppShellRuntime` out entirely — so no single test proves `buildRuntimeRoutes()`'s output actually mounts correctly through the real runtime. Close that gap directly:
+
+```jsx
+// tools/app-shell/src/__tests__/runtime-routes-integration.vitest.js
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
+import { buildRuntimeRoutes } from '../runtime-routes.jsx';
+
+vi.mock('../windows/WindowLoader.jsx', () => ({
+  default: ({ windowMap, apiBaseUrl }) => (
+    <div data-testid="window-loader">{Object.keys(windowMap).join(',')}:{apiBaseUrl}</div>
+  ),
+}));
+
+function renderAt(path, windowMap = { 'sales-order': { slug: 'sales-order' } }) {
+  const routes = buildRuntimeRoutes({ windowMap, apiBaseUrl: 'http://x/api' });
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <AppShellRuntime
+        basename="/"
+        menuGroups={[]}
+        routes={routes}
+        auth={{ loginPath: '/login' }}
+      />
+    </MemoryRouter>
+  );
+}
+
+describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
+  it('routes a window path through WindowLoader with the given windowMap', () => {
+    renderAt('/sales-order');
+    expect(screen.getByTestId('window-loader')).toHaveTextContent('sales-order:http://x/api');
+  });
+
+  it('routes a window record path through WindowLoader too', () => {
+    renderAt('/sales-order/123');
+    expect(screen.getByTestId('window-loader')).toBeInTheDocument();
+  });
+
+  it('renders a business landing page for a known path', () => {
+    renderAt('/dashboard');
+    expect(document.body.textContent).not.toBe('');
+  });
+
+  it('renders a public route without requiring auth', () => {
+    renderAt('/financial-account/psd2-callback');
+    expect(document.body.textContent).not.toContain('Loading');
+  });
+
+  it('resolves a lazy-loaded route via Suspense', async () => {
+    renderAt('/app-store');
+    expect(await screen.findByText(/.+/, {}, { timeout: 2000 })).toBeTruthy();
+  });
+});
+```
+
+`AppShellRuntime` is imported for real (not mocked) — only `WindowLoader` is mocked, since it does real `apiBaseUrl`/`windowMap`-driven fetching that's out of scope for this test. `@testing-library/react` is already a dependency of `tools/app-shell` (used by its other `.vitest.jsx` specs) — confirmed present, version `^16.3.2`.
+
+- [ ] **Step 2: Run the test**
+
+Run: `npx vitest run tools/app-shell/src/__tests__/runtime-routes-integration.vitest.js`
+Expected: all 5 tests PASS. If the dashboard/app-store pages need mock fetch wiring to render without erroring, mock whatever specific dependency throws (e.g. a data hook) rather than mocking the page itself — the point of this test is to prove real composition, not to re-mock everything back into a unit test.
+
+- [ ] **Step 3: Add the doc comment to `AppShellRuntime.jsx`**
+
+```jsx
+// packages/app-shell-core/src/runtime/AppShellRuntime.jsx
+// `menuGroups` is passed through to `layout` as-is (not normalized): a caller-supplied
+// `layout` component owns its own menu shape (e.g. tools/app-shell's `AppLayout` expects
+// the legacy `{group,section,icon,items:[{name,label,favname,slug}]}` shape its `SideMenu`
+// depends on). Normalization (`createAppShellConfig`) is intentionally NOT applied to
+// `menuGroups` for this reason — only `reports`/`routes`/`auth` go through it. The default
+// `ShellLayout` expects `{id,title,items:[{id,label,path,icon}]}`; if you rely on the
+// default layout AND pass raw `menuGroups`, normalize them yourself before passing them in.
+export function AppShellRuntime({
+```
+
+Place this directly above the `export function AppShellRuntime({` line.
+
+- [ ] **Step 4: Run both `app-shell-core` suites to confirm the comment-only change didn't break anything**
+
+Run: `npm test --workspace=packages/app-shell-core && npm run test:vitest --workspace=packages/app-shell-core`
+Expected: 362/362 and 3/3, unchanged from before (a comment cannot change behavior, but confirm anyway).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tools/app-shell/src/__tests__/runtime-routes-integration.vitest.js packages/app-shell-core/src/runtime/AppShellRuntime.jsx docs/superpowers/plans/2026-06-30-app-shell-runtime-composition.md
+git commit -m "Feature ETP-4346: Add route-composition integration test, doc menuGroups"
+```
+
 ---
 
 ## What This Plan Does Not Cover

@@ -51,6 +51,13 @@ export function AppShellProviders({
   );
 }
 
+// `menuGroups` is passed through to `layout` as-is (not normalized): a caller-supplied
+// `layout` component owns its own menu shape (e.g. tools/app-shell's `AppLayout` expects
+// the legacy `{group,section,icon,items:[{name,label,favname,slug}]}` shape its `SideMenu`
+// depends on). Normalization (`createAppShellConfig`) is intentionally NOT applied to
+// `menuGroups` for this reason — only `reports`/`routes`/`auth` go through it. The default
+// `ShellLayout` expects `{id,title,items:[{id,label,path,icon}]}`; if you rely on the
+// default layout AND pass raw `menuGroups`, normalize them yourself before passing them in.
 export function AppShellRuntime({
   basename = '/',
   config,
