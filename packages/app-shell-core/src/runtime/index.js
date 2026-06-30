@@ -1,4 +1,4 @@
-export { AppShellProviders, AppShellRuntime, AuthGate } from './AppShellRuntime.js';
+export { AppShellProviders, AppShellRuntime, AuthGate } from './AppShellRuntime.jsx';
 export {
   createAppShellConfig,
   createMenuGroup,
