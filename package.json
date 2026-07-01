@@ -6,18 +6,18 @@
     "node": ">=22"
   },
   "workspaces": [
-    "cli",
-    "tools/*",
-    "packages/*",
+    "tools/app-shell",
     "e2e"
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
-    "test": "mkdir -p artifacts && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=artifacts/test-report.xml 'cli/test/*.test.js' && node cli/src/test-report-html.js",
+    "test": "mkdir -p artifacts && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=artifacts/test-report.xml 'tools/app-shell/src/**/__tests__/*.test.js' 'tools/app-shell/test/*.test.js' 'artifacts/**/__tests__/*.test.js'",
     "check:data-testid": "./scripts/check-add-data-testid.sh",
     "apply:data-testid": "./scripts/apply-add-data-testid.sh"
   },
   "devDependencies": {
+    "@etendosoftware/schema-forge-cli": "0.1.1",
+    "@etendosoftware/app-shell-core": "0.1.0",
     "@etendosoftware/schema-forge-core": "0.1.0",
     "esbuild": "^0.28.0",
     "handlebars": "^4.7.9",
