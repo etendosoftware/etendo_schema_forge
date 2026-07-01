@@ -2,10 +2,7 @@
 
 # --- Testing ---
 
-test: ## Run all unit tests (CLI + app-shell + artifacts + vitest)
-	cd cli && node --test 'test/*.test.js'
-	npm test --workspace=packages/schema-forge-core
-	npm test --workspace=packages/app-shell-core
+test: ## Run all unit tests (app-shell + artifacts + vitest)
 	node --test 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test 'tools/app-shell/test/*.test.js'
 	node --test 'artifacts/**/__tests__/*.test.js'
@@ -13,8 +10,6 @@ test: ## Run all unit tests (CLI + app-shell + artifacts + vitest)
 
 test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@mkdir -p coverage
-	@echo "=== CLI tests ==="
-	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info $(shell find cli/test -name '*.test.js')
 	@echo "=== App-shell Node tests ==="
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info $(shell find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js')
 	@echo "=== App-shell extra tests ==="
@@ -22,25 +17,16 @@ test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@echo "=== Artifact custom tests ==="
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info $(shell find artifacts -path '*/__tests__/*.test.js')
 	@echo "=== Vitest (React components) ==="
-	cd tools/app-shell && npx vitest run --coverage && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
+	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
 	npx lcov-result-merger 'coverage/*-lcov.info' coverage/merged-lcov.info
 	@echo ""
 	@echo "Coverage reports saved in coverage/"
-	@echo "  Individual: cli-lcov.info, appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
+	@echo "  Individual: appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
 	@echo "  Merged:     merged-lcov.info (used by SonarQube)"
 
 test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 	@mkdir -p test-results
-	node --test \
-	  --test-reporter=spec --test-reporter-destination=stdout \
-	  --test-reporter=junit --test-reporter-destination=test-results/cli.xml \
-	  'cli/test/*.test.js'
-	node --test \
-	  --test-reporter=spec --test-reporter-destination=stdout \
-	  --test-reporter=junit --test-reporter-destination=test-results/schema-forge-core.xml \
-	  'packages/schema-forge-core/test/*.test.js'
-	npm test --workspace=packages/app-shell-core
 	node --test \
 	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/appshell-node.xml \
@@ -58,11 +44,6 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	@mkdir -p test-results coverage
 	node --test --experimental-test-coverage \
 	  --test-reporter=spec --test-reporter-destination=stdout \
-	  --test-reporter=junit --test-reporter-destination=test-results/cli.xml \
-	  --test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info \
-	  'cli/test/*.test.js'
-	node --test --experimental-test-coverage \
-	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/appshell-node.xml \
 	  --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info \
 	  'tools/app-shell/src/**/__tests__/*.test.js' \
@@ -72,28 +53,28 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	  --test-reporter=junit --test-reporter-destination=test-results/artifacts.xml \
 	  --test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info \
 	  'artifacts/**/__tests__/*.test.js'
-	cd tools/app-shell && npx vitest run --coverage \
+	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov \
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml \
-	  && cp coverage/vitest/lcov.info ../../coverage/vitest-lcov.info
+	  && cp coverage/lcov.info ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
 	npx lcov-result-merger 'coverage/*-lcov.info' coverage/merged-lcov.info
 
 validate-pipeline: ## Validate pipeline completeness across all artifacts
-	node cli/src/validate-pipeline.js --format=text
+	npx sf-validate-pipeline --format=text
 
 method-budget: ## Ratchet guard: fail only if a tracked class grew past its method baseline
-	node cli/src/method-budget.js
+	npx sf-method-budget
 
 window-leak-budget: ## Ratchet guard: fail only if window-specific literals in contract-ui grew (use --list to enumerate)
-	node cli/src/window-leak-budget.js
+	npx sf-window-leak-budget
 
 test-frontend: ## Run only frontend generator tests
 	cd cli && node --test 'test/generate-frontend.test.js'
 
 
 quality-gate: ## Run Schema Forge quality gate for PR-affected windows
-	node cli/src/quality-gate.js --pr-affected --baseline-ref origin/main --format md
+	npx sf-quality-gate --pr-affected --baseline-ref origin/main --format md
 
 domain-boundary-check: ## Check changed files against monorepo intent/domain boundaries (BASE=<ref>, HEAD=<ref>)
 	@if [ -z "$(BASE)" ]; then \
@@ -136,7 +117,7 @@ install-e2e: ## Install E2E dependencies + browsers
 # --- Code Generation ---
 
 generate: ## Generate frontend from Sales Order contract
-	node cli/src/generate-frontend.js artifacts/sales-order/contract.json
+	npx sf-generate-frontend artifacts/sales-order/contract.json
 
 PUSH_TO_NEO ?= 0
 SKIP_EXTRACT ?= 0
@@ -152,7 +133,7 @@ regen: ## Re-run full pipeline for all active windows (HELP=1 or `make regen-hel
 	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --write-cache"; fi; \
 	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --from-cache"; fi; \
 	if [ -n "$(ONLY)" ]; then REGEN_ARGS="$$REGEN_ARGS --only $(ONLY)"; fi; \
-	node cli/src/regen-all.js $$REGEN_ARGS
+	npx sf-regen-all $$REGEN_ARGS
 
 regen-help: ## Show usage and examples for `make regen`
 	@echo "Usage: make regen [VAR=value ...]"
@@ -175,7 +156,7 @@ regen-help: ## Show usage and examples for `make regen`
 	@echo ""
 	@echo "Notes:"
 	@echo "  - Window specs are the directory names under artifacts/ (kebab-case)."
-	@echo "  - For a single window, you can also run: node cli/src/resolve-curated.js --window <spec> --write"
+	@echo "  - For a single window, you can also run: npx sf-resolve-curated --window <spec> --write"
 	@echo "  - CACHE_DB and FROM_CACHE are mutually exclusive."
 
 # --- Push-to-NEO Delta Dump ---
@@ -193,7 +174,7 @@ dump-delta: ## Dump the writes push-to-neo WOULD make for ONLY=<spec> (no DB wri
 	CACHE_ENV=""; \
 	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read"; fi; \
 	if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write"; fi; \
-	env $$CACHE_ENV node cli/src/push-to-neo.js $(ONLY) --dump-delta artifacts/$(ONLY)/neo-delta.json $$DELTA_ARGS
+	env $$CACHE_ENV npx sf-push-neo $(ONLY) --dump-delta artifacts/$(ONLY)/neo-delta.json $$DELTA_ARGS
 
 # --- Offline Regeneration Check (Slice 3) ---
 #
@@ -222,7 +203,7 @@ process.stdout.write(r.windows.filter(w=>{\
 	REGEN_ARGS="--only $$SPECS --skip-extract"; \
 	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="--only $$SPECS --write-cache"; fi; \
 	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="--only $$SPECS --from-cache"; fi; \
-	node cli/src/regen-all.js $$REGEN_ARGS || exit $$?; \
+	npx sf-regen-all $$REGEN_ARGS || exit $$?; \
 	FAIL=0; TOTAL_OK=0; TOTAL_FAIL=0; \
 	for spec in $$(echo "$$SPECS" | tr ',' ' '); do \
 	  OUTDIR="$(REGEN_CHECK_OUT_ROOT)/$$spec"; \
@@ -232,17 +213,17 @@ process.stdout.write(r.windows.filter(w=>{\
 	  CACHE_ENV=""; \
 	  if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read"; fi; \
 	  if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write"; fi; \
-	  env $$CACHE_ENV node cli/src/push-to-neo.js $$spec \
+	  env $$CACHE_ENV npx sf-push-neo $$spec \
 	    --dump-delta "$$OUTDIR/neo-delta.json" \
 	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" || { FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); continue; }; \
-	  node cli/src/xml-apply-delta.js \
+	  npx sf-xml-apply-delta \
 	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" \
 	    --delta "$$OUTDIR/neo-delta.json" \
 	    --out-dir "$$OUTDIR/predicted/sourcedata" || { FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); continue; }; \
 	  cp "$(REGEN_CHECK_PREV_XML_DIR)/ETGO_SF_SPEC.xml"   "$$OUTDIR/prev/sourcedata/"; \
 	  cp "$(REGEN_CHECK_PREV_XML_DIR)/ETGO_SF_ENTITY.xml" "$$OUTDIR/prev/sourcedata/"; \
 	  cp "$(REGEN_CHECK_PREV_XML_DIR)/ETGO_SF_FIELD.xml"  "$$OUTDIR/prev/sourcedata/"; \
-	  if node cli/src/xml-regeneration-check.js "$$OUTDIR/prev" "$$OUTDIR/predicted" --include-dir sourcedata; then \
+	  if npx sf-xml-regeneration-check "$$OUTDIR/prev" "$$OUTDIR/predicted" --include-dir sourcedata; then \
 	    echo "  result: OK"; TOTAL_OK=$$((TOTAL_OK+1)); \
 	  else \
 	    echo "  result: DRIFT (see $$OUTDIR/)"; FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); \
@@ -296,14 +277,14 @@ data-fixes: ## Run the tenant data-fixes runner (HELP=1 or `make data-fixes-help
 	if [ -n "$(CLIENT)" ]; then DF_ARGS="$$DF_ARGS --client $(CLIENT)"; fi; \
 	if [ -n "$(FIX)" ]; then DF_ARGS="$$DF_ARGS --fix $(FIX)"; fi; \
 	if [ -n "$(REASON)" ]; then DF_ARGS="$$DF_ARGS --reason \"$(REASON)\""; fi; \
-	eval node cli/src/data-fixes/run.js $$DF_ARGS
+	eval npx sf-data-fixes $$DF_ARGS
 
 data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "Usage: make data-fixes [VAR=value ...]"
 	@echo ""
 	@echo "Applies corrective .sql data-fixes to existing tenants, recording state in the"
 	@echo "System-owned ledger ETGO_DATA_FIX_HISTORY. DB credentials auto-resolve from"
-	@echo "{etendo_root}/gradle.properties (see cli/src/db.js)."
+	@echo "{etendo_root}/gradle.properties (see the installed @etendosoftware/schema-forge-cli's db.js)."
 	@echo ""
 	@echo "Variables:"
 	@echo "  LIST_CLIENTS=1     Read-only overview: each tenant (name+id), last applied fix, # pending/FAILED"
@@ -324,7 +305,7 @@ data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo ""
 	@echo "Notes:"
 	@echo "  - fix_id = the .sql filename without .sql (e.g. 20260611T143000Z__R3-periodcontrol)."
-	@echo "  - Authoring rules + skeleton: cli/src/data-fixes/sql/README.md."
+	@echo "  - Authoring rules + skeleton: node_modules/@etendosoftware/schema-forge-cli/src/data-fixes/sql/README.md."
 	@echo "  - Exit code is non-zero if any tenant's chain halted on a FAILED fix."
 
 sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow in com.etendoerp.go
@@ -351,12 +332,12 @@ dev-mock: ensure-locale ## Start dev server with mock data for active locale —
 
 build: ## Build app-shell for production
 	cd tools/app-shell && npm run build
-	node cli/src/generate-reports-manifest.js
+	npx sf-generate-reports-manifest
 
 # --- Setup ---
 
 menu-cache: ## Refresh the AD menu cache from the database
-	node cli/src/menu-cache.js refresh
+	npx sf-menu-cache refresh
 
 uuid: ## Generate a new Etendo-format UUID (32 uppercase hex chars, no hyphens)
 	@uuidgen | tr -d '-' | tr '[:lower:]' '[:upper:]'
@@ -406,7 +387,7 @@ report-stop: ## Stop jsreport Docker container
 	cd $(JSREPORT_COMPOSE_DIR) && docker compose -f com.etendoerp.go.yml down
 
 report-preview: ## Preview Business Partner listing report
-	node cli/src/report-preview.js --artifact business-partner --report listing
+	npx sf-report-preview --artifact business-partner --report listing
 
 # --- Static Analysis (SonarQube) ---
 
@@ -439,7 +420,7 @@ xml-regeneration-check: ## Compare original module XML vs export.database output
 		echo "Usage: make xml-regeneration-check ORIGINAL_DB_DIR=<path> EXPORTED_DB_DIR=<path>"; \
 		exit 1; \
 	fi
-	node cli/src/xml-regeneration-check.js "$(ORIGINAL_DB_DIR)" "$(EXPORTED_DB_DIR)"
+	npx sf-xml-regeneration-check "$(ORIGINAL_DB_DIR)" "$(EXPORTED_DB_DIR)"
 
 # --- Project Context Switching ---
 # Active locale is tracked in .active-locale (gitignored). Default: es.
