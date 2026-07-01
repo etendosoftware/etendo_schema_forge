@@ -5,3 +5,11 @@ timestamp,workspace,score,files,errors,warnings
 2026-05-09T00:24:47.193Z,@schema-forge/spike-hello-app,98,7,0,4
 2026-05-09T00:24:47.193Z,@schema-forge/ui-preview,98,3,1,2
 2026-05-09T00:24:47.193Z,__average__,86,,16,2034
+2026-07-01T17:22:37.926Z,@schema-forge/app-shell,19,1208,225,2479
+2026-07-01T17:22:37.926Z,@schema-forge/decision-panel,69,6,0,13
+2026-07-01T17:22:37.926Z,@schema-forge/quick-order-app,67,13,0,11
+2026-07-01T17:22:37.926Z,@schema-forge/spike-hello-app,96,7,0,1
+2026-07-01T17:22:37.926Z,@schema-forge/ui-preview,47,3,1,6
+2026-07-01T17:22:37.926Z,@etendosoftware/app-shell-core,61,97,1,47
+2026-07-01T17:22:37.926Z,@etendosoftware/schema-forge-stack,82,3,0,1
+2026-07-01T17:22:37.926Z,__average__,63,,227,2558
