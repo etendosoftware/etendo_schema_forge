@@ -1569,6 +1569,10 @@ function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
   return React.createElement(Modal, { onConfirm, onClose });
 }
 
+function resolveStatusPrefix(key, translate) {
+  return key ? translate(key) : undefined;
+}
+
 export function DetailView({
   entity,
   detailEntity,
@@ -2963,7 +2967,7 @@ export function DetailView({
               <DocumentStatusPill
                 status={data[statusField]}
                 enumLabels={statusEnumLabels}
-                prefix={statusFieldLabel ? ui(statusFieldLabel) : undefined}
+                prefix={resolveStatusPrefix(statusFieldLabel, ui)}
                 data-testid="DocumentStatusPill__fa3275" />
             )}
             {extraBadges.map(b => {
