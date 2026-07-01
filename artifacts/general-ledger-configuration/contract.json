@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.2.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-01T16:43:33.816Z",
-  "checksum": "3e2b4a643a432d64",
+  "updatedAt": "2026-06-29T15:29:32.471Z",
+  "checksum": "eeb0a498dff1c9f3",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -2184,6 +2184,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Acctschema_Table_Doctype_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -2212,14 +2220,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "cAcctSchemaTableDocTypeID",
-            "apiKey": "cAcctSchemaTableDocTypeID",
-            "column": "C_Acctschema_Table_Doctype_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -2855,6 +2855,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Acctschema_Default_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "createdBy",
             "apiKey": "createdBy",
             "column": "CreatedBy",
@@ -2875,14 +2883,6 @@
             "apiKey": "updatedBy",
             "column": "UpdatedBy",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "cAcctschemaDefaultID",
-            "apiKey": "cAcctschemaDefaultID",
-            "column": "C_Acctschema_Default_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -5617,14 +5617,6 @@
         "description": "System field 'acctschemaTable' should exist in backend but not frontend for Documentos"
       },
       {
-        "id": "t-system-field-Documentos-cAcctSchemaTableDocTypeID",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "cAcctSchemaTableDocTypeID",
-        "runner": "node",
-        "description": "System field 'cAcctSchemaTableDocTypeID' should exist in backend but not frontend for Documentos"
-      },
-      {
         "id": "t-system-field-Documentos-client",
         "category": "system-field",
         "entity": "Documentos",
@@ -5647,6 +5639,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for Documentos"
+      },
+      {
+        "id": "t-system-field-Documentos-id",
+        "category": "system-field",
+        "entity": "Documentos",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for Documentos"
       },
       {
         "id": "t-system-field-Documentos-organization",
@@ -5913,14 +5913,6 @@
         "description": "System field 'bankUnidentifiedReceipts' should exist in backend but not frontend for Valores por defecto"
       },
       {
-        "id": "t-system-field-Valores-por-defecto-cAcctschemaDefaultID",
-        "category": "system-field",
-        "entity": "Valores por defecto",
-        "field": "cAcctschemaDefaultID",
-        "runner": "node",
-        "description": "System field 'cAcctschemaDefaultID' should exist in backend but not frontend for Valores por defecto"
-      },
-      {
         "id": "t-system-field-Valores-por-defecto-cashBookExpense",
         "category": "system-field",
         "entity": "Valores por defecto",
@@ -5991,6 +5983,14 @@
         "field": "employeePrepayments",
         "runner": "node",
         "description": "System field 'employeePrepayments' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-id",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for Valores por defecto"
       },
       {
         "id": "t-system-field-Valores-por-defecto-inventoryAdjustment",

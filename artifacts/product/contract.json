@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-07-01T16:43:34.196Z",
-  "checksum": "cb7fbbd71f2bd3eb",
+  "updatedAt": "2026-06-29T12:09:16.248Z",
+  "checksum": "abd729593e86f1be",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -3074,8 +3074,8 @@
             "required": true
           },
           {
-            "name": "mServicepriceruleVersionID",
-            "apiKey": "mServicepriceruleVersionID",
+            "name": "id",
+            "apiKey": "id",
             "column": "M_Servicepricerule_Version_ID",
             "type": "id",
             "visibility": "system",
@@ -4268,8 +4268,8 @@
             "required": true
           },
           {
-            "name": "mServicepriceruleVersionID",
-            "apiKey": "mServicepriceruleVersionID",
+            "name": "id",
+            "apiKey": "id",
             "column": "M_Servicepricerule_Version_ID",
             "type": "id",
             "visibility": "system",
@@ -8223,12 +8223,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for categoryPriceRuleVersion"
       },
       {
-        "id": "t-system-field-categoryPriceRuleVersion-mServicepriceruleVersionID",
+        "id": "t-system-field-categoryPriceRuleVersion-id",
         "category": "system-field",
         "entity": "categoryPriceRuleVersion",
-        "field": "mServicepriceruleVersionID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'mServicepriceruleVersionID' should exist in backend but not frontend for categoryPriceRuleVersion"
+        "description": "System field 'id' should exist in backend but not frontend for categoryPriceRuleVersion"
       },
       {
         "id": "t-system-field-categoryPriceRuleVersion-organization",
@@ -8527,12 +8527,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for priceRuleVersion"
       },
       {
-        "id": "t-system-field-priceRuleVersion-mServicepriceruleVersionID",
+        "id": "t-system-field-priceRuleVersion-id",
         "category": "system-field",
         "entity": "priceRuleVersion",
-        "field": "mServicepriceruleVersionID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'mServicepriceruleVersionID' should exist in backend but not frontend for priceRuleVersion"
+        "description": "System field 'id' should exist in backend but not frontend for priceRuleVersion"
       },
       {
         "id": "t-system-field-priceRuleVersion-organization",

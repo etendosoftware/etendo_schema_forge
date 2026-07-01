@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-07-01T16:43:34.106Z",
-  "checksum": "617074e35c1fe8dc",
+  "updatedAt": "2026-06-29T20:07:15.190Z",
+  "checksum": "b0be7c943af86da5",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -2584,8 +2584,8 @@
             "required": false
           },
           {
-            "name": "payment",
-            "apiKey": "payment",
+            "name": "id",
+            "apiKey": "id",
             "column": "Fin_Payment_ID",
             "type": "id",
             "visibility": "system",
@@ -2863,8 +2863,8 @@
             "required": true
           },
           {
-            "name": "fINPaymentScheduledetailID",
-            "apiKey": "fINPaymentScheduledetailID",
+            "name": "id",
+            "apiKey": "id",
             "column": "FIN_Payment_Scheduledetail_ID",
             "type": "id",
             "visibility": "system",
@@ -3986,8 +3986,8 @@
             "required": true
           },
           {
-            "name": "psd2PisPayment",
-            "apiKey": "psd2PisPayment",
+            "name": "id",
+            "apiKey": "id",
             "column": "Psd2_Pis_Payment_ID",
             "type": "id",
             "visibility": "system",
@@ -8710,6 +8710,14 @@
         "description": "System field 'exchangeRate' should exist in backend but not frontend for bankPayments"
       },
       {
+        "id": "t-system-field-bankPayments-id",
+        "category": "system-field",
+        "entity": "bankPayments",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for bankPayments"
+      },
+      {
         "id": "t-system-field-bankPayments-lastCallbackAt",
         "category": "system-field",
         "entity": "bankPayments",
@@ -8788,14 +8796,6 @@
         "field": "paymentUrl",
         "runner": "node",
         "description": "System field 'paymentUrl' should exist in backend but not frontend for bankPayments"
-      },
-      {
-        "id": "t-system-field-bankPayments-psd2PisPayment",
-        "category": "system-field",
-        "entity": "bankPayments",
-        "field": "psd2PisPayment",
-        "runner": "node",
-        "description": "System field 'psd2PisPayment' should exist in backend but not frontend for bankPayments"
       },
       {
         "id": "t-system-field-bankPayments-returnToUrl",
@@ -9102,20 +9102,20 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-id",
+        "category": "system-field",
+        "entity": "header",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-organization",
         "category": "system-field",
         "entity": "header",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-payment",
-        "category": "system-field",
-        "entity": "header",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-posted",
@@ -9238,12 +9238,12 @@
         "description": "System field 'etvfacPaymentZero' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-fINPaymentScheduledetailID",
+        "id": "t-system-field-lines-id",
         "category": "system-field",
         "entity": "lines",
-        "field": "fINPaymentScheduledetailID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for lines"
+        "description": "System field 'id' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-invoicePaid",

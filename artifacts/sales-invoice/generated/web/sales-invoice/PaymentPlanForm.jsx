@@ -14,7 +14,6 @@ const fields = [
   { key: 'numberOfPayments', column: 'NumberOfPayments', type: 'number', label: 'Number of Payments', readOnly: true, section: 'other' },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal' },
   { key: 'totalDebtAmount', column: 'TotalDebtAmount', type: 'number', label: 'Doubtful Debt Amount', readOnly: true, section: 'other', defaultValue: '0' },
-  { key: 'finPaymentScheduleID', column: 'Fin_Payment_Schedule_ID', type: 'text', label: 'Fin_Payment_Schedule_ID', required: true, readOnly: true, section: 'other' },
 ];
 // @sf-generated-end fields:paymentPlan
 

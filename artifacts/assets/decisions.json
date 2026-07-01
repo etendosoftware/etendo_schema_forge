@@ -87,7 +87,6 @@
       "javaQualifier": "assetsHandler",
       "fields": {
         "searchKey": {
-          "grid": true,
           "searchable": true,
           "form": false
         },

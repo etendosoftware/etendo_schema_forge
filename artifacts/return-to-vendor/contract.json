@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.14.0",
   "generatedAt": "2026-04-29T19:46:13.628Z",
-  "updatedAt": "2026-07-01T16:43:34.427Z",
-  "checksum": "811803475bb06f06",
+  "updatedAt": "2026-06-29T12:09:17.060Z",
+  "checksum": "034f5543bd50bf76",
   "frontendContract": {
     "window": {
       "id": "C50A8AEE6F044825B5EF54FAAE76826F",
@@ -3404,8 +3404,8 @@
             "required": true
           },
           {
-            "name": "cOrderlinetaxID",
-            "apiKey": "cOrderlinetaxID",
+            "name": "id",
+            "apiKey": "id",
             "column": "C_Orderlinetax_ID",
             "type": "id",
             "visibility": "system",
@@ -3785,8 +3785,8 @@
             "required": false
           },
           {
-            "name": "finPaymentSchedOrdVID",
-            "apiKey": "finPaymentSchedOrdVID",
+            "name": "id",
+            "apiKey": "id",
             "column": "Fin_Payment_Sched_Ord_V_ID",
             "type": "id",
             "visibility": "system",
@@ -4112,8 +4112,8 @@
             "required": true
           },
           {
-            "name": "finPaymentDetailVID",
-            "apiKey": "finPaymentDetailVID",
+            "name": "id",
+            "apiKey": "id",
             "column": "Fin_Payment_Detail_V_ID",
             "type": "id",
             "visibility": "system",
@@ -9952,14 +9952,6 @@
         "description": "System field 'client' should exist in backend but not frontend for lineTax"
       },
       {
-        "id": "t-system-field-lineTax-cOrderlinetaxID",
-        "category": "system-field",
-        "entity": "lineTax",
-        "field": "cOrderlinetaxID",
-        "runner": "node",
-        "description": "System field 'cOrderlinetaxID' should exist in backend but not frontend for lineTax"
-      },
-      {
         "id": "t-system-field-lineTax-createdBy",
         "category": "system-field",
         "entity": "lineTax",
@@ -9974,6 +9966,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for lineTax"
+      },
+      {
+        "id": "t-system-field-lineTax-id",
+        "category": "system-field",
+        "entity": "lineTax",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for lineTax"
       },
       {
         "id": "t-system-field-lineTax-organization",
@@ -10104,20 +10104,20 @@
         "description": "System field 'finaccCurrencyID' should exist in backend but not frontend for paymentOutDetails"
       },
       {
-        "id": "t-system-field-paymentOutDetails-finPaymentDetailVID",
-        "category": "system-field",
-        "entity": "paymentOutDetails",
-        "field": "finPaymentDetailVID",
-        "runner": "node",
-        "description": "System field 'finPaymentDetailVID' should exist in backend but not frontend for paymentOutDetails"
-      },
-      {
         "id": "t-system-field-paymentOutDetails-glitemname",
         "category": "system-field",
         "entity": "paymentOutDetails",
         "field": "glitemname",
         "runner": "node",
         "description": "System field 'glitemname' should exist in backend but not frontend for paymentOutDetails"
+      },
+      {
+        "id": "t-system-field-paymentOutDetails-id",
+        "category": "system-field",
+        "entity": "paymentOutDetails",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for paymentOutDetails"
       },
       {
         "id": "t-system-field-paymentOutDetails-invoiceAmount",
@@ -10272,12 +10272,12 @@
         "description": "System field 'fINPaymentPriorityID' should exist in backend but not frontend for paymentOutPlan"
       },
       {
-        "id": "t-system-field-paymentOutPlan-finPaymentSchedOrdVID",
+        "id": "t-system-field-paymentOutPlan-id",
         "category": "system-field",
         "entity": "paymentOutPlan",
-        "field": "finPaymentSchedOrdVID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'finPaymentSchedOrdVID' should exist in backend but not frontend for paymentOutPlan"
+        "description": "System field 'id' should exist in backend but not frontend for paymentOutPlan"
       },
       {
         "id": "t-system-field-paymentOutPlan-invoice",
