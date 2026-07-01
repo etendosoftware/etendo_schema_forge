@@ -179,12 +179,12 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         }
       );
       const json = await res.json().catch(() => null);
-      if (res.ok && json?.response?.data?.[0]?.success !== false) {
+      if (res.ok && json?.success !== false) {
         toast.success(`${row.description ?? row.documentId} — ${ui('documentPosted')}`);
         fetchRows({ document, accountingStatuses, dateFrom, dateTo });
         setSelected(p => { const n = new Set(p); n.delete(row.documentId); return n; });
       } else {
-        toast.error(json?.response?.data?.[0]?.message || json?.message || ui('postingFailed'));
+        toast.error(json?.message || ui('postingFailed'));
       }
     } catch (e) {
       toast.error(ui('postingFailed'));
@@ -213,9 +213,8 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         }
       );
       const json = await res.json().catch(() => null);
-      const d = json?.response?.data?.[0];
-      const ok = d?.ok ?? 0;
-      const total = d?.total ?? rowsToPost.length;
+      const ok = json?.ok ?? 0;
+      const total = json?.total ?? rowsToPost.length;
       if (ok === total) {
         toast.success(ui('postingComplete'));
       } else if (ok > 0) {
