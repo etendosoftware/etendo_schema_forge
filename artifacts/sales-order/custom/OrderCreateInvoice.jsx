@@ -116,14 +116,14 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
           onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); emitSurveyTrigger(); onRefresh?.(); }}
-        />,
+          data-testid="ConfirmResultModal__18d1f0" />,
         document.body,
       )
     : null;
 
   const cloneButton = (
     <button type="button" onClick={() => setShowClone(true)} style={{...btnCloneStyle, background: isCloneHovered ? '#F1F5F9' : '#FFFFFF'}} title={ui('cloneOrderBtn')} onMouseEnter={() => setIsCloneHovered(true)} onMouseLeave={() => setIsCloneHovered(false)}>
-      <CopyIcon />
+      <CopyIcon data-testid="CopyIcon__18d1f0" />
     </button>
   );
   const clonePortal = showClone ? createPortal(
@@ -134,7 +134,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
       headers={headers}
       onClose={() => setShowClone(false)}
       onCloned={(newId) => navigate(`/sales-order/${newId}`)}
-    />,
+      data-testid="CloneModal__18d1f0" />,
     document.body,
   ) : null;
 
@@ -198,7 +198,9 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
         </button>
       )}
       {cloneButton}
-      {isDraft && <SendDocumentButton onClick={() => setShowSend(true)} />}
+      {isDraft && <SendDocumentButton
+        onClick={() => setShowSend(true)}
+        data-testid="SendDocumentButton__18d1f0" />}
       {clonePortal}
       {isDraft && showConfirm && createPortal(
         <ConfirmModal
@@ -208,7 +210,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           headers={headers}
           onClose={() => setShowConfirm(false)}
           onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
-        />,
+          data-testid="ConfirmModal__18d1f0" />,
         document.body,
       )}
       {isCompleted && showActions && createPortal(
@@ -221,7 +223,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           derived={derived}
           onClose={() => setShowActions(false)}
           onCreated={(docs) => { setShowActions(false); setConfirmedTitle(ui('soDocsCreatedTitle')); setConfirmedDocs(docs); }}
-        />,
+          data-testid="CreateDocsModal__18d1f0" />,
         document.body,
       )}
       {isDraft && showSend && createPortal(
@@ -235,7 +237,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           windowName="sales-order"
           token={token}
           onClose={() => setShowSend(false)}
-        />,
+          data-testid="SendDocumentModal__18d1f0" />,
         document.body,
       )}
       {confirmedPanel}
@@ -465,7 +467,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateShipmentTitle')}
             subtitle={shipmentResult ? ui('soAlreadyCreated') : ui('soCreateShipmentCheckDesc')}
             disabled={Boolean(shipmentResult)}
-          />
+            data-testid="SoCheckboxCard__18d1f0" />
           <SoCheckboxCard
             checked={createInvoice || Boolean(invoiceResult)}
             onChange={() => !invoiceResult && setCreateInvoice(v => !v)}
@@ -473,7 +475,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
             title={ui('soCreateInvoiceTitle')}
             subtitle={invoiceResult ? ui('soAlreadyCreated') : ui('soCreateInvoiceCheckDesc')}
             disabled={Boolean(invoiceResult)}
-          />
+            data-testid="SoCheckboxCard__18d1f0" />
         </div>
 
         {error && (
@@ -488,7 +490,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           </button>
           <button type="button" onClick={handleConfirm} disabled={loading}
             style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {loading && <Spinner />}
+            {loading && <Spinner data-testid="Spinner__18d1f0" />}
             {loading ? ui('soProcessing') : primaryLabel}
           </button>
         </div>
@@ -652,7 +654,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🚚"
               title={ui('soCreateShipmentTitle')}
               subtitle={shipmentSubtitle}
-            />
+              data-testid="SoCheckboxCard__18d1f0" />
           )}
           {needsInvoice && (
             <SoCheckboxCard
@@ -661,7 +663,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
               icon="🧾"
               title={ui('soCreateInvoiceTitle')}
               subtitle={invoiceSubtitle}
-            />
+              data-testid="SoCheckboxCard__18d1f0" />
           )}
         </div>
 
@@ -677,7 +679,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           </button>
           <button type="button" onClick={handleCreate} disabled={loading || !canCreate}
             style={{ ...btnPrimaryStyle, opacity: (loading || !canCreate) ? 0.6 : 1, cursor: (loading || !canCreate) ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {loading && <Spinner />}
+            {loading && <Spinner data-testid="Spinner__18d1f0" />}
             {loading ? ui('soProcessing') : ui('soCreateDocsBtn')}
           </button>
         </div>
@@ -802,7 +804,7 @@ function CloneModal({ orderId, data, apiBaseUrl, headers, onClose, onCloned }) {
             </button>
             <button type="button" onClick={handleClone} disabled={loading}
               style={{ ...btnPrimaryStyle, opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
-              {loading && <Spinner />}
+              {loading && <Spinner data-testid="Spinner__18d1f0" />}
               {loading ? ui('soProcessing') : ui('cloneOrderAction')}
             </button>
           </div>
@@ -903,7 +905,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <div style={{ background: '#fff', padding: '16px 24px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Spinner /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
+          <Spinner data-testid="Spinner__18d1f0" /><span style={{ fontSize: 13 }}>{ui('loading')}</span>
         </div>
       </div>,
       document.body,
@@ -954,7 +956,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
       derived={derived}
       onClose={onClose}
       onCreated={onCreated}
-    />,
+      data-testid="CreateDocsModal__18d1f0" />,
     document.body,
   );
 }
