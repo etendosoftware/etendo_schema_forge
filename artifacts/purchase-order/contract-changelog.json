@@ -1459,5 +1459,18 @@
     ],
     "author": "pipeline",
     "date": "2026-06-29"
+  },
+  {
+    "from": "0.30.0",
+    "to": "0.31.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"id\" removed from entity \"lineTax\" in backend",
+      "Field \"cOrderlinetaxID\" added to entity \"lineTax\" in backend",
+      "Field \"id\" removed from entity \"paymentDetails\" in backend",
+      "Field \"finPaymentDetailVID\" added to entity \"paymentDetails\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-01"
   }
 ]

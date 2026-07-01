@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.8.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-06-29T12:09:15.761Z",
-  "checksum": "fefc6202a9a92485",
+  "updatedAt": "2026-07-01T16:43:34.080Z",
+  "checksum": "a3b84c39ffbc9ece",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -1111,8 +1111,8 @@
             "required": false
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "payment",
+            "apiKey": "payment",
             "column": "Fin_Payment_ID",
             "type": "id",
             "visibility": "system",
@@ -1390,8 +1390,8 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "fINPaymentScheduledetailID",
+            "apiKey": "fINPaymentScheduledetailID",
             "column": "FIN_Payment_Scheduledetail_ID",
             "type": "id",
             "visibility": "system",
@@ -2678,14 +2678,6 @@
         "description": "System field 'generatedCredit' should exist in backend but not frontend for finPayment"
       },
       {
-        "id": "t-system-field-finPayment-id",
-        "category": "system-field",
-        "entity": "finPayment",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for finPayment"
-      },
-      {
         "id": "t-system-field-finPayment-ndDimension",
         "category": "system-field",
         "entity": "finPayment",
@@ -2700,6 +2692,14 @@
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for finPayment"
+      },
+      {
+        "id": "t-system-field-finPayment-payment",
+        "category": "system-field",
+        "entity": "finPayment",
+        "field": "payment",
+        "runner": "node",
+        "description": "System field 'payment' should exist in backend but not frontend for finPayment"
       },
       {
         "id": "t-system-field-finPayment-posted",
@@ -2926,20 +2926,20 @@
         "description": "System field 'expected' should exist in backend but not frontend for finPaymentScheduleDetail"
       },
       {
+        "id": "t-system-field-finPaymentScheduleDetail-fINPaymentScheduledetailID",
+        "category": "system-field",
+        "entity": "finPaymentScheduleDetail",
+        "field": "fINPaymentScheduledetailID",
+        "runner": "node",
+        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for finPaymentScheduleDetail"
+      },
+      {
         "id": "t-system-field-finPaymentScheduleDetail-gLItem",
         "category": "system-field",
         "entity": "finPaymentScheduleDetail",
         "field": "gLItem",
         "runner": "node",
         "description": "System field 'gLItem' should exist in backend but not frontend for finPaymentScheduleDetail"
-      },
-      {
-        "id": "t-system-field-finPaymentScheduleDetail-id",
-        "category": "system-field",
-        "entity": "finPaymentScheduleDetail",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for finPaymentScheduleDetail"
       },
       {
         "id": "t-system-field-finPaymentScheduleDetail-invoiceAmount",

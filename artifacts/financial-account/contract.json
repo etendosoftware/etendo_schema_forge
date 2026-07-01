@@ -1,8 +1,8 @@
 {
-  "version": "0.4.1",
+  "version": "0.5.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
-  "updatedAt": "2026-06-29T19:59:03.963Z",
-  "checksum": "becdfd5824068e14",
+  "updatedAt": "2026-07-01T16:43:33.954Z",
+  "checksum": "8e97094190dec94a",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -2456,14 +2456,6 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
-            "column": "Fin_Financial_Account_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "psd2ReconnectFa",
             "apiKey": "psd2ReconnectFa",
             "column": "EM_Psd2_Reconnect_Fa",
@@ -2486,6 +2478,14 @@
             "type": "integer",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "account",
+            "apiKey": "account",
+            "column": "Fin_Financial_Account_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ],
         "javaQualifier": "financialAccountHeaderHandler"
@@ -2848,8 +2848,8 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "transactionID",
+            "apiKey": "transactionID",
             "column": "Fin_Finacc_Transaction_ID",
             "type": "id",
             "visibility": "system",
@@ -3087,8 +3087,8 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "fINBankstatementID",
+            "apiKey": "fINBankstatementID",
             "column": "FIN_Bankstatement_ID",
             "type": "id",
             "visibility": "system",
@@ -3294,8 +3294,8 @@
             "required": false
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "fINBankstatementlineID",
+            "apiKey": "fINBankstatementlineID",
             "column": "FIN_Bankstatementline_ID",
             "type": "id",
             "visibility": "system",
@@ -8190,6 +8190,14 @@
         "description": "Selector endpoint for 'stDimension' in transaction should exist"
       },
       {
+        "id": "t-system-field-account-account",
+        "category": "system-field",
+        "entity": "account",
+        "field": "account",
+        "runner": "node",
+        "description": "System field 'account' should exist in backend but not frontend for account"
+      },
+      {
         "id": "t-system-field-account-accountDigitcontrol",
         "category": "system-field",
         "entity": "account",
@@ -8292,14 +8300,6 @@
         "field": "genericAccountNo",
         "runner": "node",
         "description": "System field 'genericAccountNo' should exist in backend but not frontend for account"
-      },
-      {
-        "id": "t-system-field-account-id",
-        "category": "system-field",
-        "entity": "account",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for account"
       },
       {
         "id": "t-system-field-account-iNENo",
@@ -8470,12 +8470,12 @@
         "description": "System field 'financialAccountTransaction' should exist in backend but not frontend for bankStatementLines"
       },
       {
-        "id": "t-system-field-bankStatementLines-id",
+        "id": "t-system-field-bankStatementLines-fINBankstatementlineID",
         "category": "system-field",
         "entity": "bankStatementLines",
-        "field": "id",
+        "field": "fINBankstatementlineID",
         "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for bankStatementLines"
+        "description": "System field 'fINBankstatementlineID' should exist in backend but not frontend for bankStatementLines"
       },
       {
         "id": "t-system-field-bankStatementLines-lineNo",
@@ -8638,20 +8638,20 @@
         "description": "System field 'eTGOTotalOut' should exist in backend but not frontend for importedBankStatements"
       },
       {
+        "id": "t-system-field-importedBankStatements-fINBankstatementID",
+        "category": "system-field",
+        "entity": "importedBankStatements",
+        "field": "fINBankstatementID",
+        "runner": "node",
+        "description": "System field 'fINBankstatementID' should exist in backend but not frontend for importedBankStatements"
+      },
+      {
         "id": "t-system-field-importedBankStatements-fINReconciliationID",
         "category": "system-field",
         "entity": "importedBankStatements",
         "field": "fINReconciliationID",
         "runner": "node",
         "description": "System field 'fINReconciliationID' should exist in backend but not frontend for importedBankStatements"
-      },
-      {
-        "id": "t-system-field-importedBankStatements-id",
-        "category": "system-field",
-        "entity": "importedBankStatements",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for importedBankStatements"
       },
       {
         "id": "t-system-field-importedBankStatements-organization",
@@ -8822,14 +8822,6 @@
         "description": "System field 'foreignCurrency' should exist in backend but not frontend for transaction"
       },
       {
-        "id": "t-system-field-transaction-id",
-        "category": "system-field",
-        "entity": "transaction",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for transaction"
-      },
-      {
         "id": "t-system-field-transaction-lineNo",
         "category": "system-field",
         "entity": "transaction",
@@ -8868,6 +8860,14 @@
         "field": "reconciliation",
         "runner": "node",
         "description": "System field 'reconciliation' should exist in backend but not frontend for transaction"
+      },
+      {
+        "id": "t-system-field-transaction-transactionID",
+        "category": "system-field",
+        "entity": "transaction",
+        "field": "transactionID",
+        "runner": "node",
+        "description": "System field 'transactionID' should exist in backend but not frontend for transaction"
       },
       {
         "id": "t-system-field-transaction-updated",

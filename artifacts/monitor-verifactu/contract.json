@@ -1,8 +1,8 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "generatedAt": "2026-05-04T17:02:25.021Z",
-  "updatedAt": "2026-06-26T12:27:56.100Z",
-  "checksum": "7bc3e6ba97f8f868",
+  "updatedAt": "2026-07-01T16:43:34.051Z",
+  "checksum": "60b5d9754ccba2c1",
   "frontendContract": {
     "window": {
       "id": "F4675DAB02134762B66881DAE4672AD0",
@@ -896,8 +896,8 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "verifactuConfig",
+            "apiKey": "verifactuConfig",
             "column": "Etvfac_Verifactu_Config_ID",
             "type": "id",
             "visibility": "system",
@@ -1063,8 +1063,8 @@
             "required": false
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "invoiceSentStatusID",
+            "apiKey": "invoiceSentStatusID",
             "column": "Etvfac_Inv_Sent_Status_V_ID",
             "type": "id",
             "visibility": "system",
@@ -1230,8 +1230,8 @@
             "required": false
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "invoiceSentStatusID",
+            "apiKey": "invoiceSentStatusID",
             "column": "Etvfac_Inv_Sent_Status_V_ID",
             "type": "id",
             "visibility": "system",
@@ -1398,8 +1398,8 @@
             "required": false
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "invoiceSentStatusID",
+            "apiKey": "invoiceSentStatusID",
             "column": "Etvfac_Inv_Sent_Status_V_ID",
             "type": "id",
             "visibility": "system",
@@ -1565,8 +1565,8 @@
             "required": false
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "invoiceSentStatusID",
+            "apiKey": "invoiceSentStatusID",
             "column": "Etvfac_Inv_Sent_Status_V_ID",
             "type": "id",
             "visibility": "system",
@@ -2763,14 +2763,6 @@
         "description": "System field 'defaultQR' should exist in backend but not frontend for cabeceraDeEmisor"
       },
       {
-        "id": "t-system-field-cabeceraDeEmisor-id",
-        "category": "system-field",
-        "entity": "cabeceraDeEmisor",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for cabeceraDeEmisor"
-      },
-      {
         "id": "t-system-field-cabeceraDeEmisor-incidentReport",
         "category": "system-field",
         "entity": "cabeceraDeEmisor",
@@ -2843,6 +2835,14 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for cabeceraDeEmisor"
       },
       {
+        "id": "t-system-field-cabeceraDeEmisor-verifactuConfig",
+        "category": "system-field",
+        "entity": "cabeceraDeEmisor",
+        "field": "verifactuConfig",
+        "runner": "node",
+        "description": "System field 'verifactuConfig' should exist in backend but not frontend for cabeceraDeEmisor"
+      },
+      {
         "id": "t-system-field-facturasAceptadas-client",
         "category": "system-field",
         "entity": "facturasAceptadas",
@@ -2883,12 +2883,12 @@
         "description": "System field 'hash' should exist in backend but not frontend for facturasAceptadas"
       },
       {
-        "id": "t-system-field-facturasAceptadas-id",
+        "id": "t-system-field-facturasAceptadas-invoiceSentStatusID",
         "category": "system-field",
         "entity": "facturasAceptadas",
-        "field": "id",
+        "field": "invoiceSentStatusID",
         "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for facturasAceptadas"
+        "description": "System field 'invoiceSentStatusID' should exist in backend but not frontend for facturasAceptadas"
       },
       {
         "id": "t-system-field-facturasAceptadas-organization",
@@ -2971,12 +2971,12 @@
         "description": "System field 'hash' should exist in backend but not frontend for facturasInválidas"
       },
       {
-        "id": "t-system-field-facturasInv-lidas-id",
+        "id": "t-system-field-facturasInv-lidas-invoiceSentStatusID",
         "category": "system-field",
         "entity": "facturasInválidas",
-        "field": "id",
+        "field": "invoiceSentStatusID",
         "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for facturasInválidas"
+        "description": "System field 'invoiceSentStatusID' should exist in backend but not frontend for facturasInválidas"
       },
       {
         "id": "t-system-field-facturasInv-lidas-organization",
@@ -3067,12 +3067,12 @@
         "description": "System field 'hash' should exist in backend but not frontend for facturasParcialmenteAceptadas"
       },
       {
-        "id": "t-system-field-facturasParcialmenteAceptadas-id",
+        "id": "t-system-field-facturasParcialmenteAceptadas-invoiceSentStatusID",
         "category": "system-field",
         "entity": "facturasParcialmenteAceptadas",
-        "field": "id",
+        "field": "invoiceSentStatusID",
         "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for facturasParcialmenteAceptadas"
+        "description": "System field 'invoiceSentStatusID' should exist in backend but not frontend for facturasParcialmenteAceptadas"
       },
       {
         "id": "t-system-field-facturasParcialmenteAceptadas-organization",
@@ -3147,12 +3147,12 @@
         "description": "System field 'hash' should exist in backend but not frontend for facturasRechazadas"
       },
       {
-        "id": "t-system-field-facturasRechazadas-id",
+        "id": "t-system-field-facturasRechazadas-invoiceSentStatusID",
         "category": "system-field",
         "entity": "facturasRechazadas",
-        "field": "id",
+        "field": "invoiceSentStatusID",
         "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for facturasRechazadas"
+        "description": "System field 'invoiceSentStatusID' should exist in backend but not frontend for facturasRechazadas"
       },
       {
         "id": "t-system-field-facturasRechazadas-organization",

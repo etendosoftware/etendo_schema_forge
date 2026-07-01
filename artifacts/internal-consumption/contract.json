@@ -1,8 +1,8 @@
 {
-  "version": "0.12.0",
+  "version": "0.13.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
-  "updatedAt": "2026-06-29T12:09:15.463Z",
-  "checksum": "f9b0e1b320251451",
+  "updatedAt": "2026-07-01T16:43:34.036Z",
+  "checksum": "47314e80b4570bb7",
   "frontendContract": {
     "window": {
       "id": "800076",
@@ -635,8 +635,8 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "internalConsumptionLine",
+            "apiKey": "internalConsumptionLine",
             "column": "M_Internal_Consumptionline_ID",
             "type": "id",
             "visibility": "system",
@@ -1384,20 +1384,20 @@
         "description": "System field 'description' should exist in backend but not frontend for internalConsumptionLine"
       },
       {
-        "id": "t-system-field-internalConsumptionLine-id",
-        "category": "system-field",
-        "entity": "internalConsumptionLine",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for internalConsumptionLine"
-      },
-      {
         "id": "t-system-field-internalConsumptionLine-internalConsumption",
         "category": "system-field",
         "entity": "internalConsumptionLine",
         "field": "internalConsumption",
         "runner": "node",
         "description": "System field 'internalConsumption' should exist in backend but not frontend for internalConsumptionLine"
+      },
+      {
+        "id": "t-system-field-internalConsumptionLine-internalConsumptionLine",
+        "category": "system-field",
+        "entity": "internalConsumptionLine",
+        "field": "internalConsumptionLine",
+        "runner": "node",
+        "description": "System field 'internalConsumptionLine' should exist in backend but not frontend for internalConsumptionLine"
       },
       {
         "id": "t-system-field-internalConsumptionLine-orderQuantity",
