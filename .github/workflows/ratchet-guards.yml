@@ -31,8 +31,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          registry-url: https://npm.pkg.github.com
 
       - run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Window-specific leak ratchet (fail only if it grew)
         run: npx sf-window-leak-budget --list

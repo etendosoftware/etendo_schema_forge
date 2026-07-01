@@ -105,10 +105,13 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: etendo_core/etendo_schema_forge/package-lock.json
+          registry-url: https://npm.pkg.github.com
 
       - name: Install dependencies
         working-directory: etendo_core/etendo_schema_forge
         run: npm ci || npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run offline regeneration check (make regen-check FROM_CACHE=1)
         working-directory: etendo_core/etendo_schema_forge
