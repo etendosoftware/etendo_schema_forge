@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { MoreVertical, ExternalLink, GitMerge, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
+import { useAuth } from '@/auth/AuthContext.jsx';
+import { getApiBase } from '@/hooks/useNeoResource';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -15,14 +18,47 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 
+const POST_URL = (id) =>
+  `${getApiBase()}/sws/neo/financial-account-detail/transaction/${encodeURIComponent(id)}/action/posted`;
+
 /**
  * Per-row kebab menu for a movement row.
  * Only visible on row hover (parent row must have `group` class).
  *
- * @param {{ movement: object }} props
+ * @param {{ movement: object, onReload?: () => void }} props
  */
-export function MovementRowKebab({ movement }) {
+export function MovementRowKebab({ movement, onReload }) {
   const ui = useUI();
+  const { token } = useAuth();
+  const [posting, setPosting] = useState(false);
+
+  const isPosted = movement.posted === 'Y';
+
+  async function handlePost() {
+    if (posting || isPosted) return;
+    setPosting(true);
+    try {
+      const res = await fetch(POST_URL(movement.id), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const body = await res.json().catch(() => null);
+      const nested = body?.response?.data?.[0];
+      const message = nested?.message ?? body?.response?.message ?? body?.message;
+      const success = res.ok && (nested?.success ?? body?.success ?? true);
+      if (success) {
+        toast.success(ui('documentPosted'));
+        onReload?.();
+      } else {
+        toast.error(message || ui('financeAccountMovementsRowPostError'));
+      }
+    } catch {
+      toast.error(ui('financeAccountMovementsRowPostError'));
+    } finally {
+      setPosting(false);
+    }
+  }
 
   return (
     <TooltipProvider data-testid="TooltipProvider__64eff3">
@@ -68,20 +104,18 @@ export function MovementRowKebab({ movement }) {
             <TooltipContent data-testid="TooltipContent__64eff3">{ui('financeAccountMovementsRowUnreconcileTooltip')}</TooltipContent>
           </Tooltip>
 
-          {/* Post — disabled with tooltip */}
-          <Tooltip data-testid="Tooltip__64eff3">
-            <TooltipTrigger asChild data-testid="TooltipTrigger__64eff3">
-              <span>
-                <DropdownMenuItem disabled data-testid="DropdownMenuItem__64eff3">
-                  <BookOpen className="h-5 w-5 text-[#828FA3]" data-testid="BookOpen__64eff3" />
-                  <span className="text-sm font-normal leading-6 text-[#121217]">
-                    {ui('financeAccountMovementsRowPost')}
-                  </span>
-                </DropdownMenuItem>
+          {/* Post — enabled when not yet posted */}
+          {!isPosted && (
+            <DropdownMenuItem
+              onClick={handlePost}
+              disabled={posting}
+              data-testid="DropdownMenuItem__64eff3">
+              <BookOpen className="h-5 w-5 text-[#828FA3]" data-testid="BookOpen__64eff3" />
+              <span className="text-sm font-normal leading-6 text-[#121217]">
+                {posting ? ui('financeAccountMovementsRowPosting') : ui('financeAccountMovementsRowPost')}
               </span>
-            </TooltipTrigger>
-            <TooltipContent data-testid="TooltipContent__64eff3">{ui('financeAccountMovementsRowPostTooltip')}</TooltipContent>
-          </Tooltip>
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </TooltipProvider>

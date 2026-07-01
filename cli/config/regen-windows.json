@@ -14,8 +14,17 @@
       "windowId": "118"
     },
     {
+      "name": "general-ledger-configuration",
+      "windowId": "125"
+    },
+    {
       "name": "contacts",
       "windowId": "123"
+    },
+    {
+      "name": "financial-account",
+      "windowId": "94EAA455D2644E04AB25D93BE5157B6D",
+      "menuName": "Financial Account"
     },
     {
       "name": "goods-movements",
@@ -37,6 +46,11 @@
       "name": "monitor-verifactu",
       "windowId": "F4675DAB02134762B66881DAE4672AD0",
       "menuName": "Monitor Verifactu"
+    },
+    {
+      "name": "open-close-period-control",
+      "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A",
+      "menuName": "Open/Close Period Control"
     },
     {
       "name": "payment-in",
@@ -123,6 +137,10 @@
     {
       "name": "tax",
       "windowId": "137"
+    },
+    {
+      "name": "tax-category",
+      "windowId": "138"
     },
     {
       "name": "tbai-config",

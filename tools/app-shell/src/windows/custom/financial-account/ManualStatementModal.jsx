@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
-import { Check, ChevronDown, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, FileText, Layers, Trash2 } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { DateField } from '@/components/ui/date-field';
@@ -12,7 +12,7 @@ import { useBankStatementLines } from '@/hooks/useBankStatementLines';
 import { useBPartnerLookup, useGLItemLookup } from '@/hooks/useMovementLookups';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { LookupPicker } from './LookupPicker';
-import { FieldRow, inputClass } from './formFields';
+import { FieldRow, inputClass, textareaClass } from './formFields';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -129,6 +129,17 @@ function computeTotals(rows) {
   return { tin, tout, bal: tin - tout, n };
 }
 
+/** Narrow currency symbol (e.g. "€") for the amount-input suffix. */
+function currencySymbol(iso) {
+  if (!iso) return '';
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: iso, currencyDisplay: 'narrowSymbol' })
+      .formatToParts(0).find((p) => p.type === 'currency')?.value ?? iso;
+  } catch {
+    return iso;
+  }
+}
+
 function makeMoneyFormatter(currency, bcpLocale) {
   return (amount) => {
     try {
@@ -148,8 +159,8 @@ function makeMoneyFormatter(currency, bcpLocale) {
 function HeaderFields({ form, setForm, ui }) {
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
   return (
-    <div className="grid grid-cols-2 gap-4">
-      <div className="col-span-2">
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <FieldRow
           label={ui('financeAccountStatementsManualName')}
           required
@@ -160,40 +171,41 @@ function HeaderFields({ form, setForm, ui }) {
             data-testid="manual-statement-name" className={inputClass}
           />
         </FieldRow>
+        <FieldRow
+          label={ui('financeAccountStatementsManualTrxDate')}
+          required
+          data-testid="FieldRow__6b4086">
+          <DateField
+            value={form.transactionDate}
+            onChange={(iso) => setForm((f) => ({ ...f, transactionDate: iso }))}
+            data-testid="manual-statement-trxdate"
+          />
+        </FieldRow>
+        <FieldRow
+          label={ui('financeAccountStatementsManualImportDate')}
+          required
+          data-testid="FieldRow__6b4086">
+          <DateField
+            value={form.importDate}
+            onChange={(iso) => setForm((f) => ({ ...f, importDate: iso }))}
+            data-testid="manual-statement-importdate"
+          />
+        </FieldRow>
+        <FieldRow
+          label={ui('financeAccountStatementsManualFileName')}
+          optional={ui('financeAccountStatementsManualOptional')}
+          data-testid="FieldRow__6b4086">
+          <input type="text" value={form.fileName} onChange={set('fileName')}
+            placeholder={ui('financeAccountStatementsManualFileNamePlaceholder')}
+            data-testid="manual-statement-filename" className={inputClass} />
+        </FieldRow>
       </div>
-      <FieldRow
-        label={ui('financeAccountStatementsManualTrxDate')}
-        required
-        data-testid="FieldRow__6b4086">
-        <DateField
-          value={form.transactionDate}
-          onChange={(iso) => setForm((f) => ({ ...f, transactionDate: iso }))}
-          data-testid="manual-statement-trxdate"
-        />
-      </FieldRow>
-      <FieldRow
-        label={ui('financeAccountStatementsManualImportDate')}
-        required
-        data-testid="FieldRow__6b4086">
-        <DateField
-          value={form.importDate}
-          onChange={(iso) => setForm((f) => ({ ...f, importDate: iso }))}
-          data-testid="manual-statement-importdate"
-        />
-      </FieldRow>
-      <FieldRow
-        label={ui('financeAccountStatementsManualFileName')}
-        data-testid="FieldRow__6b4086">
-        <input type="text" value={form.fileName} onChange={set('fileName')}
-          placeholder={ui('financeAccountStatementsManualFileNamePlaceholder')}
-          data-testid="manual-statement-filename" className={inputClass} />
-      </FieldRow>
       <FieldRow
         label={ui('financeAccountStatementsManualNotes')}
         data-testid="FieldRow__6b4086">
-        <input type="text" value={form.notes} onChange={set('notes')}
+        <textarea value={form.notes} onChange={set('notes')} rows={2}
           placeholder={ui('financeAccountStatementsManualNotesPlaceholder')}
-          data-testid="manual-statement-notes" className={inputClass} />
+          data-testid="manual-statement-notes" className={textareaClass} />
       </FieldRow>
     </div>
   );
@@ -207,32 +219,21 @@ function HeaderFields({ form, setForm, ui }) {
 // the editable row so every column lines up. `fr` units let the row fill the
 // modal width without a horizontal scrollbar (which would clip lookup dropdowns).
 const LINES_GRID =
-  'grid grid-cols-[130px_minmax(110px,0.8fr)_minmax(180px,1.6fr)_minmax(140px,1.1fr)_minmax(150px,1.2fr)_minmax(150px,1.2fr)_110px_110px_72px] gap-2';
+  'grid grid-cols-[140px_minmax(120px,0.8fr)_minmax(140px,1.5fr)_minmax(130px,1.1fr)_minmax(140px,1.2fr)_minmax(140px,1.2fr)_100px_100px_40px] gap-2';
 
-const cellInput = cn(inputClass, 'w-full');
-const cellAmount = cn(inputClass, 'w-full tabular-nums');
-const MUTED = 'text-[#A8AAB8]';
-
-/** Formats a date-only ISO ("YYYY-MM-DD") for display in the committed rows. */
-function formatDisplayDate(iso, bcpLocale) {
-  if (!iso) return '—';
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return '—';
-  try {
-    return new Intl.DateTimeFormat(bcpLocale, { day: '2-digit', month: '2-digit', year: 'numeric' })
-      .format(new Date(y, m - 1, d));
-  } catch {
-    return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
-  }
-}
+// Inline cell inputs: borderless until focused (spreadsheet feel), so the
+// editable row reads as plain text cells matching the read-only rows.
+const cellInput =
+  'h-9 w-full rounded-md border border-transparent bg-transparent px-2 text-sm text-[#121217] placeholder:text-[#A8AAB8] focus:border-[#D1D4DB] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#121217]/15';
+const cellAmount = cn(cellInput, 'text-right tabular-nums');
 
 // Column header styled like the invoices table in the New movement modal:
 // normal case (no uppercase), small semibold dark labels on a white row with a
 // bottom border.
 /** A column header label with an optional red required asterisk. */
-function ColHead({ label, required }) {
+function ColHead({ label, required, className }) {
   return (
-    <span>
+    <span className={cn('truncate whitespace-nowrap', className)}>
       {label}{required ? <span className="text-[#9A1B1B]"> *</span> : null}
     </span>
   );
@@ -240,7 +241,7 @@ function ColHead({ label, required }) {
 
 function LinesHeader({ ui }) {
   return (
-    <div className={cn(LINES_GRID, 'items-center rounded-t-xl border-b border-[#E8EAEF] bg-white px-3 py-2.5 text-xs font-semibold tracking-normal text-[#121217]')}>
+    <div className={cn(LINES_GRID, 'items-center border-b border-[#E8EAEF] bg-white px-6 py-2.5 text-xs font-semibold tracking-normal text-[#121217]')}>
       <ColHead
         label={ui('financeAccountStatementsManualColDate')}
         required
@@ -274,47 +275,23 @@ function LinesHeader({ ui }) {
   );
 }
 
-/** Read-only summary of a committed line (text, not inputs) + edit / delete. */
-function DisplayRow({ row, money, bcpLocale, onEdit, onRemove, ui }) {
-  const out = parseAmount(row.out);
-  const inc = parseAmount(row.in);
-  return (
-    <div className={cn(LINES_GRID, 'items-center px-3 py-2.5 text-[13px] text-[#121217] hover:bg-[#FAFBFC]')}
-      data-testid="manual-line-row">
-      <span className="truncate">{formatDisplayDate(row.date, bcpLocale)}</span>
-      <span className={cn('truncate', !row.reference && MUTED)}>{row.reference || '—'}</span>
-      <span className={cn('truncate', !row.description && MUTED)} title={row.description || ''}>{row.description || '—'}</span>
-      <span className={cn('truncate', !row.contactName && MUTED)}>{row.contactName || '—'}</span>
-      <span className={cn('truncate', !row.contact && MUTED)}>{row.contact?.name || '—'}</span>
-      <span className={cn('truncate', !row.glItem && MUTED)}>{row.glItem?.name || '—'}</span>
-      <span className={cn('truncate font-medium tabular-nums', out > 0 ? 'text-red-700' : MUTED)}>
-        {out > 0 ? `−${money(out)}` : '—'}
-      </span>
-      <span className={cn('truncate font-medium tabular-nums', inc > 0 ? 'text-green-700' : MUTED)}>
-        {inc > 0 ? `+${money(inc)}` : '—'}
-      </span>
-      <span className="flex items-center justify-end gap-1">
-        <button type="button" onClick={() => onEdit(row.id)}
-          aria-label={ui('financeAccountStatementsManualEditLine')} data-testid="manual-line-edit"
-          className="flex h-7 w-7 items-center justify-center rounded-full text-[#6C6C89] hover:bg-[#F0F2F5] hover:text-[#121217]">
-          <Pencil className="h-4 w-4" data-testid="Pencil__6b4086" />
-        </button>
-        <button type="button" onClick={() => onRemove(row.id)}
-          aria-label={ui('financeAccountStatementsManualRemoveLine')} data-testid="manual-line-remove"
-          className="flex h-7 w-7 items-center justify-center rounded-full text-[#D50B3E] hover:bg-[#FEF0F4]">
-          <Trash2 className="h-4 w-4" data-testid="Trash2__6b4086" />
-        </button>
+/** A statement line — always inline-editable, cell by cell (no edit/display toggle). */
+function EditRow({ row, onChange, onRemove, ui, currencySym }) {
+  const set = (field) => (e) => onChange(row.id, field, e.target.value);
+  const setVal = (field) => (value) => onChange(row.id, field, value);
+  const amountCell = (field, testId) => (
+    <div className="relative">
+      <input
+        type="text" inputMode="decimal" value={row[field]} onChange={set(field)}
+        placeholder={ui('financeAccountAmountPlaceholder')}
+        className={cn(cellAmount, 'pr-7')} data-testid={testId} />
+      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#A8AAB8]">
+        {currencySym}
       </span>
     </div>
   );
-}
-
-/** The single line currently being edited — full input row, lightly highlighted. */
-function EditRow({ row, onChange, onRemove, ui, rowRef }) {
-  const set = (field) => (e) => onChange(row.id, field, e.target.value);
-  const setVal = (field) => (value) => onChange(row.id, field, value);
   return (
-    <div ref={rowRef} className={cn(LINES_GRID, 'items-center bg-white px-3 py-2.5')} data-testid="manual-line-editrow">
+    <div className={cn(LINES_GRID, 'group items-center bg-white px-6 py-1.5 hover:bg-[#FAFBFC]')} data-testid="manual-line-editrow">
       <DateField value={row.date} onChange={setVal('date')} data-testid="manual-line-date" className="w-full" />
       <input type="text" value={row.reference} onChange={set('reference')} className={cellInput} data-testid="manual-line-ref" />
       <input type="text" value={row.description} onChange={set('description')}
@@ -343,14 +320,12 @@ function EditRow({ row, onChange, onRemove, ui, rowRef }) {
         className={cellInput}
         search
         data-testid="LookupPicker__6b4086" />
-      <input type="text" inputMode="decimal" value={row.out} onChange={set('out')} placeholder={ui('financeAccountAmountPlaceholder')}
-        className={cellAmount} data-testid="manual-line-out" />
-      <input type="text" inputMode="decimal" value={row.in} onChange={set('in')} placeholder={ui('financeAccountAmountPlaceholder')}
-        className={cellAmount} data-testid="manual-line-in" />
+      {amountCell('out', 'manual-line-out')}
+      {amountCell('in', 'manual-line-in')}
       <span className="flex items-center justify-end">
         <button type="button" onClick={() => onRemove(row.id)}
           aria-label={ui('financeAccountStatementsManualRemoveLine')} data-testid="manual-line-remove"
-          className="flex h-9 w-8 items-center justify-center rounded-full text-[#D50B3E] hover:bg-[#FEF0F4]">
+          className="flex h-8 w-8 items-center justify-center rounded-full text-[#D50B3E] opacity-0 transition-opacity hover:bg-[#FEF0F4] focus:opacity-100 group-hover:opacity-100">
           <Trash2 className="h-4 w-4" data-testid="Trash2__6b4086" />
         </button>
       </span>
@@ -358,130 +333,73 @@ function EditRow({ row, onChange, onRemove, ui, rowRef }) {
   );
 }
 
-function EditableLines({ rows, setRows, money, bcpLocale, ui }) {
-  const [editingId, setEditingId] = useState(null);
-  const editRowRef = useRef(null);
+// Inline hint shown under the row whose cell is being edited.
+function LineEditHint({ ui }) {
+  return (
+    <div className="flex items-center justify-center gap-4 px-6 pb-2 text-xs text-[#6C6C89]">
+      <span className="inline-flex items-center gap-1.5">
+        <kbd className="rounded border border-[#D1D4DB] bg-[#F5F7F9] px-1.5 py-0.5 text-[11px] leading-none text-[#3F3F50]">↵</kbd>
+        {ui('financeAccountStatementsManualLineHintSave')}
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <kbd className="rounded border border-[#D1D4DB] bg-[#F5F7F9] px-1.5 py-0.5 text-[11px] leading-none text-[#3F3F50]">
+          {ui('financeAccountStatementsManualKeyEsc')}
+        </kbd>
+        {ui('financeAccountStatementsManualLineHintCancel')}
+      </span>
+    </div>
+  );
+}
+
+function EditableLines({ rows, setRows, ui, currencySym }) {
+  // The row whose cell currently has focus — drives the inline keyboard hint.
+  const [focusedId, setFocusedId] = useState(null);
 
   const change = (id, field, value) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  const remove = (id) => setRows((rs) => rs.filter((r) => r.id !== id));
+  // Every row is directly editable, so adding a line is just appending a blank one.
+  const add = () => setRows((rs) => [...rs, newLine()]);
 
-  const remove = (id) => {
-    setRows((rs) => rs.filter((r) => r.id !== id));
-    setEditingId((cur) => (cur === id ? null : cur));
-  };
-
-  // Commit the row being edited: a blank draft is discarded, a complete one
-  // becomes a read-only display row, and an incomplete one stays in edit mode
-  // (the user must finish its required fields — date, Reference No, both amounts).
-  const commitDraft = () => {
-    if (editingId == null) return;
-    const current = rows.find((r) => r.id === editingId);
-    if (!current) { setEditingId(null); return; }
-    if (isBlankLine(current)) {
-      setRows((rs) => rs.filter((r) => r.id !== editingId));
-      setEditingId(null);
-    } else if (isLineComplete(current)) {
-      setEditingId(null);
-    }
-    // incomplete → keep editing
-  };
-
-  // Clicking outside the edit row commits it (same rules as commitDraft). The
-  // lookup dropdowns are portalled out of the row, so clicks inside them must NOT
-  // count as "outside" — they're part of editing the row.
-  useEffect(() => {
-    if (editingId == null) return undefined;
-    const onDown = (e) => {
-      const t = e.target;
-      if (editRowRef.current?.contains(t)) return;
-      if (t?.closest?.('[data-lookup-dropdown]')) return;
-      // The date-field calendar (and any other popover) is portalled out of the row via a Radix
-      // popper; clicking inside it is still editing the row, so it must NOT commit/discard it.
-      if (t?.closest?.('[data-radix-popper-content-wrapper]')) return;
-      commitDraft();
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingId, rows]);
-
-  // Add a fresh editable line. Refuses while the current draft is incomplete so
-  // the user finishes (or empties) it first; an empty draft is reused as-is.
-  const add = () => {
-    const current = rows.find((r) => r.id === editingId);
-    if (current && isBlankLine(current)) return;
-    if (current && !isLineComplete(current)) return;
-    const nl = newLine();
-    setRows((rs) => [...rs, nl]);
-    setEditingId(nl.id);
-  };
-
-  // Reopen a committed row for editing. Discards the current draft if it is blank;
-  // refuses to switch away from an incomplete (non-blank) draft.
-  const edit = (id) => {
-    const current = rows.find((r) => r.id === editingId);
-    if (current && current.id !== id) {
-      if (isBlankLine(current)) {
-        setRows((rs) => rs.filter((r) => r.id !== current.id));
-      } else if (!isLineComplete(current)) {
-        return;
-      }
-    }
-    setEditingId(id);
-  };
-
-  // Empty state: a single call-to-action card (mirrors the "Añadir comisiones y
-  // conceptos (GL)" affordance in the New movement modal).
-  if (rows.length === 0) {
-    return (
-      <button
-        type="button"
-        onClick={add}
-        data-testid="manual-statement-add-lines"
-        className="flex w-full items-center gap-3 rounded-xl border border-dashed border-[#D1D4DB] bg-[#F5F7F9] px-4 py-3.5 text-left hover:border-[#A9A9BC]"
-      >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#121217] text-white">
-          <Plus className="h-[18px] w-[18px]" data-testid="Plus__6b4086" />
-        </span>
-        <span className="flex flex-col gap-px">
-          <span className="text-sm font-semibold text-[#121217]">
-            {ui('financeAccountStatementsManualAddLinesCta')}
-          </span>
-          <span className="text-xs text-[#6C6C89]">
-            {ui('financeAccountStatementsManualAddLinesCtaDesc')}
-          </span>
-        </span>
-      </button>
-    );
-  }
-
+  // Full-bleed table (extends to the modal padding edges so the header / row
+  // separators span the full width, per the design). Rows are always editable
+  // cell by cell — no edit/display toggle.
   return (
-    <div className="flex flex-col gap-2">
-      <div className="overflow-hidden rounded-xl border border-[#E8EAEF]">
-        <LinesHeader ui={ui} data-testid="LinesHeader__6b4086" />
-        <div className="divide-y divide-[#F0F2F5]">
-          {rows.map((r) => (
-            r.id === editingId
-              ? <EditRow
-              key={r.id}
+    <div className="-mx-6">
+      <LinesHeader ui={ui} data-testid="LinesHeader__6b4086" />
+      <div className="divide-y divide-[#E8EAEF]">
+        {rows.map((r) => (
+          <div
+            key={r.id}
+            onFocusCapture={() => setFocusedId(r.id)}
+            onBlurCapture={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget)) {
+                setFocusedId((cur) => (cur === r.id ? null : cur));
+              }
+            }}
+            onKeyDown={(e) => {
+              // Enter commits the cell (blur / move focus) — it must NOT bubble
+              // up and trigger "Guardar y procesar". Escape just exits the cell.
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                e.target.blur?.();
+              } else if (e.key === 'Escape') {
+                e.target.blur?.();
+              }
+            }}
+          >
+            <EditRow
               row={r}
               onChange={change}
               onRemove={remove}
               ui={ui}
-              rowRef={editRowRef}
+              currencySym={currencySym}
               data-testid="EditRow__6b4086" />
-              : <DisplayRow
-              key={r.id}
-              row={r}
-              money={money}
-              bcpLocale={bcpLocale}
-              onEdit={edit}
-              onRemove={remove}
-              ui={ui}
-              data-testid="DisplayRow__6b4086" />
-          ))}
-        </div>
+            {focusedId === r.id ? <LineEditHint ui={ui} data-testid="LineEditHint__6b4086" /> : null}
+          </div>
+        ))}
       </div>
-      <div className="w-fit">
+      <div className="border-t border-[#E8EAEF] px-6 py-2">
         <AddLineButton
           onClick={add}
           label={ui('financeAccountStatementsManualAddLine')}
@@ -496,51 +414,57 @@ function EditableLines({ rows, setRows, money, bcpLocale, ui }) {
 // Totals bar
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TotalsBar({ rows, money, ui }) {
+// Top summary strip: Líneas / Entradas / Salidas / Saldo in a bordered widget.
+function StatementSummaryWidget({ rows, money, ui }) {
   const t = computeTotals(rows);
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-      <Total
+    <div className="flex items-center gap-5 rounded-lg border border-[#E8EAEF] px-3 py-2">
+      <SummaryKpi
         label={ui('financeAccountStatementsManualTotalLines')}
         value={t.n}
-        data-testid="Total__6b4086" />
-      <Total
+        data-testid="SummaryKpi__6b4086" />
+      <SummaryKpi
         label={ui('financeAccountStatementsManualTotalIn')}
         value={`+${money(t.tin)}`}
-        valueClass="text-green-700"
-        data-testid="Total__6b4086" />
-      <Total
+        valueClass="text-[#17663A]"
+        data-testid="SummaryKpi__6b4086" />
+      <SummaryKpi
         label={ui('financeAccountStatementsManualTotalOut')}
         value={`−${money(t.tout)}`}
-        valueClass="text-red-700"
-        data-testid="Total__6b4086" />
-      <Total
+        valueClass="text-[#AF0932]"
+        data-testid="SummaryKpi__6b4086" />
+      <SummaryKpi
         label={ui('financeAccountStatementsManualTotalBalance')}
         value={money(t.bal)}
-        valueClass="text-[#121217]"
-        data-testid="Total__6b4086" />
+        data-testid="SummaryKpi__6b4086" />
     </div>
   );
 }
 
-function Total({ label, value, valueClass = 'text-[#121217]' }) {
+function SummaryKpi({ label, value, valueClass = 'text-[#121217]' }) {
   return (
-    <span className="inline-flex items-baseline gap-1.5">
-      <span className="text-xs text-[#6C6C89]">{label}</span>
-      <span className={cn('font-semibold tabular-nums', valueClass)}>{value}</span>
-    </span>
+    <div className="flex min-w-0 flex-1 flex-col">
+      <span className="text-xs leading-4 text-[#3F3F50]">{label}</span>
+      <span className={cn('truncate text-base font-medium leading-6 tabular-nums', valueClass)}>
+        {value}
+      </span>
+    </div>
   );
 }
 
-function SectionLabel({ children, count }) {
+// Single active "Líneas" tab with a count badge, sitting on a bottom border.
+function LinesTab({ count, ui }) {
   return (
-    <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.04em] text-[#6C6C89]">
-      <span>{children}</span>
-      {count != null ? (
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F0F2F5] px-1.5 text-[11px] font-semibold text-[#3F3F50]">
+    <div className="-mx-6 flex items-center border-b border-[#E8EAEF] px-6">
+      <div className="-mb-px flex items-center gap-1.5 border-b-2 border-[#121217] pb-3 pr-3 pt-2">
+        <Layers className="h-4 w-4 text-[#121217]" data-testid="Layers__6b4086" />
+        <span className="text-sm font-medium text-[#121217]">
+          {ui('financeAccountStatementsManualSectionLines')}
+        </span>
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#F5F7F9] px-1.5 text-[11px] text-[#3F3F50]">
           {count}
         </span>
-      ) : null}
+      </div>
     </div>
   );
 }
@@ -670,6 +594,7 @@ export function ManualStatementModal({
   const { locale: appLocale } = useLocaleSwitch();
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   const money = useMemo(() => makeMoneyFormatter(accountCurrency, bcpLocale), [accountCurrency, bcpLocale]);
+  const currencySym = useMemo(() => currencySymbol(accountCurrency), [accountCurrency]);
 
   const editing = !!statement;
   const { createStatement, creating } = useCreateStatement();
@@ -721,6 +646,9 @@ export function ManualStatementModal({
         notes: statement.notes || '',
       });
       setRows(loadedLines.map(lineToRow));
+    } else {
+      // Create mode: start with one editable starter row.
+      setRows([newLine()]);
     }
     hydratedRef.current = true;
   }, [open, editing, linesLoading, loadedLines, statement, today]);
@@ -789,59 +717,52 @@ export function ManualStatementModal({
         onOpenChange={(v) => { if (!v) requestClose(); }}
         data-testid="Dialog__6b4086">
         <DialogContent
-          className="w-[96vw] max-w-[1680px] overflow-hidden p-0"
+          className="w-[96vw] max-w-[1440px] overflow-hidden p-0"
           style={{ background: 'var(--surface-overlay, #FFFFFF)' }}
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => { e.preventDefault(); requestClose(); }}
           data-testid="DialogContent__6b4086">
           <div className="bg-white px-6 pt-6">
-            <h2 className="text-lg font-semibold leading-6 text-[#121217]">
+            <h2 className="text-xl font-semibold leading-7 text-[#121217]">
               {ui(editing ? 'financeAccountStatementsManualEditTitle' : 'financeAccountStatementsManualTitle')}
             </h2>
-            <p className="mt-1 text-[13px] leading-[19px] text-[#6C6C89]">
+            <p className="mt-0.5 text-xs leading-4 text-[#6C6C89]">
               {ui(editing ? 'financeAccountStatementsManualEditSubtitle' : 'financeAccountStatementsManualSubtitle')}
             </p>
           </div>
 
-          <div className="max-h-[62vh] overflow-y-auto bg-white px-6 py-4">
-            <HeaderFields
-              form={form}
-              setForm={setFormDirty}
-              ui={ui}
-              data-testid="HeaderFields__6b4086" />
+          <div className="max-h-[62vh] overflow-y-auto overflow-x-hidden bg-white px-6 py-4">
+            <div className="flex flex-col gap-5">
+              <StatementSummaryWidget
+                rows={rows}
+                money={money}
+                ui={ui}
+                data-testid="StatementSummaryWidget__6b4086" />
+              <HeaderFields
+                form={form}
+                setForm={setFormDirty}
+                ui={ui}
+                data-testid="HeaderFields__6b4086" />
+            </div>
 
             <div className="mt-6">
-              <SectionLabel count={computeTotals(rows).n} data-testid="SectionLabel__6b4086">
-                {ui('financeAccountStatementsManualSectionLines')}
-              </SectionLabel>
+              <LinesTab count={computeTotals(rows).n} ui={ui} data-testid="LinesTab__6b4086" />
             </div>
             <EditableLines
               rows={rows}
               setRows={setRowsDirty}
-              money={money}
-              bcpLocale={bcpLocale}
               ui={ui}
+              currencySym={currencySym}
               data-testid="EditableLines__6b4086" />
           </div>
 
-          <div className="flex items-center justify-between gap-4 border-t border-[#E8EAEF] bg-white px-6 py-4">
-            <TotalsBar rows={rows} money={money} ui={ui} data-testid="TotalsBar__6b4086" />
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={requestClose}
-                data-testid="manual-statement-cancel"
-                className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium text-[#121217] hover:bg-[#F5F7F9]"
-              >
-                {ui('financeAccountStatementsManualCancel')}
-              </button>
-              <SaveSplitButton
-                creating={saving}
-                onProcess={() => handleSave(true)}
-                onDraft={() => handleSave(false)}
-                ui={ui}
-                data-testid="SaveSplitButton__6b4086" />
-            </div>
+          <div className="flex items-center justify-end border-t border-[#E8EAEF] bg-white px-6 py-4">
+            <SaveSplitButton
+              creating={saving}
+              onProcess={() => handleSave(true)}
+              onDraft={() => handleSave(false)}
+              ui={ui}
+              data-testid="SaveSplitButton__6b4086" />
           </div>
 
         </DialogContent>

@@ -17,7 +17,7 @@ const fields = [
   { key: 'asset', column: 'A_Asset_ID', type: 'selector', label: 'Asset', readOnly: true, section: 'other', reference: 'Asset', inputMode: 'selector' },
   { key: 'stDimension', column: 'User1_ID', type: 'selector', label: '1st Dimension', readOnly: true, section: 'other', reference: 'User1', inputMode: 'selector' },
   { key: 'ndDimension', column: 'User2_ID', type: 'selector', label: '2nd Dimension', readOnly: true, section: 'other', reference: 'User2', inputMode: 'selector' },
-  { key: 'postingType', column: 'PostingType', type: 'select', label: 'Posting Type', required: true, readOnly: true, section: 'other', options: [{ value: 'A', label: 'Actual' }, { value: 'B', label: 'Budget' }, { value: 'E', label: 'Encumbrance' }, { value: 'S', label: 'Statistical' }] },
+  { key: 'postingType', column: 'PostingType', type: 'select', label: 'Posting Type', required: true, readOnly: true, section: 'other', options: [{ value: 'A', label: 'Actual', labels: {"es_ES":"Real"} }, { value: 'B', label: 'Budget', labels: {"es_ES":"Presupuesto"} }, { value: 'E', label: 'Encumbrance', labels: {"es_ES":"Gravamen"} }, { value: 'S', label: 'Statistical', labels: {"es_ES":"Estadística"} }] },
 ];
 // @sf-generated-end fields:accounting
 

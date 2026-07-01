@@ -1,0 +1,57 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "specName": "tax-category",
+  "window": {
+    "category": "configuration",
+    "name": "Tax Category",
+    "detailEntity": null,
+    "hidePrint": true,
+    "hideMoreMenu": true
+  },
+  "entities": {
+    "taxCategory": {
+      "fields": {
+        "name": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 1
+        },
+        "description": {
+          "section": "principal",
+          "seq": 2
+        },
+        "default": {
+          "grid": true,
+          "section": "principal",
+          "seq": 3
+        },
+        "asbom": {
+          "section": "principal",
+          "seq": 4
+        },
+        "obsptiTaxtype": {
+          "section": "principal",
+          "seq": 5
+        },
+        "obsptiTransactiontype": {
+          "section": "principal",
+          "seq": 6
+        },
+        "obsptiRatetype": {
+          "section": "principal",
+          "seq": 7
+        },
+        "aeatsiiDeclarable": {
+          "section": "principal",
+          "seq": 8
+        }
+      }
+    },
+    "translation": {
+      "exclude": true
+    }
+  },
+  "rules": {}
+}

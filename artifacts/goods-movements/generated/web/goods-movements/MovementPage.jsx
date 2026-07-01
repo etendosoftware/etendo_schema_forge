@@ -205,6 +205,7 @@ const labelOverrides = api.labelOverrides;
 export default function MovementPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="movement"
         detailEntity="movementLine"
@@ -241,6 +242,7 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         sendDocument={{"enabled":false}}
         {...props}
       />
+      </>
     );
   }
 

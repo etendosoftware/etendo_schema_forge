@@ -43,7 +43,9 @@
     },
     "dateFilterKey": "invoiceDate",
     "subsetFilters": [
-      { "label": "allTab" },
+      {
+        "label": "allTab"
+      },
       {
         "label": "invoicesTab",
         "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"
@@ -276,7 +278,7 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
-          "gridOrder": 5
+          "gridOrder": 6
         },
         "summedLineAmount": {
           "visibility": "readOnly",
@@ -306,19 +308,20 @@
         "outstandingAmount": {
           "visibility": "readOnly",
           "grid": true,
+          "gridOrder": 7,
           "form": false
         },
         "eTGODueDate": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": false,
           "searchable": true
         },
         "eTGODeliveryStatus": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 8,
+          "gridOrder": 9,
           "form": false
         },
         "dueAmount": {
@@ -359,6 +362,7 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
+          "gridOrder": 5,
           "badge": true,
           "badgeLabels": {
             "true": {
@@ -588,7 +592,8 @@
           "section": "principal",
           "derivation": null,
           "readOnlyLogic": "@Processed@='Y'",
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "lineNetAmount": {
           "visibility": "system",

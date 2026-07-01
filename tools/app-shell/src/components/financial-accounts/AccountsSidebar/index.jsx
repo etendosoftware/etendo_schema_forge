@@ -87,20 +87,8 @@ function PendingCard({ pending, ui }) {
       <div className="flex flex-col gap-3 py-3">
         <PendingIndicator
           dotColor="#F3164E"
-          label={ui('financeAccountsPendingAccountsRow', {
-            count: pending.accountsWithPending ?? 0,
-          })}
+          label={ui('financeAccountsPendingAccountsRow')}
           value={pending.accountsWithPending ?? 0}
-          data-testid="PendingIndicator__5d6a4a" />
-        <PendingIndicator
-          dotColor="#7047EB"
-          label={ui('financeAccountsPendingSuggestions')}
-          value={pending.suggestionsReady ?? 0}
-          data-testid="PendingIndicator__5d6a4a" />
-        <PendingIndicator
-          dotColor="#FAAF00"
-          label={ui('financeAccountsPendingByRule')}
-          value={pending.byRule ?? 0}
           data-testid="PendingIndicator__5d6a4a" />
       </div>
     </div>

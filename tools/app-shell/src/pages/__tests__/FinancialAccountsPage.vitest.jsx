@@ -8,6 +8,7 @@ vi.mock('@/i18n', () => ({
     if (key === 'financeAccountsRulesToast') return 'Próximamente en T5 (ETP-4099)';
     return key;
   },
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
 }));
 
 const mockSetPageMeta = vi.fn();
@@ -30,6 +31,32 @@ vi.mock('@/hooks/useAccountMutations.js', () => ({
     updateAccount: vi.fn(),
     archiveAccount: vi.fn(),
     fetchDefaults: vi.fn().mockResolvedValue({ currencies: [], defaultCurrencyId: '' }),
+  }),
+}));
+
+// usePsd2Actions/usePsd2ConnectFlow call useAuth internally; both the page and the
+// child modals consume them, so stub them at the module level (no AuthProvider needed).
+vi.mock('@/hooks/usePsd2Actions.js', () => ({
+  usePsd2Actions: () => ({
+    sync: vi.fn(), disconnect: vi.fn(), reconnect: vi.fn(), connect: vi.fn(),
+    fetchStatus: vi.fn().mockResolvedValue({}), fetchProviders: vi.fn().mockResolvedValue([]),
+    saveImportSettings: vi.fn(),
+  }),
+  launchSaltEdgePopup: vi.fn(),
+}));
+// The wizard imports usePsd2Actions without the .js extension.
+vi.mock('@/hooks/usePsd2Actions', () => ({
+  usePsd2Actions: () => ({
+    sync: vi.fn(), disconnect: vi.fn(), reconnect: vi.fn(), connect: vi.fn(),
+    fetchStatus: vi.fn().mockResolvedValue({}), fetchProviders: vi.fn().mockResolvedValue([]),
+    saveImportSettings: vi.fn(),
+  }),
+  launchSaltEdgePopup: vi.fn(),
+}));
+vi.mock('@/hooks/usePsd2ConnectFlow.js', () => ({
+  usePsd2ConnectFlow: () => ({
+    startConnect: vi.fn(), startCreate: vi.fn(), connecting: false,
+    selection: null, confirmSelection: vi.fn(), cancelSelection: vi.fn(),
   }),
 }));
 

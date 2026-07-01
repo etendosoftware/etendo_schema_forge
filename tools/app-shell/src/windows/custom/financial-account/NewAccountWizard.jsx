@@ -17,9 +17,17 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useUI } from '@/i18n';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
+import { usePsd2Actions } from '@/hooks/usePsd2Actions';
 import { AccountFormStep } from './AccountFormStep.jsx';
 import { searchBanks, institutionsFor } from './bankCatalog.js';
 
@@ -31,6 +39,23 @@ const STEP = {
   FORM: 'form',
 };
 
+/** Stable keys for the bank-picker loading skeleton (avoids array-index keys, Sonar S6479). */
+const BANK_SKELETON_KEYS = Array.from({ length: 9 }, (_, i) => `bank-skeleton-${i}`);
+
+/** Curated country list for the bank picker dropdown (Salt Edge providers are fetched per country). */
+const BANK_COUNTRIES = [
+  { code: 'ES', flag: '🇪🇸' },
+  { code: 'IT', flag: '🇮🇹' },
+  { code: 'FR', flag: '🇫🇷' },
+  { code: 'DE', flag: '🇩🇪' },
+  { code: 'PT', flag: '🇵🇹' },
+  { code: 'GB', flag: '🇬🇧' },
+  { code: 'NL', flag: '🇳🇱' },
+  { code: 'BE', flag: '🇧🇪' },
+  { code: 'IE', flag: '🇮🇪' },
+  { code: 'AT', flag: '🇦🇹' },
+];
+
 function resolveContentWidth(step) {
   if (step === STEP.TYPE) return 'max-w-[1016px]';
   if (step === STEP.CONNECTION) return 'max-w-2xl';
@@ -40,7 +65,8 @@ function resolveContentWidth(step) {
 
 function resolveFormBackStep(accountType, selectedBank) {
   if (accountType === 'C') return STEP.TYPE;
-  if (selectedBank) return STEP.INSTITUTION;
+  // Salt Edge providers are leaves (no institution sub-step), so they go back to the bank picker.
+  if (selectedBank && !selectedBank.isProvider) return STEP.INSTITUTION;
   return STEP.BANK;
 }
 
@@ -67,7 +93,7 @@ function resolveFormMode(accountType) {
  *   - onClose(): called when the dialog should close
  *   - onCreated(): called after a successful create so the caller can reload the list
  */
-export function NewAccountWizard({ open, onClose, onCreated }) {
+export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreation }) {
   const ui = useUI();
   const { createAccount, fetchDefaults } = useAccountMutations();
 
@@ -123,14 +149,20 @@ export function NewAccountWizard({ open, onClose, onCreated }) {
 
   const pickBank = (bank) => {
     setSelectedBank(bank);
-    setStep(STEP.INSTITUTION);
+    // Salt Edge providers have no institution sub-list — go straight to the form.
+    setStep(bank.isProvider ? STEP.FORM : STEP.INSTITUTION);
   };
 
   const handleCreate = async (values) => {
     setSubmitting(true);
     setFormError(null);
     try {
-      await createAccount(values);
+      // When the chosen bank is a real Salt Edge provider, remember it on the account so a later
+      // PSD2 connect preselects that bank. Static-catalog banks have no Salt Edge code → skipped.
+      const payload = selectedBank?.isProvider
+        ? { ...values, providerCode: selectedBank.id, providerName: selectedBank.name }
+        : values;
+      await createAccount(payload);
       toast.success(ui('financeAccountsNewCreateSuccess'));
       onCreated?.();
       onClose?.();
@@ -212,6 +244,12 @@ export function NewAccountWizard({ open, onClose, onCreated }) {
               description={ui(accountType === 'CA'
                 ? 'financeAccountsNewConnectionOnlineDescCard'
                 : 'financeAccountsNewConnectionOnlineDesc')}
+              onClick={() => {
+                // Case 2: no account exists yet. Launch Salt Edge (popup opens within this
+                // user gesture); the account is created from the chosen bank account afterwards.
+                onConnectWithCreation?.(accountType);
+                onClose?.();
+              }}
               testid="account-connection-online"
               data-testid="ConnectionCard__24760b" />
             <ConnectionCard
@@ -252,6 +290,9 @@ export function NewAccountWizard({ open, onClose, onCreated }) {
             bankName={selectedBank?.name}
             currencies={currencies}
             defaultCurrencyId={defaultCurrencyId}
+            // Pre-fill the account name with the chosen bank's name so the user only tweaks it
+            // (e.g. "Santander" → "Santander nóminas"). Empty when no bank was selected (skip / cash).
+            initialValues={{ name: selectedBank?.name ?? '' }}
             submitting={submitting}
             error={formError}
             onSubmit={handleCreate}
@@ -301,48 +342,120 @@ function TypePicker({ ui, onPick }) {
 }
 
 function BankPicker({ ui, query, onQueryChange, onPick, onSkip }) {
-  const banks = searchBanks(query);
+  const { fetchProviders } = usePsd2Actions();
+  const [country, setCountry] = useState(BANK_COUNTRIES[0].code);
+  const [providers, setProviders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch the Salt Edge bank catalog for the selected country (live). While it loads we show a
+  // spinner (no mock catalog flash); on error / no PSD2 API key the list stays empty and we fall
+  // back to the static catalog so offline creation still works.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchProviders(country)
+      .then((list) => { if (!cancelled) setProviders(list); })
+      .catch(() => { if (!cancelled) setProviders([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [country, fetchProviders]);
+
+  const selectedFlag = BANK_COUNTRIES.find((c) => c.code === country)?.flag ?? '';
+  const needle = (query ?? '').trim().toLowerCase();
+  const banks = providers.length > 0
+    ? providers
+      .filter((p) => !needle || p.name.toLowerCase().includes(needle))
+      .map((p) => ({ id: p.code, name: p.name, logoUrl: p.logoUrl, isProvider: true }))
+    : searchBanks(query);
+
   return (
     <div className="flex flex-col gap-5">
-      {/* Banco field: flag area + search input */}
+      {/* Banco field: country selector + search input */}
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium leading-6 text-[#121217]">{ui('financeAccountsNewBankLabel')}</p>
-        <div className="flex h-10 w-full overflow-hidden rounded-lg border border-[#D1D4DB] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
-          <div className="flex h-full w-[60px] shrink-0 items-center justify-center gap-0.5 border-r border-[#E8EAEF]">
-            <Landmark className="h-4 w-4 text-[#828FA3]" data-testid="Landmark__24760b" />
-            <ChevronDown className="h-4 w-4 text-[#828FA3]" data-testid="ChevronDown__24760b" />
-          </div>
+        <div className="flex h-10 w-full items-center overflow-hidden rounded-lg border border-[#D1D4DB] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+          <DropdownMenu data-testid="DropdownMenu__24760b">
+            <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__24760b">
+              <button
+                type="button"
+                data-testid="new-account-bank-country"
+                aria-label={ui('financeAccountsNewBankCountry')}
+                className="flex h-full w-[60px] shrink-0 items-center justify-center gap-2 border-r border-[#E8EAEF] hover:bg-[#F5F7F9] focus:outline-none"
+              >
+                <span className="text-base leading-none">{selectedFlag}</span>
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 text-[#828FA3]"
+                  data-testid="ChevronDown__24760b" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="max-h-[260px] overflow-y-auto"
+              data-testid="DropdownMenuContent__24760b">
+              {BANK_COUNTRIES.map((c) => (
+                <DropdownMenuItem
+                  key={c.code}
+                  onClick={() => setCountry(c.code)}
+                  data-testid={`new-account-bank-country-${c.code}`}
+                >
+                  <span className="text-base leading-none">{c.flag}</span>
+                  <span className="text-sm text-[#121217]">{c.code}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder={ui('financeAccountsNewBankSearchPlaceholder')}
             data-testid="new-account-bank-search"
-            className="flex-1 px-3 text-sm leading-6 text-[#121217] placeholder:text-[#6C6C89] focus:outline-none"
+            className="h-full flex-1 bg-transparent px-3 text-sm text-[#121217] placeholder:text-[#6C6C89] focus:outline-none"
           />
         </div>
       </div>
-      {/* Populares section */}
+      {/* Providers grid */}
       <div className="flex flex-col gap-3">
-        <div>
-          <p className="text-sm font-medium leading-6 text-[#121217]">{ui('financeAccountsNewBankPopular')}</p>
-          <p className="text-xs leading-4 text-[#6C6C89]">{ui('financeAccountsNewBankSubtitle')}</p>
-        </div>
-        <div className="grid grid-cols-3 gap-5">
+        {loading ? (
+          <div
+            className="grid h-[424px] grid-cols-3 content-start gap-5"
+            data-testid="new-account-bank-loading"
+          >
+            {BANK_SKELETON_KEYS.map((key) => (
+              <div
+                key={key}
+                className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[#E8EAEF] bg-white p-4 shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
+              >
+                <Skeleton className="h-10 w-10 rounded-lg" data-testid="Skeleton__24760b" />
+                <Skeleton className="h-4 w-24 rounded" data-testid="Skeleton__24760b" />
+              </div>
+            ))}
+          </div>
+        ) : (
+        <div className="grid h-[424px] grid-cols-3 content-start gap-5 overflow-y-auto pr-3">
           {banks.map((bank) => (
             <button
               key={bank.id}
               type="button"
               onClick={() => onPick(bank)}
               data-testid={`new-account-bank-${bank.id}`}
-              className="flex flex-col items-start gap-3 rounded-xl border border-[#E8EAEF] bg-white p-4 shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
+              className="flex h-[124px] flex-col items-start gap-3 rounded-xl border border-[#E8EAEF] bg-white p-4 text-left shadow-[0_1px_2px_rgba(18,18,23,0.05)] transition-colors hover:bg-[#F5F7F9]"
             >
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
-                <Landmark className="h-5 w-5 text-[#828FA3]" data-testid="Landmark__24760b" />
-              </span>
-              <span className="text-sm font-medium leading-5 text-[#121217]">{bank.name}</span>
+              {bank.logoUrl ? (
+                <img
+                  src={bank.logoUrl}
+                  alt=""
+                  className="h-10 w-10 rounded-lg border border-[#D1D4DB] bg-white object-contain p-1 shadow-[0_1px_2px_rgba(18,18,23,0.05)]"
+                />
+              ) : (
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+                  <Landmark className="h-5 w-5 text-[#828FA3]" data-testid="Landmark__24760b" />
+                </span>
+              )}
+              <span className="line-clamp-2 w-full text-left text-sm font-medium leading-5 text-[#121217]">{bank.name}</span>
             </button>
           ))}
         </div>
+        )}
       </div>
       <button
         type="button"

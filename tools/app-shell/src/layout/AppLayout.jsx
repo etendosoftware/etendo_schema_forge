@@ -35,6 +35,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
           <TopBar
             onBack={meta?.onBack}
             title={meta?.title}
+            titleExtra={meta?.titleExtra}
             breadcrumb={meta?.breadcrumb}
             recordCount={meta?.recordCount}
             menuAction={meta?.menuAction}

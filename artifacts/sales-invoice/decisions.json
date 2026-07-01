@@ -84,7 +84,9 @@
       }
     },
     "subsetFilters": [
-      { "label": "allTab" },
+      {
+        "label": "allTab"
+      },
       {
         "label": "invoicesTab",
         "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"
@@ -223,6 +225,7 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
+          "gridOrder": 5,
           "badge": true,
           "badgeLabels": {
             "true": {
@@ -243,7 +246,7 @@
         "grandTotalAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 5,
+          "gridOrder": 6,
           "section": "summary"
         },
         "summedLineAmount": {
@@ -253,21 +256,21 @@
         "outstandingAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "form": false,
           "section": "summary"
         },
         "eTGODueDate": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": false,
           "searchable": true
         },
         "eTGODeliveryStatus": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 8,
+          "gridOrder": 9,
           "form": false
         },
         "isPaid": {
@@ -322,7 +325,6 @@
           "form": false
         },
         "transactionDocument": {
-          "name": "cDocTypeTargetId",
           "visibility": "editable",
           "section": "principal",
           "form": true,
@@ -497,7 +499,8 @@
           "section": "principal",
           "derivation": null,
           "readOnlyLogic": "@Processed@='Y'",
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "unitPrice": {
           "grid": false,
@@ -624,14 +627,12 @@
         "salesOrderLine": {
           "visibility": "system",
           "reference": null,
-          "inputMode": null,
-          "name": "cOrderlineId"
+          "inputMode": null
         },
         "goodsShipmentLine": {
           "visibility": "system",
           "reference": null,
-          "inputMode": null,
-          "name": "mInoutlineId"
+          "inputMode": null
         }
       }
     },

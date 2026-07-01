@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-06-25T19:58:29.654Z",
-  "checksum": "a77ebc90875e7211",
+  "updatedAt": "2026-06-29T20:07:15.190Z",
+  "checksum": "b0be7c943af86da5",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -457,35 +457,59 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment"
+                "name": "Awaiting Payment",
+                "labels": {
+                  "es_ES": "A Pagar"
+                }
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution"
+                "name": "Awaiting Execution",
+                "labels": {
+                  "es_ES": "A Ejecutar"
+                }
               },
               {
                 "value": "RPVOID",
-                "name": "Void"
+                "name": "Void",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "PPM",
-                "name": "Payment Made"
+                "name": "Payment Made",
+                "labels": {
+                  "es_ES": "Pagado"
+                }
               },
               {
                 "value": "RPR",
-                "name": "Payment Received"
+                "name": "Payment Received",
+                "labels": {
+                  "es_ES": "Cobrado"
+                }
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared"
+                "name": "Deposited not Cleared",
+                "labels": {
+                  "es_ES": "Cobro depositado"
+                }
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared"
+                "name": "Withdrawn not Cleared",
+                "labels": {
+                  "es_ES": "Pago reintegrado"
+                }
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared"
+                "name": "Payment Cleared",
+                "labels": {
+                  "es_ES": "Conciliado"
+                }
               }
             ],
             "defaultValue": "RPAP",
@@ -1369,15 +1393,24 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Executed"
+                "name": "Executed",
+                "labels": {
+                  "es_ES": "Ejecutado"
+                }
               },
               {
                 "value": "PE",
-                "name": "Partially Executed"
+                "name": "Partially Executed",
+                "labels": {
+                  "es_ES": "Ejecutado Parcialmente"
+                }
               },
               {
                 "value": "P",
-                "name": "Pending"
+                "name": "Pending",
+                "labels": {
+                  "es_ES": "Pendiente"
+                }
               }
             ]
           },
@@ -1407,27 +1440,45 @@
             "enumValues": [
               {
                 "value": "AIP",
-                "name": "Automatically from Invoice Process"
+                "name": "Automatically from Invoice Process",
+                "labels": {
+                  "es_ES": "Automáticamente desde Procesar Factura"
+                }
               },
               {
                 "value": "APP",
-                "name": "Automatically from Payment Process"
+                "name": "Automatically from Payment Process",
+                "labels": {
+                  "es_ES": "Automáticamente desde el Proceso de Pago"
+                }
               },
               {
                 "value": "MF",
-                "name": "Execute Payments Form"
+                "name": "Execute Payments Form",
+                "labels": {
+                  "es_ES": "Ejecutar formas de Pago"
+                }
               },
               {
                 "value": "OTHER",
-                "name": "Other Source"
+                "name": "Other Source",
+                "labels": {
+                  "es_ES": "Otra fuente"
+                }
               },
               {
                 "value": "PPW",
-                "name": "Payment Proposal Window"
+                "name": "Payment Proposal Window",
+                "labels": {
+                  "es_ES": "Ventana de Propuesta de Pago"
+                }
               },
               {
                 "value": "PW",
-                "name": "Payments Window"
+                "name": "Payments Window",
+                "labels": {
+                  "es_ES": "Ventana Pagos"
+                }
               }
             ]
           },
@@ -1445,15 +1496,24 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Error"
+                "name": "Error",
+                "labels": {
+                  "es_ES": "Error"
+                }
               },
               {
                 "value": "P",
-                "name": "Pending"
+                "name": "Pending",
+                "labels": {
+                  "es_ES": "Pendiente"
+                }
               },
               {
                 "value": "S",
-                "name": "Successful"
+                "name": "Successful",
+                "labels": {
+                  "es_ES": "Éxito"
+                }
               }
             ]
           },
@@ -2412,14 +2472,6 @@
             "required": true
           },
           {
-            "name": "payment",
-            "apiKey": "payment",
-            "column": "Fin_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "processNow",
             "apiKey": "processNow",
             "column": "Processing",
@@ -2530,6 +2582,14 @@
             "type": "button",
             "visibility": "editable",
             "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ]
       },
@@ -2739,14 +2799,6 @@
             "required": false
           },
           {
-            "name": "fINPaymentScheduledetailID",
-            "apiKey": "fINPaymentScheduledetailID",
-            "column": "FIN_Payment_Scheduledetail_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -2807,6 +2859,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "FIN_Payment_Scheduledetail_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -3886,14 +3946,6 @@
             "required": true
           },
           {
-            "name": "psd2PisPayment",
-            "apiKey": "psd2PisPayment",
-            "column": "Psd2_Pis_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -3930,6 +3982,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Psd2_Pis_Payment_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -8650,6 +8710,14 @@
         "description": "System field 'exchangeRate' should exist in backend but not frontend for bankPayments"
       },
       {
+        "id": "t-system-field-bankPayments-id",
+        "category": "system-field",
+        "entity": "bankPayments",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for bankPayments"
+      },
+      {
         "id": "t-system-field-bankPayments-lastCallbackAt",
         "category": "system-field",
         "entity": "bankPayments",
@@ -8728,14 +8796,6 @@
         "field": "paymentUrl",
         "runner": "node",
         "description": "System field 'paymentUrl' should exist in backend but not frontend for bankPayments"
-      },
-      {
-        "id": "t-system-field-bankPayments-psd2PisPayment",
-        "category": "system-field",
-        "entity": "bankPayments",
-        "field": "psd2PisPayment",
-        "runner": "node",
-        "description": "System field 'psd2PisPayment' should exist in backend but not frontend for bankPayments"
       },
       {
         "id": "t-system-field-bankPayments-returnToUrl",
@@ -9042,20 +9102,20 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-id",
+        "category": "system-field",
+        "entity": "header",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-organization",
         "category": "system-field",
         "entity": "header",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-payment",
-        "category": "system-field",
-        "entity": "header",
-        "field": "payment",
-        "runner": "node",
-        "description": "System field 'payment' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-posted",
@@ -9178,12 +9238,12 @@
         "description": "System field 'etvfacPaymentZero' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-fINPaymentScheduledetailID",
+        "id": "t-system-field-lines-id",
         "category": "system-field",
         "entity": "lines",
-        "field": "fINPaymentScheduledetailID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for lines"
+        "description": "System field 'id' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-invoicePaid",

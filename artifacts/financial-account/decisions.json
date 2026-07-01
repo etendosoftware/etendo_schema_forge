@@ -38,7 +38,9 @@
         "lastreconciliation": { "visibility": "system" },
         "lastreconbalance": { "visibility": "system" },
         "aprmIsfundstransEnabled": { "visibility": "discarded" },
-        "aprmGlitemDiff": { "visibility": "discarded" }
+        "aprmGlitemDiff": { "visibility": "discarded" },
+        "eTGODateTolerance": { "visibility": "editable" },
+        "eTGOAmountTolerance": { "visibility": "editable" }
       }
     },
     "transaction": {
@@ -52,7 +54,21 @@
         "gLItem": { "visibility": "readOnly", "grid": true, "gridOrder": 7 },
         "depositAmount": { "visibility": "readOnly", "grid": false },
         "paymentAmount": { "visibility": "readOnly", "grid": false },
-        "posted": { "visibility": "system" },
+        "posted": {
+          "visibility": "readOnly",
+          "type": "boolean",
+          "form": false,
+          "grid": true,
+          "badge": true,
+          "badgeLabels": {
+            "true":  { "en_US": "Posted",     "es_ES": "Contabilizado"   },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          }
+        },
         "finPaymentID": { "visibility": "system" },
         "currency": { "visibility": "system" },
         "organization": { "visibility": "readOnly", "grid": false },

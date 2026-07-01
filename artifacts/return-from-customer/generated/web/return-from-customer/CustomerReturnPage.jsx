@@ -415,6 +415,7 @@ export const api = {
 export default function CustomerReturnPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="customerReturn"
         detailEntity="customerReturnLine"
@@ -444,6 +445,7 @@ export default function CustomerReturnPage({ windowName, recordId, ...props }) {
         sendDocument
         {...props}
       />
+      </>
     );
   }
 

@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-06-25T00:36:00.464Z",
-  "checksum": "13324a7107dca071",
+  "updatedAt": "2026-06-29T12:09:18.745Z",
+  "checksum": "1f2437953a5289b4",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -538,15 +538,24 @@
             "enumValues": [
               {
                 "value": "N",
-                "name": "None"
+                "name": "None",
+                "labels": {
+                  "es_ES": "Ninguna"
+                }
               },
               {
                 "value": "STARTTLS",
-                "name": "STARTTLS"
+                "name": "STARTTLS",
+                "labels": {
+                  "es_ES": "STARTTLS"
+                }
               },
               {
                 "value": "SSL",
-                "name": "SSL"
+                "name": "SSL",
+                "labels": {
+                  "es_ES": "SSL"
+                }
               }
             ],
             "section": "server",
@@ -1363,14 +1372,6 @@
             "required": false
           },
           {
-            "name": "cPocConfigurationID",
-            "apiKey": "cPocConfigurationID",
-            "column": "C_Poc_Configuration_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -1407,6 +1408,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Poc_Configuration_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -2615,14 +2624,6 @@
         "description": "System field 'client' should exist in backend but not frontend for emailConfiguration"
       },
       {
-        "id": "t-system-field-emailConfiguration-cPocConfigurationID",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "cPocConfigurationID",
-        "runner": "node",
-        "description": "System field 'cPocConfigurationID' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
         "id": "t-system-field-emailConfiguration-createdBy",
         "category": "system-field",
         "entity": "emailConfiguration",
@@ -2653,6 +2654,14 @@
         "field": "emailConfigOrganization",
         "runner": "node",
         "description": "System field 'emailConfigOrganization' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
+        "id": "t-system-field-emailConfiguration-id",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for emailConfiguration"
       },
       {
         "id": "t-system-field-emailConfiguration-organization",

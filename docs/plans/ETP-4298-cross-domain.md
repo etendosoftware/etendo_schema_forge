@@ -16,10 +16,11 @@ that intentionally spans the generator, platform, multiple windows, and i18n.
 | `app-shell-core` | `packages/app-shell-core/src/locales/en_US.json`, `packages/app-shell-core/src/locales/es_ES.json` | i18n keys for accounting status (`accountingStatus`, `postedStatus`, `notPostedStatus`) added to both locales. |
 | `window:amortization` | `artifacts/amortization/**` | Post/Unpost/Bulk Post actions + accounting status pill + `posted` boolean column. |
 | `window:goods-movements` | `artifacts/goods-movements/**` | Same as amortization. |
-| `window:goods-receipt` | `artifacts/goods-receipt/**` | Same as amortization. |
-| `window:goods-shipment` | `artifacts/goods-shipment/**` | Same as amortization. |
-| `window:purchase-invoice` | `artifacts/purchase-invoice/**` | Same as amortization. |
-| `window:sales-invoice` | `artifacts/sales-invoice/**` | Same as amortization. |
+| `window:goods-receipt` | `artifacts/goods-receipt/**`, `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` | Same as amortization. Grid badge added to custom HEADER_COLUMNS array (custom loader overrides generated table). |
+| `window:goods-shipment` | `artifacts/goods-shipment/**`, `tools/app-shell/src/windows/custom/goods-shipment/index.jsx` | Same as amortization. Grid badge added to custom COLUMNS array. |
+| `window:physical-inventory` | `artifacts/physical-inventory/**`, `tools/app-shell/src/windows/custom/physical-inventory/index.jsx` | statusPills added to decisions.json for detail view pill; posted badge column added to custom COLUMNS array for grid view; gridOrder set on all 5 header fields. |
+| `window:purchase-invoice` | `artifacts/purchase-invoice/**`, `tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx` | Same as amortization. Grid badge added to custom columns useMemo array. |
+| `window:sales-invoice` | `artifacts/sales-invoice/**`, `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx` | Same as amortization. Grid badge added to custom InvoiceHeaderTable columns useMemo array. |
 | `window:sales-order` | `artifacts/sales-order/**` | Same as amortization. |
 | `window:simple-g-l-journal` | `artifacts/simple-g-l-journal/**` | Same as amortization. |
 | `window:not-posted-documents` | `artifacts/not-posted-documents/**`, `tools/app-shell/src/windows/custom/not-posted-documents/**` | New fully-custom window aggregating unposted documents with single and bulk Post actions. |

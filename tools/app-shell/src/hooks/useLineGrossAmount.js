@@ -198,6 +198,22 @@ export function computeLineGrossAmount(field, value, calloutResult, rowValues, t
   // For product changes, trust the callout if it already computed the gross amount.
   if (field === 'product' && calloutResult.grossAmount != null && Number(calloutResult.grossAmount) !== 0) return;
 
+  // When a client-side field produces exactly 0 AND qty+price are both set, the
+  // zero is intentional (e.g. 100% discount). Explicitly zero out the gross so
+  // stale intermediate values (e.g. grossAmount from when the user typed "10" on
+  // the way to "100") do not remain visible. When qty or price is missing the
+  // zero is indeterminate — leave result unchanged.
+  if (clientSideFields.includes(field) && lineNet === 0) {
+    const qty   = parseFloat(String(rowValues[config.qtyField]   ?? '')) || 0;
+    const price = parseFloat(String(rowValues[config.priceField] ?? '')) || 0;
+    if (qty > 0 && price > 0) {
+      calloutResult.lineNetAmount = 0;
+      calloutResult.grossAmount = 0;
+      calloutResult[config.grossField] = 0;
+    }
+    return;
+  }
+
   if (lineNet <= 0) return;
 
   const taxId  = calloutResult.tax ?? rowValues.tax;

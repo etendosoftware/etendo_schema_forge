@@ -16,6 +16,7 @@ test('normalizeAuthSession exposes the standalone auth contract shape', () => {
   assert.deepEqual(normalizeAuthSession({ token: 't', username: 'u' }), {
     token: 't',
     username: 'u',
+    clientId: null,
     roleList: [],
     selectedRole: null,
     selectedOrg: null,
@@ -30,6 +31,7 @@ test('memory auth storage supports SDK consumers without browser localStorage', 
   assert.deepEqual(storage.read(), {
     token: 'next',
     username: null,
+    clientId: null,
     roleList: [{ id: 'admin' }],
     selectedRole: null,
     selectedOrg: null,
@@ -54,6 +56,7 @@ test('local auth storage round-trips a session through prefixed keys', () => {
   assert.deepEqual(storage.read(), {
     token: 't',
     username: 'u',
+    clientId: null,
     roleList: [{ id: 'admin' }],
     selectedRole: { id: 'admin' },
     selectedOrg: { id: 'org' },

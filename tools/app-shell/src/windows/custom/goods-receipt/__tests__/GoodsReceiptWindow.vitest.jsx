@@ -69,7 +69,7 @@ vi.mock('@generated/goods-receipt/generated/web/goods-receipt/GoodsReceiptTable'
   default: () => <div />,
 }));
 
-vi.mock('../GoodsReceiptBottomPanel.jsx', () => ({ default: () => null }));
+vi.mock('@generated/goods-receipt/custom/GoodsReceiptBottomPanel', () => ({ default: () => null }));
 vi.mock('../GoodsReceiptPreview.jsx', () => ({ default: () => null }));
 vi.mock('../RelatedDocuments.jsx', () => ({ default: () => null }));
 

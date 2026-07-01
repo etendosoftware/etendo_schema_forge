@@ -1,0 +1,352 @@
+{
+  "version": "0.5.0",
+  "generatedAt": "2026-06-25T12:12:33.694Z",
+  "updatedAt": "2026-06-26T11:11:25.752Z",
+  "contractChecksum": "a8473151bae8abe4",
+  "apiPrediction": {
+    "specName": "open-close-period-control",
+    "baseUrl": "/sws/neo/open-close-period-control",
+    "crud": {
+      "periodControl": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/open-close-period-control/periodControl",
+        "detailUrl": "/sws/neo/open-close-period-control/periodControl/{id}",
+        "supportedFilters": []
+      },
+      "documents": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": false,
+        "listUrl": "/sws/neo/open-close-period-control/documents",
+        "detailUrl": "/sws/neo/open-close-period-control/documents/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "periodControl",
+        "field": "calendar",
+        "column": "C_Calendar_ID",
+        "reference": "Calendar",
+        "inputMode": "selector",
+        "url": "/sws/neo/open-close-period-control/periodControl/selectors/calendar"
+      },
+      {
+        "entity": "periodControl",
+        "field": "year",
+        "column": "C_Year_ID",
+        "reference": "Year",
+        "inputMode": "selector",
+        "url": "/sws/neo/open-close-period-control/periodControl/selectors/year"
+      }
+    ],
+    "actions": [
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "periodControl",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/open-close-period-control/periodControl/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "167",
+        "processType": "classic"
+      },
+      {
+        "name": "openClose",
+        "actionType": "documentAction",
+        "entity": "periodControl",
+        "column": "OpenClose",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/open-close-period-control/periodControl/{id}/action/openClose",
+        "parameters": [
+          {
+            "name": "openClose",
+            "type": "string",
+            "required": true,
+            "description": "Period action: O=Open, C=Closed, P=Permanently closed"
+          }
+        ],
+        "preconditions": [],
+        "effects": [
+          "Updates the period or document-type status"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Period is permanently closed (P) — cannot be re-opened",
+          "No accounting entries exist yet — transition may be restricted",
+          "User lacks period-control permission for the organization"
+        ],
+        "processId": "167",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "documents",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/open-close-period-control/documents/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "168",
+        "processType": "classic"
+      },
+      {
+        "name": "openClose",
+        "actionType": "documentAction",
+        "entity": "documents",
+        "column": "OpenClose",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/open-close-period-control/documents/{id}/action/openClose",
+        "parameters": [
+          {
+            "name": "openClose",
+            "type": "string",
+            "required": true,
+            "description": "Period action: O=Open, C=Closed, P=Permanently closed"
+          }
+        ],
+        "preconditions": [],
+        "effects": [
+          "Updates the period or document-type status"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Period is permanently closed (P) — cannot be re-opened",
+          "No accounting entries exist yet — transition may be restricted",
+          "User lacks period-control permission for the organization"
+        ],
+        "processId": "168",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Período",
+        "PeriodNo": "N.º período",
+        "StartDate": "Fecha inicio",
+        "EndDate": "Fecha fin",
+        "PeriodType": "Tipo",
+        "Status": "Estado",
+        "DocumentCategory": "Tipo de documento",
+        "PeriodStatus": "Estado período"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "periodControl": {
+        "fields": {
+          "status": {
+            "readOnly": true
+          },
+          "calendar": {
+            "readOnly": true,
+            "required": true
+          },
+          "year": {
+            "readOnly": true,
+            "required": true
+          },
+          "periodNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@C_Period_Not_Editable@='Y'"
+          },
+          "name": {
+            "readOnly": true,
+            "required": true
+          },
+          "startingDate": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@C_Period_Not_Editable@='Y'"
+          },
+          "endingDate": {
+            "readOnly": true,
+            "readOnlyLogic": "@C_Period_Not_Editable@='Y'"
+          },
+          "periodType": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@C_Period_Not_Editable@='Y'",
+            "defaultValue": "S"
+          },
+          "openClose": {
+            "required": true,
+            "defaultValue": "O"
+          }
+        }
+      },
+      "documents": {
+        "fields": {
+          "periodStatus": {
+            "readOnly": true,
+            "defaultValue": "N"
+          },
+          "documentCategory": {
+            "readOnly": true,
+            "required": true
+          },
+          "openClose": {
+            "required": true,
+            "defaultValue": "O"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage open/close period control financial records.",
+    "whenToUse": [
+      "Use for open/close period control management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "openClose"
+      ],
+      "lineFields": [
+        "openClose"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "processNow",
+      "openClose",
+      "processNow",
+      "openClose"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Period is permanently closed (P) — cannot be re-opened",
+      "No accounting entries exist yet — transition may be restricted",
+      "User lacks period-control permission for the organization",
+      "Required field without default value must be provided",
+      "Validate the current form state before running lifecycle actions",
+      "Do not run destructive lifecycle actions without explicit user confirmation"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "openClose"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "openClose"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "processNow"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "061114243e029696"
+}

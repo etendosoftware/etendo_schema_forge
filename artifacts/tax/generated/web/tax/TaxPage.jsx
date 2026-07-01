@@ -101,6 +101,7 @@ const labelOverrides = api.labelOverrides;
 export default function TaxPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="tax"
         Form={TaxForm}
@@ -121,6 +122,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         {...props}
       />
+      </>
     );
   }
 

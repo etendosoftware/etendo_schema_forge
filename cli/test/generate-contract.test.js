@@ -2221,3 +2221,49 @@ describe('generateFrontendContract — handlesDefaults', () => {
     assert.equal(fc.entities.journalLine.handlesDefaults, undefined);
   });
 });
+
+// ─── ETP-4277 — max constraint in contract fields ─────────────────────────────
+describe('generateFrontendContract — max field constraint (ETP-4277)', () => {
+  function makeSchemaWithDiscount(discountExtra = {}) {
+    return {
+      version: '0.1.0',
+      window: { id: '999', name: 'Sales Order', primaryEntity: 'order', category: 'sales' },
+      entities: [{
+        name: 'order',
+        table: 'C_Order',
+        level: 'header',
+        fields: [
+          { name: 'discount', column: 'Discount', type: 'number', visibility: 'editable',
+            required: false, searchable: false, grid: true, form: true, ...discountExtra },
+          { name: 'quantity', column: 'QtyOrdered', type: 'number', visibility: 'editable',
+            required: false, searchable: false, grid: true, form: true },
+        ],
+      }],
+    };
+  }
+
+  it('copies max from curated field to contract field output', () => {
+    const fc = generateFrontendContract(makeSchemaWithDiscount({ max: 100 }));
+    const discount = fc.entities.order.fields.find(f => f.name === 'discount');
+    assert.equal(discount.max, 100);
+  });
+
+  it('does not set max on contract field when curated field has no max', () => {
+    const fc = generateFrontendContract(makeSchemaWithDiscount());
+    const discount = fc.entities.order.fields.find(f => f.name === 'discount');
+    assert.equal(discount.max, undefined);
+  });
+
+  it('does not set max on a sibling field that has no max declared', () => {
+    const fc = generateFrontendContract(makeSchemaWithDiscount({ max: 100 }));
+    const quantity = fc.entities.order.fields.find(f => f.name === 'quantity');
+    assert.equal(quantity.max, undefined);
+  });
+
+  it('copies both min and max when both are present on the curated field', () => {
+    const fc = generateFrontendContract(makeSchemaWithDiscount({ min: 0, max: 100 }));
+    const discount = fc.entities.order.fields.find(f => f.name === 'discount');
+    assert.equal(discount.min, 0);
+    assert.equal(discount.max, 100);
+  });
+});

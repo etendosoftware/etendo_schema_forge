@@ -2,18 +2,32 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 
 /**
- * Payment modal — date validation (mocked).
+ * Payment modal — date validation, two-step Cobros/Pagos flow (mocked).
  *
- * Verifies the AC-12 fix introduced in ETP-4005: the "Confirm payment" button
- * is disabled when the date field is empty, and submitting through the
- * disabled guard (via direct React onClick invocation) surfaces a translated
- * "date required" error with a red border on the DateField wrapper.
+ * The payment UI is a TWO-STEP flow (ETP-4331):
+ *   Step 1 — clicking the payment badge in the invoice detail opens
+ *            InvoicePaymentModal (history popup, data-testid="cp-history-modal").
+ *            When the invoice is completed (CO) and has outstanding amount, it
+ *            renders an "+ Add payment" button (data-testid="cp-add-payment").
+ *   Step 2 — clicking cp-add-payment opens NewPaymentEntryModal
+ *            (data-testid="cp-new-payment-modal").
+ *
+ * The ETP-4005 "date required" validation now lives in NewPaymentEntryModal:
+ *   - cp-confirm is DISABLED while the date field is empty.
+ *   - cp-save-draft runs the same validation; clicking it with an empty date
+ *     sets the translated error ui('paymentDateRequired') and adds the
+ *     border-red-500 class to the DateField wrapper.
  *
  * Runs in mock mode — no Etendo backend required.
  *
+ * Flow (updated for the two-step payment UI):
+ *   1. Badge click → opens InvoicePaymentHistoryModal (step 1).
+ *   2. "+ Añadir pago" button → opens NewPaymentEntryModal (step 2).
+ *   3. Date field interactions and confirm button validations happen inside step 2.
+ *
  * Locale note: the app loads real locale files in mock mode and defaults to
- * es_ES for anonymous sessions. All text assertions use /English|Español/i
- * regex to be locale-agnostic.
+ * es_ES for anonymous sessions. All text assertions use /EN|ES/i style regexes
+ * to remain locale-agnostic.
  */
 
 const INV_ID = 'pmv-mock-inv-001';
@@ -74,62 +88,56 @@ async function installInvoiceMocks(page) {
       body: JSON.stringify({ response: { data: [] } }),
     });
   });
+  // Step-2 (NewPaymentEntryModal) catalogs.
   await page.route(`**/sws/neo/purchase-invoice/header/${INV_ID}/action/invoiceAccounts`, async (route) => {
     await route.fulfill({
       status: 200, contentType: 'application/json',
       body: JSON.stringify({ items: [{ id: 'acc-1', label: 'Main Account' }] }),
     });
   });
+  await page.route(`**/sws/neo/purchase-invoice/header/${INV_ID}/action/invoicePaymentMethods`, async (route) => {
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ items: [{ id: 'm-1', label: 'Transfer' }] }),
+    });
+  });
+  await page.route(`**/sws/neo/purchase-invoice/header/${INV_ID}/action/invoiceCreditSources`, async (route) => {
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ items: [] }),
+    });
+  });
 }
 
+/** Step 1 — click the payment badge and assert the history modal is visible. */
 async function openPaymentModal(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 10_000 });
   const badge = page.locator('[style*="cursor: pointer"]').filter({ hasText: /500/ }).first();
   await expect(badge).toBeVisible({ timeout: 5_000 });
   await badge.click();
-  await page.waitForTimeout(300);
   await expect(
-    page.locator('div').filter({ hasText: /Factura #PINV|Invoice #PINV/i }).first()
+    page.getByTestId('InvoicePaymentHistoryModal__panel')
   ).toBeVisible({ timeout: 5_000 });
 }
 
-async function openRegisterForm(page) {
-  const registerBtn = page.locator('[style*="dashed"]')
-    .filter({ hasText: /Register|Registrar/i })
-    .first();
-  await expect(registerBtn).toBeVisible({ timeout: 8_000 });
-  await registerBtn.click();
+/** Step 2 — click "Añadir pago" and assert the new-payment modal is visible. */
+async function openNewPaymentModal(page) {
+  const addPaymentBtn = page.getByTestId('InvoicePaymentHistoryModal__add-btn');
+  await expect(addPaymentBtn).toBeVisible({ timeout: 8_000 });
+  await addPaymentBtn.click();
   await expect(
-    page.locator('input[type="text"][inputmode="numeric"]').first()
+    page.locator('[data-testid="cp-new-payment-modal"]')
   ).toBeVisible({ timeout: 3_000 });
 }
 
+/** Clear the date field inside the new-payment modal. */
 async function clearDateField(page) {
-  const dateInput = page.locator('input[type="text"][inputmode="numeric"]').first();
+  const modal = page.locator('[data-testid="cp-new-payment-modal"]');
+  const dateInput = modal.locator('input[type="text"][inputmode="numeric"]').first();
   await dateInput.click({ clickCount: 3 });
   await page.keyboard.press('Delete');
   await page.keyboard.press('Tab');
   return dateInput;
-}
-
-// React 18 suppresses onClick on disabled buttons even for programmatic events.
-// Invoke the React onClick handler directly via fiber introspection.
-async function clickDisabledConfirm(page) {
-  const confirmBtn = page.getByRole('button', { name: /Confirm payment|Confirmar pago/i });
-  await confirmBtn.evaluate((btn) => {
-    const fiberKey = Object.keys(btn).find(
-      (k) => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'),
-    );
-    if (!fiberKey) return;
-    let fiber = btn[fiberKey];
-    while (fiber) {
-      if (fiber.memoizedProps?.onClick) {
-        fiber.memoizedProps.onClick();
-        return;
-      }
-      fiber = fiber.return;
-    }
-  });
 }
 
 test.describe('Payment modal date validation (mocked)', () => {
@@ -146,36 +154,35 @@ test.describe('Payment modal date validation (mocked)', () => {
     await expect(badge).toBeVisible({ timeout: 5_000 });
   });
 
-  test('clicking the payment badge opens the payments modal', async ({ page }) => {
+  test('clicking the payment badge opens the payment history modal', async ({ page }) => {
     await openPaymentModal(page);
     await expect(
-      page.locator('div').filter({ hasText: /Factura #PINV|Invoice #PINV/i }).first()
+      page.getByTestId('InvoicePaymentHistoryModal__panel')
     ).toBeVisible({ timeout: 3_000 });
   });
 
-  test('Confirm payment button is disabled when the date field is cleared', async ({ page }) => {
+  test('Confirm is disabled when the date field is cleared', async ({ page }) => {
     await openPaymentModal(page);
-    await openRegisterForm(page);
+    await openNewPaymentModal(page);
     await clearDateField(page);
-    const confirmBtn = page.getByRole('button', { name: /Confirm payment|Confirmar pago/i });
-    await expect(confirmBtn).toBeDisabled({ timeout: 3_000 });
+    await expect(page.getByTestId('cp-confirm')).toBeDisabled({ timeout: 3_000 });
   });
 
-  test('submitting with empty date shows a date-required error message', async ({ page }) => {
+  test('saving with empty date shows a date-required error', async ({ page }) => {
     await openPaymentModal(page);
-    await openRegisterForm(page);
+    await openNewPaymentModal(page);
     await clearDateField(page);
-    await clickDisabledConfirm(page);
+    await page.getByTestId('cp-save-draft').click();
     await expect(
       page.getByText(/Payment date is required|La fecha de pago es obligatoria/i),
     ).toBeVisible({ timeout: 3_000 });
   });
 
-  test('date field gets red border after invalid empty-date submit', async ({ page }) => {
+  test('date field gets a red border after an empty-date save attempt', async ({ page }) => {
     await openPaymentModal(page);
-    await openRegisterForm(page);
+    await openNewPaymentModal(page);
     await clearDateField(page);
-    await clickDisabledConfirm(page);
+    await page.getByTestId('cp-save-draft').click();
     await expect(page.locator('[class*="border-red-500"]')).toBeVisible({ timeout: 3_000 });
   });
 });

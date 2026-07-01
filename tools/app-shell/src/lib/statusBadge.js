@@ -6,16 +6,16 @@ export function getStatusTone(status) {
   const s = String(status ?? '').toLowerCase();
   if (
     s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'pa' || s === 'rppc' || s === 'ppm' ||
-    s === 'pwnc' || s === 'rdnc' ||
+    s === 'pwnc' || s === 'rdnc' || s === 'o' ||
     s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' ||
     s === 'paid' || s === 'true' || s === 'processed' || s === 'y' || s === 'yes'
   ) return 'success';
   if (
-    s === 'ip' || s === 'ue' || s === 'rpae' || s === 'rpap' || s === 'rpr' ||
+    s === 'ip' || s === 'ue' || s === 'rpae' || s === 'rpap' || s === 'rpr' || s === 'm' ||
     s === 'in process' || s === 'under evaluation'
   ) return 'warning';
   if (
-    s === 'vo' || s === 'cj' || s === 'rpvoid' || s === 'rpvd' ||
+    s === 'vo' || s === 'cj' || s === 'rpvoid' || s === 'rpvd' || s === 'p' ||
     s === 'voided' || s === 'cancelled' || s === 'void' || s === 'rejected'
   ) return 'destructive';
   return 'neutral';

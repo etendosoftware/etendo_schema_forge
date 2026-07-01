@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-05-04T17:05:55.224Z",
   "updatedAt": "2026-05-26T18:57:35.898Z",
-  "contractChecksum": "258ea027602cfe96",
+  "contractChecksum": "1a00cb188dbdc3c5",
   "apiPrediction": {
     "specName": "tbai-facturas-enviadas",
     "baseUrl": "/sws/neo/tbai-facturas-enviadas",

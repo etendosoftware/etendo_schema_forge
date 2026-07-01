@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.36.0",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-06-18T19:17:38.311Z",
-  "checksum": "fbcbd6d88ea681b0",
+  "updatedAt": "2026-06-29T20:07:16.268Z",
+  "checksum": "b69d42afd8ba293b",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -71,7 +71,10 @@
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
       "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
       "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
       "listbarPaddingX": "px-2",
@@ -83,8 +86,7 @@
           "component": "AssetsAmortizationPanel"
         }
       ],
-      "layoutType": "default",
-      "sidebarAboveTabsOnly": true
+      "layoutType": "default"
     },
     "entities": {
       "assets": {
@@ -202,7 +204,10 @@
             "enumValues": [
               {
                 "value": "LI",
-                "name": "Linear"
+                "name": "Linear",
+                "labels": {
+                  "es_ES": "Lineal"
+                }
               }
             ],
             "businessCritical": true,
@@ -227,11 +232,17 @@
             "enumValues": [
               {
                 "value": "PE",
-                "name": "Percentage"
+                "name": "Percentage",
+                "labels": {
+                  "es_ES": "Porcentaje"
+                }
               },
               {
                 "value": "TI",
-                "name": "Time"
+                "name": "Time",
+                "labels": {
+                  "es_ES": "Tiempo"
+                }
               }
             ],
             "businessCritical": true,
@@ -274,11 +285,17 @@
             "enumValues": [
               {
                 "value": "MO",
-                "name": "Monthly"
+                "name": "Monthly",
+                "labels": {
+                  "es_ES": "Mensualmente"
+                }
               },
               {
                 "value": "YE",
-                "name": "Yearly"
+                "name": "Yearly",
+                "labels": {
+                  "es_ES": "Anualmente"
+                }
               }
             ],
             "businessCritical": true,
@@ -358,6 +375,7 @@
             "required": false,
             "grid": true,
             "form": false,
+            "dot": false,
             "displayLogic": {
               "raw": "@IsDepreciated@='Y'",
               "evaluable": true,
@@ -1064,7 +1082,10 @@
       "compactSidebarPadding": true,
       "whiteFormBackground": true,
       "hideFormCard": true,
+      "sidebarAboveTabsOnly": true,
+      "tabsSeparator": true,
       "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+      "formScrollPaddingX": "px-2",
       "toolbarPaddingX": "px-2",
       "toolbarButtonSize": "default",
       "listbarPaddingX": "px-2",
@@ -1075,8 +1096,7 @@
           "labelKey": "assetsAmortizationPlanTab",
           "component": "AssetsAmortizationPanel"
         }
-      ],
-      "sidebarAboveTabsOnly": true
+      ]
     },
     "entities": {
       "assets": {

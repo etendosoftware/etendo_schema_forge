@@ -291,6 +291,7 @@ const labelOverrides = api.labelOverrides;
 export default function ReturnMaterialReceiptPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="returnMaterialReceipt"
         detailEntity="returnMaterialReceiptLine"
@@ -321,6 +322,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         sendDocument
         {...props}
       />
+      </>
     );
   }
 

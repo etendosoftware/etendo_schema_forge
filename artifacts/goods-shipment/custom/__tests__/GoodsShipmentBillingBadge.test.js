@@ -28,13 +28,13 @@ describe('GoodsShipmentBillingBadge', () => {
     assert.doesNotMatch(src, /import\s+DocumentStatusPill/);
   });
 
-  describe('null guard — only renders for completed shipments', () => {
-    it('checks documentStatus equals CO before rendering', () => {
-      assert.match(src, /data\?\.documentStatus\s*===\s*['"]CO['"]/);
+  describe('null guard — only renders when invoiced > 0', () => {
+    it('reads invoiceStatus and coerces it to a number defaulting to 0', () => {
+      assert.match(src, /data\?\.invoiceStatus\s*!=\s*null\s*\?\s*Number\(\s*data\.invoiceStatus\s*\)\s*:\s*0/);
     });
 
-    it('returns null when the shipment is not completed', () => {
-      assert.match(src, /if\s*\(\s*!isCompleted\s*\)\s*return null/);
+    it('returns null when the invoiced percentage is <= 0', () => {
+      assert.match(src, /if\s*\(\s*rawPct\s*<=\s*0\s*\)\s*return null/);
     });
   });
 

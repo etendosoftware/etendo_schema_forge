@@ -70,6 +70,14 @@ function renderModal(overrides = {}) {
 describe('ImportLinesModal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Re-establish the resolved values every test. The full suite restores mocks
+    // between files, which wipes the module-level mockResolvedValue implementations
+    // and would otherwise leave fetchLines returning undefined (modal stuck on
+    // "loading"). Setting them here keeps the test deterministic in isolation and
+    // under the full parallel run.
+    defaultProps.fetchDocuments.mockResolvedValue({ documents: DOC_ROWS, sharedContext: {} });
+    defaultProps.fetchLines.mockResolvedValue(LINE_ROWS);
+    defaultProps.buildLineBody.mockResolvedValue({ product: 'p1', quantity: 1 });
     globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
   });
 
@@ -170,9 +178,15 @@ describe('ImportLinesModal', () => {
   it('expands a document row on click and loads lines', async () => {
     renderModal();
 
+    // Wait for the fully-settled list state: fetchLines already called (eager load
+    // started) AND no loading spinner (eager load finished) AND INV-001 visible.
+    // Checking only INV-001 catches the brief window between initial render and the
+    // eager-load spinner, which hides the list before stable state is reached.
     await waitFor(() => {
+      expect(defaultProps.fetchLines).toHaveBeenCalled();
+      expect(screen.queryByText('loading')).not.toBeInTheDocument();
       expect(screen.getByText('INV-001')).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
 
     // Click on the first document row to expand it
     const docRow = screen.getByText('INV-001');
@@ -182,21 +196,23 @@ describe('ImportLinesModal', () => {
       expect(defaultProps.fetchLines).toHaveBeenCalledWith(
         expect.objectContaining({ docId: 'doc-1' })
       );
-    });
+    }, { timeout: 10000 });
 
     // After lines load, product names should appear
     await waitFor(() => {
       expect(screen.getByText('Widget A')).toBeInTheDocument();
       expect(screen.getByText('Widget B')).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
   });
 
   it('shows column headers when lines are expanded', async () => {
     renderModal();
 
     await waitFor(() => {
+      expect(defaultProps.fetchLines).toHaveBeenCalled();
+      expect(screen.queryByText('loading')).not.toBeInTheDocument();
       expect(screen.getByText('INV-001')).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
 
     fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
 
@@ -205,22 +221,24 @@ describe('ImportLinesModal', () => {
       expect(screen.getByText('qty')).toBeInTheDocument();
       expect(screen.getByText('price')).toBeInTheDocument();
       expect(screen.getByText('amount')).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
   });
 
   it('hides price columns when showPriceColumns is false', async () => {
     renderModal({ showPriceColumns: false });
 
     await waitFor(() => {
+      expect(defaultProps.fetchLines).toHaveBeenCalled();
+      expect(screen.queryByText('loading')).not.toBeInTheDocument();
       expect(screen.getByText('INV-001')).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
 
     fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
 
     await waitFor(() => {
       expect(screen.getByText('product')).toBeInTheDocument();
       expect(screen.getByText('qty')).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
 
     // price and amount columns should not exist
     expect(screen.queryByText('price')).not.toBeInTheDocument();
@@ -231,8 +249,10 @@ describe('ImportLinesModal', () => {
     renderModal();
 
     await waitFor(() => {
+      expect(defaultProps.fetchLines).toHaveBeenCalled();
+      expect(screen.queryByText('loading')).not.toBeInTheDocument();
       expect(screen.getByText('INV-001')).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
 
     const searchInput = screen.getByPlaceholderText('searchOrders');
     fireEvent.change(searchInput, { target: { value: 'INV-002' } });
@@ -245,8 +265,10 @@ describe('ImportLinesModal', () => {
     renderModal();
 
     await waitFor(() => {
+      expect(defaultProps.fetchLines).toHaveBeenCalled();
+      expect(screen.queryByText('loading')).not.toBeInTheDocument();
       expect(screen.getByText('INV-001')).toBeInTheDocument();
-    });
+    }, { timeout: 10000 });
 
     const searchInput = screen.getByPlaceholderText('searchOrders');
     fireEvent.change(searchInput, { target: { value: 'NONEXISTENT' } });

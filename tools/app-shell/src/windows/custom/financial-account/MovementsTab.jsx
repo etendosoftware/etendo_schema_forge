@@ -166,6 +166,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
           selectedIds={selectedIds}
           onSelectionChange={handleSelectionChange}
           highlightTxnId={highlightTxnId}
+          onReload={onReload}
           data-testid="MovementsTable__c1f76a" />
       </div>
       <NewMovementWizard

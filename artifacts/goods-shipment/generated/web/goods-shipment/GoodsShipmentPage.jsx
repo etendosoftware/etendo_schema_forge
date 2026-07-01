@@ -260,6 +260,7 @@ export const api = {
 export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="goodsShipment"
         detailEntity="goodsShipmentLine"
@@ -296,6 +297,7 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         sendDocument
         {...props}
       />
+      </>
     );
   }
 

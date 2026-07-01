@@ -119,8 +119,7 @@
           }
         },
         "warehouse": {
-          "grid": false,
-          "form": false
+          "grid": false
         },
         "scheduledDeliveryDate": {
           "section": "principal",
@@ -426,7 +425,8 @@
           "order": 5,
           "gridOrder": 5,
           "readOnlyLogic": null,
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "taxableAmount": {
           "form": false,

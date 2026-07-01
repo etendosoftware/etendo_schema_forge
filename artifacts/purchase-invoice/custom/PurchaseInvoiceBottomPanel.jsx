@@ -1,9 +1,11 @@
-import { useState, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { LinesBottomSection } from '@/components/contract-ui';
 import RelatedDocuments from '@/windows/custom/purchase-invoice/RelatedDocuments.jsx';
 import ImportFromGoodsReceiptModal from './ImportFromGoodsReceiptModal';
+import ImportFromPurchaseOrderModal from './ImportFromPurchaseOrderModal';
+import { getApSubtype } from './purchaseInvoiceSubtype';
 
 /* eslint-disable react/prop-types */
 
@@ -25,24 +27,38 @@ export default function PurchaseInvoiceBottomPanel(props) {
 function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, recordId, token, apiBaseUrl, onSave, forceOpen, onForceOpenHandled, onRefresh }) {
   const ui = useUI();
   const [showImportReceiptModal, setShowImportReceiptModal] = useState(false);
+  const [showImportOrderModal, setShowImportOrderModal] = useState(false);
+  const pendingModal = useRef('receipt');
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
+  const isNc = getApSubtype(data) === 'NC';
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
   useEffect(() => {
     if (forceOpen) {
-      setShowImportReceiptModal(true);
+      if (pendingModal.current === 'order') { setShowImportOrderModal(true); }
+      else { setShowImportReceiptModal(true); }
       onForceOpenHandled?.();
     }
   }, [forceOpen, onForceOpenHandled]);
 
   const handleImportReceiptClick = async () => {
+    pendingModal.current = 'receipt';
     if (onSave) {
       const shouldOpen = await onSave();
       if (!shouldOpen) return;
     }
     setShowImportReceiptModal(true);
+  };
+
+  const handleImportOrderClick = async () => {
+    pendingModal.current = 'order';
+    if (onSave) {
+      const shouldOpen = await onSave();
+      if (!shouldOpen) return;
+    }
+    setShowImportOrderModal(true);
   };
 
   if (!isDraft) return null;
@@ -55,6 +71,10 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
     </svg>
   );
 
+  const ghostBtn = { display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' };
+
+  const emptyHintKey = isNc ? 'addLinesManually' : 'addLinesManuallyOrImportFromOrderOrReceipt';
+
   return (
     <div style={{ margin: '24px 16px', padding: '32px 24px', background: 'var(--color-background-secondary)', borderRadius: 'var(--border-radius-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 40, height: 40, borderRadius: 'var(--border-radius-md)', background: 'var(--color-background-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
@@ -66,17 +86,23 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
         </svg>
       </div>
       <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>{ui('noLinesYet')}</span>
-      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui('addLinesManuallyOrImportFromReceipt')}</span>
+      <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 20 }}>{ui(emptyHintKey)}</span>
       {canAddLine && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button type="button" onClick={onAddLine} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, background: '#18181b', color: '#fff', border: 'none', cursor: 'pointer' }}>
             + {ui('addLines')}
           </button>
-          {bpId && (
-            <button type="button" onClick={handleImportReceiptClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '0.5px solid #888', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 500, color: 'var(--color-text-secondary)', background: 'transparent', cursor: 'pointer' }}>
-              {importIconSvg}
-              {ui('importFromGoodsReceipt')}
-            </button>
+          {bpId && !isNc && (
+            <>
+              <button type="button" onClick={handleImportReceiptClick} style={ghostBtn}>
+                {importIconSvg}
+                {ui('importFromGoodsReceipt')}
+              </button>
+              <button type="button" onClick={handleImportOrderClick} style={ghostBtn}>
+                {importIconSvg}
+                {ui('importFromPurchaseOrder')}
+              </button>
+            </>
           )}
         </div>
       )}
@@ -91,6 +117,17 @@ function PurchaseInvoiceLinesEmptyState({ data, onAddLine, canAddLine = true, re
         />,
         document.body,
       )}
+      {showImportOrderModal && createPortal(
+        <ImportFromPurchaseOrderModal
+          invoiceId={recordId}
+          bpId={bpId}
+          base={base}
+          headers={headers}
+          onClose={() => setShowImportOrderModal(false)}
+          onSuccess={() => { setShowImportOrderModal(false); onRefresh?.(); }}
+        />,
+        document.body,
+      )}
     </div>
   );
 }
@@ -101,19 +138,24 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
 ) {
   const ui = useUI();
   const [showImportReceiptModal, setShowImportReceiptModal] = useState(false);
+  const [showImportOrderModal, setShowImportOrderModal] = useState(false);
+  const pendingModal = useRef('receipt');
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
+  const isNc = getApSubtype(data) === 'NC';
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
   useEffect(() => {
     if (forceOpen) {
-      setShowImportReceiptModal(true);
+      if (pendingModal.current === 'order') { setShowImportOrderModal(true); }
+      else { setShowImportReceiptModal(true); }
       onForceOpenHandled?.();
     }
   }, [forceOpen, onForceOpenHandled]);
 
   const openReceiptModal = async () => {
+    pendingModal.current = 'receipt';
     if (onSave) {
       const shouldOpen = await onSave();
       if (!shouldOpen) return;
@@ -121,11 +163,21 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
     setShowImportReceiptModal(true);
   };
 
+  const openOrderModal = async () => {
+    pendingModal.current = 'order';
+    if (onSave) {
+      const shouldOpen = await onSave();
+      if (!shouldOpen) return;
+    }
+    setShowImportOrderModal(true);
+  };
+
   useImperativeHandle(ref, () => ({
     openImportReceiptModal: openReceiptModal,
+    openImportOrderModal: openOrderModal,
   }), [onSave]);
 
-  if (!isDraft || !bpId) return null;
+  if (!isDraft || !bpId || isNc) return null;
 
   return (
     <>
@@ -154,6 +206,17 @@ const PurchaseInvoiceLineActions = forwardRef(function PurchaseInvoiceLineAction
         />,
         document.body,
       )}
+      {showImportOrderModal && createPortal(
+        <ImportFromPurchaseOrderModal
+          invoiceId={recordId}
+          bpId={bpId}
+          base={base}
+          headers={headers}
+          onClose={() => setShowImportOrderModal(false)}
+          onSuccess={() => { setShowImportOrderModal(false); onRefresh?.(); }}
+        />,
+        document.body,
+      )}
     </>
   );
 });
@@ -164,12 +227,18 @@ PurchaseInvoiceBottomPanel.detailExtraActions = PurchaseInvoiceLineActions;
 PurchaseInvoiceBottomPanel.lineMenuActions = function lineMenuActions({ data, importRef }) {
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
-  if (!isDraft || !bpId) return [];
+  const isNc = getApSubtype(data) === 'NC';
+  if (!isDraft || !bpId || isNc) return [];
   return [
     {
       key: 'import-receipt',
       label: 'importFromGoodsReceipt',
       onClick: () => importRef.current?.openImportReceiptModal?.(),
+    },
+    {
+      key: 'import-order',
+      label: 'importFromPurchaseOrder',
+      onClick: () => importRef.current?.openImportOrderModal?.(),
     },
   ];
 };

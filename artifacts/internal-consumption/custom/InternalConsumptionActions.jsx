@@ -3,35 +3,35 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 
 /**
- * moreMenuContent for Internal Consumption.
- * Renders a "Process" menu item that calls M_Internal_Consumption_Post with { action: 'CO' }.
- * Only shown when status is not Voided ('VO').
+ * moreMenuContent (kebab) for Internal Consumption.
+ * Renders a "Void" action that calls M_Internal_Consumption_Post with { action: 'VO' }.
+ * Only shown when the document is Completed ('CO') — voiding an open/draft document is not allowed.
  */
 export default function InternalConsumptionActions({ data, recordId, token, apiBaseUrl, onClose, onRefresh }) {
   const ui = useUI();
   const [processing, setProcessing] = useState(false);
 
-  // Hide if already voided
-  if (data?.status === 'VO') return null;
+  // Void is only available on completed documents.
+  if (data?.status !== 'CO') return null;
 
-  const handleProcess = async () => {
+  const handleVoid = async () => {
     if (processing) return;
     setProcessing(true);
     try {
       const res = await fetch(`${apiBaseUrl}/internalConsumption/${recordId}/action/processNow`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'CO' }),
+        body: JSON.stringify({ action: 'VO' }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(text || `${res.status} ${res.statusText}`);
       }
-      toast.success(ui('internalConsumptionProcessed'));
+      toast.success(ui('internalConsumptionVoided'));
       onRefresh?.();
       onClose();
     } catch (err) {
-      toast.error(ui('internalConsumptionProcessError').replace('{error}', err.message));
+      toast.error(ui('internalConsumptionVoidError').replace('{error}', err.message));
     } finally {
       setProcessing(false);
     }
@@ -40,7 +40,7 @@ export default function InternalConsumptionActions({ data, recordId, token, apiB
   return (
     <button
       type="button"
-      onClick={handleProcess}
+      onClick={handleVoid}
       disabled={processing}
       style={{
         display: 'flex', alignItems: 'center', gap: 8, width: '100%',
@@ -52,8 +52,7 @@ export default function InternalConsumptionActions({ data, recordId, token, apiB
       onMouseEnter={e => { if (!processing) e.currentTarget.style.background = '#F3F4F6'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
     >
-      <span style={{ fontSize: 14 }}>✓</span>
-      {processing ? ui('internalConsumptionProcessing') : ui('internalConsumptionProcess')}
+      {processing ? ui('internalConsumptionVoiding') : ui('internalConsumptionVoid')}
     </button>
   );
 }

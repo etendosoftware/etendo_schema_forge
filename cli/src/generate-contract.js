@@ -300,6 +300,7 @@ function applyFieldUIHints(f, mapped) {
   if (f.filterable === false) mapped.filterable = false;
   if (f.dot === false) mapped.dot = false;
   if (f.min !== undefined) mapped.min = f.min;
+  if (f.max !== undefined) mapped.max = f.max;
 }
 
 /**
@@ -499,6 +500,7 @@ const FIELD_ATTR_SPECS = [
   ['displayFromCatalog', 'verbatim'],
   ['forceCalloutFields', 'array'],
   ['excludeValueOf', 'verbatim'],
+  ['customRenderer', 'verbatim'],
 ];
 
 function mapFieldAttributes(f, mapped) {
@@ -1222,6 +1224,7 @@ export function generateApiPrediction(schema, frontendContract, backendContract)
 
     // CRUD — NEO Headless enables all methods by default via PopulateSpec
     crud[entityName] = buildCrudPrediction(baseUrl, entityName, feEntity);
+    if (frontendContract.window?.hideDelete) crud[entityName].delete = false;
 
     // Selectors — FK fields that are visible (editable or readOnly)
     selectors.push(...collectSelectorPredictions(feEntity, entityName, baseUrl, windowCategory, schema, frontendContract));

@@ -951,7 +951,7 @@
   overflow: hidden;
   width: 260px; height: 52px;
   flex-shrink: 0;
-  background: #fff;
+  background: #F5F7F9;
   box-shadow: 0px 1px 2px rgba(18,18,23,0.05);
 }
 .fm-aeat-cell__num {
@@ -971,7 +971,8 @@
 }
 .fm-aeat-cell--empty { border-color: #E8EAEF; background: #F5F7F9; box-shadow: none; width: 260px; height: 52px; flex-shrink: 0; }
 .fm-aeat-cell--fixed { color: inherit; }
-.fm-aeat-cell--editable { color: inherit; }
+.fm-aeat-cell--editable { background: #fff; }
+.fm-aeat-required-mark { color: #E53E3E; margin-left: 2px; font-weight: 500; }
 .fm-aeat-cell__unit {
   font: 400 13px/20px var(--fm-font-sans, system-ui); color: #6C6C89;
   flex-shrink: 0; padding-right: 8px; align-self: center;
@@ -987,6 +988,9 @@
   font: 400 14px/20px var(--fm-font-sans, system-ui); color: #121217;
   padding: 0 8px; min-width: 0; font-variant-numeric: tabular-nums;
 }
+.fm-aeat-cell__input[type="number"]::-webkit-inner-spin-button,
+.fm-aeat-cell__input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.fm-aeat-cell__input[type="number"] { -moz-appearance: textfield; }
 
 /* ─── Model badges ─────────────────────────────────────────────────── */
 .fm-model-badge {
@@ -1111,8 +1115,23 @@
 .fm-aeat-ident-cb { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--fm-border-1); gap: 12px; }
 .fm-aeat-ident-cb:last-child { border-bottom: none; }
 .fm-aeat-ident-cb__label { flex: 1; font: 400 14px/20px var(--fm-font-sans, system-ui); color: #121217; }
+.fm-aeat-ident-subheading { font: 500 13px/18px var(--fm-font-sans, system-ui); color: #6B7280; margin-top: 8px; }
 .fm-aeat-ident-cb__check { width: 16px; height: 16px; flex-shrink: 0; accent-color: #1d4ed8; cursor: pointer; }
 .fm-aeat-ident-cb__check--readonly { opacity: 0.5; cursor: not-allowed; }
+.fm-aeat-ident-inline-field { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--fm-border-1); }
+.fm-aeat-ident-inline-field__label { font: 400 14px/20px var(--fm-font-sans, system-ui); color: #121217; }
+/* Aligned variant: CSS grid so all labels share the widest column automatically */
+.fm-aeat-ident--aligned { display: grid; grid-template-columns: max-content 253px; gap: 10px 16px; padding: 4px 0; }
+.fm-aeat-ident--aligned .fm-aeat-ident-inline-field { display: contents; }
+.fm-aeat-ident--aligned .fm-aeat-ident-inline-field__label { padding-right: 16px; align-self: center; font: 400 14px/20px var(--fm-font-sans, system-ui); color: #121217; }
+.fm-aeat-ident--aligned .fm-aeat-ident-inline-field__input,
+.fm-aeat-ident--aligned .fm-aeat-ident-inline-field__select { align-self: center; width: 100%; }
+/* Compact select (used inline inside identificacion, not in the aligned grid) */
+.fm-aeat-ident-inline-field__select--compact { min-width: 0; width: 280px; }
+.fm-aeat-ident-inline-field__input { background: #fff; border: 1px solid #D1D4DB; border-radius: 6px; padding: 5px 10px; font: 400 14px/20px var(--fm-font-sans, system-ui); color: #121217; box-shadow: 0px 1px 2px rgba(18,18,23,0.05); outline: none; }
+.fm-aeat-ident-inline-field__input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+.fm-aeat-ident-inline-field__select { background: var(--fm-bg-subtle); border: 1px solid #D1D4DB; border-radius: 6px; padding: 5px 10px; font: 400 14px/20px var(--fm-font-sans, system-ui); color: #121217; box-shadow: 0px 1px 2px rgba(18,18,23,0.05); outline: none; min-width: 240px; cursor: pointer; }
+.fm-aeat-ident-inline-field__select:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
 
 /* ── Spin animation for loading states ─────────────────────────────── */
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

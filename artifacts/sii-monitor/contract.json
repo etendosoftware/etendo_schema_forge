@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.6.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
-  "updatedAt": "2026-06-24T20:46:50.413Z",
-  "checksum": "943a3f6ff97e2bd7",
+  "updatedAt": "2026-06-29T12:09:18.376Z",
+  "checksum": "1121146d6eb6f0ea",
   "frontendContract": {
     "window": {
       "id": "FEF76C3E0F104F06A89AAD15A4A4A35C",
@@ -260,35 +260,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
@@ -391,43 +415,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR"
@@ -487,19 +541,31 @@
             "enumValues": [
               {
                 "value": "R",
-                "name": "Corrective invoice"
+                "name": "Corrective invoice",
+                "labels": {
+                  "es_ES": "Factura rectificativa"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               },
               {
                 "value": "F2",
-                "name": "Simplified invoice"
+                "name": "Simplified invoice",
+                "labels": {
+                  "es_ES": "Factura simplificada"
+                }
               },
               {
                 "value": "F4",
-                "name": "Simplified invoices summary"
+                "name": "Simplified invoices summary",
+                "labels": {
+                  "es_ES": "Asiento resumen facturas simplificadas"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -523,23 +589,38 @@
             "enumValues": [
               {
                 "value": "R1",
-                "name": "R1 - Founded error"
+                "name": "R1 - Founded error",
+                "labels": {
+                  "es_ES": "R1 - Error fundado"
+                }
               },
               {
                 "value": "R2",
-                "name": "R2 - Competition"
+                "name": "R2 - Competition",
+                "labels": {
+                  "es_ES": "R2 - Concurso"
+                }
               },
               {
                 "value": "R3",
-                "name": "R3 - Bad debt"
+                "name": "R3 - Bad debt",
+                "labels": {
+                  "es_ES": "R3 - Deuda incobrable"
+                }
               },
               {
                 "value": "R4",
-                "name": "R4 - Rest"
+                "name": "R4 - Rest",
+                "labels": {
+                  "es_ES": "R4 - Resto"
+                }
               },
               {
                 "value": "R5",
-                "name": "R5 - Simplified invoice"
+                "name": "R5 - Simplified invoice",
+                "labels": {
+                  "es_ES": "R5 - Factura simplificada"
+                }
               }
             ],
             "readOnlyLogic": {
@@ -929,35 +1010,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ]
           },
@@ -975,15 +1080,24 @@
             "enumValues": [
               {
                 "value": "A0",
-                "name": "Alta en SII (A0)"
+                "name": "Alta en SII (A0)",
+                "labels": {
+                  "es_ES": "Alta en SII (A0)"
+                }
               },
               {
                 "value": "A1",
-                "name": "Modification to SII (A1)"
+                "name": "Modification to SII (A1)",
+                "labels": {
+                  "es_ES": "Modificación a SII (A1)"
+                }
               },
               {
                 "value": "Q",
-                "name": "SII Query"
+                "name": "SII Query",
+                "labels": {
+                  "es_ES": "Consulta SII"
+                }
               }
             ]
           },
@@ -1013,23 +1127,38 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - Not contrastable"
+                "name": "1 - Not contrastable",
+                "labels": {
+                  "es_ES": "1 - No contrastable"
+                }
               },
               {
                 "value": "2",
-                "name": "2 - In contrasting process"
+                "name": "2 - In contrasting process",
+                "labels": {
+                  "es_ES": "2 - En proceso de contraste"
+                }
               },
               {
                 "value": "3",
-                "name": "3 - Not contrasted"
+                "name": "3 - Not contrasted",
+                "labels": {
+                  "es_ES": "3 - No contrastada"
+                }
               },
               {
                 "value": "4",
-                "name": "4 - Partially contrasted"
+                "name": "4 - Partially contrasted",
+                "labels": {
+                  "es_ES": "4 - Parcialmente constrastada"
+                }
               },
               {
                 "value": "5",
-                "name": "5 - Contrasted"
+                "name": "5 - Contrasted",
+                "labels": {
+                  "es_ES": "5 - Contrastada"
+                }
               }
             ]
           },
@@ -1149,35 +1278,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
@@ -1302,43 +1455,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR"
@@ -1410,19 +1593,31 @@
             "enumValues": [
               {
                 "value": "F6",
-                "name": "Accounting document"
+                "name": "Accounting document",
+                "labels": {
+                  "es_ES": "Justificante contable"
+                }
               },
               {
                 "value": "LC",
-                "name": "Aduanas - Liquidación complementaria"
+                "name": "Aduanas - Liquidación complementaria",
+                "labels": {
+                  "es_ES": "Aduanas - Liquidación complementaria"
+                }
               },
               {
                 "value": "F5",
-                "name": "Import (DUA)"
+                "name": "Import (DUA)",
+                "labels": {
+                  "es_ES": "Importación (DUA)"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -1820,35 +2015,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ]
           },
@@ -1866,15 +2085,24 @@
             "enumValues": [
               {
                 "value": "A0",
-                "name": "Alta en SII (A0)"
+                "name": "Alta en SII (A0)",
+                "labels": {
+                  "es_ES": "Alta en SII (A0)"
+                }
               },
               {
                 "value": "A1",
-                "name": "Modification to SII (A1)"
+                "name": "Modification to SII (A1)",
+                "labels": {
+                  "es_ES": "Modificación a SII (A1)"
+                }
               },
               {
                 "value": "Q",
-                "name": "SII Query"
+                "name": "SII Query",
+                "labels": {
+                  "es_ES": "Consulta SII"
+                }
               }
             ]
           },
@@ -1904,23 +2132,38 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - Not contrastable"
+                "name": "1 - Not contrastable",
+                "labels": {
+                  "es_ES": "1 - No contrastable"
+                }
               },
               {
                 "value": "2",
-                "name": "2 - In contrasting process"
+                "name": "2 - In contrasting process",
+                "labels": {
+                  "es_ES": "2 - En proceso de contraste"
+                }
               },
               {
                 "value": "3",
-                "name": "3 - Not contrasted"
+                "name": "3 - Not contrasted",
+                "labels": {
+                  "es_ES": "3 - No contrastada"
+                }
               },
               {
                 "value": "4",
-                "name": "4 - Partially contrasted"
+                "name": "4 - Partially contrasted",
+                "labels": {
+                  "es_ES": "4 - Parcialmente constrastada"
+                }
               },
               {
                 "value": "5",
-                "name": "5 - Contrasted"
+                "name": "5 - Contrasted",
+                "labels": {
+                  "es_ES": "5 - Contrastada"
+                }
               }
             ]
           },
@@ -1984,35 +2227,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ]
           },
@@ -2116,35 +2383,59 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment"
+                "name": "Awaiting Payment",
+                "labels": {
+                  "es_ES": "A Pagar"
+                }
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution"
+                "name": "Awaiting Execution",
+                "labels": {
+                  "es_ES": "A Ejecutar"
+                }
               },
               {
                 "value": "RPVOID",
-                "name": "Void"
+                "name": "Void",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "PPM",
-                "name": "Payment Made"
+                "name": "Payment Made",
+                "labels": {
+                  "es_ES": "Pagado"
+                }
               },
               {
                 "value": "RPR",
-                "name": "Payment Received"
+                "name": "Payment Received",
+                "labels": {
+                  "es_ES": "Cobrado"
+                }
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared"
+                "name": "Deposited not Cleared",
+                "labels": {
+                  "es_ES": "Cobro depositado"
+                }
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared"
+                "name": "Withdrawn not Cleared",
+                "labels": {
+                  "es_ES": "Pago reintegrado"
+                }
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared"
+                "name": "Payment Cleared",
+                "labels": {
+                  "es_ES": "Conciliado"
+                }
               }
             ]
           },
@@ -2310,35 +2601,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ]
           },
@@ -2473,35 +2788,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
@@ -2604,43 +2943,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR"
@@ -2700,19 +3069,31 @@
             "enumValues": [
               {
                 "value": "R",
-                "name": "Corrective invoice"
+                "name": "Corrective invoice",
+                "labels": {
+                  "es_ES": "Factura rectificativa"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               },
               {
                 "value": "F2",
-                "name": "Simplified invoice"
+                "name": "Simplified invoice",
+                "labels": {
+                  "es_ES": "Factura simplificada"
+                }
               },
               {
                 "value": "F4",
-                "name": "Simplified invoices summary"
+                "name": "Simplified invoices summary",
+                "labels": {
+                  "es_ES": "Asiento resumen facturas simplificadas"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -3103,35 +3484,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ]
           },
@@ -3149,15 +3554,24 @@
             "enumValues": [
               {
                 "value": "A0",
-                "name": "Alta en SII (A0)"
+                "name": "Alta en SII (A0)",
+                "labels": {
+                  "es_ES": "Alta en SII (A0)"
+                }
               },
               {
                 "value": "A1",
-                "name": "Modification to SII (A1)"
+                "name": "Modification to SII (A1)",
+                "labels": {
+                  "es_ES": "Modificación a SII (A1)"
+                }
               },
               {
                 "value": "Q",
-                "name": "SII Query"
+                "name": "SII Query",
+                "labels": {
+                  "es_ES": "Consulta SII"
+                }
               }
             ]
           },
@@ -3187,23 +3601,38 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - Not contrastable"
+                "name": "1 - Not contrastable",
+                "labels": {
+                  "es_ES": "1 - No contrastable"
+                }
               },
               {
                 "value": "2",
-                "name": "2 - In contrasting process"
+                "name": "2 - In contrasting process",
+                "labels": {
+                  "es_ES": "2 - En proceso de contraste"
+                }
               },
               {
                 "value": "3",
-                "name": "3 - Not contrasted"
+                "name": "3 - Not contrasted",
+                "labels": {
+                  "es_ES": "3 - No contrastada"
+                }
               },
               {
                 "value": "4",
-                "name": "4 - Partially contrasted"
+                "name": "4 - Partially contrasted",
+                "labels": {
+                  "es_ES": "4 - Parcialmente constrastada"
+                }
               },
               {
                 "value": "5",
-                "name": "5 - Contrasted"
+                "name": "5 - Contrasted",
+                "labels": {
+                  "es_ES": "5 - Contrastada"
+                }
               }
             ]
           },
@@ -3323,35 +3752,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
@@ -3454,43 +3907,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR"
@@ -3562,19 +4045,31 @@
             "enumValues": [
               {
                 "value": "R",
-                "name": "Corrective invoice"
+                "name": "Corrective invoice",
+                "labels": {
+                  "es_ES": "Factura rectificativa"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               },
               {
                 "value": "F2",
-                "name": "Simplified invoice"
+                "name": "Simplified invoice",
+                "labels": {
+                  "es_ES": "Factura simplificada"
+                }
               },
               {
                 "value": "F4",
-                "name": "Simplified invoices summary"
+                "name": "Simplified invoices summary",
+                "labels": {
+                  "es_ES": "Asiento resumen facturas simplificadas"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -3951,35 +4446,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ]
           },
@@ -4023,23 +4542,38 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - Not contrastable"
+                "name": "1 - Not contrastable",
+                "labels": {
+                  "es_ES": "1 - No contrastable"
+                }
               },
               {
                 "value": "2",
-                "name": "2 - In contrasting process"
+                "name": "2 - In contrasting process",
+                "labels": {
+                  "es_ES": "2 - En proceso de contraste"
+                }
               },
               {
                 "value": "3",
-                "name": "3 - Not contrasted"
+                "name": "3 - Not contrasted",
+                "labels": {
+                  "es_ES": "3 - No contrastada"
+                }
               },
               {
                 "value": "4",
-                "name": "4 - Partially contrasted"
+                "name": "4 - Partially contrasted",
+                "labels": {
+                  "es_ES": "4 - Parcialmente constrastada"
+                }
               },
               {
                 "value": "5",
-                "name": "5 - Contrasted"
+                "name": "5 - Contrasted",
+                "labels": {
+                  "es_ES": "5 - Contrastada"
+                }
               }
             ]
           },
@@ -4081,15 +4615,24 @@
             "enumValues": [
               {
                 "value": "A0",
-                "name": "Alta en SII (A0)"
+                "name": "Alta en SII (A0)",
+                "labels": {
+                  "es_ES": "Alta en SII (A0)"
+                }
               },
               {
                 "value": "A1",
-                "name": "Modification to SII (A1)"
+                "name": "Modification to SII (A1)",
+                "labels": {
+                  "es_ES": "Modificación a SII (A1)"
+                }
               },
               {
                 "value": "Q",
-                "name": "SII Query"
+                "name": "SII Query",
+                "labels": {
+                  "es_ES": "Consulta SII"
+                }
               }
             ]
           }
@@ -4191,14 +4734,6 @@
             "column": "Update_Invoices",
             "type": "button",
             "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "configuracinSII",
-            "apiKey": "configuracinSII",
-            "column": "Aeatsii_Config_ID",
-            "type": "id",
-            "visibility": "system",
             "required": true
           },
           {
@@ -4390,6 +4925,14 @@
             "apiKey": "validHash",
             "column": "Valid_Hash",
             "type": "button",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Config_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -5800,14 +6343,6 @@
             "required": false
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -5844,6 +6379,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7254,14 +7797,6 @@
             "required": false
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -7298,6 +7833,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7461,14 +8004,6 @@
             "required": false
           },
           {
-            "name": "aeatsiiPaymentCashvatV",
-            "apiKey": "aeatsiiPaymentCashvatV",
-            "column": "Aeatsii_Payment_Cashvat_V_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -7505,6 +8040,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Payment_Cashvat_V_ID",
+            "type": "id",
             "visibility": "system",
             "required": false
           }
@@ -7580,14 +8123,6 @@
             "required": true
           },
           {
-            "name": "aeatsiiPayment",
-            "apiKey": "aeatsiiPayment",
-            "column": "Aeatsii_Payment_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -7616,6 +8151,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Payment_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -9026,14 +9569,6 @@
             "required": false
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -9070,6 +9605,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -10488,14 +11031,6 @@
             "required": true
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -10524,6 +11059,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -17928,14 +18471,6 @@
         "description": "Selector endpoint for 'invoice' in receivedInvoicesSiiData should exist"
       },
       {
-        "id": "t-system-field-cashCriterionPayments-aeatsiiPaymentCashvatV",
-        "category": "system-field",
-        "entity": "cashCriterionPayments",
-        "field": "aeatsiiPaymentCashvatV",
-        "runner": "node",
-        "description": "System field 'aeatsiiPaymentCashvatV' should exist in backend but not frontend for cashCriterionPayments"
-      },
-      {
         "id": "t-system-field-cashCriterionPayments-client",
         "category": "system-field",
         "entity": "cashCriterionPayments",
@@ -17958,6 +18493,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for cashCriterionPayments"
+      },
+      {
+        "id": "t-system-field-cashCriterionPayments-id",
+        "category": "system-field",
+        "entity": "cashCriterionPayments",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for cashCriterionPayments"
       },
       {
         "id": "t-system-field-cashCriterionPayments-organization",
@@ -19784,12 +20327,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for issuedInvoices(previousPeriod)SiiData"
       },
       {
-        "id": "t-system-field-issuedInvoices-previousPeriod-SiiData-factura",
+        "id": "t-system-field-issuedInvoices-previousPeriod-SiiData-id",
         "category": "system-field",
         "entity": "issuedInvoices(previousPeriod)SiiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for issuedInvoices(previousPeriod)SiiData"
+        "description": "System field 'id' should exist in backend but not frontend for issuedInvoices(previousPeriod)SiiData"
       },
       {
         "id": "t-system-field-issuedInvoices-previousPeriod-SiiData-organization",
@@ -20344,12 +20887,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for issuedInvoicesSiiData"
       },
       {
-        "id": "t-system-field-issuedInvoicesSiiData-factura",
+        "id": "t-system-field-issuedInvoicesSiiData-id",
         "category": "system-field",
         "entity": "issuedInvoicesSiiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for issuedInvoicesSiiData"
+        "description": "System field 'id' should exist in backend but not frontend for issuedInvoicesSiiData"
       },
       {
         "id": "t-system-field-issuedInvoicesSiiData-organization",
@@ -20424,14 +20967,6 @@
         "description": "System field 'client' should exist in backend but not frontend for organizations"
       },
       {
-        "id": "t-system-field-organizations-configuracinSII",
-        "category": "system-field",
-        "entity": "organizations",
-        "field": "configuracinSII",
-        "runner": "node",
-        "description": "System field 'configuracinSII' should exist in backend but not frontend for organizations"
-      },
-      {
         "id": "t-system-field-organizations-createdBy",
         "category": "system-field",
         "entity": "organizations",
@@ -20470,6 +21005,14 @@
         "field": "guipuzcoa",
         "runner": "node",
         "description": "System field 'guipuzcoa' should exist in backend but not frontend for organizations"
+      },
+      {
+        "id": "t-system-field-organizations-id",
+        "category": "system-field",
+        "entity": "organizations",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for organizations"
       },
       {
         "id": "t-system-field-organizations-informeltimaConexinSII",
@@ -20592,14 +21135,6 @@
         "description": "System field 'validHash' should exist in backend but not frontend for organizations"
       },
       {
-        "id": "t-system-field-paymentsSiiData-aeatsiiPayment",
-        "category": "system-field",
-        "entity": "paymentsSiiData",
-        "field": "aeatsiiPayment",
-        "runner": "node",
-        "description": "System field 'aeatsiiPayment' should exist in backend but not frontend for paymentsSiiData"
-      },
-      {
         "id": "t-system-field-paymentsSiiData-client",
         "category": "system-field",
         "entity": "paymentsSiiData",
@@ -20622,6 +21157,14 @@
         "field": "creationDate",
         "runner": "node",
         "description": "System field 'creationDate' should exist in backend but not frontend for paymentsSiiData"
+      },
+      {
+        "id": "t-system-field-paymentsSiiData-id",
+        "category": "system-field",
+        "entity": "paymentsSiiData",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for paymentsSiiData"
       },
       {
         "id": "t-system-field-paymentsSiiData-organization",
@@ -22432,12 +22975,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for receivedInvoices(previousPeriod)SiiData"
       },
       {
-        "id": "t-system-field-receivedInvoices-previousPeriod-SiiData-factura",
+        "id": "t-system-field-receivedInvoices-previousPeriod-SiiData-id",
         "category": "system-field",
         "entity": "receivedInvoices(previousPeriod)SiiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for receivedInvoices(previousPeriod)SiiData"
+        "description": "System field 'id' should exist in backend but not frontend for receivedInvoices(previousPeriod)SiiData"
       },
       {
         "id": "t-system-field-receivedInvoices-previousPeriod-SiiData-organization",
@@ -22992,12 +23535,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for receivedInvoicesSiiData"
       },
       {
-        "id": "t-system-field-receivedInvoicesSiiData-factura",
+        "id": "t-system-field-receivedInvoicesSiiData-id",
         "category": "system-field",
         "entity": "receivedInvoicesSiiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for receivedInvoicesSiiData"
+        "description": "System field 'id' should exist in backend but not frontend for receivedInvoicesSiiData"
       },
       {
         "id": "t-system-field-receivedInvoicesSiiData-organization",

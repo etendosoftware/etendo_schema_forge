@@ -136,7 +136,7 @@
           "gridOrder": 3
         },
         "processNow": {
-          "visibility": "discarded"
+          "visibility": "system"
         },
         "project": {
           "visibility": "discarded",

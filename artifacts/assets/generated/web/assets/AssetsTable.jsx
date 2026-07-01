@@ -19,7 +19,7 @@ function renderDepreciationProgress(row) {
 const columns = [
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
   { key: 'assetCategory', column: 'A_Asset_Group_ID', type: 'selector', label: 'Asset Category', required: true },
-  { key: 'purchaseDate', column: 'Datepurchased', type: 'date', label: 'Purchase Date' },
+  { key: 'purchaseDate', column: 'Datepurchased', type: 'date', label: 'Purchase Date', dot: false },
   { key: 'depreciationStartDate', column: 'Amortizationstartdate', type: 'date', label: 'Depreciation Start Date', dot: false },
   { key: 'assetValue', column: 'AssetValueAmt', type: 'amount', label: 'Asset Value', summable: true },
   { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'amount', label: 'Depreciation Amt.', summable: true },

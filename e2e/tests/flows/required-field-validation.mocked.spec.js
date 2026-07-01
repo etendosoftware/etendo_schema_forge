@@ -120,9 +120,11 @@ test.describe('Required-field validation — /sales-quotation/new (ETP-3894)', (
   // The field must not show an error on the initial load (happy path: pristine).
   // -------------------------------------------------------------------------
   test('no inline error on pristine form before save is attempted', async ({ page }) => {
-    // Wait for the form to render completely.
-    const bpWrapper = page.getByTestId('field-businessPartner');
-    await expect(bpWrapper).toBeVisible({ timeout: 8_000 });
+    // Wait for the form to render completely, including async effects.
+    // Using the save button as the readiness signal — it only becomes visible once
+    // the form is fully mounted and stable (no loading skeleton).
+    const saveDraftBtn = page.getByTestId('action-save-draft');
+    await expect(saveDraftBtn).toBeVisible({ timeout: 8_000 });
 
     // No save attempt yet — the error element must not exist in the DOM.
     const bpError = page.getByTestId('error-businessPartner');

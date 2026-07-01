@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.41.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-06-25T19:58:31.409Z",
-  "contractChecksum": "d741bfffa992820d",
+  "updatedAt": "2026-06-28T15:29:27.060Z",
+  "contractChecksum": "361ed75db4f720a4",
   "apiPrediction": {
     "specName": "sales-invoice",
     "baseUrl": "/sws/neo/sales-invoice",
@@ -68,27 +68,6 @@
         "reference": "Org",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/adOrgId"
-      },
-      {
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "column": "C_DocTypeTarget_ID",
-        "reference": "DocumentType",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-invoice/header/selectors/cDocTypeTargetId",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
       },
       {
         "entity": "header",
@@ -178,6 +157,27 @@
         "reference": "aeatsii_cause_exemption",
         "inputMode": "selector",
         "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
+      },
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "column": "C_DocTypeTarget_ID",
+        "reference": "DocumentType",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
       },
       {
         "entity": "lines",
@@ -941,10 +941,6 @@
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#AD_Org_ID@"
           },
-          "cDocTypeTargetId": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
           "documentNo": {
             "readOnly": true,
             "required": true,
@@ -1075,6 +1071,10 @@
           },
           "eTGODeliveryStatus": {
             "readOnly": true
+          },
+          "transactionDocument": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
           }
         }
       },
@@ -1160,10 +1160,6 @@
           "totalDebtAmount": {
             "readOnly": true,
             "defaultValue": "0"
-          },
-          "finPaymentScheduleID": {
-            "readOnly": true,
-            "required": true
           }
         }
       },
@@ -1201,14 +1197,14 @@
     ],
     "minimumCreate": {
       "headerFields": [
-        "cDocTypeTargetId",
         "invoiceDate",
         "businessPartner",
         "partnerAddress",
         "paymentTerms",
         "paymentMethod",
         "priceList",
-        "aeatsiiIsauthorization"
+        "aeatsiiIsauthorization",
+        "transactionDocument"
       ],
       "lineFields": [
         "invoicedQuantity",
@@ -1224,23 +1220,6 @@
       ]
     },
     "selectorContexts": [
-      {
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "AD_Org_ID",
-              "source": "field",
-              "field": "adOrgId"
-            }
-          ]
-        }
-      },
       {
         "entity": "header",
         "field": "partnerAddress",
@@ -1274,6 +1253,23 @@
             {
               "param": "isSOTrx",
               "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "header",
+        "field": "transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
             }
           ]
         }
@@ -1333,14 +1329,14 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
-          "cDocTypeTargetId",
           "invoiceDate",
           "businessPartner",
           "partnerAddress",
           "paymentTerms",
           "paymentMethod",
           "priceList",
-          "aeatsiiIsauthorization"
+          "aeatsiiIsauthorization",
+          "transactionDocument"
         ]
       },
       {
@@ -1367,5 +1363,5 @@
       "tbaiVoidxmlgenerator"
     ]
   },
-  "checksum": "74f348cd7aa147cf"
+  "checksum": "110db16466b71954"
 }

@@ -1,37 +1,9 @@
-import { ListView, DetailView } from '@/components/contract-ui';
-import AccountTable from './AccountTable';
-import AccountForm from './AccountForm';
-import catalogs from './mockCatalogs';
+import ElementValuePage, { api } from './ElementValuePage';
 
 const windowMeta = { category: 'accounting', name: 'Chart of Accounts' };
-const breadcrumb = 'Finance / Chart of Accounts';
 
-export default function App({ windowName, recordId, ...props }) {
-  if (recordId) {
-    return (
-      <DetailView
-        entity="account"
-        Form={AccountForm}
-        catalogs={catalogs}
-        entityLabel="Account"
-        windowName={windowName}
-        recordId={recordId}
-        breadcrumb={breadcrumb}
-        window={windowMeta}
-        {...props}
-      />
-    );
-  }
-
-  return (
-    <ListView
-      entity="account"
-      Table={AccountTable}
-      entityLabel="Account"
-      windowName={windowName}
-      breadcrumb={breadcrumb}
-      window={windowMeta}
-      {...props}
-    />
-  );
+// @sf-generated-start component:App
+export default function App({ windowName, recordId, token, apiBaseUrl, window, ...rest }) {
+  return <ElementValuePage windowName={windowName} recordId={recordId} token={token} apiBaseUrl={apiBaseUrl} window={window || windowMeta} api={api} {...rest} />;
 }
+// @sf-generated-end component:App

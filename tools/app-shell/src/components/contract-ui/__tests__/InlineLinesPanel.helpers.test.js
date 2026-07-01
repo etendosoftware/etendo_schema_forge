@@ -49,6 +49,31 @@ describe('InlineLinesPanel helpers (ETP-4005)', () => {
     });
   });
 
+  describe('clampToMax (ETP-4277)', () => {
+    it('is declared as an internal helper', () => {
+      assert.match(src, /function clampToMax\s*\(\s*col\s*,\s*value\s*\)/);
+    });
+
+    it('guards against non-numeric column types at the top', () => {
+      // Prevents accidental substitution in string/selector/date columns.
+      assert.match(src, /if \(!NUMERIC_TYPES\.has\(col\.type\)\) return value;/);
+    });
+
+    it('substitutes defaultValue when value is empty and defaultValue is declared', () => {
+      // The empty-branch must appear before the max-check so it catches cleared fields.
+      assert.match(src, /if \(value === '' \|\| value == null\)/);
+      assert.match(src, /col\.defaultValue !== undefined.*return String\(col\.defaultValue\)/s);
+    });
+
+    it('falls back to min when value is empty and only min is declared', () => {
+      assert.match(src, /col\.min !== undefined.*return String\(col\.min\)/s);
+    });
+
+    it('clamps to max when the numeric value exceeds col.max', () => {
+      assert.match(src, /num > col\.max \? String\(col\.max\) : value/);
+    });
+  });
+
   describe('commit-time min-value enforcement', () => {
     it('fires the fieldMinValueError toast when a value violates the min rule', () => {
       assert.match(src, /toast\.error\(ui\('fieldMinValueError'\)\)/);

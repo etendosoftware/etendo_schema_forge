@@ -60,7 +60,7 @@ describe('InlineLinesPanel', () => {
 
   it('autosaves on field commit via onUpdateRow', () => {
     assert.match(src, /commitField/);
-    assert.match(src, /onUpdateRow\?\.\(row, col\.key, value/);
+    assert.match(src, /onUpdateRow\?\.\(row, col\.key, effectiveValue/);
   });
 
   it('emits a deduplicated success toast after each inline save', () => {

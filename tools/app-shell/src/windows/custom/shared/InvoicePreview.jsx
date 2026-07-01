@@ -3,7 +3,7 @@ import { Edit2, FileText, Loader2, AlertCircle, Mail, Download, Wallet, MoreVert
 import { Button } from '@/components/ui/button.jsx';
 import { useMenuLabel, useUI } from '@/i18n';
 import { getLatestInstallmentDueDate } from '@/lib/invoiceDueDate';
-import InvoicePaymentModal from './InvoicePaymentModal.jsx';
+import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
 import PdfViewer from './PdfViewer.jsx';
 import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
 import GenericPreviewModal from './GenericPreviewModal.jsx';
@@ -17,6 +17,13 @@ import PaymentsCard from './preview-cards/PaymentsCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
 import { fetchByCriteria, fetchById } from '@/components/related-documents';
+
+function isCreditNote(invoice) {
+  if (!invoice) return false;
+  if (invoice.arInvoiceSubtype) return invoice.arInvoiceSubtype === 'NC' || invoice.arInvoiceSubtype === 'DEV';
+  const ident = (invoice['transactionDocument$_identifier'] || invoice['cDocTypeTargetId$_identifier'] || '').toLowerCase();
+  return ident.includes('credit') || ident.includes('memo') || ident.includes('crédito') || ident.includes('return') || ident.includes('devoluci');
+}
 
 /**
  * InvoicePreview — wires useInvoicePreview data into GenericPreviewModal.
@@ -95,7 +102,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
 
 // ── General tab content ───────────────────────────────────────────────────────
 
-function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isFullyPaid, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend }) {
+function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, installments, payments, loadingPayments, totalOutstanding, canAddPayment, isFullyPaid, isCreditNote: isNC, specName, apiBaseUrl, token, orgId, profile, onAddPayment, onSend }) {
   const ui = useUI();
   const fiscalTargets = getInvoiceFiscalTargets(specName, profile);
   const { sii: siiStatus, tbai: tbaiStatus, verifactu: vfStatus, loading: fiscalLoading } = useFiscalStatus(
@@ -159,8 +166,10 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         totalOutstanding={totalOutstanding}
         canAddPayment={canAddPayment}
         isFullyPaid={isFullyPaid}
+        isCreditNote={isNC}
         loading={loadingPayments}
         onAddPayment={onAddPayment}
+        specName={specName}
         data-testid="PaymentsCard__cf88e6" />
       {specName !== 'purchase-invoice' && <EmailsCard onSend={onSend} data-testid="EmailsCard__cf88e6" />}
       <RelatedDocumentsCard
@@ -252,6 +261,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           canAddPayment={p.canAddPayment}
           isDraft={p.isDraft}
           isFullyPaid={p.isFullyPaid}
+          isCreditNote={isCreditNote(p.displayInvoice)}
           specName={specName}
           apiBaseUrl={apiBaseUrl}
           token={token}
@@ -312,16 +322,16 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
         actionButtons={actionButtons}
         data-testid="GenericPreviewModal__cf88e6" />
       {p.showPaymentModal && (
-        <InvoicePaymentModal
+        <NewPaymentEntryModal
+          dir={specName === 'sales-invoice' ? 'in' : 'out'}
+          specName={specName}
           invoiceId={p.displayInvoice?.id}
           invoiceData={p.displayInvoice}
-          specName={specName}
+          outstanding={p.totalOutstanding}
           apiBaseUrl={apiBaseUrl}
-          onClose={() => {
-            p.setShowPaymentModal(false);
-            p.fetchPayments();
-          }}
-          data-testid="InvoicePaymentModal__cf88e6" />
+          onClose={() => p.setShowPaymentModal(false)}
+          onSaved={() => { p.setShowPaymentModal(false); p.fetchPayments(); }}
+          data-testid="NewPaymentEntryModal__cf88e6" />
       )}
       {p.showSifModal && (
         <SifSendingModal

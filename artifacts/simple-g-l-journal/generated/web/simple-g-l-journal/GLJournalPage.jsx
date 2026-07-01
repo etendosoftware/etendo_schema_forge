@@ -218,6 +218,7 @@ export const api = {
 export default function GLJournalPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="gLJournal"
         detailEntity="gLJournalLine"
@@ -246,6 +247,7 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
         balanceFooter={{"debitField":"foreignCurrencyDebit","creditField":"foreignCurrencyCredit"}}
         {...props}
       />
+      </>
     );
   }
 

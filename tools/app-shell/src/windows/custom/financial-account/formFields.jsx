@@ -17,13 +17,15 @@ export const textareaClass =
  * Label + control stacked vertically. The control fills the cell width via the
  * flex-column's default `align-items: stretch`.
  *
- * @param {{ label: string, required?: boolean, children: React.ReactNode }} props
+ * @param {{ label: string, required?: boolean, optional?: string, children: React.ReactNode }} props
  */
-export function FieldRow({ label, required, children }) {
+export function FieldRow({ label, required, optional, children }) {
   return (
     <label className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs font-medium text-[#3F3F50]">
-        {label}{required ? <span className="text-[#9A1B1B]"> *</span> : null}
+        {label}
+        {required ? <span className="text-[#9A1B1B]"> *</span> : null}
+        {optional ? <span className="font-normal text-[#6C6C89]"> {optional}</span> : null}
       </span>
       {children}
     </label>

@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
   "updatedAt": "2026-05-19T17:03:46.462Z",
-  "contractChecksum": "155149782fc838d1",
+  "contractChecksum": "bac42a6f5c952ea2",
   "apiPrediction": {
     "specName": "tbai-config",
     "baseUrl": "/sws/neo/tbai-config",

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
+import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
@@ -320,6 +321,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         }
         setOrderConfirmed(true);
         incrementSurveyCounter('order');
+        trackTransactionPosted();
         window.dispatchEvent(new CustomEvent('sales-order:document-created'));
       } catch (e) {
         setError(e.message || ui('soErrorOccurred'));
@@ -346,6 +348,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         const doc = (await res.json())?.response?.data;
         currentShipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
         setShipmentResult(currentShipment);
+        trackDocumentCreated('goods-shipment');
       } catch (e) {
         errors.push(e.message || ui('soErrorOccurred'));
       }
@@ -364,6 +367,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
         const doc = (await res.json())?.response?.data;
         currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
         setInvoiceResult(currentInvoice);
+        trackDocumentCreated('sales-invoice');
       } catch (e) {
         errors.push(e.message || ui('soErrorOccurred'));
       }
@@ -585,6 +589,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         }
         const doc = (await res.json())?.response?.data;
         result.shipment = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        trackDocumentCreated('goods-shipment');
       }
 
       if (createInvoice) {
@@ -596,6 +601,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         }
         const doc = (await res.json())?.response?.data;
         result.invoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        trackDocumentCreated('sales-invoice');
       }
 
       window.dispatchEvent(new CustomEvent('sales-order:document-created'));

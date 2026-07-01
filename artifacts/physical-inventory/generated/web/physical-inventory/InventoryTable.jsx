@@ -6,12 +6,12 @@ const columns = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true },
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', label: 'Warehouse', required: true },
-  { key: 'inventoryType', column: 'Inventory_Type', type: 'enum', label: 'Inventory Type', enumLabels: { 'C': 'Closing Inventory', 'N': 'Normal', 'O': 'Opening Inventory' }, required: true },
-  { key: 'processed', column: 'Processed', type: 'status', label: 'Status', required: true },
+  { key: 'processed', column: 'Processed', type: 'status', label: 'Status', enumLabels: { 'true': 'statusProcessed', 'false': 'statusDraft' }, required: true },
+  { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true },
 ];
 // @sf-generated-end columns:inventory
 
-const filters = ['movementDate', 'warehouse', 'inventoryType'];
+const filters = ['movementDate', 'warehouse'];
 
 // @sf-generated-start component:InventoryTable
 const InventoryTable = forwardRef(function InventoryTable(props, ref) {

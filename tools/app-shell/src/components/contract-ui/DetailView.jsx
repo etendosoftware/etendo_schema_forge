@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { ProcessParamDialog } from './ProcessParamDialog';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
@@ -1115,7 +1116,7 @@ export function getDetailContentContainerClassName({
   formScrollPaddingX = null,
   contentOverflow = 'auto',
 } = {}) {
-  const defaultOverflowCls = contentOverflow === 'hidden' ? 'overflow-hidden pb-2' : 'overflow-auto pb-2';
+  const defaultOverflowCls = contentOverflow === 'hidden' ? 'overflow-hidden' : 'overflow-auto pb-2';
   const overflowCls = linesLayout === 'inlineEditable' ? 'flex flex-col overflow-y-auto' : defaultOverflowCls;
   return `flex-1 min-h-0 min-w-0 ${overflowCls} ${detailContentPadding(linesLayout, !!(sidePanel || (sidebarContent && !sidebarAboveTabsOnly)), 'content', compactSidebarPadding, formScrollPaddingX)}${primaryTabs && activePrimaryTab !== 'general' ? ' hidden' : ''}`;
 }
@@ -1418,12 +1419,12 @@ function renderExistingRecordSaveAction({
   isDocumentReadOnly, blockSaveForBalance,
 }) {
   return (
-    <Button size="default" className={saveBtnCls} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
+    <Button variant="outline" size="default" className={`${saveBtnCls} bg-white border-[#D1D4DB] text-[#121217]`} data-testid="action-save" disabled={isDocumentReadOnly || hook.isSaving || !isDirty || blockSaveForBalance} title={blockSaveForBalance ? ui('journalUnbalancedSaveBlocked') : undefined} onClick={async () => {
       if (!(await flushPendingLines())) return;
       const saved = await hook.handleSave(data);
       await handlePostSaveNavigation(saved, { isNew, onAfterCreate, onAfterSave, navigate, windowName, token, apiBaseUrl, hook });
     }}>
-      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Check className="h-3.5 w-3.5" data-testid="Check__fa3275" />}
+      {hook.isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__fa3275" /> : <Save className="h-3.5 w-3.5" color="#64748B" data-testid="Save__fa3275" />}
       {ui('save')}
     </Button>
   );
@@ -1438,6 +1439,98 @@ function renderSaveActions(params) {
   if (params.draftMode?.enabled) return renderDraftModeSaveActions(params);
   if (params.isNew) return renderNewRecordSaveActions(params);
   return renderExistingRecordSaveAction(params);
+}
+
+function renderTotalsBlock({ balanceFooter, children, pendingLine, editingLine, lineConfig, formatAmount, currency, summary, isDocumentReadOnly, totalDiscountPct, onTotalDiscountChange }) {
+  if (balanceFooter) {
+    return (
+      <BalanceFooterPanel
+        lines={children}
+        pendingLine={pendingLine}
+        editingLine={editingLine}
+        config={balanceFooter}
+        formatAmount={formatAmount}
+        currency={currency}
+        data-testid="BalanceFooterPanel__fa3275" />
+    );
+  }
+  const subtotalField = summary.find(f => f.type === 'amount' && (f.key.toLowerCase().includes('summed') || f.key.toLowerCase().includes('totallines') || f.key.toLowerCase().includes('lineamount')));
+  const totalField = summary.find(f => f.type === 'amount' && (f.key.toLowerCase().includes('grand') || (f.key.toLowerCase().includes('total') && !f.key.toLowerCase().includes('line'))));
+  if (!subtotalField && !totalField) return null;
+  return (
+    <DocumentTotalsPanel
+      lines={children}
+      pendingLine={pendingLine}
+      editingLine={editingLine}
+      lineConfig={lineConfig}
+      formatAmount={formatAmount}
+      currency={currency}
+      readOnly={isDocumentReadOnly}
+      totalDiscountPct={totalDiscountPct}
+      onTotalDiscountChange={onTotalDiscountChange}
+      data-testid="DocumentTotalsPanel__fa3275" />
+  );
+}
+
+function isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) {
+  return isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows)
+    || (detailProcesses.length > 0 && selectedChildRows.length > 0 && linesLayout !== 'inlineEditable');
+}
+
+function resolveDetailRows(selectedChildRows, selectedLine) {
+  if (selectedChildRows.length > 0) return selectedChildRows;
+  return selectedLine ? [selectedLine] : [];
+}
+
+function makeCloseDialogHandler(setter) {
+  return open => { if (!open) setter(null); };
+}
+
+async function executeDetailProcessImpl(process, paramValues, explicitRows, {
+  selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui,
+  setSelectedChildRows, setExecutingDetailProcess,
+}) {
+  const rows = explicitRows || selectedChildRows;
+  const fieldValues = {};
+  for (const p of (process.params ?? [])) {
+    if (p.hidden) fieldValues[p.key] = p.value;
+  }
+  Object.assign(fieldValues, paramValues);
+  setExecutingDetailProcess(true);
+  try {
+    const results = await Promise.allSettled(
+      rows.map(row => {
+        const url = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
+          || `${apiBaseUrl}/${detailEntity}/${row.id}`;
+        return fetch(`${url}/action/${process.columnName ?? process.name}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ fieldValues }),
+        }).then(res => ({ res, row }));
+      })
+    );
+    let ok = 0;
+    for (const r of results) {
+      if (r.status === 'fulfilled' && r.value.res.ok) ok++;
+    }
+    setSelectedChildRows([]);
+    if (ok > 0) {
+      toast.success(ui('processCompletedCount', { count: ok }) !== 'processCompletedCount'
+        ? ui('processCompletedCount', { count: ok })
+        : `${process.label || process.name}: ${ok} record(s) processed`);
+      hook.fetchById?.(hook.selected?.id);
+      hook.refresh?.();
+    }
+    const failed = results.length - ok;
+    if (failed > 0) toast.error(`${failed} record(s) failed`);
+  } catch (err) {
+    toast.error(err?.message || 'Network error');
+  } finally {
+    setExecutingDetailProcess(false);
+  }
 }
 
 /**
@@ -1456,6 +1549,15 @@ function renderSaveActions(params) {
  * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api }`
  * plus any keys declared in the optional `props` object.
  */
+export function hasUnsavedEdits(editing, selected) {
+  if (!editing || !selected) return false;
+  return Object.entries(editing).some(([k, v]) => k !== 'id' && v !== selected[k]);
+}
+
+export function mergeLineEdits(lineEdits, selectedLine) {
+  return lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine;
+}
+
 export function DetailView({
   entity,
   detailEntity,
@@ -1466,6 +1568,7 @@ export function DetailView({
   statusField,
   extraBadges = [],
   processes = [],
+  detailProcesses = [],
   addLineFields = { entry: [], derived: [] },
   catalogs: staticCatalogs,
   api,
@@ -1546,6 +1649,7 @@ export function DetailView({
   secondaryTabsPaddingY = 'py-2.5',
   secondaryTabsShowHoverLine = false,
   tabsSeparator = false,
+  saveBeforeProcesses = false,
   hideAddLineChevron = false,
   addLineButtonPaddingX = '',
   formScrollPaddingB = 'pb-6',
@@ -1621,13 +1725,15 @@ export function DetailView({
     primaryFetchChildDefaults?.(parentRecordId);
   }, [primaryHandlesDefaults, parentRecordId, primaryFetchChildDefaults]);
 
+  // Ref updated on every render so the callback always reads the latest hook state,
+  // even when called from a setTimeout scheduled before the React re-render committed.
+  const handleFieldBlurRef = useRef(null);
+  handleFieldBlurRef.current = () => {
+    hasUnsavedEdits(hook.editing, hook.selected) && hook.handleSave();
+  };
   const handleFieldBlur = useCallback(() => {
-    if (!hook.editing || !hook.selected) return;
-    const hasChanges = Object.entries(hook.editing).some(
-      ([key, value]) => key !== 'id' && value !== hook.selected[key]
-    );
-    if (hasChanges) hook.handleSave();
-  }, [hook]);
+    handleFieldBlurRef.current?.();
+  }, []);
   // Depend on the single scalar the memo reads from editing/selected, not the whole objects.
   // Keeps original semantics: prefer editing when present (even if priceList is null), else selected.
   const priceListId = (hook.editing || hook.selected)?.priceList ?? null;
@@ -1802,6 +1908,13 @@ export function DetailView({
   );
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const moreMenuRef = useRef(null);
+  // Probe to detect whether customMenuContent actually renders anything for the
+  // current record. A custom kebab component may return null based on status
+  // (e.g. an action only valid in a given document state); without this the
+  // popover would open as an empty box. Mirrors Sales Order's menuActions
+  // behavior where the kebab opens nothing when no action applies.
+  const moreMenuProbeRef = useRef(null);
+  const [customMenuHasContent, setCustomMenuHasContent] = useState(customMenuContent ? null : false);
   const handledOpenAddLineRef = useRef(false);
   const handledOpenSecondaryLineRef = useRef(false);
 
@@ -1815,6 +1928,14 @@ export function DetailView({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showMoreMenu]);
+  // Keep customMenuHasContent in sync with what the hidden probe renders. Runs
+  // every render (status/data can change over the record's lifecycle) but only
+  // updates state when the value actually flips, so it never loops.
+  useEffect(() => {
+    if (!customMenuContent) return;
+    const has = !!(moreMenuProbeRef.current && moreMenuProbeRef.current.childElementCount > 0);
+    setCustomMenuHasContent(prev => (prev === has ? prev : has));
+  });
   const [directFetched, setDirectFetched] = useState(false);
   const [selectedLine, setSelectedLine] = useState(null);
   const [selectedChildRows, setSelectedChildRows] = useState([]);
@@ -2021,6 +2142,7 @@ export function DetailView({
     setSecondaryBarClosing({});
   }, [activeTab]);
   const [deletingChildren, setDeletingChildren] = useState(false);
+
   const [lineEdits, setLineEdits] = useState(null);
   const [lineEditColumns, setLineEditColumns] = useState({});
 
@@ -2231,7 +2353,7 @@ export function DetailView({
     }
     if (handledOpenImportRef.current) return;
     handledOpenImportRef.current = true;
-    setForceOpenImport(true);
+    setForceOpenImport(location.state.openImportModal);
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.state?.openImportModal, isNew, hook.editing, navigate, location.pathname]);
 
@@ -2265,14 +2387,16 @@ export function DetailView({
   }, [isNew, hook, navigate, windowName, addingLine]);
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
-  const handleImportClick = useCallback(async () => {
+  // modalType ('order' | 'invoice') is forwarded in navigation state so the destination component
+  // knows which modal to auto-open via the forceOpen mechanism.
+  const handleImportClick = useCallback(async (modalType = 'order') => {
     if (isNew) {
       const saved = await hook.handleSave();
       if (!saved?.id) return false;
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
-        state: { openImportModal: true, justSaved: saved },
+        state: { openImportModal: modalType, justSaved: saved },
       });
       return false;
     }
@@ -2443,15 +2567,12 @@ export function DetailView({
     // only applies to lines added AFTER the saved currency change.
   }, [calloutResult]);
 
-  // Wrapped onChange that triggers callout for user-initiated FK changes
-  const handleChangeWithCallout = useCallback((field, value) => {
-    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
-    // revert the dropdown if the rate check fails. The closure preserves the old
-    // hook.editing reference, but capturing explicitly keeps intent clear.
-    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
-
-    hook.handleChange(field, value);
-
+  // Fire the callout (and related validation) for a user-initiated field change.
+  // Extracted from handleChangeWithCallout so the same logic can be triggered either
+  // synchronously on change (default) or deferred to blur (opt-in: field.calloutOn === 'blur').
+  // `previousCurrency` is the currency value captured BEFORE hook.handleChange ran, used
+  // only by the currency rate-validation path; pass null when not a currency change.
+  const fireCallout = useCallback((field, value, previousCurrency = null) => {
     // Skip companion/auxiliary fields — they don't have callouts
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
@@ -2517,6 +2638,21 @@ export function DetailView({
     // Trigger callout — the backend returns empty if no callout is registered
     executeCallout(field, value, hook.editing);
   }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui]);
+
+  // Wrapped onChange that updates local form state and triggers the callout synchronously.
+  // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
+  // EntityForm's DeferredInput, which calls this same onChange once on blur — so the
+  // deferral lives entirely in the input component and this handler stays uniform.
+  const handleChangeWithCallout = useCallback((field, value) => {
+    // Capture the previous currency BEFORE hook.handleChange updates state, so we can
+    // revert the dropdown if the rate check fails. The closure preserves the old
+    // hook.editing reference, but capturing explicitly keeps intent clear.
+    const previousCurrency = field === 'currency' ? hook.editing?.currency : null;
+
+    hook.handleChange(field, value);
+
+    fireCallout(field, value, previousCurrency);
+  }, [hook.handleChange, hook.editing, fireCallout]);
 
   // Execute callout for child entity (line-level) fields and apply results via callback.
   // Merges parent header data into formState so callouts have full context (e.g., priceList).
@@ -2707,6 +2843,10 @@ export function DetailView({
   const [showOthers, setShowOthers] = useState(primaryTabs ? false : null);
   const [activePrimaryTab, setActivePrimaryTab] = useState(primaryTabs?.[0]?.key ?? 'general');
   const [notesFocused, setNotesFocused] = useState(false);
+  const [paramDialogProcess, setParamDialogProcess] = useState(null);
+  const [detailParamDialogProcess, setDetailParamDialogProcess] = useState(null);
+  const [executingDetailProcess, setExecutingDetailProcess] = useState(false);
+  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
 
   const othersRef = useRef(null);
 
@@ -2789,6 +2929,7 @@ export function DetailView({
     ui, tMenu, onAfterCreate, onAfterSave, token, apiBaseUrl, saveBtnCls,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
   };
+  const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 
   return (
     <div className="flex-1 min-h-0 flex flex-col" data-testid="detail-view" data-doc-status={_headerData?.documentStatus}>
@@ -2913,23 +3054,18 @@ export function DetailView({
                   <Trash2 className="h-4 w-4" data-testid="Trash2__fa3275" />
                 </button>
               )}
-              {/* More actions */}
-              {!resolveHideMoreMenu(hideMoreMenu, data) && <div className="relative" ref={moreMenuRef}>
-                <button
-                  data-testid="action-more"
-                  onClick={() => setShowMoreMenu(v => !v)}
-                  className={`${sqBtnSize} flex items-center justify-center rounded-md bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors`}
-                >
-                  <MoreVertical className="h-[15px] w-[15px]" data-testid="MoreVertical__fa3275" />
-                </button>
-                {showMoreMenu && (() => {
-                  const resolvedActions = typeof menuActions === 'function'
-                    ? menuActions({ data, status: data?.[statusField] })
-                    : menuActions;
-                  const visibleActions = resolvedActions.filter(a => a.visible !== false);
-                  if (visibleActions.length === 0 && !customMenuContent) return null;
-                  const currentId = data?.id || recordId;
-                  const runDocumentAction = async (action) => {
+              {/* More actions — only render the button when there is something to show */}
+              {(() => {
+                if (resolveHideMoreMenu(hideMoreMenu, data)) return null;
+                const resolvedActions = typeof menuActions === 'function'
+                  ? menuActions({ data, status: data?.[statusField] })
+                  : menuActions;
+                const visibleActions = (Array.isArray(resolvedActions) ? resolvedActions : [])
+                  .filter(a => a.visible !== false);
+                const hasCustomContent = customMenuContent && customMenuHasContent !== false;
+                if (visibleActions.length === 0 && !hasCustomContent) return null;
+                const currentId = data?.id || recordId;
+                const runDocumentAction = async (action) => {
                     if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
                       const unpostResult = await neoAction.execute(currentId, 'unpost');
                       if (!unpostResult.success) {
@@ -2958,6 +3094,30 @@ export function DetailView({
                     }
                   };
                   return (
+                    <div className="relative" ref={moreMenuRef}>
+                    <button
+                      data-testid="action-more"
+                      onClick={() => setShowMoreMenu(v => !v)}
+                      className={`${sqBtnSize} flex items-center justify-center rounded-md bg-white border border-[#D1D4DB] shadow-[0px_1px_2px_0px_#1212170D] text-muted-foreground hover:bg-[#F1F5F9] hover:text-foreground transition-colors`}
+                    >
+                      <MoreVertical className="h-[15px] w-[15px]" data-testid="MoreVertical__fa3275" />
+                    </button>
+                    {customMenuContent && (() => {
+                      const ProbeContent = customMenuContent;
+                      return (
+                        <div ref={moreMenuProbeRef} aria-hidden="true" style={{ display: 'none' }}>
+                          <ProbeContent
+                            data={data}
+                            recordId={data?.id || recordId}
+                            token={token}
+                            apiBaseUrl={apiBaseUrl}
+                            onClose={() => {}}
+                            onRefresh={() => {}}
+                            data-testid="ProbeContent__fa3275" />
+                        </div>
+                      );
+                    })()}
+                    {showMoreMenu && (
                     <div
                       className="absolute right-0 top-full mt-1 z-50 bg-white py-2 min-w-[148px]"
                       style={{
@@ -3029,11 +3189,15 @@ export function DetailView({
                         );
                       })()}
                     </div>
+                    )}
+                  </div>
                   );
                 })()}
-              </div>}
               {/* Extra action buttons from page */}
               {renderExtraActionButtons(extraActions, data, hook, saveBtnCls)}
+              {/* Save action — rendered before process buttons when saveBeforeProcesses is set (per-window opt-in) */}
+              {saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+                && renderSaveActions(saveActionParams)}
               {/* Process buttons — only shown for existing records, evaluated locally or by server visibility */}
               {!isNew && processes
                 .filter(p => p.displayLogicRaw
@@ -3057,7 +3221,11 @@ export function DetailView({
                             return;
                           }
                         }
-                        hook.handleProcess?.(p);
+                        if (p.params?.some(param => !param.hidden)) {
+                          setParamDialogProcess(p);
+                        } else {
+                          hook.handleProcess?.(p);
+                        }
                       }}
                       data-testid="Button__fa3275">
                       {tMenu(p.label)}
@@ -3065,12 +3233,55 @@ export function DetailView({
                   );
                 })}
 
-              {!hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
+              {/* Detail entity process buttons — visible when child rows are selected or a single line is clicked */}
+              {!isNew && detailProcesses.length > 0 && (selectedChildRows.length > 0 || selectedLine) && detailProcesses
+                .map(p => {
+                  const isPrimary = p.style === 'positive';
+                  const btnClass = getButtonClass(salesTheme, p, isPrimary);
+                  return (
+                    <Button
+                      key={`detail-${p.name}`}
+                      variant="outline"
+                      size="default"
+                      className={`${btnClass} ${saveBtnCls}`.trim()}
+                      disabled={executingDetailProcess}
+                      onClick={() => {
+                        const rows = resolveDetailRows(selectedChildRows, selectedLine);
+                        p.params?.some(param => !param.hidden)
+                          ? setDetailParamDialogProcess({ ...p, _rows: rows })
+                          : executeDetailProcessImpl(p, {}, rows, detailProcessDeps);
+                      }}
+                      data-testid="Button__detail-process">
+                      {tMenu(p.label) || p.label}
+                    </Button>
+                  );
+                })}
+
+              {!saveBeforeProcesses && !hideSaveStatuses.includes(_headerData?.documentStatus) && !isDraftModeCompleted
                 && renderSaveActions(saveActionParams)}
             </div>
           </div>
         )}
 
+        <ProcessParamDialog
+          open={paramDialogProcess !== null}
+          onOpenChange={makeCloseDialogHandler(setParamDialogProcess)}
+          process={paramDialogProcess}
+          onConfirm={paramValues => {
+            hook.handleProcess?.(paramDialogProcess, paramValues);
+            setParamDialogProcess(null);
+          }}
+          data-testid="ProcessParamDialog__fa3275" />
+
+        <ProcessParamDialog
+          open={detailParamDialogProcess !== null}
+          onOpenChange={makeCloseDialogHandler(setDetailParamDialogProcess)}
+          process={detailParamDialogProcess}
+          onConfirm={paramValues => {
+            executeDetailProcessImpl(detailParamDialogProcess, paramValues, detailParamDialogProcess?._rows, detailProcessDeps);
+            setDetailParamDialogProcess(null);
+          }}
+          data-testid="ProcessParamDialog__fa3275" />
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
         <div className="flex-1 flex overflow-hidden">
@@ -3121,7 +3332,7 @@ export function DetailView({
               const activeTab = primaryTabs.find(t => t.key === activePrimaryTab);
               return activeTab?.Panel ? (
                 <div className={`flex-1 overflow-auto pb-6 min-w-0 ${detailContentPadding(linesLayout, !!(sidePanel || sidebarContent), 'panel', compactSidebarPadding, formScrollPaddingX)}`}>
-                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} />
+                  <activeTab.Panel entity={entity} data={data} token={token} apiBaseUrl={apiBaseUrl} catalogs={catalogs} api={api} editing={hook.editing} onChange={handleChangeWithCallout} onLocalChange={hook.handleChange} />
                 </div>
               ) : null;
             })() : null}
@@ -3265,7 +3476,7 @@ export function DetailView({
                         {/* Form footer: inline content below form, above tabs */}
                         {formFooter && (
                           <div className={embedded ? 'pointer-events-none' : ''}>
-                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, catalogs, api, token, apiBaseUrl, editing: hook.editing })}
+                            {React.createElement(formFooter, { data, entity, onChange: handleChangeWithCallout, onLocalChange: hook.handleChange, catalogs, api, token, apiBaseUrl, editing: hook.editing })}
                           </div>
                         )}
                       </>
@@ -3283,7 +3494,10 @@ export function DetailView({
 
                   {/* Tabs: child entities + Others */}
                   {tabs.length > 0 && (
-                    <div className={getLinesTabsSectionClassName(linesLayout)}>
+                    <div
+                      className={getLinesTabsSectionClassName(linesLayout)}
+                      onMouseDown={autoSaveOnBlur && linesLayout === 'inlineEditable' ? () => handleFieldBlurRef.current?.() : undefined}
+                    >
                       <div className={`flex items-center justify-between border-b border-border/50 ${(getInlineEditableShrinkClassName(linesLayout))}`}>
                         <div className="flex items-center gap-0">
                           {tabs.map((tab, idx) => {
@@ -3355,13 +3569,30 @@ export function DetailView({
                             <div className={getLinesContainerClassName(linesLayout, embedded)}>
                               {/* Table + add button */}
                               <div className="flex-1 min-w-0">
-                                {/* Bulk delete bar (classic only) */}
-                                {isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) && (
+                                {/* Bulk action bar: delete + detail processes (classic only) */}
+                                {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
                                   <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted/60 border border-border/40">
                                     <span className="text-sm font-medium text-foreground">
                                       {ui('selected', { count: selectedChildRows.length })}
                                     </span>
                                     <div className="flex items-center gap-2">
+                                      {detailProcesses.map(p => (
+                                        <button
+                                          key={p.name}
+                                          disabled={executingDetailProcess}
+                                          onClick={() => {
+                                            if (p.params?.some(param => !param.hidden)) {
+                                              setDetailParamDialogProcess({ ...p, _rows: [...selectedChildRows] });
+                                            } else {
+                                              executeDetailProcessImpl(p, {}, undefined, detailProcessDeps);
+                                            }
+                                          }}
+                                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-primary text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
+                                        >
+                                          {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
+                                        </button>
+                                      ))}
+                                      {isBulkDeleteBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows) && (
                                       <button
                                         disabled={deletingChildren}
                                         onClick={async () => {
@@ -3401,6 +3632,7 @@ export function DetailView({
                                         <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__fa3275" />
                                         {getDeleteChildButtonLabel(deletingChildren, ui)}
                                       </button>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -3444,6 +3676,24 @@ export function DetailView({
                                       // Derive unitPrice = listPrice × (1-discount/100) before POST.
                                       // For invoice config (priceField='unitPrice') this is a no-op.
                                       prepareLineForPost(lineData);
+                                      // Recompute gross from the discount field before POST.
+                                      // Needed when the user clears the discount field to '' and
+                                      // presses Enter without blurring: the early-return guard in
+                                      // handleLineFieldChange skips the CLIENT_SIDE_FIELDS block,
+                                      // leaving a stale grossAmount in valuesRef. This guarantees
+                                      // the POST body always reflects the normalized discount (0).
+                                      // Return-order lines have discountField:null — skip for them.
+                                      if (lineConfig.discountField) {
+                                        const grossRecompute = {};
+                                        computeLineGrossAmount(
+                                          lineConfig.discountField,
+                                          lineData[lineConfig.discountField] ?? 0,
+                                          grossRecompute,
+                                          lineData,
+                                        );
+                                        if (grossRecompute.grossAmount != null) lineData.grossAmount = grossRecompute.grossAmount;
+                                        if (grossRecompute[lineConfig.grossField] != null) lineData[lineConfig.grossField] = grossRecompute[lineConfig.grossField];
+                                      }
                                       setPendingLineValues(null);
                                       return hook.handleAddChild?.(lineData);
                                     },
@@ -3989,7 +4239,7 @@ export function DetailView({
                           setNotesFocused={setNotesFocused}
                           lines={hook.children}
                           pendingLine={pendingLineValues}
-                          editingLine={lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine}
+                          editingLine={balanceFooterEditingLine}
                           lineConfig={lineConfig}
                           totalDiscountPct={Number(data?.etgoTotalDiscount ?? 0)}
                           onTotalDiscountChange={handleTotalDiscountChange}
@@ -3999,34 +4249,19 @@ export function DetailView({
                     })() : (
                       <>
                         {/* Totals block: BalanceFooterPanel for double-entry windows, else DocumentTotalsPanel */}
-                        {balanceFooter ? (
-                          <BalanceFooterPanel
-                            lines={hook.children}
-                            pendingLine={pendingLineValues}
-                            editingLine={lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine}
-                            config={balanceFooter}
-                            formatAmount={formatAmount}
-                            currency={data['currency$_identifier']}
-                            data-testid="BalanceFooterPanel__fa3275" />
-                        ) : (() => {
-                          const subtotalField = summary.find(f => f.type === 'amount' && (f.key.toLowerCase().includes('summed') || f.key.toLowerCase().includes('totallines') || f.key.toLowerCase().includes('lineamount')));
-                          const totalField = summary.find(f => f.type === 'amount' && (f.key.toLowerCase().includes('grand') || (f.key.toLowerCase().includes('total') && !f.key.toLowerCase().includes('line'))));
-                          if (!subtotalField && !totalField) return null;
-                          const currency = data['currency$_identifier'];
-                          return (
-                            <DocumentTotalsPanel
-                              lines={hook.children}
-                              pendingLine={pendingLineValues}
-                              editingLine={lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine}
-                              lineConfig={lineConfig}
-                              formatAmount={formatAmount}
-                              currency={currency}
-                              readOnly={isDocumentReadOnly}
-                              totalDiscountPct={resolveTotalDiscountPct(data, hook.children)}
-                              onTotalDiscountChange={handleTotalDiscountChange}
-                              data-testid="DocumentTotalsPanel__fa3275" />
-                          );
-                        })()}
+                        {renderTotalsBlock({
+                          balanceFooter,
+                          children: hook.children,
+                          pendingLine: pendingLineValues,
+                          editingLine: balanceFooterEditingLine,
+                          lineConfig,
+                          formatAmount,
+                          currency: data['currency$_identifier'],
+                          summary,
+                          isDocumentReadOnly,
+                          totalDiscountPct: resolveTotalDiscountPct(data, hook.children),
+                          onTotalDiscountChange: handleTotalDiscountChange,
+                        })}
 
                         {/* After-totals slot (e.g. payment footer) */}
                         {afterTotals && (() => {
@@ -4258,6 +4493,9 @@ export function DetailView({
             onSaved={() => {
               secondaryHooks[idx]?.handleSelect(hook.selected ?? hook.editing);
               setCustomModalState({ key: null, rowId: null });
+            }}
+            onParentRefresh={() => {
+              if (parentRecordId) hook.fetchById(parentRecordId);
             }}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
             bpId={parentRecordId}

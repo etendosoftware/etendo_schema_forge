@@ -3,9 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:internalConsumptionLine
 const columns = [
-  { key: 'lineNo', column: 'Line', type: 'number', label: 'Line No.' },
   { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true, lookup: true, lookupDrawer: 'internal-consumption-product' },
-  { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true },
+  { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true, minWidth: 160 },
   { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM' },
   { key: 'storageBin', column: 'M_Locator_ID', type: 'selector', label: 'Warehouse', required: true },
 ];

@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { Link2, Layers } from 'lucide-react';
+import { ArrowUpRight, Layers } from 'lucide-react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusTag } from '@/components/ui/status-tag';
@@ -112,9 +112,16 @@ const LINE_CELL_RENDERERS = {
 
 const LINE_COLUMNS = getContractGridColumns('bankStatementLines');
 
+// Amount columns are pushed to the end so the order matches the Figma:
+//   …Nº Referencia · Estado · Transacción · Salida · Entrada
+const AMOUNT_COLS = new Set(['dramount', 'cramount']);
+const LEAD_COLUMNS = LINE_COLUMNS.filter((c) => !AMOUNT_COLS.has(c.name));
+const AMOUNT_COLUMNS = LINE_COLUMNS.filter((c) => AMOUNT_COLS.has(c.name));
+
 const MINI_GRID_TEMPLATE = [
-  ...LINE_COLUMNS.map((c) => LINE_CELL_RENDERERS[c.name]?.width ?? 'minmax(140px,1fr)'),
-  MINI_TAIL_TRACKS,
+  ...LEAD_COLUMNS.map((c) => LINE_CELL_RENDERERS[c.name]?.width ?? 'minmax(140px,1fr)'),
+  MINI_TAIL_TRACKS, // Estado · Transacción
+  ...AMOUNT_COLUMNS.map((c) => LINE_CELL_RENDERERS[c.name]?.width ?? '110px'),
 ].join(' ');
 const MINI_GRID_STYLE = { gridTemplateColumns: MINI_GRID_TEMPLATE };
 
@@ -126,7 +133,7 @@ const SKELETON_CELL_KEYS = [...LINE_COLUMNS.map((c) => `c_${c.name}`), 'matched'
 // not reconciled (the "Auto"/"Manual" distinction is not meaningful here).
 const MATCH_TONE = {
   reconciled: { tone: 'success', labelKey: 'financeAccountStatementLinesStatusReconciled' },
-  pending:    { tone: 'info', labelKey: 'financeAccountStatementLinesStatusUnmatched' },
+  pending:    { tone: 'warning', labelKey: 'financeAccountStatementLinesStatusUnmatched' },
 };
 
 function MatchPill({ kind, ui }) {
@@ -155,13 +162,11 @@ function TxnChip({ line, ui, onOpen }) {
       data-testid={`statement-line-txn-${line.id}`}
       onClick={() => onOpen(line)}
       className={cn(
-        'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium',
-        multi
-          ? 'border-[#E8EAEF] bg-[#F5F7F9] font-semibold text-[#121217] hover:bg-[#EBEEF2]'
-          : 'border-[#E8EAEF] bg-white text-[#3F3F50] hover:bg-[#F5F7F9] hover:text-[#121217]',
+        'inline-flex h-6 max-w-full items-center gap-1.5 rounded-full bg-[#F5F7F9] px-2 text-xs font-normal text-[#3F3F50] hover:bg-[#EBEEF2] hover:text-[#121217]',
+        multi && 'font-medium',
       )}
     >
-      {multi ? <Layers className="h-3 w-3 flex-none text-[#6C6C89]" data-testid="Layers__10cf4a" /> : <Link2 className="h-3 w-3 flex-none text-[#6C6C89]" data-testid="Link2__10cf4a" />}
+      {multi ? <Layers className="h-3.5 w-3.5 flex-none text-[#828FA3]" data-testid="Layers__10cf4a" /> : <ArrowUpRight className="h-3.5 w-3.5 flex-none text-[#828FA3]" data-testid="ArrowUpRight__10cf4a" />}
       <span className="truncate">
         {multi ? ui('financeAccountStatementLinesTxnChipMulti', { count: txns.length }) : txns[0].documentNo}
       </span>
@@ -214,26 +219,33 @@ export function StatementLinesInline({ statementId, currency = 'EUR' }) {
   const [txnLine, setTxnLine] = useState(null);
 
   return (
-    <div className="ml-10 mr-3 rounded-lg border border-[#E8EAEF] bg-white px-4 pb-1">
-      {/* Column header — same style as the parent Statements table headers. */}
-      <div
-        style={MINI_GRID_STYLE}
-        className={cn(
-          // Same recipe as the parent Statements table header (h-10 items-center) — centered.
-          MINI_GRID_CLASS,
-          'h-10 items-center border-b border-[#E8EAEF] px-3 text-xs font-semibold leading-4 text-[#121217]',
-        )}
-      >
-        {LINE_COLUMNS.map((col) => (
-          <span key={col.name} className="truncate">
-            {LINE_CELL_RENDERERS[col.name] ? ui(LINE_CELL_RENDERERS[col.name].labelKey) : col.label}
-          </span>
-        ))}
-        <span className="truncate">{ui('financeAccountStatementLinesColMatched')}</span>
-        <span className="truncate">{ui('financeAccountStatementLinesColTransaction')}</span>
+    <>
+      <div className="overflow-hidden rounded-lg border border-[#E8EAEF] bg-white shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
+        {/* Column header — same style as the parent Statements table headers. */}
+        <div
+          style={MINI_GRID_STYLE}
+          className={cn(
+            // Same recipe as the parent Statements table header (h-10 items-center) — centered.
+            MINI_GRID_CLASS,
+            'h-10 items-center border-b border-[#E8EAEF] px-3 text-xs font-semibold leading-4 text-[#121217]',
+          )}
+        >
+          {LEAD_COLUMNS.map((col) => (
+            <span key={col.name} className="truncate">
+              {LINE_CELL_RENDERERS[col.name] ? ui(LINE_CELL_RENDERERS[col.name].labelKey) : col.label}
+            </span>
+          ))}
+          <span className="truncate">{ui('financeAccountStatementLinesColMatched')}</span>
+          <span className="truncate">{ui('financeAccountStatementLinesColTransaction')}</span>
+          {AMOUNT_COLUMNS.map((col) => (
+            <span key={col.name} className="truncate">
+              {LINE_CELL_RENDERERS[col.name] ? ui(LINE_CELL_RENDERERS[col.name].labelKey) : col.label}
+            </span>
+          ))}
+        </div>
+        {/* Body */}
+        {renderBody({ loading, lines, ui, currency, bcpLocale, onOpenTxns: setTxnLine })}
       </div>
-      {/* Body */}
-      {renderBody({ loading, lines, ui, currency, bcpLocale, onOpenTxns: setTxnLine })}
       {txnLine ? (
         <ReconciledTxnsModal
           line={txnLine}
@@ -241,7 +253,7 @@ export function StatementLinesInline({ statementId, currency = 'EUR' }) {
           onClose={() => setTxnLine(null)}
           data-testid="ReconciledTxnsModal__10cf4a" />
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -292,8 +304,8 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
         'items-center border-b border-[#F0F2F5] px-3 py-2.5 text-sm transition-colors last:border-0 hover:bg-[#FAFBFC]',
       )}
     >
-      {/* Contract-driven data columns (decisions.json → contract.json) */}
-      {LINE_COLUMNS.map((col) => {
+      {/* Lead data columns (contract order, minus the amount columns) */}
+      {LEAD_COLUMNS.map((col) => {
         const renderer = LINE_CELL_RENDERERS[col.name];
         return (
           <Fragment key={col.name} data-testid="Fragment__10cf4a">
@@ -305,6 +317,17 @@ function LineRow({ line, ui, currency, bcpLocale, onOpenTxns }) {
       })}
       <span><MatchPill kind={matchKind} ui={ui} data-testid="MatchPill__10cf4a" /></span>
       <span className="min-w-0"><TxnChip line={line} ui={ui} onOpen={onOpenTxns} data-testid="TxnChip__10cf4a" /></span>
+      {/* Amount columns last, matching the Figma column order */}
+      {AMOUNT_COLUMNS.map((col) => {
+        const renderer = LINE_CELL_RENDERERS[col.name];
+        return (
+          <Fragment key={col.name} data-testid="Fragment__10cf4a">
+            {renderer
+              ? renderer.render(line, cellCtx)
+              : <span className="truncate text-[#3F3F50]">{line[col.name] ?? '—'}</span>}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

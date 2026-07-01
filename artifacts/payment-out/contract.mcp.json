@@ -1,8 +1,8 @@
 {
-  "version": "0.7.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
   "updatedAt": "2026-06-24T20:46:47.878Z",
-  "contractChecksum": "a77ebc90875e7211",
+  "contractChecksum": "b0be7c943af86da5",
   "apiPrediction": {
     "specName": "payment-out",
     "baseUrl": "/sws/neo/payment-out",

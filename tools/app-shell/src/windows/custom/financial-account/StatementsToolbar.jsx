@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, Pencil, Upload } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Plus, RefreshCw, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { AdvancedFilterButton } from '@/components/contract-ui/AdvancedFilterButton.jsx';
@@ -55,30 +55,45 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-11 z-50 w-72 overflow-hidden rounded-lg border border-[#E8EAEF] bg-white shadow-lg"
+          className="absolute right-0 top-11 z-50 w-[229px] overflow-hidden rounded-lg border border-[#E8EAEF] bg-white py-2 shadow-lg"
         >
           <button
             type="button"
             role="menuitem"
             data-testid="statements-manual-create"
             onClick={() => { setOpen(false); onManualClick(); }}
-            className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-[#F5F7F9]"
+            className="flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-[#F5F7F9]"
           >
-            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#F0F2F5] text-[#121217]">
-              <Pencil className="h-4 w-4" data-testid="Pencil__8a428c" />
-            </span>
-            <span className="flex flex-col">
-              <span className="text-sm font-semibold text-[#121217]">
-                {ui('financeAccountStatementsManualMenuItem')}
-              </span>
-              <span className="text-xs text-[#6C6C89]">
-                {ui('financeAccountStatementsManualMenuItemDesc')}
-              </span>
+            <Plus className="h-6 w-6 shrink-0 text-[#828FA3]" data-testid="Plus__8a428c" />
+            <span className="text-sm text-[#121217]">
+              {ui('financeAccountStatementsManualMenuItem')}
             </span>
           </button>
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Replaces the import split-button for PSD2-synced accounts: statements come only from Salt Edge,
+ * so manual import / manual creation are not offered — instead this single action runs the PSD2
+ * statement fetch (the Etendo Go equivalent of Classic's "Get Bank Statement" button).
+ */
+function SyncStatementsButton({ ui, onClick, syncing }) {
+  return (
+    <button
+      type="button"
+      data-testid="statements-psd2-sync-button"
+      onClick={onClick}
+      disabled={syncing}
+      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#121217] px-3 text-sm font-medium text-white transition-colors hover:bg-[#FFD500] hover:text-[#121217] disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <RefreshCw
+        className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`}
+        data-testid="RefreshCw__8a428c" />
+      {ui('financeAccountStatementsPsd2Sync')}
+    </button>
   );
 }
 
@@ -97,6 +112,9 @@ function ImportSplitButton({ ui, onImportClick, onManualClick }) {
  *   rows?: Array<object>;
  *   onImportClick: () => void;
  *   onManualClick: () => void;
+ *   psd2Synced?: boolean;
+ *   onSyncClick?: () => void;
+ *   syncing?: boolean;
  * }} props
  */
 export function StatementsToolbar({
@@ -111,6 +129,9 @@ export function StatementsToolbar({
   rows = [],
   onImportClick,
   onManualClick,
+  psd2Synced = false,
+  onSyncClick,
+  syncing = false,
 }) {
   const ui = useUI();
   const navigate = useNavigate();
@@ -160,12 +181,21 @@ export function StatementsToolbar({
           className="h-10 w-48 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1"
         />
       </div>
-      {/* Import (split-button: import file ▾ create manually) */}
-      <ImportSplitButton
-        ui={ui}
-        onImportClick={onImportClick}
-        onManualClick={onManualClick}
-        data-testid="ImportSplitButton__8a428c" />
+      {/* PSD2-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the
+          manual import / manual create split-button. */}
+      {psd2Synced ? (
+        <SyncStatementsButton
+          ui={ui}
+          onClick={onSyncClick}
+          syncing={syncing}
+          data-testid="SyncStatementsButton__8a428c" />
+      ) : (
+        <ImportSplitButton
+          ui={ui}
+          onImportClick={onImportClick}
+          onManualClick={onManualClick}
+          data-testid="ImportSplitButton__8a428c" />
+      )}
     </div>
   );
 }

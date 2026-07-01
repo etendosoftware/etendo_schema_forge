@@ -468,6 +468,7 @@ const labelOverrides = api.labelOverrides;
 export default function ProductPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="product"
         Form={ProductForm}
@@ -512,6 +513,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           />
         )}
       />
+      </>
     );
   }
 

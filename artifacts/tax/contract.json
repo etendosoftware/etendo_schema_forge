@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-05-20T11:15:42.892Z",
-  "checksum": "3026a7617b32b170",
+  "updatedAt": "2026-06-29T12:09:18.505Z",
+  "checksum": "82f07fc33a916b94",
   "frontendContract": {
     "window": {
       "id": "137",
@@ -101,11 +101,17 @@
             "enumValues": [
               {
                 "value": "D",
-                "name": "Document based amount by rate"
+                "name": "Document based amount by rate",
+                "labels": {
+                  "es_ES": "Suma de las bases imponibles de las lineas por el porcentaje"
+                }
               },
               {
                 "value": "L",
-                "name": "Line based amount by rate"
+                "name": "Line based amount by rate",
+                "labels": {
+                  "es_ES": "Suma del importe de los impuestos de las lineas"
+                }
               }
             ],
             "defaultValue": "D",
@@ -135,23 +141,38 @@
             "enumValues": [
               {
                 "value": "TBA",
-                "name": "Alternate Tax Base Amount"
+                "name": "Alternate Tax Base Amount",
+                "labels": {
+                  "es_ES": "Base de impuesto alternativa"
+                }
               },
               {
                 "value": "TBATAX",
-                "name": "Alternate Tax Base Amount + Tax Amount"
+                "name": "Alternate Tax Base Amount + Tax Amount",
+                "labels": {
+                  "es_ES": "Base imponible alternativa + Impuestos"
+                }
               },
               {
                 "value": "LNA",
-                "name": "Line Net Amount"
+                "name": "Line Net Amount",
+                "labels": {
+                  "es_ES": "Importe neto de línea"
+                }
               },
               {
                 "value": "LNATAX",
-                "name": "Line Net Amount + Tax Amount"
+                "name": "Line Net Amount + Tax Amount",
+                "labels": {
+                  "es_ES": "Importe neto de línea + Importe de impuestos"
+                }
               },
               {
                 "value": "TAX",
-                "name": "Tax Amount"
+                "name": "Tax Amount",
+                "labels": {
+                  "es_ES": "Importe de impuestos"
+                }
               }
             ],
             "defaultValue": "LNA",
@@ -181,15 +202,24 @@
             "enumValues": [
               {
                 "value": "B",
-                "name": "Both"
+                "name": "Both",
+                "labels": {
+                  "es_ES": "Ambos"
+                }
               },
               {
                 "value": "P",
-                "name": "Purchase Tax"
+                "name": "Purchase Tax",
+                "labels": {
+                  "es_ES": "Impuesto compras"
+                }
               },
               {
                 "value": "S",
-                "name": "Sales Tax"
+                "name": "Sales Tax",
+                "labels": {
+                  "es_ES": "Impuesto ventas"
+                }
               }
             ],
             "defaultValue": "B",
