@@ -84,9 +84,60 @@ describe('NotPostedDocumentsPage', () => {
 
     const trigger = within(multiSelect).getByRole('button');
     fireEvent.click(trigger);
-    fireEvent.click(screen.getByText('Unposted'));
+    const optionCheckbox = within(multiSelect).getByRole('checkbox');
+    fireEvent.click(optionCheckbox);
 
     expect(trigger).toHaveTextContent('Unposted');
+
+    // Toggling the same option again must deselect it (Set delete branch)
+    fireEvent.click(optionCheckbox);
+    expect(trigger).toHaveTextContent('—');
+  });
+
+  it('closes the accounting status dropdown when clicking outside of it', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (url.includes('_mode=filter-options')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            documentTypes: [],
+            accountingStatuses: [{ value: 'N', label: 'Unposted' }],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
+    });
+
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+
+    const multiSelect = await waitFor(() => screen.getByTestId('npd-filter-accounting-status'));
+    fireEvent.click(within(multiSelect).getByRole('button'));
+    expect(within(multiSelect).getByRole('checkbox')).toBeInTheDocument();
+
+    fireEvent.mouseDown(document.body);
+
+    expect(within(multiSelect).queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('shows an ellipsis and disables the row post button while a post is in flight', async () => {
+    globalThis.fetch = mkFetch(ROWS);
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
+
+    let resolvePost;
+    globalThis.fetch.mockImplementationOnce(
+      () => new Promise((resolve) => { resolvePost = resolve; }),
+    );
+
+    const postButton = screen.getByTestId('npd-post-row-doc-1');
+    fireEvent.click(postButton);
+
+    await waitFor(() => expect(postButton).toHaveTextContent('…'));
+    expect(postButton).toBeDisabled();
+
+    await act(async () => {
+      resolvePost({ ok: true, json: async () => ({ success: true, message: 'Document posted' }) });
+    });
   });
 
   it('shows empty state when no rows returned', async () => {
