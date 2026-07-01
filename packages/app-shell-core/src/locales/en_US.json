@@ -18447,6 +18447,7 @@
     "warehouseQtyOnHand": "Qty on Hand",
     "warehouseStock": "Stock",
     "warehouseValuation": "Valuation",
+    "warehouseCost": "Cost",
     "warehouseStockDataTitle": "Stock data",
     "warehouseTotalValuation": "Total valuation",
     "warehouseValuationBadge": "Stock × current cost",
