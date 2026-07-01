@@ -157,7 +157,6 @@ export const api = {
   "actions": [
     {
       "entity": "cabeceraDeEmisor",
-      "field": "isReady",
       "column": "IS_Ready",
       "url": "/sws/neo/monitor-verifactu/cabeceraDeEmisor/{id}/action/isReady",
       "processId": "D995FA46EEDB4DAF9F414E661FB13E43",
@@ -165,7 +164,6 @@ export const api = {
     },
     {
       "entity": "facturasRechazadas",
-      "field": "correctInvoice",
       "column": "Correct_Invoice",
       "url": "/sws/neo/monitor-verifactu/facturasRechazadas/{id}/action/correctInvoice",
       "processId": "F353F2A7307B464CA2C6515CBEFB0D93",
@@ -173,7 +171,6 @@ export const api = {
     },
     {
       "entity": "facturasParcialmenteAceptadas",
-      "field": "correctInvoice",
       "column": "Correct_Invoice",
       "url": "/sws/neo/monitor-verifactu/facturasParcialmenteAceptadas/{id}/action/correctInvoice",
       "processId": "F353F2A7307B464CA2C6515CBEFB0D93",
@@ -181,7 +178,6 @@ export const api = {
     },
     {
       "entity": "facturasAceptadas",
-      "field": "correctInvoice",
       "column": "Correct_Invoice",
       "url": "/sws/neo/monitor-verifactu/facturasAceptadas/{id}/action/correctInvoice",
       "processId": "F353F2A7307B464CA2C6515CBEFB0D93",
@@ -189,7 +185,6 @@ export const api = {
     },
     {
       "entity": "facturasInválidas",
-      "field": "correctInvoice",
       "column": "Correct_Invoice",
       "url": "/sws/neo/monitor-verifactu/facturasInválidas/{id}/action/correctInvoice",
       "processId": "F353F2A7307B464CA2C6515CBEFB0D93",
