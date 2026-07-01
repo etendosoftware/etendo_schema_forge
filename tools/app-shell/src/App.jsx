@@ -348,7 +348,7 @@ function SurveyManager() {
       onRespond={handleRespond}
       onClose={handleClose}
       onDismiss={handleDismiss}
-    />,
+      data-testid="SurveyModal__ecaf3f" />,
     document.body,
   );
 }

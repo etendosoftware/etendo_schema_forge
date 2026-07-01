@@ -83,7 +83,7 @@ function SurveyHeader({ onClose, eyebrow }) {
           }}
           data-testid="SurveyModal__close"
         >
-          <CloseIcon />
+          <CloseIcon data-testid="CloseIcon__91aeca" />
         </button>
       )}
     </div>
@@ -251,9 +251,9 @@ function PrimaryBtn({ children, onClick, disabled }) {
 function SurveyFooter({ onSkip, onSubmit, submitLabel, disabled, skipLabel }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-      {onSkip && <GhostBtn onClick={onSkip}>{skipLabel}</GhostBtn>}
-      <PrimaryBtn onClick={onSubmit} disabled={disabled}>
-        {submitLabel} <ArrowRight />
+      {onSkip && <GhostBtn onClick={onSkip} data-testid="GhostBtn__91aeca">{skipLabel}</GhostBtn>}
+      <PrimaryBtn onClick={onSubmit} disabled={disabled} data-testid="PrimaryBtn__91aeca">
+        {submitLabel} <ArrowRight data-testid="ArrowRight__91aeca" />
       </PrimaryBtn>
     </div>
   );
@@ -268,7 +268,7 @@ function ThanksBody({ title, line }) {
         background: T.successBg, color: T.successFg,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <CheckCircle />
+        <CheckCircle data-testid="CheckCircle__91aeca" />
       </div>
       <div style={{ font: font(16, 700, 22), color: T.fg1, marginBottom: 6, letterSpacing: '-0.005em' }}>
         {title}
@@ -284,7 +284,12 @@ function ThanksBody({ title, line }) {
 function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedback, tags, setTags, onDismiss, ui }) {
 
   if (phase === 'thanks') {
-    return <ThanksBody title={ui('surveyThankYou')} line={ui('surveyNpsThanksLine')} />;
+    return (
+      <ThanksBody
+        title={ui('surveyThankYou')}
+        line={ui('surveyNpsThanksLine')}
+        data-testid="ThanksBody__91aeca" />
+    );
   }
 
   if (phase === 'followup') {
@@ -314,12 +319,16 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
           }}
         />
         <div style={{ marginTop: 10 }}>
-          <ChipGroup options={chipOptions} value={tags} onChange={setTags} />
+          <ChipGroup
+            options={chipOptions}
+            value={tags}
+            onChange={setTags}
+            data-testid="ChipGroup__91aeca" />
         </div>
         <SurveyFooter
           onSubmit={() => setPhase('thanks')}
           submitLabel={ui('surveySubmit')}
-        />
+          data-testid="SurveyFooter__91aeca" />
       </>
     );
   }
@@ -334,14 +343,14 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
         onChange={setScore}
         labelLow={ui('surveyNpsLow')}
         labelHigh={ui('surveyNpsHigh')}
-      />
+        data-testid="NPSScale__91aeca" />
       <SurveyFooter
         onSkip={onDismiss}
         onSubmit={() => setPhase('followup')}
         submitLabel={ui('surveyNext')}
         skipLabel={ui('surveySkip')}
         disabled={score === null}
-      />
+        data-testid="SurveyFooter__91aeca" />
     </>
   );
 }
@@ -350,7 +359,12 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
 function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback, setFeedback, onDismiss, ui }) {
 
   if (phase === 'thanks') {
-    return <ThanksBody title={ui('surveyThankYou')} line={ui(survey.thanksKey)} />;
+    return (
+      <ThanksBody
+        title={ui('surveyThankYou')}
+        line={ui(survey.thanksKey)}
+        data-testid="ThanksBody__91aeca" />
+    );
   }
 
   if (phase === 'followup') {
@@ -375,7 +389,7 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
         <SurveyFooter
           onSubmit={() => setPhase('thanks')}
           submitLabel={ui('surveySubmit')}
-        />
+          data-testid="SurveyFooter__91aeca" />
       </>
     );
   }
@@ -390,7 +404,7 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
         onChange={setScore}
         labelLow={ui('csatLabelLow')}
         labelHigh={ui('csatLabelHigh')}
-      />
+        data-testid="StarScale__91aeca" />
       <SurveyFooter
         onSkip={onDismiss}
         onSubmit={() => {
@@ -401,7 +415,7 @@ function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback,
         submitLabel={ui('surveySubmit')}
         skipLabel={ui('surveySkip')}
         disabled={score === null}
-      />
+        data-testid="SurveyFooter__91aeca" />
     </>
   );
 }
@@ -462,7 +476,6 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
         }}
         data-testid="SurveyModal__backdrop"
       />
-
       {/* Modal card */}
       <div
         style={{
@@ -477,7 +490,7 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
         <SurveyHeader
           eyebrow={ui('surveyEyebrow')}
           onClose={phase !== 'thanks' ? handleClose : undefined}
-        />
+          data-testid="SurveyHeader__91aeca" />
 
         <div style={{ padding: '12px 20px 20px' }}>
           {isNps ? (
@@ -492,7 +505,7 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
               setTags={setTags}
               onDismiss={onDismiss}
               ui={ui}
-            />
+              data-testid="NPSSurveyContent__91aeca" />
           ) : (
             <CSATSurveyContent
               survey={survey}
@@ -504,11 +517,10 @@ export function SurveyModal({ survey, open, onRespond, onDismiss, onClose }) {
               setFeedback={setFeedback}
               onDismiss={onDismiss}
               ui={ui}
-            />
+              data-testid="CSATSurveyContent__91aeca" />
           )}
         </div>
       </div>
-
       <style>{`
         @keyframes sf-survey-fade {
           from { opacity: 0; }
