@@ -143,12 +143,13 @@ Per the Disposition Table in `docs/superpowers/specs/2026-06-30-schema-forge-cor
 
 ```bash
 git rm -r artifacts docs/generated-custom-windows docs/etendo-ad \
-  tools/app-shell e2e core-maps infra pipelines pending tests
+  tools/app-shell e2e infra pipelines pending tests
+git rm core-maps/ad-menu-cache.json
 ```
 
-(`tests/` here is the root-level directory containing only `test-sales-order-endpoints.sh` — it hits `com.etendoerp.go`'s NEO Headless API directly, confirmed backend-adjacent, not schema_forge tooling. `presentations/` and `caps/` are NOT included here — confirmed via `git ls-files` during planning that neither has any git-tracked content, so there is nothing to remove; `git rm -r` on them would error with "did not match any files" — skip them.)
+(`tests/` here is the root-level directory containing only `test-sales-order-endpoints.sh` — it hits `com.etendoerp.go`'s NEO Headless API directly, confirmed backend-adjacent, not schema_forge tooling. `presentations/` and `caps/` are NOT included here — confirmed via `git ls-files` during planning that neither has any git-tracked content, so there is nothing to remove; `git rm -r` on them would error with "did not match any files" — skip them. **`core-maps/` is NOT removed wholesale** — corrected after a real test failure during execution: only `ad-menu-cache.json` is a genuine live-DB cache; `system-columns.json`/`ad-reference-map.json`/`impact-messages.json` are static CLI reference data that `validate-schema.js`/`extract-fields.js` read directly and must stay. `cli/test/core-maps.test.js` also stays, unlike the other Group C files — it only tests the 3 static files.)
 
-Expected: all nine paths removed. If any of `presentations/` or `caps/` still shows tracked files (contradicting the planning-time check), do NOT delete blindly — stop and report what's actually tracked there.
+Expected: eight directories plus one file removed. If any of `presentations/` or `caps/` still shows tracked files (contradicting the planning-time check), do NOT delete blindly — stop and report what's actually tracked there.
 
 - [ ] **Step 2: Delete individual files**
 
