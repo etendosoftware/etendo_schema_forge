@@ -36,20 +36,14 @@ function mkFetch(rows = []) {
       return Promise.resolve({
         ok: true,
         json: async () => ({
-          response: {
-            data: [
-              {
-                documentTypes: [{ value: 'SI', label: 'Sales Invoice' }],
-                accountingStatuses: [],
-              },
-            ],
-          },
+          documentTypes: [{ value: 'SI', label: 'Sales Invoice' }],
+          accountingStatuses: [],
         }),
       });
     }
     return Promise.resolve({
       ok: true,
-      json: async () => ({ response: { data: rows } }),
+      json: async () => ({ rows, total: rows.length }),
     });
   });
 }
@@ -121,7 +115,7 @@ describe('NotPostedDocumentsPage', () => {
     await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
 
     globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({ ok: true, json: async () => ({ response: { data: [{ success: true }] } }) }),
+      Promise.resolve({ ok: true, json: async () => ({ success: true, message: 'Document posted' }) }),
     );
 
     await act(async () => {
@@ -194,7 +188,7 @@ describe('NotPostedDocumentsPage', () => {
             res({ ok: true, json: async () => ({}) });
         });
       }
-      return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
     });
 
     const { unmount } = render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
@@ -227,7 +221,7 @@ describe('NotPostedDocumentsPage', () => {
     globalThis.fetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ response: { data: [{ ok: 2, total: 2 }] } }),
+        json: async () => ({ ok: 2, total: 2, success: true }),
       }),
     );
 
@@ -251,7 +245,7 @@ describe('NotPostedDocumentsPage', () => {
     globalThis.fetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ response: { data: [{ ok: 1, total: 2 }] } }),
+        json: async () => ({ ok: 1, total: 2, success: false }),
       }),
     );
 
@@ -273,7 +267,7 @@ describe('NotPostedDocumentsPage', () => {
     globalThis.fetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({ response: { data: [{ ok: 0, total: 1 }] } }),
+        json: async () => ({ ok: 0, total: 1, success: false }),
       }),
     );
 
@@ -352,7 +346,7 @@ describe('NotPostedDocumentsPage', () => {
       }
       return Promise.resolve({
         ok: true,
-        json: async () => ({ response: { data: [] } }),
+        json: async () => ({ rows: [], total: 0 }),
       });
     });
 
@@ -372,9 +366,7 @@ describe('NotPostedDocumentsPage', () => {
     globalThis.fetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: async () => ({
-          response: { data: [{ success: false, message: 'Accounting period closed' }] },
-        }),
+        json: async () => ({ success: false, message: 'Accounting period closed' }),
       }),
     );
 
