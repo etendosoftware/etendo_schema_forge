@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +16,9 @@ const stamp = iso.replace(/[:.]/g, '-').slice(0, 19);
 console.log('Running react-doctor on all workspaces (this may take ~1 min)...');
 let raw;
 try {
-  raw = execSync('npx --yes react-doctor@latest -y --json --offline', {
+  // Invoke npx directly (no shell) with a fixed argument list — avoids shell
+  // interpretation of a command string. Arguments are constants, not user input.
+  raw = execFileSync('npx', ['--yes', 'react-doctor@latest', '-y', '--json', '--offline'], {
     cwd: ROOT,
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
