@@ -32,7 +32,7 @@ jobs:
 
       - name: Run quality gate
         run: >-
-          node cli/src/quality-gate.js
+          npx sf-quality-gate
           --pr-affected
           --baseline-ref origin/${{ github.base_ref }}
           --head-ref ${{ github.event.pull_request.head.sha }}
