@@ -25,6 +25,7 @@ jobs:
     name: Offline Regen Check
     runs-on: ubuntu-latest
     env:
+      SF_ROOT: ${{ github.workspace }}
       GO_MODULE_NAME: com.etendoerp.go
       DEVELOP_BRANCH: develop
       MAIN_BRANCH: main
@@ -151,7 +152,7 @@ jobs:
                 # offline serializer does not emit, so a textual diff is mostly
                 # noise. The checker parses both sides and prints only the rows /
                 # fields that actually changed.
-                node cli/src/xml-regeneration-check.js "$prev" "$pred" --include-dir sourcedata || true
+                npx sf-xml-regeneration-check "$prev" "$pred" --include-dir sourcedata || true
               else
                 echo "---------------------- $spec: prev/ or predicted/ missing, nothing to diff ----------------------"
               fi

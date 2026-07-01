@@ -22,6 +22,8 @@ jobs:
   deploy:
     name: Build & deploy to S3 + CloudFront
     runs-on: ubuntu-latest
+    env:
+      SF_ROOT: ${{ github.workspace }}
 
     steps:
       - uses: actions/checkout@v4
@@ -97,7 +99,7 @@ jobs:
         # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
 
       - name: Generate reports manifest
-        run: node cli/src/generate-reports-manifest.js
+        run: npx sf-generate-reports-manifest
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
