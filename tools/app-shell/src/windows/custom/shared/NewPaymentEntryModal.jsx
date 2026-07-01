@@ -450,8 +450,10 @@ export default function NewPaymentEntryModal({
 
   const title = isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
   const deltaLabel = deltaLabelFor(balance, ui);
-  // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm.
-  const missingRequired = !(balance.amount > 0) || !date || !methodId || !accountId;
+  // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm. "Importe"
+  // is satisfied by the total applied (cash + used credit), not the cash field alone —
+  // a credit/saldo a favor line covering 100% legitimately leaves the cash amount at 0.
+  const missingRequired = !(balance.funds > 0) || !date || !methodId || !accountId;
   const saveDisabled = saving || loading || missingRequired;
   const confirmDisabled = saving || missingRequired || !balance.canConfirm;
 
