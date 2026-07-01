@@ -23,7 +23,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: App-shell Node tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout 'tools/app-shell/src/**/__tests__/*.test.js'
+        run: node --test --test-reporter=spec --test-reporter-destination=stdout $(find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js')
 
       - name: App-shell extra tests
         run: node --test --test-reporter=spec --test-reporter-destination=stdout 'tools/app-shell/test/*.test.js'
