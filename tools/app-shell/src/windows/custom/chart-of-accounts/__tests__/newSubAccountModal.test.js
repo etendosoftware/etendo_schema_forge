@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const treeSrc = readFileSync(join(__dirname, '..', 'AccountTreeView.jsx'), 'utf8');
 const modalSrc = readFileSync(join(__dirname, '..', 'NewAccountModal.jsx'), 'utf8');
-const generatorSrc = readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'cli', 'src', 'generate-frontend.js'), 'utf8');
+const generatorSrc = readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'node_modules', '@etendosoftware', 'schema-forge-cli', 'src', 'generate-frontend.js'), 'utf8');
 const decisions = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'chart-of-accounts', 'decisions.json'), 'utf8'));
 
 describe('ChartOfAccounts new sub-account modal source wiring', () => {
