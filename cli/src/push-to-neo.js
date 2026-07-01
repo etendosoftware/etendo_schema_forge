@@ -894,7 +894,9 @@ export async function pushReportToNeo(reportName, options = {}) {
         // Update handler qualifier on existing entity
         const entityId = existingEntity.rows[0].etgo_sf_entity_id;
         await client.query(
-          `UPDATE etgo_sf_entity SET java_qualifier = $1, name = $2, updated = now() WHERE etgo_sf_entity_id = $3`,
+          `UPDATE etgo_sf_entity
+           SET java_qualifier = $1, name = $2, isget = 'Y', ispost = 'Y', updated = now()
+           WHERE etgo_sf_entity_id = $3`,
           [handler, specName, entityId],
         );
         console.log(`[2/2] Updated entity handler: ${handler} (entity ${entityId})`);
