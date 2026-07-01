@@ -5,14 +5,13 @@ export default {
     './index.html',
     './src/**/*.{js,jsx}',
     '../../artifacts/**/generated/**/*.{js,jsx}',
-    // Scan EVERY workspace package source (matches `packages/*` in the root
-    // package.json workspaces). UI components live in `packages/app-shell-core/src`
-    // and carry classes like `bg-popover` that exist nowhere in the app's own
+    // UI components live in the installed @etendosoftware/app-shell-core package
+    // and carry classes like `bg-popover` that exist nowhere in this app's own
     // files — without scanning them Tailwind purges those utilities and the
-    // popover/calendar surfaces render with a transparent background. Using a
-    // generic glob (not a single package) means any future package moved or
-    // created under packages/ is covered automatically and never falls out of scope.
-    '../../packages/*/src/**/*.{js,jsx}',
+    // popover/calendar surfaces render with a transparent background (ETP-4083).
+    // `packages/*` no longer exists locally after the core/functional split —
+    // this now scans the installed dependency's source directly.
+    '../../node_modules/@etendosoftware/app-shell-core/src/**/*.{js,jsx}',
   ],
   theme: {
   	extend: {
