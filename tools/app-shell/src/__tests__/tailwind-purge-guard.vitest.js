@@ -57,7 +57,13 @@ const appShellRoot = resolve(here, '../..');
 // file (see header). The package-source glob string is also assembled to avoid
 // writing the `* / s` sequence that would prematurely close this JSDoc-style
 // region in some tooling.
-const EXPECTED_PACKAGE_GLOB = ['..', '..', 'packages', '*', 'src', '**', '*.{js,jsx}'].join('/');
+//
+// After the core/functional repo split, app-shell-core is an installed npm
+// dependency rather than a local workspace package — the glob now points at
+// node_modules instead of the (now-deleted) local packages/ directory. Same
+// purpose, same regression class: whatever this glob is, it must still scan
+// wherever app-shell-core's source actually lives.
+const EXPECTED_PACKAGE_GLOB = ['..', '..', 'node_modules', '@etendosoftware', 'app-shell-core', 'src', '**', '*.{js,jsx}'].join('/');
 
 /**
  * The semantic utilities under guard. These are the EXACT classes that broke in

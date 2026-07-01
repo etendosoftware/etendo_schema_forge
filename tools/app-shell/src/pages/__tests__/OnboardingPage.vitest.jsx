@@ -60,7 +60,7 @@ vi.mock('@etendosoftware/app-shell-core/i18n', () => ({
 }));
 
 // Mock onboarding API
-vi.mock('../../../../../packages/etendo-go-core/src/onboarding/api.js', () => ({
+vi.mock('@etendosoftware/etendo-go-core/onboarding/api', () => ({
   ONBOARDING_ERROR_CODES: {},
   changePassword: vi.fn(),
   confirmPasswordReset: vi.fn(),
@@ -78,7 +78,7 @@ vi.mock('../../../../../packages/etendo-go-core/src/onboarding/api.js', () => ({
 
 // One provider is returned so the module-level SSO_PROVIDERS list (evaluated at
 // import time) is non-empty and the SSO credential callback can be exercised.
-vi.mock('../../../../../packages/etendo-go-core/src/onboarding/sso.js', () => ({
+vi.mock('@etendosoftware/etendo-go-core/onboarding/sso', () => ({
   getConfiguredSsoProviders: vi.fn(() => [{ id: 'google', clientId: 'test-client-id' }]),
   renderSsoProviderButton: vi.fn(() => Promise.resolve()),
 }));
@@ -89,7 +89,7 @@ vi.mock('../onboarding/onboardingReadiness.js', () => ({
 }));
 
 // Mock onboarding state
-vi.mock('../../../../../packages/etendo-go-core/src/onboarding/state.js', () => ({
+vi.mock('@etendosoftware/etendo-go-core/onboarding/state', () => ({
   applyProgressMessage: (prev, message) =>
     prev.map((step) => (step.name === message.step ? { ...step, status: message.status } : step)),
   buildEnvironmentSessionStorage: () => ({}),
@@ -142,8 +142,8 @@ import {
   requestPasswordReset,
   runOnboardingStream,
   saveOnboardingDraft,
-} from '../../../../../packages/etendo-go-core/src/onboarding/api.js';
-import { renderSsoProviderButton } from '../../../../../packages/etendo-go-core/src/onboarding/sso.js';
+} from '@etendosoftware/etendo-go-core/onboarding/api';
+import { renderSsoProviderButton } from '@etendosoftware/etendo-go-core/onboarding/sso';
 import { checkSalesInvoiceReadiness } from '../onboarding/onboardingReadiness.js';
 import { track } from '../../lib/observability.js';
 
