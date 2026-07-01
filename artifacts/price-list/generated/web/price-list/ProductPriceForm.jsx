@@ -6,7 +6,7 @@ const fields = [
   { key: 'standardPrice', column: 'PriceStd', type: 'number', label: 'Unit Price', required: true, section: 'principal' },
   { key: 'listPrice', column: 'PriceList', type: 'number', label: 'List Price', required: true, section: 'principal' },
   { key: 'cost', column: 'Cost', type: 'text', label: 'Cost', required: true, section: 'principal', defaultValue: '0' },
-  { key: 'algorithm', column: 'Algorithm', type: 'select', label: 'Algorithm', required: true, section: 'other', options: [{ value: 'S', label: 'Standard' }], defaultValue: 'S' },
+  { key: 'algorithm', column: 'Algorithm', type: 'select', label: 'Algorithm', required: true, section: 'other', options: [{ value: 'S', label: 'Standard', labels: {"es_ES":"Estándar"} }], defaultValue: 'S' },
 ];
 // @sf-generated-end fields:productPrice
 

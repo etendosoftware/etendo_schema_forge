@@ -1043,4 +1043,172 @@ describe('useEntity — coverage paths', () => {
       expect(result.current.selected).toEqual(savedRecord);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // handleSave — backend messages
+  // ---------------------------------------------------------------------------
+
+  describe('handleSave — backend messages', () => {
+    /**
+     * Helper: render hook with an existing selected record so handleSave
+     * issues a PATCH (not a POST). Uses null childEntity so handleSelect
+     * does not trigger a fetchChildren fetch call. Returns { result }.
+     */
+    async function renderEntityWithSelected(record = { id: 'bp-1', taxId: 'IT123' }) {
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      act(() => { result.current.handleSelect(record); });
+      return { result };
+    }
+
+    it('calls toast.success with title and description for success type', async () => {
+      const { result } = await renderEntityWithSelected();
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: { data: [{ id: 'bp-1', taxId: 'IT123' }] },
+          messages: [{ type: 'success', title: 'IVA válido', text: 'AIRI S.R.L.\nVIA NOMENTANA 63' }],
+        }),
+      });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      expect(toast.success).toHaveBeenCalledWith('IVA válido', { description: 'AIRI S.R.L.\nVIA NOMENTANA 63' });
+    });
+
+    it('calls toast.warning with title and undefined description when text is absent', async () => {
+      const { result } = await renderEntityWithSelected();
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: { data: [{ id: 'bp-1', taxId: 'IT123' }] },
+          messages: [{ type: 'warning', title: 'IVA no válido' }],
+        }),
+      });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      expect(toast.warning).toHaveBeenCalledWith('IVA no válido', { description: undefined });
+    });
+
+    it('calls toast.error with title and undefined description for error type', async () => {
+      const { result } = await renderEntityWithSelected();
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: { data: [{ id: 'bp-1', taxId: 'IT123' }] },
+          messages: [{ type: 'error', title: 'Error VIES' }],
+        }),
+      });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      expect(toast.error).toHaveBeenCalledWith('Error VIES', { description: undefined });
+    });
+
+    it('calls toast.info for unknown type with title', async () => {
+      const { result } = await renderEntityWithSelected();
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: { data: [{ id: 'bp-1', taxId: 'IT123' }] },
+          messages: [{ type: 'foo', title: 'Info message' }],
+        }),
+      });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      expect(toast.info).toHaveBeenCalledWith('Info message', { description: undefined });
+    });
+
+    it('fires all toasts and suppresses generic success when multiple messages returned', async () => {
+      const { result } = await renderEntityWithSelected();
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: { data: [{ id: 'bp-1', taxId: 'IT123' }] },
+          messages: [
+            { type: 'success', title: 'Msg 1' },
+            { type: 'warning', title: 'Msg 2' },
+          ],
+        }),
+      });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      expect(toast.success).toHaveBeenCalledWith('Msg 1', { description: undefined });
+      expect(toast.warning).toHaveBeenCalledWith('Msg 2', { description: undefined });
+      // Generic i18n success toast must NOT have been called
+      expect(toast.success).not.toHaveBeenCalledWith(
+        expect.stringMatching(/recordSaved|recordCreated/),
+        expect.anything(),
+      );
+    });
+
+    it('falls back to generic success toast when messages array is empty', async () => {
+      const { result } = await renderEntityWithSelected();
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: { data: [{ id: 'bp-1', taxId: 'IT123' }] },
+          messages: [],
+        }),
+      });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      // The i18n mock returns the key as-is; showSaveSuccessToast calls toast.success with 'recordSaved'
+      expect(toast.success).toHaveBeenCalledWith('recordSaved');
+    });
+
+    it('falls back to generic success toast when messages key is absent', async () => {
+      const { result } = await renderEntityWithSelected();
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: { data: [{ id: 'bp-1', taxId: 'IT123' }] },
+          // no messages key at all
+        }),
+      });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      expect(toast.success).toHaveBeenCalledWith('recordSaved');
+    });
+
+    it('does not call toast.success with i18n key when backend messages are present', async () => {
+      const { result } = await renderEntityWithSelected();
+
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          response: { data: [{ id: 'bp-1', taxId: 'IT123' }] },
+          messages: [{ type: 'success', title: 'Done' }],
+        }),
+      });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      // toast.success is only called for the backend message, never for 'recordSaved' or 'recordCreated'
+      const successCalls = vi.mocked(toast.success).mock.calls;
+      const hasGenericCall = successCalls.some(
+        ([title]) => title === 'recordSaved' || title === 'recordCreated',
+      );
+      expect(hasGenericCall).toBe(false);
+    });
+  });
 });

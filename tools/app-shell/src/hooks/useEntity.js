@@ -553,6 +553,29 @@ export function showSaveSuccessToast(silent, isNew, ui) {
     if (!silent) toast.success(getSaveSuccessMessage(isNew, ui));
 }
 
+function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {
+    const backendMessages = data?.messages ?? [];
+    if (backendMessages.length > 0) {
+        for (const msg of backendMessages) {
+            const type = (msg.type || '').toLowerCase();
+            const title = msg.title || '';
+            const description = msg.text || undefined;
+            if (type === 'success') toast.success(title, { description });
+            else if (type === 'error') toast.error(title, { description });
+            else if (type === 'warning') toast.warning(title, { description });
+            else if (title) toast.info(title, { description });
+        }
+    } else {
+        showSaveSuccessToast(silent, isNew, ui);
+    }
+    if (isNew) {
+        trackDocumentCreated();
+        trackRecordCreated({ entity, specName });
+    } else {
+        trackRecordUpdated({ entity, specName });
+    }
+}
+
 export function useEntity(entity, childEntity, {
     token,
     apiBaseUrl,
@@ -910,13 +933,7 @@ export function useEntity(entity, childEntity, {
                 setEditing({ ...resolvedSaved });
                 setSaveError(null);
                 setFieldErrors({});
-                showSaveSuccessToast(silent, isNew, ui);
-                if (isNew) {
-                    trackDocumentCreated();
-                    trackRecordCreated({ entity, specName });
-                } else {
-                    trackRecordUpdated({ entity, specName });
-                }
+                afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
                 await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError);

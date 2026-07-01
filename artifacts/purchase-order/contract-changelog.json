@@ -1445,5 +1445,19 @@
     ],
     "author": "pipeline",
     "date": "2026-06-26"
+  },
+  {
+    "from": "0.29.0",
+    "to": "0.30.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryMethod\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"priority\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryTerms\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"status\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-29"
   }
 ]

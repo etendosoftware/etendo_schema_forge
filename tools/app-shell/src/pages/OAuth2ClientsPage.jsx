@@ -193,12 +193,18 @@ export default function OAuth2ClientsPage() {
       </div>
       <Card data-testid="Card__82406d">
         <CardContent className="p-0" data-testid="CardContent__82406d">
-          {loading ? (
+          {(() => {
+            if (loading) {
+              return (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
               <RefreshCw className="h-5 w-5 animate-spin mr-2" data-testid="RefreshCw__82406d" />
               {ui("loadingClients")}
             </div>
-          ) : clients.length === 0 ? (
+              );
+            }
+
+            if (clients.length === 0) {
+              return (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Shield
                 className="h-12 w-12 text-muted-foreground/40 mb-4"
@@ -212,7 +218,10 @@ export default function OAuth2ClientsPage() {
                 {ui("oauthClientCreateFirst")}
               </Button>
             </div>
-          ) : (
+              );
+            }
+
+            return (
             <Table data-testid="Table__82406d">
               <TableHeader data-testid="TableHeader__82406d">
                 <TableRow data-testid="TableRow__82406d">
@@ -311,7 +320,8 @@ export default function OAuth2ClientsPage() {
                 ))}
               </TableBody>
             </Table>
-          )}
+              );
+          })()}
         </CardContent>
       </Card>
       {/* Create/Edit dialog */}

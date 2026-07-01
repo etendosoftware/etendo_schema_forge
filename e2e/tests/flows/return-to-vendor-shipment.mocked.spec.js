@@ -456,8 +456,16 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
       page.getByText(/FC-RTV-NEW-001/).or(page.getByTestId('confirm-result-modal')),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Close result modal — use exact match to avoid "Cerrar Copilot" button
-    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    // ETP-4299: ConfirmWithCreditButtonBase.onClose fires window.location.reload()
+    // via setTimeout(0) when the user closes without navigating.
+    // page.waitForNavigation() catches the next navigation (the reload) before it races
+    // with our page.goto() to rtvs-co-002.
+    const [,] = await Promise.all([
+      // eslint-disable-next-line playwright/no-wait-for-timeout -- needed to absorb the reload
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => {}),
+      // Close result modal — use exact match to avoid "Cerrar Copilot" button
+      page.getByRole('button', { name: 'Cerrar', exact: true }).click(),
+    ]);
 
     // ── Case 5: button absent when invoice already exists ─────────────────
     await page.goto('/return-to-vendor-shipment/rtvs-co-002');

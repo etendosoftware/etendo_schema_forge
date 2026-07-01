@@ -59,8 +59,15 @@ async function fetchSiiParentId(apiFetch, orgId) {
   // The sii-monitor spec's child entities (issuedInvoices, receivedInvoices, etc.) are
   // child tabs of the "organizations" (aeatsii_config) entity. NEO Headless requires
   // a parentId (the aeatsii_config record PK) to correctly resolve the tab HQL tokens.
+  // NEO does not expose `id` for this entity — extract the PK from the $ref field
+  // (format: "aeatsii_config/<UUID>") or fall back to the configuracínSII field.
   const resp = await get(apiFetch, SII_SPEC, 'organizations', { organization: orgId, _limit: '1' });
-  return resp.data?.[0]?.id ?? null;
+  const row = resp.data?.[0];
+  if (!row) return null;
+  if (row.id) return row.id;
+  const ref = row['$ref'];
+  if (ref) return ref.split('/').pop() ?? null;
+  return row.configuracinSII ?? null;
 }
 
 async function fetchSiiMonitorData(apiFetch, orgId) {

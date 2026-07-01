@@ -46,6 +46,14 @@
 - Note to bot team: **This is the standard.** ETP-4255 stated the rule being violated, the expected end-state, and enumerated the specific behaviors to remove — which let us go straight to the code path without reconstruction. One subtlety the ticket got right and most don't: it scoped *out* what was NOT in scope (jsreport integration), which prevented scope-creep. Keep doing exactly this: rule + expected end-state + explicit out-of-scope.
 - Resolution note (for our records, not the bot): MCP report tooling was **not** a passthrough mirror of NEO — it carried its own independent Jasper logic — so the fix had to touch both layers, consolidated behind `NeoReportCallability`.
 
+### 2026-06-30 — ETP-4284 — `dashboard` spec "blocked" / widgets invisible to agent (gap G4) — investigation + plan only
+- Tool/spec: `neo_discover` + (proposed) `neo_widget`; `dashboard` spec (type `W`) whose 9 widget entities fail with `No AD_Tab linked to entity` via the generic CRUD path.
+- Root-cause category: **code-bug** (category 1) — handler-backed, AD_Tab-less entities were misrouted through the CRUD handler; the data handlers work. Fix = wrap them in a `neo_widget` enum tool + exclude `dashboard` from W discovery.
+- Time-to-locate: **fast** — the ticket itself supplied the reframing (aggregate page consuming widget endpoints, 9 named handlers, ETP-3584 stabilization) and pointed at `widget-endpoints.md` and the gap doc.
+- Missing rubric fields: **none material.** One refinement the ticket *implied but did not state*: the 9 widgets are not `widget-*` specs — they are 9 entities of the single `dashboard` spec, each keyed by `JAVA_QUALIFIER`. We had to confirm this in `ETGO_SF_ENTITY.xml`. Stating "the widgets are entities of the `dashboard` spec" would have saved that lookup.
+- Highest-value field that was missing: **n/a — exemplary ticket** (clear scope, out-of-scope, acceptance criteria with evidence, design decisions pre-made).
+- Note to bot team: **This is the standard** — like ETP-4255. It reframed the symptom into a precise root cause, named every handler, listed prior stabilization work, and split scope vs out-of-scope. The only nit: when a "blocked spec" is actually a handler-backed/aggregate spec, say so explicitly (spec type + that its entities are handler-backed with no AD_Tab) so the misrouting nature is unambiguous from the ticket alone.
+
 ---
 
 ## Batch Analysis — Round 3 (2026-06-19, 15 tickets, label `validacion-agentica`)

@@ -39,6 +39,15 @@ jobs:
             const { owner, repo } = context.repo;
             const baseRef = context.payload.pull_request.base.ref;
 
+            // This job's own check-run name (see `name:` above). With
+            // bidirectional PRs (epic → develop and the "Sync develop into
+            // epic" PR develop → epic), this gate would otherwise count the
+            // OTHER branch's base-health check run as a failure — and since
+            // that one is red for the same reason, the two branches gate each
+            // other into a circular base↔base deadlock even when every real
+            // check passes. Skip our own check run below so we never gate on it.
+            const SELF_CHECK_NAME = 'Base branch is green';
+
             // ── Escape hatch: PR that repairs the base branch ───────────────
             // A PR labeled 'base-branch-fix' is allowed through even when the
             // base is red: it IS the change that turns the base green again, so
@@ -95,6 +104,7 @@ jobs:
               owner, repo, ref: sha, per_page: 100,
             });
             for (const run of checkRuns) {
+              if (run.name === SELF_CHECK_NAME) continue;  // ignore our own check run to avoid a circular base↔base deadlock
               total++;
               if (run.status !== 'completed') {
                 pending.push(`${run.name} (check run: ${run.status})`);

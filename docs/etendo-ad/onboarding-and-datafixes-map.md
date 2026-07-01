@@ -71,7 +71,8 @@ Flow inside `handleOnboarding` (approx. lines):
 | 3 | `markOrgReady` (~1131) | `OnboardingMarkOrgReadyService.java` | `MarkOrgReadyStep` |
 | 4 | `setupFiscalData` (~1148) | `OnboardingFiscalDataSetupService.java` | — (D1 legal-entity area) |
 | 5 | `ensureDefaultCustomer` (~1165) | `OnboardingDefaultCustomerService.java` | — |
-| 6 | `registerBaseline` (~1202) | `OnboardingBaselineService.java` **(WIRED LIVE 2026-06-11)** | — (no step; service is the single source) |
+| 6 | `schedulePsd2Sync` | `OnboardingPsd2SyncService.java` **(WIRED LIVE 2026-06-28)** | — (no step; non-fatal + post-commit, see note) |
+| 7 | `registerBaseline` (~1202) | `OnboardingBaselineService.java` **(WIRED LIVE 2026-06-11)** | — (no step; service is the single source) |
 
 Each helper: sends `sendProgress(... IN_PROGRESS)`, calls its service, sends `done`, returns `true`; on exception sends `PROGRESS_ERROR` + `sendFinalResult(false, …)` and returns `false` (which aborts `ensureOnboardingDataset`, so the outer `catch`/rollback fires).
 
@@ -81,9 +82,14 @@ Service files (all in `modules/com.etendoerp.go/src/com/etendoerp/go/onboarding/
 - `OnboardingMarkOrgReadyService.java`
 - `OnboardingFiscalDataSetupService.java`
 - `OnboardingDefaultCustomerService.java`
-- `OnboardingBaselineService.java` — **step 6, wired live 2026-06-11** (stamps the data-fix `BASELINE`; single source of truth — there is no `RegisterBaselineStep`, it was removed to avoid duplicating the SQL)
+- `OnboardingPsd2SyncService.java` — **step 6, wired live 2026-06-28** (creates one daily `AD_Process_Request` per client that runs PSD2 `Get Bank Statements` ~03:00–06:00, so Salt Edge-connected accounts auto-import statements; see the deviation note below)
+- `OnboardingBaselineService.java` — **step 7, wired live 2026-06-11** (stamps the data-fix `BASELINE`; single source of truth — there is no `RegisterBaselineStep`, it was removed to avoid duplicating the SQL)
+
+> **PSD2-sync deviations from the helper pattern (step 6):** `schedulePsd2Sync` is intentionally **non-fatal** — it always returns `true` and swallows errors (logging + `done` "skipped"), because the automatic statement sync is a convenience that must never block tenant onboarding. PSD2 is a hard dependency of `com.etendoerp.go` (`build.gradle` → `com.etendoerp:psd2.bank.integration`), so the AD_Process `PSD2_GetBankStatements` is expected to exist; the service still resolves it **by search key via DAL** (it is module sourcedata, not an importable Java symbol — never hardcode its UUID) and only `warn`-skips if it is missing (an unconfigured/partially-`update.database`d DB). It also has a **post-commit companion**: `OnboardingPsd2SyncService.activateSchedule(clientId)` is called in `handleOnboarding` **right after `commitDalChanges`** (not inside the chain), because the Quartz scheduler reads the `AD_Process_Request` row on its own DB connection, which cannot see uncommitted rows. If that immediate activation fails, the row's `SCH` status means Etendo's scheduler still picks it up on the next initialization. This is **not** a corrective data-fix gap, so it does **not** bump `ONBOARDING_PROVISIONED_THROUGH`.
 
 > **Baseline exception to the helper pattern:** `registerBaseline` (~1202) deliberately does NOT catch-and-return-false. A genuine SQL error **propagates** so `handleOnboarding`'s outer `catch` performs a clean `rollbackDalChanges`; swallowing it would poison the shared transaction and abort the otherwise-successful commit. The expected `ON CONFLICT DO NOTHING` → 0-rows outcome never throws (DETECTED conserved). See `OnboardingBaselineService` javadoc for the full failure-semantics contract.
+
+> **Dataset-only provisioning (no service needed) — payment methods & terms (ETP-4341).** Pure master data that the dataset import (step 1) already whitelists in `OnboardingDatasetDefinition` does NOT need a new `Onboarding<Thing>Service` — extend the GOClient sampledata XML and it ships to every new tenant via `importOnboardingDataset` (and to anyone re-importing the sample data). The default payment methods (Efectivo, Transferencia bancaria, Cheque, Tarjeta) and terms (Inmediato/I, 30D, 60D, 90D) live in `modules/com.etendoerp.go/referencedata/sampledata/GOClient/{FIN_PAYMENTMETHOD,C_PAYMENTTERM}.xml`; the seeded **Caja**/**Cuenta de Banco** accounts get their method links in `FIN_FINACC_PAYMENTMETHOD.xml`. (Term translations exist in `C_PAYMENTTERM_TRL.xml` for completeness but are **intentionally NOT imported** — `C_PAYMENTTERM_TRL` is excluded from `OnboardingDatasetDefinition`; the base `C_PAYMENTTERM.NAME` already carries the Spanish text. See `testDefinitionExcludesPaymentTermTranslations`.) **Runtime side:** accounts the user creates later (any time, via the Neo `financial-account` window) are auto-linked to the methods for their type (C→Efectivo, B→Transferencia/Cheque/Tarjeta, CA→Tarjeta) by `FinancialAccountHandler.afterHandle` — matched by method name, first method = default, idempotent. Because the dataset XML is the single source, there is no separate corrective `.sql` for this one.
 
 ### THE clean extension point — adding a new provisioning action
 

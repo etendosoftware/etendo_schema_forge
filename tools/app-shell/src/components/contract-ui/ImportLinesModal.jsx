@@ -14,6 +14,7 @@ export default function ImportLinesModal({
   searchPlaceholderKey,
   emptyMessageKey,
   noSearchResultsKey,
+  allImportedMessageKey,
   successMessageKey,
   fetchDocuments,
   fetchLines,
@@ -35,6 +36,7 @@ export default function ImportLinesModal({
   const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState('');
   const [lineQuantities, setLineQuantities] = useState({});
+  const [eagerLoadingLines, setEagerLoadingLines] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,13 +52,47 @@ export default function ImportLinesModal({
     return () => { cancelled = true; };
   }, [bpId, base, headers, invoiceId, fetchDocuments]);
 
+  // Eagerly load all lines once documents arrive so fully-imported invoices can be
+  // filtered out before the user sees the list (avoids "appears then disappears" flicker).
+  useEffect(() => {
+    if (loading) return;
+    const docs = documents;
+    if (docs.length === 0) return;
+    let cancelled = false;
+    setEagerLoadingLines(true);
+    Promise.all(
+      docs.map(doc =>
+        fetchLines({ base, headers, docId: doc.id, sharedContext })
+          .then(lines => ({ docId: doc.id, lines }))
+          .catch(() => ({ docId: doc.id, lines: [] })),
+      ),
+    ).then(results => {
+      if (cancelled) return;
+      const newDocLines = {};
+      const qtyDefaults = {};
+      results.forEach(({ docId, lines }) => {
+        newDocLines[docId] = lines;
+        lines.forEach(l => { qtyDefaults[l.id] = l._maxQty || 0; });
+      });
+      setDocLines(newDocLines);
+      setLineQuantities(prev => ({ ...prev, ...qtyDefaults }));
+      setEagerLoadingLines(false);
+    });
+    return () => { cancelled = true; };
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const bpName = documents[0]?.['businessPartner$_identifier'] || '';
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return documents;
+    const visible = documents.filter(d => {
+      const lines = docLines[d.id];
+      if (!lines || lines.length === 0) return true;
+      return lines.some(l => !l._alreadyImported);
+    });
+    if (!search.trim()) return visible;
     const q = search.toLowerCase();
-    return documents.filter(d => (d.documentNo || '').toLowerCase().includes(q));
-  }, [documents, search]);
+    return visible.filter(d => (d.documentNo || '').toLowerCase().includes(q));
+  }, [documents, docLines, search]);
 
   const loadLines = async (docId) => {
     if (docLines[docId] || loadingLines.has(docId)) return;
@@ -65,13 +101,8 @@ export default function ImportLinesModal({
       const enrichedLines = await fetchLines({ base, headers, docId, sharedContext });
       setDocLines(prev => ({ ...prev, [docId]: enrichedLines }));
       const qtyDefaults = {};
-      const newSelected = new Set();
-      enrichedLines.forEach(l => {
-        qtyDefaults[l.id] = l._maxQty || 0;
-        if (!l._alreadyImported) newSelected.add(l.id);
-      });
+      enrichedLines.forEach(l => { qtyDefaults[l.id] = l._maxQty || 0; });
       setLineQuantities(prev => ({ ...prev, ...qtyDefaults }));
-      setSelected(prev => { const n = new Set(prev); newSelected.forEach(id => n.add(id)); return n; });
     } catch { /* silent */ } finally { setLoadingLines(prev => { const n = new Set(prev); n.delete(docId); return n; }); }
   };
 
@@ -166,6 +197,7 @@ export default function ImportLinesModal({
 
         <div style={{ padding: '10px 16px 0' }}>
           <input
+            data-testid="import-lines-search"
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -176,14 +208,20 @@ export default function ImportLinesModal({
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>
           {(() => {
-            if (loading) {
+            if (loading || eagerLoadingLines) {
               return <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{ui('loading')}</p>;
             }
             if (filtered.length === 0) {
+              let msg;
+              if (documents.length === 0) {
+                msg = ui(emptyMessageKey);
+              } else if (!search.trim() && allImportedMessageKey) {
+                msg = ui(allImportedMessageKey);
+              } else {
+                msg = ui(noSearchResultsKey);
+              }
               return (
-                <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>
-                  {documents.length === 0 ? ui(emptyMessageKey) : ui(noSearchResultsKey)}
-                </p>
+                <p style={{ fontSize: 13, color: '#9ca3af', padding: '24px 0', textAlign: 'center' }}>{msg}</p>
               );
             }
             return filtered.map(doc => {

@@ -196,6 +196,14 @@
           "section": "principal",
           "order": 6
         },
+        "oBTIKVIESStatus": {
+          "visibility": "readOnly",
+          "section": "principal",
+          "form": true,
+          "grid": false,
+          "order": 7,
+          "displayLogic": "record.oBTIKTaxIDKey === '2'"
+        },
         "oBTIKTaxIDKey": {
           "visibility": "editable",
           "order": 5

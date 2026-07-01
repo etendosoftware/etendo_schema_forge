@@ -14,6 +14,10 @@
       "windowId": "118"
     },
     {
+      "name": "general-ledger-configuration",
+      "windowId": "125"
+    },
+    {
       "name": "contacts",
       "windowId": "123"
     },
@@ -133,6 +137,10 @@
     {
       "name": "tax",
       "windowId": "137"
+    },
+    {
+      "name": "tax-category",
+      "windowId": "138"
     },
     {
       "name": "tbai-config",

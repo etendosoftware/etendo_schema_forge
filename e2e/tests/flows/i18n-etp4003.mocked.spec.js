@@ -177,9 +177,23 @@ test.describe('SendDocumentModal editable recipients (ETP-4003 / ETP-4226)', () 
     await firstRow.hover();
     const emailBtn = firstRow.getByTestId('row-quick-action-email');
     await expect(emailBtn).toBeVisible({ timeout: 5_000 });
+
+    // Register BEFORE clicking — contacts fetch can complete before we'd start waiting.
+    // Swallowed with .catch so tests still run if the component never calls this endpoint.
+    const contactsDone = page.waitForResponse(
+      r => r.url().includes('/sws/neo/contacts'),
+      { timeout: 8_000 },
+    ).catch(() => {});
+
     await emailBtn.click();
+
     const toInput = page.getByTestId('send-modal-to-input');
     await expect(toInput).toBeVisible({ timeout: 8_000 });
+
+    // Wait for the contacts pre-fill fetch to settle before returning. Without this,
+    // the Send button can remain disabled mid-fetch even after a chip is added.
+    await contactsDone;
+
     return toInput;
   }
 

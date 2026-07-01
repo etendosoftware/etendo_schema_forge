@@ -64,7 +64,7 @@ test.describe('Physical Inventory', () => {
     await expect(page.getByTestId('column-header-movementDate')).toBeVisible();
     await expect(page.getByTestId('column-header-name')).toBeVisible();
     await expect(page.getByTestId('column-header-warehouse')).toBeVisible();
-    await expect(page.getByTestId('column-header-inventoryType')).toBeVisible();
+    await expect(page.getByTestId('column-header-processed')).toBeVisible();
   });
 
   // --- New form ---
@@ -90,11 +90,10 @@ test.describe('Physical Inventory', () => {
     await expect(page.getByTestId('detail-view')).toBeVisible();
 
     // Line columns are <th> elements (not sortable buttons in detail view)
-    await expect(page.getByTestId('column-header-lineNo')).toBeVisible();
     await expect(page.getByTestId('column-header-product')).toBeVisible();
-    await expect(page.getByTestId('column-header-quantityCount')).toBeVisible();
     await expect(page.getByTestId('column-header-uOM')).toBeVisible();
     await expect(page.getByTestId('column-header-bookQuantity')).toBeVisible();
+    await expect(page.getByTestId('column-header-quantityCount')).toBeVisible();
   });
 
   test('Cancel returns to list view', async ({ page }) => {
@@ -118,7 +117,6 @@ test.describe('Physical Inventory', () => {
 
     // Wait for the inline row to appear. Current UI renders numeric inputs without placeholders.
     await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('inline-add-field-lineNo')).toBeVisible();
     await expect(page.getByTestId('inline-add-field-product')).toBeVisible();
     await expect(page.getByTestId('inline-add-field-quantityCount')).toBeVisible();
   });

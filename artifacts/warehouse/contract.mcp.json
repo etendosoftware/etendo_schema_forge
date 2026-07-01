@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
   "updatedAt": "2026-06-24T11:54:00.647Z",
-  "contractChecksum": "6c3e83f688bec854",
+  "contractChecksum": "8bdd1bc4e0c9f13d",
   "apiPrediction": {
     "specName": "warehouse",
     "baseUrl": "/sws/neo/warehouse",

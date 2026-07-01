@@ -230,6 +230,7 @@ export const api = {
 export default function WarehousePage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="warehouse"
         Form={WarehouseForm}
@@ -251,6 +252,7 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

@@ -281,6 +281,12 @@
           "windowId": "118"
         },
         {
+          "name": "general-ledger-configuration",
+          "label": "General Ledger Configuration",
+          "favname": "General Ledger Configuration",
+          "windowId": "125"
+        },
+        {
           "name": "open-close-period-control",
           "label": "Periods",
           "favname": "Open/Close Period Control",
@@ -373,6 +379,12 @@
           "label": "Tax",
           "favname": "Tax",
           "windowId": "137"
+        },
+        {
+          "name": "tax-category",
+          "label": "Tax Category",
+          "favname": "Tax Category",
+          "windowId": "138"
         },
         {
           "name": "user",

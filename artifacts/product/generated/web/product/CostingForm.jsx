@@ -2,7 +2,7 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:costing
 const fields = [
-  { key: 'costType', column: 'Costtype', type: 'select', label: 'Cost Type', required: true, readOnly: true, section: 'other', options: [{ value: 'AVA', label: 'Average' }, { value: 'STA', label: 'Standard' }] },
+  { key: 'costType', column: 'Costtype', type: 'select', label: 'Cost Type', required: true, readOnly: true, section: 'other', options: [{ value: 'AVA', label: 'Average', labels: {"es_ES":"Promedio"} }, { value: 'STA', label: 'Standard', labels: {"es_ES":"Estándar"} }] },
   { key: 'cost', column: 'Cost', type: 'number', label: 'Cost', readOnly: true, section: 'other' },
   { key: 'startingDate', column: 'DateFrom', type: 'date', label: 'Starting Date', required: true, readOnly: true, section: 'other' },
   { key: 'endingDate', column: 'DateTo', type: 'date', label: 'Ending Date', required: true, readOnly: true, section: 'other' },

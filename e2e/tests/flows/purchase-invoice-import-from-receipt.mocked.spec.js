@@ -286,6 +286,9 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
     const qtyInput = page.locator('input[type="number"]').first();
     await expect(qtyInput).toHaveValue('2', { timeout: 5_000 });
 
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
+    await page.getByRole('checkbox').last().click();
+
     await clickImportSelected(page);
 
     // Wait for POST to be captured
@@ -317,10 +320,9 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
     await expect(page.getByText('#PO-TEST-001').first()).toBeVisible({ timeout: 5_000 });
   });
 
-  test('already-imported receipt line shows "already imported" label and import button stays disabled', async ({ page }) => {
-    // The modal's fetchDocuments fetches existing invoice lines to detect already-imported.
-    // We use alreadyImported to return EXISTING_INVOICE_LINE on the second+ lines fetch
-    // (first fetch is the detail view load which gets empty list to show LinesEmptyState).
+  test('receipt with all lines already imported is hidden from the modal list', async ({ page }) => {
+    // ETP-4299: ImportLinesModal now eager-loads all lines and filters out receipts
+    // where every line is already imported, so users never see a receipt they can't use.
     const state = { calloutCalls: [], importedLines: [] };
 
     await login(page);
@@ -334,19 +336,18 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
     await page.goto(`/purchase-invoice/${INV_ID}`);
     await page.waitForLoadState('domcontentloaded');
 
-    await openImportFromReceiptModal(page);
-    await expandFirstDocRow(page, 'GR-TEST-001');
+    // Open the modal
+    const btn = page.getByText('Importar desde recibo').or(page.getByText('Import from receipt')).first();
+    await expect(btn).toBeVisible({ timeout: 8_000 });
+    await btn.click();
 
-    // Product appears after callout resolves prices (async per-line)
-    await expect(page.getByText('Queso Sardo').first()).toBeVisible({ timeout: 10_000 });
+    // Modal opens — wait for the search field to confirm the modal rendered
+    await expect(page.getByTestId('import-lines-search')).toBeVisible({ timeout: 8_000 });
 
-    // ui('alreadyImported') = "ya importado" (es) / "already imported" (en)
-    // Give time for the callout async resolution and React re-render
-    await expect(
-      page.getByText('ya importado').or(page.getByText('already imported')).first()
-    ).toBeVisible({ timeout: 10_000 });
+    // GR-TEST-001 must NOT appear — all its lines are already imported
+    await expect(page.getByText('GR-TEST-001').first()).not.toBeVisible({ timeout: 10_000 });
 
-    // Import button is disabled — no lines are selectable since all are already imported
+    // Import button stays disabled — nothing selectable
     const importBtn = page.getByRole('button', { name: /Importar seleccionadas|Import selected/i });
     await expect(importBtn).toBeDisabled({ timeout: 3_000 });
   });

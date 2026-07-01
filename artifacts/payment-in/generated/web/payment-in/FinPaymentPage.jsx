@@ -250,6 +250,7 @@ function DirBadge({ data }) {
 export default function FinPaymentPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="finPayment"
         Form={FinPaymentForm}
@@ -279,6 +280,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         sendDocument
         {...props}
       />
+      </>
     );
   }
 

@@ -274,6 +274,7 @@ const labelOverrides = api.labelOverrides;
 export default function AssetsPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="assets"
         Form={AssetsForm}
@@ -296,10 +297,12 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
         whiteFormBackground
         hideFormCard
         sidebarAboveTabsOnly
+        tabsSeparator
         sidebarClassName="w-[30%] shrink-0 border-l border-[#E8EAEF] p-2"
         toolbarPaddingX="px-2"
         toolbarButtonSize="default"
         contentBg="bg-white"
+        formScrollPaddingX="px-2"
         customTabs={[{ key: 'amortizationPlan', labelKey: 'assetsAmortizationPlanTab', Component: AssetsAmortizationPanel, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "A_Asset", config: {} } }]}
         detailSortBy="sEQNoAsset asc"
         titleField="name"
@@ -315,6 +318,7 @@ export default function AssetsPage({ windowName, recordId, ...props }) {
           />
         )}
       />
+      </>
     );
   }
 

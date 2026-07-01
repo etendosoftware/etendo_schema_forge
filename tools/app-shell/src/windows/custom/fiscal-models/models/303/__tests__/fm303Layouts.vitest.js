@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getLayout303, applyPatch } from './fm303Layouts.js';
+import { getLayout303, applyPatch, SUPPORTED_YEARS } from '../fm303Layouts.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -12,38 +12,53 @@ function rowIds(layout, sectionId) {
   return sec ? sec.rows.map(r => r.id) : null;
 }
 
+function assertSectionContains(layout, sectionId, ...ids) {
+  const rows = rowIds(layout, sectionId);
+  for (const id of ids) expect(rows).toContain(id);
+}
+
+function assertPreDevengadaAbsent(layout) {
+  const ids = rowIds(layout, 'iva_devengado');
+  for (const removed of ['150', '153', '156', '165', '168']) {
+    expect(ids).not.toContain(removed);
+  }
+}
+
+function assertTotalDevengadaPre2023Label(layout) {
+  const sec = layout.sections.find(s => s.id === 'iva_devengado');
+  const row = sec.rows.find(r => r.id === 'total_devengada');
+  expect(row.labelKey).toBe('fm.box.row.total_devengada_pre2023');
+}
+
 // ── BASE layout (no patch) ────────────────────────────────────────────────────
 
 describe('getLayout303 — BASE layout (no patch)', () => {
   const layout = getLayout303(2026, 1);
 
-  it('returns all six canonical sections', () => {
+  it('returns all nine canonical sections', () => {
     expect(sectionIds(layout)).toEqual([
       'identificacion',
+      'datos_bancarios',
       'iva_devengado',
       'iva_deducible',
       'resultado',
       'info_adicional',
       'resultado_final',
+      'sin_actividad',
+      'rectificativa',
     ]);
   });
 
   it('iva_devengado contains extended rows added in 2025 (150, 165, 168)', () => {
-    const ids = rowIds(layout, 'iva_devengado');
-    expect(ids).toContain('150');
-    expect(ids).toContain('165');
-    expect(ids).toContain('168');
+    assertSectionContains(layout, 'iva_devengado', '150', '165', '168');
   });
 
   it('iva_deducible contains full set of rows including regularizacion', () => {
-    const ids = rowIds(layout, 'iva_deducible');
-    expect(ids).toContain('regularizacion');
-    expect(ids).toContain('prorrata_definitiva');
+    assertSectionContains(layout, 'iva_deducible', 'regularizacion', 'prorrata_definitiva');
   });
 
   it('resultado contains diferencia row', () => {
-    const ids = rowIds(layout, 'resultado');
-    expect(ids).toContain('diferencia');
+    assertSectionContains(layout, 'resultado', 'diferencia');
   });
 
   it('returns a new object on each call (no shared mutation)', () => {
@@ -67,18 +82,19 @@ describe('getLayout303 — period-specific key falls back to year key', () => {
 // ── 2024 patch ────────────────────────────────────────────────────────────────
 
 describe('getLayout303 — 2024 patch', () => {
+  // period=1 has no specific key → falls back to PATCHES['2024'] (T4/M10/M11 behavior)
   const layout = getLayout303(2024, 1);
 
-  it('still returns six sections', () => {
-    expect(layout.sections).toHaveLength(6);
+  it('still returns nine sections', () => {
+    expect(layout.sections).toHaveLength(9);
   });
 
-  it('removes row 165 (not introduced until 2025)', () => {
-    expect(rowIds(layout, 'iva_devengado')).not.toContain('165');
+  it('keeps row 165 (introduced in 2024 T4, same as BASE)', () => {
+    expect(rowIds(layout, 'iva_devengado')).toContain('165');
   });
 
-  it('removes row 168 (not introduced until 2025)', () => {
-    expect(rowIds(layout, 'iva_devengado')).not.toContain('168');
+  it('keeps row 168 (introduced in 2024 T4, same as BASE)', () => {
+    expect(rowIds(layout, 'iva_devengado')).toContain('168');
   });
 
   it('keeps row 150 (present in 2024)', () => {
@@ -98,40 +114,170 @@ describe('getLayout303 — 2024 patch', () => {
 describe('getLayout303 — 2023 patch', () => {
   const layout = getLayout303(2023, 4);
 
-  it('removes all extended iva_devengado rows (150, 165, 153, 156, 168)', () => {
+  it('removes rows 165 and 168 (not introduced until 2024 T4)', () => {
     const ids = rowIds(layout, 'iva_devengado');
-    for (const removed of ['150', '165', '153', '156', '168']) {
-      expect(ids).not.toContain(removed);
-    }
+    expect(ids).not.toContain('165');
+    expect(ids).not.toContain('168');
   });
 
-  it('removes recargo_equiv, 19, 22, mod_recargo, total_devengada', () => {
+  it('keeps rows containing box numbers 152, 155, 158 (introduced in 2023)', () => {
+    // Boxes 152/155/158 are cells inside rows 150/153/156 respectively
+    const sec = layout.sections.find(s => s.id === 'iva_devengado');
+    const allCells = sec.rows.flatMap(r => r.cells ?? []);
+    expect(allCells).toContain(152);
+    expect(allCells).toContain(155);
+    expect(allCells).toContain(158);
+  });
+
+  it('keeps rows 150, 153, 156 (inherited from BASE, still present in 2023)', () => {
+    assertSectionContains(layout, 'iva_devengado', '150', '153', '156');
+  });
+
+  it('keeps recargo_equiv, total_devengada and base rows 4, 7', () => {
+    assertSectionContains(layout, 'iva_devengado', 'recargo_equiv', 'total_devengada', '4', '7');
+  });
+
+  it('keeps diferencia in resultado section', () => {
+    assertSectionContains(layout, 'resultado', 'diferencia');
+  });
+
+  it('iva_deducible retains full BASE deductible rows', () => {
+    assertSectionContains(layout, 'iva_deducible', 'op_int_corrientes', 'regularizacion', 'prorrata_definitiva');
+  });
+});
+
+// ── 2022 patch ────────────────────────────────────────────────────────────────
+
+describe('getLayout303 — 2022 patch', () => {
+  const layout = getLayout303(2022, 1);
+
+  it('returns nine sections', () => {
+    expect(layout.sections).toHaveLength(9);
+  });
+
+  it('removes rows 150, 153, 156, 165, 168 (not introduced until 2023+)', () => {
+    assertPreDevengadaAbsent(layout);
+  });
+
+  it('uses total_devengada_pre2023 label for row 27', () => {
+    assertTotalDevengadaPre2023Label(layout);
+  });
+
+  it('rectificativa section is replaced with complementaria', () => {
+    const sec = layout.sections.find(s => s.id === 'rectificativa');
+    expect(sec.titleKey).toBe('fm.section.complementaria');
+    const fieldIds = sec.fields.map(f => f.id);
+    expect(fieldIds).toContain('complementaria');
+    expect(fieldIds).not.toContain('rectificativa');
+    expect(fieldIds).not.toContain('motivo_rectificacion');
+  });
+});
+
+// ── 2021 patch ────────────────────────────────────────────────────────────────
+
+describe('getLayout303 — 2021 patch', () => {
+  const layout = getLayout303(2021, 1);
+
+  it('removes rows 150, 153, 156, 165, 168', () => {
+    assertPreDevengadaAbsent(layout);
+  });
+
+  it('uses total_devengada_pre2023 label for row 27', () => {
+    assertTotalDevengadaPre2023Label(layout);
+  });
+
+  it('rectificativa section is replaced with complementaria', () => {
+    const sec = layout.sections.find(s => s.id === 'rectificativa');
+    expect(sec.titleKey).toBe('fm.section.complementaria');
+  });
+});
+
+// ── total_devengada labelKey progression ─────────────────────────────────────
+
+describe('getLayout303 — total_devengada labelKey by year', () => {
+  function totalDevengadaLabelKey(year, period) {
+    const layout = getLayout303(year, period);
+    const sec = layout.sections.find(s => s.id === 'iva_devengado');
+    return sec.rows.find(r => r.id === 'total_devengada')?.labelKey;
+  }
+
+  it('2021 uses pre2023 label', () => {
+    expect(totalDevengadaLabelKey(2021, 1)).toBe('fm.box.row.total_devengada_pre2023');
+  });
+
+  it('2022 uses pre2023 label', () => {
+    expect(totalDevengadaLabelKey(2022, 1)).toBe('fm.box.row.total_devengada_pre2023');
+  });
+
+  it('2023 uses 2023 label (adds boxes 152/155/158)', () => {
+    expect(totalDevengadaLabelKey(2023, 1)).toBe('fm.box.row.total_devengada_2023');
+  });
+
+  it('2024 T4 (year-level patch) uses BASE label (adds 167/170)', () => {
+    // period=1 falls back to year-level (T4 behavior)
+    expect(totalDevengadaLabelKey(2024, 1)).toBe('fm.box.row.total_devengada');
+  });
+
+  it('2025 uses BASE label', () => {
+    expect(totalDevengadaLabelKey(2025, 1)).toBe('fm.box.row.total_devengada');
+  });
+
+  it('2026 uses BASE label', () => {
+    expect(totalDevengadaLabelKey(2026, 1)).toBe('fm.box.row.total_devengada');
+  });
+});
+
+// ── BASE rectificativa section — motivo_rectificacion select ─────────────────
+
+describe('getLayout303 — BASE rectificativa section', () => {
+  const layout = getLayout303(2026, 1);
+  const rectSec = layout.sections.find(s => s.id === 'rectificativa');
+
+  it('has sectionType identificacion', () => {
+    expect(rectSec.sectionType).toBe('identificacion');
+  });
+
+  it('has motivo_rectificacion field as select (not two checkboxes)', () => {
+    const motivo = rectSec.fields.find(f => f.id === 'motivo_rectificacion');
+    expect(motivo).toBeTruthy();
+    expect(motivo.type).toBe('select');
+    expect(motivo.options).toHaveLength(2);
+    expect(motivo.options.map(o => o.value)).toEqual(['R', 'D']);
+  });
+
+  it('does not have motivo_heading subheading or radioGroup checkboxes', () => {
+    const ids = rectSec.fields.map(f => f.id);
+    expect(ids).not.toContain('motivo_heading');
+    expect(ids).not.toContain('motivo_rectificaciones');
+    expect(ids).not.toContain('motivo_discrepancia');
+  });
+
+  it('motivo_rectificacion is only visible when rectificativa checkbox is true', () => {
+    const motivo = rectSec.fields.find(f => f.id === 'motivo_rectificacion');
+    expect(motivo.visibleWhen).toEqual({ field: 'rectificativa', equals: true });
+  });
+});
+
+// ── 2024 T1 complementaria ops (period-specific key) ─────────────────────────
+
+describe('getLayout303 — 2024 T1 (complementaria)', () => {
+  const layout = getLayout303(2024, 'T1');
+
+  it('removes rows 165 and 168 (not present in T1)', () => {
     const ids = rowIds(layout, 'iva_devengado');
-    for (const removed of ['recargo_equiv', '19', '22', 'mod_recargo', 'total_devengada']) {
-      expect(ids).not.toContain(removed);
-    }
+    expect(ids).not.toContain('165');
+    expect(ids).not.toContain('168');
   });
 
-  it('keeps base rows 4 and 7 (general rates)', () => {
-    const ids = rowIds(layout, 'iva_devengado');
-    expect(ids).toContain('4');
-    expect(ids).toContain('7');
+  it('uses 2023 total_devengada label (no 167/170)', () => {
+    const sec = layout.sections.find(s => s.id === 'iva_devengado');
+    const row = sec.rows.find(r => r.id === 'total_devengada');
+    expect(row.labelKey).toBe('fm.box.row.total_devengada_2023');
   });
 
-  it('removes diferencia from resultado section', () => {
-    expect(rowIds(layout, 'resultado')).not.toContain('diferencia');
-  });
-
-  it('iva_deducible only retains op_int_corrientes', () => {
-    const ids = rowIds(layout, 'iva_deducible');
-    expect(ids).toContain('op_int_corrientes');
-    for (const removed of [
-      'op_int_bienes_inv', 'importaciones', 'imp_bienes_inv',
-      'adq_intracom_corr', 'adq_intracom_inv', 'regularizacion',
-      'compensaciones_reag', 'reg_bienes_inv', 'prorrata_definitiva',
-    ]) {
-      expect(ids).not.toContain(removed);
-    }
+  it('rectificativa section is replaced with complementaria', () => {
+    const sec = layout.sections.find(s => s.id === 'rectificativa');
+    expect(sec.titleKey).toBe('fm.section.complementaria');
   });
 });
 
@@ -336,5 +482,85 @@ describe('applyPatch — opPatchSection', () => {
     expect(() => applyPatch([
       { op: 'patchSection', section: 'phantom', patch: { titleKey: 'x' } },
     ])).not.toThrow();
+  });
+});
+
+// ── SUPPORTED_YEARS export ────────────────────────────────────────────────────
+
+describe('SUPPORTED_YEARS', () => {
+  it('is a sorted array of numbers', () => {
+    expect(Array.isArray(SUPPORTED_YEARS)).toBe(true);
+    for (let i = 1; i < SUPPORTED_YEARS.length; i++) {
+      expect(SUPPORTED_YEARS[i]).toBeGreaterThan(SUPPORTED_YEARS[i - 1]);
+    }
+  });
+
+  it('includes all years that have patches (2021, 2022, 2023, 2024, 2025)', () => {
+    for (const year of [2021, 2022, 2023, 2024, 2025]) {
+      expect(SUPPORTED_YEARS).toContain(year);
+    }
+  });
+
+  it('includes BASE_YEAR 2026', () => {
+    expect(SUPPORTED_YEARS).toContain(2026);
+  });
+
+  it('does not include NaN entries (period-suffix keys like 2024_T1 are excluded)', () => {
+    for (const y of SUPPORTED_YEARS) {
+      expect(typeof y).toBe('number');
+      expect(Number.isNaN(y)).toBe(false);
+    }
+  });
+
+  it('does not contain duplicates', () => {
+    expect(SUPPORTED_YEARS.length).toBe(new Set(SUPPORTED_YEARS).size);
+  });
+
+  it('has exactly 6 entries: 2021 through 2026', () => {
+    expect(SUPPORTED_YEARS).toEqual([2021, 2022, 2023, 2024, 2025, 2026]);
+  });
+});
+
+// ── sin_actividad section ─────────────────────────────────────────────────────
+
+describe('getLayout303 — sin_actividad section', () => {
+  it('BASE (2026) has a single checkbox field with id sin_actividad', () => {
+    const layout = getLayout303(2026, 1);
+    const sec = layout.sections.find(s => s.id === 'sin_actividad');
+    expect(sec).toBeTruthy();
+    expect(sec.fields).toHaveLength(1);
+    const field = sec.fields[0];
+    expect(field.id).toBe('sin_actividad');
+    expect(field.type).toBe('checkbox');
+    expect(field.readOnly).toBe(false);
+  });
+
+  it('BASE sin_actividad has sectionType identificacion', () => {
+    const layout = getLayout303(2026, 1);
+    const sec = layout.sections.find(s => s.id === 'sin_actividad');
+    expect(sec.sectionType).toBe('identificacion');
+    expect(sec.titleKey).toBe('fm.section.sin_actividad');
+  });
+
+  it('2022 patch does not remove the sin_actividad section', () => {
+    const layout = getLayout303(2022, 1);
+    const sec = layout.sections.find(s => s.id === 'sin_actividad');
+    expect(sec).toBeTruthy();
+    expect(sec.fields).toHaveLength(1);
+    expect(sec.fields[0].id).toBe('sin_actividad');
+  });
+
+  it('2023 patch does not remove the sin_actividad section', () => {
+    const layout = getLayout303(2023, 1);
+    const sec = layout.sections.find(s => s.id === 'sin_actividad');
+    expect(sec).toBeTruthy();
+    expect(sec.fields).toHaveLength(1);
+    expect(sec.fields[0].id).toBe('sin_actividad');
+  });
+
+  it('sin_actividad field has labelKey fm.ident.sin_actividad', () => {
+    const layout = getLayout303(2026, 1);
+    const sec = layout.sections.find(s => s.id === 'sin_actividad');
+    expect(sec.fields[0].labelKey).toBe('fm.ident.sin_actividad');
   });
 });

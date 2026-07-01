@@ -272,7 +272,12 @@ export default function SiiMonitorSection({
       setError(null);
       return;
     }
-    if (!parentId) return;
+    if (!parentId) {
+      setLoading(false);
+      setRows([]);
+      setTotalRows(0);
+      return;
+    }
     setLoading(true);
     setError(null);
     fetchSubtab(apiFetch, entityKey, parentId, orgId, page)

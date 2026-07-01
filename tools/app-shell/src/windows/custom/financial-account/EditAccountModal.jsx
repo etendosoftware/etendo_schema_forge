@@ -72,12 +72,14 @@ async function copyIbanToClipboard(account, ui) {
   } catch { /* ignore */ }
 }
 
-/** Persists the changed account fields (name/iban/currency) and PSD2 import settings in one go. */
-async function persistAccountEdits({ account, fields, settings, updateAccount, saveImportSettings }) {
+/** Persists the changed account fields (name/iban/currency/tolerances) and PSD2 import settings in one go. */
+async function persistAccountEdits({ account, fields, settings, reconciliation, updateAccount, saveImportSettings }) {
   const updates = {};
   if (fields.nameDirty) updates.name = fields.name.trim();
   if (fields.ibanDirty) updates.iban = normalizeIban(fields.iban);
   if (fields.currencyDirty) updates.currencyId = fields.currencyId;
+  if (reconciliation?.dateDirty) updates.dateTolerance = reconciliation.dateTolerance;
+  if (reconciliation?.amountDirty) updates.amountTolerance = reconciliation.amountTolerance;
   if (Object.keys(updates).length > 0) {
     await updateAccount(account.id, updates);
   }
@@ -243,6 +245,69 @@ function usePsd2Connection(open, account, psd2Connected, onSaved, onClose) {
 }
 
 // ---------------------------------------------------------------------------
+// Reconciliation settings hook + section
+// ---------------------------------------------------------------------------
+
+function useReconciliationSettings(open, account) {
+  const [dateTolerance, setDateTolerance] = useState(3);
+  const [amountTolerance, setAmountTolerance] = useState(0);
+  const [snapshot, setSnapshot] = useState({ dateTolerance: 3, amountTolerance: 0 });
+
+  useEffect(() => {
+    if (!open || !account) return;
+    const dt = account.dateTolerance ?? 3;
+    const at = Number(account.amountTolerance ?? 0);
+    setDateTolerance(dt);
+    setAmountTolerance(at);
+    setSnapshot({ dateTolerance: dt, amountTolerance: at });
+  }, [open, account]);
+
+  const dateDirty = dateTolerance !== snapshot.dateTolerance;
+  const amountDirty = Number(amountTolerance) !== Number(snapshot.amountTolerance);
+  const dirty = dateDirty || amountDirty;
+  return { dateTolerance, setDateTolerance, amountTolerance, setAmountTolerance, dateDirty, amountDirty, dirty };
+}
+
+function ReconciliationSettingsSection({ ui, recon }) {
+  return (
+    <div className="mt-4 border-b border-[#E8EAEF] pb-4" data-testid="reconciliation-settings-section">
+      <p className="text-sm font-medium text-[#1E1E2C] mb-3">
+        {ui('financeAccountsReconciliationSection')}
+      </p>
+      <div className="grid grid-cols-2 gap-4">
+        <Field
+          label={ui('financeAccountsReconciliationDateTolerance')}
+          data-testid="Field__73027d">
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            value={recon.dateTolerance}
+            onChange={(e) => recon.setDateTolerance(Number(e.target.value))}
+            className={FIELD_INPUT}
+            data-testid="recon-date-tolerance-input"
+          />
+        </Field>
+        <Field
+          label={ui('financeAccountsReconciliationAmountTolerance')}
+          data-testid="Field__73027d">
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            step={0.1}
+            value={recon.amountTolerance}
+            onChange={(e) => recon.setAmountTolerance(Number(e.target.value))}
+            className={FIELD_INPUT}
+            data-testid="recon-amount-tolerance-input"
+          />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Modal
 // ---------------------------------------------------------------------------
 
@@ -279,6 +344,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const psd2Connected = account?.psd2Connected === true;
   const fields = useAccountFields(open, account, psd2Connected);
   const psd2 = usePsd2Connection(open, account, psd2Connected, onSaved, onClose);
+  const recon = useReconciliationSettings(open, account);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -286,7 +352,8 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
 
   const typeLabel = formatTypeLabel(account.type, ui);
   const reauthMessage = buildReauthMessage(psd2.status, locale, ui);
-  const dirty = fields.nameDirty || fields.ibanDirty || fields.currencyDirty || psd2.settingsDirty;
+  const dirty = fields.nameDirty || fields.ibanDirty || fields.currencyDirty || psd2.settingsDirty
+    || (!isCash && recon.dirty);
   const canSave = dirty && !saving && fields.name.trim() !== '' && !fields.ibanInvalid;
   const busy = saving || psd2.busy;
 
@@ -298,6 +365,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
         account,
         fields,
         settings: { dirty: psd2.settingsDirty, form: psd2.form },
+        reconciliation: isCash ? null : recon,
         updateAccount,
         saveImportSettings,
       });
@@ -338,6 +406,13 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
           typeLabel={typeLabel}
           fields={fields}
           data-testid="AccountFieldsGrid__73027d" />
+
+        {!isCash ? (
+          <ReconciliationSettingsSection
+            ui={ui}
+            recon={recon}
+            data-testid="ReconciliationSettingsSection__73027d" />
+        ) : null}
 
         {!isCash ? (
           <Psd2ConnectionSection

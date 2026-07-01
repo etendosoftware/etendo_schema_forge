@@ -34,15 +34,18 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
   const json = await res.json();
   const lines = json?.response?.data || [];
   return lines.map(l => {
-    const qty = Number(l.orderedQuantity) || 0;
+    const ordered = Number(l.orderedQuantity) || 0;
+    const invoiced = Number(l.invoicedQuantity) || 0;
+    const pending = Math.max(0, ordered - invoiced);
     const unitPrice = Number(l.unitPrice) || 0;
+    const alreadyInCurrent = sharedContext.alreadyImportedOrderLines?.has(l.id) || false;
     return {
       ...l,
       _productName: l['product$_identifier'] || l.id,
-      _maxQty: qty,
+      _maxQty: pending,
       _unitPrice: unitPrice,
-      _lineNetAmount: unitPrice * qty,
-      _alreadyImported: sharedContext.alreadyImportedOrderLines?.has(l.id) || false,
+      _lineNetAmount: unitPrice * pending,
+      _alreadyImported: alreadyInCurrent || pending <= 0,
     };
   });
 };

@@ -1,35 +1,48 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 
 async function fetchDraftInfoByOrderLine({ base, headers, bpId, currentShipmentId }) {
-  const res = await fetch(
-    `${base}/goods-shipment/header?_startRow=0&_endRow=100&_sortBy=movementDate desc`,
-    { headers },
-  );
-  if (!res.ok) return {};
-
-  const all = (await res.json())?.response?.data || [];
-  const otherDrafts = all.filter(s =>
-    s.documentStatus === 'DR' && s.businessPartner === bpId && s.id !== currentShipmentId,
-  );
-  if (otherDrafts.length === 0) return {};
-
-  const lineResults = await Promise.all(
-    otherDrafts.map(s =>
-      fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`, { headers })
-        .then(r => r.ok ? r.json().then(d => ({ docNo: s.documentNo, lines: d?.response?.data || [] })) : null),
-    ),
-  );
+  // Fetch current shipment lines directly (by parentId) + other draft shipments list in parallel.
+  // Avoids relying on the current shipment appearing in the paginated list.
+  const [currentLinesRes, shipmentsRes] = await Promise.all([
+    currentShipmentId
+      ? fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${currentShipmentId}&_startRow=0&_endRow=200`, { headers })
+      : Promise.resolve(null),
+    fetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=100&_sortBy=movementDate desc`, { headers }),
+  ]);
 
   const draftInfo = {};
-  for (const result of lineResults) {
-    if (!result) continue;
-    result.lines.forEach(l => {
+
+  if (currentLinesRes?.ok) {
+    const currentLines = (await currentLinesRes.json())?.response?.data || [];
+    currentLines.forEach(l => {
       if (!l.salesOrderLine) return;
       if (!draftInfo[l.salesOrderLine]) draftInfo[l.salesOrderLine] = { qty: 0, docNos: new Set() };
       draftInfo[l.salesOrderLine].qty += Number(l.movementQuantity) || 0;
-      draftInfo[l.salesOrderLine].docNos.add(result.docNo);
     });
   }
+
+  if (shipmentsRes.ok) {
+    const all = (await shipmentsRes.json())?.response?.data || [];
+    const otherDrafts = all.filter(s =>
+      s.documentStatus === 'DR' && s.businessPartner === bpId && s.id !== currentShipmentId,
+    );
+    const lineResults = await Promise.all(
+      otherDrafts.map(s =>
+        fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`, { headers })
+          .then(r => r.ok ? r.json().then(d => ({ docNo: s.documentNo, lines: d?.response?.data || [] })) : null),
+      ),
+    );
+    for (const result of lineResults) {
+      if (!result) continue;
+      result.lines.forEach(l => {
+        if (!l.salesOrderLine) return;
+        if (!draftInfo[l.salesOrderLine]) draftInfo[l.salesOrderLine] = { qty: 0, docNos: new Set() };
+        draftInfo[l.salesOrderLine].qty += Number(l.movementQuantity) || 0;
+        draftInfo[l.salesOrderLine].docNos.add(result.docNo);
+      });
+    }
+  }
+
   return draftInfo;
 }
 
@@ -81,7 +94,11 @@ const fetchLines = async ({ base, headers, docId, sharedContext }) => {
     const delivered = orderLineId ? (deliveredByOrderLine[orderLineId] ?? 0) : 0;
     const draftEntry = orderLineId ? sharedContext.draftInfo?.[orderLineId] : undefined;
     const inOtherDrafts = draftEntry?.qty || 0;
-    const pending = alreadyLinked ? 0 : Math.max(0, qty - delivered - inOtherDrafts);
+    // For lines with an order: delivery tracking supports partial imports across multiple
+    // shipments. For direct invoice lines (no order): m_inoutline_id is the only signal.
+    const pending = orderLineId
+      ? Math.max(0, qty - delivered - inOtherDrafts)
+      : alreadyLinked ? 0 : Math.max(0, qty);
     return {
       ...l,
       _orderLineId: orderLineId,
@@ -116,6 +133,7 @@ export default function ImportFromSalesInvoiceModal(props) {
       searchPlaceholderKey="searchSalesInvoice"
       emptyMessageKey="noCompletedSalesInvoicesForThisCustomer"
       noSearchResultsKey="noInvoicesMatchYourSearch"
+      allImportedMessageKey="allSalesInvoicesAlreadyImported"
       successMessageKey="linesImportedFromSalesInvoice"
       showPriceColumns={false}
       fetchDocuments={fetchDocuments}

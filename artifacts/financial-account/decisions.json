@@ -38,7 +38,9 @@
         "lastreconciliation": { "visibility": "system" },
         "lastreconbalance": { "visibility": "system" },
         "aprmIsfundstransEnabled": { "visibility": "discarded" },
-        "aprmGlitemDiff": { "visibility": "discarded" }
+        "aprmGlitemDiff": { "visibility": "discarded" },
+        "eTGODateTolerance": { "visibility": "editable" },
+        "eTGOAmountTolerance": { "visibility": "editable" }
       }
     },
     "transaction": {

@@ -87,19 +87,26 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     return () => window.removeEventListener('neo:processSuccess', handleProcessSuccess);
   }, [recordId, fetchLines]);
 
-  return (
-    <div className="pt-2 pb-5">
-      {loading ? (
+  const renderBody = () => {
+    if (loading) {
+      return (
         <div className="text-xs text-gray-400 py-4 text-center inline-flex items-center gap-1.5 justify-center w-full">
           <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__34159c" />
           {ui('assetsLoading')}
         </div>
-      ) : lines.length === 0 ? (
+      );
+    }
+
+    if (lines.length === 0) {
+      return (
         <div className="text-xs text-gray-400 py-6 text-center border border-dashed border-gray-200 rounded-lg">
           {ui('assetsNoAmortizationLines')}
         </div>
-      ) : (
-        <div className="overflow-x-auto">
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border/50">
@@ -142,7 +149,12 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
             </tbody>
           </table>
         </div>
-      )}
+    );
+  };
+
+  return (
+    <div className="pt-2 pb-5">
+      {renderBody()}
     </div>
   );
 }

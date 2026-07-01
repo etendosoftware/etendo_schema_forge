@@ -83,6 +83,7 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
   });
   const [selectedLines, setSelectedLines] = useState(new Set());
   const [lineQuantities, setLineQuantities] = useState({});
+  const [pendingByLine, setPendingByLine] = useState({});
   const [existingDraft, setExistingDraft] = useState(null);
   const [dismissedWarning, setDismissedWarning] = useState(false);
 
@@ -96,20 +97,46 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
     let cancelled = false;
     (async () => {
       try {
-        const lineResults = await Promise.all(
-          shipments.map(async (s) => {
-            const res = await fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`, { headers: hdrs });
-            if (!res.ok) return { id: s.id, lines: [] };
-            return { id: s.id, lines: (await res.json())?.response?.data || [] };
-          }),
-        );
+        // Fetch shipment lines and draft-aware pending qty in parallel
+        const [lineResults, pendingResults] = await Promise.all([
+          Promise.all(
+            shipments.map(async (s) => {
+              const res = await fetch(`${base}/goods-shipment/goodsShipmentLine?parentId=${s.id}&_startRow=0&_endRow=200`, { headers: hdrs });
+              if (!res.ok) return { id: s.id, lines: [] };
+              return { id: s.id, lines: (await res.json())?.response?.data || [] };
+            }),
+          ),
+          Promise.all(
+            shipments.map(async (s) => {
+              try {
+                const res = await fetch(`${base}/goods-shipment/goodsShipment/${s.id}/action/pendingInvoiceLines`, { headers: hdrs });
+                if (!res.ok) return {};
+                const data = (await res.json())?.response?.data || [];
+                const map = {};
+                data.forEach(item => { map[item.lineId] = Number(item.pendingQty) || 0; });
+                return map;
+              } catch { return {}; }
+            }),
+          ),
+        ]);
         if (cancelled) return;
+
+        // Merge pending qty maps (one per shipment)
+        const pending = Object.assign({}, ...pendingResults);
+        setPendingByLine(pending);
+
         const linesMap = {};
         const allLineIds = new Set();
         const qtyDefaults = {};
         lineResults.forEach(r => {
           linesMap[r.id] = r.lines;
-          r.lines.forEach(l => { allLineIds.add(l.id); qtyDefaults[l.id] = Number(l.movementQuantity) || 0; });
+          r.lines.forEach(l => {
+            // Use server-side draft-aware pending qty; fall back to raw movementQty - invoicedQty
+            const fallback = Math.max(0, (Number(l.movementQuantity) || 0) - (Number(l.invoicedQuantity) || 0));
+            const pendingQty = pending[l.id] !== undefined ? pending[l.id] : fallback;
+            if (pendingQty > 0) allLineIds.add(l.id);
+            qtyDefaults[l.id] = pendingQty;
+          });
         });
         setLinesByShipment(linesMap);
         setSelectedLines(allLineIds);
@@ -148,17 +175,18 @@ function BulkInvoiceModal({ shipments, bpName, token, apiBaseUrl, onClose, onSuc
       const lines = (linesByShipment[s.id] || []).map(l => {
         const ol = orderLinePrices[l.salesOrderLine] || {};
         const unitPrice = Number(ol.unitPrice) || 0;
-        const invoiced = Number(l.invoicedQuantity) || 0;
-        const maxQty = Math.max(0, (Number(l.movementQuantity) || 0) - invoiced);
+        // Use server-side draft-aware pending qty; fall back to raw computation
+        const fallback = Math.max(0, (Number(l.movementQuantity) || 0) - (Number(l.invoicedQuantity) || 0));
+        const maxQty = pendingByLine[l.id] !== undefined ? Number(pendingByLine[l.id]) : fallback;
         const currentQty = lineQuantities[l.id] ?? maxQty;
         const isSel = selectedLines.has(l.id);
         return { ...l, unitPrice, maxQty, currentQty, lineTotal: isSel ? unitPrice * currentQty : 0, productName: l['product$_identifier'] || l.id, isSelected: isSel };
-      });
+      }).filter(l => l.maxQty > 0);  // hide fully-invoiced / fully-drafted lines
       const total = lines.reduce((sum, l) => sum + l.lineTotal, 0);
       const selectedCount = lines.filter(l => l.isSelected).length;
       return { ...s, enrichedLines: lines, total, selectedCount };
     }),
-    [shipments, linesByShipment, orderLinePrices, selectedLines, lineQuantities],
+    [shipments, linesByShipment, orderLinePrices, selectedLines, lineQuantities, pendingByLine],
   );
 
   const totalSelectedLines = shipmentSummaries.reduce((sum, s) => sum + s.selectedCount, 0);

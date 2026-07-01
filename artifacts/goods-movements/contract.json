@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.15.1",
   "generatedAt": "2026-04-29T19:05:48.778Z",
-  "updatedAt": "2026-06-25T19:58:28.564Z",
-  "checksum": "a927cafbf30dd4ee",
+  "updatedAt": "2026-06-29T22:43:31.954Z",
+  "checksum": "e31470929f91fada",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -579,7 +579,7 @@
             "apiKey": "processNow",
             "column": "Processing",
             "type": "button",
-            "visibility": "discarded",
+            "visibility": "system",
             "required": false
           },
           {

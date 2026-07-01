@@ -1,8 +1,8 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
   "updatedAt": "2026-06-24T20:46:47.740Z",
-  "contractChecksum": "50d8b17acc9f54b2",
+  "contractChecksum": "fefc6202a9a92485",
   "apiPrediction": {
     "specName": "payment-in",
     "baseUrl": "/sws/neo/payment-in",

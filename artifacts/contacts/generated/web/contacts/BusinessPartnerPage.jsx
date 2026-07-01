@@ -22,7 +22,7 @@ const summary = [
 
 ];
 
-const statusField = null;
+const statusField = 'oBTIKVIESStatus';
 // @sf-generated-end summary:businessPartner
 
 // @sf-generated-start extraBadges:businessPartner
@@ -663,6 +663,7 @@ const labelOverrides = api.labelOverrides;
 export default function BusinessPartnerPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="businessPartner"
         Form={BusinessPartnerForm}
@@ -707,6 +708,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 
