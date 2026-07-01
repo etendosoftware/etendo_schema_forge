@@ -1558,6 +1558,12 @@ export function mergeLineEdits(lineEdits, selectedLine) {
   return lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine;
 }
 
+export function dispatchProcessAction(p, { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess }) {
+  if (p.style === 'ghost-danger' && processConfirmModal) { setConfirmProcess(p); }
+  else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
+  else { handleProcess?.(p); }
+}
+
 export function DetailView({
   entity,
   detailEntity,
@@ -3210,11 +3216,7 @@ export function DetailView({
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
-                  const dispatchProcess = () => {
-                    if (p.style === 'ghost-danger' && processConfirmModal) { setConfirmProcess(p); }
-                    else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
-                    else { hook.handleProcess?.(p); }
-                  };
+                  const processCtx = { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess: hook.handleProcess };
                   return (
                     <Button
                       key={p.name}
@@ -3229,7 +3231,7 @@ export function DetailView({
                             return;
                           }
                         }
-                        dispatchProcess();
+                        dispatchProcessAction(p, processCtx);
                       }}
                       data-testid="Button__fa3275">
                       {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}

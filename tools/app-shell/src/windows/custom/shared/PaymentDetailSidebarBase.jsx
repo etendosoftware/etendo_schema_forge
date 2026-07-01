@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 
+const AMOUNT_FMT = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function fmtAmt(val) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  const abs = Math.abs(n).toFixed(2).split('.');
-  abs[0] = abs[0].replace(/\d(?=(?:\d{3})+$)/g, '$&.');
-  return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' €';
+  return (n < 0 ? '-' : '') + AMOUNT_FMT.format(Math.abs(n)) + ' €';
 }
 
 const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
