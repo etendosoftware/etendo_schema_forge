@@ -102,10 +102,14 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       assert.match(src, /<Field label=\{ui\('account'\)\} required/);
     });
 
-    it('derives missingRequired from amount, date, methodId and accountId', () => {
+    it('derives missingRequired from funds (cash + used credit), date, methodId and accountId', () => {
+      // "Importe" is satisfied by the total applied (cash + used credit), not the
+      // cash field alone — a credit/saldo a favor line covering 100% of the
+      // invoice legitimately leaves the cash amount (balance.amount) at 0, so the
+      // gate must read balance.funds, not balance.amount (ETP-4331 bug fix).
       assert.match(
         src,
-        /const missingRequired = !\(balance\.amount > 0\) \|\| !date \|\| !methodId \|\| !accountId;/,
+        /const missingRequired = !\(balance\.funds > 0\) \|\| !date \|\| !methodId \|\| !accountId;/,
       );
     });
 

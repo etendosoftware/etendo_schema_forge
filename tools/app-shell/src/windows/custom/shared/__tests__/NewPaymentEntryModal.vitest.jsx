@@ -177,6 +177,42 @@ describe('NewPaymentEntryModal', () => {
       await waitFor(() => expect(screen.queryByText('cpUnused')).not.toBeInTheDocument());
     });
 
+    // Regression (ETP-4331 follow-up): user report — "Nuevo cobro" for an invoice
+    // with 25,30€ pending; selecting a "Saldo a favor" line that covers it in full
+    // left cash ("Importe") at 0,00€ and "Diferencia" at 0,00€ (a fully exact,
+    // valid reconciliation), yet "Confirmar" stayed disabled. Root cause:
+    // missingRequired gated on balance.amount (cash only), which is legitimately 0
+    // once a credit line covers 100% of the invoice by design. Fixed to gate on
+    // balance.funds (cash + used credit) instead — this test reproduces the exact
+    // repro and would have failed before the fix (missingRequired stuck `true`).
+    it('enables Confirmar/Guardar when a saldo-a-favor line fully covers the invoice and zeroes the cash amount', async () => {
+      mockApiFetch = buildApiFetch({
+        sources: [{ id: 's1', kind: 'abono', doc: 'SF-1', date: '2024-03-01', avail: 25.30 }],
+      });
+      renderModal({ outstanding: 25.30 });
+
+      const row = await screen.findByTestId('cp-credit-row-s1');
+      fireEvent.click(row);
+
+      // Selecting the line auto-caps usage to min(avail, need) = 25.30 and drops
+      // the cash amount to max(0, applied - usedByOthers - use) = 0 — exactly the
+      // repro: cash "Importe" left at 0,00€, credit fully covering the invoice.
+      const input = await within(row).findByTestId('cp-credit-use-s1');
+      await waitFor(() => expect(input).toHaveValue('25,30'));
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('0,00'));
+
+      // Balance is exact — no missing, no excess — "Diferencia" shows 0,00 €.
+      expect(screen.getByText('cpDifference')).toBeInTheDocument();
+      expect(screen.queryByText('cpMissing')).not.toBeInTheDocument();
+      expect(screen.queryByText('cpExcess')).not.toBeInTheDocument();
+
+      // Core regression assertion: both footer actions are enabled — before the
+      // fix, missingRequired read balance.amount (0 here) and stayed `true`,
+      // keeping Guardar/Confirmar disabled despite the fully-covered, exact balance.
+      await waitFor(() => expect(screen.getByTestId('cp-save-draft')).not.toBeDisabled());
+      expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+    });
+
     it('edits the "use" amount via the input field, clamped to [0, avail]', async () => {
       mockApiFetch = buildApiFetch({
         sources: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 500 }],
