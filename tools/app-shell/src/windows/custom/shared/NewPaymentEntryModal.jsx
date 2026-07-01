@@ -453,7 +453,7 @@ export default function NewPaymentEntryModal({
   // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm. "Importe"
   // is satisfied by the total applied (cash + used credit), not the cash field alone —
   // a credit/saldo a favor line covering 100% legitimately leaves the cash amount at 0.
-  const missingRequired = !(balance.funds > 0) || !date || !methodId || !accountId;
+  const missingRequired = balance.funds <= 0 || !date || !methodId || !accountId;
   const saveDisabled = saving || loading || missingRequired;
   const confirmDisabled = saving || missingRequired || !balance.canConfirm;
 
