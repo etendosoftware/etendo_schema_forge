@@ -14,7 +14,7 @@ function formatDate(raw) {
   return s.slice(0, 10);
 }
 
-function MultiSelect({ options, selected, onToggle }) {
+function MultiSelect({ options, selected, onToggle, 'data-testid': dataTestId }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -29,7 +29,7 @@ function MultiSelect({ options, selected, onToggle }) {
   const selectedLabels = options.filter(o => selected.has(o.value)).map(o => o.label);
 
   return (
-    <div className="npd-multiselect" ref={ref}>
+    <div className="npd-multiselect" ref={ref} data-testid={dataTestId}>
       <button type="button" className="npd-multiselect-trigger" onClick={() => setOpen(v => !v)}>
         <span className={selected.size === 0 ? 'npd-placeholder' : ''}>
           {selected.size === 0 ? '—' : selectedLabels.join(', ')}
@@ -330,7 +330,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
             options={filterOptions.accountingStatuses}
             selected={accountingStatuses}
             onToggle={toggleAccountingStatus}
-            data-testid="MultiSelect__b28bb1" />
+            data-testid="npd-filter-accounting-status" />
         </div>
 
         <div className="npd-filter-field">

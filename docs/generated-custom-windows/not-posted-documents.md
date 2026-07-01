@@ -111,7 +111,7 @@ The "Estado contable" multi-select shows 4 curated options. The values in the dr
 | Invalid Account | `i` | `A12420CC6D4144768EEC57143859EFD6` | |
 | Period Closed | `p` | `D1EAA8BCC3E649C398D4E544282E5292` | |
 
-When no filter is selected (initial load), the handler defaults to all four options — `["N","E","C","i","p"]` — because passing an empty list to `searchAllDocuments(org, emptyList)` returns zero results (the datasource short-circuits on empty status list).
+When no filter is selected (initial load), the handler defaults to all curated keys — `["N","E","C","i","p"]` (the 4 UI options, with "Error" expanded to its 2 underlying keys) — because passing an empty list to `searchAllDocuments(org, emptyList)` returns zero results (the datasource short-circuits on empty status list).
 
 Full reference for all 18 accounting statuses (excluded from UI):
 ```sql
