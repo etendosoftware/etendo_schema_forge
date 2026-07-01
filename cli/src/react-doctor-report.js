@@ -109,8 +109,9 @@ export function buildMarkdownReport(data, iso) {
 }
 
 /** Build the history.csv rows (one per project + an `__average__` row). */
-export function buildCsvRows(projects = [], iso) {
-  const totals = sevCount((projects || []).flatMap((p) => p.diagnostics || []));
+export function buildCsvRows(projects, iso) {
+  projects = projects || [];
+  const totals = sevCount(projects.flatMap((p) => p.diagnostics || []));
   const avgScore = computeAvgScore(projects);
   let csv = '';
   for (const p of projects) {
