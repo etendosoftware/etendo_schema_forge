@@ -15,11 +15,6 @@ export default defineConfig({
     // straight to Node's native loader, which can't parse JSX syntax at all
     // ("Unknown file extension .jsx"). Inlining forces these through Vite's
     // own transform (the react() plugin above) instead.
-    // Both packages ship raw .jsx source (no pre-build step). Vitest's SSR
-    // loader treats node_modules as pre-built by default and hands .jsx
-    // straight to Node's native loader, which can't parse JSX syntax at all
-    // ("Unknown file extension .jsx"). Inlining forces these through Vite's
-    // own transform (the react() plugin above) instead.
     server: {
       deps: {
         inline: ['@etendosoftware/app-shell-core', '@etendosoftware/etendo-go-core'],
