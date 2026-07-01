@@ -128,7 +128,7 @@ export function formatWindowDocReport({ affectedWindows, updatedDocWindows, miss
 
 export function resolveDiffBase(baseSha, headSha, { cwd = ROOT } = {}) {
   if (!baseSha || !headSha) {
-    throw new Error('Usage: node cli/src/check-window-docs.js --base <sha> --head <sha>');
+    throw new Error('Usage: node scripts/check-window-docs.js --base <sha> --head <sha>');
   }
 
   if (/^0+$/.test(baseSha)) {
