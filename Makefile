@@ -1,10 +1,11 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record generate regen dev dev-with-shell dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch switch-to-es switch-to-ar ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record generate regen dev dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
 # --- Testing ---
 
-test: ## Run all unit tests (app-shell + artifacts + vitest)
+test: ## Run all unit tests (CLI data-fixes + app-shell + artifacts + vitest)
+	node --test 'cli/test/*.test.js'
 	node --test 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test 'tools/app-shell/test/*.test.js'
 	node --test 'artifacts/**/__tests__/*.test.js'
@@ -12,6 +13,8 @@ test: ## Run all unit tests (app-shell + artifacts + vitest)
 
 test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@mkdir -p coverage
+	@echo "=== CLI data-fixes tests ==="
+	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info 'cli/test/*.test.js'
 	@echo "=== App-shell Node tests ==="
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info $(shell find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js')
 	@echo "=== App-shell extra tests ==="
@@ -24,11 +27,15 @@ test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 	@echo ""
 	@echo "Coverage reports saved in coverage/"
-	@echo "  Individual: appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
+	@echo "  Individual: cli-lcov.info, appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
 	@echo "  Merged:     merged-lcov.info (used by SonarQube)"
 
 test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 	@mkdir -p test-results
+	node --test \
+	  --test-reporter=spec --test-reporter-destination=stdout \
+	  --test-reporter=junit --test-reporter-destination=test-results/cli.xml \
+	  'cli/test/*.test.js'
 	node --test \
 	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/appshell-node.xml \
@@ -44,6 +51,11 @@ test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 
 test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (CI mode, single pass)
 	@mkdir -p test-results coverage
+	node --test --experimental-test-coverage \
+	  --test-reporter=spec --test-reporter-destination=stdout \
+	  --test-reporter=junit --test-reporter-destination=test-results/cli.xml \
+	  --test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info \
+	  'cli/test/*.test.js'
 	node --test --experimental-test-coverage \
 	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/appshell-node.xml \
@@ -278,14 +290,14 @@ data-fixes: ## Run the tenant data-fixes runner (HELP=1 or `make data-fixes-help
 	if [ -n "$(CLIENT)" ]; then DF_ARGS="$$DF_ARGS --client $(CLIENT)"; fi; \
 	if [ -n "$(FIX)" ]; then DF_ARGS="$$DF_ARGS --fix $(FIX)"; fi; \
 	if [ -n "$(REASON)" ]; then DF_ARGS="$$DF_ARGS --reason \"$(REASON)\""; fi; \
-	eval npx sf-data-fixes $$DF_ARGS
+	eval node cli/src/data-fixes/run.js $$DF_ARGS
 
 data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "Usage: make data-fixes [VAR=value ...]"
 	@echo ""
 	@echo "Applies corrective .sql data-fixes to existing tenants, recording state in the"
 	@echo "System-owned ledger ETGO_DATA_FIX_HISTORY. DB credentials auto-resolve from"
-	@echo "{etendo_root}/gradle.properties (see the installed @etendosoftware/schema-forge-cli's db.js)."
+	@echo "{etendo_root}/gradle.properties (see cli/src/db.js)."
 	@echo ""
 	@echo "Variables:"
 	@echo "  LIST_CLIENTS=1     Read-only overview: each tenant (name+id), last applied fix, # pending/FAILED"
@@ -306,7 +318,7 @@ data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo ""
 	@echo "Notes:"
 	@echo "  - fix_id = the .sql filename without .sql (e.g. 20260611T143000Z__R3-periodcontrol)."
-	@echo "  - Authoring rules + skeleton: node_modules/@etendosoftware/schema-forge-cli/src/data-fixes/sql/README.md."
+	@echo "  - Authoring rules + skeleton: cli/src/data-fixes/sql/README.md."
 	@echo "  - Exit code is non-zero if any tenant's chain halted on a FAILED fix."
 
 sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow in com.etendoerp.go
@@ -314,22 +326,11 @@ sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow
 
 # --- Dev Server ---
 
-dev: ensure-locale ## Start dev server for active locale (make switch LOCALE=ar to change)
-	@if [ "$(LOCALE)" = "ar" ]; then \
-		cd tools/etendo-go-ar/app-shell && npm run dev; \
-	else \
-		cd tools/app-shell && npm run dev; \
-	fi
+dev: ensure-locale ## Start app-shell dev server
+	cd tools/app-shell && npm run dev
 
-dev-with-shell: ## Start app-shell + spike-hello-app together (shell 3100, UI 5173, API 4100)
-	cd tools/spike-hello-app && npm run dev:with-shell
-
-dev-mock: ensure-locale ## Start dev server with mock data for active locale — required for E2E tests
-	@if [ "$(LOCALE)" = "ar" ]; then \
-		cd tools/etendo-go-ar/app-shell && npm run dev:mock; \
-	else \
-		cd tools/app-shell && npm run dev:mock; \
-	fi
+dev-mock: ensure-locale ## Start app-shell dev server with mock data — required for E2E tests
+	cd tools/app-shell && npm run dev:mock
 
 build: ## Build app-shell for production
 	cd tools/app-shell && npm run build
@@ -416,29 +417,12 @@ xml-regeneration-check: ## Compare original module XML vs export.database output
 
 # --- Project Context Switching ---
 # Active locale is tracked in .active-locale (gitignored). Default: es.
-# Usage: make switch-to-ar  |  make switch-to-es  |  make switch LOCALE=ar
-
-LOCALE ?= $(shell cat .active-locale 2>/dev/null || echo es)
+# Usage: make switch-to-es
 
 switch-to-es: ## Switch active locale to Spain (ES)
 	@cp tools/app-shell/.env.es tools/app-shell/.env.local
 	@echo es > .active-locale
 	@echo "Active locale: ES (Spain) — com.etendoerp.go"
-
-switch-to-ar: ## Switch active locale to Argentina (AR)
-	@cp tools/etendo-go-ar/app-shell/.env.ar tools/etendo-go-ar/app-shell/.env.local
-	@echo ar > .active-locale
-	@echo "Active locale: AR (Argentina) — com.etendoerp.go.ar"
-
-switch: ## Switch active locale — LOCALE=es (default) | LOCALE=ar
-	@if [ "$(LOCALE)" = "es" ]; then \
-		$(MAKE) switch-to-es --no-print-directory; \
-	elif [ "$(LOCALE)" = "ar" ]; then \
-		$(MAKE) switch-to-ar --no-print-directory; \
-	else \
-		echo "Unknown locale '$(LOCALE)'. Use LOCALE=es or LOCALE=ar."; \
-		exit 1; \
-	fi
 
 ensure-locale: ## Bootstrap ES locale if .active-locale does not exist (called automatically)
 	@if [ ! -f .active-locale ]; then \
@@ -446,15 +430,9 @@ ensure-locale: ## Bootstrap ES locale if .active-locale does not exist (called a
 	fi
 
 project-status: ## Show active locale and module ID
-	@LOCALE=$$(cat .active-locale 2>/dev/null || echo es); \
-	echo "Active locale : $$LOCALE"; \
-	if [ "$$LOCALE" = "es" ]; then \
-		echo "Module        : com.etendoerp.go (Spain)"; \
-		grep -s SF_MODULE_ID tools/app-shell/.env.local || echo "  .env.local missing — run: make switch-to-es"; \
-	elif [ "$$LOCALE" = "ar" ]; then \
-		echo "Module        : com.etendoerp.go.ar (Argentina)"; \
-		grep -s SF_MODULE_ID tools/etendo-go-ar/app-shell/.env.local || echo "  .env.local missing — run: make switch-to-ar"; \
-	fi
+	@echo "Active locale : es"; \
+	echo "Module        : com.etendoerp.go (Spain)"; \
+	grep -s SF_MODULE_ID tools/app-shell/.env.local || echo "  .env.local missing — run: make switch-to-es"
 
 # --- Cleanup ---
 
