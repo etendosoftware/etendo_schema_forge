@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
 import { toast } from 'sonner';
 
 import NotPostedDocumentsPage from '../NotPostedDocumentsPage.jsx';
@@ -58,6 +58,35 @@ describe('NotPostedDocumentsPage', () => {
     render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
     await waitFor(() => expect(screen.getByTestId('npd-filter-document-type')).toBeInTheDocument());
     expect(screen.getByTestId('npd-filter-apply')).toBeInTheDocument();
+  });
+
+  // Regression: MultiSelect used to drop unknown props, so data-testid never
+  // reached the DOM and the accounting-status filter was unqueryable in tests
+  // (and by any consumer relying on it).
+  it('renders the accounting status MultiSelect with its data-testid and supports toggling an option', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (url.includes('_mode=filter-options')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            documentTypes: [],
+            accountingStatuses: [{ value: 'N', label: 'Unposted' }],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
+    });
+
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+
+    const multiSelect = await waitFor(() => screen.getByTestId('npd-filter-accounting-status'));
+    expect(multiSelect).toBeInTheDocument();
+
+    const trigger = within(multiSelect).getByRole('button');
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByText('Unposted'));
+
+    expect(trigger).toHaveTextContent('Unposted');
   });
 
   it('shows empty state when no rows returned', async () => {
