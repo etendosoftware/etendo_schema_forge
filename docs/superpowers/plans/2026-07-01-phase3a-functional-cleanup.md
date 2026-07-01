@@ -170,7 +170,7 @@ test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@echo "=== Vitest (React components) ==="
 	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
-	npx lcov-result-merger 'coverage/*-lcov.info' coverage/merged-lcov.info
+	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 	@echo ""
 	@echo "Coverage reports saved in coverage/"
 	@echo "  Individual: appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
@@ -209,10 +209,10 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	  --outputFile=../../test-results/vitest.xml \
 	  && cp coverage/lcov.info ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
-	npx lcov-result-merger 'coverage/*-lcov.info' coverage/merged-lcov.info
+	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 ```
 
-(Note the `--coverage.reporter=lcov` flag on both vitest invocations — Phase 2 discovered vitest's default coverage reporters don't include `lcov.info`, which `lcov-result-merger` needs. Apply the same fix here proactively rather than rediscovering it via a failed push.)
+(Note the `--coverage.reporter=lcov` flag on both vitest invocations — Phase 2 discovered vitest's default coverage reporters don't include `lcov.info`, which the local `scripts/merge-lcov.js` merger needs. Apply the same fix here proactively rather than rediscovering it via a failed push.)
 
 - [ ] **Step 3: Run a syntax/dry-run check on the Makefile before running anything for real**
 
