@@ -5,6 +5,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+// Absolute path to the npx that ships alongside the running node binary, so the
+// command is NOT resolved through PATH. On Windows npx is npx.cmd.
+const NPX_BIN = path.join(
+  path.dirname(process.execPath),
+  process.platform === 'win32' ? 'npx.cmd' : 'npx'
+);
 const ROOT = path.resolve(HERE, '../..');
 const OUT_DIR = path.join(ROOT, 'reports', 'react-doctor');
 mkdirSync(OUT_DIR, { recursive: true });
@@ -16,9 +22,9 @@ const stamp = iso.replace(/[:.]/g, '-').slice(0, 19);
 console.log('Running react-doctor on all workspaces (this may take ~1 min)...');
 let raw;
 try {
-  // Invoke npx directly (no shell) with a fixed argument list — avoids shell
-  // interpretation of a command string. Arguments are constants, not user input.
-  raw = execFileSync('npx', ['--yes', 'react-doctor@latest', '-y', '--json', '--offline'], {
+  // Invoke npx by absolute path (no shell, no PATH lookup) with a fixed argument
+  // list — arguments are constants, not user input.
+  raw = execFileSync(NPX_BIN, ['--yes', 'react-doctor@latest', '-y', '--json', '--offline'], {
     cwd: ROOT,
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
