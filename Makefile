@@ -122,16 +122,18 @@ SKIP_EXTRACT ?= 0
 CACHE_DB ?= 0
 FROM_CACHE ?= 0
 ONLY ?=
+SF_CACHE_PATH ?= cli/cache/ad-snapshot.json
 
 regen: ## Re-run full pipeline for all active windows (HELP=1 or `make regen-help` for options)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s regen-help; exit 0; fi; \
 	REGEN_ARGS=""; \
+	CACHE_ENV=""; \
 	if [ "$(PUSH_TO_NEO)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --push-to-neo"; fi; \
 	if [ "$(SKIP_EXTRACT)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --skip-extract"; fi; \
 	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --write-cache"; fi; \
-	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --from-cache"; fi; \
+	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	if [ -n "$(ONLY)" ]; then REGEN_ARGS="$$REGEN_ARGS --only $(ONLY)"; fi; \
-	npx sf-regen-all $$REGEN_ARGS
+	env $$CACHE_ENV npx sf-regen-all $$REGEN_ARGS
 
 regen-help: ## Show usage and examples for `make regen`
 	@echo "Usage: make regen [VAR=value ...]"
@@ -140,8 +142,8 @@ regen-help: ## Show usage and examples for `make regen`
 	@echo "  ONLY=<spec>[,<spec>...]   Run only the given window spec(s) (kebab-case, matches artifacts/<spec>/)"
 	@echo "  PUSH_TO_NEO=1             Push the resulting config to NEO Headless after regenerating"
 	@echo "  SKIP_EXTRACT=1            Skip the DB extraction step (reuse existing schema-raw.json)"
-	@echo "  CACHE_DB=1                Run against DB and refresh cli/cache/ad-snapshot.json (commit the diff)"
-	@echo "  FROM_CACHE=1              Run extractors offline using cli/cache/ad-snapshot.json (no DB needed)"
+	@echo "  CACHE_DB=1                Run against DB and refresh $(SF_CACHE_PATH) (commit the diff)"
+	@echo "  FROM_CACHE=1              Run extractors offline using $(SF_CACHE_PATH) (no DB needed)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make regen                                # all active windows"
@@ -170,8 +172,8 @@ dump-delta: ## Dump the writes push-to-neo WOULD make for ONLY=<spec> (no DB wri
 	DELTA_ARGS=""; \
 	if [ -n "$(PREV_XML_DIR)" ]; then DELTA_ARGS="$$DELTA_ARGS --prev-xml-dir $(PREV_XML_DIR)"; fi; \
 	CACHE_ENV=""; \
-	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read"; fi; \
-	if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write"; fi; \
+	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	env $$CACHE_ENV npx sf-push-neo $(ONLY) --dump-delta artifacts/$(ONLY)/neo-delta.json $$DELTA_ARGS
 
 # --- Offline Regeneration Check (Slice 3) ---
@@ -200,8 +202,9 @@ process.stdout.write(r.windows.filter(w=>{\
 	fi; \
 	REGEN_ARGS="--only $$SPECS --skip-extract"; \
 	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="--only $$SPECS --write-cache"; fi; \
-	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="--only $$SPECS --from-cache"; fi; \
-	npx sf-regen-all $$REGEN_ARGS || exit $$?; \
+	CACHE_ENV=""; \
+	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="--only $$SPECS"; CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	env $$CACHE_ENV npx sf-regen-all $$REGEN_ARGS || exit $$?; \
 	FAIL=0; TOTAL_OK=0; TOTAL_FAIL=0; \
 	for spec in $$(echo "$$SPECS" | tr ',' ' '); do \
 	  OUTDIR="$(REGEN_CHECK_OUT_ROOT)/$$spec"; \
@@ -209,8 +212,8 @@ process.stdout.write(r.windows.filter(w=>{\
 	  echo ""; \
 	  echo "=== regen-check: $$spec ==="; \
 	  CACHE_ENV=""; \
-	  if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read"; fi; \
-	  if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write"; fi; \
+	  if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	  if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	  env $$CACHE_ENV npx sf-push-neo $$spec \
 	    --dump-delta "$$OUTDIR/neo-delta.json" \
 	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" || { FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); continue; }; \
@@ -238,7 +241,7 @@ regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo ""
 	@echo "Variables:"
 	@echo "  ONLY=<spec>[,<spec>...]      Comma-separated window specs (kebab-case)"
-	@echo "  FROM_CACHE=1                 Run the full check offline from cli/cache/ad-snapshot.json"
+	@echo "  FROM_CACHE=1                 Run the full check offline from $(SF_CACHE_PATH)"
 	@echo "  CACHE_DB=1                   Refresh cache from DB during the regen step (writes snapshot)"
 	@echo "  REGEN_CHECK_PREV_XML_DIR     Path to committed ETGO_SF_*.xml directory"
 	@echo "                               (default: ../modules/com.etendoerp.go/src-db/database/sourcedata)"
@@ -253,7 +256,7 @@ regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo "  - Windows only (specType=W). Process/report specs are NOT supported yet."
 	@echo "  - Exit code 0 = no drift, non-zero = drift or pipeline error."
 	@echo "  - Outputs are under tmp/regen-check/<spec>/ (gitignored)."
-	@echo "  - To refresh the AD cache when AD changes: make regen ONLY=<spec> CACHE_DB=1, then commit cli/cache/ad-snapshot.json."
+	@echo "  - To refresh the AD cache when AD changes: make regen ONLY=<spec> CACHE_DB=1, then commit $(SF_CACHE_PATH)."
 
 regen-check-clean: ## Remove tmp/regen-check/ outputs
 	rm -rf $(REGEN_CHECK_OUT_ROOT)

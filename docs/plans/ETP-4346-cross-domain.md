@@ -83,6 +83,9 @@ artifact tests, CI, and operational scripts had to be rewired in the same PR.
 - Local `cli/` and generic `packages/*` workspaces are removed from this
   functional repo. Their history and ongoing development continue in
   `schema_forge_core`; this repo consumes the published package outputs.
+- `cli/cache/ad-snapshot.json` remains in this functional repo because it is the
+  committed offline AD data snapshot used by `make regen-check FROM_CACHE=1`;
+  the executable cache reader now comes from the installed CLI package.
 - `core-maps/system-columns.json`, `core-maps/ad-reference-map.json`, and
   `core-maps/impact-messages.json` move with the core tooling. The functional
   live DB menu cache remains here.
