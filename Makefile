@@ -1,5 +1,7 @@
 .PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record generate regen dev dev-with-shell dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch switch-to-es switch-to-ar ensure-locale project-status
 
+export SF_ROOT := $(CURDIR)
+
 # --- Testing ---
 
 test: ## Run all unit tests (app-shell + artifacts + vitest)

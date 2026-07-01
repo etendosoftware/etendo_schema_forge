@@ -6,10 +6,6 @@ on:
     paths:
       - 'artifacts/**'
       - 'tools/app-shell/src/windows/registry.js'
-      - 'cli/src/generate-**'
-      - 'cli/src/resolve-**'
-      - 'cli/src/push-**'
-      - 'cli/src/validate-pipeline.js'
       - '.github/workflows/pipeline-validate.yml'
   push:
     branches: [main]
@@ -17,6 +13,8 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      SF_ROOT: ${{ github.workspace }}
     permissions:
       contents: read
       pull-requests: write
@@ -68,11 +66,11 @@ jobs:
         shell: bash
         run: |
           if [[ -n "${{ steps.scope.outputs.changed_since }}" ]]; then
-            node cli/src/validate-pipeline.js \
+            npx sf-validate-pipeline \
               --changed-since="${{ steps.scope.outputs.changed_since }}" \
               --format=json | tee validation.json
           else
-            node cli/src/validate-pipeline.js --format=json | tee validation.json
+            npx sf-validate-pipeline --format=json | tee validation.json
           fi
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
