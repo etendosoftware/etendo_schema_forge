@@ -49,17 +49,18 @@ So `etendo_schema_forge` ends up depending on three packages published from `sch
 
 - `cli/` in full — extractors, generators, pipeline, validators (`extract-from-db.js`, `generate-contract.js`, `generate-frontend.js`, `resolve-curated.js`, `push-to-neo.js`, `validate-pipeline.js`, etc.)
 - `packages/*` — `app-shell-core`, `schema-forge-core`, `schema-forge-stack`, `schema-forge-agent-context`, `apps-sdk`, `apps-sdk-bff`, `etendo-go-core`
-- `tools/app-shell` generic shell only — providers, layout, build config, registry *loader* — no window-specific registry entries or custom component folders
 - `tools/quick-order-app`, `tools/report-server`, `tools/decision-panel`, `tools/etendo-go-ar`, `tools/ui-preview`, `tools/spike-hello-app`
-- Generic docs (`architecture-overview.md`, `decisions-reference.md`, `pipeline-validator-reference.md`, `ui-customization.md`, `window-templates.md`, `e2e-testing-guide.md`, `conventions.md`, etc.)
+- Generic docs (`architecture-overview.md`, `decisions-reference.md`, `pipeline-validator-reference.md`, `ui-customization.md`, `window-templates.md`, `conventions.md`, etc.)
 - `scripts/`, `Makefile`, `schemas/`, `templates/`, generator-level tests, CI for `cli/`/`packages/*`
+
+**Corrected after Phase 0 landed:** `tools/app-shell` does **not** split — it moves *wholesale* to `etendo_schema_forge`, listed below. The App Shell Composition Spike (implemented in Tasks 1-3 of `docs/superpowers/plans/2026-06-30-app-shell-runtime-composition.md`, reviewed and merged) found `App.jsx`/`AppLayout`/the ~23 business pages/`WindowLoader`/`registry.js` are all product-specific, not generic shell — nothing from `tools/app-shell` ended up moving into `packages/app-shell-core`. Only `packages/app-shell-core` (already its own directory) goes to core; it gained two new extension points (`children`, `layout`) so `tools/app-shell` can consume it via a normal npm dependency instead of a copy step. `e2e-testing-guide.md` moves with `e2e/` to functional, below — it documents that package's own conventions, not a generic capability.
 
 ### `etendo_schema_forge` keeps (generated windows and their derivatives)
 
 - `artifacts/<window>/**` in full — `schema-raw.json`, `rules-raw.json`, `decisions.json`, `contract.json`, `contract.mcp.json`, `contract-changelog.json`, `generated/web/<window>/**`
 - `docs/generated-custom-windows/**` (including `INDEX.md`)
-- `tools/app-shell/src/windows/custom/<window>/**` and the per-window registry overlay/entries
-- `e2e/tests/flows/*` specific to a window
+- `tools/app-shell` in full — `App.jsx`, `AppLayout`, all pages, `WindowLoader`, `registry.js`, `runtime-routes.jsx`, `src/windows/custom/<window>/**`, build config, everything (see correction above)
+- `e2e/` in full — harness (`playwright.config.js`, `tests/helpers/*`, `tests/smoke.spec.js`) and all `tests/flows/*.spec.js` (see Disposition Table below — nothing to click through in `schema_forge_core`, so the harness moves with the specs, not with the tooling)
 - `docs/etendo-ad/**`
 - Adds `@etendosoftware/schema-forge-cli` as a real published dependency (replacing today's workspace-linked `cli/`), and upgrades its existing `@etendosoftware/app-shell-core` dependency to the version that ships the registry-injection API (see App Shell Composition Spike)
 
@@ -67,7 +68,7 @@ So `etendo_schema_forge` ends up depending on three packages published from `sch
 
 1. Create the empty GitHub repo `etendosoftware/schema_forge_core`.
 2. `git clone --mirror` the current `etendo_schema_forge` and `push --mirror` it into the new repo. Both repos now share byte-identical history.
-3. In `schema_forge_core`, on a feature branch: one cleanup PR that removes everything functional (`artifacts/`, `docs/generated-custom-windows`, `tools/app-shell/src/windows/custom/*`, per-window e2e specs, `docs/etendo-ad`). Merge.
+3. In `schema_forge_core`, on a feature branch: one cleanup PR that removes everything functional (`artifacts/`, `docs/generated-custom-windows`, `tools/app-shell` in full, `e2e/` in full, `docs/etendo-ad`, plus everything else the Disposition Table below assigns to `etendo_schema_forge` or marks out-of-scope). Merge.
 4. In `etendo_schema_forge`, on a feature branch: one cleanup PR that removes everything core (`cli/`, the `packages/*` listed above, the generic tools listed above, generic docs/scripts/Makefile that belong to the tool), wires the real dependency on the published `@etendosoftware/schema-forge-cli`, and rewrites `Makefile` targets to call the installed `bin` commands instead of `node cli/src/*.js` paths. Merge.
 5. Publish `schema_forge_core`'s packages (`@etendosoftware/schema-forge-cli`, `@etendosoftware/app-shell-core`, `@etendosoftware/schema-forge-core`) to GitHub Packages (`npm.pkg.github.com`) so step 4's dependency resolves against a real published version, not a local workspace symlink.
 6. Split CI: `cli/`/`packages/*` tests and the publish workflow live in `schema_forge_core`'s CI. `pipeline-validate` and per-window tests live in `etendo_schema_forge`'s CI, invoking the installed `@etendosoftware/schema-forge-cli` bin commands instead of local script paths.
