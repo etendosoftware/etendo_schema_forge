@@ -8,6 +8,8 @@ function makeProvider(name = 'test', overrides = {}) {
     track: vi.fn().mockResolvedValue(undefined),
     page: vi.fn().mockResolvedValue(undefined),
     identify: vi.fn().mockResolvedValue(undefined),
+    group: vi.fn().mockResolvedValue(undefined),
+    groupSet: vi.fn().mockResolvedValue(undefined),
     captureException: vi.fn().mockResolvedValue(undefined),
     flush: vi.fn().mockResolvedValue(undefined),
     setContext: vi.fn().mockResolvedValue(undefined),
@@ -156,6 +158,113 @@ describe('identify', () => {
     await obs.initObservability({ providers: [p] });
     await obs.identify('');
     expect(p.identify).not.toHaveBeenCalled();
+  });
+});
+
+describe('group', () => {
+  it('calls provider.group with key, id, traits, and context', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p], context: { locale: 'es' } });
+    await obs.group('account_id', 'client-1', { tier: 'gold' });
+    expect(p.group).toHaveBeenCalledWith(
+      'account_id',
+      'client-1',
+      { tier: 'gold' },
+      expect.objectContaining({ context: expect.objectContaining({ locale: 'es' }) }),
+    );
+  });
+
+  it('defaults traits to an empty object when omitted', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.group('account_id', 'client-1');
+    expect(p.group).toHaveBeenCalledWith('account_id', 'client-1', {}, expect.any(Object));
+  });
+
+  it('does nothing before init', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.group('account_id', 'client-1');
+    expect(p.group).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when groupKey is missing', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.group('', 'client-1');
+    expect(p.group).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when groupId is missing', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.group('account_id', '');
+    expect(p.group).not.toHaveBeenCalled();
+  });
+
+  it('swallows a provider.group failure (Promise.all rejection handled by callProvider)', async () => {
+    const logger = { warn: vi.fn() };
+    const obs = createObservability({ logger });
+    const p = makeProvider('broken', { group: vi.fn().mockRejectedValue(new Error('boom')) });
+    await obs.initObservability({ providers: [p], logger });
+    await expect(obs.group('account_id', 'client-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('groupSet', () => {
+  it('calls provider.groupSet with key, id, properties, and context', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p], context: { locale: 'es' } });
+    await obs.groupSet('account_id', 'client-1', { $name: 'Acme' });
+    expect(p.groupSet).toHaveBeenCalledWith(
+      'account_id',
+      'client-1',
+      { $name: 'Acme' },
+      expect.objectContaining({ context: expect.objectContaining({ locale: 'es' }) }),
+    );
+  });
+
+  it('defaults properties to an empty object when omitted', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.groupSet('account_id', 'client-1');
+    expect(p.groupSet).toHaveBeenCalledWith('account_id', 'client-1', {}, expect.any(Object));
+  });
+
+  it('does nothing before init', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.groupSet('account_id', 'client-1', { $name: 'Acme' });
+    expect(p.groupSet).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when groupKey is missing', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.groupSet('', 'client-1', {});
+    expect(p.groupSet).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when groupId is missing', async () => {
+    const obs = createObservability();
+    const p = makeProvider();
+    await obs.initObservability({ providers: [p] });
+    await obs.groupSet('account_id', '', {});
+    expect(p.groupSet).not.toHaveBeenCalled();
+  });
+
+  it('tolerates a rejecting provider via Promise.allSettled', async () => {
+    const obs = createObservability({ logger: { warn: vi.fn() } });
+    const p = makeProvider('broken', { groupSet: vi.fn().mockRejectedValue(new Error('boom')) });
+    await obs.initObservability({ providers: [p] });
+    await expect(obs.groupSet('account_id', 'client-1', { $name: 'x' })).resolves.toBeUndefined();
   });
 });
 
