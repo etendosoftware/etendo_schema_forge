@@ -19,7 +19,7 @@ test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@echo "=== Artifact custom tests ==="
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info $(shell find artifacts -path '*/__tests__/*.test.js')
 	@echo "=== Vitest (React components) ==="
-	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/lcov.info > ../../coverage/vitest-lcov.info
+	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
 	npx lcov-result-merger 'coverage/*-lcov.info' coverage/merged-lcov.info
 	@echo ""
@@ -58,7 +58,7 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov \
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml \
-	  && cp coverage/lcov.info ../../coverage/vitest-lcov.info
+	  && cp coverage/vitest/lcov.info ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
 	npx lcov-result-merger 'coverage/*-lcov.info' coverage/merged-lcov.info
 
