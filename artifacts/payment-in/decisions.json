@@ -3,64 +3,73 @@
   "window": {
     "category": "finance",
     "name": "Payment In",
-    "salesTheme": true,
-    "documentPreview": {
-      "titlePrefix": "Payment"
-    },
+    "salesTheme": false,
     "relatedDocuments": true,
     "notesField": "description",
     "customComponents": {
       "headerTable": "PaymentHeaderTable",
       "sidePanel": "PaymentDetailSidebar",
       "bottomSection": "PaymentBottomPanel",
-      "topbarRight": "PaymentActivityToggle",
-      "newRecordComponent": "NewPaymentModal"
+      "newRecordComponent": "NewPaymentModal",
+      "processConfirmModal": "ReactivarConfirmModal",
+      "topbarRight": "PaymentConciliadoBadge",
+      "sidePanelStyle": {
+        "order": -1,
+        "borderLeft": "none",
+        "borderRight": "1px solid #E8EAEF",
+        "padding": 0
+      }
     },
-    "attachments": true,
+    "contentAreaClassName": "!bg-[#FAFAFB] !p-0",
+    "attachments": false,
     "detailEntity": null,
     "hideDeleteWhenComplete": true,
     "customTabsAfterBottom": true,
     "summaryFields": [],
-    "menuActions": [
-      {
-        "key": "reverse",
-        "label": "Reverse Payment",
-        "destructive": true,
-        "visibleWhenStatus": [
-          "RPPC",
-          "RPR",
-          "RDNC"
-        ],
-        "columnName": "aPRMReversePayment"
-      }
-    ],
     "processOverrides": {
       "aPRMProcessPayment": {
+        "label": "processConfirm",
+        "displayLogicRaw": "@status@ = 'RPAP'"
+      },
+      "aPRMAddScheduledpayments": { "exclude": true },
+      "aprmExecutepayment": { "exclude": true },
+      "aPRMReversePayment": { "exclude": true },
+      "aPRMReconcilePayment": { "exclude": true },
+      "etprReactivatePayment": {
         "add": true,
-        "label": "Process Payment",
-        "style": "positive",
-        "columnName": "aPRMProcessPayment",
-        "displayLogicRaw": "@status@='RPAP'"
-      },
-      "aPRMAddScheduledpayments": {
-        "exclude": true
-      },
-      "aprmExecutepayment": {
-        "exclude": true
-      },
-      "aPRMReversePayment": {
-        "exclude": true
-      },
-      "aPRMReconcilePayment": {
-        "exclude": true
+        "columnName": "etprReactivatePayment",
+        "label": "processReactivate",
+        "style": "ghost-danger",
+        "displayLogicRaw": "@status@ != 'RPAP'"
       }
     },
-    "dateFilterKey": "paymentDate"
+    "dateFilterKey": "paymentDate",
+    "hideCreate": true,
+    "hideFormCard": true,
+    "hidePrint": true,
+    "hideSaveStatuses": [
+      "RDNC",
+      "RPPC",
+      "RPR",
+      "RPVOID",
+      "PWNC"
+    ],
+    "statusEnumLabels": {
+      "RPAP": "statusDraft",
+      "RPR": "cobroDepositado",
+      "RDNC": "cobroDepositado",
+      "RPPC": "cobroDepositado",
+      "PPM": "cobroDepositado",
+      "PWNC": "cobroDepositado"
+    },
+    "statusFieldLabel": "statusColumnLabel",
+    "toolbarBorderBottom": true
   },
   "entities": {
     "header": {
       "name": "finPayment",
       "formCols": 3,
+      "javaQualifier": "payment-reactivate",
       "fields": {
         "documentNo": {
           "visibility": "readOnly",
@@ -181,7 +190,8 @@
           "visibility": "discarded"
         },
         "aPRMProcessPayment": {
-          "visibility": "discarded"
+          "visibility": "editable",
+          "form": false
         },
         "aprmExecutepayment": {
           "visibility": "discarded"
@@ -203,14 +213,47 @@
         },
         "ndDimension": {
           "visibility": "discarded"
+        },
+        "creationDate": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "updated": {
+          "visibility": "readOnly",
+          "form": false
+        },
+        "etblkpAccountingstatus": {
+          "form": false
+        },
+        "etblkpBulkposting": {
+          "form": false
+        },
+        "etprReactivatePayment": {
+          "form": false
+        },
+        "eTPRRemovePayment": {
+          "form": false
         }
       }
     },
     "lines": {
       "name": "finPaymentScheduleDetail",
+      "javaQualifier": "paymentScheduleDetailHandler",
+      "virtualFields": [
+        {
+          "name": "invoiceDocumentNo",
+          "column": "invoiceDocumentNo",
+          "label": "Invoice",
+          "type": "string",
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 1
+        }
+      ],
       "fields": {
         "invoicePaymentSchedule": {
-          "grid": true
+          "grid": false
         },
         "amount": {
           "grid": true,
@@ -261,7 +304,8 @@
           "visibility": "discarded"
         },
         "expected": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false
         },
         "invoiceAmount": {
           "visibility": "discarded"

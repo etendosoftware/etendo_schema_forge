@@ -11,7 +11,7 @@ export function getStatusTone(status) {
     s === 'paid' || s === 'true' || s === 'processed'
   ) return 'success';
   if (
-    s === 'ip' || s === 'ue' || s === 'rpae' || s === 'rpap' || s === 'rpr' ||
+    s === 'ip' || s === 'ue' || s === 'rpae' || s === 'rpr' ||
     s === 'in process' || s === 'under evaluation'
   ) return 'warning';
   if (
@@ -45,8 +45,11 @@ export function getStatusBadgeProps(status) {
   if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') {
     return { variant: 'destructive' };
   }
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpap' || s === 'rpr') {
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') {
     return { variant: 'outline', className: 'border-amber-300 bg-amber-50 text-amber-700' };
+  }
+  if (s === 'rpap') {
+    return { variant: 'outline', className: 'border-gray-200 bg-gray-50 text-gray-600' };
   }
   if (s === 'under evaluation' || s === 'ue') {
     return { variant: 'outline', className: 'border-purple-300 bg-purple-50 text-purple-700' };
@@ -62,7 +65,8 @@ export function getStatusDotColor(status) {
   if (s === 'completed' || s === 'complete' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-emerald-500';
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-blue-500';
   if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-red-500';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpap' || s === 'rpr') return 'bg-amber-400';
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-amber-400';
+  if (s === 'rpap') return 'bg-gray-400';
   if (s === 'under evaluation' || s === 'ue') return 'bg-purple-500';
   return 'bg-gray-400';
 }
@@ -75,7 +79,8 @@ export function getStatusPillClass(status) {
   if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-emerald-50 text-emerald-800';
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-blue-50 text-blue-800';
   if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-red-50 text-red-800';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpap' || s === 'rpr') return 'bg-amber-50 text-amber-800';
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-amber-50 text-amber-800';
+  if (s === 'rpap') return 'bg-gray-100 text-gray-700';
   if (s === 'under evaluation' || s === 'ue') return 'bg-purple-50 text-purple-800';
   return 'bg-gray-100 text-gray-700';
 }
@@ -88,7 +93,8 @@ export function getStatusGridPillClass(status) {
   if (s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' || s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'rppc' || s === 'ppm' || s === 'pwnc' || s === 'rdnc') return 'bg-emerald-500 text-white';
   if (s === 'closed' || s === 'cl' || s === 'paid' || s === 'pa') return 'bg-slate-500 text-white';
   if (s === 'voided' || s === 'cancelled' || s === 'void' || s === 'vo' || s === 'cj' || s === 'rejected' || s === 'rpvoid') return 'bg-red-500 text-white';
-  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpap' || s === 'rpr') return 'bg-amber-500 text-white';
+  if (s === 'in process' || s === 'ip' || s === 'rpae' || s === 'rpr') return 'bg-amber-500 text-white';
+  if (s === 'rpap') return 'bg-gray-100 text-gray-600 border border-gray-300';
   if (s === 'under evaluation' || s === 'ue') return 'bg-purple-500 text-white';
   return 'bg-gray-100 text-gray-600 border border-gray-300';
 }

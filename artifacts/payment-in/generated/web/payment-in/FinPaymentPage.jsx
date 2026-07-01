@@ -1,12 +1,17 @@
+import { useState, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import FinPaymentTable from '../../../custom/PaymentHeaderTable';
 import FinPaymentForm from './FinPaymentForm';
-import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
+import RelatedDocuments from '../../../custom/RelatedDocuments';
+import PaymentBottomPanel from '../../../custom/PaymentBottomPanel';
+import PaymentConciliadoBadge from '../../../custom/PaymentConciliadoBadge';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
+import NewPaymentModal from '../../../custom/NewPaymentModal';
+import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finanzas / Cobro';
+const breadcrumb = 'Finance / Payment In';
 
 
 // @sf-generated-start summary:finPayment
@@ -19,20 +24,16 @@ const statusField = 'status';
 
 // @sf-generated-start extraBadges:finPayment
 const extraBadges = [
-  { key: 'conciliado', labelKey: 'conciliado', field: 'reconciled', condition: (data) => data?.reconciled === 'Y', style: 'info' },
+
 ];
 // @sf-generated-end extraBadges:finPayment
 
 // @sf-generated-start processes:finPayment
 const processes = [
-  { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
-    displayLogicRaw: "@Status@!'RPAE' & @Status@!'RPVOID' & @Processed@='Y' & @#ShowAcct@='Y'" },
-  { name: 'etprReactivatePayment', label: 'Advanced Reactivation', style: 'positive',
-    displayLogicRaw: "@Processed@='Y' & @Status@!'RPVOID'" },
-  { name: 'eTPRRemovePayment', label: 'Remove Payment', style: 'positive',
-    displayLogicRaw: "@Processed@='Y' & @Status@!'RPVOID'" },
-  { name: 'aPRMProcessPayment', label: 'Process Payment', style: 'positive', columnName: 'aPRMProcessPayment',
-    displayLogicRaw: "@status@='RPAP'" },
+  { name: 'Payment Process', label: 'processConfirm', style: 'positive', columnName: 'aPRMProcessPayment',
+    displayLogicRaw: "@status@ = 'RPAP'" },
+  { name: 'etprReactivatePayment', label: 'processReactivate', style: 'ghost-danger', columnName: 'etprReactivatePayment',
+    displayLogicRaw: "@status@ != 'RPAP'" },
 ];
 // @sf-generated-end processes:finPayment
 
@@ -192,6 +193,14 @@ export const api = {
     },
     {
       "entity": "finPayment",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/payment-in/finPayment/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "finPayment",
       "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
       "url": "/sws/neo/payment-in/finPayment/{id}/action/etblkpBulkposting",
@@ -233,21 +242,9 @@ export const api = {
   }
 };
 
-function DirBadge({ data }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: '#DDFAEB', flexShrink: 0 }}>
-        <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#17663A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 5v14M5 12l7 7 7-7"/>
-        </svg>
-      </span>
-      <span style={{ font: '700 15px/20px Inter', color: '#19191D' }}>{data?.documentNo}</span>
-    </span>
-  );
-}
-
 // @sf-generated-start component:FinPaymentPage
 export default function FinPaymentPage({ windowName, recordId, ...props }) {
+  const [showNewModal, setShowNewModal] = useState(false);
   if (recordId) {
     return (
       <>
@@ -257,26 +254,28 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
-        processes={[
-          { name: 'etprReactivatePayment', label: 'Reactivar', style: 'danger',
-            displayLogicRaw: "@Processed@='Y' & @Status@!'RPVOID'" },
-        ]}
+        processes={processes}
         catalogs={catalogs}
         entityLabel="Fin Payment"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
-        api={api}
+      api={api}
         hideDeleteWhenComplete
-        noHeaderBorder
-        formCardPadding="p-0"
-        topbarExtra={DirBadge}
-        topbarRight={PaymentActivityToggle}
+        customTabsAfterBottom
+        hidePrint
+        hideSaveStatuses={["RDNC","RPPC","RPR","RPVOID","PWNC"]}
+        toolbarBorderBottom
+        hideFormCard
+        notesField="description"
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }]}
+        bottomSection={PaymentBottomPanel}
+        topbarRight={PaymentConciliadoBadge}
         sidePanel={PaymentDetailSidebar}
-        menuActions={({ status }) => [
-          { key: 'reverse', label: 'Reverse Payment', destructive: true, visible: ["RPPC","RPR","RDNC"].includes(status), columnName: 'aPRMReversePayment' }
-        ]}
-        requiredHeaderFields={requiredHeaderFields}
+        sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid #E8EAEF","padding":0}}
+        processConfirmModal={ReactivarConfirmModal}
+        statusEnumLabels={{"RPAP":"statusDraft","RPR":"cobroDepositado","RDNC":"cobroDepositado","RPPC":"cobroDepositado","PPM":"cobroDepositado","PWNC":"cobroDepositado"}}
+        statusFieldLabel="statusColumnLabel"
         sendDocument
         {...props}
       />
@@ -285,6 +284,7 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
   }
 
   return (
+    <>
     <ListView
       entity="finPayment"
       Table={FinPaymentTable}
@@ -293,10 +293,15 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="paymentDate"
+      hidePrint
+      hideCreate
       rowQuickActions={{}}
       sendDocument
       {...props}
+      onNew={() => setShowNewModal(true)}
     />
+    {showNewModal && <NewPaymentModal token={props.token} apiBaseUrl={props.apiBaseUrl} windowName={windowName} onClose={() => setShowNewModal(false)} />}
+    </>
   );
 }
 // @sf-generated-end component:FinPaymentPage

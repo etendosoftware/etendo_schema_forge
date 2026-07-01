@@ -8,66 +8,77 @@ function fmtAmt(val) {
   return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' €';
 }
 
-const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM']);
+const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
 
 function fmtDate(raw) {
   if (!raw) return '';
   const str = String(raw);
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
-  const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(raw);
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}:\d{2}))?/.exec(str);
+  if (!m) return '';
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) +
+    (m[4] ? ` · ${m[4]}` : '');
 }
 
-function StateTag({ status, dir, ui }) {
-  const isDeposited = PAID_STATUSES.has(status);
-  if (isDeposited) {
-    return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, padding: '2px 10px', borderRadius: 6, background: '#E2F7EA', color: '#17663A' }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2DCA72', flexShrink: 0 }} />
-        {ui(dir === 'in' ? 'cobroDepositado' : 'pagoDepositado')}
-      </span>
-    );
-  }
+function Separator() {
+  return <div style={{ height: 0, border: '1px solid rgba(18,18,23,0.05)', alignSelf: 'stretch' }} />;
+}
+
+function BreakdownRow({ label, value, muted }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, padding: '2px 10px', borderRadius: 6, background: '#F1F2F4', color: '#55556D' }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#A9A9BC', flexShrink: 0 }} />
-      {ui('statusDraft')}
-    </span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span style={{ font: '400 12px/16px Inter', color: '#555B6D' }}>{label}</span>
+      <span className="tabular-nums" style={{ font: '500 14px/20px Inter', color: muted ? '#6C6C89' : '#121217', whiteSpace: 'nowrap' }}>
+        {value}
+      </span>
+    </div>
   );
 }
 
-/**
- * Shared detail sidebar for payment-in and payment-out.
- * Shows: hero amount + status, amount breakdown, applied lines, activity timeline.
- * Consumed by the sidePanel customComponent slot in each window's decisions.json.
- * Props come from DetailView.renderSidePanel: { recordId, data, token, apiBaseUrl, api, isNew }
- */
+function fmtNow(d) {
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) + ` · ${h}:${m}`;
+}
+
 export default function PaymentDetailSidebarBase({ dir, specName, data, token, apiBaseUrl }) {
   const ui = useUI();
   const [lines, setLines] = useState(null);
+  const [confirmedAt, setConfirmedAt] = useState(null);
 
   const isIn = dir === 'in';
   const status = data?.status || '';
-  const isDeposited = PAID_STATUSES.has(status);
-  const isDraft = !isDeposited;
+  const isDraft = !PAID_STATUSES.has(status);
   const totalAmount = parseFloat(data?.amount ?? 0);
+
+  useEffect(() => {
+    if (!data?.id) return;
+    const handler = (e) => {
+      if (e.detail?.recordId === data.id) setConfirmedAt(new Date());
+    };
+    window.addEventListener('neo:processSuccess', handler);
+    return () => window.removeEventListener('neo:processSuccess', handler);
+  }, [data?.id]);
 
   useEffect(() => {
     if (!data?.id || !token || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
     const linesEntity = isIn ? 'finPaymentScheduleDetail' : 'lines';
+    let cancelled = false;
     (async () => {
       try {
         const res = await fetch(
           `${base}/${specName}/${linesEntity}?parentId=${data.id}&_startRow=0&_endRow=100`,
           { headers },
         );
-        if (!res.ok) { setLines([]); return; }
+        if (!res.ok || cancelled) { if (!cancelled) setLines([]); return; }
         const rows = (await res.json())?.response?.data || [];
-        setLines(rows.filter(d => d.invoicePaymentSchedule || d.amount));
-      } catch { setLines([]); }
+        if (!cancelled) setLines(rows.filter(d => d.invoicePaymentSchedule || d.amount));
+      } catch { if (!cancelled) setLines([]); }
     })();
+    return () => { cancelled = true; };
   }, [data?.id, token, apiBaseUrl, isIn, specName]);
 
   const appliedLines = lines ?? [];
@@ -76,61 +87,102 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
 
   const paymentDate = data?.paymentDate;
   const createdDate = data?.creationDate || data?.created || paymentDate;
-  const updatedDate = data?.updated;
 
-  const heroColor = isDraft ? '#55556D' : (isIn ? '#17663A' : '#19191D');
-  const heroSign = isIn ? '+ ' : '− ';
+  const sign = isIn ? '+ ' : '− ';
+  const titleKey = isIn ? 'amountLabelIn' : 'amountLabelOut';
 
   const activityItems = [
-    { label: ui(isIn ? 'cobroCreado' : 'pagoCreado'), date: createdDate, dot: isDraft ? '#C28800' : '#17663A' },
-    ...(!isDraft ? [{ label: ui(isIn ? 'cobroConfirmado' : 'pagoConfirmado'), date: paymentDate, dot: '#2DCA72' }] : []),
-    ...(!isDraft && data?.posted === 'Y' ? [{ label: ui('asientoContabilizado'), date: updatedDate, dot: '#D0D5DD' }] : []),
+    {
+      label: ui(isIn ? 'cobroCreado' : 'pagoCreado'),
+      date: createdDate,
+      dot: isDraft ? '#FAAF00' : '#17663A',
+    },
+    ...(!isDraft ? [{
+      label: ui(isIn ? 'cobroConfirmado' : 'pagoConfirmado'),
+      confirmedAt,
+      date: paymentDate,
+      dot: '#2DCA72',
+    }] : []),
+    ...(!isDraft && data?.posted === 'Y' ? [{
+      label: ui('asientoContabilizado'),
+      date: data?.updated,
+      dot: '#D0D5DD',
+    }] : []),
   ];
 
   return (
     <div
-      style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '20px 22px', height: '100%', overflowY: 'auto' }}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}
       data-testid="PaymentDetailSidebar__panel"
     >
-      {/* Hero amount */}
-      <div>
-        <div style={{ fontSize: 11, fontWeight: 500, color: '#828FA3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-          {ui(isIn ? 'amountLabelIn' : 'amountLabelOut')}
-        </div>
-        <div className="tabular-nums" style={{ font: '700 32px/38px Inter', color: heroColor, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-          {heroSign}{fmtAmt(totalAmount)}
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <StateTag status={status} dir={dir} ui={ui} data-testid="StateTag__624cef" />
-        </div>
+      {/* Cabecera: padding 8px 12px 4px */}
+      <div style={{ padding: '8px 12px 4px' }}>
+        <h2 style={{ margin: 0, font: '600 20px/28px Inter', color: '#121217' }}>
+          {ui(titleKey)}
+        </h2>
       </div>
-      {/* Amount breakdown */}
-      <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 11 }}>
-        {[
-          { label: ui('totalAmount'), value: fmtAmt(totalAmount), muted: false },
-          { label: ui('appliedToInvoices'), value: lines === null ? '...' : fmtAmt(applied), muted: false },
-          { label: ui('unallocated'), value: lines === null ? '...' : fmtAmt(unapplied), muted: true },
-        ].map(({ label, value, muted }) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ font: '400 13px/18px Inter', color: '#828FA3' }}>{label}</span>
-            <span className="tabular-nums" style={{ font: '600 13px/18px Inter', color: muted ? '#828FA3' : '#19191D' }}>
-              {value}
+
+      {/* Datos: amount, padding 4px 12px 8px */}
+      <div style={{ padding: '4px 12px 8px' }}>
+        {(() => {
+          const formatted = sign + fmtAmt(Math.abs(totalAmount));
+          const len = formatted.length;
+          const fs = len <= 13 ? 30 : 26;
+          const lh = fs === 30 ? '32px' : '30px';
+          return (
+            <span className="tabular-nums" style={{ font: `500 ${fs}px/${lh} Inter`, color: '#121217' }}>
+              {formatted}
             </span>
-          </div>
-        ))}
+          );
+        })()}
       </div>
-      {/* Activity timeline */}
-      <div style={{ borderTop: '1px solid #E3E7EC', paddingTop: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#19191D', marginBottom: 10 }}>{ui('activity')}</div>
+
+      {/* Breakdown outer: padding 12px, gap 10px */}
+      <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Detalle moneda card: padding 12px, gap 12px — Info sub-section has gap 8px */}
+        <div style={{ background: '#F5F7F9', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Info: rows + separators with gap 8px */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <BreakdownRow
+              label={ui('totalAmount')}
+              value={fmtAmt(totalAmount)}
+            />
+            <Separator />
+            <BreakdownRow
+              label={ui('appliedToInvoices')}
+              value={lines === null ? '...' : fmtAmt(applied)}
+            />
+            <Separator />
+            <BreakdownRow
+              label={ui('unallocated')}
+              value={lines === null ? '...' : fmtAmt(unapplied)}
+              muted={unapplied === 0}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Actividad: padding 8px 12px 0, column gap 10px */}
+      <div style={{ padding: '8px 12px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Title with 4px bottom padding */}
+        <div style={{ font: '400 14px/20px Inter', color: '#3F3F50', paddingBottom: 4 }}>
+          {ui('activity')}
+        </div>
         {activityItems.map((item, i) => (
-          <div key={i} style={{ display: 'flex', gap: 10, paddingBottom: 12 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.dot, marginTop: 5, flexShrink: 0 }} />
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 500, color: '#55556D' }}>{item.label}</div>
-              {item.date && (
-                <div style={{ fontSize: 11, color: '#A9A9BC', marginTop: 2 }}>{fmtDate(item.date)}</div>
-              )}
+          <div key={i} style={{ display: 'flex', flexDirection: 'column' }}>
+            {/* Row: dot 24×24 + name */}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <div style={{ width: 24, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: item.dot }} />
+              </div>
+              <span style={{ font: '500 14px/20px Inter', color: '#121217' }}>{item.label}</span>
             </div>
+            {/* Date: 24px left indent, 12px font */}
+            {(item.confirmedAt || item.date) && (
+              <div style={{ paddingLeft: 24, font: '400 12px/16px Inter', color: '#6C6C89' }}>
+                {item.confirmedAt ? fmtNow(item.confirmedAt) : fmtDate(item.date)}
+              </div>
+            )}
           </div>
         ))}
       </div>

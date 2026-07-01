@@ -1,36 +1,37 @@
+import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import HeaderTable from '../../../custom/PaymentHeaderTable';
 import HeaderForm from './HeaderForm';
-import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
+import PaymentOutBottomPanel from '../../../custom/PaymentOutBottomPanel';
+import PaymentConciliadoBadge from '../../../custom/PaymentConciliadoBadge';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
+import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
 import catalogs from './mockCatalogs';
 
 
-const breadcrumb = 'Finanzas / Pago';
+const breadcrumb = 'Finance / Payment Out';
 
 
 // @sf-generated-start summary:header
-const summary = [];
+const summary = [
+
+];
 
 const statusField = 'status';
 // @sf-generated-end summary:header
 
 // @sf-generated-start extraBadges:header
 const extraBadges = [
-  { key: 'conciliado', labelKey: 'conciliado', field: 'reconciled', condition: (data) => data?.reconciled === 'Y', style: 'info' },
+
 ];
 // @sf-generated-end extraBadges:header
 
 // @sf-generated-start processes:header
 const processes = [
-  { name: 'psd2GenerateBankPayment', label: 'Generate Bank Payment', style: 'positive',
-    displayLogicRaw: "@PSD2_HasPayments@=0 & @PSD2_ClientHasApiKey@=1 & @Status@='PPM'  & @PSD2_HasFinTransaction@=0 & @PSD2_FAIsBank@=1 & @PSD2_PMIsBankTransfer@=1" },
-  { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
-    displayLogicRaw: "@Status@!'RPAE' & @Status@!'RPVOID' & @Processed@='Y' & @#ShowAcct@='Y'" },
-  { name: 'etprReactivatePayment', label: 'Advanced Reactivation', style: 'positive',
-    displayLogicRaw: "@Processed@='Y' & @Status@!'RPVOID'" },
-  { name: 'eTPRRemovePayment', label: 'Remove Payment', style: 'positive',
-    displayLogicRaw: "@Processed@='Y' & @Status@!'RPVOID'" },
+  { name: 'Payment Process', label: 'processConfirm', style: 'positive', columnName: 'aPRMProcessPayment',
+    displayLogicRaw: "@status@ = 'RPAP'" },
+  { name: 'etprReactivatePayment', label: 'processReactivate', style: 'ghost-danger', columnName: 'etprReactivatePayment',
+    displayLogicRaw: "@status@ != 'RPAP'" },
 ];
 // @sf-generated-end processes:header
 
@@ -42,20 +43,7 @@ const draftMode = null;
 const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:header
 
-// @sf-generated-start addLineFields:lines
-const addLineFields = {
-  entry: [
-    { key: 'amount', column: 'Amount', type: 'number', required: true, label: 'Paid Amount', defaultValue: 0 },
-    { key: 'invoicePaymentSchedule', column: 'FIN_Payment_Schedule_Invoice', type: 'search', lookup: true, label: 'Invoice Payment Schedule', reference: 'Payment_Schedule', inputMode: 'search' },
-  ],
-  derived: [
 
-  ],
-  hidden: [
-    { key: 'canceled', value: 'N' },
-  ],
-};
-// @sf-generated-end addLineFields:lines
 
 export const api = {
   "specName": "payment-out",
@@ -89,48 +77,15 @@ export const api = {
       "detailUrl": "/sws/neo/payment-out/lines/{id}",
       "supportedFilters": []
     },
-    "executionHistory": {
+    "bankPayments": {
       "get": true,
       "getById": true,
       "post": true,
       "put": true,
       "patch": true,
       "delete": true,
-      "listUrl": "/sws/neo/payment-out/executionHistory",
-      "detailUrl": "/sws/neo/payment-out/executionHistory/{id}",
-      "supportedFilters": []
-    },
-    "exchangeRates": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/payment-out/exchangeRates",
-      "detailUrl": "/sws/neo/payment-out/exchangeRates/{id}",
-      "supportedFilters": []
-    },
-    "usedCreditSource": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/payment-out/usedCreditSource",
-      "detailUrl": "/sws/neo/payment-out/usedCreditSource/{id}",
-      "supportedFilters": []
-    },
-    "accounting": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/payment-out/accounting",
-      "detailUrl": "/sws/neo/payment-out/accounting/{id}",
+      "listUrl": "/sws/neo/payment-out/bankPayments",
+      "detailUrl": "/sws/neo/payment-out/bankPayments/{id}",
       "supportedFilters": []
     }
   },
@@ -182,7 +137,16 @@ export const api = {
       "column": "C_Currency_ID",
       "reference": "Currency",
       "inputMode": "selector",
-      "url": "/sws/neo/payment-out/header/selectors/currency"
+      "url": "/sws/neo/payment-out/header/selectors/currency",
+      "context": {
+        "required": [
+          {
+            "param": "FIN_Financial_Account_ID",
+            "source": "parentField",
+            "field": "financialAccount"
+          }
+        ]
+      }
     },
     {
       "entity": "header",
@@ -321,132 +285,20 @@ export const api = {
       "url": "/sws/neo/payment-out/lines/selectors/ndDimension"
     },
     {
-      "entity": "executionHistory",
-      "field": "paymentRun",
-      "column": "FIN_Payment_Run_ID",
-      "reference": "Payment_Run",
-      "inputMode": "search",
-      "url": "/sws/neo/payment-out/executionHistory/selectors/paymentRun"
-    },
-    {
-      "entity": "exchangeRates",
+      "entity": "bankPayments",
       "field": "currency",
       "column": "C_Currency_ID",
       "reference": "Currency",
       "inputMode": "selector",
-      "url": "/sws/neo/payment-out/exchangeRates/selectors/currency"
+      "url": "/sws/neo/payment-out/bankPayments/selectors/currency"
     },
     {
-      "entity": "exchangeRates",
-      "field": "toCurrency",
-      "column": "C_Currency_Id_To",
-      "reference": "Currency",
-      "inputMode": "search",
-      "url": "/sws/neo/payment-out/exchangeRates/selectors/toCurrency"
-    },
-    {
-      "entity": "usedCreditSource",
-      "field": "creditPaymentUsed",
-      "column": "FIN_Payment_Id_Used",
-      "reference": "Payment",
-      "inputMode": "search",
-      "url": "/sws/neo/payment-out/usedCreditSource/selectors/creditPaymentUsed"
-    },
-    {
-      "entity": "usedCreditSource",
-      "field": "currency",
-      "column": "C_Currency_ID",
-      "reference": "Currency",
+      "entity": "bankPayments",
+      "field": "financialAccount",
+      "column": "FIN_Financial_Account_ID",
+      "reference": "Financial_Account",
       "inputMode": "selector",
-      "url": "/sws/neo/payment-out/usedCreditSource/selectors/currency"
-    },
-    {
-      "entity": "accounting",
-      "field": "accountingSchema",
-      "column": "C_AcctSchema_ID",
-      "reference": "AcctSchema",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/accounting/selectors/accountingSchema"
-    },
-    {
-      "entity": "accounting",
-      "field": "currency",
-      "column": "C_Currency_ID",
-      "reference": "Currency",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/accounting/selectors/currency"
-    },
-    {
-      "entity": "accounting",
-      "field": "period",
-      "column": "C_Period_ID",
-      "reference": "Period",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/accounting/selectors/period"
-    },
-    {
-      "entity": "accounting",
-      "field": "account",
-      "column": "Account_ID",
-      "reference": "ElementValue",
-      "inputMode": "search",
-      "url": "/sws/neo/payment-out/accounting/selectors/account"
-    },
-    {
-      "entity": "accounting",
-      "field": "businessPartner",
-      "column": "C_BPartner_ID",
-      "reference": "BPartner",
-      "inputMode": "search",
-      "url": "/sws/neo/payment-out/accounting/selectors/businessPartner"
-    },
-    {
-      "entity": "accounting",
-      "field": "product",
-      "column": "M_Product_ID",
-      "reference": "Product",
-      "inputMode": "search",
-      "url": "/sws/neo/payment-out/accounting/selectors/product"
-    },
-    {
-      "entity": "accounting",
-      "field": "project",
-      "column": "C_Project_ID",
-      "reference": "Project",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/accounting/selectors/project"
-    },
-    {
-      "entity": "accounting",
-      "field": "costcenter",
-      "column": "C_Costcenter_ID",
-      "reference": "Costcenter",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/accounting/selectors/costcenter"
-    },
-    {
-      "entity": "accounting",
-      "field": "asset",
-      "column": "A_Asset_ID",
-      "reference": "Asset",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/accounting/selectors/asset"
-    },
-    {
-      "entity": "accounting",
-      "field": "stDimension",
-      "column": "User1_ID",
-      "reference": "User1",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/accounting/selectors/stDimension"
-    },
-    {
-      "entity": "accounting",
-      "field": "ndDimension",
-      "column": "User2_ID",
-      "reference": "User2",
-      "inputMode": "selector",
-      "url": "/sws/neo/payment-out/accounting/selectors/ndDimension"
+      "url": "/sws/neo/payment-out/bankPayments/selectors/financialAccount"
     }
   ],
   "actions": [
@@ -504,6 +356,14 @@ export const api = {
     },
     {
       "entity": "header",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/payment-out/header/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
       "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
       "url": "/sws/neo/payment-out/header/{id}/action/etblkpBulkposting",
@@ -525,6 +385,14 @@ export const api = {
       "url": "/sws/neo/payment-out/header/{id}/action/eTPRRemovePayment",
       "processId": "FB79E902A5384754990AD145F6CAC9FB",
       "processType": "obuiapp"
+    },
+    {
+      "entity": "bankPayments",
+      "field": "refreshPayment",
+      "column": "Refresh_Payment",
+      "url": "/sws/neo/payment-out/bankPayments/{id}/action/refreshPayment",
+      "processId": "3894F258A80D4FAB8A5131B5172145AF",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -545,19 +413,6 @@ export const api = {
   }
 };
 
-function DirBadge({ data }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 7, background: '#FDECEA', flexShrink: 0 }}>
-        <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="#B91C1C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 19V5M5 12l7-7 7 7"/>
-        </svg>
-      </span>
-      <span style={{ font: '700 15px/20px Inter', color: '#19191D' }}>{data?.documentNo}</span>
-    </span>
-  );
-}
-
 // @sf-generated-start component:HeaderPage
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
@@ -569,22 +424,27 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
-        processes={[
-          { name: 'etprReactivatePayment', label: 'Reactivar', style: 'danger',
-            displayLogicRaw: "@Processed@='Y' & @Status@!'RPVOID'" },
-        ]}
+        processes={processes}
         catalogs={catalogs}
         entityLabel="Header"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
-        api={api}
-        noHeaderBorder
-        formCardPadding="p-0"
-        topbarExtra={DirBadge}
-        topbarRight={PaymentActivityToggle}
+      api={api}
+        hideDeleteWhenComplete
+        customTabsAfterBottom
+        hidePrint
+        hideSaveStatuses={["RDNC","RPPC","RPR","RPVOID","PWNC"]}
+        toolbarBorderBottom
+        hideFormCard
+        notesField="description"
+        bottomSection={PaymentOutBottomPanel}
+        topbarRight={PaymentConciliadoBadge}
         sidePanel={PaymentDetailSidebar}
-        requiredHeaderFields={requiredHeaderFields}
+        sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid #E8EAEF","padding":0}}
+        processConfirmModal={ReactivarConfirmModal}
+        statusEnumLabels={{"RPAP":"statusDraft","RPR":"pagoDepositado","RDNC":"pagoDepositado","RPPC":"pagoDepositado","PPM":"pagoDepositado","PWNC":"pagoDepositado"}}
+        statusFieldLabel="statusColumnLabel"
         sendDocument
         {...props}
       />
@@ -601,6 +461,8 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="paymentDate"
+      hidePrint
+      hideCreate
       rowQuickActions={{}}
       sendDocument
       {...props}

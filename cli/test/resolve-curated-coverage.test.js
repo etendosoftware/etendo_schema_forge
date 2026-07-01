@@ -418,6 +418,28 @@ describe('resolveCurated — applyEntityDecisions handlesDefaults: false', () =>
 });
 
 // ---------------------------------------------------------------------------
+// window.statusFieldLabel — WINDOW_TRUTHY_PROPS propagation
+// ---------------------------------------------------------------------------
+
+describe('resolveCurated — window.statusFieldLabel propagates to curated schema', () => {
+  const schemaRaw = makeSchema('finPayment', [
+    { name: 'status', columnName: 'Status', label: 'Status', type: 'string', visibility: 'readOnly' },
+  ]);
+
+  it('carries statusFieldLabel from decisions window to schema.window', async () => {
+    const decisions = makeDecisions('finPayment', { name: 'finPayment', fields: {} }, { statusFieldLabel: 'statusColumnLabel' });
+    const { schema } = await resolveCurated(schemaRaw, { rules: [] }, decisions);
+    assert.equal(schema.window.statusFieldLabel, 'statusColumnLabel');
+  });
+
+  it('does not set statusFieldLabel when absent from decisions', async () => {
+    const decisions = makeDecisions('finPayment', { name: 'finPayment', fields: {} });
+    const { schema } = await resolveCurated(schemaRaw, { rules: [] }, decisions);
+    assert.equal(schema.window.statusFieldLabel, undefined);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // CLI entry point (lines 859-968)
 //
 // `runCli` and `printSchemaAndRules` are ONLY called when the module is executed
