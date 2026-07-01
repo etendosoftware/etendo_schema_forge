@@ -124,6 +124,9 @@ artifact tests, CI, and operational scripts had to be rewired in the same PR.
   `@etendosoftware/schema-forge-cli`; the only observed output drift was live DB
   translation label drift in generated sales-order contract data and was left
   uncommitted.
+- `make regen FROM_CACHE=1` — completed 39/39 windows against the committed
+  offline AD snapshot; generated deterministic contract/UI updates were
+  committed so `Offline Regen Check` can assert a clean tree after regeneration.
 - `./run-sonar.sh --base-ref origin/feature/ETP-4346 --coverage
   --fail-on-gate --compare-coverage --compare-branch feature/ETP-4346` —
   local suites completed, but the final Sonar server request was blocked by

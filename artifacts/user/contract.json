@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.16.0",
   "generatedAt": "2026-04-29T18:12:34.035Z",
-  "updatedAt": "2026-06-29T12:09:18.745Z",
-  "checksum": "1f2437953a5289b4",
+  "updatedAt": "2026-07-01T16:43:34.871Z",
+  "checksum": "7d46f807b118e718",
   "frontendContract": {
     "window": {
       "id": "108",
@@ -1412,8 +1412,8 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "cPocConfigurationID",
+            "apiKey": "cPocConfigurationID",
             "column": "C_Poc_Configuration_ID",
             "type": "id",
             "visibility": "system",
@@ -2624,6 +2624,14 @@
         "description": "System field 'client' should exist in backend but not frontend for emailConfiguration"
       },
       {
+        "id": "t-system-field-emailConfiguration-cPocConfigurationID",
+        "category": "system-field",
+        "entity": "emailConfiguration",
+        "field": "cPocConfigurationID",
+        "runner": "node",
+        "description": "System field 'cPocConfigurationID' should exist in backend but not frontend for emailConfiguration"
+      },
+      {
         "id": "t-system-field-emailConfiguration-createdBy",
         "category": "system-field",
         "entity": "emailConfiguration",
@@ -2654,14 +2662,6 @@
         "field": "emailConfigOrganization",
         "runner": "node",
         "description": "System field 'emailConfigOrganization' should exist in backend but not frontend for emailConfiguration"
-      },
-      {
-        "id": "t-system-field-emailConfiguration-id",
-        "category": "system-field",
-        "entity": "emailConfiguration",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for emailConfiguration"
       },
       {
         "id": "t-system-field-emailConfiguration-organization",

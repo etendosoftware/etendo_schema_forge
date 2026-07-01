@@ -2,7 +2,7 @@
   "version": "0.10.0",
   "generatedAt": "2026-05-04T17:02:25.021Z",
   "updatedAt": "2026-06-16T14:53:08.146Z",
-  "contractChecksum": "7bc3e6ba97f8f868",
+  "contractChecksum": "60b5d9754ccba2c1",
   "apiPrediction": {
     "specName": "monitor-verifactu",
     "baseUrl": "/sws/neo/monitor-verifactu",

@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-06-29T12:09:17.864Z",
-  "checksum": "b15c1d1763c3ce05",
+  "updatedAt": "2026-07-01T16:43:34.611Z",
+  "checksum": "9ee4efdd42c3ec26",
   "frontendContract": {
     "window": {
       "id": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A",
@@ -886,8 +886,8 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "configuracinSII",
+            "apiKey": "configuracinSII",
             "column": "Aeatsii_Config_ID",
             "type": "id",
             "visibility": "system",
@@ -973,8 +973,8 @@
             "required": true
           },
           {
-            "name": "id",
-            "apiKey": "id",
+            "name": "logHash",
+            "apiKey": "logHash",
             "column": "Aeatsii_Config_Log_ID",
             "type": "id",
             "visibility": "system",
@@ -1911,12 +1911,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for logHash"
       },
       {
-        "id": "t-system-field-logHash-id",
+        "id": "t-system-field-logHash-logHash",
         "category": "system-field",
         "entity": "logHash",
-        "field": "id",
+        "field": "logHash",
         "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for logHash"
+        "description": "System field 'logHash' should exist in backend but not frontend for logHash"
       },
       {
         "id": "t-system-field-logHash-organization",
@@ -1967,6 +1967,14 @@
         "description": "System field 'client' should exist in backend but not frontend for siiConfiguration"
       },
       {
+        "id": "t-system-field-siiConfiguration-configuracinSII",
+        "category": "system-field",
+        "entity": "siiConfiguration",
+        "field": "configuracinSII",
+        "runner": "node",
+        "description": "System field 'configuracinSII' should exist in backend but not frontend for siiConfiguration"
+      },
+      {
         "id": "t-system-field-siiConfiguration-createdBy",
         "category": "system-field",
         "entity": "siiConfiguration",
@@ -1989,14 +1997,6 @@
         "field": "guipuzcoa",
         "runner": "node",
         "description": "System field 'guipuzcoa' should exist in backend but not frontend for siiConfiguration"
-      },
-      {
-        "id": "t-system-field-siiConfiguration-id",
-        "category": "system-field",
-        "entity": "siiConfiguration",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for siiConfiguration"
       },
       {
         "id": "t-system-field-siiConfiguration-informeltimaConexinSII",
