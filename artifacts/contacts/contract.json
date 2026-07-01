@@ -1,8 +1,8 @@
 {
-  "version": "0.31.0",
+  "version": "0.32.0",
   "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-06-29T12:08:11.777Z",
-  "checksum": "080f686a20dbd788",
+  "updatedAt": "2026-06-29T19:05:06.035Z",
+  "checksum": "b099c42c4c15ee8c",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -900,6 +900,47 @@
             "required": false,
             "grid": false,
             "form": false
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "label": "Estado VIES",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "P",
+                "name": "Pendiente",
+                "labels": {
+                  "es_ES": "Pendiente"
+                }
+              },
+              {
+                "value": "V",
+                "name": "Válido",
+                "labels": {
+                  "es_ES": "Válido"
+                }
+              },
+              {
+                "value": "I",
+                "name": "No válido",
+                "labels": {
+                  "es_ES": "No válido"
+                }
+              }
+            ],
+            "section": "principal",
+            "displayLogic": {
+              "raw": "record.oBTIKTaxIDKey === '2'",
+              "evaluable": true,
+              "js": "record.oBTIKTaxIDKey === '2'"
+            }
           }
         ],
         "searchableFields": [
@@ -1137,35 +1178,35 @@
                 "value": "D",
                 "name": "After Delivery",
                 "labels": {
-                  "es_ES": "Después de entregado"
+                  "es_ES": "After Delivery"
                 }
               },
               {
                 "value": "O",
                 "name": "After Order Delivered",
                 "labels": {
-                  "es_ES": "Pedido completamente entregado"
+                  "es_ES": "After Order Delivered"
                 }
               },
               {
                 "value": "S",
                 "name": "Customer Schedule After Delivery",
                 "labels": {
-                  "es_ES": "Periódico después de entregado"
+                  "es_ES": "Customer Schedule After Delivery"
                 }
               },
               {
                 "value": "N",
                 "name": "Do Not Invoice",
                 "labels": {
-                  "es_ES": "No facturar"
+                  "es_ES": "Do Not Invoice"
                 }
               },
               {
                 "value": "I",
                 "name": "Immediate",
                 "labels": {
-                  "es_ES": "Inmediato"
+                  "es_ES": "Immediate"
                 }
               }
             ],
@@ -3350,28 +3391,28 @@
                 "value": "GENERIC",
                 "name": "Use Generic Account No.",
                 "labels": {
-                  "es_ES": "Utilizar Número Genérico de Cuenta"
+                  "es_ES": "Use Generic Account No."
                 }
               },
               {
                 "value": "IBAN",
                 "name": "Use IBAN",
                 "labels": {
-                  "es_ES": "Utilizar IBAN"
+                  "es_ES": "Use IBAN"
                 }
               },
               {
                 "value": "SWIFT",
                 "name": "Use SWIFT + Generic Account No.",
                 "labels": {
-                  "es_ES": "Usar código SWIFT + Número Genérico de Cuenta"
+                  "es_ES": "Use SWIFT + Generic Account No."
                 }
               },
               {
                 "value": "SPANISH",
                 "name": "Use Spanish",
                 "labels": {
-                  "es_ES": "Utilizar Español"
+                  "es_ES": "Use Spanish"
                 }
               }
             ],
@@ -5243,6 +5284,14 @@
             "type": "string",
             "visibility": "readOnly",
             "required": false
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "businessPartnerHandler"
@@ -6137,6 +6186,14 @@
             "apiKey": "eTGOLocation",
             "column": "em_etgo_location",
             "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
             "visibility": "system",
             "required": false
           }
@@ -7286,6 +7343,14 @@
             "apiKey": "eTGOLocation",
             "column": "em_etgo_location",
             "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
             "visibility": "system",
             "required": false
           }
@@ -8443,6 +8508,14 @@
             "apiKey": "eTGOLocation",
             "column": "em_etgo_location",
             "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
             "visibility": "system",
             "required": false
           }
@@ -11373,6 +11446,14 @@
         "description": "Display logic for 'etgoLastname' in businessPartner should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-businessPartner-oBTIKVIESStatus",
+        "category": "displaylogic-evaluable",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Display logic for 'oBTIKVIESStatus' in businessPartner should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-businessPartner-paymentMethod",
         "category": "displaylogic-evaluable",
         "entity": "businessPartner",
@@ -11827,6 +11908,14 @@
         "field": "etgoLastname",
         "runner": "node",
         "description": "Display logic for 'etgoLastname' in businessPartner should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-businessPartner-oBTIKVIESStatus",
+        "category": "displaylogic-valid",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Display logic for 'oBTIKVIESStatus' in businessPartner should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-businessPartner-paymentMethod",
@@ -12523,6 +12612,14 @@
         "field": "oBTIKTaxIDKey",
         "runner": "node",
         "description": "Field 'oBTIKTaxIDKey' should be present in businessPartner"
+      },
+      {
+        "id": "t-field-presence-businessPartner-oBTIKVIESStatus",
+        "category": "field-presence",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Field 'oBTIKVIESStatus' should be present in businessPartner"
       },
       {
         "id": "t-field-presence-businessPartner-operator",
@@ -13661,6 +13758,14 @@
         "description": "Field 'oBTIKTaxIDKey' should have type 'string' in businessPartner"
       },
       {
+        "id": "t-field-type-businessPartner-oBTIKVIESStatus",
+        "category": "field-type",
+        "entity": "businessPartner",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "Field 'oBTIKVIESStatus' should have type 'string' in businessPartner"
+      },
+      {
         "id": "t-field-type-businessPartner-operator",
         "category": "field-type",
         "entity": "businessPartner",
@@ -14602,6 +14707,13 @@
         "rule": "contacts-Business Partner-EM_Etgo_Lastname-displayLogic",
         "runner": "node",
         "description": "Rule 'contacts-Business Partner-EM_Etgo_Lastname-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-contacts-Business-Partner-EM-OBTIK-VIESStatus-displayLogic",
+        "category": "rule-declared",
+        "rule": "contacts-Business Partner-EM_OBTIK_VIESStatus-displayLogic",
+        "runner": "node",
+        "description": "Rule 'contacts-Business Partner-EM_OBTIK_VIESStatus-displayLogic' (displayLogic) should be declared"
       },
       {
         "id": "t-rule-declared-contacts-Business-Partner-FirstSale-displayLogic",
@@ -17134,6 +17246,14 @@
         "description": "System field 'oBTIKTaxIDKey' should exist in backend but not frontend for customer"
       },
       {
+        "id": "t-system-field-customer-oBTIKVIESStatus",
+        "category": "system-field",
+        "entity": "customer",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "System field 'oBTIKVIESStatus' should exist in backend but not frontend for customer"
+      },
+      {
         "id": "t-system-field-customer-oneTimeTransaction",
         "category": "system-field",
         "entity": "customer",
@@ -18084,6 +18204,14 @@
         "field": "oBTIKTaxIDKey",
         "runner": "node",
         "description": "System field 'oBTIKTaxIDKey' should exist in backend but not frontend for employee"
+      },
+      {
+        "id": "t-system-field-employee-oBTIKVIESStatus",
+        "category": "system-field",
+        "entity": "employee",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "System field 'oBTIKVIESStatus' should exist in backend but not frontend for employee"
       },
       {
         "id": "t-system-field-employee-oneTimeTransaction",
@@ -19406,6 +19534,14 @@
         "description": "System field 'oBTIKTaxIDKey' should exist in backend but not frontend for vendorCreditor"
       },
       {
+        "id": "t-system-field-vendorCreditor-oBTIKVIESStatus",
+        "category": "system-field",
+        "entity": "vendorCreditor",
+        "field": "oBTIKVIESStatus",
+        "runner": "node",
+        "description": "System field 'oBTIKVIESStatus' should exist in backend but not frontend for vendorCreditor"
+      },
+      {
         "id": "t-system-field-vendorCreditor-oneTimeTransaction",
         "category": "system-field",
         "entity": "vendorCreditor",
@@ -19784,23 +19920,23 @@
       }
     ],
     "summary": {
-      "total": 1142,
+      "total": 1150,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
         "default-value-type": 46,
-        "displaylogic-evaluable": 57,
-        "displaylogic-valid": 57,
-        "field-presence": 142,
-        "field-type": 142,
-        "rule-declared": 103,
+        "displaylogic-evaluable": 58,
+        "displaylogic-valid": 58,
+        "field-presence": 143,
+        "field-type": 143,
+        "rule-declared": 104,
         "searchable-filters": 4,
         "selector-endpoint": 41,
-        "system-field": 514,
+        "system-field": 517,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1142,
+        "node": 1150,
         "junit": 0
       }
     }

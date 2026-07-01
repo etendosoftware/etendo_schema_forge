@@ -1,8 +1,8 @@
 {
-  "version": "0.31.0",
+  "version": "0.32.0",
   "generatedAt": "2026-05-06T15:52:09.982Z",
   "updatedAt": "2026-06-19T12:52:46.818Z",
-  "contractChecksum": "080f686a20dbd788",
+  "contractChecksum": "b099c42c4c15ee8c",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",
@@ -814,6 +814,9 @@
           },
           "eTGOLocation": {
             "readOnly": true
+          },
+          "oBTIKVIESStatus": {
+            "readOnly": true
           }
         }
       },
@@ -1268,5 +1271,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "6d5673c2de0410b3"
+  "checksum": "73ffa3db9b0b06c4"
 }

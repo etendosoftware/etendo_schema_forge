@@ -4494,6 +4494,9 @@ export function DetailView({
               secondaryHooks[idx]?.handleSelect(hook.selected ?? hook.editing);
               setCustomModalState({ key: null, rowId: null });
             }}
+            onParentRefresh={() => {
+              if (parentRecordId) hook.fetchById(parentRecordId);
+            }}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
             bpId={parentRecordId}
             apiBase={apiBaseUrl}

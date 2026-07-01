@@ -25,7 +25,7 @@ vi.mock('lucide-react', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
+  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock('@/auth/AuthContext.jsx', () => ({
@@ -35,6 +35,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 // --- Import under test ----------------------------------------------------
 
 import LocationEditorModal from '../LocationEditorModal.jsx';
+import { toast } from 'sonner';
 
 // --- Helpers --------------------------------------------------------------
 
@@ -284,6 +285,215 @@ describe('LocationEditorModal', () => {
 
     const saveBtn = screen.getByText('save').closest('button');
     expect(saveBtn).toBeDisabled();
+  });
+
+  // ---------------------------------------------------------------------------
+  // showBackendMessages — PUT (edit) path
+  // ---------------------------------------------------------------------------
+
+  describe('showBackendMessages — PUT (edit existing record)', () => {
+    /**
+     * Render an edit modal with a pre-loaded record that includes country='ES'.
+     * The GET response populates the form so the Save button is immediately enabled.
+     * The PUT response carries the messages we want to test.
+     */
+    async function renderAndSaveExisting(rowId, putMessages, onParentRefresh) {
+      const { toast } = await import('sonner');
+      vi.mocked(toast.success).mockClear();
+      vi.mocked(toast.error).mockClear();
+      vi.mocked(toast.warning).mockClear();
+      vi.mocked(toast.info).mockClear();
+
+      const onSaved = vi.fn();
+
+      global.fetch = vi.fn((url, opts) => {
+        // Initial GET of the existing record — populate form with country so save is enabled
+        if (url.includes(`/locationAddress/${rowId}`) && (!opts?.method || opts.method === 'GET')) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: {
+                data: [{
+                  id: rowId,
+                  address: '123 Main St',
+                  country: 'ES',
+                  'country$_identifier': 'Spain',
+                }],
+              },
+            }),
+          });
+        }
+        // PUT — save response carries messages
+        if (url.includes(`/locationAddress/${rowId}`) && opts?.method === 'PUT') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: { data: [{ id: rowId, messages: putMessages }] },
+            }),
+          });
+        }
+        // Selector calls (countries)
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: [{ id: 'ES', label: 'Spain' }], hasMore: false }),
+        });
+      });
+
+      renderModal({ rowId, onSaved, onParentRefresh });
+
+      // Wait for initialLoading to finish (the spinner disappears and form fields appear)
+      await screen.findByText('save', {}, { timeout: 3000 });
+      // Wait until the country button is enabled (country='ES' was loaded)
+      await vi.waitFor(() => {
+        const btns = screen.getAllByRole('button');
+        const countryBtn = btns.find(b => b.getAttribute('aria-haspopup') === 'dialog');
+        expect(countryBtn).not.toBeDisabled();
+      });
+
+      fireEvent.click(screen.getByText('save'));
+
+      // Wait for the save to complete (onSaved is called after PUT finishes)
+      await vi.waitFor(() => {
+        expect(onSaved).toHaveBeenCalled();
+      }, { timeout: 3000 });
+
+      return { toast, onSaved };
+    }
+
+    it('calls toast.warning and onSaved for warning message', async () => {
+      const onParentRefresh = vi.fn();
+      const { toast, onSaved } = await renderAndSaveExisting(
+        'loc-warn',
+        [{ type: 'warning', title: 'NIF warning', text: 'desc' }],
+        onParentRefresh,
+      );
+      expect(toast.warning).toHaveBeenCalledWith('NIF warning', { description: 'desc' });
+      expect(onSaved).toHaveBeenCalled();
+      expect(onParentRefresh).toHaveBeenCalled();
+    });
+
+    it('calls toast.error and onSaved for error message', async () => {
+      const onParentRefresh = vi.fn();
+      const { toast, onSaved } = await renderAndSaveExisting(
+        'loc-err',
+        [{ type: 'error', title: 'VIES error' }],
+        onParentRefresh,
+      );
+      expect(toast.error).toHaveBeenCalledWith('VIES error', { description: undefined });
+      expect(onSaved).toHaveBeenCalled();
+    });
+
+    it('calls toast.success and onSaved for success message', async () => {
+      const onParentRefresh = vi.fn();
+      const { toast, onSaved } = await renderAndSaveExisting(
+        'loc-ok',
+        [{ type: 'success', title: 'Valid NIF' }],
+        onParentRefresh,
+      );
+      expect(toast.success).toHaveBeenCalledWith('Valid NIF', { description: undefined });
+      expect(onSaved).toHaveBeenCalled();
+    });
+
+    it('calls toast.info for unknown message type with title', async () => {
+      const onParentRefresh = vi.fn();
+      const { toast } = await renderAndSaveExisting(
+        'loc-info',
+        [{ type: 'foo', title: 'Info msg' }],
+        onParentRefresh,
+      );
+      expect(toast.info).toHaveBeenCalledWith('Info msg', { description: undefined });
+    });
+
+    it('does NOT call onParentRefresh when messages array is empty', async () => {
+      const onParentRefresh = vi.fn();
+      const { onSaved } = await renderAndSaveExisting('loc-empty', [], onParentRefresh);
+      expect(onParentRefresh).not.toHaveBeenCalled();
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // showBackendMessages — POST (create) path
+  // ---------------------------------------------------------------------------
+
+  describe('showBackendMessages — POST (create new record)', () => {
+    beforeEach(() => {
+      vi.mocked(toast.success).mockClear();
+      vi.mocked(toast.error).mockClear();
+      vi.mocked(toast.warning).mockClear();
+      vi.mocked(toast.info).mockClear();
+    });
+
+    /**
+     * Render a create modal, select Spain as country, click save, and wait for POST.
+     */
+    async function renderAndSaveNew(postResponseData, onSaved, onParentRefresh) {
+      global.fetch = vi.fn((url, opts) => {
+        if (url.includes('/locationAddress') && !url.includes('selectors') && opts?.method === 'POST') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              response: { status: 0, data: [postResponseData] },
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: [{ id: 'ES', label: 'Spain' }], hasMore: false }),
+        });
+      });
+
+      renderModal({ onSaved, onParentRefresh });
+
+      const buttons = screen.getAllByRole('button');
+      const countryBtn = buttons.find(b => b.getAttribute('aria-haspopup') === 'dialog' && !b.disabled);
+      fireEvent.click(countryBtn);
+      const spainBtn = await screen.findByText('Spain');
+      fireEvent.click(spainBtn);
+      fireEvent.click(screen.getByText('save'));
+
+      await vi.waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/locationAddress'),
+          expect.objectContaining({ method: 'POST' }),
+        );
+      });
+    }
+
+    it('calls toast.success and onSaved with new record id for success message', async () => {
+      const onSaved = vi.fn();
+      const onParentRefresh = vi.fn();
+
+      await renderAndSaveNew(
+        { id: 'new-loc-99', name: 'Madrid, Calle Mayor', messages: [{ type: 'success', title: 'ok' }] },
+        onSaved,
+        onParentRefresh,
+      );
+
+      await vi.waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith('ok', { description: undefined });
+      });
+      expect(onSaved).toHaveBeenCalledWith('new-loc-99', 'Madrid, Calle Mayor');
+      expect(onParentRefresh).toHaveBeenCalled();
+    });
+
+    it('calls onSaved without toast when POST response has no messages', async () => {
+      const onSaved = vi.fn();
+      const onParentRefresh = vi.fn();
+
+      await renderAndSaveNew(
+        { id: 'new-loc-100', name: 'Barcelona' },
+        onSaved,
+        onParentRefresh,
+      );
+
+      await vi.waitFor(() => {
+        expect(onSaved).toHaveBeenCalledWith('new-loc-100', 'Barcelona');
+      });
+      expect(onParentRefresh).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.warning).not.toHaveBeenCalled();
+    });
   });
 
   it('allows typing in postal code and city fields', () => {

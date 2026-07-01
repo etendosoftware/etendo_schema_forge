@@ -553,6 +553,27 @@ function renderSelectField(f, data, label, isReadOnly, onChange, ctx) {
   } else {
     selectValue = data?.[f.key] ?? '';
   }
+
+  if (isReadOnly) {
+    const matchedOption = f.options?.find(o => String(o.value) === String(selectValue));
+    const displayLabel = matchedOption ? tMenu(matchedOption.label) : selectValue;
+    return (
+      <div key={f.key} className="space-y-1.5">
+        <Label htmlFor={f.key} className="text-sm text-foreground font-medium" data-testid="Label__a8d626">
+          {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
+        </Label>
+        <Input
+          id={f.key}
+          data-testid={`field-${f.key}`}
+          value={displayLabel}
+          readOnly
+          disabled
+          className="bg-muted/50 cursor-default"
+        />
+      </div>
+    );
+  }
+
   return (
     <div key={f.key} className={LABEL_GAP}>
       <Label

@@ -81,5 +81,23 @@ Repos:
 
 ---
 
+## etendo-go — NEO Headless / handlers (`src/com/etendoerp/go/schemaforge/`)
+| File | What it is / when to read | Key symbols |
+|------|---------------------------|-------------|
+| `schemaforge/NeoServlet.java` | HTTP entry for `/sws/neo/...`. Routes handler-backed entities via `Java_Qualifier`. Read for handler dispatch / fallback to CRUD. | `handleWithHooks(qualifier, ctx,…) ~241`; `lookupHandler(qualifier) ~271` (iterates `WeldUtils.getInstances(NeoHandler.class)`, matches `@Named` off `handler.getClass()`) |
+| `schemaforge/NeoContext.java` | Per-request context passed to `NeoHandler`s. Fluent `builder()`. | getters `~62-110`; `builder() ~125`; setters: `specName/entityName/httpMethod/recordId/requestBody/queryParams/obContext` |
+| `schemaforge/NeoHandler.java` | CDI interface (`@Named`-only beans). `handle()`=pre-hook, `afterHandle()`=post-hook; `null`→default CRUD. | `handle(NeoContext)`, `afterHandle(NeoContext)` |
+| `schemaforge/Widget*Handler.java` | The 9 widget data handlers (`@Named("widget…Handler")`). GET-only; read `range` from `getQueryParams()`. Stable (ETP-3584) — do not modify. | `handle()`; 405 on non-GET; empty state `{response:{data:[],count:0}}` |
+| `schemaforge/WidgetQueryHelper.java` | Shared widget query utilities. | `rangeToSqlDateFrom(range) ~35`; `executeRangedQuery ~52`; `resolveQuery(fallbackSql,rangedSql,clientId,range) ~68`; `buildDataResponse ~75` |
+| `mcp/McpHookExecutor.java` | Runs `NeoHandler` hooks for MCP writes. **Canonical CDI handler-lookup seam** — reuse for any MCP→handler call. | `resolveEntityHandler(SFEntity) ~59` (`WeldUtils.getStaticInstanceBeanManager()` → `bm.getBeans(NeoHandler.class, ANY_LITERAL)` → match `Bean.getName()` → `bm.getReference`); `buildHookContext ~80`; `buildDefaultsHookContext ~101`; `runPreHook/runPostHook` |
+| `src-db/database/sourcedata/ETGO_SF_SPEC.xml` | Spec definitions (source of truth). `dashboard` spec (type W) `~547`. | `<NAME>`, `<SPEC_TYPE>` |
+| `src-db/database/sourcedata/ETGO_SF_ENTITY.xml` | Entity defs incl. `JAVA_QUALIFIER` → `@Named`. dashboard widget entities `~4029-4198`. | `<NAME>`, `<JAVA_QUALIFIER>`, `<ETGO_SF_SPEC_ID>` |
+
+| `mcp/McpAuthorizationService.java` | OAuth2 scope per tool. Read/edit when adding a tool's scope. | `authorizeToolCall ~56`; `requiredScopeFor() ~65` (switch: READ/WRITE group + GENERATE_PREFIX→REPORT default→PROCESS) |
+| `mcp/McpConstants.java` | Tool-name + param-key constants. Add `TOOL_*`/`PARAM_*` here for a new tool. | `TOOL_GENERATE_AMORTIZATION_PLAN`, `GENERATE_PREFIX`, `PARAM_*` |
+
+---
+
 ## Per-ticket trace log (which files each ticket touched)
 - **ETP-4255** (code-bug — remove runtime Jasper from Etendo Go): `McpToolRouter.java` (handleReport, handleDiscover), `McpToolRouterSupport.java` (buildDiscoverSpec), `ToolRegistry.java` (processSpec, buildReportTool), `McpResourceProvider.java` (process coupling), `NeoReportService.java` (Jasper exportJR), `cli/src/neo-writer.js` (P/R as process-backed).
+- **ETP-4284** (code-bug — expose `neo_widget` enum tool, G4; investigation/plan only): planned touch points `McpConstants.java`, `ToolRegistry.java` (buildWidgetTool + isCrudTool), `McpAuthorizationService.java` (neo:read), `McpToolRouter.java` (route + handleWidget reusing `McpHookExecutor` lookup), `McpToolRouterSupport.java`/`ToolRegistry.addWindowSpec` (exclude `dashboard` from W discovery). Plan: `docs/plans/ETP-4284-neo-widget-tool.md`.
