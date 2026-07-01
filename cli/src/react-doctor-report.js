@@ -11,6 +11,8 @@ const NPX_BIN = path.join(
   path.dirname(process.execPath),
   process.platform === 'win32' ? 'npx.cmd' : 'npx'
 );
+// Pin the tool version for deterministic, reproducible reports (no `@latest`).
+const REACT_DOCTOR_VERSION = '0.5.8';
 const ROOT = path.resolve(HERE, '../..');
 const OUT_DIR = path.join(ROOT, 'reports', 'react-doctor');
 mkdirSync(OUT_DIR, { recursive: true });
@@ -24,7 +26,7 @@ let raw;
 try {
   // Invoke npx by absolute path (no shell, no PATH lookup) with a fixed argument
   // list — arguments are constants, not user input.
-  raw = execFileSync(NPX_BIN, ['--yes', 'react-doctor@latest', '-y', '--json', '--offline'], {
+  raw = execFileSync(NPX_BIN, ['--yes', `react-doctor@${REACT_DOCTOR_VERSION}`, '-y', '--json', '--offline'], {
     cwd: ROOT,
     encoding: 'utf8',
     maxBuffer: 256 * 1024 * 1024,
