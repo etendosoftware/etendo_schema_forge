@@ -51,8 +51,8 @@ export default function ReactivarModal({ dir, onConfirm, onClose }) {
         {/* Body */}
         <div style={{ padding: '4px 24px 20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-            {items.map(([t, d], i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            {items.map(([t, d]) => (
+              <div key={t} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#C5234A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 2 }}>
                   <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
                 </svg>

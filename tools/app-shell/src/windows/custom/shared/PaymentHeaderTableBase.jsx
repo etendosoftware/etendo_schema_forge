@@ -62,7 +62,7 @@ function currencySymbol(curr) {
 function fmtAmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
   const abs = Math.abs(n).toFixed(2).split('.');
-  abs[0] = abs[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  abs[0] = abs[0].replace(/\d(?=(?:\d{3})+$)/g, '$&.');
   return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' ' + currencySymbol(curr);
 }
 
@@ -77,8 +77,8 @@ function fmtDate(raw) {
 function SidebarSkeleton() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {[90, 70, 60].map((w, i) => (
-        <div key={i} style={{ height: 14, borderRadius: 6, background: '#F1F2F4', width: `${w}%` }} />
+      {[90, 70, 60].map((w) => (
+        <div key={w} style={{ height: 14, borderRadius: 6, background: '#F1F2F4', width: `${w}%` }} />
       ))}
     </div>
   );

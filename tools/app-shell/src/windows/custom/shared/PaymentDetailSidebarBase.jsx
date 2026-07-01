@@ -4,7 +4,7 @@ import { useUI } from '@/i18n';
 function fmtAmt(val) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
   const abs = Math.abs(n).toFixed(2).split('.');
-  abs[0] = abs[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  abs[0] = abs[0].replace(/\d(?=(?:\d{3})+$)/g, '$&.');
   return (n < 0 ? '-' : '') + abs[0] + ',' + abs[1] + ' €';
 }
 
@@ -73,7 +73,10 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           `${base}/${specName}/${linesEntity}?parentId=${data.id}&_startRow=0&_endRow=100`,
           { headers },
         );
-        if (!res.ok || cancelled) { if (!cancelled) setLines([]); return; }
+        if (!res.ok || cancelled) {
+          if (!cancelled) setLines([]);
+          return;
+        }
         const rows = (await res.json())?.response?.data || [];
         if (!cancelled) setLines(rows.filter(d => d.invoicePaymentSchedule || d.amount));
       } catch { if (!cancelled) setLines([]); }
@@ -165,8 +168,8 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
         <div style={{ font: '400 14px/20px Inter', color: '#3F3F50', paddingBottom: 4 }}>
           {ui('activity')}
         </div>
-        {activityItems.map((item, i) => (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column' }}>
+        {activityItems.map((item) => (
+          <div key={item.label} style={{ display: 'flex', flexDirection: 'column' }}>
             {/* Row: dot 24×24 + name */}
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <div style={{ width: 24, height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

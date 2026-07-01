@@ -3210,6 +3210,11 @@ export function DetailView({
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
+                  const dispatchProcess = () => {
+                    if (p.style === 'ghost-danger' && processConfirmModal) { setConfirmProcess(p); }
+                    else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
+                    else { hook.handleProcess?.(p); }
+                  };
                   return (
                     <Button
                       key={p.name}
@@ -3224,13 +3229,7 @@ export function DetailView({
                             return;
                           }
                         }
-                        if (p.style === 'ghost-danger' && processConfirmModal) {
-                          setConfirmProcess(p);
-                        } else if (p.params?.some(param => !param.hidden)) {
-                          setParamDialogProcess(p);
-                        } else {
-                          hook.handleProcess?.(p);
-                        }
+                        dispatchProcess();
                       }}
                       data-testid="Button__fa3275">
                       {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
