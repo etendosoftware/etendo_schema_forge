@@ -37,31 +37,114 @@ export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
   return null;
 }
 
+// Maps identChecks field ids (from casillas form) to their AEAT HTTP param names.
+// Simple 1:1 string forwarding — value is set only when truthy.
+const IDENT_PARAM_MAP = [
+  ['bank_iban',          'IBAN'],
+  ['bank_swift_bic',     'BIC'],
+  ['bank_nombre',        'Bank'],
+  ['bank_direccion',     'BankAddress'],
+  ['bank_ciudad',        'BankCity'],
+  ['bank_pais',          'CountryIso'],
+  ['bank_sepa',          'SEPA'],
+  ['baja_domiciliacion', 'Cancel_Modify_Debit'],
+];
+
+// Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
+// Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
+const BOX_PARAM_MAP = {
+  42:  'Special_Compensations',      // compensaciones régimen especial / agrario
+  43:  'Investment_Adjustment',      // regularización bienes de inversión
+  44:  'Adjustment_Final_Percentage',// prorrata definitiva
+  68:  'AnnualRegularAmt',           // regularización anual prorrata (T4/12 only)
+  78:  'PreviousPeriodAmtApplied',   // cuotas a compensar aplicadas en este período
+  108: 'AdministrativeCriteriaDiscrepancy', // discrepancia criterio administrativo (2024+)
+  109: 'ReturnsPendingSettlement',   // devoluciones en tramitación (2023+)
+  110: 'PreviousPeriodAmt',          // cuotas a compensar pendientes de períodos anteriores
+  111: 'RectifyingAmount',           // rectificación. importe (2024+ rectificativa)
+  124: 'OSS_SujetaYAcogida',         // operaciones OSS sujetas y acogidas (2021+)
+};
+
 /**
  * Calls GET /neo/fiscal303/generate and triggers a browser file download.
- * Returns true on success, false on error.
+ * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+ *
+ * All parameters are read from the casillas form state:
+ *   identChecks   — identificación fields (tipo_declaracion, bank_iban, bank_swift_bic, etc.)
+ *   manualOverrides — editable box values keyed by box number
+ *   filename      — optional download filename (defaults to 303_<period>_<year>.txt)
  */
-export async function generate303File(decl, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return false;
+export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
+  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+
+  const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
+  const IBAN_REQUIRED_TIPOS = ['D', 'G', 'I', 'V', 'U', 'X'];
+
+  if (IBAN_REQUIRED_TIPOS.includes(tipo) && !identChecks?.bank_iban?.trim()) {
+    return { ok: false, error: 'iban_required' };
+  }
+
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    const tipo = decl.result?.kind ?? 'N';
     const params = new URLSearchParams({ year: decl.year, period: decl.period, tipo });
+
+    // ── identChecks: bank fields (1:1 string forwarding) ──────────────
+    if (identChecks) {
+      for (const [field, paramName] of IDENT_PARAM_MAP) {
+        const v = identChecks[field];
+        if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
+      }
+      // Declaration_NoActivity
+      if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
+      // Complementaria (2021-2023 forms)
+      if (identChecks.complementaria === true) {
+        params.set('IsComplementary', 'Y');
+        if (identChecks.complementaria_num) params.set('ComplementaryNo', identChecks.complementaria_num);
+      }
+      // Rectifying reason from casillas form
+      if (identChecks.rectificativa) {
+        if (identChecks.motivo_rectificacion === 'R') params.set('RectifyingReason', 'Y');
+        else if (identChecks.motivo_rectificacion === 'D')
+          params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
+      }
+    }
+
+    // ── manualOverrides: editable box values → AEAT param names ───────
+    if (manualOverrides) {
+      for (const [boxNum, paramName] of Object.entries(BOX_PARAM_MAP)) {
+        const v = manualOverrides[Number(boxNum)];
+        if (v != null) params.set(paramName, String(v));
+      }
+    }
+
     const url = `${base}/fiscal303/generate?${params}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      const raw = await res.text().catch(() => '');
+      let serverMessage;
+      try {
+        const parsed = JSON.parse(raw);
+        const full = parsed?.error?.message || parsed?.message || '';
+        // Strip Java exception class prefix (e.g. "com.foo.SomeException: Actual message")
+        let cleaned = full.replace(/^(?:[\w.$]+\.)+\w+Exception:\s*/i, '').trim();
+        // Openbravo message keys arrive as "@AEAT303_SomeKey@" — strip the @ delimiters
+        cleaned = cleaned.replace(/^@(.+)@$/, '$1');
+        serverMessage = cleaned || undefined;
+      } catch (_) { /* not JSON */ }
+      return { ok: false, error: `http_${res.status}`, serverMessage };
+    }
     const blob = await res.blob();
     const objectUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = objectUrl;
-    a.download = `303_${decl.period}_${decl.year}.txt`;
+    a.download = filename ?? `303_${decl.period}_${decl.year}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(objectUrl);
-    return true;
+    return { ok: true };
   } catch (_) {
-    return false;
+    return { ok: false, error: 'network' };
   }
 }
 

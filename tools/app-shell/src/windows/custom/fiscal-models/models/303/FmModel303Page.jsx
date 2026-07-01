@@ -9,7 +9,7 @@ import {
 import { Tabs, KpiWidget } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
-import { PresentModal, FileGenModal, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
+import { PresentModal, FileGenModal303, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount, formatPeriod, computeBoxes303, generate303File } from '../../fiscalModelsUtils.js';
 
@@ -223,6 +223,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const [liveSources, setLiveSources] = useState(decl._precomputed?.sources ?? null);
   const [computing,   setComputing]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
+  const [genError,    setGenError]    = useState(null);
 
   async function handleCompute() {
     setComputing(true);
@@ -238,20 +239,21 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     }
   }
 
-  async function handleGenerate() {
+  async function handleGenerate({ filename } = {}) {
+    setGenError(null);
     setGenerating(true);
-    const result = liveSummary?.result ?? decl.summary?.result ?? 0;
-    let kind = decl.result?.kind;
-    if (!kind) {
-      if (result > 0) kind = 'I';
-      else if (result < 0) kind = 'C';
-      else kind = 'N';
-    }
-    const declForGenerate = { ...decl, result: { ...decl.result, kind } };
-    const ok = await generate303File(declForGenerate, { token, apiBaseUrl });
+    const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename });
     setGenerating(false);
-    if (!ok) {
-      console.error('generate303File failed for', decl.year, decl.period);
+    if (!result.ok) {
+      if (result.error === 'iban_required') {
+        setGenError(t('fm.gen303.error.iban_required') ?? 'Se necesita el IBAN para generar el fichero. Selecciona tipo C o N, o introduce el IBAN.');
+      } else {
+        const msg = result.serverMessage
+          || t('fm.gen303.error.generic')
+          || 'Error al generar el fichero. Por favor, inténtelo de nuevo.';
+        setGenError(msg);
+        console.error('generate303File failed:', result.error, result.serverMessage);
+      }
     }
   }
 
@@ -288,6 +290,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
 
   // Derive result sublabel from kind
   const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
+
 
   let incidentBadgeTone = null;
   if (blocking > 0) incidentBadgeTone = 'danger';
@@ -367,7 +370,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
         <MoreOptionsMenu
           onCompare={() => setShowCompare(true)}
           onConfig={() => setShowConfig(true)}
-          onGenerate={() => setShowFilegen(true)}
+          onGenerate={() => { setGenError(null); setShowFilegen(true); }}
           generating={generating}
           fileBlocked={fileBlocked}
           t={t}
@@ -455,6 +458,24 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           badgeColor="#3F3F50"
           data-testid="KpiWidget__4f6c0d" />
       </div>
+      {/* ── Inline generate error ────────────────────────────────── */}
+      {genError && (
+        <div style={{
+          margin: '4px 20px 0',
+          padding: '8px 14px',
+          background: '#FEF0F4',
+          border: '1px solid #F9B8C8',
+          borderRadius: 8,
+          fontSize: 13,
+          color: '#D50B3E',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <OctagonAlert size={14} data-testid="OctagonAlert__gen_error" />
+          {genError}
+        </div>
+      )}
       {/* ── Tabs bar ─────────────────────────────────────────────── */}
       <div className="fm-tabs-sticky">
         <Tabs
@@ -497,7 +518,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
               decl={decl}
               t={t}
               fileBlocked={fileBlocked}
-              onGenerate={() => setShowFilegen(true)}
+              onGenerate={() => { setGenError(null); setShowFilegen(true); }}
               genLabel={t('fm.action.gen303') ?? 'Generar fichero 303'}
               data-testid="FilesTab__4f6c0d" />
           )}
@@ -514,11 +535,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
           data-testid="PresentModal__4f6c0d" />
       )}
       {showFilegen && (
-        <FileGenModal
+        <FileGenModal303
           decl={decl}
           onConfirm={handleGenerate}
           onClose={() => setShowFilegen(false)}
-          data-testid="FileGenModal__4f6c0d" />
+          data-testid="FileGenModal303__4f6c0d" />
       )}
       {showConfig && <ConfigDrawer
         onClose={() => setShowConfig(false)}

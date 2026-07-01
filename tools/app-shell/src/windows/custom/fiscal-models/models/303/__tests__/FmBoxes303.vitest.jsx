@@ -559,7 +559,7 @@ describe('FmBoxes303 — datos_bancarios sectionVisibleWhen', () => {
     expect(container.querySelector('.fm-aeat-section')).toBeTruthy();
   });
 
-  it('hides section when tipo_declaracion is I', () => {
+  it('shows section when tipo_declaracion is I (IBAN required for ingreso)', () => {
     const { container } = render(
       <FmBoxes303
         {...BASE_PROPS}
@@ -568,7 +568,7 @@ describe('FmBoxes303 — datos_bancarios sectionVisibleWhen', () => {
         identification={{ tipo_declaracion: 'I' }}
       />
     );
-    expect(container.querySelector('.fm-aeat-section')).toBeNull();
+    expect(container.querySelector('.fm-aeat-section')).toBeTruthy();
   });
 
   it('hides section when tipo_declaracion is N', () => {

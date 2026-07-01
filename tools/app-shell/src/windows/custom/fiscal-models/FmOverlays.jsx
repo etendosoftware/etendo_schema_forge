@@ -211,6 +211,55 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
   );
 }
 
+
+export function FileGenModal303({ decl, defaultFilename, onConfirm, onClose }) {
+  const ui = useUI();
+  const t = ui;
+  const [filename, setFilename] = React.useState(defaultFilename ?? `303_${decl?.period}_${decl?.year}.txt`);
+  const inputSt = {
+    width: '100%', fontSize: 14, padding: '8px 12px',
+    border: '1px solid #D1D4DB', borderRadius: 8, height: 40,
+    boxSizing: 'border-box', color: '#121217', outline: 'none', background: '#fff',
+  };
+  return (
+    <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="fm-config-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+        <div className="fm-config-modal__header">
+          <div className="fm-config-modal__titles">
+            <div className="fm-config-modal__title">{t('fm.filegen303.title') ?? 'Generar fichero 303'}</div>
+            <div className="fm-config-modal__sub">
+              {t('fm.filegen.desc') ?? 'Generar el fichero .303 para'} <strong>{decl?.model} {decl?.year} {decl?.period}</strong>
+            </div>
+          </div>
+          <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
+        </div>
+        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
+          <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>
+            {t('fm.filegen.filename') ?? 'Nombre del fichero'}
+          </div>
+          <input
+            style={inputSt}
+            value={filename}
+            onChange={e => setFilename(e.target.value)}
+            placeholder={`303_${decl?.period}_${decl?.year}.txt`}
+          />
+        </div>
+        <div className="fm-config-modal__footer">
+          <button className="fm-btn fm-btn--cancel-pill" onClick={onClose}>
+            {t('fm.action.cancel')}
+          </button>
+          <button
+            className="fm-btn fm-btn--save-pill fm-btn--save-pill--active"
+            onClick={() => { onConfirm?.({ filename: filename.trim() || undefined }); onClose(); }}
+          >
+            {t('fm.filegen.generate') ?? 'Generar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function NewDeclModal({ onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
@@ -396,6 +445,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '', conceptCondition: 'condición', amountTolerance: '0%' });
   const [redeme, setRedeme] = useState(true);
   const [recc, setRecc] = useState(false);
+  const [iban, setIban] = useState('');
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
@@ -575,7 +625,13 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
                 <CfgField
                   label={t('fm.config.m303.iban') ?? 'IBAN Domiciliación'}
                   data-testid="CfgField__cda0bb">
-                  <input type="text" placeholder="ES00 0000 0000 0000 0000 0000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
+                  <input
+                    type="text"
+                    value={iban}
+                    onChange={e => { setIban(e.target.value); setIsDirty(true); }}
+                    placeholder="ES00 0000 0000 0000 0000 0000"
+                    style={{ ...INPUT_ST, fontFamily: 'monospace' }}
+                  />
                 </CfgField>
               </div>
             </>

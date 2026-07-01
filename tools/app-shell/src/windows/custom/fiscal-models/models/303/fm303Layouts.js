@@ -70,9 +70,10 @@ const BASE = {
       titleKeyFrom: 'tipo_declaracion',
       titleKeyMap: {
         D: 'fm.section.devolucion', V: 'fm.section.devolucion', X: 'fm.section.devolucion',
-        U: 'fm.section.domiciliacion',
+        G: 'fm.section.devolucion',
+        I: 'fm.section.domiciliacion', U: 'fm.section.domiciliacion',
       },
-      sectionVisibleWhen: { field: 'tipo_declaracion', in: ['D', 'V', 'X', 'U'] },
+      sectionVisibleWhen: { field: 'tipo_declaracion', in: ['D', 'G', 'I', 'V', 'X', 'U'] },
       fieldLayout: 'aligned',
       colHeaderKeys: [],
       fields: [
@@ -172,7 +173,7 @@ const BASE = {
             { id: 'devoluciones_at',       labelKey: 'fm.box.row.devoluciones_at',       cells: [109], editable: true },
             { id: 'resultado_declaracion', labelKey: 'fm.box.row.resultado_declaracion', cells: [71],  total: true },
             { id: 'importe_devolucion',    labelKey: 'fm.box.row.importe_devolucion',    cells: [null], rowVisibleWhen: { field: 'tipo_declaracion', in: ['D', 'V', 'X', 'C'] }, derivedValue: { box: 71, abs: true, subtractBox: 70, clampMin: 0 } },
-            { id: 'rectificacion_importe', labelKey: 'fm.box.row.rectificacion_importe', cells: [111] },
+            { id: 'rectificacion_importe', labelKey: 'fm.box.row.rectificacion_importe', cells: [111], editable: true },
           ],
         },
       ],
