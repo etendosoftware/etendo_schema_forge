@@ -1564,6 +1564,11 @@ export function dispatchProcessAction(p, { processConfirmModal, setConfirmProces
   else { handleProcess?.(p); }
 }
 
+function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
+  if (!process || !Modal) return null;
+  return React.createElement(Modal, { onConfirm, onClose });
+}
+
 export function DetailView({
   entity,
   detailEntity,
@@ -3290,10 +3295,12 @@ export function DetailView({
           }}
           data-testid="ProcessParamDialog__fa3275" />
 
-        {confirmProcess && processConfirmModal && React.createElement(processConfirmModal, {
-          onConfirm: async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
-          onClose: () => setConfirmProcess(null),
-        })}
+        {renderProcessConfirmModal(
+          confirmProcess,
+          processConfirmModal,
+          async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
+          () => setConfirmProcess(null),
+        )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
         <div className="flex-1 flex overflow-hidden">
