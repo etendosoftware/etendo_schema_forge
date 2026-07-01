@@ -25,6 +25,9 @@ jobs:
     name: Offline Regen Check
     runs-on: ubuntu-latest
     env:
+      # NOTE: some steps below run with working-directory: etendo_core/etendo_schema_forge,
+      # so this doesn't match their actual CWD. Harmless today — no script invoked from
+      # those steps reads SF_ROOT — but fix this if one ever does.
       SF_ROOT: ${{ github.workspace }}
       GO_MODULE_NAME: com.etendoerp.go
       DEVELOP_BRANCH: develop
