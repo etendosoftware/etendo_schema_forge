@@ -330,7 +330,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
             options={filterOptions.accountingStatuses}
             selected={accountingStatuses}
             onToggle={toggleAccountingStatus}
-          />
+            data-testid="MultiSelect__b28bb1" />
         </div>
 
         <div className="npd-filter-field">
@@ -347,7 +347,6 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           {loading ? '…' : ui('search') || 'Search'}
         </button>
       </div>
-
       {/* ── Toolbar ──────────────────────────────────────────────────────────── */}
       <div className="npd-toolbar">
         <div className="npd-toolbar-left">
@@ -366,7 +365,6 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           {rows.length} {ui('records') || 'records'}
         </span>
       </div>
-
       {/* ── Table ────────────────────────────────────────────────────────────── */}
       {renderTableContent()}
     </div>
