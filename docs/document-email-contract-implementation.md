@@ -19,7 +19,7 @@ User clicks Send
   -> provider adapter sends the approved template
 ```
 
-The browser must never send provider payload fields such as `to`, `template`, `data`, `subject`, `body`, sender, Reply-To, provider URL, provider credentials, or a caller-provided download link.
+The browser must never send provider payload fields such as `to`, `template`, `data`, `subject`, `body`, sender, Reply-To, provider URL, provider credentials, or a caller-provided download link. The only recipient-related command field the browser may send is the allowlisted `recipientEdits` of the document-send family (see [email-contracts.md](email-contracts.md)); the backend stays authoritative over the final recipient set.
 
 ## Ownership Map
 
@@ -149,7 +149,7 @@ Document:
 - where the user can trigger the send action;
 - which contract name is used;
 - whether the preview PDF is cached before send;
-- which recipient data is shown as read-only;
+- the editable recipient behavior: which contact email is proposed as the To chip, and whether the window keeps the default (editable To/CC) or disables editing via `window.sendDocument.editableRecipients: false`;
 - expected user-facing states for success, duplicate, no recipient, validation failure, unauthorized, provider failure;
 - tests or smoke checks that cover the flow.
 
@@ -157,9 +157,12 @@ For example:
 
 ```md
 Email send: the Send Document modal calls the `sales-order-send` contract with
-a minimal command. The browser does not send recipient, template, subject, body,
-or provider metadata. The recipient is resolved server-side from the trusted
-business partner/contact record.
+a minimal command. The contact email is proposed as an editable To chip; the
+user can remove it, add To recipients, and add CC recipients. The browser sends
+recipient changes only through the allowlisted `recipientEdits` field — never
+template, subject, body, or provider metadata. The base recipient is resolved
+server-side from the trusted business partner/contact record and the backend
+re-validates the final set.
 ```
 
 ## Step 3: Wire The Frontend Command
@@ -177,6 +180,23 @@ The command sent by the browser must stay minimal:
 }
 ```
 
+When the user edited the recipient lists, the command adds the allowlisted
+`recipientEdits` field and omits the client `idempotencyKey` (the server
+derives it from the final recipient set — see
+[email-contracts.md](email-contracts.md)):
+
+```json
+{
+  "version": "v1",
+  "recordId": "E2F7A13B...",
+  "intent": "send-document",
+  "recipientEdits": {
+    "to": { "add": ["ap@customer.com"], "remove": ["contact@customer.com"] },
+    "cc": { "add": ["pm@customer.com"] }
+  }
+}
+```
+
 Expected request:
 
 ```http
@@ -188,9 +208,9 @@ Content-Type: application/json
 Frontend rules:
 
 1. Derive contract name generically as `{windowName}-send`.
-2. Keep recipient preview fields read-only.
-3. Never add editable recipient fields for normal document sends.
-4. Never include `to`, `template`, `data`, `subject`, `body`, sender, Reply-To, provider URL, provider metadata, or provider credentials in the command.
+2. Recipients are **editable by default** for document sends: the contact email is proposed as an editable To chip; the user can remove it, add To recipients, and add CC recipients. Edits travel only through the command-scoped `recipientEdits` field. Render the read-only recipient input only where a window or contract explicitly disables editing (`window.sendDocument.editableRecipients: false` in `decisions.json`, or the contract's `isRecipientEditingEnabled()` hook).
+3. Validate recipient syntax client-side as user experience only: disable Send while any entered email is invalid, while the final To list is empty, or while the total across To and CC exceeds the effective max (default 10). The backend re-validates everything.
+4. Never include `to`, `template`, `data`, `subject`, `body`, sender, Reply-To, provider URL, provider metadata, or provider credentials in the command. `recipientEdits` is the only recipient-related field, and it is omitted when the user made no edits (untouched sends stay byte-identical to the legacy command).
 5. Map executor statuses to user-facing messages without exposing internal exception details.
 6. Disable send while a required preview blob is still loading and no cacheable source exists.
 
@@ -281,6 +301,28 @@ Document email package
 
 The core framework must know about contracts, commands, responses, safety controls, audit, and provider adapters. It must not know the fields or tables of each business document.
 
+### Multi-Channel Recipient Resolution (To/CC)
+
+Point 3 above resolves the trusted **base** recipient — that part is unchanged and stays in the injected per-document resolver. With editable recipients (ETP-4226), `DefaultDocumentSendEmailContract` then applies the generic resolution algorithm on top of that base. Every document-send contract inherits it; do not reimplement it per document.
+
+The order is fixed:
+
+1. **Base To set.** The trusted business partner/contact email lands in the `to` channel. Base recipients never originate in `cc`.
+2. **Normalize the edits.** For each list in `recipientEdits` (`to.add`, `to.remove`, `cc.add`): trim whitespace, lower-case the domain, drop empty values, dedup within the channel, and reject syntactically invalid emails (`VALIDATION_FAILED`, provider never called).
+3. **Apply `to.remove`** against the base set (case-insensitive comparable key).
+4. **Apply `to.add` and `cc.add`.**
+5. **Cross-channel dedup** with precedence `to > cc`: an address present in `to` is silently dropped from `cc`.
+6. **Enforce final constraints:**
+   - at least one `to` recipient — a send with only CC is invalid;
+   - maximum recipient count across both channels (default 10, single limit for all roles);
+   - no suppressed recipient or domain in either channel (`SUPPRESSED`);
+   - no invalid address after normalization.
+7. **`NO_RECIPIENT` when the final `to` set is empty** — this covers both "base contact has no email and no valid additions" and "user removed every base recipient without replacement". It replaces the old collapse into `VALIDATION_FAILED` for empty recipients.
+
+A command **without** `recipientEdits` skips steps 2–5 and resolves exactly the single trusted base recipient, as before. A contract can disable editing (`isRecipientEditingEnabled()` returns `false`) or tighten the limit (`maxRecipientsTotal()`); a disabled contract rejects any command carrying `recipientEdits` with `VALIDATION_FAILED`.
+
+Idempotency and throttle then run over the **final** set: the key is server-derived as `{contractName}:{tenantId}:{recordId}:send:v1:{recipientSetHash}`, and per-recipient/per-domain throttle rules iterate every address in both channels.
+
 ## Step 6: Backend Validation Rules
 
 A document-send contract must validate in this order:
@@ -311,12 +353,13 @@ For app-shell changes, add or update tests near:
 Required frontend assertions:
 
 1. The contract name is derived generically from `windowName`.
-2. The command contains only `version`, `recordId`, `intent`, and `idempotencyKey`.
-3. The command does not contain `to`, `template`, `data`, `subject`, `body`, sender, Reply-To, or provider metadata.
-4. Preview cache runs before contract send when `pdfBlob` or `pdfBlobUrl` is available.
-5. If preview cache fails, the contract send is not called.
-6. Send is disabled while the required preview source is loading and unavailable.
-7. User-facing errors do not expose raw internal exception details.
+2. An untouched send contains only `version`, `recordId`, `intent`, and `idempotencyKey` — byte-identical to the legacy command. A send with recipient edits contains `version`, `recordId`, `intent`, and `recipientEdits`, and omits the client `idempotencyKey`.
+3. The command does not contain `to`, `template`, `data`, `subject`, `body`, sender, Reply-To, or provider metadata. `recipientEdits` is the only recipient-related field ever sent.
+4. The To chip editor is rendered by default; `sendPolicy: { editableRecipients: false }` restores the read-only input; Send is disabled on invalid entries, empty final To, or more than the effective max recipients.
+5. Preview cache runs before contract send when `pdfBlob` or `pdfBlobUrl` is available.
+6. If preview cache fails, the contract send is not called.
+7. Send is disabled while the required preview source is loading and unavailable.
+8. User-facing errors do not expose raw internal exception details.
 
 Suggested commands:
 
@@ -382,8 +425,8 @@ Record the endpoint, contract, record id, expected result, actual result, and ev
 
 - Contract entry exists in [email-contracts.md](email-contracts.md).
 - Window guide is updated when a window flow changes.
-- Frontend sends a contract command, not provider payload.
-- Recipient fields shown in the UI are read-only.
+- Frontend sends a contract command, not provider payload; recipient changes travel only through the allowlisted `recipientEdits` field.
+- Recipients are editable by default for document sends (To chips + CC); the read-only recipient input appears only where the window/contract explicitly disables editing (`window.sendDocument.editableRecipients: false` or the contract hook).
 - Default document payload stays minimal.
 - Optional variables are justified by provider-template compatibility.
 - Preview cache or storage handoff is documented.

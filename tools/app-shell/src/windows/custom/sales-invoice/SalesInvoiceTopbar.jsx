@@ -25,7 +25,10 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
 
   return (
     <>
-      <CloneButton onClick={() => setShowClone(true)} title={ui('cloneOrderBtn')} />
+      <CloneButton
+        onClick={() => setShowClone(true)}
+        title={ui('cloneOrderBtn')}
+        data-testid="CloneButton__5c4da7" />
       <InvoiceTopbarExtra
         data={data}
         recordId={recordId}
@@ -33,7 +36,7 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
         apiBaseUrl={apiBaseUrl}
         api={api}
         onProcess={onProcess}
-      />
+        data-testid="InvoiceTopbarExtra__5c4da7" />
       {showClone && createPortal(
         <CloneOrderModal
           recordId={recordId}
@@ -51,7 +54,7 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
             setShowClone(false);
             navigate(`/sales-invoice/${newId}`);
           }}
-        />,
+          data-testid="CloneOrderModal__5c4da7" />,
         document.body,
       )}
     </>

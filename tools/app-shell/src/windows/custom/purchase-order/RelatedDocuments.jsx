@@ -65,19 +65,25 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
         <DocChip
           key={`${spec.key}-${row.id}`}
           {...docChipProps({ type: spec.type, doc: row, ui, navigate, iconKey: spec.iconKey })}
-        />
+          data-testid="DocChip__4efe59" />
       );
     }
   }
 
   for (const p of payments) {
     chips.push(
-      <DocChip key={`payment-${p.id}`} {...docChipProps({ type: 'payment', doc: p, ui, navigate })} />
+      <DocChip
+        key={`payment-${p.id}`}
+        {...docChipProps({ type: 'payment', doc: p, ui, navigate })}
+        data-testid="DocChip__4efe59" />
     );
   }
 
   return (
-    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
+    <RelatedDocumentsShell
+      loading={loading}
+      onRefresh={() => setRefreshKey(k => k + 1)}
+      data-testid="RelatedDocumentsShell__4efe59">
       {chips}
     </RelatedDocumentsShell>
   );

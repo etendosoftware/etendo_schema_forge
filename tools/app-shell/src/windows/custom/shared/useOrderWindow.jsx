@@ -1,9 +1,11 @@
 import { useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
+import { fetchOptionalJson } from './pdfUtils.js';
 import { useSavedPreviewRecord } from './useSavedPreviewRecord.js';
 import OrderPreview from './OrderPreview.jsx';
 
@@ -48,7 +50,7 @@ export function useOrderWindow({
       specName={specName}
       onClose={onClose}
       onEdit={onEdit}
-    />
+      data-testid="OrderPreview__4b313b" />
   ), [token, apiBaseUrl, windowName, specName]);
 
   const rowQuickActions = useMemo(() => ({
@@ -78,7 +80,30 @@ export function useOrderWindow({
           key: 'confirm',
           label: ui(confirmLabelKey),
           visible: status === 'DR',
-          onClick: ({ row: r }) => setConfirmRow(r),
+          onClick: async ({ row: r }) => {
+            const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+            const docCurrency = r['currency$_identifier'] || r.currency;
+            if (docCurrency && r.orderDate) {
+              try {
+                const session = await fetchOptionalJson(`${base}/session`, token);
+                const orgCurrency = session?.organization?.['currency$_identifier'];
+                const orgCurrencyId = session?.organization?.currency;
+                if (orgCurrency && docCurrency !== orgCurrency) {
+                  const fromCurrency = r.currency || docCurrency;
+                  const toCurrency = orgCurrencyId ?? orgCurrency;
+                  const rateData = await fetchOptionalJson(
+                    `${base}/validate-exchange-rate?fromCurrency=${encodeURIComponent(fromCurrency)}&toCurrency=${encodeURIComponent(toCurrency)}&date=${encodeURIComponent(r.orderDate)}`,
+                    token,
+                  );
+                  if (rateData && !rateData.hasRate) {
+                    toast.error(ui('noExchangeRateAvailable'));
+                    return;
+                  }
+                }
+              } catch { /* non-fatal — allow confirmation to proceed */ }
+            }
+            setConfirmRow(r);
+          },
         },
         {
           key: 'manage',
@@ -109,7 +134,7 @@ export function useOrderWindow({
       headers={headers}
       onClose={() => setConfirmRow(null)}
       onConfirmed={(docs) => setConfirmedDocs(docs)}
-    />,
+      data-testid="ConfirmModal__4b313b" />,
     document.body,
   ) : null;
 
@@ -121,7 +146,7 @@ export function useOrderWindow({
       token={token}
       onClose={() => setManageRow(null)}
       onCreated={() => { setManageRow(null); setRefreshKey(k => k + 1); }}
-    />
+      data-testid="ManageDocsLauncher__4b313b" />
   ) : null;
 
   const confirmResultPortal = confirmedDocs ? createPortal(
@@ -131,7 +156,6 @@ export function useOrderWindow({
         confirmedDocs.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, amount: confirmedDocs.shipment.amount, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
         confirmedDocs.invoice?.id  && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
       ].filter(Boolean)}
-      primary={ui('soViewInvoice')}
       currency={confirmRow?.['currency$_identifier'] || ''}
       navigate={navigate}
       onClose={() => {
@@ -139,7 +163,7 @@ export function useOrderWindow({
         setConfirmRow(null);
         setRefreshKey(k => k + 1);
       }}
-    />,
+      data-testid="ConfirmResultModal__4b313b" />,
     document.body,
   ) : null;
 

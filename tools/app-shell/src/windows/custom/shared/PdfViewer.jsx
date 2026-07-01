@@ -77,7 +77,7 @@ export default function PdfViewer({ url }) {
           className="w-12 h-[38px] flex items-center justify-center hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label={ui('pdfViewerZoomIn')}
         >
-          <ZoomIn size={20} style={{ color: '#828FA3' }} />
+          <ZoomIn size={20} style={{ color: '#828FA3' }} data-testid="ZoomIn__fca188" />
         </button>
         <div style={{ width: 1, backgroundColor: '#E8EAEF' }} />
         <button
@@ -86,7 +86,10 @@ export default function PdfViewer({ url }) {
           className="w-12 h-[38px] flex items-center justify-center hover:bg-gray-50 transition-colors"
           aria-label={ui('pdfViewerFitToPage')}
         >
-          <Maximize2 size={20} style={{ color: fitMode === 'page' ? '#121217' : '#828FA3' }} />
+          <Maximize2
+            size={20}
+            style={{ color: fitMode === 'page' ? '#121217' : '#828FA3' }}
+            data-testid="Maximize2__fca188" />
         </button>
         <div style={{ width: 1, backgroundColor: '#E8EAEF' }} />
         <button
@@ -96,10 +99,9 @@ export default function PdfViewer({ url }) {
           className="w-12 h-[38px] flex items-center justify-center hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           aria-label={ui('pdfViewerZoomOut')}
         >
-          <ZoomOut size={20} style={{ color: '#828FA3' }} />
+          <ZoomOut size={20} style={{ color: '#828FA3' }} data-testid="ZoomOut__fca188" />
         </button>
       </div>
-
       {/* PDF scroll container */}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto">
         <div className="w-fit mx-auto py-2">
@@ -109,18 +111,18 @@ export default function PdfViewer({ url }) {
             onLoadError={(err) => setLoadError(err?.message || 'Error')}
             loading={(
               <div className="flex items-center justify-center gap-2 text-muted-foreground p-12">
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__fca188" />
                 <span className="text-sm">{ui('invoicePdfGenerating')}</span>
               </div>
             )}
             error={(
               <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-                <AlertCircle className="h-8 w-8 text-amber-400" />
+                <AlertCircle className="h-8 w-8 text-amber-400" data-testid="AlertCircle__fca188" />
                 <p className="text-sm text-muted-foreground">{ui('invoicePdfError')}</p>
                 {loadError && <p className="text-xs text-muted-foreground/60">{loadError}</p>}
               </div>
             )}
-          >
+            data-testid="Document__fca188">
             {Boolean(effectiveWidth) && Array.from({ length: numPages }, (_, i) => (
               <Page
                 key={`page-${i + 1}`}
@@ -130,7 +132,7 @@ export default function PdfViewer({ url }) {
                 renderTextLayer={false}
                 renderAnnotationLayer={false}
                 className="mb-2 last:mb-0 bg-white shadow-md"
-              />
+                data-testid="Page__fca188" />
             ))}
           </Document>
         </div>

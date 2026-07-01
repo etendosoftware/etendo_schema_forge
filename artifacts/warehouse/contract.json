@@ -1,14 +1,16 @@
 {
-  "version": "0.5.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T18:11:37.816Z",
-  "updatedAt": "2026-05-20T11:45:15.824Z",
-  "checksum": "26ade87ee9e371da",
+  "updatedAt": "2026-06-29T12:09:18.905Z",
+  "checksum": "8bdd1bc4e0c9f13d",
   "frontendContract": {
     "window": {
       "id": "139",
       "name": "Warehouse",
       "primaryEntity": "warehouse",
       "category": "inventory",
+      "hidePrint": true,
+      "hideLink": true,
       "secondaryTabs": {
         "productTransactions": {
           "label": "Transactions",
@@ -16,6 +18,8 @@
         }
       },
       "detailEntity": null,
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2",
       "layoutType": "default"
     },
     "entities": {
@@ -36,7 +40,8 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "seq": 1
           },
           {
             "name": "name",
@@ -49,7 +54,8 @@
             "required": true,
             "grid": true,
             "form": true,
-            "sourceRequired": true
+            "sourceRequired": true,
+            "seq": 2
           },
           {
             "name": "description",
@@ -61,7 +67,10 @@
             "visibility": "editable",
             "required": false,
             "grid": false,
-            "form": true
+            "form": true,
+            "seq": 4,
+            "span": 4,
+            "rows": 1
           },
           {
             "name": "locationAddress",
@@ -72,64 +81,21 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "Location",
-            "inputMode": "search"
-          },
-          {
-            "name": "warehouseRule",
-            "apiKey": "warehouseRule",
-            "column": "M_Warehouse_Rule_ID",
-            "label": "Warehouse Rule",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "Warehouse_Rule",
-            "inputMode": "selector"
-          },
-          {
-            "name": "allocated",
-            "apiKey": "allocated",
-            "column": "Isallocated",
-            "label": "Allocated",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "displayLogic": {
-              "raw": "@StockReservations@!''",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
-            }
+            "inputMode": "search",
+            "seq": 3,
+            "span": 2
           }
         ],
         "searchableFields": [
           "searchKey",
           "name"
         ],
-        "computedFields": [
-          {
-            "name": "allocated",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          }
-        ]
+        "computedFields": [],
+        "formCols": 4
       },
       "storageBin": {
         "tableName": "M_Locator",
@@ -379,43 +345,73 @@
             "enumValues": [
               {
                 "value": "V+",
-                "name": "Vendor Receipts"
+                "name": "Vendor Receipts",
+                "labels": {
+                  "es_ES": "Albarán proveedor"
+                }
               },
               {
                 "value": "I+",
-                "name": "Inventory In"
+                "name": "Inventory In",
+                "labels": {
+                  "es_ES": "Entrada inventario"
+                }
               },
               {
                 "value": "M-",
-                "name": "Movement From"
+                "name": "Movement From",
+                "labels": {
+                  "es_ES": "Mover desde"
+                }
               },
               {
                 "value": "M+",
-                "name": "Movement To"
+                "name": "Movement To",
+                "labels": {
+                  "es_ES": "Mover a"
+                }
               },
               {
                 "value": "I-",
-                "name": "Inventory Out"
+                "name": "Inventory Out",
+                "labels": {
+                  "es_ES": "Salida inventario"
+                }
               },
               {
                 "value": "P-",
-                "name": "Production -"
+                "name": "Production -",
+                "labels": {
+                  "es_ES": "Producción -"
+                }
               },
               {
                 "value": "P+",
-                "name": "Production +"
+                "name": "Production +",
+                "labels": {
+                  "es_ES": "Producción +"
+                }
               },
               {
                 "value": "C-",
-                "name": "Customer Shipment"
+                "name": "Customer Shipment",
+                "labels": {
+                  "es_ES": "Albarán cliente"
+                }
               },
               {
                 "value": "D-",
-                "name": "Internal Consumption -"
+                "name": "Internal Consumption -",
+                "labels": {
+                  "es_ES": "Consumo Interno -"
+                }
               },
               {
                 "value": "D+",
-                "name": "Internal Consumption +"
+                "name": "Internal Consumption +",
+                "labels": {
+                  "es_ES": "Consumo Interno +"
+                }
               }
             ]
           },
@@ -491,7 +487,8 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "productTransactionsHandler"
       },
       "binContents": {
         "tableName": "M_Storage_Detail",
@@ -633,10 +630,23 @@
             "form": true,
             "reference": "RefInventory",
             "inputMode": "selector"
+          },
+          {
+            "name": "etgoValuation",
+            "apiKey": "etgoValuation",
+            "column": "EM_Etgo_Valuation",
+            "label": "Valuation",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "binContentsHandler"
       }
     }
   },
@@ -646,13 +656,17 @@
       "name": "Warehouse",
       "primaryEntity": "warehouse",
       "category": "inventory",
+      "hidePrint": true,
+      "hideLink": true,
       "secondaryTabs": {
         "productTransactions": {
           "label": "Transactions",
           "customPanel": "WarehouseTransactionsTable"
         }
       },
-      "detailEntity": null
+      "detailEntity": null,
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2"
     },
     "entities": {
       "warehouse": {
@@ -713,7 +727,7 @@
             "apiKey": "warehouseRule",
             "column": "M_Warehouse_Rule_ID",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -721,7 +735,7 @@
             "apiKey": "allocated",
             "column": "Isallocated",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -1282,7 +1296,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "productTransactionsHandler"
       },
       "binContents": {
         "tableName": "M_Storage_Detail",
@@ -1456,8 +1471,17 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoValuation",
+            "apiKey": "etgoValuation",
+            "column": "EM_Etgo_Valuation",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
           }
-        ]
+        ],
+        "javaQualifier": "binContentsHandler"
       }
     },
     "endpoints": [
@@ -1647,14 +1671,6 @@
         "reference": "Location",
         "inputMode": "search",
         "url": "/sws/neo/warehouse/warehouse/selectors/locationAddress"
-      },
-      {
-        "entity": "warehouse",
-        "field": "warehouseRule",
-        "column": "M_Warehouse_Rule_ID",
-        "reference": "Warehouse_Rule",
-        "inputMode": "selector",
-        "url": "/sws/neo/warehouse/warehouse/selectors/warehouseRule"
       },
       {
         "entity": "storageBin",
@@ -1851,14 +1867,6 @@
         "description": "Default value for 'relativePriority' in storageBin should be a string"
       },
       {
-        "id": "t-default-value-type-warehouse-allocated",
-        "category": "default-value-type",
-        "entity": "warehouse",
-        "field": "allocated",
-        "runner": "node",
-        "description": "Default value for 'allocated' in warehouse should be a string"
-      },
-      {
         "id": "t-displaylogic-evaluable-binContents-attributeSetValue",
         "category": "displaylogic-evaluable",
         "entity": "binContents",
@@ -1881,14 +1889,6 @@
         "field": "changeStatus",
         "runner": "node",
         "description": "Display logic for 'changeStatus' in storageBin should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-warehouse-allocated",
-        "category": "displaylogic-evaluable",
-        "entity": "warehouse",
-        "field": "allocated",
-        "runner": "node",
-        "description": "Display logic for 'allocated' in warehouse should have evaluable flag"
       },
       {
         "id": "t-displaylogic-valid-binContents-attributeSetValue",
@@ -1915,20 +1915,20 @@
         "description": "Display logic for 'changeStatus' in storageBin should be valid JS"
       },
       {
-        "id": "t-displaylogic-valid-warehouse-allocated",
-        "category": "displaylogic-valid",
-        "entity": "warehouse",
-        "field": "allocated",
-        "runner": "node",
-        "description": "Display logic for 'allocated' in warehouse should be valid JS"
-      },
-      {
         "id": "t-field-presence-binContents-attributeSetValue",
         "category": "field-presence",
         "entity": "binContents",
         "field": "attributeSetValue",
         "runner": "node",
         "description": "Field 'attributeSetValue' should be present in binContents"
+      },
+      {
+        "id": "t-field-presence-binContents-etgoValuation",
+        "category": "field-presence",
+        "entity": "binContents",
+        "field": "etgoValuation",
+        "runner": "node",
+        "description": "Field 'etgoValuation' should be present in binContents"
       },
       {
         "id": "t-field-presence-binContents-lastInventoryCountDate",
@@ -2155,14 +2155,6 @@
         "description": "Field 'stackY' should be present in storageBin"
       },
       {
-        "id": "t-field-presence-warehouse-allocated",
-        "category": "field-presence",
-        "entity": "warehouse",
-        "field": "allocated",
-        "runner": "node",
-        "description": "Field 'allocated' should be present in warehouse"
-      },
-      {
         "id": "t-field-presence-warehouse-description",
         "category": "field-presence",
         "entity": "warehouse",
@@ -2195,20 +2187,20 @@
         "description": "Field 'searchKey' should be present in warehouse"
       },
       {
-        "id": "t-field-presence-warehouse-warehouseRule",
-        "category": "field-presence",
-        "entity": "warehouse",
-        "field": "warehouseRule",
-        "runner": "node",
-        "description": "Field 'warehouseRule' should be present in warehouse"
-      },
-      {
         "id": "t-field-type-binContents-attributeSetValue",
         "category": "field-type",
         "entity": "binContents",
         "field": "attributeSetValue",
         "runner": "node",
         "description": "Field 'attributeSetValue' should have type 'string' in binContents"
+      },
+      {
+        "id": "t-field-type-binContents-etgoValuation",
+        "category": "field-type",
+        "entity": "binContents",
+        "field": "etgoValuation",
+        "runner": "node",
+        "description": "Field 'etgoValuation' should have type 'number' in binContents"
       },
       {
         "id": "t-field-type-binContents-lastInventoryCountDate",
@@ -2435,14 +2427,6 @@
         "description": "Field 'stackY' should have type 'string' in storageBin"
       },
       {
-        "id": "t-field-type-warehouse-allocated",
-        "category": "field-type",
-        "entity": "warehouse",
-        "field": "allocated",
-        "runner": "node",
-        "description": "Field 'allocated' should have type 'boolean' in warehouse"
-      },
-      {
         "id": "t-field-type-warehouse-description",
         "category": "field-type",
         "entity": "warehouse",
@@ -2473,14 +2457,6 @@
         "field": "searchKey",
         "runner": "node",
         "description": "Field 'searchKey' should have type 'string' in warehouse"
-      },
-      {
-        "id": "t-field-type-warehouse-warehouseRule",
-        "category": "field-type",
-        "entity": "warehouse",
-        "field": "warehouseRule",
-        "runner": "node",
-        "description": "Field 'warehouseRule' should have type 'string' in warehouse"
       },
       {
         "id": "t-rule-declared-AD-Client-Security-validation",
@@ -2670,14 +2646,6 @@
         "field": "locationAddress",
         "runner": "node",
         "description": "Selector endpoint for 'locationAddress' in warehouse should exist"
-      },
-      {
-        "id": "t-selector-endpoint-warehouse-warehouseRule",
-        "category": "selector-endpoint",
-        "entity": "warehouse",
-        "field": "warehouseRule",
-        "runner": "node",
-        "description": "Selector endpoint for 'warehouseRule' in warehouse should exist"
       },
       {
         "id": "t-system-field-binContents-active",
@@ -3072,6 +3040,14 @@
         "description": "System field 'active' should exist in backend but not frontend for warehouse"
       },
       {
+        "id": "t-system-field-warehouse-allocated",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "allocated",
+        "runner": "node",
+        "description": "System field 'allocated' should exist in backend but not frontend for warehouse"
+      },
+      {
         "id": "t-system-field-warehouse-client",
         "category": "system-field",
         "entity": "warehouse",
@@ -3176,6 +3152,14 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for warehouse"
       },
       {
+        "id": "t-system-field-warehouse-warehouseRule",
+        "category": "system-field",
+        "entity": "warehouse",
+        "field": "warehouseRule",
+        "runner": "node",
+        "description": "System field 'warehouseRule' should exist in backend but not frontend for warehouse"
+      },
+      {
         "id": "t-visibility-binContents",
         "category": "visibility",
         "entity": "binContents",
@@ -3205,23 +3189,23 @@
       }
     ],
     "summary": {
-      "total": 180,
+      "total": 176,
       "byCategory": {
         "action-endpoint": 2,
         "crud-flags": 4,
-        "default-value-type": 4,
-        "displaylogic-evaluable": 4,
-        "displaylogic-valid": 4,
-        "field-presence": 35,
-        "field-type": 35,
+        "default-value-type": 3,
+        "displaylogic-evaluable": 3,
+        "displaylogic-valid": 3,
+        "field-presence": 34,
+        "field-type": 34,
         "rule-declared": 11,
         "searchable-filters": 2,
-        "selector-endpoint": 13,
-        "system-field": 62,
+        "selector-endpoint": 12,
+        "system-field": 64,
         "visibility": 4
       },
       "byRunner": {
-        "node": 180,
+        "node": 176,
         "junit": 0
       }
     }

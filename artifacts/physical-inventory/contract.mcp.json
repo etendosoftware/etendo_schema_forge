@@ -1,8 +1,7 @@
 {
-  "version": "0.17.0",
-  "generatedAt": "2026-04-29T19:05:48.442Z",
-  "updatedAt": "2026-05-26T18:48:56.939Z",
-  "contractChecksum": "43be58d0a53e1c42",
+  "version": "0.29.1",
+  "generatedAt": "2026-06-29T12:25:17.116Z",
+  "contractChecksum": "74ff606db3b82619",
   "apiPrediction": {
     "specName": "physical-inventory",
     "baseUrl": "/sws/neo/physical-inventory",
@@ -18,8 +17,7 @@
         "detailUrl": "/sws/neo/physical-inventory/inventory/{id}",
         "supportedFilters": [
           "movementDate",
-          "warehouse",
-          "inventoryType"
+          "warehouse"
         ]
       },
       "inventoryLine": {
@@ -172,13 +170,13 @@
         "processType": "classic"
       },
       {
-        "name": "posted",
+        "name": "etblkpBulkposting",
         "actionType": "documentAction",
         "entity": "inventory",
-        "column": "Posted",
+        "column": "EM_Etblkp_Bulkposting",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/physical-inventory/inventory/{id}/action/posted",
+        "url": "/sws/neo/physical-inventory/inventory/{id}/action/etblkpBulkposting",
         "parameters": [
           {
             "name": "docAction",
@@ -207,7 +205,9 @@
           "Document is already completed or closed",
           "Document has pending lines or missing required fields",
           "User lacks permission to execute the action"
-        ]
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -225,6 +225,14 @@
     },
     "window": {
       "category": "inventory"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "Processed": "Status"
+      },
+      "es_ES": {
+        "Processed": "Estado"
+      }
     }
   },
   "formState": {
@@ -238,6 +246,7 @@
           },
           "name": {
             "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#Date@"
           },
           "warehouse": {
@@ -245,7 +254,11 @@
             "readOnlyLogic": "@Processed@='Y'"
           },
           "description": {},
-          "processNow": {},
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
           "inventoryType": {
             "readOnly": true,
             "required": true,
@@ -300,7 +313,9 @@
         }
       }
     },
-    "requiredSessionVariables": [],
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
     "evaluationMode": "runtime"
   },
   "agentProfile": {
@@ -342,7 +357,7 @@
     "actions": [
       "generateList",
       "processNow",
-      "posted"
+      "etblkpBulkposting"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -391,5 +406,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "c00ae65b9c882018"
+  "checksum": "74ff96fd4197c154"
 }

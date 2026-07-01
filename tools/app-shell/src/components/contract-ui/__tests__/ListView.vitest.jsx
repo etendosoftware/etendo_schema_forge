@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
 // Mock react-router-dom
 vi.mock('react-router-dom', () => ({
@@ -74,6 +74,28 @@ function MockTable({ data, onNavigate, ...rest }) {
   );
 }
 
+// A Table mock variant that lets the test drive the selection state by
+// invoking the forwarded `onSelectionChange` prop. The original MockTable
+// never calls it, so the selection toolbar branch stays unexercised there.
+function SelectableMockTable({ data, onSelectionChange, ...rest }) {
+  return (
+    <table data-testid="mock-table">
+      <tbody>
+        <tr>
+          <td>
+            <button
+              data-testid="trigger-select"
+              onClick={() => onSelectionChange?.(data.length ? data : [{ id: 'r1' }])}
+            >
+              select-all
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
 describe('ListView', () => {
   const defaultProps = {
     entity: 'testEntity',
@@ -131,5 +153,78 @@ describe('ListView', () => {
     ];
     render(<ListView {...defaultProps} quickFilters={quickFilters} />);
     expect(screen.getByText('overdueFilter')).toBeInTheDocument();
+  });
+
+  it('renders the selection toolbar (preview/print) when rows are selected — exercises iconSizeClass', () => {
+    render(<ListView {...defaultProps} Table={SelectableMockTable} />);
+
+    // Before selection, the selection-specific toolbar must not be present:
+    // the "preview" button and the "selected {count}" label belong only to the
+    // selection branch (the standalone report-print button is always present).
+    expect(screen.queryByText('preview')).not.toBeInTheDocument();
+    expect(screen.queryByText('selected')).not.toBeInTheDocument();
+
+    // Drive selectedRows to be non-empty by invoking the forwarded
+    // onSelectionChange prop, which switches ListView into the selection branch.
+    fireEvent.click(screen.getByTestId('trigger-select'));
+
+    // Preview + print buttons render — these contain the <Eye>/<Printer> icons
+    // whose className comes from iconSizeClass(selectionBarSize).
+    const previewBtn = screen.getByText('preview').closest('button');
+    expect(previewBtn).toBeInTheDocument();
+
+    // Default selectionBarSize is 'sm', so iconSizeClass returns 'h-3.5 w-3.5'
+    // for the <Eye> (preview) icon in the selection bar.
+    expect(previewBtn.querySelector('svg.lucide-eye')).toBeInTheDocument();
+    expect(previewBtn.querySelector('.h-3\\.5.w-3\\.5')).toBeInTheDocument();
+
+    // The selection-bar print button (<Printer> icon) is also present and sized
+    // by iconSizeClass.
+    const printIcon = document.querySelector('button svg.lucide-printer.h-3\\.5.w-3\\.5');
+    expect(printIcon).toBeInTheDocument();
+  });
+
+  it('renders the clone button in the selection toolbar when onCloneRow is provided', () => {
+    const onCloneRow = vi.fn();
+    render(<ListView {...defaultProps} Table={SelectableMockTable} onCloneRow={onCloneRow} />);
+
+    fireEvent.click(screen.getByTestId('trigger-select'));
+
+    // Clone button only shows when onCloneRow is passed (uses the <Copy> icon
+    // sized by iconSizeClass).
+    const cloneBtn = screen.getByText(/^cloneOrderBtn/).closest('button');
+    expect(cloneBtn).toBeInTheDocument();
+    expect(cloneBtn.querySelector('.h-3\\.5.w-3\\.5')).toBeInTheDocument();
+  });
+
+  it('applies the larger icon size in the selection toolbar when selectionBarSize is not "sm"', () => {
+    render(<ListView {...defaultProps} Table={SelectableMockTable} selectionBarSize="default" />);
+
+    fireEvent.click(screen.getByTestId('trigger-select'));
+
+    // selectionBarSize !== 'sm' → iconSizeClass returns 'h-4 w-4'.
+    const previewBtn = screen.getByText('preview').closest('button');
+    expect(previewBtn.querySelector('.h-4.w-4')).toBeInTheDocument();
+    expect(previewBtn.querySelector('.h-3\\.5.w-3\\.5')).not.toBeInTheDocument();
+  });
+
+  it('renders both view-toggle buttons when galleryRenderer is provided — exercises ViewToggle true branch', () => {
+    const galleryRenderer = () => <div data-testid="gallery" />;
+    render(<ListView {...defaultProps} galleryRenderer={galleryRenderer} />);
+
+    // ViewToggle wraps the two toggle buttons and is identified by data-testid.
+    // It only renders when galleryRenderer is truthy.
+    const toggleWrapper = screen.getByTestId('view-toggle');
+    expect(toggleWrapper).toBeInTheDocument();
+
+    // Two toggle buttons: list and gallery.
+    const buttons = toggleWrapper.querySelectorAll('button');
+    expect(buttons).toHaveLength(2);
+  });
+
+  it('does not render the view-toggle when galleryRenderer is absent — ViewToggle false branch', () => {
+    const { container } = render(<ListView {...defaultProps} />);
+    const toggleWrapper = container.querySelector('.inline-flex.border.border-border.rounded-lg.overflow-hidden');
+    expect(toggleWrapper).not.toBeInTheDocument();
   });
 });

@@ -356,7 +356,6 @@ export default function FiscalConfigDebugPanel({ orgId, token, apiBaseUrl, onDel
           </>
         )}
       </div>
-
       {certDebug && (
         <CertModal
           context={certDebug.context}
@@ -366,7 +365,7 @@ export default function FiscalConfigDebugPanel({ orgId, token, apiBaseUrl, onDel
           debugInitialState={certDebug.state?.errMsgKey ? { ...certDebug.state, errMsg: ui(certDebug.state.errMsgKey) } : certDebug.state}
           onClose={() => setCertDebug(null)}
           onUpload={() => setCertDebug(null)}
-        />
+          data-testid="CertModal__df0aa1" />
       )}
     </>
   );

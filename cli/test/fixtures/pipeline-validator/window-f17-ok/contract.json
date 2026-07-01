@@ -1,0 +1,21 @@
+{
+  "version": "v2",
+  "frontendContract": {
+    "window": { "primaryEntity": "journal" },
+    "entities": {
+      "journal": {
+        "fields": [
+          { "name": "documentNo" }
+        ]
+      },
+      "journalLine": {
+        "fields": [
+          { "name": "amtSourceDr" },
+          { "name": "amtSourceCr" },
+          { "name": "account" }
+        ]
+      }
+    }
+  },
+  "agentProfile": {}
+}

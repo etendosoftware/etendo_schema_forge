@@ -9,8 +9,9 @@ function createFakeMixpanel(calls) {
     init(token, options) {
       calls.push(['init', token, options]);
     },
-    track(eventName, properties) {
+    track(eventName, properties, _options, callback) {
       calls.push(['track', eventName, properties]);
+      callback?.();
     },
     identify(userId) {
       calls.push(['identify', userId]);
@@ -83,7 +84,7 @@ describe('Mixpanel observability adapter', () => {
     await provider.flush();
 
     assert.deepEqual(calls, [
-      ['init', 'token-123', { debug: true, api_host: 'https://mixpanel.example' }],
+      ['init', 'token-123', { debug: true, api_host: 'https://mixpanel.example', batch_requests: false }],
       ['track', 'app_started', { app: 'app-shell' }],
       ['track', 'page_view', { route: '/dashboard', routePattern: '/dashboard' }],
       ['identify', 'user-1'],

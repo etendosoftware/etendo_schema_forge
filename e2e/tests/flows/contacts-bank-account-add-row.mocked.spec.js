@@ -2,16 +2,18 @@ import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
 
 /**
- * Contacts — Cuenta Bancaria inline-add-row (mocked).
+ * Contacts — Cuenta Bancaria inline-add-row (mocked, single continuous flow).
  *
  * Regression coverage for ETP-4009 fixes:
- *  1. Column alignment: IBAN header cell aligns with body row cells (minWidth:0 prevents overflow).
- *  2. @variable@ defaultValues (e.g. @COUNTRYDEF@) are NOT sent as field initialValues —
- *     buildEmpty() now strips them. Submitting with Generic format works without a country error.
- *  3. Backend error strings for IBAN validation are translated to Spanish via translateBackendError.
+ *  1. Column alignment: IBAN header aligns with body cells (minWidth:0).
+ *  2. @variable@ defaults (e.g. @COUNTRYDEF@) are stripped by buildEmpty().
+ *  3. Backend error strings are translated to Spanish via translateBackendError.
  *
- * Mock mode: no real Etendo backend. Specific routes installed after login() take
- * precedence over the generic /sws/** catch-all (Playwright LIFO route matching).
+ * Single flow: login → detail → bank tab → verify rows → check alignment →
+ *   open add-row → verify @COUNTRYDEF@ stripped → submit IBAN error →
+ *   verify translation → submit generic error → verify toast.
+ *
+ * Mock mode only.
  */
 
 const BP_ID = 'bp-mock-001';
@@ -33,181 +35,107 @@ const BANK_LINE_1 = {
   displayedAccount: '1234567890',
 };
 
-const BANK_LINE_IBAN = {
-  id: 'bank-002',
-  bankName: 'BBVA',
-  bankFormat: 'IBAN',
-  accountNo: '',
-  iBAN: 'ES7620770024003102575766',
-  swiftCode: 'BBVAESMMXXX',
-  displayedAccount: 'ES7620770024003102575766',
-};
-
-/**
- * Install mocks for the contacts/bankAccount tab.
- * Must be called AFTER login() so our routes win over the generic catch-all.
- *
- * @param {import('@playwright/test').Page} page
- * @param {object} opts
- * @param {object[]} opts.bankLines   – rows returned for the bankAccount child list
- * @param {number}   opts.addStatus   – HTTP status to return for POST bankAccount (default 200)
- * @param {object}   opts.addError    – error body to return when addStatus is not 200
- * @param {function} opts.onPost      – called with { body } on every POST /contacts/bankAccount
- */
-async function installMocks(page, {
-  bankLines = [BANK_LINE_1],
-  addStatus = 200,
-  addError = null,
-  onPost = null,
-} = {}) {
-  // Header GET (list)
-  await page.route('**/sws/neo/contacts/businessPartner**', async (route) => {
-    const url = route.request().url();
-    const method = route.request().method();
-
-    if (method === 'GET' && !/\/businessPartner\/[^/?]+/.test(url)) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [BP_ROW], totalRows: 1 } }),
-      });
-      return;
-    }
-    if (method === 'GET') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [BP_ROW] } }),
-      });
-      return;
-    }
-    route.fallback();
-  });
-
-  // BankAccount child list
-  await page.route('**/sws/neo/contacts/bankAccount**', async (route) => {
-    const method = route.request().method();
-
-    if (method === 'GET') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: bankLines, totalRows: bankLines.length } }),
-      });
-      return;
-    }
-
-    if (method === 'POST') {
-      const rawBody = route.request().postData();
-      const body = rawBody ? JSON.parse(rawBody) : {};
-      onPost?.({ body });
-
-      if (addStatus !== 200) {
-        await route.fulfill({
-          status: addStatus,
-          contentType: 'application/json',
-          body: JSON.stringify(addError || { error: { message: 'Error' } }),
-        });
-        return;
-      }
-      const saved = { id: 'bank-new-001', ...body };
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [saved] } }),
-      });
-      return;
-    }
-
-    route.fallback();
-  });
-}
-
 test.describe('Contacts — Cuenta Bancaria inline-add-row', () => {
-  test.beforeEach(async ({ page }) => {
+
+  test('tab access → alignment → add-row → @COUNTRYDEF@ → IBAN error translation → generic error', async ({ page }) => {
     await login(page);
-    await installMocks(page);
+
+    // ── Install base mocks ──────────────────────────────────────────────
+    // Track POST override for later error scenarios
+    let postOverride = null;
+
+    await page.route('**/sws/neo/contacts/businessPartner**', async (route) => {
+      const url = route.request().url();
+      const method = route.request().method();
+      if (method === 'GET' && !/\/businessPartner\/[^/?]+/.test(url)) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [BP_ROW], totalRows: 1 } }) });
+      }
+      if (method === 'GET') {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [BP_ROW] } }) });
+      }
+      route.fallback();
+    });
+
+    await page.route('**/sws/neo/contacts/bankAccount**', async (route) => {
+      const method = route.request().method();
+      if (method === 'GET') {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [BANK_LINE_1], totalRows: 1 } }) });
+      }
+      if (method === 'POST') {
+        if (postOverride) {
+          return route.fulfill(postOverride);
+        }
+        const body = route.request().postData() ? JSON.parse(route.request().postData()) : {};
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [{ id: 'bank-new-001', ...body }] } }) });
+      }
+      route.fallback();
+    });
+
+    // Empty child entities
+    for (const entity of ['contact', 'locationAddress', 'customer', 'vendorCreditor']) {
+      await page.route(`**/sws/neo/contacts/${entity}**`, async (route) => {
+        if (route.request().method() === 'GET') {
+          return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [], totalRows: 0 } }) });
+        }
+        route.fallback();
+      });
+    }
+
     await page.goto(`/contacts/${BP_ID}`);
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-  });
 
-  // ── Tab navigation ────────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 1: Bank Account tab is accessible and shows existing rows
+    // ═══════════════════════════════════════════════════════════════════════
 
-  test('Bank Account tab is accessible and shows existing rows', async ({ page }) => {
-    // Find the Bank Account / Cuenta Bancaria tab
     const bankTab = page.getByTestId('tab-bankAccount');
     await expect(bankTab).toBeVisible({ timeout: 10_000 });
     await bankTab.click();
 
-    // Existing bank line should appear
     await expect(page.getByText('Santander')).toBeVisible({ timeout: 5_000 });
-  });
 
-  // ── Column alignment (ETP-4009 regression) ───────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 2: IBAN column header aligns with body row cells
+    // ═══════════════════════════════════════════════════════════════════════
 
-  test('IBAN column header aligns with body row cells without overflow', async ({ page }) => {
-    const bankTab = page.getByTestId('tab-bankAccount');
-    await expect(bankTab).toBeVisible({ timeout: 10_000 });
-    await bankTab.click();
     await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
 
-    // The column header for iBAN should exist
     const ibanHeader = page.getByTestId('column-header-iBAN');
-    if (await ibanHeader.count() === 0) {
-      // InlineLinesPanel mode: header rendered via data-testid="column-header-<key>"
-      // If not found the tab may be in table-form mode — just verify no horizontal scroll overflow
+    if (await ibanHeader.count() > 0) {
+      await expect(ibanHeader).toBeVisible();
+      const headerBox = await ibanHeader.boundingBox();
+      const bodyCell = page.locator('[data-cell-key="iBAN"]').first();
+      if (await bodyCell.count() > 0) {
+        const bodyBox = await bodyCell.boundingBox();
+        if (headerBox && bodyBox) {
+          expect(Math.abs(headerBox.x - bodyBox.x)).toBeLessThanOrEqual(4);
+        }
+      }
+    } else {
+      // InlineLinesPanel mode — verify no horizontal overflow
       const tableEl = page.locator('[data-testid="inline-lines-panel"]');
       if (await tableEl.count() > 0) {
         const box = await tableEl.boundingBox();
         const parentBox = await tableEl.locator('..').boundingBox();
         if (box && parentBox) {
-          // Panel should not overflow its container horizontally
           expect(box.x + box.width).toBeLessThanOrEqual(parentBox.x + parentBox.width + 2);
         }
       }
-      return;
     }
 
-    await expect(ibanHeader).toBeVisible();
-
-    // Measure header cell left edge vs first body cell left edge
-    const headerBox = await ibanHeader.boundingBox();
-    const bodyCell = page.locator('[data-cell-key="iBAN"]').first();
-    if (await bodyCell.count() > 0) {
-      const bodyBox = await bodyCell.boundingBox();
-      if (headerBox && bodyBox) {
-        // Allow up to 4px tolerance for border/padding differences
-        expect(Math.abs(headerBox.x - bodyBox.x)).toBeLessThanOrEqual(4);
-      }
-    }
-  });
-
-  // ── Add row — Generic format (ETP-4009: @COUNTRYDEF@ must NOT be sent) ───
-
-  test('add-row button opens inline add form', async ({ page }) => {
-    const bankTab = page.getByTestId('tab-bankAccount');
-    await expect(bankTab).toBeVisible({ timeout: 10_000 });
-    await bankTab.click();
-
-    // AddLineButton always renders with data-testid="action-add-line"
-    const addBtn = page.getByTestId('action-add-line');
-    await expect(addBtn).toBeVisible({ timeout: 8_000 });
-    await addBtn.click();
-    // Inline add row should appear
-    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-  });
-
-  test('@COUNTRYDEF@ default is not pre-filled in the country field on the add row', async ({ page }) => {
-    const bankTab = page.getByTestId('tab-bankAccount');
-    await expect(bankTab).toBeVisible({ timeout: 10_000 });
-    await bankTab.click();
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 3: Add-row button opens inline form
+    // ═══════════════════════════════════════════════════════════════════════
 
     const addBtn = page.getByTestId('action-add-line');
     await expect(addBtn).toBeVisible({ timeout: 8_000 });
     await addBtn.click();
     await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
 
-    // The country field should not contain the literal placeholder "@COUNTRYDEF@"
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 4: @COUNTRYDEF@ default is NOT pre-filled in country field
+    // ═══════════════════════════════════════════════════════════════════════
+
     const countryField = page.getByTestId('inline-add-field-country');
     if (await countryField.count() > 0) {
       const val = await countryField.inputValue().catch(() => '');
@@ -215,43 +143,24 @@ test.describe('Contacts — Cuenta Bancaria inline-add-row', () => {
       expect(val).not.toMatch(/^@[^@]+@$/);
     }
 
-    // The bankFormat field should default to GENERIC (not a placeholder)
     const bankFormatField = page.getByTestId('inline-add-field-bankFormat');
     if (await bankFormatField.count() > 0) {
-      // Radix Select — inspect the trigger text instead of inputValue
       const triggerText = await bankFormatField.textContent().catch(() => '');
       expect(triggerText).not.toContain('@');
     }
-  });
 
-  // ── Error translation (ETP-4009: backend errors are shown in Spanish) ────
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 5: Backend IBAN country error is shown as translated message
+    // ═══════════════════════════════════════════════════════════════════════
 
-  test('backend IBAN country error is shown as a translated message', async ({ page }) => {
-    // Reinstall mocks with a server error for the POST
-    await page.route('**/sws/neo/contacts/bankAccount**', async (route) => {
-      if (route.request().method() !== 'POST') { route.fallback(); return; }
-      await route.fulfill({
-        status: 400,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: {
-            message: 'Country needed in an IBAN account.',
-            status: 400,
-          },
-        }),
-      });
-    });
+    // Override POST to return IBAN country error
+    postOverride = {
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Country needed in an IBAN account.', status: 400 } }),
+    };
 
-    const bankTab = page.getByTestId('tab-bankAccount');
-    await expect(bankTab).toBeVisible({ timeout: 10_000 });
-    await bankTab.click();
-
-    const addBtn = page.getByTestId('action-add-line');
-    await expect(addBtn).toBeVisible({ timeout: 8_000 });
-    await addBtn.click();
-    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-
-    // Fill bankFormat as IBAN to trigger the country validation path
+    // Select IBAN format if available
     const bankFormatTrigger = page.getByTestId('inline-add-field-bankFormat');
     if (await bankFormatTrigger.count() > 0) {
       await bankFormatTrigger.click();
@@ -259,60 +168,7 @@ test.describe('Contacts — Cuenta Bancaria inline-add-row', () => {
       if (await ibanOption.count() > 0) await ibanOption.click();
     }
 
-    // Submit the add row
-    const confirmBtn = page.getByTestId('inline-add-confirm')
-      .or(page.getByRole('button', { name: /confirm|guardar|save/i }));
-    if (await confirmBtn.count() === 0) {
-      // Try pressing Enter in any visible add-row input
-      const firstInput = page.getByTestId('inline-add-row').locator('input, button[role="combobox"]').first();
-      if (await firstInput.count() > 0) await firstInput.press('Enter');
-    } else {
-      await confirmBtn.first().click();
-    }
-
-    // An error toast or inline message should appear — NOT the raw English backend string
-    // The translated key is "backendError.countryIban"; the app may display a translated
-    // Spanish string or an i18n fallback key.
-    const rawEnglishMsg = 'Country needed in an IBAN account.';
-    // Wait briefly for any toast/error UI
-    await page.waitForTimeout(1_500);
-    const bodyText = await page.locator('body').textContent();
-    // The raw English backend string should NOT be shown verbatim (it should be translated)
-    // In mock mode the locale may fall back to keys, so we also accept the key form.
-    // What we reject is the exact raw backend string appearing on screen.
-    const hasRawMsg = bodyText.includes(rawEnglishMsg);
-    // In a real locale this would be a Spanish translation; in key-only mode it is
-    // 'backendError.countryIban'. Either way, the untranslated English should not appear.
-    if (hasRawMsg) {
-      // Fail with a descriptive message
-      expect(bodyText).not.toContain(rawEnglishMsg);
-    }
-  });
-
-  test('backend generic account missing error shows an error (not silent)', async ({ page }) => {
-    await page.route('**/sws/neo/contacts/bankAccount**', async (route) => {
-      if (route.request().method() !== 'POST') { route.fallback(); return; }
-      await route.fulfill({
-        status: 400,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: {
-            message: 'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number',
-            status: 400,
-          },
-        }),
-      });
-    });
-
-    const bankTab = page.getByTestId('tab-bankAccount');
-    await expect(bankTab).toBeVisible({ timeout: 10_000 });
-    await bankTab.click();
-
-    const addBtn = page.getByTestId('action-add-line');
-    await expect(addBtn).toBeVisible({ timeout: 8_000 });
-    await addBtn.click();
-    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-
+    // Submit
     const confirmBtn = page.getByTestId('inline-add-confirm')
       .or(page.getByRole('button', { name: /confirm|guardar|save/i }));
     if (await confirmBtn.count() === 0) {
@@ -323,13 +179,46 @@ test.describe('Contacts — Cuenta Bancaria inline-add-row', () => {
     }
 
     await page.waitForTimeout(1_500);
-    // The page should show some error feedback — either a toast or an inline message.
-    // We verify that at minimum some error key / translated string is present.
-    const bodyText = await page.locator('body').textContent();
-    const rawMsg = 'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number';
-    // Raw backend English should not be displayed — either translated or key-form
-    if (bodyText.includes(rawMsg)) {
-      expect(bodyText).not.toContain(rawMsg);
+    const rawIbanMsg = 'Country needed in an IBAN account.';
+    const bodyText1 = await page.locator('body').textContent();
+    // Raw English should NOT appear verbatim — should be translated
+    if (bodyText1.includes(rawIbanMsg)) {
+      expect(bodyText1).not.toContain(rawIbanMsg);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 6: Backend generic error shows an error (not silent)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Override POST to return generic account error
+    postOverride = {
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number', status: 400 } }),
+    };
+
+    // Re-open add row if it closed after the error
+    const addRowVisible = await page.getByTestId('inline-add-row').isVisible().catch(() => false);
+    if (!addRowVisible) {
+      await addBtn.click();
+      await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+    }
+
+    // Submit again
+    const confirmBtn2 = page.getByTestId('inline-add-confirm')
+      .or(page.getByRole('button', { name: /confirm|guardar|save/i }));
+    if (await confirmBtn2.count() === 0) {
+      const firstInput = page.getByTestId('inline-add-row').locator('input, button[role="combobox"]').first();
+      if (await firstInput.count() > 0) await firstInput.press('Enter');
+    } else {
+      await confirmBtn2.first().click();
+    }
+
+    await page.waitForTimeout(1_500);
+    const rawGenericMsg = 'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number';
+    const bodyText2 = await page.locator('body').textContent();
+    if (bodyText2.includes(rawGenericMsg)) {
+      expect(bodyText2).not.toContain(rawGenericMsg);
     }
   });
 });

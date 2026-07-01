@@ -11,7 +11,7 @@ The system must not become a generic email relay. Every send must be driven by a
 3. The browser never sends a generic provider payload such as `{ "to": "...", "template": "...", "data": ... }`.
 4. Every email send uses a named email contract and a versioned command schema.
 5. Recipients are resolved server-side from the authenticated context or business record by default.
-6. Caller-provided recipients are allowed only for explicit admin/support contracts with role checks, throttle, reason capture, and audit.
+6. Document-send contracts accept recipient edits **by default** through the allowlisted `recipientEdits` command field (`to.add`/`to.remove`, `cc.add`); the backend stays authoritative over the final recipient set (normalization, cross-channel dedup, suppression, count limits, hashed audit). Reason capture is **explicitly waived** for document-send recipient edits (stakeholder decision 2026-06-11, ETP-4226): the send action plus the hashed audit evidence is sufficient context. Caller-provided recipients outside the document-send family remain allowed only for explicit admin/support contracts with role checks, throttle, reason capture, and audit. This amendment does not relax rule 1 or rule 3: `recipientEdits` is a named, contract-family-scoped command field, never a generic provider payload, and contracts outside the document-send family reject it with `VALIDATION_FAILED`.
 7. `custom` email is not a public capability. It can exist only as a controlled contract with sanitizer, allowlisted roles, tight throttle, and complete audit.
 8. Reply-To is disabled by default and must never allow tenant-owned sender spoofing. If enabled, it must be validated and recorded.
 9. Each contract must define throttle, idempotency, audit fields, kill switch behavior, and at least three edge cases.
@@ -159,6 +159,7 @@ Edge cases:
 - The document has no valid recipient contact: block the send with a clear UI state and audit `NO_RECIPIENT`.
 - The document is draft or voided: block unless the contract explicitly allows that document status.
 - The same document is sent twice from the UI: idempotency returns a duplicate/sent state without a second provider call.
+- The user edits recipients (To/CC) before sending: the backend re-resolves and re-validates the final set; an empty final To returns `NO_RECIPIENT`, and a different final set derives a different idempotency key.
 
 ### Controlled Custom Support Email
 
@@ -184,7 +185,7 @@ Each contract must verify the authenticated user, role, tenant, organization, an
 Contracts should resolve recipients from trusted server-side data:
 
 - account owner email for authentication flows
-- business partner contact email for documents
+- business partner contact email for documents (the trusted base `to` set; document-send contracts then apply the allowlisted `recipientEdits` command field per rule 6 and re-validate the final set server-side)
 - responsible user email for internal alerts
 - allowlisted caller-provided email only for admin/support contracts
 
@@ -248,7 +249,7 @@ When creating or maintaining email sending behavior:
 
 1. Update or create the contract entry in [email-contracts.md](email-contracts.md).
 2. Keep provider endpoint/API key in server config only.
-3. Do not add frontend code that accepts arbitrary `to`, `template`, or raw provider data.
+3. Do not add frontend code that accepts arbitrary `to`, `template`, or raw provider data. The only recipient-related command field the document-send UI may emit is the allowlisted `recipientEdits` (rule 6).
 4. Implement backend authorization before recipient or variable resolution.
 5. Add throttling, idempotency, audit, suppression, and kill switch handling.
 6. Add at least three edge cases for the contract family.

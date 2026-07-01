@@ -12,7 +12,7 @@ function ConfirmDeleteModal({ onConfirm, onCancel }) {
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
       <div className="relative bg-white rounded-xl shadow-lg border border-border/60 w-[22rem] p-6">
         <button onClick={onCancel} className="absolute top-3 right-3 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground">
-          <X className="h-3.5 w-3.5" />
+          <X className="h-3.5 w-3.5" data-testid="X__a2df7f" />
         </button>
         <h3 className="text-[15px] font-semibold text-foreground mb-2">{ui('deleteRecord')}</h3>
         <p className="text-sm text-muted-foreground mb-5">
@@ -186,7 +186,6 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
       {error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>
       )}
-
       <div className="flex items-start gap-4">
         {/* Table */}
         <div className="flex-1 min-w-0">
@@ -215,7 +214,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
                 onCancel: () => setAdding(false),
                 catalogs: {},
               } : undefined}
-            />
+              data-testid="DataTable__a2df7f" />
           )}
 
           {canAddProducts && !adding && (
@@ -223,7 +222,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
               <AddLineButton
                 onClick={() => { setAdding(true); closeSidePanel(); }}
                 label={ui('addEntity', { label: tMenu('Product') })}
-              />
+                data-testid="AddLineButton__a2df7f" />
             </div>
           )}
         </div>
@@ -237,7 +236,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
                 onClick={closeSidePanel}
                 className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground transition-colors"
               >
-                <X className="h-3.5 w-3.5" />
+                <X className="h-3.5 w-3.5" data-testid="X__a2df7f" />
               </button>
             </div>
 
@@ -297,7 +296,7 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
                   onClick={() => setConfirmDelete(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive/40 text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__a2df7f" />
                   {ui('delete')}
                 </button>
               </div>
@@ -305,12 +304,11 @@ export default function PriceListProductPrices({ recordId, data, token, apiBaseU
           </div>
         )}
       </div>
-
       {confirmDelete && (
         <ConfirmDeleteModal
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}
-        />
+          data-testid="ConfirmDeleteModal__a2df7f" />
       )}
     </div>
   );

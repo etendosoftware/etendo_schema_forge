@@ -1,0 +1,422 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-06-16T16:35:15.726Z",
+  "checksum": "ad607ba1b76e3f89",
+  "frontendContract": {
+    "window": {
+      "id": "82922976BB524D1BAA3CF8462B9219FE",
+      "name": "Transaction Type",
+      "primaryEntity": "transactionType",
+      "category": "finance",
+      "templateConfig": null,
+      "breadcrumb": "Finance / Transaction Type",
+      "detailEntity": null,
+      "layoutType": "list-modal"
+    },
+    "entities": {
+      "transactionType": {
+        "tableName": "ETGO_Transaction_Type",
+        "tabId": "90453D94C1D146FC90235C5131269183",
+        "tabName": "Transaction Type",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "gridOrder": 1
+          },
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "label": "Value",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true
+          }
+        ],
+        "searchableFields": [
+          "name"
+        ],
+        "computedFields": [],
+        "javaQualifier": "transaction-type"
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "82922976BB524D1BAA3CF8462B9219FE",
+      "name": "Transaction Type",
+      "primaryEntity": "transactionType",
+      "category": "finance",
+      "breadcrumb": "Finance / Transaction Type",
+      "detailEntity": null,
+      "layoutType": "list-modal"
+    },
+    "entities": {
+      "transactionType": {
+        "tableName": "ETGO_Transaction_Type",
+        "tabId": "90453D94C1D146FC90235C5131269183",
+        "tabName": "Transaction Type",
+        "fields": [
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "ETGO_Transaction_Type_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": true
+          }
+        ],
+        "javaQualifier": "transaction-type"
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/transactionType",
+        "entity": "transactionType",
+        "supportedFilters": [
+          "name"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/transactionType/:id",
+        "entity": "transactionType",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/transactionType",
+        "entity": "transactionType",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/transactionType/:id",
+        "entity": "transactionType",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/transactionType/:id",
+        "entity": "transactionType",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "transaction-type",
+    "baseUrl": "/sws/neo/transaction-type",
+    "crud": {
+      "transactionType": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/transaction-type/transactionType",
+        "detailUrl": "/sws/neo/transaction-type/transactionType/{id}",
+        "supportedFilters": [
+          "name"
+        ]
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    }
+  },
+  "formState": {
+    "entities": {
+      "transactionType": {
+        "fields": {
+          "name": {
+            "required": true
+          },
+          "searchKey": {
+            "readOnly": true,
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage transaction type financial records.",
+    "whenToUse": [
+      "Use for transaction type management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [
+      "Create draft header with required fields"
+    ],
+    "edgeCases": [
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name"
+        ]
+      }
+    ],
+    "warnings": [
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-crud-flags-transactionType",
+        "category": "crud-flags",
+        "entity": "transactionType",
+        "runner": "node",
+        "description": "CRUD flags for 'transactionType' should all be booleans"
+      },
+      {
+        "id": "t-field-presence-transactionType-name",
+        "category": "field-presence",
+        "entity": "transactionType",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in transactionType"
+      },
+      {
+        "id": "t-field-presence-transactionType-searchKey",
+        "category": "field-presence",
+        "entity": "transactionType",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be present in transactionType"
+      },
+      {
+        "id": "t-field-type-transactionType-name",
+        "category": "field-type",
+        "entity": "transactionType",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in transactionType"
+      },
+      {
+        "id": "t-field-type-transactionType-searchKey",
+        "category": "field-type",
+        "entity": "transactionType",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should have type 'string' in transactionType"
+      },
+      {
+        "id": "t-searchable-filters-transactionType-name",
+        "category": "searchable-filters",
+        "entity": "transactionType",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for transactionType"
+      },
+      {
+        "id": "t-system-field-transactionType-active",
+        "category": "system-field",
+        "entity": "transactionType",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for transactionType"
+      },
+      {
+        "id": "t-system-field-transactionType-client",
+        "category": "system-field",
+        "entity": "transactionType",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for transactionType"
+      },
+      {
+        "id": "t-system-field-transactionType-createdBy",
+        "category": "system-field",
+        "entity": "transactionType",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for transactionType"
+      },
+      {
+        "id": "t-system-field-transactionType-creationDate",
+        "category": "system-field",
+        "entity": "transactionType",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for transactionType"
+      },
+      {
+        "id": "t-system-field-transactionType-id",
+        "category": "system-field",
+        "entity": "transactionType",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for transactionType"
+      },
+      {
+        "id": "t-system-field-transactionType-organization",
+        "category": "system-field",
+        "entity": "transactionType",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for transactionType"
+      },
+      {
+        "id": "t-system-field-transactionType-updated",
+        "category": "system-field",
+        "entity": "transactionType",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for transactionType"
+      },
+      {
+        "id": "t-system-field-transactionType-updatedBy",
+        "category": "system-field",
+        "entity": "transactionType",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for transactionType"
+      },
+      {
+        "id": "t-visibility-transactionType",
+        "category": "visibility",
+        "entity": "transactionType",
+        "runner": "node",
+        "description": "Entity 'transactionType' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 15,
+      "byCategory": {
+        "crud-flags": 1,
+        "field-presence": 2,
+        "field-type": 2,
+        "searchable-filters": 1,
+        "system-field": 8,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 15,
+        "junit": 0
+      }
+    }
+  }
+}

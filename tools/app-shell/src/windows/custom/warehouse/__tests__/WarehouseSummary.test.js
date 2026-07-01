@@ -7,69 +7,56 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'WarehouseSummary.jsx'), 'utf8');
 
-describe('WarehouseSummary — Y-axis formatting', () => {
-  it('imports niceScale and formatDashboardAxisTick from the shared lib', () => {
-    assert.match(src, /import.*niceScale.*formatDashboardAxisTick.*from.*@\/lib\/dashboardNumberFormat/);
+describe('WarehouseSummary — currency formatting', () => {
+  it('imports useCurrency and formatCurrency', () => {
+    assert.match(src, /import.*useCurrency.*from.*@\/hooks\/useCurrency/);
+    assert.match(src, /import.*formatCurrency.*from.*@\/lib\/formatCurrency/);
   });
 
-  it('does not define a local fmtY function', () => {
-    assert.doesNotMatch(src, /function fmtY/);
+  it('calls formatCurrency with currencyCode and totalValuation', () => {
+    assert.match(src, /formatCurrency\(currencyCode,\s*totalValuation\)/);
   });
 
-  it('does not call fmtY anywhere', () => {
-    assert.doesNotMatch(src, /fmtY\(/);
-  });
-
-  it('uses niceScale to compute line chart ticks', () => {
-    assert.match(src, /niceScale\(maxVal\)/);
-  });
-
-  it('uses niceScale to compute bar chart ticks', () => {
-    assert.match(src, /niceScale\(barMaxVal\)/);
-  });
-
-  it('uses formatDashboardAxisTick for line chart Y-axis labels', () => {
-    assert.match(src, /formatDashboardAxisTick\(val\)/);
+  it('falls back to USD when useCurrency returns nothing', () => {
+    assert.match(src, /useCurrency\(\).*\?\?.*'USD'/);
   });
 });
 
-describe('WarehouseSummary — i18n', () => {
-  it('uses i18n key for line chart aria-label', () => {
-    assert.match(src, /aria-label=\{ui\('warehouseStockTrend'\)\}/);
+describe('WarehouseSummary — stock data section', () => {
+  it('renders the stock data section title key', () => {
+    assert.match(src, /warehouseStockDataTitle/);
   });
 
-  it('uses i18n key for bar chart aria-label', () => {
-    assert.match(src, /aria-label=\{ui\('warehouseStockBarAria'\)\}/);
+  it('renders the total valuation label key', () => {
+    assert.match(src, /warehouseTotalValuation/);
   });
 
-  it('uses i18n keys for toolbar button titles', () => {
-    assert.match(src, /title=\{ui\('warehouseLineChart'\)\}/);
-    assert.match(src, /title=\{ui\('warehouseBarChart'\)\}/);
-    assert.match(src, /title=\{ui\('warehouseExpandChart'\)\}/);
+  it('renders the valuation badge key', () => {
+    assert.match(src, /warehouseValuationBadge/);
   });
 
-  it('does not hardcode Line chart, Bar chart or Expand chart strings', () => {
-    assert.doesNotMatch(src, /"Line chart"/);
-    assert.doesNotMatch(src, /"Bar chart"/);
-    assert.doesNotMatch(src, /"Expand chart"/);
-    assert.doesNotMatch(src, /"Stock trend"/);
-    assert.doesNotMatch(src, /"Stock bar chart"/);
+  it('renders the products with stock label key', () => {
+    assert.match(src, /warehouseProductsWithStock/);
+  });
+
+  it('renders the products with stock badge key', () => {
+    assert.match(src, /warehouseProductsWithStockBadge/);
   });
 });
 
-describe('WarehouseSummary — line chart dots', () => {
-  it('circles are transparent by default (no permanent dots)', () => {
-    assert.match(src, /fill.*transparent/);
+describe('WarehouseSummary — valuation calculation', () => {
+  it('sums valuation from products using reduce', () => {
+    assert.match(src, /products\.reduce.*valuation/s);
   });
 
-  it('circles show stroke only when hovered', () => {
-    assert.match(src, /stroke.*hovered.*i === i.*#10b981.*none/s);
+  it('does not import chart or dashboard utilities', () => {
+    assert.doesNotMatch(src, /niceScale/);
+    assert.doesNotMatch(src, /formatDashboardAxisTick/);
+    assert.doesNotMatch(src, /dashboardNumberFormat/);
   });
-});
 
-describe('WarehouseSummary — bar chart tooltip', () => {
-  it('passes ui prop to SvgTooltip in the bar chart branch', () => {
-    const barSection = src.slice(src.indexOf("ui('warehouseStockBarAria')"));
-    assert.match(barSection, /SvgTooltip[^/]*ui=\{ui\}/);
+  it('does not render a StockChart or SVG chart', () => {
+    assert.doesNotMatch(src, /StockChart/);
+    assert.doesNotMatch(src, /warehouseStockTrend/);
   });
 });

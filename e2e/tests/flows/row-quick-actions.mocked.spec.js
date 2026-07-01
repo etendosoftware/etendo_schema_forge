@@ -112,7 +112,8 @@ for (const spec of SPECS) {
       await firstRow.hover();
 
       const overlay = firstRow.getByTestId('row-quick-actions');
-      await expect(overlay).toBeVisible();
+      // Allow the CSS hover transition to settle before asserting children.
+      await expect(overlay).toBeVisible({ timeout: 5_000 });
 
       // Always-on canonical buttons.
       await expect(firstRow.getByTestId('row-quick-action-edit')).toBeVisible();

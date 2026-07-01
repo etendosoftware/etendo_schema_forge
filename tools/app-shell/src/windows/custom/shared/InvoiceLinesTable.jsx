@@ -25,9 +25,23 @@ const InvoiceLinesTable = forwardRef(function InvoiceLinesTable({ data, productR
   })), [currencyCode, data]);
 
   if (props.linesLayout === 'inlineEditable' && !props.addRow?.active) {
-    return <InlineLinesPanel ref={ref} columns={columns} data={enrichedData} {...props} />;
+    return (
+      <InlineLinesPanel
+        ref={ref}
+        columns={columns}
+        data={enrichedData}
+        {...props}
+        data-testid="InlineLinesPanel__7a084c" />
+    );
   }
-  return <DataTable columns={columns} filters={EMPTY_FILTERS} data={enrichedData} {...props} />;
+  return (
+    <DataTable
+      columns={columns}
+      filters={EMPTY_FILTERS}
+      data={enrichedData}
+      {...props}
+      data-testid="DataTable__7a084c" />
+  );
 });
 
 export default InvoiceLinesTable;

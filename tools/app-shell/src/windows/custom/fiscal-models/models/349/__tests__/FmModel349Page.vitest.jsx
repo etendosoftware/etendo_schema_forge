@@ -33,6 +33,12 @@ vi.mock('../use349Pdf.js', () => ({
 // FmCommon.jsx lives at fiscal-models/ (3 levels up)
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
+  // KpiWidget must render the value prop so count/total KPI tests can read it.
+  KpiWidget: ({ value, valueColor }) => (
+    React.createElement('span', { className: 'test-kpi-value', style: { color: valueColor } }, value)
+  ),
+  Tabs: () => null,
+  Banner: () => null,
 }));
 
 // FmOverlays.jsx lives at fiscal-models/ (3 levels up)
@@ -49,6 +55,14 @@ vi.mock('../../../../../../components/contract-ui/DocumentPreview.jsx', () => ({
 // CSS module
 vi.mock('../../../fiscal-models.css', () => ({}));
 
+// FmTabContent.jsx lives at fiscal-models/ (3 levels up)
+vi.mock('../../../FmTabContent.jsx', () => ({
+  SourcesTab: () => null,
+  IncidentsTab: () => null,
+  FilesTab: () => null,
+  HistoryTab: () => null,
+}));
+
 vi.mock('lucide-react', () => ({
   ArrowLeft: () => null,
   Download: () => null,
@@ -61,6 +75,31 @@ vi.mock('lucide-react', () => ({
   Globe: () => null,
   Eye: () => null,
   Lock: () => null,
+  MoreVertical: () => null,
+  ChevronDown: () => null,
+  ChevronRight: () => null,
+  Users: () => null,
+  FileEdit: () => null,
+  Clock: () => null,
+  TriangleAlert: () => null,
+  Folder: () => null,
+  ReceiptText: () => null,
+  Calculator: () => null,
+  PenLine: () => null,
+  ShieldAlert: () => null,
+  Info: () => null,
+  Star: () => null,
+  ArrowUpRight: () => null,
+  Loader2: () => null,
+  TrendingUp: () => null,
+  TrendingDown: () => null,
+  FileText: () => null,
+  Settings: () => null,
+  ArrowLeftRight: () => null,
+  Pencil: () => null,
+  X: () => null,
+  Check: () => null,
+  Checkbox: () => null,
 }));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
@@ -119,7 +158,9 @@ describe('Bug 1 — totalBase with string operator.base values', () => {
     render(<FmModel349Page decl={decl} {...defaultProps} />);
 
     // formatAmount mock returns String(n); if n is NaN the text is "NaN"
-    const kpiValues = document.querySelectorAll('.fm-349-kpi__value--mono');
+    // KPI values are rendered by the KpiWidget mock as .test-kpi-value spans.
+    // The 2nd KpiWidget (index 1) receives formatAmount(totalBase) as value.
+    const kpiValues = document.querySelectorAll('.test-kpi-value');
     kpiValues.forEach(el => {
       expect(el.textContent).not.toBe('NaN');
     });
@@ -134,14 +175,14 @@ describe('Bug 1 — totalBase with string operator.base values', () => {
     });
     render(<FmModel349Page decl={decl} {...defaultProps} />);
 
-    // The total KPI element has class fm-349-kpi__value--mono
-    // formatAmount mock: String(2300.5) = "2300.5" — parseable as a number
-    const monoEl = document.querySelector('.fm-349-kpi__value--mono');
-    expect(monoEl).not.toBeNull();
-    const rendered = monoEl.textContent.trim();
-    // Must not be "NaN"
+    // KPI bar has 4 KpiWidgets: operators count, totalBase, rectifications, viesPending.
+    // formatAmount mock: String(2300.5) = "2300.5" — parseable as a number.
+    // Index 1 = totalBase KPI.
+    const kpiValues = document.querySelectorAll('.test-kpi-value');
+    expect(kpiValues.length).toBeGreaterThanOrEqual(2);
+    const totalEl = kpiValues[1]; // 2nd KpiWidget = totalBase
+    const rendered = totalEl.textContent.trim();
     expect(rendered).not.toBe('NaN');
-    // Must parse as a finite number
     const parsed = parseFloat(rendered);
     expect(isNaN(parsed)).toBe(false);
     expect(parsed).toBeCloseTo(2300.5);
@@ -156,9 +197,10 @@ describe('Bug 1 — totalBase with string operator.base values', () => {
     });
     render(<FmModel349Page decl={decl} {...defaultProps} />);
 
-    const monoEl = document.querySelector('.fm-349-kpi__value--mono');
-    expect(monoEl).not.toBeNull();
-    const rendered = monoEl.textContent.trim();
+    const kpiValues = document.querySelectorAll('.test-kpi-value');
+    expect(kpiValues.length).toBeGreaterThanOrEqual(2);
+    const totalEl = kpiValues[1]; // 2nd KpiWidget = totalBase
+    const rendered = totalEl.textContent.trim();
     expect(rendered).not.toBe('NaN');
     const parsed = parseFloat(rendered);
     expect(isNaN(parsed)).toBe(false);
@@ -183,8 +225,8 @@ describe('Bug 2 — liveOperators syncs when decl._precomputed changes', () => {
     const decl = makeDecl({ _precomputed: { operators: initialOps } });
     render(<FmModel349Page decl={decl} {...defaultProps} />);
 
-    // The operators count KPI is the first .fm-349-kpi__value (not mono)
-    const kpiValues = document.querySelectorAll('.fm-349-kpi__value:not(.fm-349-kpi__value--mono)');
+    // KpiWidget mock renders .test-kpi-value spans. Index 0 = operators count.
+    const kpiValues = document.querySelectorAll('.test-kpi-value');
     expect(kpiValues[0].textContent).toBe('2');
   });
 
@@ -192,8 +234,7 @@ describe('Bug 2 — liveOperators syncs when decl._precomputed changes', () => {
     const decl = makeDecl({ _precomputed: { operators: initialOps } });
     const { rerender } = render(<FmModel349Page decl={decl} {...defaultProps} />);
 
-    const getCountKpi = () =>
-      document.querySelectorAll('.fm-349-kpi__value:not(.fm-349-kpi__value--mono)')[0];
+    const getCountKpi = () => document.querySelectorAll('.test-kpi-value')[0];
 
     expect(getCountKpi().textContent).toBe('2');
 
@@ -209,16 +250,17 @@ describe('Bug 2 — liveOperators syncs when decl._precomputed changes', () => {
     const decl = makeDecl({ _precomputed: { operators: initialOps } });
     const { rerender } = render(<FmModel349Page decl={decl} {...defaultProps} />);
 
-    const getMonoEl = () => document.querySelector('.fm-349-kpi__value--mono');
+    // KpiWidget mock index 1 = totalBase
+    const getTotalEl = () => document.querySelectorAll('.test-kpi-value')[1];
 
-    // Initial: 1000 + 500 = 1500
-    expect(parseFloat(getMonoEl().textContent.trim())).toBeCloseTo(1500);
+    // Initial: 1000 + 500 = 1500; formatAmount mock: String(1500) = "1500"
+    expect(parseFloat(getTotalEl().textContent.trim())).toBeCloseTo(1500);
 
     // After polling update: 1000 + 500 + 2000 = 3500
     const updatedDecl = makeDecl({ _precomputed: { operators: updatedOps } });
     rerender(<FmModel349Page decl={updatedDecl} {...defaultProps} />);
 
-    expect(parseFloat(getMonoEl().textContent.trim())).toBeCloseTo(3500);
+    expect(parseFloat(getTotalEl().textContent.trim())).toBeCloseTo(3500);
   });
 
   it('falls back to decl.operators when _precomputed is null', () => {
@@ -228,7 +270,8 @@ describe('Bug 2 — liveOperators syncs when decl._precomputed changes', () => {
     const decl = makeDecl({ _precomputed: null, operators: fallbackOps });
     render(<FmModel349Page decl={decl} {...defaultProps} />);
 
-    const kpiValues = document.querySelectorAll('.fm-349-kpi__value:not(.fm-349-kpi__value--mono)');
+    // KpiWidget index 0 = operators count; with 1 fallback operator → "1"
+    const kpiValues = document.querySelectorAll('.test-kpi-value');
     expect(kpiValues[0].textContent).toBe('1');
   });
 });

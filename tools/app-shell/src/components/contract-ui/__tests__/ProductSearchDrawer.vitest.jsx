@@ -180,4 +180,111 @@ describe('ProductSearchDrawer', () => {
       expect(screen.getByText('2 products')).toBeInTheDocument();
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Auto-waterfall (useProductSelectorFetch line 168-170): ProductSearchDrawer
+  // wires autoWaterfallMin: 15. When a fresh fetch yields fewer than 15 visible
+  // rows AND hasMore is true, the hook recursively fetches the next page.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('auto-fetches the next page when fewer than 15 rows are returned and hasMore is true', async () => {
+    // First page: 2 deduped rows + hasMore=true → below the 15 threshold, so the
+    // hook must fire a SECOND (append) fetch for the next page automatically.
+    const page1 = [
+      { id: '1', label: 'Widget A', searchKey: 'W001' },
+      { id: '2', label: 'Widget B', searchKey: 'W002' },
+    ];
+    const page2 = [
+      { id: '3', label: 'Widget C', searchKey: 'W003' },
+    ];
+
+    let selectorCalls = 0;
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/image/')) return Promise.resolve({ ok: false });
+      if (url.includes('product/product')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      // Selector URL: first call returns page1 with hasMore, second returns page2.
+      selectorCalls += 1;
+      if (selectorCalls === 1) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: page1, hasMore: true, totalCount: 3 }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ items: page2, hasMore: false, totalCount: 3 }),
+      });
+    });
+
+    render(<ProductSearchDrawer {...BASE_PROPS} />);
+
+    // The waterfall fires a second selector fetch; wait until at least 2 selector
+    // calls have happened (image-prefetch calls are excluded by the counter).
+    await waitFor(() => {
+      expect(selectorCalls).toBeGreaterThanOrEqual(2);
+    });
+
+    // The appended page row becomes visible after the second fetch resolves.
+    await waitFor(() => {
+      expect(screen.getByText('Widget C')).toBeInTheDocument();
+    });
+  });
+
+  it('does NOT auto-fetch a second page when hasMore is false', async () => {
+    const page1 = [
+      { id: '1', label: 'Widget A', searchKey: 'W001' },
+      { id: '2', label: 'Widget B', searchKey: 'W002' },
+    ];
+    let selectorCalls = 0;
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/image/')) return Promise.resolve({ ok: false });
+      if (url.includes('product/product')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      selectorCalls += 1;
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ items: page1, hasMore: false, totalCount: 2 }),
+      });
+    });
+
+    render(<ProductSearchDrawer {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByText('Widget A')).toBeInTheDocument();
+    });
+    // Give any (incorrect) waterfall a chance to fire, then assert it did not.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(selectorCalls).toBe(1);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Error path (useProductSelectorFetch line 172-177): a non-abort fetch
+  // rejection on the initial (non-append) load clears results and stops loading.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('ends in a non-loading empty state when the initial fetch rejects with a network error', async () => {
+    mockFetch.mockImplementation((url) => {
+      if (url.includes('/image/')) return Promise.resolve({ ok: false });
+      if (url.includes('product/product')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ response: { data: [] } }) });
+      }
+      // Selector URL rejects with a non-abort error → hits the .catch branch.
+      return Promise.reject(new Error('network'));
+    });
+
+    const { container } = render(<ProductSearchDrawer {...BASE_PROPS} />);
+
+    // The drawer stays mounted (dialog present) and renders no product options.
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    // No spinner remains after the rejection settles (loading was reset to false).
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid^="Loader2"]')).toBeNull();
+    });
+    // Results were cleared — no product option rows rendered.
+    expect(screen.queryAllByTestId(/^product-search-option-/)).toHaveLength(0);
+  });
 });

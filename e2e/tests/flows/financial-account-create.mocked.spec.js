@@ -6,13 +6,16 @@ import { login } from '../helpers/auth.js';
  *
  * Validates the ETP-4096 (T2) "New Account" wizard reachable from the Cuentas
  * page: type picker → (Bank) connection toggle → bank picker → institution →
- * form → submit. The create POST is mocked to 201 and the defaults GET to a
- * single-currency list so the wizard can pre-select EUR.
+ * form → submit. The spec mocks the generic W (CRUD) endpoints introduced by
+ * ETP-4239: the currency selector + entity defaults GETs (so the wizard can
+ * pre-select EUR) and the create POST against the `account` entity.
  *
- * Mock mode only: installs the `financial-account` defaults + create handlers
- * and the `financial-accounts-page` list AFTER the generic /sws/** stub seeded
- * by login() so the specific handlers win (Playwright matches routes in reverse
- * registration order).
+ * Mock mode only: installs the `financial-account` selector/defaults/create
+ * handlers and the `financial-accounts-page` list AFTER the generic /sws/**
+ * stub seeded by login() so the specific handlers win (Playwright matches
+ * routes in reverse registration order). Within installCreateMocks the POST
+ * route is registered FIRST so the more specific selectors/defaults routes
+ * (registered later) take priority over it.
  *
  * Default app locale is es_ES (see useLocaleState.DEFAULT_LOCALE), so the copy
  * assertions target the Spanish strings.
@@ -43,36 +46,30 @@ const SUMMARY = {
   pending: { accountsWithPending: 0, suggestionsReady: 0, byRule: 0 },
 };
 
-const DEFAULTS = {
-  defaultCurrencyId: '102',
-  defaultCurrencyIso: 'EUR',
-  currencies: [{ id: '102', iso: 'EUR', symbol: '€' }],
-};
+// Selector rows for the C_Currency_ID selector — the hook maps `name` to the
+// ISO code (`{ id, iso, symbol }`), so the wizard sees EUR + USD.
+const CURRENCY_ROWS = [
+  { id: '102', name: 'EUR' },
+  { id: '100', name: 'USD' },
+];
+
+// Entity defaults envelope — `defaults.currency` is the session default the
+// wizard pre-selects.
+const ENTITY_DEFAULTS = { defaults: { currency: '102' } };
 
 /**
- * Installs the financial-account mocks. The defaults + create handlers must be
- * registered before the broader list handler so the action routes are matched
- * first, and all of them after login()'s generic /sws/** stub.
+ * Installs the financial-account mocks (generic W endpoints, ETP-4239). All of
+ * them must be installed after login()'s generic /sws/** stub. Registration
+ * order matters: Playwright matches routes in reverse registration order, so
+ * the create POST route goes FIRST and the more specific selectors/defaults
+ * routes go AFTER it — they must not be swallowed by the entity route.
  *
  * @param {import('@playwright/test').Page} page the test page
  * @param {() => void} onCreate called when the create POST is intercepted
  */
 async function installCreateMocks(page, onCreate) {
-  // GET ?action=defaults → currency list + session default.
-  await page.route('**/sws/neo/financial-account?action=defaults', async (route) => {
-    if (route.request().method() !== 'GET') {
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ response: { data: DEFAULTS } }),
-    });
-  });
-
-  // POST /financial-account (no action) → 201 created.
-  await page.route('**/sws/neo/financial-account', async (route) => {
+  // POST /financial-account/account → 201 created.
+  await page.route('**/sws/neo/financial-account/account', async (route) => {
     const req = route.request();
     if (req.method() !== 'POST') {
       await route.fallback();
@@ -82,7 +79,33 @@ async function installCreateMocks(page, onCreate) {
     await route.fulfill({
       status: 201,
       contentType: 'application/json',
-      body: JSON.stringify({ response: { data: { id: 'acc-new', name: 'Cuenta BBVA' } } }),
+      body: JSON.stringify({ response: { data: [{ id: 'acc-new', name: 'Cuenta BBVA' }] } }),
+    });
+  });
+
+  // GET /account/selectors/C_Currency_ID?limit=200 → currency selector rows.
+  await page.route('**/sws/neo/financial-account/account/selectors/C_Currency_ID*', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: CURRENCY_ROWS } }),
+    });
+  });
+
+  // GET /account/defaults → session default currency (best-effort in the hook).
+  await page.route('**/sws/neo/financial-account/account/defaults', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(ENTITY_DEFAULTS),
     });
   });
 
@@ -209,24 +232,35 @@ test.describe('Financial Account Create (T2) — mocked', () => {
       psd2Connected: false,
     };
 
-    // defaults → single EUR currency so the form pre-selects it.
-    await page.route('**/sws/neo/financial-account?action=defaults', async (route) => {
-      if (route.request().method() !== 'GET') { await route.fallback(); return; }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: DEFAULTS } }),
-      });
-    });
-
-    // create POST → 201; capture the body for assertion.
-    await page.route('**/sws/neo/financial-account', async (route) => {
+    // create POST → 201; capture the body for assertion. Registered FIRST so
+    // the more specific selectors/defaults routes below take priority.
+    await page.route('**/sws/neo/financial-account/account', async (route) => {
       if (route.request().method() !== 'POST') { await route.fallback(); return; }
       postBody = JSON.parse(route.request().postData() ?? '{}');
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
-        body: JSON.stringify({ response: { data: { id: 'acc-new', name: newAccount.name } } }),
+        body: JSON.stringify({ response: { data: [{ id: 'acc-new', name: newAccount.name }] } }),
+      });
+    });
+
+    // currency selector → EUR + USD rows so the form pre-selects EUR.
+    await page.route('**/sws/neo/financial-account/account/selectors/C_Currency_ID*', async (route) => {
+      if (route.request().method() !== 'GET') { await route.fallback(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: CURRENCY_ROWS } }),
+      });
+    });
+
+    // entity defaults → session default currency.
+    await page.route('**/sws/neo/financial-account/account/defaults', async (route) => {
+      if (route.request().method() !== 'GET') { await route.fallback(); return; }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(ENTITY_DEFAULTS),
       });
     });
 
@@ -286,12 +320,13 @@ test.describe('Financial Account Create (T2) — mocked', () => {
     // 1. Toast confirms the creation.
     await expect(page.getByText('Cuenta creada')).toBeVisible();
 
-    // 2. POST body carried the correct name, type, IBAN and currency.
+    // 2. POST body carried the correct name, type, IBAN and currency — the
+    // hook maps the SPA payload to DAL property names (iBAN, currency).
     expect(postBody).toMatchObject({
       name: newAccount.name,
       type: 'B',
-      iban: newAccount.iban,
-      currencyId: '102',
+      iBAN: newAccount.iban,
+      currency: '102',
     });
 
     // 3. Wizard auto-closes.

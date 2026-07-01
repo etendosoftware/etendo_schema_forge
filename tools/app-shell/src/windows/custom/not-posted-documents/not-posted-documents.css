@@ -1,0 +1,240 @@
+/* not-posted-documents.css — Not Posted Documents window styles (npd- prefix). */
+
+:root {
+  --npd-gray-50:    #F7F7F8;
+  --npd-gray-100:   #E8E8ED;
+  --npd-gray-200:   #D1D1DB;
+  --npd-gray-400:   #8A8AA3;
+  --npd-gray-600:   #55556D;
+  --npd-gray-700:   #3F3F50;
+  --npd-gray-800:   #282833;
+  --npd-blue-600:   #0075AD;
+  --npd-green-50:   #EEFBF4;
+  --npd-green-600:  #17913A;
+  --npd-red-50:     #FEF0F4;
+  --npd-red-700:    #D50B3E;
+  --npd-radius:     8px;
+}
+
+.npd-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--npd-gray-50);
+  font-size: 13px;
+  color: var(--npd-gray-800);
+}
+
+/* ── Filter bar ─────────────────────────────────────────────────────────────── */
+
+.npd-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #fff;
+  border-bottom: 1px solid var(--npd-gray-100);
+  flex-shrink: 0;
+}
+
+.npd-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.npd-filter-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--npd-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.npd-filter-field select,
+.npd-filter-field input[type="date"] {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--npd-gray-200);
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: var(--npd-gray-800);
+  outline: none;
+  cursor: pointer;
+}
+
+.npd-filter-field select:focus,
+.npd-filter-field input[type="date"]:focus {
+  border-color: var(--npd-blue-600);
+  box-shadow: 0 0 0 2px rgba(0, 117, 173, 0.12);
+}
+
+/* ── Toolbar ────────────────────────────────────────────────────────────────── */
+
+.npd-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid var(--npd-gray-100);
+  flex-shrink: 0;
+}
+
+.npd-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.npd-record-count {
+  font-size: 12px;
+  color: var(--npd-gray-400);
+}
+
+.npd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  height: 30px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.npd-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.npd-btn-primary {
+  background: var(--npd-blue-600);
+  color: #fff;
+}
+
+.npd-btn-primary:hover:not(:disabled) {
+  background: #006090;
+}
+
+.npd-btn-ghost {
+  background: transparent;
+  color: var(--npd-gray-600);
+  border: 1px solid var(--npd-gray-200);
+}
+
+.npd-btn-ghost:hover:not(:disabled) {
+  background: var(--npd-gray-50);
+}
+
+/* ── Table ──────────────────────────────────────────────────────────────────── */
+
+.npd-table-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.npd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.npd-table thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--npd-gray-600);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--npd-gray-100);
+  white-space: nowrap;
+}
+
+.npd-table thead th.col-check {
+  width: 36px;
+  text-align: center;
+}
+
+.npd-table thead th.col-actions {
+  width: 80px;
+  text-align: right;
+}
+
+.npd-table tbody tr {
+  border-bottom: 1px solid var(--npd-gray-100);
+  transition: background 0.1s;
+}
+
+.npd-table tbody tr:hover {
+  background: var(--npd-gray-50);
+}
+
+.npd-table tbody tr.is-selected {
+  background: #EFF6FF;
+}
+
+.npd-table tbody td {
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+
+.npd-table tbody td.col-check {
+  text-align: center;
+}
+
+.npd-table tbody td.col-actions {
+  text-align: right;
+}
+
+.npd-doc-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--npd-gray-100);
+  color: var(--npd-gray-700);
+  white-space: nowrap;
+}
+
+.npd-date {
+  color: var(--npd-gray-600);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ── Empty & loading ────────────────────────────────────────────────────────── */
+
+.npd-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+  padding: 48px;
+  color: var(--npd-gray-400);
+}
+
+.npd-center svg {
+  opacity: 0.4;
+}
+
+.npd-error {
+  color: var(--npd-red-700);
+}

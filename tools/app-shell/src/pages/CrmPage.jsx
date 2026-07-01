@@ -62,8 +62,7 @@ export default function CrmPage() {
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <KPIHeader kpis={KPIS} />
-
+      <KPIHeader kpis={KPIS} data-testid="KPIHeader__81e6f5" />
       {/* Deal Pipeline Kanban */}
       <KanbanBoard
         columns={COLUMNS}
@@ -71,42 +70,43 @@ export default function CrmPage() {
         onDragEnd={handleDragEnd}
         onCardClick={handleCardClick}
         emptyMessage="No deals in pipeline"
-      />
-
+        data-testid="KanbanBoard__81e6f5" />
       {/* Two-column layout: Activities (2/3) + Team Feed (1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Activities Table */}
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-muted-foreground" />
+          <Card data-testid="Card__81e6f5">
+            <CardHeader data-testid="CardHeader__81e6f5">
+              <CardTitle className="flex items-center gap-2" data-testid="CardTitle__81e6f5">
+                <Activity className="h-5 w-5 text-muted-foreground" data-testid="Activity__81e6f5" />
                 {ui('recentActivities')}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent data-testid="CardContent__81e6f5">
               <DataTable
                 columns={TABLE_COLUMNS}
                 filters={TABLE_FILTERS}
                 data={TABLE_DATA}
-              />
+                data-testid="DataTable__81e6f5" />
             </CardContent>
           </Card>
         </div>
 
         {/* Team Activity Feed */}
         <div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Users className="h-5 w-5 text-muted-foreground" />
+          <Card data-testid="Card__81e6f5">
+            <CardHeader data-testid="CardHeader__81e6f5">
+              <CardTitle
+                className="flex items-center gap-2 text-base"
+                data-testid="CardTitle__81e6f5">
+                <Users className="h-5 w-5 text-muted-foreground" data-testid="Users__81e6f5" />
                 {ui('teamActivity')}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3" data-testid="CardContent__81e6f5">
               {TEAM_FEED.map((entry, idx) => (
                 <div key={entry.id}>
-                  {idx > 0 && <Separator className="mb-3" />}
+                  {idx > 0 && <Separator className="mb-3" data-testid="Separator__81e6f5" />}
                   <div className="flex items-start gap-3">
                     {entry.direction && (
                       <div className={`mt-0.5 rounded-full p-1 ${
@@ -115,8 +115,8 @@ export default function CrmPage() {
                           : 'bg-blue-100 text-blue-600'
                       }`}>
                         {entry.direction === 'in'
-                          ? <ArrowUp className="h-3.5 w-3.5" />
-                          : <ArrowDown className="h-3.5 w-3.5" />
+                          ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__81e6f5" />
+                          : <ArrowDown className="h-3.5 w-3.5" data-testid="ArrowDown__81e6f5" />
                         }
                       </div>
                     )}

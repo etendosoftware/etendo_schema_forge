@@ -65,4 +65,12 @@ describe('CreateContactModal', () => {
     assert.match(src, /documentType === 'purchase'/);
     assert.match(src, /isVendor/);
   });
+
+  it('passes locale as language param in country selector fetch URL', () => {
+    assert.match(src, /language=\$\{locale\}/);
+  });
+
+  it('fetches country selectors from C_Country_ID endpoint', () => {
+    assert.match(src, /selectors\/C_Country_ID/);
+  });
 });

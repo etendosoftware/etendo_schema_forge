@@ -192,6 +192,17 @@ describe('domain boundary classification', () => {
     );
   });
 
+  it('classifies finance-feature shared components as platform', () => {
+    assert.deepEqual(
+      classifyPath('tools/app-shell/src/components/financial-accounts/AccountsToolbar.jsx', { knownWindows: WINDOWS }),
+      { kind: 'platform-change', scope: 'platform-change' },
+    );
+    assert.deepEqual(
+      classifyPath('tools/app-shell/src/components/payment/PaymentForm.jsx', { knownWindows: WINDOWS }),
+      { kind: 'platform-change', scope: 'platform-change' },
+    );
+  });
+
   it('classifies CLI tests with the generator boundary', () => {
     assert.deepEqual(
       classifyPath('cli/test/i18n-integration.test.js', { knownWindows: WINDOWS }),
@@ -225,9 +236,41 @@ describe('domain boundary classification', () => {
     }
   });
 
+  it('classifies neo-writer and cli/src/lib helpers with the generator boundary', () => {
+    assert.deepEqual(
+      classifyPath('cli/src/neo-writer.js', { knownWindows: WINDOWS }),
+      { kind: 'generator-change', scope: 'generator-change' },
+    );
+    assert.deepEqual(
+      classifyPath('cli/src/lib/neo-delta.js', { knownWindows: WINDOWS }),
+      { kind: 'generator-change', scope: 'generator-change' },
+    );
+  });
+
+  it('classifies .claude agent/tooling config as repo infra', () => {
+    assert.equal(
+      classifyPath('.claude/agents/foo.md', { knownWindows: WINDOWS }).scope,
+      'repo-infra',
+    );
+  });
+
+  it('classifies agentic-validation docs as repo infra', () => {
+    assert.equal(
+      classifyPath('docs/agentic-validation/bar.md', { knownWindows: WINDOWS }).scope,
+      'repo-infra',
+    );
+  });
+
   it('classifies npm registry config as repo infra', () => {
     assert.deepEqual(
       classifyPath('.npmrc', { knownWindows: WINDOWS }),
+      { kind: 'repo-infra', scope: 'repo-infra' },
+    );
+  });
+
+  it('classifies the Sonar wrapper script as repo infra', () => {
+    assert.deepEqual(
+      classifyPath('run-sonar.sh', { knownWindows: WINDOWS }),
       { kind: 'repo-infra', scope: 'repo-infra' },
     );
   });
@@ -293,6 +336,38 @@ describe('domain boundary classification', () => {
 
     assert.equal(report.decision, 'pass');
     assert.ok(report.warnings.some((warning) => warning.code === 'CROSS_DOMAIN_APPROVED'));
+  });
+
+  it('passes merge-block PRs without a plan (aggregated cross-branch merge)', () => {
+    const report = analyzeBoundary({
+      knownWindows: WINDOWS,
+      labels: ['merge-block'],
+      changedFiles: [
+        'tools/app-shell/src/components/contract-ui/DetailView.jsx',
+        'cli/src/generate-frontend.js',
+        'packages/app-shell-core/src/locales/es_ES.json',
+        'artifacts/sales-order/contract.json',
+        'artifacts/purchase-order/contract.json',
+      ],
+    });
+
+    assert.equal(report.decision, 'pass');
+    assert.ok(report.warnings.some((warning) => warning.code === 'MERGE_BLOCK'));
+    assert.equal(report.blockers.length, 0);
+  });
+
+  it('does not require a cross-domain plan when merge-block is combined with cross-domain-approved', () => {
+    const report = analyzeBoundary({
+      knownWindows: WINDOWS,
+      labels: ['merge-block', 'cross-domain-approved'],
+      changedFiles: [
+        'tools/app-shell/src/components/contract-ui/DetailView.jsx',
+        'artifacts/sales-order/contract.json',
+      ],
+    });
+
+    assert.equal(report.decision, 'pass');
+    assert.ok(!report.blockers.some((blocker) => blocker.code === 'CROSS_DOMAIN_PLAN_MISSING'));
   });
 
   it('does not treat root lockfiles as neutral when multiple domains are changed', () => {

@@ -97,15 +97,17 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
             {total > 1 && (
               <div className="flex items-center gap-1 ml-2">
                 <button onClick={() => setCurrentIndex(i => Math.max(0, i - 1))} disabled={currentIndex === 0} className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-30">
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-4 w-4" data-testid="ChevronLeft__8d2ae7" />
                 </button>
                 <span className="text-xs font-medium text-muted-foreground tabular-nums">{currentIndex + 1} / {total}</span>
                 <button onClick={() => setCurrentIndex(i => Math.min(total - 1, i + 1))} disabled={currentIndex === total - 1} className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-30">
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4" data-testid="ChevronRight__8d2ae7" />
                 </button>
               </div>
             )}
-            {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            {loading && <Loader2
+              className="h-4 w-4 animate-spin text-muted-foreground"
+              data-testid="Loader2__8d2ae7" />}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -113,7 +115,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
               disabled={downloading || !currentDocId}
               className="h-8 px-3 flex items-center gap-1.5 rounded-md border border-border/50 text-muted-foreground hover:text-foreground hover:bg-muted/50 bg-white text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__8d2ae7" /> : <Download className="h-3.5 w-3.5" data-testid="Download__8d2ae7" />}
               {downloading ? ui('generating') : ui('download')}
             </button>
             <button
@@ -121,18 +123,18 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
               title={ui('comingSoon')}
               className="h-8 px-3 flex items-center gap-1.5 rounded-md bg-blue-600/50 text-white text-xs font-medium cursor-not-allowed"
             >
-              <Send className="h-3.5 w-3.5" />
+              <Send className="h-3.5 w-3.5" data-testid="Send__8d2ae7" />
               {ui('sendByEmail')}
             </button>
             <button onClick={onClose} className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 ml-1">
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" data-testid="X__8d2ae7" />
             </button>
           </div>
         </div>
         {/* Document area */}
         <div className="flex-1 overflow-hidden bg-slate-100 p-6 flex justify-center">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-[850px] overflow-hidden relative">
-            {loading && <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /><span>{ui('generating')}</span></div>}
+            {loading && <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__8d2ae7" /><span>{ui('generating')}</span></div>}
             {error && <div className="absolute inset-0 flex items-center justify-center bg-white/90 z-10 text-destructive text-sm px-8 text-center">{error}</div>}
             <iframe ref={iframeRef} title="Document Print" className="w-full h-full border-0" />
           </div>

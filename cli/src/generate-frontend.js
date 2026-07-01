@@ -168,6 +168,7 @@ function mapFieldType(field) {
  * FK fields use inputMode (search/selector/dependent); non-FK fields use type.
  */
 function mapFormFieldType(field) {
+  if (field.explicitType) return field.type;
   if (field.type === 'foreignKey') {
     if (field.inputMode === 'selector') return 'selector';
     if (field.inputMode === 'dependent') return 'dependent';
@@ -192,6 +193,24 @@ function optProp(name, val) {
  */
 export function fragmentIf(cond, fragment) {
   return cond ? fragment : '';
+}
+
+/**
+ * Serialize the inline-create props (`createLabelKey`, `createSpec`, `createEntity`)
+ * for an `allowCreate` FK selector. These tell EntityForm where to POST a new record
+ * created on the fly (e.g. match-rule transaction type → ETGO_Transaction_Type) and
+ * which i18n key labels the "+ create" action. Emitted only when the field opts in.
+ */
+export function buildInlineCreatePart(f) {
+  if (!f.allowCreate) return '';
+  const esc = (v) => String(v).replace(/'/g, "\\'");
+  let out = '';
+  if (f.createLabelKey) out += `, createLabelKey: '${esc(f.createLabelKey)}'`;
+  if (f.createTitleKey) out += `, createTitleKey: '${esc(f.createTitleKey)}'`;
+  if (f.createNamePlaceholderKey) out += `, createNamePlaceholderKey: '${esc(f.createNamePlaceholderKey)}'`;
+  if (f.createSpec) out += `, createSpec: '${esc(f.createSpec)}'`;
+  if (f.createEntity) out += `, createEntity: '${esc(f.createEntity)}'`;
+  return out;
 }
 
 /**
@@ -280,13 +299,23 @@ export function generateTableComponent(entityName, contract) {
     //  - lookup / popup → swap the dropdown for a ProductSearchDrawer modal.
     const requiredPart = fragmentIf(f.required, ', required: true');
     const lookupPart = fragmentIf(f.lookup, ', lookup: true');
+    // Inline-edit lookup drawer override (InlineLinesPanel resolves it via the
+    // shared LOOKUP_DRAWERS registry). Keeps the inline-edit picker consistent
+    // with the add-row picker for windows that declare a custom drawer.
+    const lookupDrawerColPart = f.lookupDrawer ? `, lookupDrawer: '${String(f.lookupDrawer).replace(/'/g, "\\'")}'` : '';
+    // Inline-edit selector exclusion (InlineLinesPanel reads col.excludeValueOf and
+    // filters out the row's value of that sibling field).
+    const excludeValueOfColPart = f.excludeValueOf ? `, excludeValueOf: '${String(f.excludeValueOf).replace(/'/g, "\\'")}'` : '';
     const popupPart = fragmentIf(f.popup, ', popup: true');
     const minColPart = optProp('min', f.min);
+    const maxColPart = optProp('max', f.max);
     const growPart = fragmentIf(f.grow, ', grow: true');
+    const columnWidthPart = optProp('minWidth', f.columnWidth);
     const noTrailingPart = fragmentIf(f.noTrailing, ', noTrailing: true');
     const filterOnlyPart = fragmentIf((f.filterOnly || f.filterable === false), ', filterable: false');
     const dotPart = fragmentIf(f.dot === false, ', dot: false');
-    return `  { key: '${f.name}', column: '${f.column}', type: '${type}'${labelsPart}${labelPart}${enumLabelsPart}${enumVariantsPart}${selectionPart}${togglePart}${badgePart}${badgeLabelsPart}${badgeColorsPart}${badgeVariantsPart}${summablePart}${displayPart}${renderPart}${requiredPart}${lookupPart}${popupPart}${minColPart}${growPart}${noTrailingPart}${filterOnlyPart}${dotPart} },`;
+    const gridReadOnlyPart = fragmentIf(f.gridReadOnly, ', readOnly: true');
+    return `  { key: '${f.name}', column: '${f.column}', type: '${type}'${labelsPart}${labelPart}${enumLabelsPart}${enumVariantsPart}${selectionPart}${togglePart}${badgePart}${badgeLabelsPart}${badgeColorsPart}${badgeVariantsPart}${summablePart}${displayPart}${renderPart}${requiredPart}${lookupPart}${lookupDrawerColPart}${excludeValueOfColPart}${popupPart}${minColPart}${maxColPart}${growPart}${columnWidthPart}${noTrailingPart}${filterOnlyPart}${dotPart}${gridReadOnlyPart} },`;
   }).join('\n');
 
   const filtersArray = searchableFields.map(f => `'${f}'`).join(', ');
@@ -418,7 +447,8 @@ function buildReadOnlyLogicPart(f) {
 }
 
 function getS(o) {
-  return `{ value: '${o.value}', label: '${o.name.replace(/'/g, "\\'")}' }`;
+  const labelsPart = o.labels ? `, labels: ${JSON.stringify(o.labels)}` : '';
+  return `{ value: '${o.value}', label: '${o.name.replace(/'/g, "\\'")}'${labelsPart} }`;
 }
 
 function getOptionsPart(type, f) {
@@ -438,6 +468,7 @@ export function generateFormComponent(entityName, contract) {
   const entity = contract.frontendContract.entities[entityName];
   const formCols = entity.formCols ?? null;
   const colsProp = formCols != null ? ` cols={${formCols}}` : '';
+  const specName = contract.apiPrediction?.specName;
   // Sort by seq override if present (stable sort: fields without seq keep natural DB order)
   const formFields = entity.fields
     .filter(f => f.form && f.type !== 'button' && f.visibility !== 'discarded')
@@ -471,8 +502,12 @@ export function generateFormComponent(entityName, contract) {
     const lookupPart = fragmentIf(f.lookup, ', lookup: true');
     const popupPart = fragmentIf(f.popup, ', popup: true');
     const readOnlyPart = fragmentIf(f.visibility === 'readOnly', ', readOnly: true');
+    const inlinePart = fragmentIf(f.inline, ', inline: true');
     const referencePart = wrapIf(", reference: '", f.reference, "'");
     const inputModePart = wrapIf(", inputMode: '", f.inputMode, "'");
+    const searchSelectPart = fragmentIf(f.searchSelect, ', searchSelect: true');
+    const allowCreatePart = fragmentIf(f.allowCreate, ', allowCreate: true');
+    const createPart = buildInlineCreatePart(f);
     const dependsOnPart = f.dependsOn
       ? `, dependsOn: { field: '${f.dependsOn.field}', filterKey: '${f.dependsOn.filterKey}' }`
       : '';
@@ -485,6 +520,8 @@ export function generateFormComponent(entityName, contract) {
     const skipServerMacro = isEtendoSessionMacro(f.defaultValue);
     const defaultValuePart = getDefaultValuePart(skipCheckboxDefault, skipServerMacro, f);
     const helpPart = f.help ? `, help: '${f.help.replace(/'/g, "\\'")}'` : '';
+    const placeholderPart = f.placeholderKey ? `, placeholderKey: '${f.placeholderKey.replace(/'/g, "\\'")}'` : '';
+    const emptyOptionPart = f.emptyOptionLabelKey ? `, emptyOptionLabelKey: '${f.emptyOptionLabelKey.replace(/'/g, "\\'")}'` : '';
     const fieldGroupPart = f.fieldGroup ? `, fieldGroup: '${f.fieldGroup.replace(/'/g, "\\'")}'` : '';
     const precisionPart = wrapIf(', precision: ', f.precision);
     // Behavioral metadata: displayLogic and readOnlyLogic
@@ -494,7 +531,11 @@ export function generateFormComponent(entityName, contract) {
     const optionsPart = getOptionsPart(type, f);
     const formLabelPart = f.label ? `, label: '${f.label.replace(/'/g, "\\'")}'` : '';
     const valueTypePart = (type === 'select' && f.tsType === 'boolean') ? `, valueType: 'boolean'` : '';
-    const fieldLine = `  { key: '${f.name}', column: '${f.column}', type: '${type}'${formLabelPart}${requiredPart}${lookupPart}${popupPart}${readOnlyPart}${sectionPart}${referencePart}${inputModePart}${dependsOnPart}${optionsPart}${valueTypePart}${defaultValuePart}${helpPart}${fieldGroupPart}${precisionPart}${displayLogicPart}${readOnlyLogicPart} },`;
+    const spanPart = (f.span && f.span > 1) ? `, span: ${f.span}` : '';
+    const rowsPart = f.rows != null ? `, rows: ${f.rows}` : '';
+    const clearablePart = f.clearable === false ? ', clearable: false' : '';
+    const customRendererPart = f.customRenderer ? `, customRenderer: ${f.customRenderer}` : '';
+    const fieldLine = `  { key: '${f.name}', column: '${f.column}', type: '${type}'${formLabelPart}${requiredPart}${lookupPart}${popupPart}${readOnlyPart}${inlinePart}${sectionPart}${referencePart}${inputModePart}${searchSelectPart}${allowCreatePart}${createPart}${dependsOnPart}${optionsPart}${valueTypePart}${defaultValuePart}${helpPart}${placeholderPart}${emptyOptionPart}${fieldGroupPart}${precisionPart}${displayLogicPart}${readOnlyLogicPart}${spanPart}${rowsPart}${clearablePart}${customRendererPart} },`;
     return [...slotLines, fieldLine].join('\n');
   }).join('\n');
 
@@ -504,7 +545,15 @@ export function generateFormComponent(entityName, contract) {
     ? `// Field groups: ${uniqueGroups.join(', ')}\n`
     : '';
 
-  return `import { EntityForm } from '@/components/contract-ui';
+  // Collect unique customRenderer component names and emit imports.
+  // Append after the EntityForm import when present; otherwise omit the block entirely
+  // so no extra blank line appears in windows that don't use customRenderer.
+  const customRenderers = [...new Set(formFields.map(f => f.customRenderer).filter(Boolean))];
+  const rendererImportLines = customRenderers.length > 0 && specName
+    ? '\n' + customRenderers.map(comp => `import ${comp} from ${resolveCustomImport(specName, comp)};`).join('\n')
+    : '';
+
+  return `import { EntityForm } from '@/components/contract-ui';${rendererImportLines}
 
 ${MARKERS.GENERATED_START(`fields:${entityName}`)}
 ${fieldGroupsComment}const fields = [
@@ -542,10 +591,22 @@ function generateStatusBarComponent(headerEntity, statusBarConfig) {
 
   // Build cards array literal
   const cardsLiteral = cards.map(card => {
-    const valueExpr = card.display === 'identifier'
-      ? `(data['${card.field}$_identifier'] || data['${card.field}'] || '—')`
-      : `fmt(data.${card.field})`;
-    return `    { label: '${card.label}', value: ${valueExpr}, color: '${card.color}',  Icon: ${card.icon} },`;
+    // Value expression: identifier FK label | yesno conditional | numeric default
+    let valueExpr;
+    if (card.display === 'identifier') {
+      valueExpr = `(data['${card.field}$_identifier'] || data['${card.field}'] || '—')`;
+    } else if (card.display === 'yesno') {
+      valueExpr = `((data.${card.field} === true || data.${card.field} === 'Y') ? ui('${card.trueKey ?? 'postedStatus'}') : (data.${card.field} === false || data.${card.field} === 'N') ? ui('${card.falseKey ?? 'notPostedStatus'}') : '—')`;
+    } else {
+      valueExpr = `fmt(data.${card.field})`;
+    }
+    // Color expression: dynamic for yesno, static otherwise
+    const colorExpr = card.display === 'yesno'
+      ? `((data.${card.field} === true || data.${card.field} === 'Y') ? '${card.trueColor ?? 'green'}' : '${card.falseColor ?? 'orange'}')`
+      : `'${card.color}'`;
+    // Label expression: i18n key via ui() or static string
+    const labelExpr = card.labelKey ? `ui('${card.labelKey}')` : `'${card.label}'`;
+    return `    { label: ${labelExpr}, value: ${valueExpr}, color: ${colorExpr},  Icon: ${card.icon} },`;
   }).join('\n');
 
   // Build progress section
@@ -718,11 +779,25 @@ function resolveSendDocumentConfig(windowConfig, allEntityFields) {
     ? !!sendDocumentOverride.enabled
     : isDocumentalWindow;
   const sdAllowEmail = sendDocumentOverride?.allowEmail !== false;
-  const sendDocument = sdEnabled ? { enabled: true, allowEmail: sdAllowEmail } : null;
+  // When explicitly disabled via decisions.json (sendDocument.enabled: false), emit
+  // the object so ListView receives sendDocument != null and skips its documentNo
+  // auto-detection heuristic — otherwise the envelope button would re-appear on
+  // windows with a documentNo column. Non-documental windows (no override, no
+  // documentNo) return null so they stay transparent to the heuristic.
+  if (!sdEnabled) return sendDocumentOverride != null ? { enabled: false } : null;
+  const sendDocument = { enabled: true, allowEmail: sdAllowEmail };
+  // ETP-4226 — recipient-edit policy overrides pass through verbatim so
+  // ListView can forward them to SendDocumentModal as `sendPolicy`.
+  // Absence means the shared default applies (editable To/CC, max 10).
+  for (const key of ['editableRecipients', 'cc', 'maxRecipients']) {
+    if (sendDocumentOverride && sendDocumentOverride[key] !== undefined) {
+      sendDocument[key] = sendDocumentOverride[key];
+    }
+  }
   return sendDocument;
 }
 
-function buildCustomComponentImportsAndProps(customComponents, specName, customPanelTabs, newActionsConfig) {
+function buildCustomComponentImportsAndProps(customComponents, specName, customPanelTabs, newActionsConfig, menuActionsConfig = []) {
   const customComponentImports = [];
   const customComponentProps = [];
   if (customComponents.bottomSection) {
@@ -763,6 +838,9 @@ function buildCustomComponentImportsAndProps(customComponents, specName, customP
   for (const action of newActionsWithComponents) {
     customComponentImports.push(`import ${action.component} from ${resolveCustomImport(specName, action.component)};`);
   }
+  for (const action of menuActionsConfig.filter(a => a.component)) {
+    customComponentImports.push(`import ${action.component} from ${resolveCustomImport(specName, action.component)};`);
+  }
   const customCompImportBlock = customComponentImports.length > 0
     ? customComponentImports.join('\n') + '\n'
     : '';
@@ -786,7 +864,7 @@ function getSuccessPart(a) {
   }
 }
 
-function getMenuActionsProp(menuActionsConfig, menuActionsFnParams) {
+export function getMenuActionsProp(menuActionsConfig, menuActionsFnParams) {
   let menuActionsProp;
   if (menuActionsConfig.length > 0) {
     menuActionsProp = `\n        menuActions={${menuActionsFnParams} => [\n${menuActionsConfig.map(a => {
@@ -800,23 +878,32 @@ function getMenuActionsProp(menuActionsConfig, menuActionsFnParams) {
           ? `status === '${a.visibleWhenStatus}'`
           : '';
       }
-      const fieldVisFalse = a.visibleWhenFieldFalse ? `!data?.${a.visibleWhenFieldFalse}` : '';
+      const fieldVisFalse = a.visibleWhenFieldFalse ? `!(data?.${a.visibleWhenFieldFalse} === 'Y' || data?.${a.visibleWhenFieldFalse} === true)` : '';
       const fieldVisTrue = a.visibleWhenFieldTrue ? `(data?.${a.visibleWhenFieldTrue} === 'Y' || data?.${a.visibleWhenFieldTrue} === true)` : '';
       const visParts = [statusVis, fieldVisFalse, fieldVisTrue].filter(Boolean);
       const vis = getVis(visParts);
       const destr = fragmentIf(a.destructive, 'destructive: true, ');
-      // Handler precedence: documentAction (declarative DocAction) > columnName (AD process button) > onClick placeholder
+      // Handler precedence: documentAction (declarative DocAction) > columnName
+      // (AD process button) > action (declarative NEO action endpoint, ETP-4298)
+      // > onClick placeholder.
       let handler;
       if (a.documentAction) {
         handler = `documentAction: '${a.documentAction}', `;
       } else if (a.columnName) {
         handler = `columnName: '${a.columnName}', `;
+      } else if (a.action) {
+        handler = `neoAction: '${a.action}', `;
+      } else if (a.component) {
+        const stateSetter = `set${capitalize(a.key.replace(/-./g, m => m[1].toUpperCase()))}MenuModal`;
+        const contextSetter = `set${capitalize(a.key.replace(/-./g, m => m[1].toUpperCase()))}MenuContext`;
+        handler = `onClick: () => { ${contextSetter}(data ?? null); ${stateSetter}(true); },`;
       } else {
         handler = `onClick: () => {},`;
       }
       const labelKeyPart = a.labelKey ? `labelKey: '${a.labelKey}', ` : '';
       const successPart = getSuccessPart(a);
-      return `          { key: '${a.key}', label: '${a.label}', ${destr}${vis}${labelKeyPart}${successPart}${handler} }`;
+      const preUnpostPart = a.preUnpost ? `preUnpost: true, ` : '';
+      return `          { key: '${a.key}', label: '${a.label}', ${destr}${vis}${labelKeyPart}${successPart}${preUnpostPart}${handler} }`;
     }).join(',\n')}\n        ]}`;
   } else {
     menuActionsProp = '';
@@ -846,7 +933,10 @@ function buildSendDocumentProps(sendDocument) {
   let sendDocumentProp = '';
   let sendDocumentDetailProp = '';
   if (sendDocument) {
-    const isDefaults = sendDocument.enabled === true && sendDocument.allowEmail === true;
+    // ETP-4226 — any recipient-policy key (editableRecipients/cc/maxRecipients)
+    // makes the object non-default so it is emitted verbatim.
+    const isDefaults = sendDocument.enabled === true && sendDocument.allowEmail === true
+      && Object.keys(sendDocument).length === 2;
     const propValue = isDefaults ? '' : `={${JSON.stringify(sendDocument)}}`;
     sendDocumentProp = `\n      sendDocument${propValue}`;
     sendDocumentDetailProp = `\n        sendDocument${propValue}`;
@@ -1079,6 +1169,51 @@ function getLineConfigSymbol(lineEntityConfig, LINE_CONFIG_SYMBOLS) {
   return lineEntityConfig ? (LINE_CONFIG_SYMBOLS[lineEntityConfig] ?? null) : null;
 }
 
+function buildCustomLinesParts(windowConfig, specName) {
+  const customLinesComp = windowConfig.customLinesComponent ?? null;
+  const customLinesLabelValue = windowConfig.customLinesLabel ?? null;
+  let customLinesImport = '';
+  let customLinesProp = '';
+  if (customLinesComp && specName) {
+    customLinesImport = `import ${customLinesComp} from ${resolveCustomImport(specName, customLinesComp)};\n`;
+    customLinesProp = `\n        CustomLines={${customLinesComp}}`;
+    if (customLinesLabelValue) {
+      customLinesProp += `\n        customLinesLabel="${customLinesLabelValue}"`;
+    }
+  }
+  return {customLinesComp, customLinesImport, customLinesProp};
+}
+
+function getCustomTabItems(relatedDocuments, customPanelTabs, attachmentsEnabled, attachmentsOpts, headerTableName, extraTabs) {
+  const customTabItems = [];
+  if (relatedDocuments) {
+    customTabItems.push(`{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }`);
+  }
+  customPanelTabs.forEach(pt => {
+    const labelPart = pt.labelKey ? `labelKey: '${pt.labelKey}'` : `label: '${pt.label}'`;
+    customTabItems.push(
+        `{ key: '${pt.key}', ${labelPart}, Component: ${pt.component}, placement: 'tab' }`
+    );
+  });
+  pushAttachmentsTab(attachmentsEnabled, attachmentsOpts, customTabItems, headerTableName);
+  extraTabs.forEach(et => {
+    const labelPart = et.labelKey ? `labelKey: '${et.labelKey}'` : `label: '${JSON.stringify(et.label)}'`;
+    customTabItems.push(
+        `{ key: '${et.key}', ${labelPart}, Component: ${et.component}, placement: 'tab' }`
+    );
+  });
+  return customTabItems;
+}
+
+/**
+ * Build the `detailEntity="..."` JSX attribute fragment (with leading newline
+ * and indentation) when a detail entity is present, or an empty string otherwise.
+ */
+export function buildDetailEntityAttr(detailEntity) {
+  return detailEntity ? `
+        detailEntity="${detailEntity}"` : '';
+}
+
 /**
  * Build the `processes` registry literal for a page: backend process endpoints,
  * button-type header fields, and extra processes declared only in decisions.json.
@@ -1095,7 +1230,7 @@ function buildProcessesArray({ processes, buttonFields, processOverrides }) {
       const colPart = wrapIf(", columnName: '", p.columnName, "'");
       const paramsPart = p.params?.length ? `, params: ${JSON.stringify(p.params)}` : '';
       const dlRaw = ovr.displayLogicRaw
-        ? `,\n    displayLogicRaw: "${ovr.displayLogicRaw.replace(/"/g, '\\"')}"`
+        ? `,\n    displayLogicRaw: "${ovr.displayLogicRaw.replace(/"/g, '\\"').replace(/\r?\n/g, '\\n')}"`
         : '';
       return `  { name: '${p.name}', label: '${label.replace(/'/g, "\\'")}', style: '${style}'${colPart}${paramsPart}${dlRaw} },`;
     }).filter(Boolean),
@@ -1106,9 +1241,10 @@ function buildProcessesArray({ processes, buttonFields, processOverrides }) {
       const style = ovr.style || pick(isDestructive, 'destructive', 'positive');
       const label = ovr.label || f.label || toLabel(f.name);
       const dlRawVal = ovr.displayLogicRaw || f.displayLogic?.raw;
-      const dlRaw = dlRawVal ? `,\n    displayLogicRaw: "${dlRawVal.replace(/"/g, '\\"')}"` : '';
+      const dlRaw = dlRawVal ? `,\n    displayLogicRaw: "${dlRawVal.replace(/"/g, '\\"').replace(/\r?\n/g, '\\n')}"` : '';
       const requiresLinesPart = fragmentIf(ovr.requiresLines, ', requiresLines: true');
-      return `  { name: '${f.name}', label: '${label.replace(/'/g, "\\'")}', style: '${style}'${dlRaw}${requiresLinesPart} },`;
+      const paramsPart = ovr.params?.length ? `, params: ${JSON.stringify(ovr.params)}` : '';
+      return `  { name: '${f.name}', label: '${label.replace(/'/g, "\\'")}', style: '${style}'${dlRaw}${requiresLinesPart}${paramsPart} },`;
     }).filter(Boolean),
     // Extra processes defined purely in decisions.json (not in backend contract)
     ...Object.entries(processOverrides)
@@ -1118,13 +1254,14 @@ function buildProcessesArray({ processes, buttonFields, processOverrides }) {
         const label = ovr.label || toLabel(name);
         const colPart = wrapIf(", columnName: '", ovr.columnName, "'");
         const dlRaw = ovr.displayLogicRaw
-          ? `,\n    displayLogicRaw: "${ovr.displayLogicRaw.replace(/"/g, '\\"')}"`
+          ? `,\n    displayLogicRaw: "${ovr.displayLogicRaw.replace(/"/g, '\\"').replace(/\r?\n/g, '\\n')}"`
           : '';
         const requiresLinesPart = fragmentIf(ovr.requiresLines, ', requiresLines: true');
         const fieldMaxPart = ovr.requiresFieldMax
           ? `, requiresFieldMax: ${JSON.stringify(ovr.requiresFieldMax)}`
           : '';
-        return `  { name: '${name}', label: '${label.replace(/'/g, "\\'")}', style: '${style}'${colPart}${dlRaw}${requiresLinesPart}${fieldMaxPart} },`;
+        const addParamsPart = ovr.params?.length ? `, params: ${JSON.stringify(ovr.params)}` : '';
+        return `  { name: '${name}', label: '${label.replace(/'/g, "\\'")}', style: '${style}'${colPart}${dlRaw}${requiresLinesPart}${fieldMaxPart}${addParamsPart} },`;
       }),
   ].join('\n');
 }
@@ -1151,6 +1288,480 @@ function buildHiddenDefaultsArray(hiddenDefaultFields, allEntityFields) {
     }).join('\n');
 }
 
+export function buildHeaderLogicMaps(contract, headerEntity) {
+  const headerEntityForLogic = contract.frontendContract.entities[headerEntity] ?? {};
+  const headerColumnMap = {};
+  const headerBooleanFields = [];
+  for (const hf of (headerEntityForLogic.fields ?? [])) {
+    if (hf.column && hf.name) headerColumnMap[hf.column] = hf.name;
+    if (hf.tsType === 'boolean' || hf.type === 'boolean') headerBooleanFields.push(hf.name);
+  }
+  return {headerColumnMap, headerBooleanFields};
+}
+
+function getHiddenArraySeparator(hiddenDefaultsArray, hiddenSiblingArray) {
+  return (hiddenDefaultsArray && hiddenSiblingArray) ? '\n' : '';
+}
+
+function getAddLineGuardProp(maxDetailLines) {
+  return maxDetailLines != null
+      ? `\n        addLineGuard={(_, children) => children.length < ${maxDetailLines}}`
+      : '';
+}
+
+/**
+ * Order the grid fields the same way generateTableComponent does: fields with an
+ * explicit `gridOrder` are inserted at that 1-based position, the rest keep their
+ * natural relative order. Shared so the list-modal grid matches the standard grid.
+ */
+function orderGridFields(entity) {
+  const gridFieldsRaw = entity.fields.filter(f => f.grid && f.visibility !== 'discarded');
+  const pinned = [...gridFieldsRaw].filter(f => f.gridOrder != null).sort((a, b) => a.gridOrder - b.gridOrder);
+  const unpinned = gridFieldsRaw.filter(f => f.gridOrder == null);
+  const gridFields = [...unpinned];
+  for (const f of pinned) {
+    const pos = Math.max(1, Math.min(f.gridOrder, gridFields.length + 1));
+    gridFields.splice(pos - 1, 0, f);
+  }
+  return gridFields;
+}
+
+/**
+ * Build the column descriptor literals for the list-modal grid. Reuses the same
+ * field flags as the standard DataTable (`type`, `label`, enum labels, `toggle`
+ * for inlineToggle, `inlineEdit`, `badge`). Backend-agnostic: every cell renders
+ * from the row payload alone.
+ */
+function buildListModalColumns(entity) {
+  return orderGridFields(entity).map(f => {
+    const type = mapFieldType(f);
+    const labelPart = f.label ? `, label: '${f.label.replace(/'/g, "\\'")}'` : '';
+    let enumLabelsPart = '';
+    if ((type === 'enum' || type === 'status') && f.enumValues?.length) {
+      const enumEntries = f.enumValues.map(o => `'${o.value}': '${o.name.replace(/'/g, "\\'")}'`).join(', ');
+      enumLabelsPart = `, enumLabels: { ${enumEntries} }`;
+    }
+    const enumVariantsPart = jsonWrapIf(', enumVariants: ', f.enumVariants);
+    const togglePart = fragmentIf(f.inlineToggle, ', toggle: true');
+    const inlineEditPart = fragmentIf(f.inlineEdit, ', inlineEdit: true');
+    const badgePart = fragmentIf(f.badge, ', badge: true');
+    const displayPart = wrapIf(", display: '", f.display, "'");
+    // Cell-renderer registry config (listModalCells.jsx). cellType selects the
+    // renderer; the rest carry its inputs. All values are field names or i18n
+    // keys (never raw user text), so they are safe to emit verbatim.
+    const cellTypePart = wrapIf(", cellType: '", f.cellType, "'");
+    const labelKeyPart = wrapIf(", labelKey: '", f.gridLabelKey, "'");
+    const subFieldPart = wrapIf(", subField: '", f.subField, "'");
+    const subEmptyKeyPart = wrapIf(", subEmptyKey: '", f.subEmptyKey, "'");
+    const kindFieldPart = wrapIf(", kindField: '", f.kindField, "'");
+    const patternFieldPart = wrapIf(", patternField: '", f.patternField, "'");
+    const kindLabelsPart = jsonWrapIf(', kindLabels: ', f.kindLabels);
+    const tonesPart = jsonWrapIf(', tones: ', f.tones);
+    return `  { key: '${f.name}', column: '${f.column}', type: '${type}'${labelPart}${labelKeyPart}${enumLabelsPart}${enumVariantsPart}${togglePart}${inlineEditPart}${badgePart}${displayPart}${cellTypePart}${subFieldPart}${subEmptyKeyPart}${kindFieldPart}${patternFieldPart}${kindLabelsPart}${tonesPart} },`;
+  }).join('\n');
+}
+
+/**
+ * Resolve the ordered modal sections. Honors templateConfig.sections (array of
+ * `{ key, label }` or string keys); otherwise derives the order from the first
+ * appearance of each field's `section` (defaulting unsectioned fields to 'general').
+ */
+function resolveModalSections(formFields, templateConfig) {
+  const declared = templateConfig?.sections;
+  if (Array.isArray(declared) && declared.length > 0) {
+    return declared.map(s => (typeof s === 'string' ? { key: s, label: null } : { key: s.key, label: s.label ?? null }));
+  }
+  const seen = [];
+  for (const f of formFields) {
+    const key = f.section || 'general';
+    if (!seen.includes(key)) seen.push(key);
+  }
+  return seen.map(key => ({ key, label: null }));
+}
+
+/**
+ * Build the modal field descriptor literals for the list-modal create/edit form.
+ * Mirrors generateFormComponent's field shape (type, required, lookup, reference,
+ * inputMode, options, defaultValue, span, section) so EntityForm renders identically.
+ */
+function buildListModalFields(formFields) {
+  return formFields.map(f => {
+    const type = mapFormFieldType(f);
+    const requiredPart = fragmentIf(f.required, ', required: true');
+    const lookupPart = fragmentIf(f.lookup, ', lookup: true');
+    const popupPart = fragmentIf(f.popup, ', popup: true');
+    const referencePart = wrapIf(", reference: '", f.reference, "'");
+    const inputModePart = wrapIf(", inputMode: '", f.inputMode, "'");
+    const searchSelectPart = fragmentIf(f.searchSelect, ', searchSelect: true');
+    const allowCreatePart = fragmentIf(f.allowCreate, ', allowCreate: true');
+    const createPart = buildInlineCreatePart(f);
+    const sectionPart = `, section: '${f.section || 'general'}'`;
+    const optionsPart = getOptionsPart(type, f);
+    const valueTypePart = (type === 'select' && f.tsType === 'boolean') ? `, valueType: 'boolean'` : '';
+    const labelPart = f.label ? `, label: '${f.label.replace(/'/g, "\\'")}'` : '';
+    const helpPart = f.help ? `, help: '${f.help.replace(/'/g, "\\'")}'` : '';
+    const placeholderPart = f.placeholderKey ? `, placeholderKey: '${f.placeholderKey.replace(/'/g, "\\'")}'` : '';
+    const emptyOptionPart = f.emptyOptionLabelKey ? `, emptyOptionLabelKey: '${f.emptyOptionLabelKey.replace(/'/g, "\\'")}'` : '';
+    const spanPart = (f.span && f.span > 1) ? `, span: ${f.span}` : '';
+    const rowsPart = f.rows != null ? `, rows: ${f.rows}` : '';
+    const skipCheckboxDefault = type === 'checkbox' && (f.defaultValue === 'N' || f.defaultValue === false);
+    const skipServerMacro = isEtendoSessionMacro(f.defaultValue);
+    const defaultValuePart = getDefaultValuePart(skipCheckboxDefault, skipServerMacro, f);
+    // A boolean field flagged as a grid toggle renders as the shared PillToggle switch in the
+    // modal body too (in place), instead of a plain checkbox.
+    const togglePart = (type === 'checkbox' && (f.cellType === 'toggle' || f.inlineToggle))
+      ? ', toggle: true' : '';
+    return `  { key: '${f.name}', column: '${f.column}', type: '${type}'${labelPart}${requiredPart}${lookupPart}${popupPart}${referencePart}${inputModePart}${searchSelectPart}${allowCreatePart}${createPart}${sectionPart}${optionsPart}${valueTypePart}${defaultValuePart}${helpPart}${placeholderPart}${emptyOptionPart}${spanPart}${rowsPart}${togglePart} },`;
+  }).join('\n');
+}
+
+/**
+ * Generate the page component for `layoutType: "list-modal"` windows.
+ *
+ * Emits a thin wrapper around the generic <ListModalWindow> component: a grid
+ * (list) + create/edit modal with NO drill-in detail view. All structure comes
+ * from the contract — grid columns, modal fields grouped by section, the NEO
+ * CRUD endpoint and the i18n title/banner — so the same template serves any
+ * catalog/master-data window that opts in.
+ */
+export function generateListModalPage(headerEntity, contract) {
+  const headerName = toJsIdentifier(headerEntity);
+  const compName = `${headerName}Page`;
+  const entity = contract.frontendContract.entities[headerEntity];
+  const windowConfig = contract?.frontendContract?.window ?? {};
+  const templateConfig = windowConfig.templateConfig ?? null;
+
+  const columnsArray = buildListModalColumns(entity);
+
+  const formFields = entity.fields
+    .filter(f => f.form && f.type !== 'button' && f.visibility !== 'discarded')
+    .sort((a, b) => {
+      if (a.seq != null && b.seq != null) return a.seq - b.seq;
+      if (a.seq != null) return -1;
+      if (b.seq != null) return 1;
+      return 0;
+    });
+  const fieldsArray = buildListModalFields(formFields);
+  const sections = resolveModalSections(formFields, templateConfig);
+  const sectionsArray = sections
+    .map(s => {
+      const sectionLabelPart = s.label ? `, label: '${String(s.label).replace(/'/g, "\\'")}'` : '';
+      return `  { key: '${s.key}'${sectionLabelPart} },`;
+    })
+    .join('\n');
+
+  const searchableFields = entity.searchableFields ?? [];
+  const filtersArray = searchableFields.map(f => `'${f}'`).join(', ');
+
+  const { apiBlock, apiProp } = buildApiParts(contract);
+
+  const windowCategory = capitalize(windowConfig.category ?? 'general');
+  const windowLabel = windowConfig.name ?? toLabel(headerEntity);
+  const breadcrumbLiteral = getBreadcrumbLiteral(windowConfig.breadcrumb, windowCategory, windowLabel);
+  const entityLabel = windowConfig.entityLabel || windowConfig.name || toLabel(headerEntity);
+
+  // Optional list-modal config (all i18n keys / field names; never raw user text).
+  const tc = templateConfig ?? {};
+  const configLiteral = JSON.stringify({
+    titleKey: tc.titleKey ?? null,
+    editTitleKey: tc.editTitleKey ?? null,
+    // Modal header subtitle (Figma muted line under the title) and submit button
+    // labels. All i18n keys; edit variants fall back to the create variant in the UI.
+    subtitleKey: tc.subtitleKey ?? null,
+    editSubtitleKey: tc.editSubtitleKey ?? null,
+    submitLabelKey: tc.submitLabelKey ?? null,
+    editSubmitLabelKey: tc.editSubmitLabelKey ?? null,
+    bannerKey: tc.bannerKey ?? null,
+    searchPlaceholderKey: tc.searchPlaceholderKey ?? null,
+    newLabelKey: tc.newLabelKey ?? null,
+    autoPriorityField: tc.autoPriorityField ?? null,
+    autoPriorityStep: tc.autoPriorityStep ?? null,
+    identifierField: tc.identifierField ?? null,
+    // Footer toggle: a boolean field promoted out of the body grid into the modal
+    // footer (switch + helper, beside the submit button — Figma "Crear transacción
+    // automáticamente"). Value is a field name from `fields`.
+    footerToggleField: tc.footerToggleField ?? null,
+    // Per-section column count for the modal body grid, keyed by section key
+    // (e.g. { general: 3, dimensions: 4 }). Defaults to 3 columns per section.
+    sectionGrid: tc.sectionGrid ?? {},
+    // Opt-in row "clone" action: a hover Copy button that opens the create modal
+    // pre-filled with the row's values (new record, re-seeded auto-priority).
+    allowClone: tc.allowClone ?? false,
+    // Toolbar back button + declarative dropdown filters (Figma "Cancelar",
+    // "Todas las reglas", "Todos los estados"). Filters are applied client-side
+    // by ListModalWindow over the loaded rows. Keys are i18n keys / field names.
+    backLabelKey: tc.backLabelKey ?? null,
+    backTo: tc.backTo ?? null,
+    toolbarFilters: tc.toolbarFilters ?? [],
+  }, null, 2);
+
+  return `import { ListModalWindow } from '@/components/contract-ui';
+
+${MARKERS.GENERATED_START(`columns:${headerEntity}`)}
+const columns = [
+${columnsArray}
+];
+${MARKERS.GENERATED_END(`columns:${headerEntity}`)}
+
+${MARKERS.GENERATED_START(`fields:${headerEntity}`)}
+const fields = [
+${fieldsArray}
+];
+
+const sections = [
+${sectionsArray}
+];
+
+const filters = [${filtersArray}];
+${MARKERS.GENERATED_END(`fields:${headerEntity}`)}
+
+const breadcrumb = ${breadcrumbLiteral};
+const listModalConfig = ${configLiteral};
+${apiBlock}
+${MARKERS.GENERATED_START(`component:${compName}`)}
+export default function ${compName}({ windowName, ...props }) {
+  return (
+    <ListModalWindow
+      entity="${headerEntity}"
+      entityLabel="${entityLabel.replace(/"/g, '\\"')}"
+      windowName={windowName}
+      breadcrumb={breadcrumb}
+      columns={columns}
+      fields={fields}
+      sections={sections}
+      filters={filters}
+      config={listModalConfig}${apiProp}
+      {...props}
+    />
+  );
+}
+${MARKERS.GENERATED_END(`component:${compName}`)}
+`;
+}
+
+/**
+ * Split a detail entity's editable fields into user-entry fields vs auto-derived
+ * fields (price/tax/amount/…), plus the hidden form=false defaults that still need
+ * to reach the server for callouts. Extracted to keep generatePageComponent flat.
+ * Note: discount is intentionally excluded — user-editable, triggers recalculation.
+ */
+function splitDetailLineFields(detailEditableFields, detailFields) {
+  const autoPatterns = /price|tax|amount|total|cost|net/i;
+  const derivedFields = detailEditableFields.filter(f =>
+    autoPatterns.test(f.name) && !f.required && !f.reference
+  );
+  const entryFields = detailEditableFields.filter(f => !derivedFields.includes(f));
+  const hiddenDefaultFields = detailFields.filter(f =>
+    !f.form && f.defaultValue !== undefined
+  );
+  return { entryFields, derivedFields, hiddenDefaultFields };
+}
+
+// Quote a field's name for emission, or the literal 'null' when absent.
+function quoteNameOrNull(field) {
+  return field ? `'${field.name}'` : 'null';
+}
+
+// One header summary-strip descriptor line. Hoisted out of generatePageComponent
+// to keep its map callbacks out of the function's cognitive complexity.
+function buildSummaryFieldLine(f) {
+  return `  { key: '${f.name}', column: '${f.column}', type: '${mapFieldType(f)}' },`;
+}
+
+// One auto-derived detail field descriptor line (price/tax/amount fields).
+function buildDerivedFieldLine(f) {
+  const type = mapFormFieldType(f);
+  const labelPart = wrapIf(", label: '", f.label, "'");
+  const referencePart = wrapIf(", reference: '", f.reference, "'");
+  const inputModePart = wrapIf(", inputMode: '", f.inputMode, "'");
+  return `    { key: '${f.name}', column: '${f.column}', type: '${type}'${labelPart}${referencePart}${inputModePart} },`;
+}
+
+/**
+ * Build one descriptor line for a detail add-line entry field. Hoisted out of
+ * generatePageComponent's map callback to keep that function's cognitive
+ * complexity low. `firstSearchIdx` flags which entry field opens the lookup.
+ */
+function buildEntryFieldLine(f, i, firstSearchIdx) {
+  const type = mapFormFieldType(f);
+  const requiredPart = fragmentIf(f.required, ', required: true');
+  const lookupPart = fragmentIf(i === firstSearchIdx && firstSearchIdx !== -1, ', lookup: true');
+  const labelPart = wrapIf(", label: '", f.label, "'");
+  const labelsDictPart = f.labels ? `, labels: ${JSON.stringify(f.labels)}` : '';
+  const clearsFieldPart = f.clearsField ? `, clearsField: '${String(f.clearsField).replace(/'/g, "\\'")}'` : '';
+  const skipDefaultPart = f.skipDefault ? ', skipDefault: true' : '';
+  const referencePart = wrapIf(", reference: '", f.reference, "'");
+  const inputModePart = wrapIf(", inputMode: '", f.inputMode, "'");
+  const dependsOnPart = f.dependsOn
+    ? `, dependsOn: { field: '${f.dependsOn.field}', filterKey: '${f.dependsOn.filterKey}' }`
+    : '';
+  // Include defaultValue for quantity/numeric fields so the add-line form starts with a
+  // sensible value. Skip redundant unchecked YESNO/checkbox defaults (backend coerces).
+  const rawDv = f.defaultValue;
+  let defaultValuePart = '';
+  const skipCheckboxDefault = type === 'checkbox' && (rawDv === 'N' || rawDv === false);
+  const skipServerMacro = isEtendoSessionMacro(rawDv);
+  if (!skipCheckboxDefault && !skipServerMacro && rawDv !== undefined && rawDv !== null && rawDv !== '') {
+    const numDv = Number(rawDv);
+    const dvLiteral = (!isNaN(numDv) && String(rawDv).trim() !== '') ? numDv : `'${String(rawDv).replace(/'/g, "\\'")}'`;
+    defaultValuePart = `, defaultValue: ${dvLiteral}`;
+  }
+  const forceCalloutFieldsPart = Array.isArray(f.forceCalloutFields) && f.forceCalloutFields.length > 0
+    ? `, forceCalloutFields: ${JSON.stringify(f.forceCalloutFields)}`
+    : '';
+  const { lookupDrawerPart, lookupTitlePart, onSelectMappingsPart, displayFromCatalogPart } = buildLookupEntryParts(f);
+  const minEntryPart = optProp('min', f.min);
+  const maxEntryPart = optProp('max', f.max);
+  // Selector exclusion: hide the option equal to the current value of another field
+  // on the same add-line row (e.g. newStorageBin can't equal storageBin).
+  const excludeValueOfPart = f.excludeValueOf ? `, excludeValueOf: '${String(f.excludeValueOf).replace(/'/g, "\\'")}'` : '';
+  return `    { key: '${f.name}', column: '${f.column}', type: '${type}'${requiredPart}${lookupPart}${labelPart}${labelsDictPart}${clearsFieldPart}${skipDefaultPart}${referencePart}${inputModePart}${dependsOnPart}${defaultValuePart}${forceCalloutFieldsPart}${lookupDrawerPart}${lookupTitlePart}${onSelectMappingsPart}${displayFromCatalogPart}${minEntryPart}${maxEntryPart}${excludeValueOfPart} },`;
+}
+
+function resolveSecondaryTabDefs(secondaryTabsDecl, contract, headerEntity, detailEntity, headerColumnMap, headerBooleanFields) {
+  if (!secondaryTabsDecl) {
+    // Fallback: hardcoded known list + entity inference (backward compat)
+    const allEntityEntries = Object.entries(contract.frontendContract.entities);
+    const knownSecondaryTabDefs = [
+      { key: 'orderTax', label: 'Tax', TableName: 'OrderTaxTable', FormName: 'OrderTaxForm' },
+      { key: 'invoiceTax', label: 'Tax', TableName: 'InvoiceTaxTable', FormName: 'InvoiceTaxForm' },
+      { key: 'basicDiscounts', label: 'Basic Discounts', TableName: 'BasicDiscountsTable', FormName: 'BasicDiscountsForm' },
+      { key: 'paymentPlan', label: 'Payment Plan', TableName: 'PaymentPlanTable', FormName: 'PaymentPlanForm' },
+      { key: 'accounting', label: 'Accounting', TableName: 'AccountingTable', FormName: 'AccountingForm' },
+      { key: 'landedCost', label: 'Landed Cost', TableName: 'LandedCostTable', FormName: 'LandedCostForm' },
+      { key: 'reversedInvoices', label: 'Reversed Invoices', TableName: 'ReversedInvoicesTable', FormName: 'ReversedInvoicesForm' },
+    ].filter(t => allEntityEntries.some(([name]) => name === t.key));
+    const knownSecondaryKeys = new Set(knownSecondaryTabDefs.map(t => t.key));
+    const inferredSecondaryTabDefs = allEntityEntries
+      .filter(([name, entity]) => {
+        if (name === headerEntity || name === detailEntity) return false;
+        if (knownSecondaryKeys.has(name)) return false;
+        const editableFieldCount = (entity.fields || []).filter(f => f.visibility === 'editable').length;
+        return editableFieldCount === 0;
+      })
+      .map(([name, entity]) => ({
+        key: name,
+        label: entity.tabName || toLabel(name),
+        isFormTab: false,
+        TableName: `${toJsIdentifier(name)}Table`,
+        FormName: `${toJsIdentifier(name)}Form`,
+        addLineEntries: [],
+      }));
+    return [
+      ...knownSecondaryTabDefs.map(t => ({ ...t, isFormTab: false, addLineEntries: [] })),
+      ...inferredSecondaryTabDefs,
+    ].filter(t => t.key !== detailEntity).slice(0, 4);
+  }
+  // Declarative config from decisions.json — sorted by tabOrder
+  return Object.entries(secondaryTabsDecl)
+    .sort((a, b) => (a[1].tabOrder ?? 99) - (b[1].tabOrder ?? 99))
+    .map(([key, cfg]) => {
+      const isFormTab = cfg.tabMode === 'form-only';
+      const isPanelTab = !!cfg.customPanel;
+      const PanelName = cfg.customPanel ?? null;
+      const FormName = cfg.customForm ?? `${toJsIdentifier(key)}Form`;
+      const TableName = cfg.customTable ?? `${toJsIdentifier(key)}Table`;
+      const addLineFieldKeys = cfg.addLineFields ?? [];
+      const requireSavedRecord = cfg.requireSavedRecord === true;
+      const customAddModalName = cfg.customAddModal ?? null;
+      const entityFields = contract.frontendContract.entities[key]?.fields ?? [];
+      const addLineEntries = addLineFieldKeys.map(fk => {
+        const f = entityFields.find(ef => ef.name === fk);
+        if (!f) return null;
+        const type = mapFormFieldType(f);
+        const requiredPart = fragmentIf(f.required, ', required: true');
+        const labelPart = wrapIf(", label: '", f.label, "'");
+        const labelsDictPart = f.labels ? `, labels: ${JSON.stringify(f.labels)}` : '';
+        const clearsFieldPart = f.clearsField ? `, clearsField: '${String(f.clearsField).replace(/'/g, "\\'")}'` : '';
+        const referencePart = wrapIf(", reference: '", f.reference, "'");
+        const inputModePart = wrapIf(", inputMode: '", f.inputMode, "'");
+        // Skip redundant unchecked defaults on YESNO/checkbox fields (backend coerces to false anyway).
+        const skipCheckboxDefault = type === 'checkbox' && (f.defaultValue === 'N' || f.defaultValue === false);
+        const defaultValuePart = (!skipCheckboxDefault && f.defaultValue) ? `, defaultValue: '${String(f.defaultValue).replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '')}'` : '';
+        const optionsPart = (type === 'select' && f.enumValues?.length)
+          ? `, options: [${f.enumValues.map(buildEnumOptionStr).join(', ')}]`
+          : '';
+        const lookupDrawerPart = f.lookupDrawer ? `, lookupDrawer: '${String(f.lookupDrawer).replace(/'/g, "\\'")}'` : '';
+        const lookupTitlePart = f.lookupTitle ? `, lookupTitle: '${String(f.lookupTitle).replace(/'/g, "\\'")}'` : '';
+        const onSelectMappingsPart = Array.isArray(f.onSelectMappings) && f.onSelectMappings.length > 0
+          ? `, onSelectMappings: ${JSON.stringify(f.onSelectMappings)}`
+          : '';
+        const displayFromCatalogPart = f.displayFromCatalog ? `, displayFromCatalog: true` : '';
+        // Declarative selector exclusion declared in secondaryTabs.<tab>.addLineFieldExclusions.
+        const excludeValueOf = cfg.addLineFieldExclusions?.[fk];
+        const excludeValueOfPart = excludeValueOf ? `, excludeValueOf: '${String(excludeValueOf).replace(/'/g, "\\'")}'` : '';
+        return `          { key: '${fk}', column: '${f.column}', type: '${type}'${requiredPart}${labelPart}${labelsDictPart}${clearsFieldPart}${referencePart}${inputModePart}${defaultValuePart}${optionsPart}${lookupDrawerPart}${lookupTitlePart}${onSelectMappingsPart}${displayFromCatalogPart}${excludeValueOfPart} }`;
+      }).filter(Boolean);
+      // Tab-level readOnlyLogic compiled with the same translator as field-level readOnlyLogic.
+      const readOnlyLogicJs = cfg.readOnlyLogic
+        ? convertLogicToJs(cfg.readOnlyLogic, headerColumnMap, headerBooleanFields)
+        : null;
+      return { key, label: cfg.label ?? toLabel(key), isFormTab, isPanelTab, isCustomForm: !!cfg.customForm, isCustomTable: !!cfg.customTable, PanelName, FormName, TableName, addLineEntries, requireSavedRecord, isCustomAddModal: !!customAddModalName, CustomAddModalName: customAddModalName, readOnlyLogicJs };
+    });
+}
+
+function buildDetailTableAndFormProps(detailEntity, customLinesComp, hideDetailForm, detailName) {
+  if (!detailEntity || customLinesComp) return '';
+  const formProp = hideDetailForm ? '' : `\n        DetailForm={${detailName}Form}`;
+  return `\n        DetailTable={${detailName}Table}${formProp}`;
+}
+
+function buildEnumOptionStr(o) {
+  return `{ value: '${o.value}', label: '${o.name.replace(/'/g, "\\'")}' }`;
+}
+
+function buildSecondaryTabImport(t, specName) {
+  if (t.isPanelTab && specName) {
+    return `import ${t.PanelName} from ${resolveCustomImport(specName, t.PanelName)};`;
+  }
+  const formImportPath = (t.isCustomForm && specName)
+    ? resolveCustomImport(specName, t.FormName).replace(/'/g, '')
+    : `./${t.FormName}`;
+  const tableImportPath = (t.isCustomTable && specName)
+    ? resolveCustomImport(specName, t.TableName).replace(/'/g, '')
+    : `./${t.TableName}`;
+  const customModalImport = (t.isCustomAddModal && specName)
+    ? `\nimport ${t.CustomAddModalName} from ${resolveCustomImport(specName, t.CustomAddModalName)};`
+    : '';
+  if (t.isFormTab) {
+    return `import ${t.FormName} from '${formImportPath}';${customModalImport}`;
+  }
+  const formImport = (t.isCustomAddModal && !t.isCustomForm) ? '' : `\nimport ${t.FormName} from '${formImportPath}';`;
+  return `import ${t.TableName} from '${tableImportPath}';${formImport}${customModalImport}`;
+}
+
+function buildSecondaryTabPropEntry(t) {
+  const requireSavedPart = t.requireSavedRecord ? ', requireSavedRecord: true' : '';
+  const readOnlyLogicPart = t.readOnlyLogicJs
+    ? `, readOnlyLogic: (record) => ${t.readOnlyLogicJs}`
+    : '';
+  if (t.isFormTab) {
+    return `          { key: '${t.key}', label: '${t.label}', isFormTab: true, Form: ${t.FormName}${requireSavedPart}${readOnlyLogicPart} },`;
+  }
+  if (t.isPanelTab) {
+    return `          { key: '${t.key}', label: '${t.label}', Panel: ${t.PanelName}${requireSavedPart}${readOnlyLogicPart} },`;
+  }
+  const addLinePart = t.addLineEntries.length > 0
+    ? `, addLineFields: { entry: [\n${t.addLineEntries.join(',\n')},\n          ], derived: [], hidden: [] }`
+    : '';
+  const customAddModalPart = wrapIf(', customAddModal: ', t.CustomAddModalName);
+  const formProp = (t.isCustomAddModal && !t.isCustomForm) ? '' : `, Form: ${t.FormName}`;
+  return `          { key: '${t.key}', label: '${t.label}', Table: ${t.TableName}${formProp}${addLinePart}${customAddModalPart}${requireSavedPart}${readOnlyLogicPart} },`;
+}
+
+function buildDetailProcessesForPage(detailEntity, contract, processOverrides) {
+  const detailButtonFields = detailEntity
+    ? (contract.frontendContract.entities[detailEntity]?.fields ?? []).filter(f => f.type === 'button' && f.form)
+    : [];
+  const detailProcessesEndpoints = detailEntity ? getProcessesForEntity(contract, detailEntity) : [];
+  const detailProcessOverrides = Object.fromEntries(
+    Object.entries(processOverrides).map(([k, v]) => [k, v.detailLabel ? { ...v, label: v.detailLabel } : v])
+  );
+  return detailButtonFields.length > 0 || detailProcessesEndpoints.length > 0
+    ? buildProcessesArray({ processes: detailProcessesEndpoints, buttonFields: detailButtonFields, processOverrides: detailProcessOverrides })
+    : '';
+}
+
 /**
  * Generate a header-detail page component with ListView/DetailView pattern.
  * Produces a thin declarative component that routes by recordId.
@@ -1160,6 +1771,11 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const detailName = getDetailName(detailEntity);
   const compName = `${headerName}Page`;
   const layoutType = contract?.frontendContract?.window?.layoutType ?? 'default';
+  // list-modal: grid (list) + create/edit modal, no drill-in detail view.
+  // Delegate to the dedicated generator and skip the ListView/DetailView template.
+  if (layoutType === 'list-modal') {
+    return generateListModalPage(headerEntity, contract);
+  }
   const isGallery = layoutType === 'gallery';
   const isSidebar = !!contract?.frontendContract?.window?.sidebarLayout;
   const processes = getProcessesForEntity(contract, headerEntity);
@@ -1189,13 +1805,10 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   } = resolveStatusAndSummaryFields(requiredHeaderFieldNames, allEntityFields, contract, readOnlyFields);
 
   // Summary config
-  const summaryArray = summaryFields.map(f => {
-    const type = mapFieldType(f);
-    return `  { key: '${f.name}', column: '${f.column}', type: '${type}' },`;
-  }).join('\n');
+  const summaryArray = summaryFields.map(buildSummaryFieldLine).join('\n');
 
   // Status field config
-  const statusFieldLine = statusField ? `'${statusField.name}'` : 'null';
+  const statusFieldLine = quoteNameOrNull(statusField);
 
   // Process config: backendContract process endpoints + button-type fields from frontendContract
   // processOverrides from decisions.json allow label, style, displayLogicRaw, and exclude overrides
@@ -1203,58 +1816,26 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const buttonFields = allEntityFields.filter(f => f.type === 'button' && f.form);
   const processesArray = buildProcessesArray({ processes, buttonFields, processOverrides });
 
-  // Separate entry fields (user types) from auto-derived fields (price, tax, amount)
-  // Note: discount is intentionally excluded — it is user-editable and triggers SL_Order_Amt recalculation.
-  const autoPatterns = /price|tax|amount|total|cost|net/i;
-  const derivedFields = detailEditableFields.filter(f =>
-    autoPatterns.test(f.name) && !f.required && !f.reference
-  );
-  const entryFields = detailEditableFields.filter(f => !derivedFields.includes(f));
-  // Include all form=false fields with a defaultValue as hidden defaults, regardless of readOnly —
-  // readOnly fields like grossUnitPrice still need to be sent to the server for callout price calculation.
-  const hiddenDefaultFields = detailFields.filter(f =>
-    !f.form && f.defaultValue !== undefined
-  );
+  // Detail entity processes: button-type fields on the detail entity that have their own action endpoints.
+  // When processOverrides has `detailLabel`, swap it into `label` for the detail version of the button.
+  const detailProcessesArray = buildDetailProcessesForPage(detailEntity, contract, processOverrides);
+
+  const { entryFields, derivedFields, hiddenDefaultFields } = splitDetailLineFields(detailEditableFields, detailFields);
 
   // The first search-type entry field (usually product) triggers a lookup modal
   const firstSearchIdx = entryFields.findIndex(f => mapFormFieldType(f) === 'search');
-  const entryArray = entryFields.map((f, i) => {
-    const type = mapFormFieldType(f);
-    const requiredPart = fragmentIf(f.required, ', required: true');
-    const lookupPart = fragmentIf(i === firstSearchIdx && firstSearchIdx !== -1, ', lookup: true');
-    const labelPart = wrapIf(", label: '", f.label, "'");
-    const referencePart = wrapIf(", reference: '", f.reference, "'");
-    const inputModePart = wrapIf(", inputMode: '", f.inputMode, "'");
-    const dependsOnPart = f.dependsOn
-      ? `, dependsOn: { field: '${f.dependsOn.field}', filterKey: '${f.dependsOn.filterKey}' }`
-      : '';
-    // Include defaultValue for quantity/numeric fields so the add-line form starts with a sensible value.
-    // Skip redundant unchecked defaults on YESNO/checkbox fields (backend coerces to false anyway).
-    const rawDv = f.defaultValue;
-    let defaultValuePart = '';
-    const skipCheckboxDefault = type === 'checkbox' && (rawDv === 'N' || rawDv === false);
-    const skipServerMacro = isEtendoSessionMacro(rawDv);
-    if (!skipCheckboxDefault && !skipServerMacro && rawDv !== undefined && rawDv !== null && rawDv !== '') {
-      const numDv = Number(rawDv);
-      defaultValuePart = `, defaultValue: ${(!isNaN(numDv) && String(rawDv).trim() !== '') ? numDv : `'${String(rawDv).replace(/'/g, "\\'")}'`}`;
-    }
-    const forceCalloutFieldsPart = Array.isArray(f.forceCalloutFields) && f.forceCalloutFields.length > 0
-      ? `, forceCalloutFields: ${JSON.stringify(f.forceCalloutFields)}`
-      : '';
-    const { lookupDrawerPart, lookupTitlePart, onSelectMappingsPart, displayFromCatalogPart } = buildLookupEntryParts(f);
-    const minEntryPart = optProp('min', f.min);
-    return `    { key: '${f.name}', column: '${f.column}', type: '${type}'${requiredPart}${lookupPart}${labelPart}${referencePart}${inputModePart}${dependsOnPart}${defaultValuePart}${forceCalloutFieldsPart}${lookupDrawerPart}${lookupTitlePart}${onSelectMappingsPart}${displayFromCatalogPart}${minEntryPart} },`;
-  }).join('\n');
+  const entryArray = entryFields
+    .map((f, i) => buildEntryFieldLine(f, i, firstSearchIdx))
+    .join('\n');
 
-  const derivedArray = derivedFields.map(f => {
-    const type = mapFormFieldType(f);
-    const labelPart = wrapIf(", label: '", f.label, "'");
-    const referencePart = wrapIf(", reference: '", f.reference, "'");
-    const inputModePart = wrapIf(", inputMode: '", f.inputMode, "'");
-    return `    { key: '${f.name}', column: '${f.column}', type: '${type}'${labelPart}${referencePart}${inputModePart} },`;
-  }).join('\n');
+  const derivedArray = derivedFields.map(buildDerivedFieldLine).join('\n');
 
   const hiddenDefaultsArray = buildHiddenDefaultsArray(hiddenDefaultFields, allEntityFields);
+  const hiddenSiblingNames = contract.frontendContract.entities[detailEntity]?.addLineHiddenFromSibling ?? [];
+  const hiddenSiblingArray = hiddenSiblingNames
+    .map(name => `    { key: '${name}', fromSibling: '${name}' },`)
+    .join('\n');
+  const hiddenArraySeparator = getHiddenArraySeparator(hiddenDefaultsArray, hiddenSiblingArray);
 
   // API prediction config
   const { apiBlock, apiProp } = buildApiParts(contract);
@@ -1268,9 +1849,11 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const documentPreview = windowConfig.documentPreview ?? null;
   const notesField = windowConfig.notesField ?? null;
   const relatedDocuments = windowConfig.relatedDocuments ?? false;
+  const hideDetailForm = windowConfig.hideDetailForm ?? false;
   const hideDeleteWhenComplete = windowConfig.hideDeleteWhenComplete ?? false;
   const customTabsAfterBottom = windowConfig.customTabsAfterBottom ?? false;
   const hidePrint = windowConfig.hidePrint ?? false;
+  const hideCreate = windowConfig.hideCreate ?? false;
   const hideSaveStatuses = windowConfig.hideSaveStatuses ?? [];
   const hideMoreMenu = windowConfig.hideMoreMenu ?? false;
   const hideMoreDetails = windowConfig.hideMoreDetails ?? false;
@@ -1278,8 +1861,10 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const toolbarBorderBottom = windowConfig.toolbarBorderBottom ?? false;
   const compactSidebarPadding = windowConfig.compactSidebarPadding ?? false;
   const whiteFormBackground = windowConfig.whiteFormBackground ?? false;
+  const autoSaveOnBlur = windowConfig.autoSaveOnBlur ?? false;
   const hideFormCard = windowConfig.hideFormCard ?? false;
   const sidebarAboveTabsOnly = windowConfig.sidebarAboveTabsOnly ?? false;
+  const tabsSeparator = windowConfig.tabsSeparator ?? false;
   const sidebarClassName = windowConfig.sidebarClassName ?? null;
   const tabsBarPaddingX = windowConfig.tabsBarPaddingX ?? null;
   const primaryTabsVariant = windowConfig.primaryTabsVariant ?? null;
@@ -1288,22 +1873,28 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const listbarPaddingX = windowConfig.listbarPaddingX ?? null;
   const tablePaddingX = windowConfig.tablePaddingX ?? null;
   const linesLayout = windowConfig.linesLayout ?? 'classic';
+  const balanceFooter = windowConfig.balanceFooter ?? null;
   const listViewOptions = windowConfig.listViewOptions ?? null;
   const listBaseFilter = windowConfig.listBaseFilter ?? null;
   const quickFilters = windowConfig.quickFilters ?? null;
   const subsetFilters = windowConfig.subsetFilters ?? null;
   const dateFilterKey = windowConfig.dateFilterKey ?? null;
   const contentBg = windowConfig.contentBg ?? null;
+  const formCardPadding = windowConfig.formCardPadding ?? null;
   const hideListFilters = windowConfig.hideListFilters ?? false;
+  const hideStatusFilter = windowConfig.hideStatusFilter ?? false;
   const hideLink = windowConfig.hideLink ?? false;
   const hideEyeCount = windowConfig.hideEyeCount ?? false;
+  const customListIcons = windowConfig.customListIcons ?? false;
   const customComponents = windowConfig.customComponents ?? {};
   const menuActionsConfig = windowConfig.menuActions ?? [];
   const newActionsConfig = windowConfig.newActions ?? [];
   const statusBar = windowConfig.statusBar ?? null;
+  const statusPills = windowConfig.statusPills ?? [];
   const detailSortBy = windowConfig.detailSortBy ?? null;
   const titleField = windowConfig.titleField ?? null;
   const salesTheme = windowConfig.salesTheme ?? false;
+  const selectorPriceCurrency = windowConfig.selectorPriceCurrency ?? null;
   const extraTabs = windowConfig.extraTabs ?? [];
   const customPanelTabs = windowConfig.customPanelTabs ?? [];
   const lineEntityConfig = windowConfig.lineEntityConfig ?? null;
@@ -1332,145 +1923,15 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
 
   // Detect secondary child entities for additional tabs
   const secondaryTabsDecl = windowConfig.secondaryTabs;
-  let secondaryTabDefs;
-
   // Column→property and boolean-field maps built from the header entity, used
   // to compile tab-level readOnlyLogic expressions the same way field-level
   // readOnlyLogic is compiled in generate-contract.js.
-  const headerEntityForLogic = contract.frontendContract.entities[headerEntity] ?? {};
-  const headerColumnMap = {};
-  const headerBooleanFields = [];
-  for (const hf of (headerEntityForLogic.fields ?? [])) {
-    if (hf.column && hf.name) headerColumnMap[hf.column] = hf.name;
-    if (hf.tsType === 'boolean' || hf.type === 'boolean') headerBooleanFields.push(hf.name);
-  }
-
-  if (secondaryTabsDecl) {
-    // Declarative config from decisions.json — sorted by tabOrder
-    secondaryTabDefs = Object.entries(secondaryTabsDecl)
-      .sort((a, b) => (a[1].tabOrder ?? 99) - (b[1].tabOrder ?? 99))
-      .map(([key, cfg]) => {
-        const isFormTab = cfg.tabMode === 'form-only';
-        const isPanelTab = !!cfg.customPanel;
-        const PanelName = cfg.customPanel ?? null;
-        const FormName = cfg.customForm ?? `${toJsIdentifier(key)}Form`;
-        const TableName = cfg.customTable ?? `${toJsIdentifier(key)}Table`;
-        const addLineFieldKeys = cfg.addLineFields ?? [];
-        const requireSavedRecord = cfg.requireSavedRecord === true;
-        const customAddModalName = cfg.customAddModal ?? null;
-        const entityFields = contract.frontendContract.entities[key]?.fields ?? [];
-        const addLineEntries = addLineFieldKeys.map(fk => {
-          const f = entityFields.find(ef => ef.name === fk);
-          if (!f) return null;
-          const type = mapFormFieldType(f);
-          const requiredPart = fragmentIf(f.required, ', required: true');
-          const labelPart = wrapIf(", label: '", f.label, "'");
-          const referencePart = wrapIf(", reference: '", f.reference, "'");
-          const inputModePart = wrapIf(", inputMode: '", f.inputMode, "'");
-          // Skip redundant unchecked defaults on YESNO/checkbox fields (backend coerces to false anyway).
-          const skipCheckboxDefault = type === 'checkbox' && (f.defaultValue === 'N' || f.defaultValue === false);
-          const defaultValuePart = (!skipCheckboxDefault && f.defaultValue) ? `, defaultValue: '${String(f.defaultValue).replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '')}'` : '';
-          const optionsPart = (type === 'select' && f.enumValues?.length)
-            ? `, options: [${f.enumValues.map(o => `{ value: '${o.value}', label: '${o.name.replace(/'/g, "\\'")}' }`).join(', ')}]`
-            : '';
-          const lookupDrawerPart = f.lookupDrawer ? `, lookupDrawer: '${String(f.lookupDrawer).replace(/'/g, "\\'")}'` : '';
-          const lookupTitlePart = f.lookupTitle ? `, lookupTitle: '${String(f.lookupTitle).replace(/'/g, "\\'")}'` : '';
-          const onSelectMappingsPart = Array.isArray(f.onSelectMappings) && f.onSelectMappings.length > 0
-            ? `, onSelectMappings: ${JSON.stringify(f.onSelectMappings)}`
-            : '';
-          const displayFromCatalogPart = f.displayFromCatalog ? `, displayFromCatalog: true` : '';
-          // Declarative selector exclusion: this entry's options drop the live value
-          // of another field in the same add-row (e.g. toCurrency excludes the
-          // document currency). Declared in secondaryTabs.<tab>.addLineFieldExclusions.
-          const excludeValueOf = cfg.addLineFieldExclusions?.[fk];
-          const excludeValueOfPart = excludeValueOf ? `, excludeValueOf: '${String(excludeValueOf).replace(/'/g, "\\'")}'` : '';
-          return `          { key: '${fk}', column: '${f.column}', type: '${type}'${requiredPart}${labelPart}${referencePart}${inputModePart}${defaultValuePart}${optionsPart}${lookupDrawerPart}${lookupTitlePart}${onSelectMappingsPart}${displayFromCatalogPart}${excludeValueOfPart} }`;
-        }).filter(Boolean);
-        // Tab-level readOnlyLogic — when truthy at runtime the tab still
-        // renders existing rows but blocks add / edit / delete actions.
-        // Compiled using the same translator as field-level readOnlyLogic.
-        const readOnlyLogicJs = cfg.readOnlyLogic
-          ? convertLogicToJs(cfg.readOnlyLogic, headerColumnMap, headerBooleanFields)
-          : null;
-        return { key, label: cfg.label ?? toLabel(key), isFormTab, isPanelTab, isCustomForm: !!cfg.customForm, isCustomTable: !!cfg.customTable, PanelName, FormName, TableName, addLineEntries, requireSavedRecord, isCustomAddModal: !!customAddModalName, CustomAddModalName: customAddModalName, readOnlyLogicJs };
-      });
-  } else {
-    // Fallback: hardcoded known list + entity inference (backward compat)
-    const allEntityEntries = Object.entries(contract.frontendContract.entities);
-    const knownSecondaryTabDefs = [
-      { key: 'orderTax', label: 'Tax', TableName: 'OrderTaxTable', FormName: 'OrderTaxForm' },
-      { key: 'invoiceTax', label: 'Tax', TableName: 'InvoiceTaxTable', FormName: 'InvoiceTaxForm' },
-      { key: 'basicDiscounts', label: 'Basic Discounts', TableName: 'BasicDiscountsTable', FormName: 'BasicDiscountsForm' },
-      { key: 'paymentPlan', label: 'Payment Plan', TableName: 'PaymentPlanTable', FormName: 'PaymentPlanForm' },
-      { key: 'accounting', label: 'Accounting', TableName: 'AccountingTable', FormName: 'AccountingForm' },
-      { key: 'landedCost', label: 'Landed Cost', TableName: 'LandedCostTable', FormName: 'LandedCostForm' },
-      { key: 'reversedInvoices', label: 'Reversed Invoices', TableName: 'ReversedInvoicesTable', FormName: 'ReversedInvoicesForm' },
-    ].filter(t => allEntityEntries.some(([name]) => name === t.key));
-
-    const knownSecondaryKeys = new Set(knownSecondaryTabDefs.map(t => t.key));
-    const inferredSecondaryTabDefs = allEntityEntries
-      .filter(([name, entity]) => {
-        if (name === headerEntity || name === detailEntity) return false;
-        if (knownSecondaryKeys.has(name)) return false;
-        const editableFieldCount = (entity.fields || []).filter(f => f.visibility === 'editable').length;
-        return editableFieldCount === 0;
-      })
-      .map(([name, entity]) => ({
-        key: name,
-        label: entity.tabName || toLabel(name),
-        isFormTab: false,
-        TableName: `${toJsIdentifier(name)}Table`,
-        FormName: `${toJsIdentifier(name)}Form`,
-        addLineEntries: [],
-      }));
-
-    secondaryTabDefs = [
-      ...knownSecondaryTabDefs.map(t => ({ ...t, isFormTab: false, addLineEntries: [] })),
-      ...inferredSecondaryTabDefs,
-    ].slice(0, 4);
-  }
+  const {headerColumnMap, headerBooleanFields} = buildHeaderLogicMaps(contract, headerEntity);
+  const secondaryTabDefs = resolveSecondaryTabDefs(secondaryTabsDecl, contract, headerEntity, detailEntity, headerColumnMap, headerBooleanFields);
 
   const specName = contract.apiPrediction?.specName;
-  const secondaryTabsImports = secondaryTabDefs
-    .map(t => {
-      if (t.isPanelTab && specName) {
-        return `import ${t.PanelName} from ${resolveCustomImport(specName, t.PanelName)};`;
-      }
-      const formImportPath = (t.isCustomForm && specName)
-        ? resolveCustomImport(specName, t.FormName).replace(/'/g, '')
-        : `./${t.FormName}`;
-      const tableImportPath = (t.isCustomTable && specName)
-        ? resolveCustomImport(specName, t.TableName).replace(/'/g, '')
-        : `./${t.TableName}`;
-      const customModalImport = (t.isCustomAddModal && specName)
-        ? `\nimport ${t.CustomAddModalName} from ${resolveCustomImport(specName, t.CustomAddModalName)};`
-        : '';
-      if (t.isFormTab) {
-        return `import ${t.FormName} from '${formImportPath}';${customModalImport}`;
-      }
-      const formImport = (t.isCustomAddModal && !t.isCustomForm) ? '' : `\nimport ${t.FormName} from '${formImportPath}';`;
-      return `import ${t.TableName} from '${tableImportPath}';${formImport}${customModalImport}`;
-    })
-    .join('\n');
-
-  const secondaryTabsPropEntries = secondaryTabDefs.map(t => {
-    const requireSavedPart = t.requireSavedRecord ? ', requireSavedRecord: true' : '';
-    const readOnlyLogicPart = t.readOnlyLogicJs
-      ? `, readOnlyLogic: (record) => ${t.readOnlyLogicJs}`
-      : '';
-    if (t.isFormTab) {
-      return `          { key: '${t.key}', label: '${t.label}', isFormTab: true, Form: ${t.FormName}${requireSavedPart}${readOnlyLogicPart} },`;
-    }
-    if (t.isPanelTab) {
-      return `          { key: '${t.key}', label: '${t.label}', Panel: ${t.PanelName}${requireSavedPart}${readOnlyLogicPart} },`;
-    }
-    const addLinePart = t.addLineEntries.length > 0
-      ? `, addLineFields: { entry: [\n${t.addLineEntries.join(',\n')},\n          ], derived: [], hidden: [] }`
-      : '';
-    const customAddModalPart = wrapIf(', customAddModal: ', t.CustomAddModalName);
-    const formProp = (t.isCustomAddModal && !t.isCustomForm) ? '' : `, Form: ${t.FormName}`;
-    return `          { key: '${t.key}', label: '${t.label}', Table: ${t.TableName}${formProp}${addLinePart}${customAddModalPart}${requireSavedPart}${readOnlyLogicPart} },`;
-  }).join('\n');
+  const secondaryTabsImports = secondaryTabDefs.map(t => buildSecondaryTabImport(t, specName)).join('\n');
+  const secondaryTabsPropEntries = secondaryTabDefs.map(t => buildSecondaryTabPropEntry(t)).join('\n');
 
   const secondaryTabsProp = wrapIf('\n        secondaryTabs={[\n', secondaryTabsPropEntries, '\n        ]}', secondaryTabDefs.length > 0);
 
@@ -1486,23 +1947,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   //   { key, label, Component, placement?: 'tab' | 'footer', props?: {} }
   // `placement: 'tab'` renders as a main tab (Lines/Notes style);
   // `placement: 'footer'` (default) keeps the legacy chip-footer behavior.
-  const customTabItems = [];
-  if (relatedDocuments) {
-    customTabItems.push(`{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }`);
-  }
-  customPanelTabs.forEach(pt => {
-    const labelPart = pt.labelKey ? `labelKey: '${pt.labelKey}'` : `label: '${pt.label}'`;
-    customTabItems.push(
-      `{ key: '${pt.key}', ${labelPart}, Component: ${pt.component}, placement: 'tab' }`
-    );
-  });
-  pushAttachmentsTab(attachmentsEnabled, attachmentsOpts, customTabItems, headerTableName);
-  extraTabs.forEach(et => {
-    const labelPart = et.labelKey ? `labelKey: '${et.labelKey}'` : `label: '${JSON.stringify(et.label)}'`;
-    customTabItems.push(
-      `{ key: '${et.key}', ${labelPart}, Component: ${et.component}, placement: 'tab' }`
-    );
-  });
+  const customTabItems = getCustomTabItems(relatedDocuments, customPanelTabs, attachmentsEnabled, attachmentsOpts, headerTableName, extraTabs);
   const customTabsProp = getCustomTabsProp(customTabItems);
 
   // hideDeleteWhenComplete prop
@@ -1525,10 +1970,13 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   // compactSidebarPadding prop (DetailView)
   const compactSidebarPaddingProp = fragmentIf(compactSidebarPadding, '\n        compactSidebarPadding');
   const whiteFormBackgroundProp = fragmentIf(whiteFormBackground, '\n        whiteFormBackground');
+  const autoSaveOnBlurProp = fragmentIf(autoSaveOnBlur, '\n        autoSaveOnBlur');
   // hideFormCard prop (DetailView)
   const hideFormCardProp = fragmentIf(hideFormCard, '\n        hideFormCard');
   // sidebarAboveTabsOnly prop (DetailView)
   const sidebarAboveTabsOnlyProp = fragmentIf(sidebarAboveTabsOnly, '\n        sidebarAboveTabsOnly');
+  // tabsSeparator prop (DetailView) — full-width border between form/sidebar and tabs
+  const tabsSeparatorProp = fragmentIf(tabsSeparator, '\n        tabsSeparator');
   // sidebarClassName prop (DetailView)
   const sidebarClassNameProp = wrapIf('\n        sidebarClassName="', sidebarClassName, '"');
   // tabsBarPaddingX prop (DetailView)
@@ -1546,6 +1994,8 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   // output diff-free for windows that don't opt in.
   const cond = linesLayout && linesLayout !== 'classic';
   const linesLayoutProp = wrapIf('\n        linesLayout="', linesLayout, '"', cond);
+  // balanceFooter prop (DetailView) — { debitField, creditField } for double-entry windows.
+  const balanceFooterProp = jsonWrapIf('\n        balanceFooter={', balanceFooter, '}');
   // listViewOptions props
   const listViewOptionsProp = jsonWrapIf('\n      listViewOptions={', listViewOptions, '}');
   const listBaseFilterProp = wrapIf('\n      baseFilter="', listBaseFilter, '"');
@@ -1558,30 +2008,40 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const initialHiddenColumnsProp = jsonWrapIf('\n      hiddenColumns={', filterOnlyFields.map(f => f.name), '}', filterOnlyFields.length > 0);
   // contentBg prop
   const contentBgProp = wrapIf('\n        contentBg="', contentBg, '"');
+  // formCardPadding prop (DetailView)
+  const formCardPaddingProp = wrapIf('\n        formCardPadding="', formCardPadding, '"');
+  // formScrollPaddingX prop (DetailView) — overrides the horizontal padding of the content scroll column
+  const formScrollPaddingX = windowConfig.formScrollPaddingX ?? null;
+  const formScrollPaddingXProp = wrapIf('\n        formScrollPaddingX="', formScrollPaddingX, '"');
   // lineConfig prop — emitted when the window uses a non-default line pricing config
   const LINE_CONFIG_SYMBOLS = { invoice: 'INVOICE_LINE_CONFIG', returnOrder: 'RETURN_ORDER_LINE_CONFIG' };
   const lineConfigSymbol = getLineConfigSymbol(lineEntityConfig, LINE_CONFIG_SYMBOLS);
   const lineConfigProp = wrapIf('\n        lineConfig={', lineConfigSymbol, '}');
   // ListView toolbar props
   const hidePrintListProp = fragmentIf(hidePrint, '\n      hidePrint');
+  const hideCreateProp = fragmentIf(hideCreate, '\n      hideCreate');
   const hideMoreMenuListProp = fragmentIf(hideMoreMenu, '\n      hideMoreMenu');
+  const listSortBy = windowConfig.listSortBy ?? null;
+  const listSortByProp = listSortBy ? `\n      listSortBy="${listSortBy}"` : '';
   const hideListFiltersProp = fragmentIf(hideListFilters, '\n      hideListFilters');
+  const hideStatusFilterProp = fragmentIf(hideStatusFilter, '\n      hideStatusFilter');
   const hideLinkProp = fragmentIf(hideLink, '\n      hideLink');
   const hideEyeCountProp = fragmentIf(hideEyeCount, '\n      hideEyeCount');
+  const customListIconsProp = fragmentIf(customListIcons, `\n      SortIconComponent={SortIcon}\n      RefreshIconComponent={RefreshIcon}`);
 
   // Custom component props (bottomSection, topbarRight)
   const {
     newActionsWithComponents,
     customCompImportBlock,
     customCompPropsBlock
-  } = buildCustomComponentImportsAndProps(customComponents, specName, customPanelTabs, newActionsConfig);
+  } = buildCustomComponentImportsAndProps(customComponents, specName, customPanelTabs, newActionsConfig, menuActionsConfig);
 
   // Custom headerTable override
   const customHeaderTable = customComponents.headerTable ?? null;
   const headerTableImport = getHeaderTableImport(customHeaderTable, headerName, specName);
 
   // menuActions prop
-  const menuActionsNeedsData = menuActionsConfig.some(a => a.visibleWhenFieldFalse || a.visibleWhenFieldTrue);
+  const menuActionsNeedsData = menuActionsConfig.some(a => a.visibleWhenFieldFalse || a.visibleWhenFieldTrue || a.component);
   const menuActionsFnParams = getMenuActionsFnParams(menuActionsNeedsData);
   const menuActionsProp = getMenuActionsProp(menuActionsConfig, menuActionsFnParams);
 
@@ -1602,6 +2062,10 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   const draftModePropName = pick(confirmModalName, 'draftModeWithConfirm', 'draftMode');
   const draftModeProp = wrapIf('\n        draftMode={', draftModePropName, '}', !!draftModeStaticConfig?.enabled);
   const requiredHeaderFieldsProp = fragmentIf(requiredHeaderFieldNames.length > 0, '\n        requiredHeaderFields={requiredHeaderFields}');
+
+  // maxDetailLines: limits the detail entity to N lines; hides the Add Line button once reached.
+  const maxDetailLines = windowConfig.maxDetailLines ?? null;
+  const addLineGuardProp = getAddLineGuardProp(maxDetailLines);
 
   // entityLabel / detailLabel / detailTabIndex from window decisions config
   let entityLabel = windowConfig.entityLabel || toLabel(headerEntity);
@@ -1626,6 +2090,9 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   // salesTheme prop
   const salesThemeProp = fragmentIf(salesTheme, '\n        salesTheme');
 
+  // selectorPriceCurrency prop (DetailView) — only emit when set in decisions
+  const selectorPriceCurrencyProp = wrapIf('\n        selectorPriceCurrency="', selectorPriceCurrency, '"');
+
   // listKpiCards → headerContent prop in ListView
   let { listKpiCardsImport, listKpiCardsProp } = getListKpiCardsParts(windowConfig, specName);
 
@@ -1637,17 +2104,7 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   let { formFooterImport, formFooterProp } = buildFormFooterParts(headerExtraConfig, specName);
 
   // customLinesComponent → CustomLines prop
-  const customLinesComp = windowConfig.customLinesComponent ?? null;
-  const customLinesLabelValue = windowConfig.customLinesLabel ?? null;
-  let customLinesImport = '';
-  let customLinesProp = '';
-  if (customLinesComp && specName) {
-    customLinesImport = `import ${customLinesComp} from ${resolveCustomImport(specName, customLinesComp)};\n`;
-    customLinesProp = `\n        CustomLines={${customLinesComp}}`;
-    if (customLinesLabelValue) {
-      customLinesProp += `\n        customLinesLabel="${customLinesLabelValue}"`;
-    }
-  }
+  let {customLinesComp, customLinesImport, customLinesProp} = buildCustomLinesParts(windowConfig, specName);
 
   // primaryTabs support
   const primaryTabsConfig = windowConfig.primaryTabs ?? null;
@@ -1663,6 +2120,10 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
   // statusEnumLabels support
   const statusEnumLabelsConfig = windowConfig.statusEnumLabels ?? null;
   const statusEnumLabelsProp = jsonWrapIf('\n        statusEnumLabels={', statusEnumLabelsConfig, '}');
+
+  // lockedAlert support — banner shown above the principal fields when the document is processed
+  const lockedAlertConfig = windowConfig.lockedAlert ?? null;
+  const lockedAlertProp = jsonWrapIf('\n        lockedAlert={', lockedAlertConfig, '}');
 
   // showDetailFooterTotals support
   const showDetailFooterTotalsValue = windowConfig.showDetailFooterTotals;
@@ -1701,15 +2162,29 @@ export function generatePageComponent(headerEntity, detailEntity, contract) {
     return `    {${stateName} && <${a.component} token={props.token} apiBaseUrl={props.apiBaseUrl} windowName={windowName} onClose={() => ${setterName}(false)} />}`;
   }).join('\n');
 
-  const needsUseState = customComponents.newRecordComponent || newActionsWithComponents.length > 0 || !!confirmModalName;
+  const menuActionsWithComponents = menuActionsConfig.filter(a => a.component);
+  const menuActionStateStatements = menuActionsWithComponents.map(a => {
+    const name = capitalize(a.key.replace(/-./g, m => m[1].toUpperCase()));
+    const camelKey = name.charAt(0).toLowerCase() + name.slice(1);
+    return `  const [show${name}MenuModal, set${name}MenuModal] = useState(false);\n  const [${camelKey}MenuContext, set${name}MenuContext] = useState(null);`;
+  }).join('\n');
+  const menuActionModals = menuActionsWithComponents.map(a => {
+    const name = capitalize(a.key.replace(/-./g, m => m[1].toUpperCase()));
+    const camelKey = name.charAt(0).toLowerCase() + name.slice(1);
+    return `      {show${name}MenuModal && <${a.component} isOpen={show${name}MenuModal} token={props.token} apiBaseUrl={api.baseUrl} currentRecord={${camelKey}MenuContext} onClose={() => set${name}MenuModal(false)} onSaved={() => { set${name}MenuModal(false); window.location.reload(); }} />}`;
+  }).join('\n');
+
+  const needsUseState = customComponents.newRecordComponent || newActionsWithComponents.length > 0 || menuActionsWithComponents.length > 0 || !!confirmModalName;
   const needsFragment = customComponents.newRecordComponent || newActionsWithComponents.length > 0;
 
   const galleryComponentName = `${headerName}Gallery`;
   const sidebarComponentName = `${headerName}Sidebar`;
   const detailHeaderComponentName = `${headerName}DetailHeader`;
+  const detailTableAndFormProps = buildDetailTableAndFormProps(detailEntity, customLinesComp, hideDetailForm, detailName);
+  const detailProcessesProp = detailProcessesArray ? '\n        detailProcesses={detailProcesses}' : '';
   const useStateImport = fragmentIf(needsUseState, 'useState, ');
   return `import { ${useStateImport}useEffect } from 'react';
-import { ListView, DetailView } from '@/components/contract-ui';${fragmentIf(menuActionsConfig.length > 0, `\nimport { toast } from 'sonner';`)}${wrapIf('\nimport { ', lineConfigSymbol, ` } from '@/hooks/useLineGrossAmount';`)}
+import { ListView, DetailView } from '@/components/contract-ui';${fragmentIf(customListIcons, `\nimport { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';`)}${fragmentIf(menuActionsConfig.length > 0, `\nimport { toast } from 'sonner';`)}${wrapIf('\nimport { ', lineConfigSymbol, ` } from '@/hooks/useLineGrossAmount';`)}
 ${headerTableImport}
 import ${headerName}Form from './${headerName}Form';${(buildDetailImports(detailEntity, detailName, customLinesComp))}
 ${fragmentIf(secondaryTabDefs.length > 0, `${secondaryTabsImports}\n`)}${formFooterImport}${customLinesImport}${primaryTabsImports}${listKpiCardsImport}${relatedDocsImport}${attachmentsImport}${extraTabsImport}${customCompImportBlock}import catalogs from './mockCatalogs';
@@ -1727,7 +2202,9 @@ const statusField = ${statusFieldLine};
 ${MARKERS.GENERATED_END(`summary:${headerEntity}`)}
 
 ${MARKERS.GENERATED_START(`extraBadges:${headerEntity}`)}
-const extraBadges = [];
+const extraBadges = [
+${statusPills.map(p => `  { key: '${p.field}', type: 'statusPill', trueKey: '${p.trueKey}', falseKey: '${p.falseKey}' },`).join('\n')}
+];
 ${MARKERS.GENERATED_END(`extraBadges:${headerEntity}`)}
 
 ${MARKERS.GENERATED_START(`processes:${headerEntity}`)}
@@ -1735,7 +2212,13 @@ const processes = [
 ${processesArray}
 ];
 ${MARKERS.GENERATED_END(`processes:${headerEntity}`)}
-
+${detailProcessesArray ? `
+${MARKERS.GENERATED_START(`detailProcesses:${detailEntity}`)}
+const detailProcesses = [
+${detailProcessesArray}
+];
+${MARKERS.GENERATED_END(`detailProcesses:${detailEntity}`)}
+` : ''}
 ${MARKERS.GENERATED_START(`draftMode:${headerEntity}`)}
 const draftMode = ${draftModeValue};
 ${MARKERS.GENERATED_END(`draftMode:${headerEntity}`)}
@@ -1753,38 +2236,37 @@ ${entryArray}
 ${derivedArray}
   ],
   hidden: [
-${hiddenDefaultsArray}
+${hiddenDefaultsArray}${hiddenArraySeparator}${hiddenSiblingArray}
   ],
 };
 ${MARKERS.GENERATED_END(`addLineFields:${detailEntity}`)}` : ''}
 ${apiBlock}
 ${labelOverridesBlock}${MARKERS.GENERATED_START(`component:${compName}`)}
 export default function ${compName}({ windowName, recordId, ...props }) {${fragmentIf(customComponents.newRecordComponent, `
-  const [showNewModal, setShowNewModal] = useState(false);`)}${fragmentIf(newActionsWithComponents.length > 0, `\n${newActionsStatements}`)}${fragmentIf(confirmModalName, `
+  const [showNewModal, setShowNewModal] = useState(false);`)}${fragmentIf(newActionsWithComponents.length > 0, `\n${newActionsStatements}`)}${fragmentIf(menuActionsWithComponents.length > 0, `
+${menuActionStateStatements}`)}${fragmentIf(confirmModalName, `
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const draftModeWithConfirm = { ...draftMode, onConfirm: () => setShowConfirmModal(true) };`)}
   if (recordId) {
-    return (${fragmentIf(confirmModalName, `
-      <>`)}
+    return (
+      <>
       <DetailView
-        entity="${headerEntity}"${detailEntity ? `
-        detailEntity="${detailEntity}"` : ''}
-        Form={${headerName}Form}${detailEntity && !customLinesComp ? `
-        DetailTable={${detailName}Table}
-        DetailForm={${detailName}Form}` : ''}
+        entity="${headerEntity}"${buildDetailEntityAttr(detailEntity)}
+        Form={${headerName}Form}${detailTableAndFormProps}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
-        processes={processes}${detailEntity && !customLinesComp ? `
+        processes={processes}${detailProcessesProp}${detailTableAndFormProps ? `
         addLineFields={addLineFields}` : ''}
         catalogs={catalogs}
         entityLabel="${entityLabel}"${detailEntity ? `
         detailLabel="${entityDetailLabel}"` : ''}
         windowName={windowName}
         recordId={recordId}
-        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${customLinesProp}${primaryTabsProp}${othersLabelProp}${documentPreviewProp}${hideDeleteProp}${customTabsAfterBottomProp}${hidePrintProp}${hideSaveStatusesProp}${hideMoreMenuProp}${hideMoreDetailsProp}${noHeaderBorderProp}${toolbarBorderBottomProp}${compactSidebarPaddingProp}${whiteFormBackgroundProp}${hideFormCardProp}${sidebarAboveTabsOnlyProp}${sidebarClassNameProp}${tabsBarPaddingXProp}${primaryTabsVariantProp}${toolbarPaddingXProp}${toolbarButtonSizeProp}${contentBgProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${requiredHeaderFieldsProp}${headerContentProp}${detailSortByProp}${titleFieldProp}${salesThemeProp}${disableProcessedLockProp}${statusEnumLabelsProp}${showDetailFooterTotalsProp}${labelOverridesProp}${lineConfigProp}${linesLayoutProp}${sendDocumentDetailProp}
+        breadcrumb={breadcrumb}${apiProp}${detailTabIndexProp}${secondaryTabsProp}${formFooterProp}${customLinesProp}${primaryTabsProp}${othersLabelProp}${documentPreviewProp}${hideDeleteProp}${customTabsAfterBottomProp}${hidePrintProp}${hideSaveStatusesProp}${hideMoreMenuProp}${hideMoreDetailsProp}${noHeaderBorderProp}${toolbarBorderBottomProp}${compactSidebarPaddingProp}${whiteFormBackgroundProp}${autoSaveOnBlurProp}${hideFormCardProp}${sidebarAboveTabsOnlyProp}${tabsSeparatorProp}${sidebarClassNameProp}${tabsBarPaddingXProp}${primaryTabsVariantProp}${toolbarPaddingXProp}${toolbarButtonSizeProp}${contentBgProp}${formCardPaddingProp}${formScrollPaddingXProp}${notesFieldProp}${customTabsProp}${customCompPropsBlock}${menuActionsProp}${draftModeProp}${requiredHeaderFieldsProp}${addLineGuardProp}${headerContentProp}${detailSortByProp}${titleFieldProp}${salesThemeProp}${disableProcessedLockProp}${statusEnumLabelsProp}${lockedAlertProp}${showDetailFooterTotalsProp}${labelOverridesProp}${lineConfigProp}${linesLayoutProp}${balanceFooterProp}${sendDocumentDetailProp}${selectorPriceCurrencyProp}
         {...props}${sidebarContentProp}
-      />${confirmModalName ? `
+      />
+${menuActionModals}${confirmModalName ? `
       {showConfirmModal && (
         <${confirmModalName}
           recordId={recordId}
@@ -1796,7 +2278,7 @@ export default function ${compName}({ windowName, recordId, ...props }) {${fragm
           }}
         />
       )}
-      </>` : ''}
+` : ''}      </>
     );
   }
 
@@ -1808,7 +2290,7 @@ export default function ${compName}({ windowName, recordId, ...props }) {${fragm
       entityLabel="${windowConfig.name || entityLabel}"
       windowName={windowName}
       breadcrumb={breadcrumb}${apiProp}${isGallery ? `
-      galleryRenderer={(gProps) => <${headerName}Gallery {...gProps} />}` : ''}${listKpiCardsProp}${listViewOptionsProp}${listBaseFilterProp}${quickFiltersProp}${subsetFiltersProp}${dateFilterKeyProp}${initialHiddenColumnsProp}${bulkActionsProp}${listbarPaddingXProp}${tablePaddingXProp}${hidePrintListProp}${hideMoreMenuListProp}${hideListFiltersProp}${hideLinkProp}${hideEyeCountProp}${labelOverridesListProp}${rowQuickActionsProp}${sendDocumentProp}
+      galleryRenderer={(gProps) => <${headerName}Gallery {...gProps} />}` : ''}${listKpiCardsProp}${listViewOptionsProp}${listBaseFilterProp}${quickFiltersProp}${subsetFiltersProp}${dateFilterKeyProp}${initialHiddenColumnsProp}${bulkActionsProp}${listbarPaddingXProp}${tablePaddingXProp}${hidePrintListProp}${hideCreateProp}${hideMoreMenuListProp}${hideListFiltersProp}${hideStatusFilterProp}${hideLinkProp}${hideEyeCountProp}${customListIconsProp}${labelOverridesListProp}${rowQuickActionsProp}${sendDocumentProp}${listSortByProp}
       {...props}${customComponents.newRecordComponent ? `
       onNew={() => setShowNewModal(true)}` : ''}${newActionsPropValue}
     />${customComponents.newRecordComponent ? `
@@ -1879,11 +2361,18 @@ export function generateAll(contract) {
 
   const files = {};
 
+  // list-modal pages are self-contained (columns + fields live in the Page file and
+  // are rendered by the generic ListModalWindow), so the per-entity Table/Form
+  // components are not needed and would only add dead files.
+  const isListModal = win.layoutType === 'list-modal';
+
   // Generate Table + Form for each entity
-  for (const entityName of entityNames) {
-    const capName = toJsIdentifier(entityName);
-    files[`${capName}Table.jsx`] = generateTableComponent(entityName, contract);
-    files[`${capName}Form.jsx`] = generateFormComponent(entityName, contract);
+  if (!isListModal) {
+    for (const entityName of entityNames) {
+      const capName = toJsIdentifier(entityName);
+      files[`${capName}Table.jsx`] = generateTableComponent(entityName, contract);
+      files[`${capName}Form.jsx`] = generateFormComponent(entityName, contract);
+    }
   }
 
   // Generate Page component (handles both header-detail and header-only layouts)

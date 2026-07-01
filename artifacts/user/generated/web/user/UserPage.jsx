@@ -22,7 +22,9 @@ const statusField = null;
 // @sf-generated-end summary:user
 
 // @sf-generated-start extraBadges:user
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:user
 
 // @sf-generated-start processes:user
@@ -239,6 +241,7 @@ export const api = {
 export default function UserPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="user"
         detailEntity="userRoles"
@@ -261,6 +264,7 @@ export default function UserPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

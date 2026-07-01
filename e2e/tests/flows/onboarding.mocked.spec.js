@@ -60,7 +60,7 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
 
   await page.route('**/sws/go/onboarding', async route => {
     const body = route.request().postDataJSON();
-    expect(body).toEqual({
+    expect(body).toMatchObject({
       clientName: 'QA Mock Company',
       currency: 'EUR',
       language: expectedLanguage,

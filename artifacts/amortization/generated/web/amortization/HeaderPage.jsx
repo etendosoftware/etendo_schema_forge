@@ -14,14 +14,17 @@ const breadcrumb = 'Finance / Amortization';
 
 // @sf-generated-start summary:header
 const summary = [
-
+  { key: 'etblkpAccountingstatus', column: 'EM_Etblkp_Accountingstatus', type: 'status' },
+  { key: 'etblkpBulkposting', column: 'EM_Etblkp_Bulkposting', type: 'string' },
 ];
 
 const statusField = 'processed';
 // @sf-generated-end summary:header
 
 // @sf-generated-start extraBadges:header
-const extraBadges = [];
+const extraBadges = [
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+];
 // @sf-generated-end extraBadges:header
 
 // @sf-generated-start processes:header
@@ -41,7 +44,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['name', 'accountingDate', 'currency'];
+const requiredHeaderFields = ['name', 'accountingDate', 'currency', 'etblkpAccountingstatus', 'etblkpBulkposting'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -200,9 +203,11 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/amortization/header/{id}/action/posted"
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/amortization/header/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -298,7 +303,8 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         toolbarButtonSize="default"
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "A_Amortization", config: {} } }]}
         menuActions={({ data, status }) => [
-          { key: 'reactivate', label: 'Reactivate', visible: (data?.processed === 'Y' || data?.processed === true), labelKey: 'reactivate', columnName: 'Processed',  }
+          { key: 'reactivate', label: 'Reactivate', visible: (data?.processed === 'Y' || data?.processed === true), labelKey: 'reactivate', preUnpost: true, columnName: 'Processed',  },
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
         ]}
         draftMode={draftModeWithConfirm}
         requiredHeaderFields={requiredHeaderFields}
@@ -307,6 +313,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         linesLayout="inlineEditable"
         {...props}
       />
+
       {showConfirmModal && (
         <AmortizationConfirmModal
           recordId={recordId}

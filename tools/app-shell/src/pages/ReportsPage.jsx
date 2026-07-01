@@ -35,19 +35,21 @@ export default function ReportsPage() {
             variant={activeTab === tab.id ? 'default' : 'outline'}
             size="sm"
             onClick={() => setActiveTab(tab.id)}
-          >
+            data-testid="Button__9a4b32">
             {tab.label}
           </Button>
         ))}
       </div>
-
       {/* Active report table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>{currentTab?.title}</CardTitle>
+      <Card data-testid="Card__9a4b32">
+        <CardHeader data-testid="CardHeader__9a4b32">
+          <CardTitle data-testid="CardTitle__9a4b32">{currentTab?.title}</CardTitle>
         </CardHeader>
-        <CardContent>
-          <DataTable columns={currentColumns} data={currentData} />
+        <CardContent data-testid="CardContent__9a4b32">
+          <DataTable
+            columns={currentColumns}
+            data={currentData}
+            data-testid="DataTable__9a4b32" />
         </CardContent>
       </Card>
     </div>

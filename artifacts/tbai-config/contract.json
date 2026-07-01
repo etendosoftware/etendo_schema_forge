@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-05-19T17:03:46.462Z",
-  "checksum": "155149782fc838d1",
+  "updatedAt": "2026-06-26T12:27:58.848Z",
+  "checksum": "bac42a6f5c952ea2",
   "frontendContract": {
     "window": {
       "id": "C327DE215AC945F69363905840118177",
@@ -326,14 +326,6 @@
             "required": true
           },
           {
-            "name": "tbaiConfigID",
-            "apiKey": "tbaiConfigID",
-            "column": "Tbai_Config_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -370,6 +362,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Tbai_Config_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -677,20 +677,20 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-id",
+        "category": "system-field",
+        "entity": "header",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-organization",
         "category": "system-field",
         "entity": "header",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-tbaiConfigID",
-        "category": "system-field",
-        "entity": "header",
-        "field": "tbaiConfigID",
-        "runner": "node",
-        "description": "System field 'tbaiConfigID' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-updated",

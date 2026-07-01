@@ -35,25 +35,24 @@ export default function InventoryPage() {
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <KPIHeader kpis={KPIS} />
-
+      <KPIHeader kpis={KPIS} data-testid="KPIHeader__2d6473" />
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: DataTable (2/3 width) */}
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5 text-muted-foreground" />
+          <Card data-testid="Card__2d6473">
+            <CardHeader data-testid="CardHeader__2d6473">
+              <CardTitle className="flex items-center gap-2" data-testid="CardTitle__2d6473">
+                <Search className="h-5 w-5 text-muted-foreground" data-testid="Search__2d6473" />
                 {ui('stockLevels')}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent data-testid="CardContent__2d6473">
               <DataTable
                 columns={COLUMNS}
                 filters={FILTERS}
                 data={INVENTORY_DATA}
-              />
+                data-testid="DataTable__2d6473" />
             </CardContent>
           </Card>
         </div>
@@ -61,17 +60,19 @@ export default function InventoryPage() {
         {/* Right column: Alerts + Recent Movements (1/3 width) */}
         <div className="space-y-6">
           {/* Low Stock Alerts */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
+          <Card data-testid="Card__2d6473">
+            <CardHeader data-testid="CardHeader__2d6473">
+              <CardTitle
+                className="flex items-center gap-2 text-base"
+                data-testid="CardTitle__2d6473">
+                <AlertTriangle className="h-5 w-5 text-amber-500" data-testid="AlertTriangle__2d6473" />
                 {ui('lowStockAlerts')}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3" data-testid="CardContent__2d6473">
               {LOW_STOCK_ALERTS.map((alert, idx) => (
                 <div key={idx}>
-                  {idx > 0 && <Separator className="mb-3" />}
+                  {idx > 0 && <Separator className="mb-3" data-testid="Separator__2d6473" />}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{alert.name}</p>
@@ -86,7 +87,7 @@ export default function InventoryPage() {
                           ? 'border-amber-300 bg-amber-50 text-amber-700'
                           : ''
                       }
-                    >
+                      data-testid="Badge__2d6473">
                       {alert.severity === 'red' ? 'Critical' : 'Warning'}
                     </Badge>
                   </div>
@@ -96,14 +97,14 @@ export default function InventoryPage() {
           </Card>
 
           {/* Recent Movements */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{ui('recentMovements')}</CardTitle>
+          <Card data-testid="Card__2d6473">
+            <CardHeader data-testid="CardHeader__2d6473">
+              <CardTitle className="text-base" data-testid="CardTitle__2d6473">{ui('recentMovements')}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3" data-testid="CardContent__2d6473">
               {RECENT_MOVEMENTS.map((movement, idx) => (
                 <div key={movement.id}>
-                  {idx > 0 && <Separator className="mb-3" />}
+                  {idx > 0 && <Separator className="mb-3" data-testid="Separator__2d6473" />}
                   <div className="flex items-start gap-3">
                     <div className={`mt-0.5 rounded-full p-1 ${
                       movement.direction === 'in'
@@ -111,8 +112,8 @@ export default function InventoryPage() {
                         : 'bg-red-100 text-red-600'
                     }`}>
                       {movement.direction === 'in'
-                        ? <ArrowUp className="h-3.5 w-3.5" />
-                        : <ArrowDown className="h-3.5 w-3.5" />
+                        ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__2d6473" />
+                        : <ArrowDown className="h-3.5 w-3.5" data-testid="ArrowDown__2d6473" />
                       }
                     </div>
                     <div className="flex-1 min-w-0">

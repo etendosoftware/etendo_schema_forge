@@ -366,7 +366,6 @@ export default function ReportDrawer({
     <>
       {/* Backdrop */}
       <div className={`fixed inset-0 bg-black/30 z-50 ${isClosing ? 'scrim-fade-out' : 'scrim-fade-in'}`} onClick={onClose} />
-
       {/* Drawer */}
       <div className={`fixed right-0 top-0 bottom-0 w-[70%] max-w-5xl bg-white shadow-2xl z-50 flex flex-col ${isClosing ? 'sidebar-slide-out' : 'sidebar-slide-in'}`}>
         {/* Toolbar */}
@@ -375,7 +374,7 @@ export default function ReportDrawer({
             <h2 className="text-sm font-semibold text-foreground">{title || windowName || ui('report')}</h2>
             {fetchingData ? (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" /> {ui('loadingAllRecords')}
+                <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__3ba698" /> {ui('loadingAllRecords')}
               </span>
             ) : reportRows ? (
               <span className="text-xs text-muted-foreground">{reportRows.length} {ui('records')}</span>
@@ -403,7 +402,7 @@ export default function ReportDrawer({
                     disabled ? 'opacity-40 cursor-not-allowed' : '',
                   ].join(' ')}
                 >
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-3.5 w-3.5" data-testid="Icon__3ba698" />
                   {label}
                 </button>
               );
@@ -417,7 +416,7 @@ export default function ReportDrawer({
               disabled={!dataReady || loading}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
-              <Printer className="h-3.5 w-3.5" />
+              <Printer className="h-3.5 w-3.5" data-testid="Printer__3ba698" />
               {ui('print')}
             </button>
 
@@ -425,7 +424,7 @@ export default function ReportDrawer({
               onClick={onClose}
               className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors ml-1"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" data-testid="X__3ba698" />
             </button>
           </div>
         </div>
@@ -442,7 +441,7 @@ export default function ReportDrawer({
           <div className="bg-white rounded-lg shadow-lg h-full overflow-hidden relative">
             {(fetchingData || loading) && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3ba698" />
                 <span>{fetchingData ? ui('fetchingAllRecords') : ui('renderingReport')}</span>
               </div>
             )}

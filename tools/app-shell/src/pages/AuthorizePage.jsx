@@ -100,7 +100,13 @@ export default function AuthorizePage() {
 
   // No OAuth params — show the connections landing page
   if (!isOAuthFlow) {
-    return <ConnectionsLanding isEmbedded={isEmbedded} tMenu={tMenu} ui={ui} />;
+    return (
+      <ConnectionsLanding
+        isEmbedded={isEmbedded}
+        tMenu={tMenu}
+        ui={ui}
+        data-testid="ConnectionsLanding__96270f" />
+    );
   }
 
   return (
@@ -108,11 +114,11 @@ export default function AuthorizePage() {
       data-testid="oauth-consent-view"
       className={isEmbedded ? 'flex min-h-screen items-center justify-center p-4' : 'flex min-h-[80vh] items-center justify-center p-4'}
     >
-      <Card className="w-full max-w-md">
-        <CardContent className="pt-6">
+      <Card className="w-full max-w-md" data-testid="Card__96270f">
+        <CardContent className="pt-6" data-testid="CardContent__96270f">
           <div className="flex flex-col items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-              <Shield className="h-7 w-7 text-primary" />
+              <Shield className="h-7 w-7 text-primary" data-testid="Shield__96270f" />
             </div>
 
             <div className="text-center">
@@ -145,7 +151,12 @@ export default function AuthorizePage() {
                   const label = info ? ui(info.labelKey) : s;
                   const description = info ? ui(info.descriptionKey) : '';
                   return (
-                    <Badge key={s} variant="secondary" className="text-xs" title={description}>
+                    <Badge
+                      key={s}
+                      variant="secondary"
+                      className="text-xs"
+                      title={description}
+                      data-testid="Badge__96270f">
                       {label}
                     </Badge>
                   );
@@ -155,14 +166,14 @@ export default function AuthorizePage() {
 
             {status === 'error' && (
               <div className="flex w-full items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-                <XCircle className="h-4 w-4 shrink-0" />
+                <XCircle className="h-4 w-4 shrink-0" data-testid="XCircle__96270f" />
                 {errorMessage}
               </div>
             )}
 
             {status === 'success' ? (
               <div className="flex w-full items-center gap-2 rounded-lg border border-green-500/30 bg-green-50 p-3 text-sm text-green-700 dark:bg-green-950/30 dark:text-green-400">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <CheckCircle2 className="h-4 w-4 shrink-0" data-testid="CheckCircle2__96270f" />
                 {ui('oauthAuthorizedRedirecting')}
               </div>
             ) : (
@@ -183,7 +194,7 @@ export default function AuthorizePage() {
                   data-testid="oauth-authorize-submit"
                 >
                   {status === 'authorizing' ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {ui('oauthAuthorizing')}</>
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__96270f" /> {ui('oauthAuthorizing')}</>
                   ) : (
                     ui('oauthAuthorize')
                   )}
@@ -204,11 +215,11 @@ export default function AuthorizePage() {
 function ConnectionsLanding({ isEmbedded, tMenu, ui }) {
   return (
     <div className={isEmbedded ? 'flex min-h-screen items-center justify-center p-4' : 'flex min-h-[80vh] items-center justify-center p-4'}>
-      <Card className="w-full max-w-lg">
-        <CardContent className="pt-6">
+      <Card className="w-full max-w-lg" data-testid="Card__96270f">
+        <CardContent className="pt-6" data-testid="CardContent__96270f">
           <div className="flex flex-col items-center gap-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-              <Plug className="h-7 w-7 text-primary" />
+              <Plug className="h-7 w-7 text-primary" data-testid="Plug__96270f" />
             </div>
 
             <div className="text-center">

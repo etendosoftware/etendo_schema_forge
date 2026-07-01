@@ -28,6 +28,6 @@ export function StatusFilter({ value, onChange }) {
       labelFor={(code) => labelMap[code] ?? code}
       allLabel={ui('financeAccountMovementsFilterAllStatuses')}
       searchPlaceholder={ui('searchStatuses')}
-    />
+      data-testid="DistinctValuesFilter__15378f" />
   );
 }

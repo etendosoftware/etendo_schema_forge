@@ -35,7 +35,7 @@ describe('SelectorChip (ETP-4000 Figma chip)', () => {
 
   it('renders the X icon from lucide-react', () => {
     assert.match(src, /import \{ X \} from 'lucide-react'/);
-    assert.match(src, /<X /);
+    assert.match(src, /<X[\s\S]/);
   });
 
   it('uses the Figma chip background #F5F7F9 and label color #3F3F50', () => {

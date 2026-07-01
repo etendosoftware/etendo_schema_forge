@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Truck, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
 
@@ -19,6 +20,7 @@ export default function OrderConfirmModal({
   onClose,
 }) {
   const ui = useUI();
+  const navigate = useNavigate();
   const alreadyConfirmed = data?.documentStatus === 'CO';
   const [createShipment, setCreateShipment] = useState(false);
   const [createInvoice,  setCreateInvoice]  = useState(false);
@@ -126,7 +128,7 @@ export default function OrderConfirmModal({
           const err = await res.json().catch(() => null);
           throw new Error(
             ui('soOrderConfirmedShipmentError')
-            + (err?.response?.message || err?.message || `Error (${res.status})`),
+            + (err?.error?.message || err?.response?.message || err?.message || `Error (${res.status})`),
           );
         }
         const json = await res.json();
@@ -149,7 +151,7 @@ export default function OrderConfirmModal({
           const err = await res.json().catch(() => null);
           throw new Error(
             ui('soOrderConfirmedInvoiceError')
-            + (err?.response?.message || err?.message || `Error (${res.status})`),
+            + (err?.error?.message || err?.response?.message || err?.message || `Error (${res.status})`),
           );
         }
         const json = await res.json();
@@ -179,14 +181,14 @@ export default function OrderConfirmModal({
 
   const handleGoToInvoice = () => {
     if (!createdDocs?.invoice?.id) { handleCloseAfterCreate(); return; }
-    const basePath = window.location.pathname.replace(/\/sales-order\/.*$/, '');
-    window.location.href = `${basePath}/sales-invoice/${createdDocs.invoice.id}`;
+    onClose();
+    navigate(`/sales-invoice/${createdDocs.invoice.id}`);
   };
 
   const handleGoToShipment = () => {
     if (!createdDocs?.shipment?.id) { handleCloseAfterCreate(); return; }
-    const basePath = window.location.pathname.replace(/\/sales-order\/.*$/, '');
-    window.location.href = `${basePath}/goods-shipment/${createdDocs.shipment.id}`;
+    onClose();
+    navigate(`/goods-shipment/${createdDocs.shipment.id}`);
   };
 
   const handleCloseAfterCreate = () => {
@@ -248,17 +250,17 @@ export default function OrderConfirmModal({
             {/* When both: show shipment as secondary, invoice as primary */}
             {both && shipment?.id && (
               <button type="button" onClick={handleGoToShipment} style={btnSecondary}>
-                {ui('soViewShipment')}
+                {ui('soViewShipment')} →
               </button>
             )}
             {invoice?.id && (
               <button type="button" onClick={handleGoToInvoice} style={btnPrimary}>
-                {ui('soViewInvoice')}
+                {ui('soViewInvoice')} →
               </button>
             )}
             {!invoice?.id && shipment?.id && (
               <button type="button" onClick={handleGoToShipment} style={btnPrimary}>
-                {ui('soViewShipment')}
+                {ui('soViewShipment')} →
               </button>
             )}
           </div>

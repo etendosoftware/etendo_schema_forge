@@ -11,6 +11,6 @@ export default function PriceListWindow(props) {
       DetailForm={null}
       CustomLines={PriceListProductPrices}
       customLinesLabel="Product Price"
-    />
+      data-testid="GeneratedApp__d2d28e" />
   );
 }

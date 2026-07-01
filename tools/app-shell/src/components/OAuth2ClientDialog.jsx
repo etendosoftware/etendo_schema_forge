@@ -133,17 +133,17 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
         onClose={handleCloseReveal}
         clientId={revealData.clientId}
         clientSecret={revealData.clientSecret}
-      />
+        data-testid="SecretRevealDialog__4aea7f" />
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={onOpenChange} data-testid="Dialog__4aea7f">
+      <DialogContent className="sm:max-w-md" data-testid="DialogContent__4aea7f">
         <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>{isEdit ? 'Edit Client' : 'Create OAuth2 Client'}</DialogTitle>
-            <DialogDescription>
+          <DialogHeader data-testid="DialogHeader__4aea7f">
+            <DialogTitle data-testid="DialogTitle__4aea7f">{isEdit ? 'Edit Client' : 'Create OAuth2 Client'}</DialogTitle>
+            <DialogDescription data-testid="DialogDescription__4aea7f">
               {isEdit
                 ? 'Update the client configuration. Secret is not changed here.'
                 : 'Create a new OAuth2 client for MCP agent authentication.'}
@@ -153,43 +153,43 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
           <div className="grid gap-4 py-4">
             {/* Name */}
             <div className="grid gap-2">
-              <Label htmlFor="client-name">Name *</Label>
+              <Label htmlFor="client-name" data-testid="Label__4aea7f">Name *</Label>
               <Input
                 id="client-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="My MCP Agent"
                 required
-              />
+                data-testid="Input__4aea7f" />
             </div>
 
             {/* Etendo User ID */}
             <div className="grid gap-2">
-              <Label htmlFor="client-user-id">Etendo User ID</Label>
+              <Label htmlFor="client-user-id" data-testid="Label__4aea7f">Etendo User ID</Label>
               <Input
                 id="client-user-id"
                 value={adUserId}
                 onChange={(e) => setAdUserId(e.target.value)}
                 placeholder="e.g. 100"
                 className="font-mono text-sm"
-              />
+                data-testid="Input__4aea7f" />
             </div>
 
             {/* Etendo Role ID */}
             <div className="grid gap-2">
-              <Label htmlFor="client-role-id">Etendo Role ID</Label>
+              <Label htmlFor="client-role-id" data-testid="Label__4aea7f">Etendo Role ID</Label>
               <Input
                 id="client-role-id"
                 value={adRoleId}
                 onChange={(e) => setAdRoleId(e.target.value)}
                 placeholder="e.g. 0"
                 className="font-mono text-sm"
-              />
+                data-testid="Input__4aea7f" />
             </div>
 
             {/* Scopes */}
             <div className="grid gap-2">
-              <Label>Scopes</Label>
+              <Label data-testid="Label__4aea7f">Scopes</Label>
               <div className="grid grid-cols-2 gap-2">
                 {ALL_SCOPES.map((scope) => {
                   const isGranular = scope !== 'neo:*';
@@ -223,21 +223,25 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
 
             {/* Active toggle */}
             <div className="flex items-center justify-between">
-              <Label htmlFor="client-active">Active</Label>
+              <Label htmlFor="client-active" data-testid="Label__4aea7f">Active</Label>
               <Switch
                 id="client-active"
                 checked={isActive}
                 onCheckedChange={setIsActive}
-              />
+                data-testid="Switch__4aea7f" />
             </div>
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <DialogFooter data-testid="DialogFooter__4aea7f">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              data-testid="Button__4aea7f">
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <Button type="submit" disabled={submitting} data-testid="Button__4aea7f">
+              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__4aea7f" />}
               {isEdit ? 'Save Changes' : 'Create Client'}
             </Button>
           </DialogFooter>
@@ -266,24 +270,27 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Client Created Successfully</DialogTitle>
-          <DialogDescription>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => !v && onClose()}
+      data-testid="Dialog__4aea7f">
+      <DialogContent className="sm:max-w-lg" data-testid="DialogContent__4aea7f">
+        <DialogHeader data-testid="DialogHeader__4aea7f">
+          <DialogTitle data-testid="DialogTitle__4aea7f">Client Created Successfully</DialogTitle>
+          <DialogDescription data-testid="DialogDescription__4aea7f">
             Save these credentials now. The secret will not be shown again.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="flex items-center gap-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <AlertTriangle className="h-4 w-4 shrink-0" data-testid="AlertTriangle__4aea7f" />
             <span>This secret will not be shown again. Copy it now.</span>
           </div>
 
           {/* Client ID */}
           <div className="grid gap-1.5">
-            <Label className="text-xs text-muted-foreground">Client ID</Label>
+            <Label className="text-xs text-muted-foreground" data-testid="Label__4aea7f">Client ID</Label>
             <div className="flex items-center gap-2">
               <code className="flex-1 rounded-md bg-muted px-3 py-2 text-sm font-mono break-all">
                 {clientId}
@@ -294,15 +301,15 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret }) {
                 size="icon"
                 className="shrink-0"
                 onClick={() => copyToClipboard(clientId, 'Client ID')}
-              >
-                <Copy className="h-4 w-4" />
+                data-testid="Button__4aea7f">
+                <Copy className="h-4 w-4" data-testid="Copy__4aea7f" />
               </Button>
             </div>
           </div>
 
           {/* Client Secret */}
           <div className="grid gap-1.5">
-            <Label className="text-xs text-muted-foreground">Client Secret</Label>
+            <Label className="text-xs text-muted-foreground" data-testid="Label__4aea7f">Client Secret</Label>
             <div className="flex items-center gap-2">
               <code className="flex-1 rounded-md bg-muted px-3 py-2 text-sm font-mono break-all">
                 {clientSecret}
@@ -313,15 +320,15 @@ export function SecretRevealDialog({ open, onClose, clientId, clientSecret }) {
                 size="icon"
                 className="shrink-0"
                 onClick={() => copyToClipboard(clientSecret, 'Secret')}
-              >
-                <Copy className="h-4 w-4" />
+                data-testid="Button__4aea7f">
+                <Copy className="h-4 w-4" data-testid="Copy__4aea7f" />
               </Button>
             </div>
           </div>
         </div>
 
-        <DialogFooter>
-          <Button onClick={onClose}>
+        <DialogFooter data-testid="DialogFooter__4aea7f">
+          <Button onClick={onClose} data-testid="Button__4aea7f">
             I have saved the secret
           </Button>
         </DialogFooter>
@@ -346,14 +353,19 @@ export function ConfirmDialog({
   onConfirm,
 }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+    <Dialog open={open} onOpenChange={onOpenChange} data-testid="Dialog__4aea7f">
+      <DialogContent className="sm:max-w-md" data-testid="DialogContent__4aea7f">
+        <DialogHeader data-testid="DialogHeader__4aea7f">
+          <DialogTitle data-testid="DialogTitle__4aea7f">{title}</DialogTitle>
+          <DialogDescription data-testid="DialogDescription__4aea7f">{description}</DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+        <DialogFooter data-testid="DialogFooter__4aea7f">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+            data-testid="Button__4aea7f">
             {cancelLabel}
           </Button>
           <Button
@@ -361,8 +373,8 @@ export function ConfirmDialog({
             variant={variant === 'destructive' ? 'destructive' : 'default'}
             onClick={onConfirm}
             disabled={loading}
-          >
-            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            data-testid="Button__4aea7f">
+            {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" data-testid="Loader2__4aea7f" />}
             {confirmLabel}
           </Button>
         </DialogFooter>

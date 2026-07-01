@@ -78,7 +78,12 @@ function CustomQuotationTable(props) {
   const dictionary = useLocale();
   const quotationColumns = useMemo(() => buildQuotationColumns(ui), [dictionary]);
 
-  return <QuotationTable columns={quotationColumns} {...props} />;
+  return (
+    <QuotationTable
+      columns={quotationColumns}
+      {...props}
+      data-testid="QuotationTable__bc8637" />
+  );
 }
 
 export default function SalesQuotationWindow({ windowName, recordId, token, apiBaseUrl, ...rest }) {
@@ -105,7 +110,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
       windowName={windowName}
       onClose={onClose}
       onEdit={onEdit}
-    />
+      data-testid="QuotationPreview__bc8637" />
   ), [token, apiBaseUrl, windowName]);
 
   const rowQuickActions = useMemo(() => ({
@@ -136,7 +141,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
           menuActions={customMenuActions}
           linesEmptyState={LinesEmptyState}
           {...rest}
-        />
+          data-testid="GeneratedApp__bc8637" />
         {contactPortal}
       </CreateContactContext.Provider>
     );
@@ -157,7 +162,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
         {...rest}
-      />
+        data-testid="GeneratedApp__bc8637" />
       {deleteDialog}
       {cloneTargets && createPortal(
         <CloneOrderModal
@@ -168,7 +173,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
           routePrefix="/sales-quotation/"
           onClose={() => setCloneTargets(null)}
           onCloned={() => setRefreshKey(k => k + 1)}
-        />,
+          data-testid="CloneOrderModal__bc8637" />,
         document.body,
       )}
     </>

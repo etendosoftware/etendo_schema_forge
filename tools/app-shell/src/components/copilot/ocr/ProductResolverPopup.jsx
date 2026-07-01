@@ -43,7 +43,7 @@ function SelectorOption({ option, selected, onPick, sizing = 'compact' }) {
       onClick={() => onPick(option)}
       className={`${base} ${pad} ${tone}`}
     >
-      <span className="w-4 shrink-0">{selected ? <Check size={14} /> : null}</span>
+      <span className="w-4 shrink-0">{selected ? <Check size={14} data-testid="Check__b3ae11" /> : null}</span>
       <span className="truncate">{option.label}</span>
     </button>
   );
@@ -80,7 +80,7 @@ export default function ProductResolverPopup({
             {ui('ocrProductResolverTitle')}
           </h2>
           <button onClick={cancel} aria-label={ui('cancel')} className="text-gray-400 hover:text-gray-600">
-            <X size={18} />
+            <X size={18} data-testid="X__b3ae11" />
           </button>
         </div>
 
@@ -100,7 +100,7 @@ export default function ProductResolverPopup({
               authHeader={authHeader}
               token={token}
               ui={ui}
-            />
+              data-testid="ProductRow__b3ae11" />
           ))}
         </div>
 
@@ -153,9 +153,8 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
           onPick={onSelect}
           onCreateNew={productSpecUrl ? () => setCreating(true) : null}
           ui={ui}
-        />
+          data-testid="InlineSelector__b3ae11" />
       </div>
-
       {creating && (
         <ProductCreateForm
           initialName={row.description}
@@ -165,7 +164,7 @@ function ProductRow({ row, selection, onSelect, selectorUrl, productSpecUrl, aut
           onCreated={(value) => { onSelect(value); setCreating(false); }}
           onCancel={() => setCreating(false)}
           ui={ui}
-        />
+          data-testid="ProductCreateForm__b3ae11" />
       )}
     </div>
   );
@@ -257,7 +256,10 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
         <span className={`truncate ${value ? 'text-gray-900' : 'text-gray-500'}`}>
           {value?.label || ui('ocrProductSkip')}
         </span>
-        <ChevronDown size={16} className="text-gray-500 shrink-0" />
+        <ChevronDown
+          size={16}
+          className="text-gray-500 shrink-0"
+          data-testid="ChevronDown__b3ae11" />
       </button>
     );
   }
@@ -265,7 +267,7 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
   return (
     <div className="relative" ref={wrapRef}>
       <div className="flex items-center gap-2 rounded-lg border border-gray-900 bg-white px-3 py-2">
-        <Search size={14} className="text-gray-400 shrink-0" />
+        <Search size={14} className="text-gray-400 shrink-0" data-testid="Search__b3ae11" />
         <input
           ref={inputRef}
           type="text"
@@ -274,7 +276,10 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
           placeholder={ui('ocrProductSearchPlaceholder')}
           className="flex-1 text-sm text-gray-900 placeholder-gray-500 outline-none"
         />
-        {loading && <Loader2 size={14} className="animate-spin text-gray-400" />}
+        {loading && <Loader2
+          size={14}
+          className="animate-spin text-gray-400"
+          data-testid="Loader2__b3ae11" />}
       </div>
       <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
         {onCreateNew && (
@@ -283,7 +288,7 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
             onClick={onCreateNew}
             className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2 text-left text-sm text-blue-700 hover:bg-blue-50"
           >
-            <Plus size={14} className="shrink-0" />
+            <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
             <span className="truncate">{ui('ocrProductCreateNew')}</span>
           </button>
         )}
@@ -299,7 +304,7 @@ function InlineSelector({ selectorUrl, authHeader, initialQuery, value, onPick, 
             option={o}
             selected={value?.id === o.id}
             onPick={handlePick}
-          />
+            data-testid="SelectorOption__b3ae11" />
         ))}
       </div>
     </div>
@@ -403,12 +408,15 @@ function SelectorDialog({
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={16} />
+            <X size={16} data-testid="X__b3ae11" />
           </button>
         </div>
         <div className="px-4 py-3 border-b border-gray-100">
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              data-testid="Search__b3ae11" />
             <input
               ref={inputRef}
               type="text"
@@ -426,13 +434,13 @@ function SelectorDialog({
               onClick={onCreateNew}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-blue-700 hover:bg-blue-50 border-b border-gray-100"
             >
-              <Plus size={14} className="shrink-0" />
+              <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
               <span className="truncate">{createLabel}</span>
             </button>
           )}
           {loading && (
             <div className="px-4 py-6 text-center text-sm text-gray-500 flex items-center justify-center gap-2">
-              <Loader2 size={14} className="animate-spin" /> {ui('loading')}
+              <Loader2 size={14} className="animate-spin" data-testid="Loader2__b3ae11" /> {ui('loading')}
             </div>
           )}
           {!loading && failed && (
@@ -449,7 +457,7 @@ function SelectorDialog({
                 selected={currentId === o.id}
                 onPick={(opt) => onPick({ id: opt.id, label: opt.label })}
                 sizing="comfortable"
-              />
+                data-testid="SelectorOption__b3ae11" />
             ))
           )}
         </div>
@@ -576,7 +584,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-200">
           <h2 className="text-base font-semibold text-gray-900">{ui('ocrProductCreateTitle')}</h2>
           <button onClick={onCancel} aria-label={ui('cancel')} className="text-gray-400 hover:text-gray-600">
-            <X size={18} />
+            <X size={18} data-testid="X__b3ae11" />
           </button>
         </div>
         <div className="px-6 py-4 space-y-3">
@@ -608,7 +616,10 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
               <span className={`truncate ${uom ? 'text-gray-900' : 'text-gray-500'}`}>
                 {uom?.label || ui('ocrProductCreateSelect')}
               </span>
-              <ChevronDown size={16} className="text-gray-500 shrink-0" />
+              <ChevronDown
+                size={16}
+                className="text-gray-500 shrink-0"
+                data-testid="ChevronDown__b3ae11" />
             </button>
           </div>
           <div>
@@ -621,7 +632,10 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
               <span className={`truncate ${taxCategory ? 'text-gray-900' : 'text-gray-500'}`}>
                 {taxCategory?.label || ui('ocrProductCreateSelect')}
               </span>
-              <ChevronDown size={16} className="text-gray-500 shrink-0" />
+              <ChevronDown
+                size={16}
+                className="text-gray-500 shrink-0"
+                data-testid="ChevronDown__b3ae11" />
             </button>
           </div>
           {error && (
@@ -648,12 +662,11 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
             disabled={submitting}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 flex items-center gap-2"
           >
-            {submitting && <Loader2 size={13} className="animate-spin" />}
+            {submitting && <Loader2 size={13} className="animate-spin" data-testid="Loader2__b3ae11" />}
             {ui('ocrProductCreate')}
           </button>
         </div>
       </div>
-
       {picker === 'uom' && uomSelectorUrl && (
         <SelectorDialog
           title={ui('ocrProductCreateUom')}
@@ -664,7 +677,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
           onPick={(value) => { setUom(value); setPicker(null); }}
           onClose={() => setPicker(null)}
           ui={ui}
-        />
+          data-testid="SelectorDialog__b3ae11" />
       )}
       {picker === 'taxCategory' && taxSelectorUrl && (
         <SelectorDialog
@@ -676,7 +689,7 @@ function ProductCreateForm({ initialName, productSpecUrl, authHeader, token, onC
           onPick={(value) => { setTaxCategory(value); setPicker(null); }}
           onClose={() => setPicker(null)}
           ui={ui}
-        />
+          data-testid="SelectorDialog__b3ae11" />
       )}
     </div>
   );

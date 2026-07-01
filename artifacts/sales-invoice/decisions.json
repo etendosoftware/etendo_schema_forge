@@ -32,7 +32,17 @@
         "labelKey": "reactivate",
         "visibleWhenStatus": "CO",
         "documentAction": "RE",
-        "successKey": "reactivated"
+        "successKey": "reactivated",
+        "preUnpost": true
+      },
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
       }
     ],
     "secondaryTabs": {
@@ -63,14 +73,41 @@
       "es_ES": {
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
-        "em_etgo_delivery_status": "Estado de entrega"
+        "em_etgo_delivery_status": "Estado de entrega",
+        "C_DocTypeTarget_ID": "Tipo de documento"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",
         "EM_Etgo_Due_Date": "Due Date",
-        "em_etgo_delivery_status": "Delivery Status"
+        "em_etgo_delivery_status": "Delivery Status",
+        "C_DocTypeTarget_ID": "Document Type"
       }
-    }
+    },
+    "subsetFilters": [
+      {
+        "label": "allTab"
+      },
+      {
+        "label": "invoicesTab",
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"
+      },
+      {
+        "label": "creditNotesTab",
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D"
+      },
+      {
+        "label": "returnsTab",
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D"
+      }
+    ],
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ]
   },
   "entities": {
     "header": {
@@ -187,12 +224,29 @@
         "posted": {
           "visibility": "readOnly",
           "form": false,
-          "grid": false
+          "grid": true,
+          "gridOrder": 5,
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "en_US": "Posted",
+              "es_ES": "Contabilizado"
+            },
+            "false": {
+              "en_US": "Not posted",
+              "es_ES": "Sin contabilizar"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         },
         "grandTotalAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 5,
+          "gridOrder": 6,
           "section": "summary"
         },
         "summedLineAmount": {
@@ -202,21 +256,21 @@
         "outstandingAmount": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 6,
+          "gridOrder": 7,
           "form": false,
           "section": "summary"
         },
         "eTGODueDate": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": false,
           "searchable": true
         },
         "eTGODeliveryStatus": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 8,
+          "gridOrder": 9,
           "form": false
         },
         "isPaid": {
@@ -271,7 +325,15 @@
           "form": false
         },
         "transactionDocument": {
-          "name": "cDocTypeTargetId"
+          "visibility": "editable",
+          "section": "principal",
+          "form": true,
+          "grid": false,
+          "reference": "DocumentType",
+          "inputMode": "selector",
+          "readOnlyLogicJs": "!!record.id",
+          "readOnlyLogic": null,
+          "seq": 15
         },
         "documentType": {
           "name": "cDocTypeId"
@@ -348,7 +410,8 @@
         },
         "etvfacInvoiceStatus": {
           "visibility": "readOnly",
-          "form": false
+          "form": false,
+          "grid": true
         },
         "etsgDateOperation": {
           "visibility": "editable",
@@ -373,11 +436,6 @@
         "tbaiInvoiceseq": {
           "visibility": "readOnly",
           "form": false
-        },
-        "etvfacInvoiceStatus": {
-          "visibility": "readOnly",
-          "form": false,
-          "grid": true
         }
       }
     },
@@ -441,7 +499,8 @@
           "section": "principal",
           "derivation": null,
           "readOnlyLogic": "@Processed@='Y'",
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "unitPrice": {
           "grid": false,
@@ -568,14 +627,12 @@
         "salesOrderLine": {
           "visibility": "system",
           "reference": null,
-          "inputMode": null,
-          "name": "cOrderlineId"
+          "inputMode": null
         },
         "goodsShipmentLine": {
           "visibility": "system",
           "reference": null,
-          "inputMode": null,
-          "name": "mInoutlineId"
+          "inputMode": null
         }
       }
     },
@@ -625,7 +682,7 @@
     "ticketbai": {
       "exclude": true
     },
-    "resultadoValidaci\u00f3n": {
+    "resultadoValidación": {
       "exclude": true
     },
     "cashVat": {

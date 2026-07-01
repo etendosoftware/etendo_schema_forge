@@ -13,12 +13,15 @@
   ],
   "scripts": {
     "prepare": "git config core.hooksPath .githooks",
-    "test": "mkdir -p artifacts && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=artifacts/test-report.xml 'cli/test/*.test.js' && node cli/src/test-report-html.js"
+    "test": "mkdir -p artifacts && node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=artifacts/test-report.xml 'cli/test/*.test.js' && node cli/src/test-report-html.js",
+    "check:data-testid": "./scripts/check-add-data-testid.sh",
+    "apply:data-testid": "./scripts/apply-add-data-testid.sh"
   },
   "devDependencies": {
     "@etendosoftware/schema-forge-core": "0.1.0",
     "esbuild": "^0.28.0",
     "handlebars": "^4.7.9",
+    "jscodeshift": "^17.3.0",
     "shadcn": "^4.0.2"
   }
 }

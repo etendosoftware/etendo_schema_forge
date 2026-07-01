@@ -6,19 +6,19 @@ export { eur, parseEur, fmtAmount, parseAmount, todayISO } from '@/components/pa
 // section. Which ones actually render is decided at runtime by the account's
 // header dimensions (the active chart-of-accounts dimensions for FAT, minus the
 // ones explicitly hidden) — we never hardcode the list. Option values come from
-// real lookups (useDimensionValues); the label/required here drive the field
-// chrome. Order follows the AD field order (Organization, Business Partner,
-// Project, …).
+// real lookups (useDimensionValues); the labelKey/required here drive the field
+// chrome (labelKey is resolved via the i18n `ui()` hook in the component). Order
+// follows the AD field order (Organization, Business Partner, Project, …).
 export const DIM_META = {
-  organization: { label: 'Organización', required: true },
-  bpartner: { label: 'Contacto' },
-  project: { label: 'Proyecto' },
-  costcenter: { label: 'Centro de coste' },
-  activity: { label: 'Actividad' },
-  campaign: { label: 'Campaña' },
-  salesregion: { label: 'Región de ventas' },
-  user1: { label: 'Dimensión 1º' },
-  user2: { label: 'Dimensión 2º' },
+  organization: { labelKey: 'financeAccountMovementsDimOrganization', required: true },
+  bpartner: { labelKey: 'financeAccountMovementsDimBpartner' },
+  project: { labelKey: 'financeAccountMovementsDimProject' },
+  costcenter: { labelKey: 'financeAccountMovementsDimCostcenter' },
+  activity: { labelKey: 'financeAccountMovementsDimActivity' },
+  campaign: { labelKey: 'financeAccountMovementsDimCampaign' },
+  salesregion: { labelKey: 'financeAccountMovementsDimSalesregion' },
+  user1: { labelKey: 'financeAccountMovementsDimUser1' },
+  user2: { labelKey: 'financeAccountMovementsDimUser2' },
 };
 
 export const DIM_ORDER = ['organization', 'bpartner', 'project', 'costcenter', 'activity', 'campaign', 'salesregion', 'user1', 'user2'];

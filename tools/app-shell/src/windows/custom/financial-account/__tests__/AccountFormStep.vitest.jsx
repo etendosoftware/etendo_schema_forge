@@ -120,6 +120,26 @@ describe('AccountFormStep', () => {
     });
   });
 
+  it('submits a card account with type CA and no iban/swiftCode', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    renderForm({ mode: 'card', onSubmit });
+
+    // Card form is minimal: Name + Currency, no IBAN/BIC.
+    expect(screen.queryByTestId('account-form-iban')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('account-form-bic')).not.toBeInTheDocument();
+
+    await user.type(screen.getByTestId('account-form-name'), 'Visa Oro');
+    await user.click(screen.getByTestId('account-form-submit'));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0]).toEqual({
+      name: 'Visa Oro',
+      type: 'CA',
+      currencyId: '102',
+    });
+  });
+
   it('renders the inline error block when an error prop is supplied', () => {
     renderForm({ error: 'something went wrong' });
     expect(screen.getByTestId('account-form-error')).toHaveTextContent('something went wrong');

@@ -112,13 +112,13 @@ export default function AssetsConfigPanel({ data, token, apiBaseUrl, catalogs, a
       <SectionCard
         title={null}
         description={ui('assetsConfigDesc')}
-      >
+        data-testid="SectionCard__56e730">
         <div className="space-y-4">
           <EntityForm
             fields={currencyFields}
             {...common}
             displayLogic={makeDisplayLogic(currencyFields)}
-          />
+            data-testid="EntityForm__56e730" />
           <div className="grid grid-cols-2 gap-4">
             <ToggleCard
               label={ui('assetsDepreciateLabel')}
@@ -127,7 +127,7 @@ export default function AssetsConfigPanel({ data, token, apiBaseUrl, catalogs, a
               value={d.depreciate}
               onChange={onChange}
               editing={editing}
-            />
+              data-testid="ToggleCard__56e730" />
             {depreciate && d.calculateType === 'TI' && (
               <ToggleCard
                 label={ui('assets30DaysLabel')}
@@ -136,7 +136,7 @@ export default function AssetsConfigPanel({ data, token, apiBaseUrl, catalogs, a
                 value={d.everyMonthIs30Days}
                 onChange={onChange}
                 editing={editing}
-              />
+                data-testid="ToggleCard__56e730" />
             )}
           </div>
           {depreciate && (
@@ -145,17 +145,17 @@ export default function AssetsConfigPanel({ data, token, apiBaseUrl, catalogs, a
                 fields={deprecFields}
                 {...common}
                 displayLogic={makeDisplayLogic(deprecFields)}
-              />
+                data-testid="EntityForm__56e730" />
               <EntityForm
                 fields={dateFields}
                 {...common}
                 displayLogic={makeDisplayLogic(dateFields)}
-              />
+                data-testid="EntityForm__56e730" />
               <EntityForm
                 fields={amtFields}
                 {...common}
                 displayLogic={makeDisplayLogic(amtFields)}
-              />
+                data-testid="EntityForm__56e730" />
             </>
           )}
         </div>

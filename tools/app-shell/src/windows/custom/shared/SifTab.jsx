@@ -8,7 +8,10 @@ import { useSifFieldPatcher } from '@/windows/custom/shared/useSifFieldPatcher.j
 function Field({ label, htmlFor, children }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={htmlFor} className="text-sm text-foreground font-medium">{label}</Label>
+      <Label
+        htmlFor={htmlFor}
+        className="text-sm text-foreground font-medium"
+        data-testid="Label__b99c8b">{label}</Label>
       {children}
     </div>
   );
@@ -23,7 +26,7 @@ function ReadOnlyValue({ id, value }) {
       disabled
       readOnly
       className="bg-muted/40"
-    />
+      data-testid="Input__b99c8b" />
   );
 }
 
@@ -156,7 +159,12 @@ function PanelHeader({ titleKey, subtitleKey, badge, ui }) {
 function Panel({ titleKey, subtitleKey, badge, ui, children }) {
   return (
     <>
-      <PanelHeader titleKey={titleKey} subtitleKey={subtitleKey} badge={badge} ui={ui} />
+      <PanelHeader
+        titleKey={titleKey}
+        subtitleKey={subtitleKey}
+        badge={badge}
+        ui={ui}
+        data-testid="PanelHeader__b99c8b" />
       <div className="grid grid-cols-2 gap-x-5 gap-y-4 p-4 overflow-y-auto">{children}</div>
     </>
   );
@@ -164,8 +172,8 @@ function Panel({ titleKey, subtitleKey, badge, ui, children }) {
 
 function ReadOnlyField({ id, labelKey, value, ui }) {
   return (
-    <Field label={ui(labelKey)} htmlFor={id}>
-      <ReadOnlyValue id={id} value={value} />
+    <Field label={ui(labelKey)} htmlFor={id} data-testid="Field__b99c8b">
+      <ReadOnlyValue id={id} value={value} data-testid="ReadOnlyValue__b99c8b" />
     </Field>
   );
 }
@@ -233,25 +241,30 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
           );
         })}
       </div>
-
       <div className="flex-1 border border-border/40 rounded-lg bg-white overflow-hidden flex flex-col min-h-0">
         {effectiveTab === 'sii' && showSii && (
           <Panel
             titleKey={PANEL_META.sii.titleKey}
             subtitleKey={PANEL_META.sii.subtitleKey}
-            badge={<SiiStatusBadge estado={data?.aeatsiiEstado} ui={ui} />}
+            badge={<SiiStatusBadge estado={data?.aeatsiiEstado} ui={ui} data-testid="SiiStatusBadge__b99c8b" />}
             ui={ui}
-          >
-            <Field label={ui('sifDataTabs.field.operationDate')} htmlFor="sif-etsgDateOperation">
+            data-testid="Panel__b99c8b">
+            <Field
+              label={ui('sifDataTabs.field.operationDate')}
+              htmlFor="sif-etsgDateOperation"
+              data-testid="Field__b99c8b">
               <DateField
                 id="sif-etsgDateOperation"
                 value={getDateVal('etsgDateOperation')}
                 onChange={iso => setVal('etsgDateOperation', iso)}
                 onBlur={() => handleBlur('etsgDateOperation', getDateVal('etsgDateOperation'))}
                 disabled={dateReadOnly || savingField === 'etsgDateOperation'}
-              />
+                data-testid="DateField__b99c8b" />
             </Field>
-            <Field label={ui('sifDataTabs.field.invoiceType')} htmlFor="sif-siiType">
+            <Field
+              label={ui('sifDataTabs.field.invoiceType')}
+              htmlFor="sif-siiType"
+              data-testid="Field__b99c8b">
               <Select
                 value={getVal(siiTypeField) || undefined}
                 onValueChange={val => {
@@ -259,19 +272,27 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
                   patchField(siiTypeField, val);
                 }}
                 disabled={siiFieldReadOnly || savingField === siiTypeField}
-              >
-                <SelectTrigger id="sif-siiType">
-                  <SelectValue placeholder="—" />
+                data-testid="Select__b99c8b">
+                <SelectTrigger id="sif-siiType" data-testid="SelectTrigger__b99c8b">
+                  <SelectValue placeholder="—" data-testid="SelectValue__b99c8b" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent data-testid="SelectContent__b99c8b">
                   {siiTypeOptions.map(o => (
-                    <SelectItem key={o.value} value={o.value}>{o.value} — {ui(o.labelKey)}</SelectItem>
+                    <SelectItem key={o.value} value={o.value} data-testid="SelectItem__b99c8b">{o.value} — {ui(o.labelKey)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
-            <ReadOnlyField id="sif-masterDesc" labelKey="sifDataTabs.field.masterDescription" value={siiDescriptionMasterIdentifier} ui={ui} />
-            <Field label={ui('sifDataTabs.field.siiDescription')} htmlFor="sif-siiDesc">
+            <ReadOnlyField
+              id="sif-masterDesc"
+              labelKey="sifDataTabs.field.masterDescription"
+              value={siiDescriptionMasterIdentifier}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <Field
+              label={ui('sifDataTabs.field.siiDescription')}
+              htmlFor="sif-siiDesc"
+              data-testid="Field__b99c8b">
               <Input
                 id="sif-siiDesc"
                 type="text"
@@ -279,19 +300,37 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
                 onChange={e => setVal('aeatsiiDescripcionSii', e.target.value)}
                 onBlur={e => handleBlur('aeatsiiDescripcionSii', e.target.value)}
                 disabled={siiFieldReadOnly || savingField === 'aeatsiiDescripcionSii'}
-              />
+                data-testid="Input__b99c8b" />
             </Field>
-            <ReadOnlyField id="sif-exemption" labelKey="sifDataTabs.field.exemptionCause" value={data?.['aeatsiiCauseExemption$_identifier']} ui={ui} />
-            <Field label={ui('sifDataTabs.field.authorization')} htmlFor="sif-auth">
+            <ReadOnlyField
+              id="sif-exemption"
+              labelKey="sifDataTabs.field.exemptionCause"
+              value={data?.['aeatsiiCauseExemption$_identifier']}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <Field
+              label={ui('sifDataTabs.field.authorization')}
+              htmlFor="sif-auth"
+              data-testid="Field__b99c8b">
               <CheckboxField
                 id="sif-auth"
                 checked={Boolean(getVal('aeatsiiIsauthorization'))}
                 disabled={siiFieldReadOnly || savingField === 'aeatsiiIsauthorization'}
                 onToggle={val => handleCheckboxChange('aeatsiiIsauthorization', val)}
-              />
+                data-testid="CheckboxField__b99c8b" />
             </Field>
-            <ReadOnlyField id="sif-siiYear" labelKey="sifDataTabs.field.siiYear" value={data?.aeatsiiEjercicio} ui={ui} />
-            <ReadOnlyField id="sif-siiPeriod" labelKey="sifDataTabs.field.siiPeriod" value={data?.aeatsiiPeriodo} ui={ui} />
+            <ReadOnlyField
+              id="sif-siiYear"
+              labelKey="sifDataTabs.field.siiYear"
+              value={data?.aeatsiiEjercicio}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <ReadOnlyField
+              id="sif-siiPeriod"
+              labelKey="sifDataTabs.field.siiPeriod"
+              value={data?.aeatsiiPeriodo}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
           </Panel>
         )}
 
@@ -299,12 +338,27 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
           <Panel
             titleKey={PANEL_META.tbai.titleKey}
             subtitleKey={PANEL_META.tbai.subtitleKey}
-            badge={<TbaiBadge issent={data?.tbaiIssent} ui={ui} />}
+            badge={<TbaiBadge issent={data?.tbaiIssent} ui={ui} data-testid="TbaiBadge__b99c8b" />}
             ui={ui}
-          >
-            <ReadOnlyField id="sif-tbaiSeq" labelKey="sifDataTabs.field.chainSequence" value={data?.tbaiSequence} ui={ui} />
-            <ReadOnlyField id="sif-tbaiSerie" labelKey="sifDataTabs.field.invoiceSeries" value={data?.tbaiInvoicenum} ui={ui} />
-            <ReadOnlyField id="sif-tbaiInvSeq" labelKey="sifDataTabs.field.invoiceSequence" value={data?.tbaiInvoiceseq} ui={ui} />
+            data-testid="Panel__b99c8b">
+            <ReadOnlyField
+              id="sif-tbaiSeq"
+              labelKey="sifDataTabs.field.chainSequence"
+              value={data?.tbaiSequence}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <ReadOnlyField
+              id="sif-tbaiSerie"
+              labelKey="sifDataTabs.field.invoiceSeries"
+              value={data?.tbaiInvoicenum}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <ReadOnlyField
+              id="sif-tbaiInvSeq"
+              labelKey="sifDataTabs.field.invoiceSequence"
+              value={data?.tbaiInvoiceseq}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
           </Panel>
         )}
 
@@ -312,14 +366,43 @@ export default function SifTab({ recordId, data, token, apiBaseUrl }) {
           <Panel
             titleKey={PANEL_META.verifactu.titleKey}
             subtitleKey={PANEL_META.verifactu.subtitleKey}
-            badge={<VerifactuBadge status={data?.etvfacInvoiceStatus} sent={data?.etvfacSentToVerifac} ui={ui} />}
+            badge={<VerifactuBadge
+              status={data?.etvfacInvoiceStatus}
+              sent={data?.etvfacSentToVerifac}
+              ui={ui}
+              data-testid="VerifactuBadge__b99c8b" />}
             ui={ui}
-          >
-            <ReadOnlyField id="sif-vfDate" labelKey="sifDataTabs.field.rfGenerationDate" value={data?.etvfacDateIssue} ui={ui} />
-            <ReadOnlyField id="sif-vfCsv" labelKey="sifDataTabs.field.csv" value={data?.cdigoCSV} ui={ui} />
-            <ReadOnlyField id="sif-vfHash" labelKey="sifDataTabs.field.hash" value={data?.etvfacHash} ui={ui} />
-            <ReadOnlyField id="sif-vfQr" labelKey="sifDataTabs.field.qrUrl" value={data?.etvfacQRURL} ui={ui} />
-            <ReadOnlyField id="sif-vfIssue" labelKey="sifDataTabs.field.issueDetail" value={data?.etvfacIssueDescription} ui={ui} />
+            data-testid="Panel__b99c8b">
+            <ReadOnlyField
+              id="sif-vfDate"
+              labelKey="sifDataTabs.field.rfGenerationDate"
+              value={data?.etvfacDateIssue}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <ReadOnlyField
+              id="sif-vfCsv"
+              labelKey="sifDataTabs.field.csv"
+              value={data?.cdigoCSV}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <ReadOnlyField
+              id="sif-vfHash"
+              labelKey="sifDataTabs.field.hash"
+              value={data?.etvfacHash}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <ReadOnlyField
+              id="sif-vfQr"
+              labelKey="sifDataTabs.field.qrUrl"
+              value={data?.etvfacQRURL}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
+            <ReadOnlyField
+              id="sif-vfIssue"
+              labelKey="sifDataTabs.field.issueDetail"
+              value={data?.etvfacIssueDescription}
+              ui={ui}
+              data-testid="ReadOnlyField__b99c8b" />
           </Panel>
         )}
       </div>

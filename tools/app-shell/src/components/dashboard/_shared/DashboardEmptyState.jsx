@@ -71,7 +71,9 @@ export function DashboardEmptyState({ title, subtitle, actions = [], width, text
                   className="flex items-center justify-center"
                   style={buttonStyle}
                 >
-                  {Icon ? <Icon style={{ width: '20px', height: '20px', color: iconColor }} /> : null}
+                  {Icon ? <Icon
+                    style={{ width: '20px', height: '20px', color: iconColor }}
+                    data-testid="Icon__7fdef5" /> : null}
                   <span style={{ ...labelStyle, color }}>{action.label}</span>
                 </button>
               );

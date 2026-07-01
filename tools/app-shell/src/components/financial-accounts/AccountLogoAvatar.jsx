@@ -23,7 +23,7 @@ export function AccountLogoAvatar({ account, className }) {
       )}
       aria-hidden="true"
     >
-      <Icon className="h-4 w-4" />
+      <Icon className="h-4 w-4" data-testid="Icon__e6d2a0" />
     </div>
   );
 }

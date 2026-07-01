@@ -20,7 +20,7 @@ function ComingSoon({ Icon }) {
   const ui = useUI();
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
-      <Icon className="h-8 w-8 opacity-40" />
+      <Icon className="h-8 w-8 opacity-40" data-testid="Icon__c851a1" />
       <span className="text-xs">{ui('ocrSidePanelComingSoon')}</span>
     </div>
   );
@@ -43,13 +43,13 @@ function FileTab(props) {
             {ui('ocrSidePanelHint')}
           </p>
         </div>
-        <Suspense fallback={null}>
-          <LazyOcrInlineUploader {...props} />
+        <Suspense fallback={null} data-testid="Suspense__c851a1">
+          <LazyOcrInlineUploader {...props} data-testid="LazyOcrInlineUploader__c851a1" />
         </Suspense>
       </div>
     );
   }
-  return <AttachmentsView {...props} />;
+  return <AttachmentsView {...props} data-testid="AttachmentsView__c851a1" />;
 }
 
 /**
@@ -98,14 +98,14 @@ function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
   if (loading) {
     return (
       <div className="flex min-h-[360px] items-center justify-center rounded-xl border-2 border-dashed border-gray-300 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
+        <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
       </div>
     );
   }
   if (attachments.length === 0) {
     return (
       <div className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 text-muted-foreground">
-        <FileText className="h-8 w-8 opacity-40" />
+        <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
         <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
       </div>
     );
@@ -113,17 +113,19 @@ function AttachmentsView({ recordId, token, apiBaseUrl, docTypeId }) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <FileText className="h-3.5 w-3.5" />
+        <FileText className="h-3.5 w-3.5" data-testid="FileText__c851a1" />
         <span className="truncate">{attachments[0].name}</span>
       </div>
       {pdfUrl && (
         <div className="min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-white">
-          <Suspense fallback={(
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-            </div>
-          )}>
-            <LazyPdfViewer url={pdfUrl} />
+          <Suspense
+            fallback={(
+              <div className="flex h-full items-center justify-center text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
+              </div>
+            )}
+            data-testid="Suspense__c851a1">
+            <LazyPdfViewer url={pdfUrl} data-testid="LazyPdfViewer__c851a1" />
           </Suspense>
         </div>
       )}
@@ -141,11 +143,11 @@ export default function OcrSidePanel(props) {
 
   let body;
   if (activeTab === 'file') {
-    body = <FileTab {...slotProps} />;
+    body = <FileTab {...slotProps} data-testid="FileTab__c851a1" />;
   } else if (activeTab === 'messages') {
-    body = <ComingSoon Icon={MessageSquare} />;
+    body = <ComingSoon Icon={MessageSquare} data-testid="ComingSoon__c851a1" />;
   } else {
-    body = <ComingSoon Icon={History} />;
+    body = <ComingSoon Icon={History} data-testid="ComingSoon__c851a1" />;
   }
 
   return (
@@ -177,7 +179,7 @@ export default function OcrSidePanel(props) {
           className="rounded-md border border-gray-200 bg-white p-1.5 text-muted-foreground hover:text-foreground"
           aria-label={ui('ocrSidePanelMore')}
         >
-          <MoreVertical className="h-4 w-4" />
+          <MoreVertical className="h-4 w-4" data-testid="MoreVertical__c851a1" />
         </button>
       </div>
       <div className="flex-1 overflow-auto">

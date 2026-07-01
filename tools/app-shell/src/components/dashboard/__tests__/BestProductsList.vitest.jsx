@@ -3,6 +3,9 @@ import userEvent from '@testing-library/user-event';
 
 const navigateMock = vi.fn();
 const openCopilotMock = vi.fn();
+const telemetryMocks = vi.hoisted(() => ({
+  trackDashboardKpi: vi.fn(),
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -19,6 +22,13 @@ vi.mock('@/lib/dashboardNumberFormat.js', () => ({
   localeFromUi: (locale) => locale,
 }));
 
+vi.mock('@/lib/dashboardKpiTelemetry.js', () => ({
+  DASHBOARD_KPI_IDS: {
+    dashboardToDocument: 'kpi_ux_dashboard_to_document',
+  },
+  trackDashboardKpi: telemetryMocks.trackDashboardKpi,
+}));
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => navigateMock,
 }));
@@ -29,6 +39,7 @@ describe('BestProductsList', () => {
   beforeEach(() => {
     navigateMock.mockReset();
     openCopilotMock.mockReset();
+    telemetryMocks.trackDashboardKpi.mockReset();
   });
 
   it('renders the header title from useUI', () => {
@@ -147,5 +158,26 @@ describe('BestProductsList', () => {
     render(<BestProductsList sellers={[]} products={[]} currencyLabel="EUR" />);
     await user.click(screen.getByText('createWithCopilot'));
     expect(openCopilotMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('tracks dashboard product navigation without product identifiers', async () => {
+    const user = userEvent.setup();
+    render(
+      <BestProductsList
+        sellers={[]}
+        products={[{ id: 'prod-1', name: 'Product X', qty: 1, amount: 50, trendPct: 0 }]}
+        currencyLabel="EUR"
+      />,
+    );
+
+    await user.click(screen.getByText('bestProductsToggleRevenue'));
+    await user.click(screen.getByText('Product X'));
+
+    expect(telemetryMocks.trackDashboardKpi).toHaveBeenCalledWith('dashboard_document_opened', {
+      kpiId: 'kpi_ux_dashboard_to_document',
+      entityType: 'product',
+      source: 'dashboard_best_products',
+    });
+    expect(navigateMock).toHaveBeenCalledWith('/product/prod-1');
   });
 });

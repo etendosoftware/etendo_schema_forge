@@ -13,7 +13,6 @@ import { AttachmentsTab } from '@/components/attachments';
 import ContactTypeToggle from '@/windows/custom/contacts/ContactTypeToggle';
 import catalogs from './mockCatalogs';
 
-import BusinessPartnerSidebar from '@/windows/custom/contacts/BusinessPartnerSidebar';
 
 const breadcrumb = 'Contact';
 
@@ -23,11 +22,13 @@ const summary = [
 
 ];
 
-const statusField = null;
+const statusField = 'oBTIKVIESStatus';
 // @sf-generated-end summary:businessPartner
 
 // @sf-generated-start extraBadges:businessPartner
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:businessPartner
 
 // @sf-generated-start processes:businessPartner
@@ -662,6 +663,7 @@ const labelOverrides = api.labelOverrides;
 export default function BusinessPartnerPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="businessPartner"
         Form={BusinessPartnerForm}
@@ -686,7 +688,7 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
           { key: 'bankAccount', label: 'Bank Account', Table: BankAccountTable, Form: BankAccountForm, addLineFields: { entry: [
           { key: 'bankName', column: 'Bank_Name', type: 'text', label: 'Bank Name' },
           { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country', reference: 'Country', inputMode: 'selector', defaultValue: '@COUNTRYDEF@' },
-          { key: 'bankFormat', column: 'BankFormat', type: 'select', required: true, label: 'Bank Account Format', defaultValue: 'GENERIC', options: [{ value: 'GENERIC', label: 'Use Generic Account No.' }, { value: 'IBAN', label: 'Use IBAN' }, { value: 'SWIFT', label: 'Use SWIFT + Generic Account No.' }, { value: 'SPANISH', label: 'Use Spanish' }] },
+          { key: 'bankFormat', column: 'BankFormat', type: 'select', required: true, label: 'Bank Account Format', labels: {"en_US":"Format","es_ES":"Formato"}, defaultValue: 'GENERIC', options: [{ value: 'GENERIC', label: 'Use Generic Account No.' }, { value: 'IBAN', label: 'Use IBAN' }, { value: 'SWIFT', label: 'Use SWIFT + Generic Account No.' }, { value: 'SPANISH', label: 'Use Spanish' }] },
           { key: 'accountNo', column: 'AccountNo', type: 'text', label: 'Generic Account No.' },
           { key: 'iBAN', column: 'Iban', type: 'text', label: 'IBAN' },
           { key: 'swiftCode', column: 'SwiftCode', type: 'text', label: 'SWIFT Code' },
@@ -705,15 +707,8 @@ export default function BusinessPartnerPage({ windowName, recordId, ...props }) 
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         {...props}
-        sidebarContent={(data) => (
-          <BusinessPartnerSidebar
-            recordId={recordId}
-            data={data}
-            token={props.token}
-            apiBaseUrl={props.apiBaseUrl}
-          />
-        )}
       />
+      </>
     );
   }
 

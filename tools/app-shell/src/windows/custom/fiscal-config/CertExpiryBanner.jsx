@@ -43,7 +43,7 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
             aria-label={ui('fiscal.cert.expiry.dismiss')}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.fg, opacity: 0.5, padding: '0 2px', display: 'flex' }}
           >
-            <X size={14} strokeWidth={2} />
+            <X size={14} strokeWidth={2} data-testid="X__15abdc" />
           </button>
         )}
       </div>
@@ -58,8 +58,8 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
     }}>
       <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
         {isCritical
-          ? <OctagonAlert size={18} strokeWidth={1.75} />
-          : <TriangleAlert size={18} strokeWidth={1.75} />}
+          ? <OctagonAlert size={18} strokeWidth={1.75} data-testid="OctagonAlert__15abdc" />
+          : <TriangleAlert size={18} strokeWidth={1.75} data-testid="TriangleAlert__15abdc" />}
       </span>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600, fontSize: 14 }}>
@@ -78,7 +78,7 @@ export default function CertExpiryBanner({ daysLeft, variant = 'prominent' }) {
           aria-label={ui('fiscal.cert.expiry.dismiss')}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.fg, opacity: 0.45, flexShrink: 0, display: 'flex' }}
         >
-          <X size={16} strokeWidth={2} />
+          <X size={16} strokeWidth={2} data-testid="X__15abdc" />
         </button>
       )}
     </div>

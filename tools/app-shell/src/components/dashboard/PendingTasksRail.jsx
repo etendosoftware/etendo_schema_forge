@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, FileText, Truck, DollarSign, CreditCard, ShoppingBag, Box, Circle } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
+import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 
 const CATEGORY_MAP = {
   overdueInvoices:               { category: 'sales',       icon: FileText,    subjectKey: 'pendingSubjectSalesInvoices', stateKey: 'pendingStateOverdue'   },
@@ -61,19 +62,24 @@ export function PendingTasksRail({ tasks = [] }) {
               onClick={() => scroll(-1)}
               className="h-8 w-8 rounded-full border bg-white flex items-center justify-center hover:bg-gray-50 transition-colors"
             >
-              <ChevronLeft className="h-3.5 w-3.5" style={{ color: '#6C6C89' }} />
+              <ChevronLeft
+                className="h-3.5 w-3.5"
+                style={{ color: '#6C6C89' }}
+                data-testid="ChevronLeft__7e1000" />
             </button>
             <button
               type="button"
               onClick={() => scroll(1)}
               className="h-8 w-8 rounded-full border bg-white flex items-center justify-center hover:bg-gray-50 transition-colors"
             >
-              <ChevronRight className="h-3.5 w-3.5" style={{ color: '#6C6C89' }} />
+              <ChevronRight
+                className="h-3.5 w-3.5"
+                style={{ color: '#6C6C89' }}
+                data-testid="ChevronRight__7e1000" />
             </button>
           </div>
         )}
       </div>
-
       {/* Cards rail / empty state */}
       {tasks.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
@@ -105,9 +111,15 @@ export function PendingTasksRail({ tasks = [] }) {
                 <Link
                   key={i}
                   to={target}
+                  onClick={() => trackDashboardKpi('pending_task_opened', {
+                    kpiId: DASHBOARD_KPI_IDS.pendingTasks,
+                    action: 'open_pending_task',
+                    source: 'dashboard_pending_tasks',
+                    type: meta.category === 'stock' ? 'inventory' : meta.category,
+                  })}
                   className="flex-none flex flex-col rounded-lg border bg-white hover:bg-[#F5F7F9] hover:shadow-sm transition-colors transition-shadow"
                   style={{ minWidth: '185px', height: '154px', borderColor: '#E8EAEF' }}
-                >
+                  data-testid="Link__7e1000">
                   {/* Cabecera de tarjeta: 44px fijo, padding top 4px / right 4px / left 16px, gap 10px */}
                   <div
                     className="flex items-center shrink-0"
@@ -117,13 +129,15 @@ export function PendingTasksRail({ tasks = [] }) {
                       className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
                       style={{ backgroundColor: 'rgba(18,18,23,0.05)' }}
                     >
-                      <Icon className="h-3.5 w-3.5" style={{ color: '#3F3F50' }} />
+                      <Icon
+                        className="h-3.5 w-3.5"
+                        style={{ color: '#3F3F50' }}
+                        data-testid="Icon__7e1000" />
                     </div>
                     <span className="text-sm font-normal" style={{ color: '#3F3F50' }}>
                       {subjectLabel}
                     </span>
                   </div>
-
                   {/* Contenido: fill ~110px, padding 0 16px 16px 16px, número arriba, badge abajo */}
                   <div
                     className="flex flex-col justify-between flex-1"

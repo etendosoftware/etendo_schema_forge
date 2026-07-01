@@ -1,14 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useUI } from '@/i18n';
 import {
-  ArrowLeft, Settings2, Download, FileText, Lock, Play,
-  OctagonAlert, TriangleAlert, CircleCheck, ChevronRight, GitCompare, FolderOpen,
-  Calculator, Loader2,
+  Settings, Download,
+  OctagonAlert, TriangleAlert, CircleCheck, ArrowLeftRight,
+  Calculator, Loader2, MoreVertical, TrendingUp, TrendingDown, Clock,
+  ClipboardCheck, ReceiptText, Folder,
 } from 'lucide-react';
-import {
-  StatusPillMenu, ResultPill, SummaryCard, Tabs, Banner, SectionCard, EmptyState,
-  NumberedStepper,
-} from '../../FmCommon.jsx';
+import { Tabs, KpiWidget } from '../../FmCommon.jsx';
+import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal, ConfigDrawer, CompareDrawer } from '../../FmOverlays.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -22,256 +21,120 @@ const STEPPER_INDEX = {
 
 // ── Tab content components ────────────────────────────────────────
 
-function buildBoxIncidentMap(incidents) {
-  const map = {};
-  for (const inc of incidents) {
-    const m = inc.origin?.match(/Casilla\s+(\d+)/i);
-    if (!m) continue;
-    const key = String(parseInt(m[1], 10)).padStart(2, '0');
-    if (!map[key]) map[key] = [];
-    map[key].push(inc);
-  }
-  return map;
-}
+// Casillas tab — left sidebar nav + content area
+const CASILLAS_SECTIONS = [
+  { id: 'identificacion',  titleKey: 'fm.page.identificacion',  sections: ['identificacion', 'datos_bancarios'] },
+  { id: 'liquidacion',     titleKey: 'fm.page.liquidacion',     sections: ['iva_devengado', 'iva_deducible', 'resultado'] },
+  { id: 'info_adicional',  titleKey: 'fm.page.info_adicional',  sections: ['info_adicional'] },
+  { id: 'resultado_final', titleKey: 'fm.page.resultado_final', sections: ['resultado_final', 'sin_actividad', 'rectificativa'] },
+];
 
-function SourcesTab({ decl, t }) {
-  const [onlyIncidents, setOnlyIncidents] = useState(false);
-  const sources = decl.sources ?? [];
-  const boxIncidentMap = buildBoxIncidentMap(decl.incidents?.items ?? []);
-
-  function rowIncidents(source) {
-    return (source.boxes ?? '').split(',').flatMap(b => boxIncidentMap[b.trim()] ?? []);
-  }
-
-  const incidentRowCount = sources.filter(r => rowIncidents(r).length > 0).length;
-  const visible = onlyIncidents ? sources.filter(r => rowIncidents(r).length > 0) : sources;
-
-  const filterBtn = incidentRowCount > 0 && (
-    <button
-      className={`fm-toolbar__pill${onlyIncidents ? ' fm-toolbar__pill--active-dark' : ''}`}
-      style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-      onClick={() => setOnlyIncidents(v => !v)}
-    >
-      <TriangleAlert size={11} strokeWidth={2} />
-      {t('fm.sources.filter.incidents') ?? 'Con incidencias'}
-      <span className="fm-toolbar__count-badge">{incidentRowCount}</span>
-    </button>
-  );
+function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, onBoxChange, t }) {
+  const [activeSection, setActiveSection] = useState('identificacion');
+  const section = CASILLAS_SECTIONS.find(s => s.id === activeSection) ?? CASILLAS_SECTIONS[0];
 
   return (
-    <SectionCard
-      title={t('fm.sources.title')}
-      sub={t('fm.sources.sub')}
-      right={filterBtn}
-      flush
-    >
-      {sources.length === 0 ? (
-        <EmptyState
-          icon={<FileText size={28} strokeWidth={1.5} />}
-          title={t('fm.list.empty')}
-          sub={t('fm.sources.sub')}
-        />
-      ) : (
-        <div className="fm-table-wrap">
-          <table className="fm-dtable">
-            <thead>
-              <tr>
-                <th>{t('fm.sources.col.date')}</th>
-                <th>{t('fm.sources.col.ref')}</th>
-                <th>{t('fm.sources.col.type')}</th>
-                <th>{t('fm.sources.col.party')}</th>
-                <th>{t('fm.sources.col.regime')}</th>
-                <th className="num">{t('fm.sources.col.base')}</th>
-                <th className="num">{t('fm.sources.col.vat')}</th>
-                <th className="num">{t('fm.sources.col.total')}</th>
-                <th>{t('fm.sources.col.boxes')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {visible.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign:'center', color:'#9ca3af', padding:'24px 0', fontSize:13 }}>{t('fm.incidents.empty') ?? 'Sin incidencias'}</td></tr>
-              )}
-              {visible.map((r) => {
-                const incs = rowIncidents(r);
-                const hasBlock = incs.some(inc => inc.severity === 'block');
-                const hasWarn  = incs.length > 0 && !hasBlock;
-                const tooltip  = incs.map(inc => inc.message).join(' · ');
-                let rowClass = '';
-                if (hasBlock)     rowClass = 'fm-dtable__row--block';
-                else if (hasWarn) rowClass = 'fm-dtable__row--warn';
-                return (
-                  <tr key={r.ref} className={rowClass}>
-                    <td className="strong">{r.date}</td>
-                    <td className="mono">{r.ref}</td>
-                    <td>{r.type}</td>
-                    <td>{r.party}</td>
-                    <td style={{ color: '#6b7280' }}>{r.regime || '—'}</td>
-                    <td className="num strong">{formatAmount(r.base)}</td>
-                    <td className="num">{r.vat != null ? formatAmount(r.vat) : '—'}</td>
-                    <td className="num strong">{formatAmount(r.total)}</td>
-                    <td className="mono" style={{ color: '#9ca3af', fontSize: 11 }}>
-                      {r.boxes || '—'}
-                      {incs.length > 0 && (
-                        <span
-                          className={`fm-sources__inc-flag fm-sources__inc-flag--${hasBlock ? 'block' : 'warn'}`}
-                          title={tooltip}
-                        >
-                          {hasBlock
-                            ? <OctagonAlert size={12} strokeWidth={2} />
-                            : <TriangleAlert size={12} strokeWidth={2} />
-                          }
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </SectionCard>
-  );
-}
-
-function FilesTab({ decl, t, onGenerate, fileBlocked }) {
-  const file = decl.file ?? null;
-  return (
-    <SectionCard title={t('fm.files.title')} flush>
-      {file ? (
-        <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', border: '1px solid #d1fae5', borderRadius: 8, background: '#f0fdf4' }}>
-            <CircleCheck size={20} strokeWidth={1.75} style={{ color: '#16a34a', flexShrink: 0 }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{file.name}</div>
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
-                {file.size} · {file.generatedAt}
-              </div>
-            </div>
-            <button className="fm-btn" onClick={() => {}}><Download size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />{t('fm.action.download')}</button>
-          </div>
-          <Banner
-            tone="info"
-            title={t('fm.files.next_step')}
-            sub={t('fm.files.next_step_sub')}
-          />
-        </div>
-      ) : (
-        <EmptyState
-          icon={<FolderOpen size={28} strokeWidth={1.5} />}
-          title={t('fm.files.empty')}
-          sub={t('fm.files.empty_sub')}
-          cta={
+    <div style={{ background: '#fff', flex: 1, overflow: 'auto', padding: '0' }}>
+      <div style={{
+        display: 'flex',
+        background: '#fff',
+        overflow: 'auto',
+        minWidth: 'fit-content',
+      }}>
+        {/* Left sidebar nav — no separator, same white card */}
+        <div style={{
+          width: 200, flexShrink: 0,
+          padding: '6px 8px',
+          display: 'flex', flexDirection: 'column', gap: 2,
+        }}>
+          {CASILLAS_SECTIONS.map(s => (
             <button
-              className={`fm-btn${fileBlocked ? ' fm-btn--danger' : ' fm-btn--primary'}`}
-              onClick={onGenerate}
+              key={s.id}
+              onClick={() => setActiveSection(s.id)}
+              style={{
+                padding: '8px 12px', fontSize: 14, textAlign: 'left', border: 'none', width: '100%',
+                background: activeSection === s.id ? '#E8EAED' : 'transparent',
+                color: '#121217',
+                fontWeight: activeSection === s.id ? 500 : 400,
+                cursor: 'pointer',
+                borderRadius: 8,
+                transition: 'background .1s',
+              }}
             >
-              {fileBlocked
-                ? <Lock size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />
-                : <FileText size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />
-              }
-              {t('fm.action.gen303')}
+              {t(s.titleKey)}
             </button>
-          }
-        />
-      )}
-    </SectionCard>
-  );
-}
-
-function HistoryTab({ decl, t }) {
-  const history = decl.history ?? [];
-  return (
-    <SectionCard title={t('fm.history.title')} flush>
-      {history.length === 0 ? (
-        <EmptyState icon="🕐" title={t('fm.list.empty')} />
-      ) : (
-        <div className="fm-timeline">
-          {history.map((e) => (
-            <div key={`${e.at}-${e.text}`} className="fm-timeline__event">
-              <div className="fm-timeline__dot">{e.icon ?? '○'}</div>
-              <div className="fm-timeline__body">
-                <div className="fm-timeline__text">{e.text}</div>
-                <div className="fm-timeline__meta">{e.at} · {e.who}</div>
-              </div>
-            </div>
           ))}
         </div>
-      )}
-    </SectionCard>
+        {/* Content area — no border, flows directly after sidebar */}
+        <div style={{ flex: 1, padding: '6px 24px', overflow: 'auto' }}>
+          <FmBoxes303
+            boxes={liveBoxes ?? decl.boxes ?? null}
+            year={decl.year}
+            period={decl.period}
+            sectionIds={section.sections}
+            identification={{ ...orgIdent, ...identChecks }}
+            onIdentChange={onIdentChange}
+            onBoxChange={onBoxChange}
+            data-testid="FmBoxes303__4f6c0d" />
+        </div>
+      </div>
+    </div>
   );
 }
 
-function IncidentsTab({ decl, blocking, warning, t, onGoToSources }) {
-  const incidents = decl.incidents?.items ?? [];
-
-  if (blocking === 0 && warning === 0) {
-    return (
-      <SectionCard title={t('fm.incidents.tab_title')} flush>
-        <EmptyState
-          icon={<CircleCheck size={28} strokeWidth={1.5} />}
-          title={t('fm.incidents.empty')}
-          sub={t('fm.incidents.empty_sub')}
-        />
-      </SectionCard>
-    );
-  }
-
-  const total = blocking + warning;
-  const sorted = [...incidents].sort((a, b) =>
-    (a.severity === 'block' ? 0 : 1) - (b.severity === 'block' ? 0 : 1)
-  );
-
+// ── More options kebab menu ──────────────────────────────────────
+function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBlocked, t }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
   return (
-    <SectionCard
-      title={`${total} ${t('fm.incidents.tab_title').toLowerCase()}`}
-      sub={t('fm.incidents.block_sub')}
-      flush
-    >
-      {sorted.length > 0 ? (
-        <div className="fm-table-wrap">
-          <table className="fm-dtable">
-            <thead>
-              <tr>
-                <th>{t('fm.incidents.col.severity')}</th>
-                <th>{t('fm.incidents.col.origin')}</th>
-                <th>{t('fm.incidents.col.message')}</th>
-                <th>{t('fm.incidents.col.suggestion')}</th>
-                <th style={{ textAlign: 'right' }}>{t('fm.incidents.col.action')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((inc) => (
-                <tr key={`${inc.origin ?? ''}-${inc.message}`}>
-                  <td>
-                    {inc.severity === 'block'
-                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#dc2626', background: '#fee2e2', borderRadius: 4, padding: '2px 6px' }}><OctagonAlert size={11} strokeWidth={2} /> {t('fm.incidents.severity.block')}</span>
-                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: '#d97706', background: '#fef3c7', borderRadius: 4, padding: '2px 6px' }}><TriangleAlert size={11} strokeWidth={2} /> {t('fm.incidents.severity.warn')}</span>
-                    }
-                  </td>
-                  <td style={{ color: '#6b7280', fontSize: 11 }}>{inc.origin ?? '—'}</td>
-                  <td className="strong">{inc.message}</td>
-                  <td style={{ color: '#6b7280' }}>{inc.suggestion ?? '—'}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    {inc.origin?.match(/Casilla\s+\d+/i) && onGoToSources && (
-                      <button className="fm-btn" onClick={() => onGoToSources()}>
-                        {t('fm.sources.title')} <ChevronRight size={13} strokeWidth={2} style={{ display:'inline',verticalAlign:'middle' }} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        className="fm-section-header__icon-btn"
+        style={{ width: 32, height: 32, borderRadius: 8, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', background: '#fff' }}
+        onClick={() => setOpen(o => !o)}
+        aria-label="Más opciones"
+      >
+        <MoreVertical size={15} strokeWidth={1.75} data-testid="MoreVertical__4f6c0d" />
+      </button>
+      {open && (
+        <div className="fm-status-select__menu" role="menu" style={{ right: 0, left: 'auto', minWidth: 220 }}>
+          <button className="fm-status-select__item fm-status-select__item--14" role="menuitem" onClick={() => { onCompare(); setOpen(false); }}>
+            <ArrowLeftRight
+              size={14}
+              strokeWidth={1.75}
+              style={{ color: '#121217' }}
+              data-testid="ArrowLeftRight__4f6c0d" />
+            {t('fm.action.compare') ?? 'Comparar'}
+          </button>
+          <button className="fm-status-select__item fm-status-select__item--14" role="menuitem" onClick={() => { onConfig(); setOpen(false); }}>
+            <Settings
+              size={14}
+              strokeWidth={1.75}
+              style={{ color: '#121217' }}
+              data-testid="Settings__4f6c0d" />
+            {t('fm.config.title') ?? 'Configuración'}
+          </button>
+          <button
+            className="fm-status-select__item fm-status-select__item--14"
+            role="menuitem"
+            onClick={() => { onGenerate(); setOpen(false); }}
+            disabled={generating}
+          >
+            <Download
+              size={14}
+              strokeWidth={1.75}
+              style={{ color: fileBlocked ? '#dc2626' : '#121217' }}
+              data-testid="Download__4f6c0d" />
+            {t('fm.action.gen303') ?? 'Generar fichero 303'}
+          </button>
         </div>
-      ) : (
-        <EmptyState
-          icon={<CircleCheck size={28} strokeWidth={1.5} />}
-          title={t('fm.incidents.empty')}
-          sub={t('fm.incidents.empty_sub')}
-        />
       )}
-    </SectionCard>
+    </div>
   );
 }
 
@@ -282,15 +145,80 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const t = ui;
   const [status, setStatus] = useState(decl.status);
   const [activeTab, setActiveTab] = useState('boxes');
-  const [boxPage, setBoxPage] = useState(0);
   const [showPresent, setShowPresent] = useState(false);
   const [showFilegen, setShowFilegen] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [orgIdent, setOrgIdent] = useState({ nif: '', nombre: '' });
   const [identChecks, setIdentChecks] = useState(decl.identification ?? {});
-  const handleIdentChange = (id, value) => setIdentChecks(prev => ({ ...prev, [id]: value }));
-  const [liveBoxes,   setLiveBoxes]   = useState(decl._precomputed?.boxes   ?? null);
+  const handleIdentChange = (id, value) => {
+    setIdentChecks(prev => ({ ...prev, [id]: value }));
+    if (id === 'motivo_rectificacion' && value !== 'D') {
+      setManualOverrides(prev => { const n = { ...prev }; delete n[108]; return n; });
+      setLiveBoxes(prev => {
+        if (prev == null) return prev;
+        const arr = toBoxArray(prev).filter(b => b.num !== 108);
+        return recomputeDerivedBoxes(arr);
+      });
+    }
+  };
+  const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
+  const [manualOverrides, setManualOverrides] = useState({});
+
+  const toBoxArray = (src) => {
+    if (Array.isArray(src)) return src;
+    if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
+    return [];
+  };
+
+  function applyOverrides(boxes, overrides) {
+    if (!Object.keys(overrides).length) return boxes;
+    const arr = toBoxArray(boxes);
+    const result = arr.filter(b => !(b.num in overrides));
+    Object.entries(overrides).forEach(([num, val]) => {
+      if (val != null) result.push({ num: Number(num), value: val });
+    });
+    return result;
+  }
+
+  // Recompute all derived resultado_final boxes from the current merged box array.
+  // Formulas follow the official AEAT 303 labels:
+  //   45 = 29+31+33+35+37+39+41+42+43+44
+  //   46 = 27 − 45
+  //   64 = 46 + 58 + 76   (suma resultados)
+  //   66 = 64 × 65 / 100  (atribuible Estado)
+  //   69 = 66 + 77 − 78 + 68 + 108
+  //   71 = 69 − 70 + 109
+  function recomputeDerivedBoxes(boxArr) {
+    const r2 = v => Math.round(v * 100) / 100;
+    const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+    const box65entry = boxArr.find(b => b.num === 65);
+    const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
+    const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
+    const box46 = r2(get(27) - box45);
+    const box64 = r2(box46 + get(58) + get(76));
+    const box66 = r2(box64 * box65 / 100);
+    const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
+    const box71 = r2(box69 - get(70) + get(109) - get(112));
+    const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+    return [
+      ...boxArr.filter(b => !(b.num in derived)),
+      ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+    ];
+  }
+
+  function handleBoxChange(boxNum, rawValue) {
+    const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
+    const value = isNaN(numVal) ? null : numVal;
+    setManualOverrides(prev => ({ ...prev, [boxNum]: value }));
+    setLiveBoxes(prev => {
+      const base = prev != null ? toBoxArray(prev) : toBoxArray(decl._precomputed?.boxes ?? decl.boxes);
+      const filtered = base.filter(b => b.num !== boxNum);
+      const updated = value != null ? [...filtered, { num: boxNum, value }] : filtered;
+      return recomputeDerivedBoxes(updated);
+    });
+  }
+
   const [liveSummary, setLiveSummary] = useState(decl._precomputed?.summary ?? null);
   const [liveSources, setLiveSources] = useState(decl._precomputed?.sources ?? null);
   const [computing,   setComputing]   = useState(false);
@@ -301,7 +229,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     try {
       const res = await computeBoxes303(decl, { token, apiBaseUrl });
       if (res) {
-        setLiveBoxes(res.boxes);
+        setLiveBoxes(recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides)));
         setLiveSummary(res.summary);
         if (res.sources) setLiveSources(res.sources);
       }
@@ -341,12 +269,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
       .catch(() => {});
   }, [token, apiBaseUrl]);
 
-  const stepperSteps = [
-    t('fm.stepper.draft'),
-    t('fm.stepper.ready'),
-    t('fm.stepper.presented'),
-  ];
-
   function handleStatusChange(newStatus) {
     setStatus(newStatus);
     onStatusChange?.(decl.id, newStatus);
@@ -363,238 +285,251 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const fileBlocked = blocking > 0;
   const summary = liveSummary ?? decl.summary ?? {};
   const resultKind = decl.result?.kind ?? null;
-  const prev = summary.prev ?? null;
 
-  function pctDelta(current, previous) {
-    if (previous == null || previous === 0 || current == null) return null;
-    const pct = ((current - previous) / Math.abs(previous)) * 100;
-    return { dir: pct >= 0 ? 'up' : 'down', text: `${Math.abs(pct).toFixed(1)}%` };
-  }
+  // Derive result sublabel from kind
+  const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
 
   let incidentBadgeTone = null;
   if (blocking > 0) incidentBadgeTone = 'danger';
   else if (warning > 0) incidentBadgeTone = 'warn';
 
+  let incidentIconColor = '#828FA3';
+  if (blocking > 0) incidentIconColor = '#D50B3E';
+  else if (warning > 0) incidentIconColor = '#8A6100';
+
+  let incidentBadge = null;
+  if (blocking > 0) incidentBadge = t('fm.incidents.severity.block') ?? 'Bloqueante';
+  else if (warning > 0) incidentBadge = t('fm.incidents.severity.warn') ?? 'Advertencia';
+
   const tabs = [
-    { id: 'boxes',     label: t('fm.tab.boxes') },
-    { id: 'sources',   label: t('fm.tab.sources') },
-    { id: 'incidents', label: t('fm.tab.incidents'),
+    { id: 'boxes',     label: t('fm.tab.boxes') ?? 'Casillas',
+      icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__4f6c0d" /> },
+    { id: 'sources',   label: t('fm.tab.sources') ?? 'Facturas',
+      badge: (liveSources ?? decl.sources)?.length ?? null,
+      icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__4f6c0d" /> },
+    { id: 'incidents', label: t('fm.tab.incidents') ?? 'Incidencias',
       badge: incidentCount > 0 ? incidentCount : null,
       badgeTone: incidentBadgeTone,
-    },
-    { id: 'files',     label: t('fm.tab.files'),
+      icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__4f6c0d" /> },
+    { id: 'files',     label: t('fm.tab.files') ?? 'Ficheros',
       badge: decl.file ? 1 : null,
-    },
-    { id: 'history',   label: t('fm.tab.history') },
+      icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__4f6c0d" /> },
+    { id: 'history',   label: t('fm.tab.history') ?? 'Historial',
+      icon: <Clock size={16} strokeWidth={1.75} data-testid="Clock__4f6c0d" /> },
   ];
+
+  const periodLabel = `${decl.year}/${formatPeriod(decl.period)}`;
 
   return (
     <div className="fm-page fm-page--freeflow">
+      {/* ── Title bar ────────────────────────────────────────────── */}
+      <div style={{
+        padding: '10px 20px',
+        background: '#fff', flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="fm-model-badge fm-model-badge--303">303</span>
+          <span style={{ fontWeight: 600, fontSize: 20, color: '#121217' }}>
+            Modelo 303 - {periodLabel}
+          </span>
+          <MoreVertical
+            size={14}
+            strokeWidth={1.75}
+            style={{ color: '#9ca3af', cursor: 'pointer' }}
+            data-testid="MoreVertical__4f6c0d" />
+        </div>
+        <div style={{ fontSize: 12, color: '#828FA3', marginTop: 1 }}>
+          Tesorería / Modelo 303 - {periodLabel}
+        </div>
+      </div>
+      {/* ── Action bar ───────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '6px 20px 10px',
+        background: '#fff', flexShrink: 0,
+      }}>
+        <button
+          className="fm-btn"
+          onClick={onBack}
+          style={{ borderRadius: 8, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', fontSize: 14, color: '#121217' }}
+        >
+          {t('fm.action.cancel') ?? 'Cancelar'}
+        </button>
+        <span style={{
+          padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
+          background: '#F5F7F9', color: '#3F3F50',
+        }}>
+          {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${status}`) ?? status}
+        </span>
 
-      {/* ── Header (349-style) ──────────────────────────────────── */}
-      <div className="fm-349-header">
-        <div className="fm-349-header__back">
-          <button className="fm-349-header__back-btn" onClick={onBack}>
-            <ArrowLeft size={14} strokeWidth={1.75} /> {t('fm.action.back')}
+        <div style={{ flex: 1 }} />
+
+        <MoreOptionsMenu
+          onCompare={() => setShowCompare(true)}
+          onConfig={() => setShowConfig(true)}
+          onGenerate={() => setShowFilegen(true)}
+          generating={generating}
+          fileBlocked={fileBlocked}
+          t={t}
+          data-testid="MoreOptionsMenu__4f6c0d" />
+
+        <button
+          className="fm-btn"
+          onClick={handleCompute}
+          disabled={computing}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', border: '1px solid #D1D4DB' }}
+        >
+          {computing
+            ? <Loader2
+            size={24}
+            strokeWidth={1.75}
+            style={{ animation: 'spin 1s linear infinite' }}
+            data-testid="Loader2__4f6c0d" />
+            : <Calculator size={24} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />
+          }
+          {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+        </button>
+
+        {!isSubmitted && (
+          <button
+            className="fm-toolbar__btn fm-toolbar__btn--primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+            onClick={() => setShowPresent(true)}
+          >
+            <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__4f6c0d" />
+            {t('fm.action.submit') ?? "Marcar como 'Presentado'"}
           </button>
-        </div>
-        <div className="fm-349-header__main">
-          <div>
-            <div className="fm-349-header__title-row">
-              <span className="fm-model-badge fm-model-badge--303">303</span>
-              <span className="fm-349-header__title">
-                Modelo 303 · {decl.year} / {formatPeriod(decl.period)}
-              </span>
-              <StatusPillMenu status={status} onStatusChange={handleStatusChange} />
-            </div>
-            <div className="fm-349-header__subtitle">
-              {t('fm.m303.subtitle')}
-              {' · '}
-              {decl.type === 'ord' ? t('fm.type.ordinary') : t('fm.type.complementary')}
-              {decl.nif ? ` · NIF: ${decl.nif}` : ''}
-            </div>
-          </div>
-          <div className="fm-349-header__actions">
-            <button
-              className="fm-349-header__btn"
-              onClick={handleCompute}
-              disabled={computing}
-              title={t('fm.action.compute') ?? 'Calcular desde contabilidad'}
-            >
-              {computing
-                ? <Loader2 size={14} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} />
-                : <Calculator size={14} strokeWidth={1.75} />
-              }
-              {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
-            </button>
-            <button className="fm-349-header__btn" onClick={() => setShowCompare(true)}>
-              <GitCompare size={14} strokeWidth={1.75} /> {t('fm.action.compare')}
-            </button>
-            <button className="fm-349-header__btn" onClick={() => setShowConfig(true)}>
-              <Settings2 size={14} strokeWidth={1.75} /> {t('fm.config.title')}
-            </button>
-            {!isSubmitted && (
-              <button
-                className={`fm-349-header__btn${fileBlocked ? ' fm-303-header__btn--locked' : ''}`}
-                onClick={() => setShowFilegen(true)}
-                disabled={generating}
-                title={fileBlocked ? t('fm.incidents.block_sub') : ''}
-                style={fileBlocked ? { color: '#dc2626', borderColor: '#fca5a5', background: '#fef2f2' } : {}}
-              >
-                {fileBlocked ? <Lock size={14} strokeWidth={1.75} /> : <Download size={14} strokeWidth={1.75} />} {t('fm.action.gen303')}
-              </button>
-            )}
-            <button
-              className="fm-349-header__btn fm-349-header__btn--primary"
-              onClick={() => setShowPresent(true)}
-            >
-              <Play size={13} strokeWidth={1.75} fill="currentColor" /> {isSubmitted ? t('fm.action.change_status') : t('fm.action.submit')}
-            </button>
-          </div>
-        </div>
+        )}
       </div>
-
-      {/* ── Numbered Stepper ────────────────────────────────────── */}
-      <NumberedStepper steps={stepperSteps} current={STEPPER_INDEX[status] ?? 0} />
-
-      {/* Incident banners */}
-      {blocking > 0 && (
-        <Banner
-          tone="danger"
-          icon={<OctagonAlert size={18} strokeWidth={1.75} />}
-          title={`${blocking} ${t('fm.incidents.banner')}`}
-          sub={t('fm.incidents.block_sub')}
-          actions={
-            <button className="fm-btn" onClick={() => setActiveTab('incidents')}>
-              {t('fm.action.go_to')} <ChevronRight size={13} strokeWidth={2} style={{ display:'inline',verticalAlign:'middle' }} />
-            </button>
+      {/* ── KPI bar ──────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', flexDirection: 'row', alignItems: 'center',
+        gap: 12, padding: '12px 16px',
+        flexShrink: 0,
+        background: '#fff',
+      }}>
+        {/* Incidencias */}
+        <KpiWidget
+          icon={blocking > 0
+            ? <OctagonAlert size={20} strokeWidth={1.75} data-testid="OctagonAlert__4f6c0d" />
+            : <TriangleAlert size={20} strokeWidth={1.75} data-testid="TriangleAlert__4f6c0d" />
           }
-        />
-      )}
-      {warning > 0 && blocking === 0 && (
-        <Banner
-          tone="warn"
-          icon={<TriangleAlert size={18} strokeWidth={1.75} />}
-          title={`${warning} ${t('fm.incidents.banner_warn')}`}
-          actions={
-            <button className="fm-btn" onClick={() => setActiveTab('incidents')}>
-              {t('fm.tab.incidents')} <ChevronRight size={13} strokeWidth={2} style={{ display:'inline',verticalAlign:'middle' }} />
-            </button>
-          }
-        />
-      )}
+          iconColor={incidentIconColor}
+          label={t('fm.tab.incidents') ?? 'Incidencias'}
+          value={String(incidentCount)}
+          badge={incidentBadge}
+          badgeBg={blocking > 0 ? '#FEF0F4' : '#FFF9EB'}
+          badgeColor={blocking > 0 ? '#D50B3E' : '#8A6100'}
+          data-testid="KpiWidget__4f6c0d" />
 
-      {/* Summary cards row — always visible */}
-      <div className="fm-summary-row">
-        <SummaryCard
-          eyebrow={t('fm.m303.summary.accrued')}
+        {/* IVA Devengado */}
+        <KpiWidget
+          icon={<TrendingUp size={20} strokeWidth={1.75} data-testid="TrendingUp__4f6c0d" />}
+          iconColor="#121217"
+          label={t('fm.m303.summary.accrued') ?? 'IVA Devengado'}
           value={formatAmount(summary.accrued ?? 0)}
-          sub={t('fm.m303.summary.accrued_sub')}
-          delta={pctDelta(summary.accrued, prev?.accrued)}
-        />
-        <SummaryCard
-          eyebrow={t('fm.m303.summary.deductible')}
+          badge={t('fm.m303.summary.accrued_sub') ?? 'De ventas'}
+          badgeBg="#F5F7F9"
+          badgeColor="#3F3F50"
+          data-testid="KpiWidget__4f6c0d" />
+
+        {/* IVA Deducible */}
+        <KpiWidget
+          icon={<TrendingDown size={20} strokeWidth={1.75} data-testid="TrendingDown__4f6c0d" />}
+          iconColor="#121217"
+          label={t('fm.m303.summary.deductible') ?? 'IVA Deducible'}
           value={formatAmount(summary.deductible ?? 0)}
-          sub={t('fm.m303.summary.deductible_sub')}
-          delta={pctDelta(summary.deductible, prev?.deductible)}
-        />
-        <SummaryCard
-          accent
-          eyebrow={t('fm.m303.summary.result')}
+          badge={t('fm.m303.summary.deductible_sub') ?? 'De compras'}
+          badgeBg="#F5F7F9"
+          badgeColor="#3F3F50"
+          data-testid="KpiWidget__4f6c0d" />
+
+        {/* Resultado */}
+        <KpiWidget
+          icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
+          iconColor="#121217"
+          label={t('fm.m303.summary.result') ?? 'Resultado'}
           value={formatAmount(summary.result ?? 0)}
-          delta={pctDelta(summary.result, prev?.result)}
-          right={resultKind ? (
-            <ResultPill
-              kind={resultKind}
-              label={t(`fm.result.${resultKind}`)}
-            />
-          ) : null}
-          sub={t('fm.m303.summary.result_sub')}
-        />
-        {summary.previousCompensation != null && (
-          <SummaryCard
-            eyebrow={t('fm.m303.summary.previous')}
-            value={formatAmount(summary.previousCompensation)}
-            sub={t('fm.m303.summary.previous_sub')}
-            valueColor="#2563eb"
-          />
-        )}
+          badge={resultSubLabel}
+          badgeBg="#F5F7F9"
+          badgeColor="#3F3F50"
+          data-testid="KpiWidget__4f6c0d" />
       </div>
-
+      {/* ── Tabs bar ─────────────────────────────────────────────── */}
       <div className="fm-tabs-sticky">
-        <Tabs tabs={tabs} active={activeTab} onSelect={setActiveTab} />
+        <Tabs
+          tabs={tabs}
+          active={activeTab}
+          onSelect={setActiveTab}
+          data-testid="Tabs__4f6c0d" />
       </div>
-
-      <div className="fm-page__body">
-        {activeTab === 'boxes' && (() => {
-          const BOX_PAGES = [
-            { titleKey: 'fm.page.identificacion',  sections: ['identificacion'] },
-            { titleKey: 'fm.page.liquidacion',    sections: ['iva_devengado', 'iva_deducible', 'resultado'] },
-            { titleKey: 'fm.page.info_adicional', sections: ['info_adicional'] },
-            { titleKey: 'fm.page.resultado_final',sections: ['resultado_final'] },
-          ];
-          const page = BOX_PAGES[boxPage];
-          return (
-            <SectionCard title={t(page.titleKey)}>
-              <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
-                {BOX_PAGES.map((p, idx) => (
-                  <button
-                    key={p.titleKey}
-                    onClick={() => setBoxPage(idx)}
-                    style={{
-                      fontSize: 12, padding: '4px 14px', borderRadius: 6, border: '1px solid',
-                      cursor: 'pointer', fontWeight: boxPage === idx ? 600 : 400,
-                      background: boxPage === idx ? '#1e40af' : '#f9fafb',
-                      color: boxPage === idx ? '#fff' : '#374151',
-                      borderColor: boxPage === idx ? '#1e40af' : '#d1d5db',
-                    }}
-                  >
-                    {t(p.titleKey)}
-                  </button>
-                ))}
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af', alignSelf: 'center' }}>
-                  {boxPage + 1} / {BOX_PAGES.length}
-                </span>
-              </div>
-              <FmBoxes303
-                boxes={liveBoxes ?? decl.boxes ?? null}
-                year={decl.year}
-                period={decl.period}
-                sectionIds={page.sections}
-                identification={{ ...orgIdent, ...identChecks }}
-                onIdentChange={handleIdentChange}
-              />
-            </SectionCard>
-          );
-        })()}
-        {activeTab === 'sources' && (
-          <SourcesTab decl={{ ...decl, sources: liveSources ?? decl.sources }} t={t} />
-        )}
-        {activeTab === 'incidents' && (
-          <IncidentsTab decl={decl} blocking={blocking} warning={warning} t={t}
-            onGoToSources={() => setActiveTab('sources')} />
-        )}
-        {activeTab === 'files' && (
-          <FilesTab
-            decl={decl}
-            t={t}
-            fileBlocked={fileBlocked}
-            onGenerate={() => setShowFilegen(true)}
-          />
-        )}
-        {activeTab === 'history' && (
-          <HistoryTab decl={decl} t={t} />
-        )}
-      </div>
-
+      {/* ── Tab content ──────────────────────────────────────────── */}
+      {activeTab === 'boxes' && (
+        <CasillasTab
+          decl={decl}
+          orgIdent={orgIdent}
+          identChecks={identChecks}
+          onIdentChange={handleIdentChange}
+          liveBoxes={liveBoxes}
+          onBoxChange={handleBoxChange}
+          t={t}
+          data-testid="CasillasTab__4f6c0d" />
+      )}
+      {activeTab !== 'boxes' && (
+        <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'sources' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
+          {activeTab === 'sources' && (
+            <SourcesTab
+              decl={{ ...decl, sources: liveSources ?? decl.sources }}
+              t={t}
+              data-testid="SourcesTab__4f6c0d" />
+          )}
+          {activeTab === 'incidents' && (
+            <IncidentsTab
+              decl={decl}
+              blocking={blocking}
+              warning={warning}
+              t={t}
+              onGoToSources={() => setActiveTab('sources')}
+              data-testid="IncidentsTab__4f6c0d" />
+          )}
+          {activeTab === 'files' && (
+            <FilesTab
+              decl={decl}
+              t={t}
+              fileBlocked={fileBlocked}
+              onGenerate={() => setShowFilegen(true)}
+              genLabel={t('fm.action.gen303') ?? 'Generar fichero 303'}
+              data-testid="FilesTab__4f6c0d" />
+          )}
+          {activeTab === 'history' && (
+            <HistoryTab decl={decl} t={t} data-testid="HistoryTab__4f6c0d" />
+          )}
+        </div>
+      )}
       {showPresent && (
-        <PresentModal decl={decl} onConfirm={handlePresent} onClose={() => setShowPresent(false)} />
+        <PresentModal
+          decl={decl}
+          onConfirm={handlePresent}
+          onClose={() => setShowPresent(false)}
+          data-testid="PresentModal__4f6c0d" />
       )}
       {showFilegen && (
-        <FileGenModal decl={decl} onConfirm={handleGenerate} onClose={() => setShowFilegen(false)} />
+        <FileGenModal
+          decl={decl}
+          onConfirm={handleGenerate}
+          onClose={() => setShowFilegen(false)}
+          data-testid="FileGenModal__4f6c0d" />
       )}
-      {showConfig && <ConfigDrawer onClose={() => setShowConfig(false)} token={token} apiBaseUrl={apiBaseUrl} />}
-      {showCompare && <CompareDrawer decl={decl} onClose={() => setShowCompare(false)} />}
+      {showConfig && <ConfigDrawer
+        onClose={() => setShowConfig(false)}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        model="303"
+        data-testid="ConfigDrawer__4f6c0d" />}
+      {showCompare && <CompareDrawer
+        decl={decl}
+        onClose={() => setShowCompare(false)}
+        data-testid="CompareDrawer__4f6c0d" />}
     </div>
   );
 }

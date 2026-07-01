@@ -19,6 +19,7 @@ window-locks.json
 tools/app-shell/dist/
 tools/app-shell/.env.local
 tools/app-shell/.env.development
+tools/app-shell/.env.development.local
 artifacts/e2e-report/
 # Artifacts: only decisions.json, contract*.json, and generated/ are tracked
 artifacts/*/schema-raw.json
@@ -32,6 +33,7 @@ e2e/test-results/
 e2e/playwright-report/
 e2e/recordings/
 e2e/auth.json
+e2e/.auth-credentials.json
 .fyso/
 tmp/
 sonar-results.md
@@ -42,3 +44,10 @@ dev.pid
 test-results/
 .idea/
 tools/app-shell/coverage/vitest/coverage-summary.json
+domain-boundary-report.json
+domain-boundary-report.md
+review-report.json
+review-report.md
+coverage/
+tools/app-shell/coverage/
+sonar-reports/

@@ -12,12 +12,16 @@
  */
 export function columnFlex(col, idx) {
   const g = col.grow ? '1' : '0';
+  if (col.minWidth) return `1 1 ${col.minWidth}px`;
   if (col.type === 'amount') return `${g} 0 172px`;
   if (col.type === 'price') return `${g} 0 152px`;
   if (col.type === 'quantity' || col.type === 'integer') return `${g} 0 152px`;
   if (col.type === 'decimal' || col.type === 'percent') return `${g} 0 152px`;
   if (col.type === 'string' || col.type === 'text') return '1 1 224px';
-  if (col.type === 'selector' || col.type === 'search' || col.type === 'foreignKey') return idx === 0 ? '1 1 192px' : '0 0 192px';
+  if (col.type === 'selector' || col.type === 'search' || col.type === 'foreignKey') {
+    const grow = col.grow !== undefined ? col.grow : (idx === 0);
+    return grow ? '1 1 192px' : '0 0 192px';
+  }
   // Enum/select columns share the string baseline (224px). Their values
   // include the Select's chevron, so long options like "Use Generic Account
   // No." need at least as much room as a plain text input of the same length
@@ -35,6 +39,7 @@ export function columnFlex(col, idx) {
  * display table — keeping header wrapping consistent across both modes.
  */
 export function columnMinWidthPx(col, idx) {
+  if (col.minWidth) return col.minWidth;
   if (col.type === 'amount') return 172;
   if (col.type === 'price') return 152;
   if (col.type === 'quantity' || col.type === 'integer') return 152;

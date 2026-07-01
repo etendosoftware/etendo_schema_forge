@@ -24,7 +24,9 @@ const statusField = null;
 // @sf-generated-end summary:siiConfiguration
 
 // @sf-generated-start extraBadges:siiConfiguration
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:siiConfiguration
 
 // @sf-generated-start processes:siiConfiguration
@@ -139,6 +141,7 @@ export const api = {
 export default function SiiConfigurationPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="siiConfiguration"
         detailEntity="logHash"
@@ -160,6 +163,7 @@ export default function SiiConfigurationPage({ windowName, recordId, ...props })
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

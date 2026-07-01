@@ -86,6 +86,20 @@ describe('AccountRow', () => {
     expect(screen.getByText(/ES12 0000 1234 5678 9012 3456/)).toBeInTheDocument();
   });
 
+  it('renders the PSD2 masked card number for card accounts (no IBAN)', () => {
+    renderRow({
+      account: {
+        ...baseAccount, type: 'CA', iban: '', maskedPan: '**** **** **** 1234',
+      },
+    });
+    expect(screen.getByTestId('account-row-card-number-acc-1')).toHaveTextContent('**** **** **** 1234');
+  });
+
+  it('falls back to an em dash for a card without a masked PAN', () => {
+    renderRow({ account: { ...baseAccount, type: 'CA', iban: '', maskedPan: '' } });
+    expect(screen.queryByTestId('account-row-card-number-acc-1')).not.toBeInTheDocument();
+  });
+
   it('renders negative balances in the red treatment', () => {
     renderRow({ account: { ...baseAccount, currentBalance: -42.5 } });
     const balanceCell = screen.getByText(/-?€42\.50|-€42\.50|-42,50 €|-42\.50 €/);

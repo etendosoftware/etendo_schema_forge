@@ -26,18 +26,20 @@ export function AccountTypeFilter({ value, onChange }) {
   const active = options.find((opt) => opt.value === current) ?? options[0];
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
+    <Popover data-testid="Popover__f795e3">
+      <PopoverTrigger asChild data-testid="PopoverTrigger__f795e3">
         <button
           type="button"
           data-testid="account-type-filter-trigger"
-          className="inline-flex h-10 w-[181px] items-center justify-between gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="inline-flex h-9 w-[181px] items-center justify-between gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[#F5F7F9]"
         >
           <span className="truncate text-left">{active.label}</span>
-          <ChevronDown className="h-5 w-5 shrink-0 text-[#828FA3]" />
+          <ChevronDown
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+            data-testid="ChevronDown__f795e3" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-1" align="start">
+      <PopoverContent className="w-56 p-1" align="start" data-testid="PopoverContent__f795e3">
         <div role="listbox" aria-label={ui('financeAccountsFilterAll')}>
           {options.map((opt) => {
             const selected = opt.value === current;
@@ -58,7 +60,7 @@ export function AccountTypeFilter({ value, onChange }) {
                 >
                   <opt.Icon className="h-4 w-4 text-[#6c6c89]" />
                   <span className="flex-1 text-left">{opt.label}</span>
-                  {selected ? <Check className="h-4 w-4 text-[#121217]" /> : null}
+                  {selected ? <Check className="h-4 w-4 text-[#121217]" data-testid="Check__f795e3" /> : null}
                 </button>
               </div>
             );

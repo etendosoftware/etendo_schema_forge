@@ -1,0 +1,7 @@
+{
+  "version": "v2",
+  "window": {
+    "balanceFooter": { "debitField": "amtDebitDoesNotExist", "creditField": "amtSourceCr" }
+  },
+  "entities": {}
+}

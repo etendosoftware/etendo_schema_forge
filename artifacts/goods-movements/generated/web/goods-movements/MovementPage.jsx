@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { toast } from 'sonner';
 import MovementTable from './MovementTable';
 import MovementForm from './MovementForm';
 import MovementLineTable from './MovementLineTable';
@@ -21,33 +22,43 @@ const statusField = 'processed';
 // @sf-generated-end summary:movement
 
 // @sf-generated-start extraBadges:movement
-const extraBadges = [];
+const extraBadges = [
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+];
 // @sf-generated-end extraBadges:movement
 
 // @sf-generated-start processes:movement
 const processes = [
-  { name: 'processNow', label: 'Process Movements', style: 'positive',
-    displayLogicRaw: "@Processed@='N'", requiresLines: true },
+
 ];
 // @sf-generated-end processes:movement
 
 // @sf-generated-start draftMode:movement
-const draftMode = null;
+const draftMode = {
+  "enabled": true,
+  "processField": "processNow",
+  "processValue": "Y",
+  "label": "processMovements",
+  "completedStatuses": [
+    "true"
+  ],
+  "disableWhenEmpty": true
+};
 // @sf-generated-end draftMode:movement
 
 // @sf-generated-start requiredHeaderFields:movement
-const requiredHeaderFields = ['name', 'movementDate', 'documentNo'];
+const requiredHeaderFields = ['name', 'movementDate'];
 // @sf-generated-end requiredHeaderFields:movement
 
 // @sf-generated-start addLineFields:movementLine
 const addLineFields = {
   entry: [
     { key: 'lineNo', column: 'Line', type: 'number', required: true, label: 'Line No.', defaultValue: '@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM M_MovementLine WHERE M_Movement_ID=@M_Movement_ID@' },
-    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search' },
+    { key: 'product', column: 'M_Product_ID', type: 'search', required: true, lookup: true, label: 'Product', reference: 'Product', inputMode: 'search', lookupDrawer: 'goods-movements-product', lookupTitle: 'Product', onSelectMappings: [{"from":"_aux._LOC","to":"storageBin","labelFrom":["storageBin","storageBin$_identifier","warehouse"]}] },
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
     { key: 'movementQuantity', column: 'MovementQty', type: 'number', required: true, label: 'Movement Quantity', defaultValue: 1 },
     { key: 'storageBin', column: 'M_Locator_ID', type: 'selector', required: true, label: 'Storage Bin', reference: 'Locator', inputMode: 'selector' },
-    { key: 'newStorageBin', column: 'M_LocatorTo_ID', type: 'selector', required: true, label: 'New Storage Bin', reference: 'Locator', inputMode: 'selector' },
+    { key: 'newStorageBin', column: 'M_LocatorTo_ID', type: 'selector', required: true, label: 'New Storage Bin', reference: 'Locator', inputMode: 'selector', excludeValueOf: 'storageBin' },
   ],
   derived: [
 
@@ -146,6 +157,14 @@ export const api = {
       "field": "posted",
       "column": "Posted",
       "url": "/sws/neo/goods-movements/movement/{id}/action/posted"
+    },
+    {
+      "entity": "movement",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/goods-movements/movement/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -163,13 +182,30 @@ export const api = {
   },
   "window": {
     "category": "inventory"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "Processed": "Status",
+      "M_Locator_ID": "Source Warehouse",
+      "M_LocatorTo_ID": "Destination Warehouse",
+      "MovementQty": "Quantity"
+    },
+    "es_ES": {
+      "Processed": "Estado",
+      "M_Locator_ID": "Almacén origen",
+      "M_LocatorTo_ID": "Almacén destino",
+      "MovementQty": "Cantidad"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:MovementPage
 export default function MovementPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="movement"
         detailEntity="movementLine"
@@ -188,13 +224,25 @@ export default function MovementPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hidePrint
+        noHeaderBorder
+        whiteFormBackground
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Movement", config: {} } }]}
         bottomSection={GoodsMovementsBottomPanel}
+        menuActions={({ data, status }) => [
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
+        ]}
+        draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        statusEnumLabels={{"true":"statusProcessed","false":"statusDraft"}}
+        lockedAlert={{"title":"goodsMovementsLockedTitle","message":"goodsMovementsLockedMessage","actionLabel":"goodsMovementsLockedAction","navigateTo":"/physical-inventory/new"}}
+        labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        sendDocument
+        sendDocument={{"enabled":false}}
         {...props}
       />
+      </>
     );
   }
 
@@ -206,9 +254,15 @@ export default function MovementPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"hideStatusFilter":true}}
       dateFilterKey="movementDate"
+      listbarPaddingX="px-2"
+      tablePaddingX="px-2"
+      hidePrint
+      hideLink
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument
+      sendDocument={{"enabled":false}}
       {...props}
     />
   );

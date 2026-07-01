@@ -46,6 +46,6 @@ export default function StockTableGrouped({ data = [], ...props }) {
             data={groupedData}
             selectable={false}
             {...props}
-        />
+            data-testid="DataTable__7f7232" />
     );
 }

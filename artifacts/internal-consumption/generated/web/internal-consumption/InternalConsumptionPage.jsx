@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 import InternalConsumptionTable from './InternalConsumptionTable';
 import InternalConsumptionForm from './InternalConsumptionForm';
 import InternalConsumptionLineTable from './InternalConsumptionLineTable';
@@ -22,7 +23,9 @@ const statusField = 'status';
 // @sf-generated-end summary:internalConsumption
 
 // @sf-generated-start extraBadges:internalConsumption
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:internalConsumption
 
 // @sf-generated-start processes:internalConsumption
@@ -32,7 +35,15 @@ const processes = [
 // @sf-generated-end processes:internalConsumption
 
 // @sf-generated-start draftMode:internalConsumption
-const draftMode = null;
+const draftMode = {
+  "enabled": true,
+  "processField": "processNow",
+  "processValue": "CO",
+  "label": "internalConsumptionProcess",
+  "extraParams": {
+    "action": "CO"
+  }
+};
 // @sf-generated-end draftMode:internalConsumption
 
 // @sf-generated-start requiredHeaderFields:internalConsumption
@@ -127,6 +138,14 @@ export const api = {
       "field": "posted",
       "column": "Posted",
       "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/posted"
+    },
+    {
+      "entity": "internalConsumption",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
     }
   ],
   "queryParams": {
@@ -151,6 +170,7 @@ export const api = {
 export default function InternalConsumptionPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="internalConsumption"
         detailEntity="internalConsumptionLine"
@@ -169,13 +189,17 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hidePrint
+        noHeaderBorder
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Internal_Consumption", config: {} } }]}
         bottomSection={InternalConsumptionBottomPanel}
         customMenuContent={InternalConsumptionActions}
+        draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 
@@ -187,7 +211,12 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listViewOptions={{"hideStatusFilter":true}}
       dateFilterKey="movementDate"
+      hidePrint
+      hideLink
+      SortIconComponent={SortIcon}
+      RefreshIconComponent={RefreshIcon}
       rowQuickActions={{}}
       {...props}
     />

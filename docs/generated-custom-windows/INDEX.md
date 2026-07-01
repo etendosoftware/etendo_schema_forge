@@ -53,7 +53,7 @@ This folder is the entry point for documentation that describes how generated an
 | [product-category.md](product-category.md) | Generated product-category master/detail flow |
 | [physical-inventory.md](physical-inventory.md) | Generated physical-inventory flow with custom count-list actions |
 | [goods-movements.md](goods-movements.md) | Generated goods-movements flow for stock transfers |
-| [internal-consumption.md](internal-consumption.md) | Generated internal-consumption flow with custom process action |
+| [internal-consumption.md](internal-consumption.md) | Generated internal-consumption flow: draftMode Complete + kebab Void, trimmed list view |
 | [warehouse.md](warehouse.md) | Custom warehouse flow with products/transactions tabs |
 | [warehouse-storage-bins.md](warehouse-storage-bins.md) | Hidden route-only warehouse storage-bin master/detail window |
 
@@ -65,11 +65,16 @@ This folder is the entry point for documentation that describes how generated an
 | [payment-out.md](payment-out.md) | Custom payment-out flow with related documents and multiple child surfaces |
 | [financial-accounts-page.md](financial-accounts-page.md) | Cuentas landing page (ETP-4095) + offline account create / edit / archive (ETP-4096) |
 | [bank-reconciliation.md](bank-reconciliation.md) | Legacy placeholder; superseded by `financial-account.md` (kept hidden in menu.json until T8) |
+| [match-rule.md](match-rule.md) | Bank Reconciliation matching-rules catalog ("Reglas de matcheo") — first `list-modal` window (grid + create/edit modal, no detail) on generic W CRUD + validation hook |
+| [transaction-type.md](transaction-type.md) | Backend-only user-definable lookup behind the match-rule "Tipo de transacción" field — no menu/route; created inline from the selector (W spec + `TransactionTypeHandler`) |
 | [chart-of-accounts.md](chart-of-accounts.md) | Generated chart-of-accounts maintenance window |
+| [open-close-period-control.md](open-close-period-control.md) | Generated open/close period control window for fiscal period status management |
 | [assets.md](assets.md) | Generated assets flow with custom setup, sidebar, and amortization surfaces |
 | [amortization.md](amortization.md) | Generated amortization master/detail flow (MVP read+draft, sidebar metrics, linked assets) |
+| [simple-g-l-journal.md](simple-g-l-journal.md) | Generated manual-journal (Asientos Manuales) master/detail flow with a debit/credit balance footer that blocks save until Σ debit = Σ credit (posting deferred) |
 | [recurring-invoice.md](recurring-invoice.md) | Hidden route-only recurring-invoice template window |
 | [conversion-rates.md](conversion-rates.md) | General currency conversion-rate catalog; auto-downloaded rates lock as Synced and feed the invoice completion guard |
+| [general-ledger-configuration.md](general-ledger-configuration.md) | Custom 4-tab accounting schema setup window aligned to the Figma-first ETP-4246 scope |
 
 ## Projects
 
@@ -93,13 +98,13 @@ This folder is the entry point for documentation that describes how generated an
 |------|-------------|
 | [price-list.md](price-list.md) | Custom price-list flow with product-price workspace |
 | [payment-term.md](payment-term.md) | Generated payment-term maintenance window |
-| [payment-method.md](payment-method.md) | Generated payment-method window with grouped payment toggles |
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
-| [unit-of-measure.md](unit-of-measure.md) | Generated unit-of-measure window with conversion metadata notes |
+| [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
 | [user.md](user.md) | Generated user window with roles child surface and defaults dependencies |
 | [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance |
 | [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349) with auto-compute and file generation |
 | [fiscal-monitor.md](fiscal-monitor.md) | Custom fiscal monitor window — real-time invoice submission status for SII, TBAI, and Verifactu |
+| [not-posted-documents.md](not-posted-documents.md) | Custom cross-document posting window — aggregates all unposted documents, single-row and bulk Post actions |
 | [sii-monitor.md](sii-monitor.md) | API-only sub-window — SII invoice submission records consumed by FiscalMonitorPage |
 | [monitor-verifactu.md](monitor-verifactu.md) | API-only sub-window — Verifactu invoice submission records consumed by FiscalMonitorPage |
 | [tbai-facturas-enviadas.md](tbai-facturas-enviadas.md) | API-only sub-window — TBAI invoice submission records consumed by FiscalMonitorPage |

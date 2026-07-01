@@ -119,12 +119,12 @@ describe('ContactDetailModal — fields rendered', () => {
   it('passes bpId to LocationEditorModal', () => assert.match(src, /bpId=\{bpId\}/));
 });
 
-// Guards: TaxIDKeyPicker is a custom dropdown — structural assertions prevent regressions
-describe('TaxIDKeyPicker — structure', () => {
-  it('is defined in the same file', () => assert.match(src, /function TaxIDKeyPicker/));
+// Guards: OptionPicker is the refactored custom dropdown (was TaxIDKeyPicker) — structural assertions
+describe('OptionPicker — structure', () => {
+  it('is defined in the same file', () => assert.match(src, /function OptionPicker/));
 
-  it('renders a loading spinner with animate-spin when loading', () => {
-    assert.match(src, /animate-spin/);
+  it('renders a loading spinner with inline spin animation when loading', () => {
+    assert.match(src, /animation: 'spin 1s linear infinite'/);
   });
 
   it('renders ChevronDown icon in the trigger button', () => {
@@ -135,8 +135,8 @@ describe('TaxIDKeyPicker — structure', () => {
     assert.match(src, /Check.*size/);
   });
 
-  it('highlights the selected item with bg-blue-50', () => {
-    assert.match(src, /bg-blue-50/);
+  it('highlights the selected item with inline background style', () => {
+    assert.match(src, /background: opt\.id === value \? '#F5F7F9'/);
   });
 
   it('handles Escape key to close the dropdown', () => {
@@ -145,10 +145,48 @@ describe('TaxIDKeyPicker — structure', () => {
   });
 
   it('uses a fixed-position backdrop div for outside-click detection', () => {
-    assert.match(src, /fixed inset-0.*z-\[60\]/);
+    assert.match(src, /position: 'fixed', inset: 0/);
+    assert.match(src, /data-testid="taxid-picker-backdrop"/);
   });
 
   it('uses onMouseDown (not onClick) on list items to prevent blur race condition', () => {
     assert.match(src, /onMouseDown[\s\S]*?onChange/);
+  });
+});
+
+// Guards: new invoice-related props and TABS computation
+describe('ContactDetailModal — invoice tab wiring', () => {
+  it('accepts invoiceId prop', () => assert.match(src, /\binvoiceId\b/));
+  it('accepts invoiceSpec prop', () => assert.match(src, /\binvoiceSpec\b/));
+  it('accepts neoApiBase prop', () => assert.match(src, /\bneoApiBase\b/));
+
+  it('computes TABS when hasInvoice is true', () => {
+    assert.match(src, /const TABS\s*=/);
+    assert.match(src, /hasInvoice/);
+  });
+
+  it('uses contactDetail.section.contact i18n key for contact tab', () => {
+    assert.match(src, /contactDetail\.section\.contact/);
+  });
+
+  it('uses contactDetail.section.invoice i18n key for invoice tab', () => {
+    assert.match(src, /contactDetail\.section\.invoice/);
+  });
+
+  it('uses contactDetail.siiInvoiceType i18n key', () => {
+    assert.match(src, /contactDetail\.siiInvoiceType/);
+  });
+
+  it('uses contactDetail.siiDescription i18n key', () => {
+    assert.match(src, /contactDetail\.siiDescription/);
+  });
+
+  it('uses contactDetail.siiDescriptionRequired i18n key for validation error', () => {
+    assert.match(src, /contactDetail\.siiDescriptionRequired/);
+  });
+
+  it('validates invDescripcionSii before saving when hasInvoice', () => {
+    assert.match(src, /invDescripcionSii/);
+    assert.match(src, /hasInvoice.*invDescripcionSii|invDescripcionSii.*hasInvoice/s);
   });
 });

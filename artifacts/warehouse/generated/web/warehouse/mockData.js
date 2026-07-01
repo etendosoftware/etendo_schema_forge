@@ -6,108 +6,84 @@ export const warehouse = [
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Standard order for Q1 delivery",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "Main Warehouse",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-002",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Rush order - priority shipping required",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "East Distribution Center",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-003",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Bulk purchase for warehouse restocking",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "West Hub",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-004",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Sample order for client evaluation",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "North Storage",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-005",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Recurring monthly supply order",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "South Logistics",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-006",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Special pricing agreement applies",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "Central Depot",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-007",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Consolidated order from multiple requests",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "Regional Warehouse A",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-008",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Trial order for new product line",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "Regional Warehouse B",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-009",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Replacement for damaged goods",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "Main Warehouse",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-010",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Pre-season inventory build-up",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "East Distribution Center",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-011",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Customer-specific configuration",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "West Hub",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   },
   {
     "id": "mock-warehouse-012",
     "searchKey": "Sample searchKey",
     "name": "Sample name",
     "description": "Government contract fulfillment",
-    "locationAddress": "Sample locationAddress",
-    "warehouseRule": "North Storage",
-    "allocated": "Sample allocated"
+    "locationAddress": "Sample locationAddress"
   }
 ];
 
@@ -454,6 +430,7 @@ export const binContents = [
     "quantityInDraftTransactions": 402,
     "quantityOrderInDraftTransactions": 402,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 38907,
     "warehouseId": "mock-warehouse-001"
   },
   {
@@ -468,6 +445,7 @@ export const binContents = [
     "quantityInDraftTransactions": 54,
     "quantityOrderInDraftTransactions": 54,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 9306,
     "warehouseId": "mock-warehouse-002"
   },
   {
@@ -482,6 +460,7 @@ export const binContents = [
     "quantityInDraftTransactions": 150,
     "quantityOrderInDraftTransactions": 150,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 11544,
     "warehouseId": "mock-warehouse-003"
   },
   {
@@ -496,6 +475,7 @@ export const binContents = [
     "quantityInDraftTransactions": 97,
     "quantityOrderInDraftTransactions": 97,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 11872,
     "warehouseId": "mock-warehouse-004"
   },
   {
@@ -510,6 +490,7 @@ export const binContents = [
     "quantityInDraftTransactions": 311,
     "quantityOrderInDraftTransactions": 311,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 48460,
     "warehouseId": "mock-warehouse-005"
   },
   {
@@ -524,6 +505,7 @@ export const binContents = [
     "quantityInDraftTransactions": 451,
     "quantityOrderInDraftTransactions": 451,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 45418,
     "warehouseId": "mock-warehouse-006"
   },
   {
@@ -538,6 +520,7 @@ export const binContents = [
     "quantityInDraftTransactions": 496,
     "quantityOrderInDraftTransactions": 496,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 33840,
     "warehouseId": "mock-warehouse-007"
   },
   {
@@ -552,6 +535,7 @@ export const binContents = [
     "quantityInDraftTransactions": 284,
     "quantityOrderInDraftTransactions": 284,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 25716,
     "warehouseId": "mock-warehouse-008"
   },
   {
@@ -566,6 +550,7 @@ export const binContents = [
     "quantityInDraftTransactions": 225,
     "quantityOrderInDraftTransactions": 225,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 44780,
     "warehouseId": "mock-warehouse-009"
   },
   {
@@ -580,6 +565,7 @@ export const binContents = [
     "quantityInDraftTransactions": 479,
     "quantityOrderInDraftTransactions": 479,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 12483,
     "warehouseId": "mock-warehouse-010"
   },
   {
@@ -594,6 +580,7 @@ export const binContents = [
     "quantityInDraftTransactions": 123,
     "quantityOrderInDraftTransactions": 123,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 46022,
     "warehouseId": "mock-warehouse-011"
   },
   {
@@ -608,6 +595,7 @@ export const binContents = [
     "quantityInDraftTransactions": 337,
     "quantityOrderInDraftTransactions": 337,
     "referencedInventory": "Sample referencedInventory",
+    "etgoValuation": 38634,
     "warehouseId": "mock-warehouse-012"
   }
 ];

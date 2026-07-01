@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { ArrowLeft, Download, FileDown, Play, OctagonAlert, CircleCheck, Search, RefreshCw, Globe, Eye, Lock } from 'lucide-react';
-import { StatusPillMenu } from '../../FmCommon.jsx';
+import {
+  Download, CircleCheck, Search,
+  RefreshCw, Globe, Eye, MoreVertical, ChevronDown, Users, FileEdit, Clock,
+  TriangleAlert, Folder, ReceiptText, Calculator, PenLine, ShieldAlert, Info,
+} from 'lucide-react';
+import { KpiWidget, Tabs } from '../../FmCommon.jsx';
+import { SourcesTab, IncidentsTab, FilesTab, HistoryTab } from '../../FmTabContent.jsx';
+import { Checkbox } from '@/components/ui/checkbox';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File } from '../../fiscalModelsUtils.js';
 import { use349Pdf } from './use349Pdf.js';
@@ -38,67 +44,41 @@ function ViesBadge({ status }) {
   return <span className={`fm-vies fm-vies--${cls}`}>{icon} {t(`fm.m349.vies.${status ?? 'pending'}`)}</span>;
 }
 
-function NumberedStepper({ steps, current }) {
-  return (
-    <div className="fm-stepper-num" role="list">
-      {steps.map((label, i) => {
-        const done   = i < current;
-        const active = i === current;
-        return (
-          <React.Fragment key={label}>
-            {i > 0 && <span className="fm-stepper-num__sep" aria-hidden="true">—</span>}
-            <span
-              role="listitem"
-              className={`fm-stepper-num__step${active ? ' fm-stepper-num__step--active' : ''}${done ? ' fm-stepper-num__step--done' : ''}`}
-            >
-              <span className="fm-stepper-num__circle">
-                {done ? '✓' : i + 1}
-              </span>
-              {label}
-            </span>
-          </React.Fragment>
-        );
-      })}
-    </div>
-  );
-}
-
-function Banner349({ type, icon, title, sub, actions }) {
-  return (
-    <div className={`fm-349-banner fm-349-banner--${type}`}>
-      <div className="fm-349-banner__icon">{icon}</div>
-      <div className="fm-349-banner__body">
-        <div className="fm-349-banner__title">{title}</div>
-        {sub && <div className="fm-349-banner__sub">{sub}</div>}
-      </div>
-      {actions && <div className="fm-349-banner__actions">{actions}</div>}
-    </div>
-  );
-}
-
-function TotalsCard({ operators }) {
-  const t = useUI();
+function TotalsCard({ operators, t }) {
   const totals = {};
   KEY_IDS.forEach(k => { totals[k] = operators.filter(o => o.key === k).reduce((s,o) => s + (parseFloat(o.base) || 0), 0); });
+  const [showInfo, setShowInfo] = useState(false);
   return (
     <div className="fm-349-totals">
-      <div className="fm-349-totals__header">
+      <div className="fm-349-totals__card">
         <div className="fm-349-totals__title">
-          {t('fm.m349.totals.title')} <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>({t('fm.m349.totals.readonly')})</span>
+          {t('fm.m349.totals.title')}
+          <span
+            className="fm-349-totals__info-wrap"
+            onMouseEnter={() => setShowInfo(true)}
+            onMouseLeave={() => setShowInfo(false)}
+          >
+            <Info
+              size={12}
+              strokeWidth={1.75}
+              style={{ color: 'var(--fm-fg-3)', cursor: 'help' }}
+              data-testid="Info__346dd5" />
+            {showInfo && (
+              <div className="fm-349-totals__tooltip">
+                {t('fm.m349.totals.info') ?? 'Calculados a partir de los operadores. No editable. Modifica los operadores para ajustar los totales.'}
+              </div>
+            )}
+          </span>
         </div>
-        <div className="fm-349-totals__sub">{t('fm.m349.totals.sub')}</div>
-      </div>
-      <div className="fm-349-totals__grid">
         {KEY_IDS.map(k => (
-          <div key={k} className="fm-349-total-cell">
-            <div className="fm-349-total-cell__head">
-              <KeyBadge k={k} />
-              <Lock size={10} strokeWidth={2} style={{ color: '#9ca3af' }} />
+          <div key={k} className="fm-349-total-row">
+            <div className="fm-349-total-row__left">
+              <KeyBadge k={k} data-testid="KeyBadge__346dd5" />
+              <span className="fm-349-total-row__label">{t(`fm.m349.key.${k}`)}</span>
             </div>
-            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{t(`fm.m349.key.${k}`)}</div>
-            <div className={`fm-349-total-cell__amount${totals[k] === 0 ? ' fm-349-total-cell__amount--zero' : ''}`}>
+            <span className={`fm-349-total-row__amount${totals[k] === 0 ? ' fm-349-total-row__amount--zero' : ''}`}>
               {formatAmount(totals[k])}
-            </div>
+            </span>
           </div>
         ))}
       </div>
@@ -106,72 +86,122 @@ function TotalsCard({ operators }) {
   );
 }
 
-// ── InvoicesTab ───────────────────────────────────────────────────
-function InvoicesTab({ liveInvoices, invoiceNifFilter, setInvoiceNifFilter, t }) {
-  if (!liveInvoices) {
-    return (
-      <div style={{ padding: '32px 0', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-        {t('fm.m349.invoices.empty')}
-      </div>
-    );
-  }
-  if (liveInvoices.length === 0) {
-    return (
-      <div style={{ padding: '32px 0', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-        {t('fm.m349.invoices.none')}
-      </div>
-    );
-  }
-  const visibleInvoices = invoiceNifFilter
-    ? liveInvoices.filter(inv => inv.nifIva === invoiceNifFilter)
-    : liveInvoices;
+// Key filter dropdown
+function KeyFilterDropdown({ value, onChange, t }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const allLabel = t('fm.m349.filter.all_keys') ?? 'Todas las claves';
+  const selectedLabel = value === 'all'
+    ? allLabel
+    : `${value} — ${t('fm.m349.key.' + value) ?? value}`;
+
+  const keyColors = { E: '#F0FAFF', S: '#FEECFB', A: '#FFF2EE', I: '#F4F1FD' };
+  const keyFgColors = { E: '#0075AD', S: '#A5088C', A: '#B82E00', I: '#4316CA' };
+  const keyBorderColors = { E: '#ADE4FF', S: '#FCC5F3', A: '#FFCDBD', I: '#C6B6F7' };
+
   return (
-    <>
-      {invoiceNifFilter && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <span style={{ fontSize: 11, color: '#6b7280' }}>{t('fm.m349.invoices.filtering_by')}</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: '#1e40af', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 4, padding: '2px 8px' }}>
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{invoiceNifFilter}</span>
-            <button onClick={() => setInvoiceNifFilter(null)} aria-label={t('fm.action.clear')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', lineHeight: 1, padding: 0, fontSize: 13 }}>×</button>
-          </span>
-          <span style={{ fontSize: 11, color: '#9ca3af' }}>{t('fm.m349.invoices.filtered', { visible: visibleInvoices.length, total: liveInvoices.length })}</span>
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        className="fm-toolbar__pill"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+      >
+        {selectedLabel}
+        <ChevronDown
+          size={12}
+          strokeWidth={1.75}
+          style={{ opacity: .6 }}
+          data-testid="ChevronDown__346dd5" />
+      </button>
+      {open && (
+        <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 220 }}>
+          <button
+            className={`fm-status-select__item${value === 'all' ? ' fm-status-select__item--active' : ''}`}
+            onClick={() => { onChange('all'); setOpen(false); }}
+          >
+            <span style={{ flex: 1 }}>{allLabel}</span>
+            {value === 'all' && <span>✓</span>}
+          </button>
+          {KEY_IDS.map(k => (
+            <button
+              key={k}
+              className={`fm-status-select__item${value === k ? ' fm-status-select__item--active' : ''}`}
+              onClick={() => { onChange(k); setOpen(false); }}
+            >
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 24, height: 24, borderRadius: 8, fontSize: 12, fontWeight: 500,
+                background: keyColors[k], color: keyFgColors[k],
+                border: `1px solid ${keyBorderColors[k]}`,
+              }}>{k}</span>
+              <span style={{ flex: 1 }}>{t(`fm.m349.key.${k}`)}</span>
+              {value === k && <span>✓</span>}
+            </button>
+          ))}
         </div>
       )}
-      <div className="fm-table-wrap" style={{ flex: 'none' }}>
-        <table className="fm-table">
-          <thead>
-            <tr>
-              <th>{t('fm.m349.col.date')}</th>
-              <th>{t('fm.m349.col.ref')}</th>
-              <th>{t('fm.m349.col.invoice_type')}</th>
-              <th>{t('fm.m349.col.operator')}</th>
-              <th>{t('fm.m349.col.nif_iva')}</th>
-              <th style={{ textAlign: 'right' }}>{t('fm.m349.col.taxable_base')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleInvoices.map((inv, i) => (
-              <tr key={`${inv.ref}-${i}`}>
-                <td><span className="fm-date">{inv.date}</span></td>
-                <td><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }}>{inv.ref}</span></td>
-                <td>
-                  <span style={{ fontSize: 11, color: inv.type === 'Venta' ? '#059669' : '#2563eb', fontWeight: 500 }}>
-                    {inv.type}
-                  </span>
-                </td>
-                <td style={{ fontWeight: 500, color: '#0f172a' }}>{inv.party}</td>
-                <td><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: '#374151' }}>{inv.nifIva}</span></td>
-                <td style={{ textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>
-                  {formatAmount(parseFloat(inv.base))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
+    </div>
   );
 }
+
+// ── More options kebab menu ──────────────────────────────────────
+function MoreOptionsMenu349({ onVies, onPreviewPdf, onGenerate, pdfLoading, generating, t }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        className="fm-btn"
+        style={{ padding: '8px 10px', borderRadius: 8 }}
+        onClick={() => setOpen(o => !o)}
+        aria-label="Más opciones"
+      >
+        <MoreVertical size={15} strokeWidth={1.75} data-testid="MoreVertical__346dd5" />
+      </button>
+      {open && (
+        <div className="fm-status-select__menu" role="menu" style={{ right: 0, left: 'auto', minWidth: 220 }}>
+          <button className="fm-status-select__item" role="menuitem" onClick={() => { onVies(); setOpen(false); }}>
+            <Globe
+              size={13}
+              strokeWidth={1.75}
+              style={{ color: '#6b7280' }}
+              data-testid="Globe__346dd5" />
+            VIES
+          </button>
+          <button className="fm-status-select__item" role="menuitem" onClick={() => { onPreviewPdf(); setOpen(false); }} disabled={pdfLoading}>
+            <Eye
+              size={13}
+              strokeWidth={1.75}
+              style={{ color: '#6b7280' }}
+              data-testid="Eye__346dd5" />
+            {t('fm.action.preview_pdf') ?? 'Vista previa PDF'}
+          </button>
+          <button className="fm-status-select__item" role="menuitem" onClick={() => { onGenerate(); setOpen(false); }} disabled={generating}>
+            <Download
+              size={13}
+              strokeWidth={1.75}
+              style={{ color: '#6b7280' }}
+              data-testid="Download__346dd5" />
+            {t('fm.action.generate_file') ?? 'Generar fichero'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 // ── Main ─────────────────────────────────────────────────────────
 export default function FmModel349Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
@@ -187,8 +217,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const [selected,     setSelected]     = useState(new Set());
   const [liveOperators, setLiveOperators] = useState(decl._precomputed?.operators ?? null);
   const [liveInvoices,  setLiveInvoices]  = useState(decl._precomputed?.invoices  ?? null);
+  const [viesBannerDismissed, setViesBannerDismissed] = useState(false);
 
-  // Sync when background polling updates _precomputed in the parent
   React.useEffect(() => {
     if (decl._precomputed?.operators) setLiveOperators(decl._precomputed.operators);
     if (decl._precomputed?.invoices)  setLiveInvoices(decl._precomputed.invoices);
@@ -209,11 +239,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const periodLabel = monthName ? `${decl.year} / ${monthName}` : `${decl.year} ${decl.period}`;
 
   const blocking     = decl.incidents?.blocking ?? 0;
+  const warning      = decl.incidents?.warning  ?? 0;
+  const fileBlocked  = blocking > 0;
   const viesPending  = operators.filter(o => o.vies === 'pending').length;
   const totalBase    = operators.reduce((s,o) => s + (parseFloat(o.base) || 0), 0);
   const rectifications = decl.rectifications ?? 1;
-
-  const stepLabels = ['pending', 'draft', 'ready', 'submitted'].map(id => t(`fm.status.${id}`));
 
   function handleStatusChange(newStatus) {
     setStatus(newStatus);
@@ -253,7 +283,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const toggleSelect = id => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const allSelected  = filteredOps.length > 0 && filteredOps.every(o => selected.has(o.id));
 
-  // Derive invoice counts per NIF from liveInvoices (same compute, no extra request)
   const originByNif = React.useMemo(() => {
     if (!liveInvoices) return {};
     const map = {};
@@ -266,7 +295,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   }, [liveInvoices]);
 
   function formatOrigin(op) {
-    if (op.origin) return op.origin; // mock or manually set
+    if (op.origin) return op.origin;
     const counts = originByNif[op.nif];
     if (!counts) return null;
     const c = counts['Compra'] ?? 0;
@@ -280,254 +309,333 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const declNif = decl.nif ?? '';
 
   const TABS = [
-    { id:'operators', label: t('fm.m349.tab.operators'), count: operators.length },
-    { id:'rectif',    label: t('fm.m349.tab.rectif'),    count: rectifications },
-    { id:'invoices',  label: t('fm.m349.tab.invoices'),  count: liveInvoices?.length ?? null },
-    { id:'incidents', label: t('fm.m349.tab.incidents'), count: blocking },
-    { id:'files',     label: t('fm.m349.tab.files'),     count: 1 },
-    { id:'history',   label: t('fm.m349.tab.history'),   count: null },
+    { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
+    { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications,          icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
+    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: liveInvoices?.length ?? null, icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
+    { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
+    { id:'files',     label: t('fm.m349.tab.files'),     badge: null,                   icon: <Folder size={16} strokeWidth={1.75} data-testid="Folder__346dd5" /> },
+    { id:'history',   label: t('fm.m349.tab.history'),   badge: null,                   icon: <Clock size={16} strokeWidth={1.75} data-testid="Clock__346dd5" /> },
   ];
 
-  return (
-    <div className="fm-page">
+  const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
 
-      {/* ── Header ───────────────────────────────────────────────── */}
-      <div className="fm-349-header">
-        <div className="fm-349-header__back">
-          <button className="fm-349-header__back-btn" onClick={onBack}>
-            <ArrowLeft size={14} strokeWidth={1.75} /> {t('fm.action.back')}
-          </button>
+  return (
+    <div className="fm-page fm-page--freeflow">
+      {/* ── Title bar ────────────────────────────────────────────── */}
+      <div style={{
+        padding: '12px 20px',
+        background: '#fff', flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="fm-model-badge fm-model-badge--349">349</span>
+          <span style={{ fontWeight: 600, fontSize: 20, color: '#121217' }}>
+            Modelo 349 - {periodLabel}
+          </span>
+          <div style={{ flex: 1 }} />
+          <MoreVertical
+            size={16}
+            strokeWidth={1.75}
+            style={{ color: '#9ca3af', cursor: 'pointer' }}
+            data-testid="MoreVertical__346dd5" />
         </div>
-        <div className="fm-349-header__main">
-          <div>
-            <div className="fm-349-header__title-row">
-              <span className="fm-model-badge fm-model-badge--349">349</span>
-              <span className="fm-349-header__title">Modelo 349 · {periodLabel}</span>
-              <div style={{ marginLeft: 4 }}>
-                <StatusPillMenu status={status} onStatusChange={handleStatusChange} />
-              </div>
-            </div>
-            <div className="fm-349-header__subtitle">
-              {t('fm.m349.subtitle')} · {decl.type === 'ord' ? t('fm.m349.type.ord') : t('fm.m349.type.com')}
-              {declNif && ` · NIF: ${declNif}`} · {t('fm.m349.periodicity')}: {/^T\d$/.test(decl.period) ? t('fm.m349.period.quarterly') : t('fm.m349.monthly')}
-            </div>
-          </div>
-          <div className="fm-349-header__actions">
-            <button className="fm-349-header__btn" onClick={handleCompute} disabled={computing}>
-              <RefreshCw size={14} strokeWidth={1.75} style={computing ? { animation: 'spin 1s linear infinite' } : {}} />
-              {computing ? (t('fm.action.computing') ?? 'Calculando…') : t('fm.action.recalc')}
-            </button>
-            <button className="fm-349-header__btn"><Globe size={14} strokeWidth={1.75} /> VIES</button>
-            <button className="fm-349-header__btn" onClick={handlePreviewPdf} disabled={pdfLoading}>
-              <Eye size={14} strokeWidth={1.75} />
-              {pdfLoading ? (t('fm.action.generating') ?? 'Generando…') : t('fm.action.preview_pdf')}
-            </button>
-            <button className="fm-349-header__btn" onClick={() => setShowFilegen(true)} disabled={generating}>
-              <FileDown size={14} strokeWidth={1.75} />
-              {generating ? (t('fm.action.generating') ?? 'Generando…') : t('fm.action.generate_file')}
-            </button>
-            <button className="fm-349-header__btn fm-349-header__btn--primary" onClick={() => setShowPresent(true)}>
-              <Play size={13} strokeWidth={1.75} fill="currentColor" /> {t('fm.action.present')}
-            </button>
-          </div>
+        <div style={{ fontSize: 12, color: '#828FA3', marginTop: 2 }}>
+          Tesorería / Declaraciones / Modelo 349 - {periodLabel}
         </div>
       </div>
+      {/* ── Action bar ───────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '6px 20px 10px',
+        background: '#fff', flexShrink: 0,
+      }}>
+        <button className="fm-btn" onClick={onBack}
+          style={{ borderRadius: 8, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', fontSize: 14, color: '#121217' }}>
+          {t('fm.action.cancel') ?? 'Cancelar'}
+        </button>
+        <span style={{
+          padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
+          background: '#F5F7F9', color: '#3F3F50',
+        }}>
+          {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${status}`) ?? status}
+        </span>
 
-      {/* ── Numbered Stepper ─────────────────────────────────────── */}
-      <NumberedStepper steps={stepLabels} current={stepIdx} />
+        <div style={{ flex: 1 }} />
 
+        <MoreOptionsMenu349
+          onVies={() => {}}
+          onPreviewPdf={handlePreviewPdf}
+          onGenerate={() => setShowFilegen(true)}
+          pdfLoading={pdfLoading}
+          generating={generating}
+          t={t}
+          data-testid="MoreOptionsMenu349__346dd5" />
+
+        <button
+          className="fm-btn"
+          onClick={handleCompute}
+          disabled={computing}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', padding: '8px 12px', fontSize: 14 }}
+        >
+          <RefreshCw
+            size={20}
+            strokeWidth={1.75}
+            style={computing ? { animation: 'spin 1s linear infinite' } : {}}
+            data-testid="RefreshCw__346dd5" />
+          {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.recalc') ?? 'Recalcular')}
+        </button>
+
+        {!isSubmitted && (
+          <button
+            className="fm-toolbar__btn fm-toolbar__btn--primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '8px 12px', fontSize: 14, fontWeight: 500 }}
+            onClick={() => setShowPresent(true)}
+          >
+            <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
+            {t('fm.action.present') ?? "Marcar como 'Presentado'"}
+          </button>
+        )}
+      </div>
+      {/* ── VIES banner ──────────────────────────────────────────── */}
+      {viesPending > 0 && !viesBannerDismissed && (
+        <div style={{ padding: '8px 20px', flexShrink: 0 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '10px 12px', borderRadius: 8, background: '#F0FAFF',
+          }}>
+            <Globe
+              size={14}
+              strokeWidth={1.75}
+              style={{ color: '#0075AD', flexShrink: 0 }}
+              data-testid="Globe__346dd5" />
+            <span style={{ fontSize: 14, flex: 1 }}>
+              <span style={{ color: '#0075AD', fontWeight: 500 }}>
+                {t('fm.m349.banner.vies_title', { count: viesPending }) ?? `${viesPending} NIF-IVA con validación VIES pendiente`}
+              </span>
+              {' '}
+              <span style={{ color: '#0075AD', fontWeight: 400 }}>
+                {t('fm.m349.banner.vies_sub') ?? 'Validación VIES asíncrona — informativa, no bloqueante'}
+              </span>
+            </span>
+            <button
+              style={{ fontSize: 14, fontWeight: 500, color: '#0075AD', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap' }}
+            >
+              {t('fm.m349.banner.vies_action') ?? 'Validar VIES'}
+            </button>
+            <button
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0075AD', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+              onClick={() => setViesBannerDismissed(true)}
+              aria-label={t('fm.action.close') ?? 'Cerrar'}
+            >×</button>
+          </div>
+        </div>
+      )}
+      {/* ── KPI bar ──────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', flexDirection: 'row', alignItems: 'center',
+        gap: 12, padding: '0 8px',
+        height: 84, flexShrink: 0,
+      }}>
+        <KpiWidget
+          icon={<Users size={20} strokeWidth={1.75} data-testid="Users__346dd5" />}
+          iconColor="#828FA3"
+          label={t('fm.m349.kpi.operators') ?? 'Operadores'}
+          value={String(operators.length)}
+          badge={t('fm.m349.kpi.operators_desc') ?? 'Activos'}
+          badgeBg="#F5F7F9"
+          badgeColor="#828FA3"
+          data-testid="KpiWidget__346dd5" />
+        <KpiWidget
+          icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
+          iconColor="#828FA3"
+          label={t('fm.m349.kpi.total_ops') ?? 'Total operaciones'}
+          value={formatAmount(totalBase)}
+          badge={t('fm.m349.kpi.total_ops_desc') ?? 'Base total'}
+          badgeBg="#F5F7F9"
+          badgeColor="#828FA3"
+          data-testid="KpiWidget__346dd5" />
+        <KpiWidget
+          icon={<PenLine size={20} strokeWidth={1.75} data-testid="PenLine__346dd5" />}
+          iconColor="#828FA3"
+          label={t('fm.m349.kpi.rectif') ?? 'Rectificaciones'}
+          value={String(rectifications)}
+          badge={t('fm.m349.kpi.rectif_desc') ?? 'Previos'}
+          badgeBg="#FFF9EB"
+          badgeColor="#8A6100"
+          data-testid="KpiWidget__346dd5" />
+        <KpiWidget
+          icon={<ShieldAlert size={20} strokeWidth={1.75} data-testid="ShieldAlert__346dd5" />}
+          iconColor="#828FA3"
+          label={t('fm.m349.kpi.vies_pending') ?? 'Pendientes VIES'}
+          value={String(viesPending)}
+          valueColor={viesPending > 0 ? '#D50B3E' : '#121217'}
+          badge={t('fm.m349.kpi.vies_pending_desc') ?? 'Sin validar'}
+          badgeBg={viesPending > 0 ? '#FEF0F4' : '#F5F7F9'}
+          badgeColor={viesPending > 0 ? '#D50B3E' : '#828FA3'}
+          data-testid="KpiWidget__346dd5" />
+      </div>
+      {/* ── Tabs ─────────────────────────────────────────────────── */}
+      <div className="fm-tabs-sticky" style={{ padding: '0 8px' }}>
+        <Tabs
+          tabs={TABS}
+          active={activeTab}
+          onSelect={(id) => { setActiveTab(id); if (id !== 'invoices') setInvoiceNifFilter(null); }}
+          data-testid="Tabs__346dd5" />
+      </div>
       {/* ── Body ─────────────────────────────────────────────────── */}
       <div className="fm-page__body">
 
-        {/* Banners */}
-        {blocking > 0 && (
-          <Banner349
-            type="error"
-            icon={<OctagonAlert size={18} strokeWidth={1.75} />}
-            title={t('fm.m349.banner.blocking_title', { count: blocking })}
-            sub={t('fm.m349.banner.blocking_sub')}
-            actions={<button className="fm-349-banner__btn fm-349-banner__btn--outline">{t('fm.m349.banner.blocking_action')}</button>}
-          />
-        )}
-        {viesPending > 0 && (
-          <Banner349
-            type="info"
-            icon={<Globe size={18} strokeWidth={1.75} />}
-            title={t('fm.m349.banner.vies_title', { count: viesPending })}
-            sub={t('fm.m349.banner.vies_sub')}
-            actions={<button className="fm-349-banner__btn fm-349-banner__btn--outline"><RefreshCw size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />{t('fm.m349.banner.vies_action')}</button>}
-          />
-        )}
-        {status === 'ready' && (
-          <Banner349
-            type="success"
-            icon={<CircleCheck size={18} strokeWidth={1.75} />}
-            title={t('fm.m349.banner.ready_title')}
-            sub={`349_${declNif}_${decl.year}_${decl.period}.349 · ${t('fm.m349.banner.ready_sub', { ops: operators.length })}`}
-            actions={
-              <>
-                <button className="fm-349-banner__btn fm-349-banner__btn--outline"><Download size={13} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />{t('fm.m349.banner.download')}</button>
-                <button className="fm-349-banner__btn fm-349-banner__btn--primary"><Play size={12} strokeWidth={1.75} fill="currentColor" style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />{t('fm.m349.banner.present')}</button>
-              </>
-            }
-          />
-        )}
-
-        {/* KPI cards */}
-        <div className="fm-349-kpis">
-          <div className="fm-349-kpi">
-            <div className="fm-349-kpi__label">{t('fm.m349.kpi.operators')}</div>
-            <div className="fm-349-kpi__value">{operators.length}</div>
-            <div className="fm-349-kpi__desc">{t('fm.m349.kpi.operators_desc')}</div>
-          </div>
-          <div className="fm-349-kpi">
-            <div className="fm-349-kpi__label">{t('fm.m349.kpi.total_ops')}</div>
-            <div className="fm-349-kpi__value fm-349-kpi__value--mono">{formatAmount(totalBase)}</div>
-            <div className="fm-349-kpi__desc">{t('fm.m349.kpi.total_ops_desc')}</div>
-          </div>
-          <div className="fm-349-kpi">
-            <div className="fm-349-kpi__label">{t('fm.m349.kpi.rectif')}</div>
-            <div className="fm-349-kpi__value">{rectifications}</div>
-            <div className="fm-349-kpi__desc">{t('fm.m349.kpi.rectif_desc')}</div>
-          </div>
-          <div className="fm-349-kpi">
-            <div className="fm-349-kpi__label">{t('fm.m349.kpi.vies_pending')}</div>
-            <div className={`fm-349-kpi__value${viesPending > 0 ? ' fm-349-kpi__value--orange' : ''}`}>{viesPending}</div>
-            <div className="fm-349-kpi__desc">{t('fm.m349.kpi.vies_pending_desc')}</div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="fm-tabs-bar">
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              className={`fm-tabs-bar__tab${activeTab === tab.id ? ' fm-tabs-bar__tab--active' : ''}`}
-              onClick={() => { setActiveTab(tab.id); if (tab.id !== 'invoices') setInvoiceNifFilter(null); }}
-            >
-              {tab.label}
-              {tab.count != null && <span className="fm-tabs-bar__count">{tab.count}</span>}
-            </button>
-          ))}
-        </div>
-
         {activeTab === 'operators' && (
-          <div style={{ marginTop: 12 }}>
-            {/* Key filter + search row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-              <div className="fm-key-pills">
-                <button className={`fm-key-pill${keyFilter === 'all' ? ' fm-key-pill--active' : ''}`} onClick={() => setKeyFilter('all')}>
-                  {t('fm.m349.filter.all_keys')}
-                </button>
-                {KEY_IDS.map(k => (
-                  <button key={k} className={`fm-key-pill${keyFilter === k ? ' fm-key-pill--active' : ''}`} onClick={() => setKeyFilter(k)}>
-                    <KeyBadge k={k} />{t(`fm.m349.key.${k}`)}
-                  </button>
-                ))}
-              </div>
+          <div>
+            {/* Filter + search + new operator row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, marginTop: 8, flexWrap: 'wrap' }}>
+              <KeyFilterDropdown
+                value={keyFilter}
+                onChange={setKeyFilter}
+                t={t}
+                data-testid="KeyFilterDropdown__346dd5" />
               <div style={{ flex: 1 }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', border: `1px solid ${searchQuery ? '#6366f1' : '#e2e8f0'}`, borderRadius: 6, fontSize: 12, color: '#6b7280', background: '#fff', minWidth: 220 }}>
-                <Search size={13} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? '#6366f1' : '#E8E8ED'}`, borderRadius: 8, fontSize: 14, color: '#6C6C89', background: '#fff', minWidth: 240 }}>
+                <Search
+                  size={15}
+                  strokeWidth={1.75}
+                  style={{ flexShrink: 0, color: '#6C6C89' }}
+                  data-testid="Search__346dd5" />
                 <input
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder={t('fm.m349.search_placeholder')}
-                  style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 12, color: '#374151', width: '100%' }}
+                  style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: '#6C6C89', width: '100%' }}
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', padding: 0, lineHeight: 1, fontSize: 14 }}>×</button>
+                  <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#6C6C89', padding: 0, lineHeight: 1, fontSize: 16 }}>×</button>
                 )}
               </div>
+              <button className="fm-toolbar__btn fm-toolbar__btn--primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 14, padding: '8px 12px' }}>
+                + {t('fm.m349.action.new_operator') ?? 'Nuevo operador'}
+              </button>
             </div>
 
-            {/* Totals card */}
-            <TotalsCard operators={operators} />
+            {/* Full-width separator above NIF-IVA columns */}
+            <div style={{ margin: '4px -20px 0', borderTop: '1px solid #E8EAEF' }} />
 
-            {/* Operators table */}
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', marginBottom: 2 }}>
-                {t('fm.m349.operators_count', { count: filteredOps.length })}
-                {filteredOps.length !== operators.length && (
-                  <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>
-                    {t('fm.m349.operators_filtered', { total: operators.length }) ?? `de ${operators.length}`}
-                  </span>
-                )}
+            {/* Layout: totals panel + table */}
+            <div style={{ display: 'flex', gap: 0 }}>
+              <TotalsCard operators={operators} t={t} data-testid="TotalsCard__346dd5" />
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="fm-table-wrap" style={{ flex: 'none' }}>
+                  <table className="fm-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 32, paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
+                          <Checkbox
+                            checked={allSelected}
+                            onChange={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(o => o.id)))}
+                            onClick={e => e.stopPropagation()}
+                            data-testid="Checkbox__346dd5" />
+                        </th>
+                        <th>{t('fm.m349.col.nif_iva')}</th>
+                        <th>{t('fm.m349.col.operator')}</th>
+                        <th>{t('fm.m349.col.key')}</th>
+                        <th style={{ textAlign: 'right' }}>{t('fm.m349.col.taxable_base')}</th>
+                        <th>{t('fm.m349.col.vies')}</th>
+                        <th>{t('fm.m349.col.origin')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredOps.map(op => (
+                        <tr key={op.id} className={selected.has(op.id) ? 'fm-table__row--selected' : ''}>
+                          <td style={{ paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selected.has(op.id)}
+                              onChange={() => toggleSelect(op.id)}
+                              onClick={e => e.stopPropagation()}
+                              data-testid="Checkbox__346dd5" />
+                          </td>
+                          <td>{op.nif}</td>
+                          <td style={{ fontWeight: 600 }}>{op.name}</td>
+                          <td>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <KeyBadge k={op.key} data-testid="KeyBadge__346dd5" />
+                              <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${op.key}`)}</span>
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatAmount(op.base)}</td>
+                          <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
+                          <td>
+                            {formatOrigin(op)
+                              ? <button className="fm-origin-link" onClick={() => { setInvoiceNifFilter(op.nif); setActiveTab('invoices'); }}>{formatOrigin(op)}</button>
+                              : <span style={{ color: 'var(--fm-fg-4)' }}>—</span>
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
-                {t('fm.m349.operators_sub')}
-              </div>
-            </div>
-
-            <div className="fm-table-wrap" style={{ flex: 'none' }}>
-              <table className="fm-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 32 }}>
-                      <input type="checkbox" className="fm-table__cb" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(o => o.id)))} />
-                    </th>
-                    <th>{t('fm.m349.col.nif_iva')}</th>
-                    <th>{t('fm.m349.col.operator')}</th>
-                    <th>{t('fm.m349.col.key')}</th>
-                    <th style={{ textAlign: 'right' }}>{t('fm.m349.col.taxable_base')}</th>
-                    <th>{t('fm.m349.col.vies')}</th>
-                    <th>{t('fm.m349.col.origin')}</th>
-                    <th>{t('fm.m349.col.action')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOps.map(op => (
-                    <tr key={op.id}>
-                      <td onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" className="fm-table__cb" checked={selected.has(op.id)} onChange={() => toggleSelect(op.id)} />
-                      </td>
-                      <td><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: '#374151' }}>{op.nif}</span></td>
-                      <td style={{ fontWeight: 600, color: '#0f172a' }}>{op.name}</td>
-                      <td><KeyBadge k={op.key} /><span style={{ marginLeft: 5, fontSize: 11, color: '#6b7280' }}>{t(`fm.m349.key.${op.key}`)}</span></td>
-                      <td style={{ textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}>{formatAmount(op.base)}</td>
-                      <td><ViesBadge status={op.vies} /></td>
-                      <td>
-                        {formatOrigin(op)
-                          ? <button className="fm-origin-link" onClick={() => { setInvoiceNifFilter(op.nif); setActiveTab('invoices'); }}>{formatOrigin(op)}</button>
-                          : <span style={{ color: '#d1d5db' }}>—</span>
-                        }
-                      </td>
-                      <td><button className="fm-table-action"><Eye size={12} strokeWidth={1.75} style={{ display:'inline',verticalAlign:'middle',marginRight:4 }} />{t('fm.action.open')}</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </div>
         )}
 
-        {activeTab === 'invoices' && (
-          <div style={{ marginTop: 12 }}>
-            <InvoicesTab
-              liveInvoices={liveInvoices}
-              invoiceNifFilter={invoiceNifFilter}
-              setInvoiceNifFilter={setInvoiceNifFilter}
-              t={t}
-            />
+        {activeTab === 'rectif' && (
+          <div style={{ padding: '60px 0', textAlign: 'center' }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', marginBottom: 6 }}>
+              {t('fm.m349.tab.rectif') ?? 'Rectificaciones'}
+            </div>
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>
+              {t('fm.m349.coming_soon') ?? 'Contenido disponible próximamente'}
+            </div>
           </div>
         )}
 
-        {activeTab !== 'operators' && activeTab !== 'invoices' && (
-          <div style={{ padding: '32px 0', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-            {t('fm.m349.coming_soon', { tab: TABS.find(tab => tab.id === activeTab)?.label ?? '' })}
-          </div>
-        )}
       </div>
-
+      {/* Shared tab content — same layout as 303 */}
+      {(activeTab === 'invoices' || activeTab === 'incidents' || activeTab === 'files' || activeTab === 'history') && (
+        <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'invoices' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
+          {activeTab === 'invoices' && (
+            <SourcesTab
+              decl={{ ...decl, sources: liveInvoices ?? decl.invoices }}
+              t={t}
+              data-testid="SourcesTab__346dd5" />
+          )}
+          {activeTab === 'incidents' && (
+            <IncidentsTab
+              decl={decl}
+              blocking={blocking}
+              warning={warning}
+              t={t}
+              onGoToSources={() => setActiveTab('invoices')}
+              data-testid="IncidentsTab__346dd5" />
+          )}
+          {activeTab === 'files' && (
+            <FilesTab
+              decl={decl}
+              t={t}
+              fileBlocked={fileBlocked}
+              onGenerate={() => setShowFilegen(true)}
+              genLabel={t('fm.action.gen349') ?? 'Generar fichero 349'}
+              data-testid="FilesTab__346dd5" />
+          )}
+          {activeTab === 'history' && (
+            <HistoryTab decl={decl} t={t} data-testid="HistoryTab__346dd5" />
+          )}
+        </div>
+      )}
       {/* Overlays */}
       {showPresent && (
-        <PresentModal decl={decl} onConfirm={({ status: s }) => handleStatusChange(s)} onClose={() => setShowPresent(false)} />
+        <PresentModal
+          decl={decl}
+          onConfirm={({ status: s }) => handleStatusChange(s)}
+          onClose={() => setShowPresent(false)}
+          data-testid="PresentModal__346dd5" />
       )}
       {showFilegen && (
         <FileGenModal
           decl={decl}
           onConfirm={({ phone, contact }) => handleGenerate({ phone, contact })}
           onClose={() => setShowFilegen(false)}
-        />
+          data-testid="FileGenModal__346dd5" />
       )}
       {showPdf && (
         <DocumentPreview
@@ -535,7 +643,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           onClose={() => { setShowPdf(false); clearPdf(); }}
           title={`Modelo 349 · ${decl.year} ${decl.period}`}
           pdfUrl={pdfUrl}
-        />
+          data-testid="DocumentPreview__346dd5" />
       )}
     </div>
   );

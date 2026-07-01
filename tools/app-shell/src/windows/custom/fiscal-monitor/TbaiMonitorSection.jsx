@@ -3,7 +3,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Checkbox } from '@/components/ui/checkbox';
-import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload } from './FmPrimitives.jsx';
 import { TBAI_SPEC, TBAI_ENTITY } from './useFiscalMonitor.js';
 
 const STATUS_FIELD = 'estado';
@@ -11,6 +11,14 @@ const STATUS_FIELD = 'estado';
 const FILTER_ALL      = 'all';
 const FILTER_SENT     = 'sent';
 const FILTER_REJECTED = 'rejected';
+
+const TBAI_EXPORT_COLS = [
+  { label: 'Date',        get: r => { const inv = parseIdentifier(r); return r.invoiceDate ?? inv.date ?? ''; } },
+  { label: 'Invoice No.', get: r => parseIdentifier(r).docNo },
+  { label: 'Description', get: r => r['invoice$description'] ?? r.descripcion ?? '' },
+  { label: 'Signature',   get: r => r.estado === 'Recibido' ? 'Yes' : 'No' },
+  { label: 'Status',      get: r => r.estado ?? '' },
+];
 
 function parseIdentifier(row) {
   const raw = row['invoice$_identifier'] ?? row.invoiceIdentifier ?? null;
@@ -49,7 +57,7 @@ function mapInitialFilter(initialFilter) {
 
 export default function TbaiMonitorSection({
   orgId, apiBaseUrl, initialFilter = 'all', mockRows, onFilterChange,
-  refreshKey = 0, onInvoiceOpen, onBpClick,
+  refreshKey = 0, onInvoiceOpen, onBpClick, onErrorClick,
   kpis,
   noWrap,
 }) {
@@ -62,6 +70,7 @@ export default function TbaiMonitorSection({
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const { selectedIds, setSelectedIds, allSelected, someSelected, handleToggleAll, handleToggleRow } = useFmSelection(rows);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => { setFilter(mapInitialFilter(initialFilter)); }, [initialFilter]);
 
@@ -96,6 +105,28 @@ export default function TbaiMonitorSection({
   // Reset to first page, rows and selection when filter changes
   useEffect(() => { setPage(1); setRows([]); setSelectedIds(new Set()); }, [filter, setSelectedIds]);
 
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const params = { organization: orgId };
+      if (filter === FILTER_SENT) {
+        params.criteria = JSON.stringify([{ fieldName: 'estado', operator: 'equals', value: 'Recibido' }]);
+      } else if (filter === FILTER_REJECTED) {
+        params.criteria = JSON.stringify([{ fieldName: 'estado', operator: 'inSet', value: ['Rechazado', 'Error'] }]);
+      }
+      await fetchCsvAndDownload(
+        apiFetch,
+        `/${TBAI_SPEC}/${encodeURIComponent(TBAI_ENTITY)}`,
+        params,
+        `tbai_${filter}`,
+        TBAI_EXPORT_COLS,
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const tbaiKpis      = kpis?.tbai ?? {};
   const countAll      = tbaiKpis.total    ?? 0;
   const countSent     = tbaiKpis.received ?? 0;
@@ -123,8 +154,8 @@ export default function TbaiMonitorSection({
             </button>
           ))}
         </div>
-        <button className="fm-export-btn">
-          <ExportIcon /> {ui('fiscalMonitor.export')}
+        <button className="fm-export-btn" onClick={handleExport} disabled={loading || exporting}>
+          <ExportIcon data-testid="ExportIcon__dd7710" /> {ui('fiscalMonitor.export')}
         </button>
       </div>
 
@@ -141,7 +172,11 @@ export default function TbaiMonitorSection({
           <table className="fm-table" data-testid="fm-data-table">
             <thead>
               <tr>
-                <th><Checkbox checked={allSelected} indeterminate={someSelected} onChange={handleToggleAll} /></th>
+                <th><Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  onChange={handleToggleAll}
+                  data-testid="Checkbox__dd7710" /></th>
                 <th className="sortable sorted">{ui('fiscalMonitor.col.date')}</th>
                 <th>{ui('fiscalMonitor.col.invoiceNumber')}</th>
                 <th>{ui('fiscalMonitor.col.description')}</th>
@@ -160,26 +195,32 @@ export default function TbaiMonitorSection({
                 const inv = parseIdentifier(row);
                 const isSigned = row.estado === 'Recibido';
                 let pillClick;
-                if (isErrorStatus(row.estado) && row.businessPartner) {
-                  pillClick = () => onBpClick?.(row.businessPartner);
+                if (isErrorStatus(row.estado)) {
+                  // Always clickable on error — even if businessPartner is null
+                  pillClick = onErrorClick
+                    ? () => onErrorClick(row.businessPartner ?? null, null, row.estado)
+                    : () => onBpClick?.(row.businessPartner);
                 } else if (isPendingStatus(row.estado) && row.invoice) {
                   pillClick = () => onInvoiceOpen?.(row.invoice, 'sales-invoice');
                 }
                 return (
                   <tr key={row.id ?? i}>
-                    <td><Checkbox checked={selectedIds.has(row.id)} onChange={() => handleToggleRow(row.id)} /></td>
+                    <td><Checkbox
+                      checked={selectedIds.has(row.id)}
+                      onChange={() => handleToggleRow(row.id)}
+                      data-testid="Checkbox__dd7710" /></td>
                     <td>{fmtDate(row.invoiceDate ?? inv.date)}</td>
                     <td className="num-factura">
                       <NumFactura
                         n={inv.docNo}
                         onOpen={() => onInvoiceOpen?.(row.invoice, 'sales-invoice')}
-                      />
+                        data-testid="NumFactura__dd7710" />
                     </td>
                     <td>{row['invoice$description'] ?? row.descripcion ?? '—'}</td>
                     <td>
                       {isSigned ? (
                         <span style={{ color: 'var(--fm-success-fg)', display: 'inline-flex', alignItems: 'center' }}>
-                          <CheckIcon />
+                          <CheckIcon data-testid="CheckIcon__dd7710" />
                         </span>
                       ) : (
                         <span style={{ color: 'var(--fm-fg-4)' }}>—</span>
@@ -190,14 +231,18 @@ export default function TbaiMonitorSection({
                         estado={row.estado}
                         onClick={pillClick}
                         title={isPendingStatus(row.estado) ? ui('fiscalMonitor.openInvoice') : undefined}
-                      />
+                        data-testid="StatusPill__dd7710" />
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          <ScrollSentinel hasMore={rows.length < totalRows} loading={loading} onVisible={() => setPage(p => p + 1)} />
+          <ScrollSentinel
+            hasMore={rows.length < totalRows}
+            loading={loading}
+            onVisible={() => setPage(p => p + 1)}
+            data-testid="ScrollSentinel__dd7710" />
         </>
       )}
     </>

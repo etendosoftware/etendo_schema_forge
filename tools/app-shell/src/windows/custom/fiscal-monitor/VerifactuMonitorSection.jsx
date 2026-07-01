@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react';
+
+function getSelectedErrorType(rows) {
+  if (!rows.length) return null;
+  if (rows.every(r => r.verifactuSendingStatus === 'IN')) return 'IN';
+  if (rows.every(r => r.verifactuSendingStatus === 'AE')) return 'AE';
+  return 'mixed';
+}
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Checkbox } from '@/components/ui/checkbox';
-import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, PAGE_SIZE, ExportIcon, useFmSelection } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, PAGE_SIZE, ExportIcon, useFmSelection, buildCsvAndDownload, fetchCsvAndDownload } from './FmPrimitives.jsx';
 import {
   VF_SPEC,
   VF_ACEPTADAS_ENTITY,
@@ -16,6 +23,15 @@ const FILTER_CORRECT  = 'correct';
 const FILTER_PROBLEMS = 'problems';
 
 const INVOICE_FK_FIELD = 'invoice';
+
+const VF_CORRECT_EXPORT_COLS = [
+  { label: 'Invoice No.',    get: r => r['invoice$documentNo'] ?? r['invoice$_identifier']?.split(/\s[–-]\s/)[0]?.trim() ?? r.invoice ?? '' },
+  { label: 'Operation Type', get: r => r['typeOperation$_identifier'] ?? r.typeOperation ?? '' },
+  { label: 'CSV',            get: r => r.cSV ?? '' },
+  { label: 'Status',         get: r => mapVfStatus(r.verifactuSendingStatus ?? '') },
+  { label: 'Error Code',     get: r => r.codeError ?? '' },
+  { label: 'Error Reason',   get: r => r.errorReason ?? '' },
+];
 
 // Map raw DB status codes → StatusPill-compatible keys
 const VF_STATUS_MAP = {
@@ -75,7 +91,7 @@ async function fetchProblems(apiFetch, orgId) {
 
 export default function VerifactuMonitorSection({
   orgId, apiBaseUrl, initialTab = 'correct', mockRows, onTabChange,
-  refreshKey = 0, onInvoiceOpen, onBpClick,
+  refreshKey = 0, onInvoiceOpen, onBpClick, onVfErrorClick, onVfResolveClick,
   kpis,
   noWrap,
 }) {
@@ -88,6 +104,7 @@ export default function VerifactuMonitorSection({
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const { selectedIds, setSelectedIds, allSelected, someSelected, handleToggleAll, handleToggleRow } = useFmSelection(rows);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     // Accept legacy 'accepted' key for backward compat
@@ -124,6 +141,40 @@ export default function VerifactuMonitorSection({
   // Reset to first page, rows and selection when tab changes
   useEffect(() => { setPage(1); setRows([]); setSelectedIds(new Set()); }, [activeTab, setSelectedIds]);
 
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      if (activeTab === FILTER_CORRECT) {
+        await fetchCsvAndDownload(
+          apiFetch,
+          `/${VF_SPEC}/${encodeURIComponent(VF_ACEPTADAS_ENTITY)}`,
+          { _org: orgId },
+          'verifactu_correct',
+          VF_CORRECT_EXPORT_COLS,
+        );
+      } else {
+        // Problems tab loads all rows at once (no pagination) — client-side export is complete
+        buildCsvAndDownload('verifactu_problems', [
+          { label: 'Invoice No.',    get: r => parseInvoiceNo(r) },
+          { label: 'Operation Type', get: r => parseTypeLabel(r) },
+          { label: 'CSV',            get: r => r.cSV ?? '' },
+          { label: 'Status',         get: r => mapVfStatus(r.verifactuSendingStatus ?? '') },
+          { label: 'Error Code',     get: r => r.codeError ?? '' },
+          { label: 'Error Reason',   get: r => r.errorReason ?? '' },
+        ], rows);
+      }
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const selectedErrorRows = rows.filter(r =>
+    selectedIds.has(r.id) && isErrorStatus(mapVfStatus(r.verifactuSendingStatus))
+  );
+  const selectedErrorType = getSelectedErrorType(selectedErrorRows);
+  const canResolve = selectedErrorRows.length > 0 && selectedErrorType !== 'mixed';
+
   const vfKpis         = kpis?.verifactu ?? {};
   const countCorrect   = vfKpis.accepted ?? 0;
   const countProblems  = (vfKpis.partiallyAccepted ?? 0) + (vfKpis.rejected ?? 0) + (vfKpis.invalid ?? 0);
@@ -148,9 +199,21 @@ export default function VerifactuMonitorSection({
             </button>
           ))}
         </div>
-        <button className="fm-export-btn">
-          <ExportIcon /> {ui('fiscalMonitor.export')}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="fm-export-btn" onClick={handleExport} disabled={loading || exporting}>
+            <ExportIcon data-testid="ExportIcon__8c1785" /> {ui('fiscalMonitor.export')}
+          </button>
+          {selectedErrorRows.length > 0 && (
+            <button
+              className="fm-export-btn fm-export-btn--primary"
+              onClick={() => onVfResolveClick?.(selectedErrorRows)}
+              disabled={!canResolve}
+              title={!canResolve ? ui('vfSolveError.mixedTypes') : undefined}
+            >
+              {ui('vfSolveError.resolveBtn')}{selectedErrorRows.length > 1 ? ` (${selectedErrorRows.length})` : ''}
+            </button>
+          )}
+        </div>
       </div>
 
       {loading && page === 1 && (
@@ -166,7 +229,11 @@ export default function VerifactuMonitorSection({
           <table className="fm-table" data-testid="fm-data-table">
             <thead>
               <tr>
-                <th><Checkbox checked={allSelected} indeterminate={someSelected} onChange={handleToggleAll} /></th>
+                <th><Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  onChange={handleToggleAll}
+                  data-testid="Checkbox__8c1785" /></th>
                 <th>{ui('fiscalMonitor.col.invoiceNumber')}</th>
                 <th>{ui('fiscalMonitor.col.operationType')}</th>
                 <th>{ui('fiscalMonitor.col.csv')}</th>
@@ -187,22 +254,25 @@ export default function VerifactuMonitorSection({
                 const mappedStatus = mapVfStatus(row.verifactuSendingStatus ?? activeTab);
                 return (
                   <tr key={row.id ?? i}>
-                    <td><Checkbox checked={selectedIds.has(row.id)} onChange={() => handleToggleRow(row.id)} /></td>
+                    <td><Checkbox
+                      checked={selectedIds.has(row.id)}
+                      onChange={() => handleToggleRow(row.id)}
+                      data-testid="Checkbox__8c1785" /></td>
                     <td className="num-factura">
                       <NumFactura
                         n={invoiceNo}
                         onOpen={() => onInvoiceOpen?.(row[INVOICE_FK_FIELD], 'sales-invoice')}
-                      />
+                        data-testid="NumFactura__8c1785" />
                     </td>
                     <td>{typeLabel}</td>
                     <td className="mono">{row.cSV ?? '—'}</td>
                     <td>
                       <StatusPill
                         estado={mappedStatus}
-                        onClick={isErrorStatus(mappedStatus) && row.businessPartner
-                          ? () => onBpClick?.(row.businessPartner)
+                        onClick={isErrorStatus(mappedStatus)
+                          ? () => onVfErrorClick?.(row)
                           : undefined}
-                      />
+                        data-testid="StatusPill__8c1785" />
                     </td>
                     <td style={{ color: row.errorReason ? 'var(--fm-danger-fg)' : 'var(--fm-fg-3)', fontSize: 12, maxWidth: 280 }}>
                       {row.codeError ? `[${row.codeError}] ` : ''}{row.errorReason ?? '—'}
@@ -212,7 +282,11 @@ export default function VerifactuMonitorSection({
               })}
             </tbody>
           </table>
-          <ScrollSentinel hasMore={rows.length < totalRows} loading={loading} onVisible={() => setPage(p => p + 1)} />
+          <ScrollSentinel
+            hasMore={rows.length < totalRows}
+            loading={loading}
+            onVisible={() => setPage(p => p + 1)}
+            data-testid="ScrollSentinel__8c1785" />
         </>
       )}
     </>

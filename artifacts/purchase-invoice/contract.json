@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.60.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-06-03T17:59:09.816Z",
-  "checksum": "040cf302366d66b6",
+  "updatedAt": "2026-06-29T19:54:37.694Z",
+  "checksum": "b370f896543f140f",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -16,7 +16,26 @@
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
       },
-      "menuActions": [],
+      "menuActions": [
+        {
+          "key": "reactivate",
+          "label": "Reactivate",
+          "labelKey": "reactivate",
+          "visibleWhenStatus": "CO",
+          "documentAction": "RE",
+          "successKey": "reactivated",
+          "preUnpost": true
+        },
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
@@ -39,15 +58,30 @@
           "POReference": "Nº documento",
           "OutstandingAmt": "Pendiente de pago",
           "EM_Etgo_Due_Date": "Vencimiento",
-          "em_etgo_delivery_status": "Estado de entrega"
+          "em_etgo_delivery_status": "Estado de recepción",
+          "C_DocTypeTarget_ID": "Tipo de documento"
         },
         "en_US": {
           "POReference": "Document No.",
           "OutstandingAmt": "Pending Payment",
           "EM_Etgo_Due_Date": "Due Date",
-          "em_etgo_delivery_status": "Delivery Status"
+          "em_etgo_delivery_status": "Reception Status",
+          "C_DocTypeTarget_ID": "Document Type"
         }
       },
+      "subsetFilters": [
+        {
+          "label": "allTab"
+        },
+        {
+          "label": "invoicesTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"
+        },
+        {
+          "label": "creditNotesTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D"
+        }
+      ],
       "dateFilterKey": "invoiceDate",
       "noHeaderBorder": true,
       "lineEntityConfig": "invoice",
@@ -64,7 +98,15 @@
         "allowEmail": false
       },
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "header": {
@@ -83,7 +125,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
             "derivation": {
               "type": "fromConfig",
@@ -91,7 +133,8 @@
             },
             "reference": "DocumentType",
             "inputMode": "selector",
-            "section": "other",
+            "section": "principal",
+            "seq": 15,
             "validationRule": {
               "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
               "contextParams": [
@@ -108,7 +151,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "!!record.id"
             }
           },
           {
@@ -161,7 +204,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO'))"
+              "js": "record['posted'] === true || (record['processed'] === true && (record['documentStatus'] !== 'VO'))"
             }
           },
           {
@@ -282,7 +325,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -400,43 +443,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR",
@@ -454,7 +527,7 @@
             "grid": true,
             "form": false,
             "sourceRequired": true,
-            "gridOrder": 5
+            "gridOrder": 6
           },
           {
             "name": "summedLineAmount",
@@ -570,7 +643,11 @@
               "source": "0"
             },
             "defaultValue": "0",
-            "gridOrder": 6
+            "gridOrder": 7,
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @Ispaid@='N'",
+              "evaluable": true
+            }
           },
           {
             "name": "dueAmount",
@@ -653,6 +730,47 @@
             }
           },
           {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "gridOrder": 5,
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          },
+          {
             "name": "project",
             "apiKey": "project",
             "column": "C_Project_ID",
@@ -681,7 +799,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -799,19 +917,31 @@
             "enumValues": [
               {
                 "value": "F6",
-                "name": "Accounting document"
+                "name": "Accounting document",
+                "labels": {
+                  "es_ES": "Justificante contable"
+                }
               },
               {
                 "value": "LC",
-                "name": "Aduanas - Liquidación complementaria"
+                "name": "Aduanas - Liquidación complementaria",
+                "labels": {
+                  "es_ES": "Aduanas - Liquidación complementaria"
+                }
               },
               {
                 "value": "F5",
-                "name": "Import (DUA)"
+                "name": "Import (DUA)",
+                "labels": {
+                  "es_ES": "Importación (DUA)"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -900,35 +1030,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
@@ -1016,6 +1170,23 @@
             "required": false,
             "grid": false,
             "form": false
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "label": "Processed",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "false"
+            }
           },
           {
             "name": "aeatsiiCauseExemption",
@@ -1174,7 +1345,7 @@
             "required": false,
             "grid": true,
             "form": false,
-            "gridOrder": 7
+            "gridOrder": 8
           },
           {
             "name": "eTGODeliveryStatus",
@@ -1187,7 +1358,7 @@
             "required": false,
             "grid": true,
             "form": false,
-            "gridOrder": 8
+            "gridOrder": 9
           }
         ],
         "searchableFields": [
@@ -1270,6 +1441,13 @@
             }
           },
           {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            }
+          },
+          {
             "name": "prepaymentAmount",
             "derivation": {
               "type": "computed",
@@ -1330,6 +1508,13 @@
             "derivation": {
               "type": "computed",
               "source": "N"
+            }
+          },
+          {
+            "name": "processed",
+            "derivation": {
+              "type": "computed",
+              "source": "false"
             }
           },
           {
@@ -1466,14 +1651,11 @@
             "required": false,
             "grid": true,
             "form": true,
-            "derivation": {
-              "type": "computed",
-              "source": "0"
-            },
             "defaultValue": "0",
             "section": "principal",
             "gridOrder": 5,
             "min": 0,
+            "max": 100,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1499,7 +1681,7 @@
             "section": "principal",
             "gridOrder": 6,
             "validationRule": {
-              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID=@AD_CLIENT_ID@ AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
               "cascadeParams": [
                 "DateInvoiced",
@@ -1712,7 +1894,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -1731,7 +1913,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -1750,7 +1932,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -1769,7 +1951,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -1788,7 +1970,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           }
         ],
@@ -1799,13 +1981,6 @@
             "derivation": {
               "type": "computed",
               "source": "1"
-            }
-          },
-          {
-            "name": "etgoDiscount",
-            "derivation": {
-              "type": "computed",
-              "source": "0"
             }
           },
           {
@@ -1894,71 +2069,122 @@
             "enumValues": [
               {
                 "value": "INTRES_15",
-                "name": "Arrendamiento financiero (alquiler­compra)"
+                "name": "Arrendamiento financiero (alquiler­compra)",
+                "labels": {
+                  "es_ES": "Arrendamiento financiero (alquiler­compra)"
+                }
               },
               {
                 "value": "INTRES_11",
-                "name": "Compra/venta en firme"
+                "name": "Compra/venta en firme",
+                "labels": {
+                  "es_ES": "Compra/venta en firme"
+                }
               },
               {
                 "value": "INTRES_14",
-                "name": "Compras por particulares"
+                "name": "Compras por particulares",
+                "labels": {
+                  "es_ES": "Compras por particulares"
+                }
               },
               {
                 "value": "INTRES_21",
-                "name": "Devolución de mercancías,"
+                "name": "Devolución de mercancías,",
+                "labels": {
+                  "es_ES": "Devolución de mercancías,"
+                }
               },
               {
                 "value": "INTRES_12",
-                "name": "Entrega para venta a la vista o de prueba"
+                "name": "Entrega para venta a la vista o de prueba",
+                "labels": {
+                  "es_ES": "Entrega para venta a la vista o de prueba"
+                }
               },
               {
                 "value": "INTRES_31",
-                "name": "Mercancías suministradas financiados CE"
+                "name": "Mercancías suministradas financiados CE",
+                "labels": {
+                  "es_ES": "Mercancías suministradas financiados CE"
+                }
               },
               {
                 "value": "INTRES_40",
-                "name": "Operaciones con miras al trabajo por encargo"
+                "name": "Operaciones con miras al trabajo por encargo",
+                "labels": {
+                  "es_ES": "Operaciones con miras al trabajo por encargo"
+                }
               },
               {
                 "value": "INTRES_70",
-                "name": "Operaciones en programas comunes de defensa/intergubernament"
+                "name": "Operaciones en programas comunes de defensa/intergubernament",
+                "labels": {
+                  "es_ES": "Operaciones en programas comunes de defensa/intergubernament"
+                }
               },
               {
                 "value": "INTRES_50",
-                "name": "Operaciones tras el trabajo por encargo"
+                "name": "Operaciones tras el trabajo por encargo",
+                "labels": {
+                  "es_ES": "Operaciones tras el trabajo por encargo"
+                }
               },
               {
                 "value": "INTRES_33",
-                "name": "Otras entregas de ayuda (particulares, orgs. no gubernamenta"
+                "name": "Otras entregas de ayuda (particulares, orgs. no gubernamenta",
+                "labels": {
+                  "es_ES": "Otras entregas de ayuda (particulares, orgs. no gubernamenta"
+                }
               },
               {
                 "value": "INTRES_32",
-                "name": "Otras entregas de ayuda gubernamental"
+                "name": "Otras entregas de ayuda gubernamental",
+                "labels": {
+                  "es_ES": "Otras entregas de ayuda gubernamental"
+                }
               },
               {
                 "value": "INTRES_90",
-                "name": "Otras transacciones"
+                "name": "Otras transacciones",
+                "labels": {
+                  "es_ES": "Otras transacciones"
+                }
               },
               {
                 "value": "INTRES_34",
-                "name": "Otros"
+                "name": "Otros",
+                "labels": {
+                  "es_ES": "Otros"
+                }
               },
               {
                 "value": "INTRES_80",
-                "name": "Suministro de materiales de construcción y maquinaria"
+                "name": "Suministro de materiales de construcción y maquinaria",
+                "labels": {
+                  "es_ES": "Suministro de materiales de construcción y maquinaria"
+                }
               },
               {
                 "value": "INTRES_22",
-                "name": "Sustitución de mercancías devueltas"
+                "name": "Sustitución de mercancías devueltas",
+                "labels": {
+                  "es_ES": "Sustitución de mercancías devueltas"
+                }
               },
               {
                 "value": "INTRES_23",
-                "name": "Sustitución de mercancías no devueltas,"
+                "name": "Sustitución de mercancías no devueltas,",
+                "labels": {
+                  "es_ES": "Sustitución de mercancías no devueltas,"
+                }
               },
               {
                 "value": "INTRES_13",
-                "name": "Trueque (compensación en especie)"
+                "name": "Trueque (compensación en especie)",
+                "labels": {
+                  "es_ES": "Trueque (compensación en especie)"
+                }
               }
             ],
             "readOnlyLogic": {
@@ -1981,35 +2207,59 @@
             "enumValues": [
               {
                 "value": "4",
-                "name": "Air transport"
+                "name": "Air transport",
+                "labels": {
+                  "es_ES": "Transporte Aéreo"
+                }
               },
               {
                 "value": "7",
-                "name": "Fixed transport installations"
+                "name": "Fixed transport installations",
+                "labels": {
+                  "es_ES": "Instalaciones fijas de transporte"
+                }
               },
               {
                 "value": "8",
-                "name": "Inland waterway transport"
+                "name": "Inland waterway transport",
+                "labels": {
+                  "es_ES": "Transporte de navegación interior"
+                }
               },
               {
                 "value": "9",
-                "name": "Own propulsion"
+                "name": "Own propulsion",
+                "labels": {
+                  "es_ES": "Autopropulsión"
+                }
               },
               {
                 "value": "5",
-                "name": "Postal consignment"
+                "name": "Postal consignment",
+                "labels": {
+                  "es_ES": "Envíos postales"
+                }
               },
               {
                 "value": "2",
-                "name": "Rail transport"
+                "name": "Rail transport",
+                "labels": {
+                  "es_ES": "Transporte por ferrocaril"
+                }
               },
               {
                 "value": "3",
-                "name": "Road transport"
+                "name": "Road transport",
+                "labels": {
+                  "es_ES": "Transporte por Carretera"
+                }
               },
               {
                 "value": "1",
-                "name": "Sea transport"
+                "name": "Sea transport",
+                "labels": {
+                  "es_ES": "Transporte marítimo"
+                }
               }
             ],
             "readOnlyLogic": {
@@ -2032,239 +2282,416 @@
             "enumValues": [
               {
                 "value": "INTRES_0101",
-                "name": "ALAVA AEROPUERTO"
+                "name": "ALAVA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALAVA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0717",
-                "name": "ALCUDIA MARITIMA"
+                "name": "ALCUDIA MARITIMA",
+                "labels": {
+                  "es_ES": "ALCUDIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1131",
-                "name": "ALGECIRAS MARITIMA"
+                "name": "ALGECIRAS MARITIMA",
+                "labels": {
+                  "es_ES": "ALGECIRAS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0301",
-                "name": "ALICANTE AEROPUERTO"
+                "name": "ALICANTE AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALICANTE AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0311",
-                "name": "ALICANTE MARITIMA"
+                "name": "ALICANTE MARITIMA",
+                "labels": {
+                  "es_ES": "ALICANTE MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0401",
-                "name": "ALMERIA AEROPUERTO"
+                "name": "ALMERIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ALMERIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0411",
-                "name": "ALMERIA MARITIMA"
+                "name": "ALMERIA MARITIMA",
+                "labels": {
+                  "es_ES": "ALMERIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3301",
-                "name": "ASTURIAS AEROPUERTO"
+                "name": "ASTURIAS AEROPUERTO",
+                "labels": {
+                  "es_ES": "ASTURIAS AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3331",
-                "name": "AVILES MARITIMA"
+                "name": "AVILES MARITIMA",
+                "labels": {
+                  "es_ES": "AVILES MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0801",
-                "name": "BARCELONA AEROPUERTO"
+                "name": "BARCELONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "BARCELONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_812",
-                "name": "BARCELONA MARITIMA EXP"
+                "name": "BARCELONA MARITIMA EXP",
+                "labels": {
+                  "es_ES": "BARCELONA MARITIMA EXP"
+                }
               },
               {
                 "value": "INTRES_0811",
-                "name": "BARCELONA MARITIMA IMP"
+                "name": "BARCELONA MARITIMA IMP",
+                "labels": {
+                  "es_ES": "BARCELONA MARITIMA IMP"
+                }
               },
               {
                 "value": "INTRES_4801",
-                "name": "BILBAO AEROPUERTO"
+                "name": "BILBAO AEROPUERTO",
+                "labels": {
+                  "es_ES": "BILBAO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4811",
-                "name": "BILBAO MARITIMA"
+                "name": "BILBAO MARITIMA",
+                "labels": {
+                  "es_ES": "BILBAO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1111",
-                "name": "CADIZ MARITIMA"
+                "name": "CADIZ MARITIMA",
+                "labels": {
+                  "es_ES": "CADIZ MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3011",
-                "name": "CARTAGENA MARITIMA"
+                "name": "CARTAGENA MARITIMA",
+                "labels": {
+                  "es_ES": "CARTAGENA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1211",
-                "name": "CASTELLON MARIMA"
+                "name": "CASTELLON MARIMA",
+                "labels": {
+                  "es_ES": "CASTELLON MARIMA"
+                }
               },
               {
                 "value": "INTRES_1521",
-                "name": "EL FERROL MARITIMA"
+                "name": "EL FERROL MARITIMA",
+                "labels": {
+                  "es_ES": "EL FERROL MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4631",
-                "name": "GANDIA MARITIMA"
+                "name": "GANDIA MARITIMA",
+                "labels": {
+                  "es_ES": "GANDIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1701",
-                "name": "GERONA AEROPUERTO"
+                "name": "GERONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GERONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3311",
-                "name": "GIJON MARITIMA"
+                "name": "GIJON MARITIMA",
+                "labels": {
+                  "es_ES": "GIJON MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1801",
-                "name": "GRANDA AEROPUERTO"
+                "name": "GRANDA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GRANDA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2001",
-                "name": "GUIPUZCOA AEROPUERTO"
+                "name": "GUIPUZCOA AEROPUERTO",
+                "labels": {
+                  "es_ES": "GUIPUZCOA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2111",
-                "name": "HUELVA MARITIMA"
+                "name": "HUELVA MARITIMA",
+                "labels": {
+                  "es_ES": "HUELVA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0707",
-                "name": "IBIZA AEROPUERTO"
+                "name": "IBIZA AEROPUERTO",
+                "labels": {
+                  "es_ES": "IBIZA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0721",
-                "name": "IBIZA MARITIMA"
+                "name": "IBIZA MARITIMA",
+                "labels": {
+                  "es_ES": "IBIZA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1101",
-                "name": "JEREZ AEROPUERTO"
+                "name": "JEREZ AEROPUERTO",
+                "labels": {
+                  "es_ES": "JEREZ AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1501",
-                "name": "LA CORUNA AEROPUERTO"
+                "name": "LA CORUNA AEROPUERTO",
+                "labels": {
+                  "es_ES": "LA CORUNA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1511",
-                "name": "LA CORUNA MARITIMA"
+                "name": "LA CORUNA MARITIMA",
+                "labels": {
+                  "es_ES": "LA CORUNA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_2801",
-                "name": "MADRID AEROPUERTO"
+                "name": "MADRID AEROPUERTO",
+                "labels": {
+                  "es_ES": "MADRID AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2901",
-                "name": "MALAGA AEROPUERTO"
+                "name": "MALAGA AEROPUERTO",
+                "labels": {
+                  "es_ES": "MALAGA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_2911",
-                "name": "MALAGA MARITIMA"
+                "name": "MALAGA MARITIMA",
+                "labels": {
+                  "es_ES": "MALAGA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3621",
-                "name": "MARTIN MARITIMA"
+                "name": "MARTIN MARITIMA",
+                "labels": {
+                  "es_ES": "MARTIN MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0708",
-                "name": "MOHAN AEROPUERTO"
+                "name": "MOHAN AEROPUERTO",
+                "labels": {
+                  "es_ES": "MOHAN AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0731",
-                "name": "MOHAN MARITIMA"
+                "name": "MOHAN MARITIMA",
+                "labels": {
+                  "es_ES": "MOHAN MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1811",
-                "name": "MORIL MARIMA"
+                "name": "MORIL MARIMA",
+                "labels": {
+                  "es_ES": "MORIL MARIMA"
+                }
               },
               {
                 "value": "INTRES_3001",
-                "name": "MURCIA AEROPUERTO"
+                "name": "MURCIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "MURCIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_0711",
-                "name": "P . MALLORCA MARITIMA"
+                "name": "P . MALLORCA MARITIMA",
+                "labels": {
+                  "es_ES": "P . MALLORCA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_0701",
-                "name": "P. MALLORCA AEROPUERTO"
+                "name": "P. MALLORCA AEROPUERTO",
+                "labels": {
+                  "es_ES": "P. MALLORCA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_1711",
-                "name": "PALAMOS MARITIMA"
+                "name": "PALAMOS MARITIMA",
+                "labels": {
+                  "es_ES": "PALAMOS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_2011",
-                "name": "PASAJES MARITIMA"
+                "name": "PASAJES MARITIMA",
+                "labels": {
+                  "es_ES": "PASAJES MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1121",
-                "name": "PUERTO DE SANTA MARIA"
+                "name": "PUERTO DE SANTA MARIA",
+                "labels": {
+                  "es_ES": "PUERTO DE SANTA MARIA"
+                }
               },
               {
                 "value": "INTRES_2711",
-                "name": "RIBADEO MARITIMA"
+                "name": "RIBADEO MARITIMA",
+                "labels": {
+                  "es_ES": "RIBADEO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4621",
-                "name": "SAGUNTO MARITIMA"
+                "name": "SAGUNTO MARITIMA",
+                "labels": {
+                  "es_ES": "SAGUNTO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4321",
-                "name": "SAN CARLOS MARITIMA"
+                "name": "SAN CARLOS MARITIMA",
+                "labels": {
+                  "es_ES": "SAN CARLOS MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3901",
-                "name": "SANTANDER AUEROPUERTO"
+                "name": "SANTANDER AUEROPUERTO",
+                "labels": {
+                  "es_ES": "SANTANDER AUEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3911",
-                "name": "SANTANDER MARITIMA"
+                "name": "SANTANDER MARITIMA",
+                "labels": {
+                  "es_ES": "SANTANDER MARITIMA"
+                }
               },
               {
                 "value": "INTRES_1507",
-                "name": "SANTIAGO AEROPUERTO"
+                "name": "SANTIAGO AEROPUERTO",
+                "labels": {
+                  "es_ES": "SANTIAGO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4101",
-                "name": "SEVILLA AEROPUERTO"
+                "name": "SEVILLA AEROPUERTO",
+                "labels": {
+                  "es_ES": "SEVILLA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4111",
-                "name": "SEVILLA MARITIMA"
+                "name": "SEVILLA MARITIMA",
+                "labels": {
+                  "es_ES": "SEVILLA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4301",
-                "name": "TARRAGONA AEROPUERTO"
+                "name": "TARRAGONA AEROPUERTO",
+                "labels": {
+                  "es_ES": "TARRAGONA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4311",
-                "name": "TARRAGONA MARITIMA"
+                "name": "TARRAGONA MARITIMA",
+                "labels": {
+                  "es_ES": "TARRAGONA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4601",
-                "name": "VALENCIA AEROPUERTO"
+                "name": "VALENCIA AEROPUERTO",
+                "labels": {
+                  "es_ES": "VALENCIA AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_4611",
-                "name": "VALENCIA MARITIMA"
+                "name": "VALENCIA MARITIMA",
+                "labels": {
+                  "es_ES": "VALENCIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_4701",
-                "name": "VALLADOLID AEROPUERTO"
+                "name": "VALLADOLID AEROPUERTO",
+                "labels": {
+                  "es_ES": "VALLADOLID AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3601",
-                "name": "VIGO AEROPUERTO"
+                "name": "VIGO AEROPUERTO",
+                "labels": {
+                  "es_ES": "VIGO AEROPUERTO"
+                }
               },
               {
                 "value": "INTRES_3611",
-                "name": "VIGO MARITIMA"
+                "name": "VIGO MARITIMA",
+                "labels": {
+                  "es_ES": "VIGO MARITIMA"
+                }
               },
               {
                 "value": "INTRES_3631",
-                "name": "VILLAGARCIA MARITIMA"
+                "name": "VILLAGARCIA MARITIMA",
+                "labels": {
+                  "es_ES": "VILLAGARCIA MARITIMA"
+                }
               },
               {
                 "value": "INTRES_5001",
-                "name": "ZARAGOZA AEROPUERTO"
+                "name": "ZARAGOZA AEROPUERTO",
+                "labels": {
+                  "es_ES": "ZARAGOZA AEROPUERTO"
+                }
               }
             ],
             "displayLogic": {
@@ -2291,43 +2718,73 @@
             "enumValues": [
               {
                 "value": "INTRES_Acq_1",
-                "name": "Comunitarias destino final Estado miembro introducción"
+                "name": "Comunitarias destino final Estado miembro introducción",
+                "labels": {
+                  "es_ES": "Comunitarias destino final Estado miembro introducción"
+                }
               },
               {
                 "value": "INTRES_Acq_4",
-                "name": "Comunitarias devueltas al mismo estado expedidas"
+                "name": "Comunitarias devueltas al mismo estado expedidas",
+                "labels": {
+                  "es_ES": "Comunitarias devueltas al mismo estado expedidas"
+                }
               },
               {
                 "value": "INTRES_Acq_5",
-                "name": "Comunitarias devueltas transformadas"
+                "name": "Comunitarias devueltas transformadas",
+                "labels": {
+                  "es_ES": "Comunitarias devueltas transformadas"
+                }
               },
               {
                 "value": "INTRES_Del_5",
-                "name": "Salida de mercancías tras transformación"
+                "name": "Salida de mercancías tras transformación",
+                "labels": {
+                  "es_ES": "Salida de mercancías tras transformación"
+                }
               },
               {
                 "value": "INTRES_Del_1",
-                "name": "Salida mercancías a estado miembro"
+                "name": "Salida mercancías a estado miembro",
+                "labels": {
+                  "es_ES": "Salida mercancías a estado miembro"
+                }
               },
               {
                 "value": "INTRES_Del_4",
-                "name": "Salida para devolución de mercancías"
+                "name": "Salida para devolución de mercancías",
+                "labels": {
+                  "es_ES": "Salida para devolución de mercancías"
+                }
               },
               {
                 "value": "INTRES_Del_2",
-                "name": "Salida temporal para reintroducir en el mismo estado"
+                "name": "Salida temporal para reintroducir en el mismo estado",
+                "labels": {
+                  "es_ES": "Salida temporal para reintroducir en el mismo estado"
+                }
               },
               {
                 "value": "INTRES_Del_3",
-                "name": "Salida temporal para reintroducir tras transformación"
+                "name": "Salida temporal para reintroducir tras transformación",
+                "labels": {
+                  "es_ES": "Salida temporal para reintroducir tras transformación"
+                }
               },
               {
                 "value": "INTRES_Acq_3",
-                "name": "Temporales a otro Estado miembro con transformación"
+                "name": "Temporales a otro Estado miembro con transformación",
+                "labels": {
+                  "es_ES": "Temporales a otro Estado miembro con transformación"
+                }
               },
               {
                 "value": "INTRES_Acq_2",
-                "name": "Temporales para ser reexpedidas a un Estado miembro"
+                "name": "Temporales para ser reexpedidas a un Estado miembro",
+                "labels": {
+                  "es_ES": "Temporales para ser reexpedidas a un Estado miembro"
+                }
               }
             ],
             "readOnlyLogic": {
@@ -2762,35 +3219,59 @@
             "enumValues": [
               {
                 "value": "RPAP",
-                "name": "Awaiting Payment"
+                "name": "Awaiting Payment",
+                "labels": {
+                  "es_ES": "A Pagar"
+                }
               },
               {
                 "value": "RPAE",
-                "name": "Awaiting Execution"
+                "name": "Awaiting Execution",
+                "labels": {
+                  "es_ES": "A Ejecutar"
+                }
               },
               {
                 "value": "RPVOID",
-                "name": "Void"
+                "name": "Void",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "PPM",
-                "name": "Payment Made"
+                "name": "Payment Made",
+                "labels": {
+                  "es_ES": "Pagado"
+                }
               },
               {
                 "value": "RPR",
-                "name": "Payment Received"
+                "name": "Payment Received",
+                "labels": {
+                  "es_ES": "Cobrado"
+                }
               },
               {
                 "value": "RDNC",
-                "name": "Deposited not Cleared"
+                "name": "Deposited not Cleared",
+                "labels": {
+                  "es_ES": "Cobro depositado"
+                }
               },
               {
                 "value": "PWNC",
-                "name": "Withdrawn not Cleared"
+                "name": "Withdrawn not Cleared",
+                "labels": {
+                  "es_ES": "Pago reintegrado"
+                }
               },
               {
                 "value": "RPPC",
-                "name": "Payment Cleared"
+                "name": "Payment Cleared",
+                "labels": {
+                  "es_ES": "Conciliado"
+                }
               }
             ]
           },
@@ -3182,39 +3663,6 @@
         ],
         "javaQualifier": "paymentDetailsHandler"
       },
-      "reversedInvoices": {
-        "tableName": "C_Invoice_Reverse",
-        "tabId": "3ED38B380CD849B38F0AC1B52F992C34",
-        "tabName": "Reversed Invoices",
-        "uiPattern": "STD",
-        "fields": [
-          {
-            "name": "reversedInvoice",
-            "apiKey": "reversedInvoice",
-            "column": "Reversed_C_Invoice_ID",
-            "label": "Reversed Invoice",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "Invoice",
-            "inputMode": "search",
-            "callout": {
-              "className": "com.etendoerp.verifactu.ad_callouts.PaymentWarning"
-            },
-            "readOnlyLogic": {
-              "raw": "@Processed@='Y'",
-              "evaluable": true,
-              "js": "record['processed'] === true"
-            }
-          }
-        ],
-        "searchableFields": [],
-        "computedFields": []
-      },
       "exchangeRates": {
         "tableName": "C_Conversion_Rate_Document",
         "tabId": "FF808181308EA4230130901AB2C60090",
@@ -3249,7 +3697,7 @@
             "readOnlyLogic": {
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
+              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
             }
           },
           {
@@ -3274,7 +3722,7 @@
             "readOnlyLogic": {
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
+              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
             }
           },
           {
@@ -3294,7 +3742,7 @@
             "readOnlyLogic": {
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
+              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
             }
           },
           {
@@ -3320,7 +3768,7 @@
             "readOnlyLogic": {
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
+              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
             }
           }
         ],
@@ -3564,19 +4012,31 @@
             "enumValues": [
               {
                 "value": "A",
-                "name": "Actual"
+                "name": "Actual",
+                "labels": {
+                  "es_ES": "Real"
+                }
               },
               {
                 "value": "B",
-                "name": "Budget"
+                "name": "Budget",
+                "labels": {
+                  "es_ES": "Presupuesto"
+                }
               },
               {
                 "value": "E",
-                "name": "Encumbrance"
+                "name": "Encumbrance",
+                "labels": {
+                  "es_ES": "Gravamen"
+                }
               },
               {
                 "value": "S",
-                "name": "Statistical"
+                "name": "Statistical",
+                "labels": {
+                  "es_ES": "Estadística"
+                }
               }
             ]
           }
@@ -3632,35 +4092,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ]
           },
@@ -3678,15 +4162,24 @@
             "enumValues": [
               {
                 "value": "A0",
-                "name": "Alta en SII (A0)"
+                "name": "Alta en SII (A0)",
+                "labels": {
+                  "es_ES": "Alta en SII (A0)"
+                }
               },
               {
                 "value": "A1",
-                "name": "Modification to SII (A1)"
+                "name": "Modification to SII (A1)",
+                "labels": {
+                  "es_ES": "Modificación a SII (A1)"
+                }
               },
               {
                 "value": "Q",
-                "name": "SII Query"
+                "name": "SII Query",
+                "labels": {
+                  "es_ES": "Consulta SII"
+                }
               }
             ]
           },
@@ -3716,23 +4209,38 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - Not contrastable"
+                "name": "1 - Not contrastable",
+                "labels": {
+                  "es_ES": "1 - No contrastable"
+                }
               },
               {
                 "value": "2",
-                "name": "2 - In contrasting process"
+                "name": "2 - In contrasting process",
+                "labels": {
+                  "es_ES": "2 - En proceso de contraste"
+                }
               },
               {
                 "value": "3",
-                "name": "3 - Not contrasted"
+                "name": "3 - Not contrasted",
+                "labels": {
+                  "es_ES": "3 - No contrastada"
+                }
               },
               {
                 "value": "4",
-                "name": "4 - Partially contrasted"
+                "name": "4 - Partially contrasted",
+                "labels": {
+                  "es_ES": "4 - Parcialmente constrastada"
+                }
               },
               {
                 "value": "5",
-                "name": "5 - Contrasted"
+                "name": "5 - Contrasted",
+                "labels": {
+                  "es_ES": "5 - Contrastada"
+                }
               }
             ]
           },
@@ -3854,7 +4362,26 @@
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
       },
-      "menuActions": [],
+      "menuActions": [
+        {
+          "key": "reactivate",
+          "label": "Reactivate",
+          "labelKey": "reactivate",
+          "visibleWhenStatus": "CO",
+          "documentAction": "RE",
+          "successKey": "reactivated",
+          "preUnpost": true
+        },
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        }
+      ],
       "processOverrides": {},
       "secondaryTabs": {
         "exchangeRates": {
@@ -3877,15 +4404,30 @@
           "POReference": "Nº documento",
           "OutstandingAmt": "Pendiente de pago",
           "EM_Etgo_Due_Date": "Vencimiento",
-          "em_etgo_delivery_status": "Estado de entrega"
+          "em_etgo_delivery_status": "Estado de recepción",
+          "C_DocTypeTarget_ID": "Tipo de documento"
         },
         "en_US": {
           "POReference": "Document No.",
           "OutstandingAmt": "Pending Payment",
           "EM_Etgo_Due_Date": "Due Date",
-          "em_etgo_delivery_status": "Delivery Status"
+          "em_etgo_delivery_status": "Reception Status",
+          "C_DocTypeTarget_ID": "Document Type"
         }
       },
+      "subsetFilters": [
+        {
+          "label": "allTab"
+        },
+        {
+          "label": "invoicesTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"
+        },
+        {
+          "label": "creditNotesTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D"
+        }
+      ],
       "dateFilterKey": "invoiceDate",
       "noHeaderBorder": true,
       "lineEntityConfig": "invoice",
@@ -3901,7 +4443,15 @@
       "sendDocument": {
         "allowEmail": false
       },
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "header": {
@@ -4241,8 +4791,8 @@
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
-            "visibility": "discarded",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -4562,7 +5112,7 @@
             "apiKey": "processed",
             "column": "Processed",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -5180,6 +5730,38 @@
             "type": "integer",
             "visibility": "readOnly",
             "required": false
+          },
+          {
+            "name": "psd2GenerateBankPayment",
+            "apiKey": "psd2GenerateBankPayment",
+            "column": "EM_Psd2_Generate_Bank_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTPRRemovePayment",
+            "apiKey": "eTPRRemovePayment",
+            "column": "EM_Etpr_Remove_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
           }
         ],
         "javaQualifier": "purchaseInvoiceHeaderHandler"
@@ -5798,14 +6380,6 @@
             "required": true
           },
           {
-            "name": "intrCInvoiceline",
-            "apiKey": "intrCInvoiceline",
-            "column": "Intr_C_Invoiceline_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -5834,6 +6408,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Intr_C_Invoiceline_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -6243,14 +6825,6 @@
             "required": false
           },
           {
-            "name": "cInvoicetaxCashvatVID",
-            "apiKey": "cInvoicetaxCashvatVID",
-            "column": "C_Invoicetax_Cashvat_V_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": false
-          },
-          {
             "name": "invoice",
             "apiKey": "invoice",
             "column": "C_Invoice_ID",
@@ -6319,6 +6893,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Invoicetax_Cashvat_V_ID",
+            "type": "id",
             "visibility": "system",
             "required": false
           }
@@ -6466,14 +7048,6 @@
             "required": false
           },
           {
-            "name": "finPaymentScheduleID",
-            "apiKey": "finPaymentScheduleID",
-            "column": "Fin_Payment_Schedule_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -6542,6 +7116,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_Schedule_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -6737,14 +7319,6 @@
             "required": true
           },
           {
-            "name": "fINPaymentScheduledetailID",
-            "apiKey": "fINPaymentScheduledetailID",
-            "column": "FIN_Payment_Scheduledetail_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "costCenter",
             "apiKey": "costCenter",
             "column": "C_Costcenter_ID",
@@ -6855,144 +7429,17 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": false
-          }
-        ],
-        "javaQualifier": "paymentDetailsHandler"
-      },
-      "reversedInvoices": {
-        "tableName": "C_Invoice_Reverse",
-        "tabId": "3ED38B380CD849B38F0AC1B52F992C34",
-        "tabName": "Reversed Invoices",
-        "fields": [
-          {
-            "name": "reversedInvoice",
-            "apiKey": "reversedInvoice",
-            "column": "Reversed_C_Invoice_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "aEAT349IsCorrective",
-            "apiKey": "aEAT349IsCorrective",
-            "column": "EM_AEAT349_IsCorrective",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "aEAT349CYear",
-            "apiKey": "aEAT349CYear",
-            "column": "EM_AEAT349_C_Year_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "aEAT349Period",
-            "apiKey": "aEAT349Period",
-            "column": "EM_AEAT349_Period",
-            "type": "enum",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "aEAT349BPBaseAmount",
-            "apiKey": "aEAT349BPBaseAmount",
-            "column": "EM_AEAT349_BP_BaseAmount",
-            "type": "amount",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "aEAT349CBpartner",
-            "apiKey": "aEAT349CBpartner",
-            "column": "EM_AEAT349_C_Bpartner_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "aEAT349BPBaseAmountS",
-            "apiKey": "aEAT349BPBaseAmountS",
-            "column": "EM_AEAT349_BP_BaseAmount_S",
-            "type": "amount",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "invoice",
-            "apiKey": "invoice",
-            "column": "C_Invoice_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
           },
           {
             "name": "id",
             "apiKey": "id",
-            "column": "C_Invoice_Reverse_ID",
+            "column": "FIN_Payment_Scheduledetail_ID",
             "type": "id",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "Createdby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "Updatedby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
           }
-        ]
+        ],
+        "javaQualifier": "paymentDetailsHandler"
       },
       "exchangeRates": {
         "tableName": "C_Conversion_Rate_Document",
@@ -7664,14 +8111,6 @@
             "required": true
           },
           {
-            "name": "factura",
-            "apiKey": "factura",
-            "column": "Aeatsii_Facturas_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -7700,6 +8139,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Facturas_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7751,14 +8198,6 @@
             "required": true
           },
           {
-            "name": "tbaiSyncinvoiceID",
-            "apiKey": "tbaiSyncinvoiceID",
-            "column": "Tbai_Syncinvoice_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -7795,6 +8234,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Tbai_Syncinvoice_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -8051,36 +8498,6 @@
       },
       {
         "method": "GET",
-        "path": "/reversedInvoices",
-        "entity": "reversedInvoices",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/reversedInvoices/:id",
-        "entity": "reversedInvoices",
-        "supportedFilters": []
-      },
-      {
-        "method": "POST",
-        "path": "/reversedInvoices",
-        "entity": "reversedInvoices",
-        "supportedFilters": []
-      },
-      {
-        "method": "PUT",
-        "path": "/reversedInvoices/:id",
-        "entity": "reversedInvoices",
-        "supportedFilters": []
-      },
-      {
-        "method": "DELETE",
-        "path": "/reversedInvoices/:id",
-        "entity": "reversedInvoices",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
         "path": "/exchangeRates",
         "entity": "exchangeRates",
         "supportedFilters": []
@@ -8299,17 +8716,6 @@
         "delete": true,
         "listUrl": "/sws/neo/purchase-invoice/paymentDetails",
         "detailUrl": "/sws/neo/purchase-invoice/paymentDetails/{id}",
-        "supportedFilters": []
-      },
-      "reversedInvoices": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/purchase-invoice/reversedInvoices",
-        "detailUrl": "/sws/neo/purchase-invoice/reversedInvoices/{id}",
         "supportedFilters": []
       },
       "exchangeRates": {
@@ -8708,14 +9114,6 @@
         "url": "/sws/neo/purchase-invoice/paymentDetails/selectors/finPaymentID"
       },
       {
-        "entity": "reversedInvoices",
-        "field": "reversedInvoice",
-        "column": "Reversed_C_Invoice_ID",
-        "reference": "Invoice",
-        "inputMode": "search",
-        "url": "/sws/neo/purchase-invoice/reversedInvoices/selectors/reversedInvoice"
-      },
-      {
         "entity": "exchangeRates",
         "field": "currency",
         "column": "C_Currency_ID",
@@ -8867,12 +9265,6 @@
       },
       {
         "entity": "header",
-        "field": "posted",
-        "column": "Posted",
-        "url": "/sws/neo/purchase-invoice/header/{id}/action/posted"
-      },
-      {
-        "entity": "header",
         "field": "aPRMProcessinvoice",
         "column": "EM_APRM_Processinvoice",
         "url": "/sws/neo/purchase-invoice/header/{id}/action/aPRMProcessinvoice",
@@ -8998,6 +9390,30 @@
         "processType": "obuiapp"
       },
       {
+        "entity": "header",
+        "field": "psd2GenerateBankPayment",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "url": "/sws/neo/purchase-invoice/header/{id}/action/psd2GenerateBankPayment",
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "column": "EM_Etpr_Remove_Payment",
+        "url": "/sws/neo/purchase-invoice/header/{id}/action/eTPRRemovePayment",
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/purchase-invoice/header/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
         "entity": "lines",
         "field": "explode",
         "column": "Explode",
@@ -9059,13 +9475,15 @@
         "POReference": "Nº documento",
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
-        "em_etgo_delivery_status": "Estado de entrega"
+        "em_etgo_delivery_status": "Estado de recepción",
+        "C_DocTypeTarget_ID": "Tipo de documento"
       },
       "en_US": {
         "POReference": "Document No.",
         "OutstandingAmt": "Pending Payment",
         "EM_Etgo_Due_Date": "Due Date",
-        "em_etgo_delivery_status": "Delivery Status"
+        "em_etgo_delivery_status": "Reception Status",
+        "C_DocTypeTarget_ID": "Document Type"
       }
     }
   },
@@ -9168,6 +9586,22 @@
         "description": "Action endpoint for 'documentAction' in header should exist"
       },
       {
+        "id": "t-action-endpoint-header-etblkpBulkposting",
+        "category": "action-endpoint",
+        "entity": "header",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Action endpoint for 'etblkpBulkposting' in header should exist"
+      },
+      {
+        "id": "t-action-endpoint-header-eTPRRemovePayment",
+        "category": "action-endpoint",
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "runner": "node",
+        "description": "Action endpoint for 'eTPRRemovePayment' in header should exist"
+      },
+      {
         "id": "t-action-endpoint-header-etvfacRectCreate",
         "category": "action-endpoint",
         "entity": "header",
@@ -9184,20 +9618,20 @@
         "description": "Action endpoint for 'generateTo' in header should exist"
       },
       {
-        "id": "t-action-endpoint-header-posted",
-        "category": "action-endpoint",
-        "entity": "header",
-        "field": "posted",
-        "runner": "node",
-        "description": "Action endpoint for 'posted' in header should exist"
-      },
-      {
         "id": "t-action-endpoint-header-processNow",
         "category": "action-endpoint",
         "entity": "header",
         "field": "processNow",
         "runner": "node",
         "description": "Action endpoint for 'processNow' in header should exist"
+      },
+      {
+        "id": "t-action-endpoint-header-psd2GenerateBankPayment",
+        "category": "action-endpoint",
+        "entity": "header",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "Action endpoint for 'psd2GenerateBankPayment' in header should exist"
       },
       {
         "id": "t-action-endpoint-header-tBAIQRcode",
@@ -9332,13 +9766,6 @@
         "entity": "paymentPlan",
         "runner": "node",
         "description": "CRUD flags for 'paymentPlan' should all be booleans"
-      },
-      {
-        "id": "t-crud-flags-reversedInvoices",
-        "category": "crud-flags",
-        "entity": "reversedInvoices",
-        "runner": "node",
-        "description": "CRUD flags for 'reversedInvoices' should all be booleans"
       },
       {
         "id": "t-crud-flags-siiData",
@@ -9521,6 +9948,14 @@
         "field": "paymentComplete",
         "runner": "node",
         "description": "Default value for 'paymentComplete' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-posted",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in header should be a string"
       },
       {
         "id": "t-default-value-type-header-prepaymentAmount",
@@ -9723,6 +10158,22 @@
         "description": "Display logic for 'etsgDateOperation' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-outstandingAmount",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "outstandingAmount",
+        "runner": "node",
+        "description": "Display logic for 'outstandingAmount' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-intrastat-conversionRate",
         "category": "displaylogic-evaluable",
         "entity": "intrastat",
@@ -9841,6 +10292,22 @@
         "field": "etsgDateOperation",
         "runner": "node",
         "description": "Display logic for 'etsgDateOperation' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-outstandingAmount",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "outstandingAmount",
+        "runner": "node",
+        "description": "Display logic for 'outstandingAmount' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-posted",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-intrastat-conversionRate",
@@ -10475,6 +10942,14 @@
         "description": "Field 'paymentTerms' should be present in header"
       },
       {
+        "id": "t-field-presence-header-posted",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-prepaymentAmount",
         "category": "field-presence",
         "entity": "header",
@@ -10489,6 +10964,14 @@
         "field": "priceList",
         "runner": "node",
         "description": "Field 'priceList' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-processed",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should be present in header"
       },
       {
         "id": "t-field-presence-header-project",
@@ -10961,14 +11444,6 @@
         "field": "paymentMethod",
         "runner": "node",
         "description": "Field 'paymentMethod' should be present in paymentPlan"
-      },
-      {
-        "id": "t-field-presence-reversedInvoices-reversedInvoice",
-        "category": "field-presence",
-        "entity": "reversedInvoices",
-        "field": "reversedInvoice",
-        "runner": "node",
-        "description": "Field 'reversedInvoice' should be present in reversedInvoices"
       },
       {
         "id": "t-field-presence-siiData-cdigoCSV",
@@ -11651,6 +12126,14 @@
         "description": "Field 'paymentTerms' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-posted",
+        "category": "field-type",
+        "entity": "header",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in header"
+      },
+      {
         "id": "t-field-type-header-prepaymentAmount",
         "category": "field-type",
         "entity": "header",
@@ -11665,6 +12148,14 @@
         "field": "priceList",
         "runner": "node",
         "description": "Field 'priceList' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-processed",
+        "category": "field-type",
+        "entity": "header",
+        "field": "processed",
+        "runner": "node",
+        "description": "Field 'processed' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-project",
@@ -12137,14 +12628,6 @@
         "field": "paymentMethod",
         "runner": "node",
         "description": "Field 'paymentMethod' should have type 'string' in paymentPlan"
-      },
-      {
-        "id": "t-field-type-reversedInvoices-reversedInvoice",
-        "category": "field-type",
-        "entity": "reversedInvoices",
-        "field": "reversedInvoice",
-        "runner": "node",
-        "description": "Field 'reversedInvoice' should have type 'string' in reversedInvoices"
       },
       {
         "id": "t-field-type-siiData-cdigoCSV",
@@ -12723,14 +13206,6 @@
         "description": "Read-only logic for 'unitPrice' in lines should have evaluable flag"
       },
       {
-        "id": "t-readonlylogic-evaluable-reversedInvoices-reversedInvoice",
-        "category": "readonlylogic-evaluable",
-        "entity": "reversedInvoices",
-        "field": "reversedInvoice",
-        "runner": "node",
-        "description": "Read-only logic for 'reversedInvoice' in reversedInvoices should have evaluable flag"
-      },
-      {
         "id": "t-readonlylogic-evaluable-tax-tax",
         "category": "readonlylogic-evaluable",
         "entity": "tax",
@@ -13233,14 +13708,6 @@
         "field": "unitPrice",
         "runner": "node",
         "description": "Read-only logic for 'unitPrice' in lines should be valid JS"
-      },
-      {
-        "id": "t-readonlylogic-valid-reversedInvoices-reversedInvoice",
-        "category": "readonlylogic-valid",
-        "entity": "reversedInvoices",
-        "field": "reversedInvoice",
-        "runner": "node",
-        "description": "Read-only logic for 'reversedInvoice' in reversedInvoices should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-tax-tax",
@@ -13846,14 +14313,6 @@
         "description": "Selector endpoint for 'paymentMethod' in paymentPlan should exist"
       },
       {
-        "id": "t-selector-endpoint-reversedInvoices-reversedInvoice",
-        "category": "selector-endpoint",
-        "entity": "reversedInvoices",
-        "field": "reversedInvoice",
-        "runner": "node",
-        "description": "Selector endpoint for 'reversedInvoice' in reversedInvoices should exist"
-      },
-      {
         "id": "t-selector-endpoint-siiData-conexinSII",
         "category": "selector-endpoint",
         "entity": "siiData",
@@ -14254,20 +14713,20 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for batuz"
       },
       {
+        "id": "t-system-field-batuz-id",
+        "category": "system-field",
+        "entity": "batuz",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for batuz"
+      },
+      {
         "id": "t-system-field-batuz-organization",
         "category": "system-field",
         "entity": "batuz",
         "field": "organization",
         "runner": "node",
         "description": "System field 'organization' should exist in backend but not frontend for batuz"
-      },
-      {
-        "id": "t-system-field-batuz-tbaiSyncinvoiceID",
-        "category": "system-field",
-        "entity": "batuz",
-        "field": "tbaiSyncinvoiceID",
-        "runner": "node",
-        "description": "System field 'tbaiSyncinvoiceID' should exist in backend but not frontend for batuz"
       },
       {
         "id": "t-system-field-batuz-updated",
@@ -14310,14 +14769,6 @@
         "description": "System field 'businessPartner' should exist in backend but not frontend for cashVat"
       },
       {
-        "id": "t-system-field-cashVat-cInvoicetaxCashvatVID",
-        "category": "system-field",
-        "entity": "cashVat",
-        "field": "cInvoicetaxCashvatVID",
-        "runner": "node",
-        "description": "System field 'cInvoicetaxCashvatVID' should exist in backend but not frontend for cashVat"
-      },
-      {
         "id": "t-system-field-cashVat-cInvoiceTaxID",
         "category": "system-field",
         "entity": "cashVat",
@@ -14356,6 +14807,14 @@
         "field": "currency",
         "runner": "node",
         "description": "System field 'currency' should exist in backend but not frontend for cashVat"
+      },
+      {
+        "id": "t-system-field-cashVat-id",
+        "category": "system-field",
+        "entity": "cashVat",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for cashVat"
       },
       {
         "id": "t-system-field-cashVat-invoice",
@@ -14886,12 +15345,36 @@
         "description": "System field 'documentType' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-etblkpAccountingstatus",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-etblkpBulkposting",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "System field 'etblkpBulkposting' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-etcopagCopilotFeedback",
         "category": "system-field",
         "entity": "header",
         "field": "etcopagCopilotFeedback",
         "runner": "node",
         "description": "System field 'etcopagCopilotFeedback' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-eTPRRemovePayment",
+        "category": "system-field",
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "runner": "node",
+        "description": "System field 'eTPRRemovePayment' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-etsgIsF3",
@@ -15206,14 +15689,6 @@
         "description": "System field 'percentageOverdue' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-posted",
-        "category": "system-field",
-        "entity": "header",
-        "field": "posted",
-        "runner": "node",
-        "description": "System field 'posted' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-priceIncludesTax",
         "category": "system-field",
         "entity": "header",
@@ -15238,20 +15713,20 @@
         "description": "System field 'printDiscount' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-processed",
-        "category": "system-field",
-        "entity": "header",
-        "field": "processed",
-        "runner": "node",
-        "description": "System field 'processed' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-processNow",
         "category": "system-field",
         "entity": "header",
         "field": "processNow",
         "runner": "node",
         "description": "System field 'processNow' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-psd2GenerateBankPayment",
+        "category": "system-field",
+        "entity": "header",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "System field 'psd2GenerateBankPayment' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-salesCampaign",
@@ -15478,12 +15953,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for intrastat"
       },
       {
-        "id": "t-system-field-intrastat-intrCInvoiceline",
+        "id": "t-system-field-intrastat-id",
         "category": "system-field",
         "entity": "intrastat",
-        "field": "intrCInvoiceline",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'intrCInvoiceline' should exist in backend but not frontend for intrastat"
+        "description": "System field 'id' should exist in backend but not frontend for intrastat"
       },
       {
         "id": "t-system-field-intrastat-organization",
@@ -15934,12 +16409,12 @@
         "description": "System field 'expected' should exist in backend but not frontend for paymentDetails"
       },
       {
-        "id": "t-system-field-paymentDetails-fINPaymentScheduledetailID",
+        "id": "t-system-field-paymentDetails-id",
         "category": "system-field",
         "entity": "paymentDetails",
-        "field": "fINPaymentScheduledetailID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'fINPaymentScheduledetailID' should exist in backend but not frontend for paymentDetails"
+        "description": "System field 'id' should exist in backend but not frontend for paymentDetails"
       },
       {
         "id": "t-system-field-paymentDetails-invoiceAmount",
@@ -16126,12 +16601,12 @@
         "description": "System field 'fINPaymentPriorityID' should exist in backend but not frontend for paymentPlan"
       },
       {
-        "id": "t-system-field-paymentPlan-finPaymentScheduleID",
+        "id": "t-system-field-paymentPlan-id",
         "category": "system-field",
         "entity": "paymentPlan",
-        "field": "finPaymentScheduleID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'finPaymentScheduleID' should exist in backend but not frontend for paymentPlan"
+        "description": "System field 'id' should exist in backend but not frontend for paymentPlan"
       },
       {
         "id": "t-system-field-paymentPlan-invoice",
@@ -16198,126 +16673,6 @@
         "description": "System field 'updatePaymentPlan' should exist in backend but not frontend for paymentPlan"
       },
       {
-        "id": "t-system-field-reversedInvoices-active",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "active",
-        "runner": "node",
-        "description": "System field 'active' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-aEAT349BPBaseAmount",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "aEAT349BPBaseAmount",
-        "runner": "node",
-        "description": "System field 'aEAT349BPBaseAmount' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-aEAT349BPBaseAmountS",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "aEAT349BPBaseAmountS",
-        "runner": "node",
-        "description": "System field 'aEAT349BPBaseAmountS' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-aEAT349CBpartner",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "aEAT349CBpartner",
-        "runner": "node",
-        "description": "System field 'aEAT349CBpartner' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-aEAT349CYear",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "aEAT349CYear",
-        "runner": "node",
-        "description": "System field 'aEAT349CYear' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-aEAT349IsCorrective",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "aEAT349IsCorrective",
-        "runner": "node",
-        "description": "System field 'aEAT349IsCorrective' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-aEAT349Period",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "aEAT349Period",
-        "runner": "node",
-        "description": "System field 'aEAT349Period' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-client",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-createdBy",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-creationDate",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-id",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-invoice",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "invoice",
-        "runner": "node",
-        "description": "System field 'invoice' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-organization",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-updated",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
-        "id": "t-system-field-reversedInvoices-updatedBy",
-        "category": "system-field",
-        "entity": "reversedInvoices",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for reversedInvoices"
-      },
-      {
         "id": "t-system-field-siiData-active",
         "category": "system-field",
         "entity": "siiData",
@@ -16350,12 +16705,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for siiData"
       },
       {
-        "id": "t-system-field-siiData-factura",
+        "id": "t-system-field-siiData-id",
         "category": "system-field",
         "entity": "siiData",
-        "field": "factura",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'factura' should exist in backend but not frontend for siiData"
+        "description": "System field 'id' should exist in backend but not frontend for siiData"
       },
       {
         "id": "t-system-field-siiData-invoice",
@@ -16564,13 +16919,6 @@
         "description": "Entity 'paymentPlan' should only expose visible fields in frontend"
       },
       {
-        "id": "t-visibility-reversedInvoices",
-        "category": "visibility",
-        "entity": "reversedInvoices",
-        "runner": "node",
-        "description": "Entity 'reversedInvoices' should only expose visible fields in frontend"
-      },
-      {
         "id": "t-visibility-siiData",
         "category": "visibility",
         "entity": "siiData",
@@ -16586,25 +16934,25 @@
       }
     ],
     "summary": {
-      "total": 945,
+      "total": 936,
       "byCategory": {
-        "action-endpoint": 24,
-        "crud-flags": 13,
-        "default-value-type": 37,
-        "displaylogic-evaluable": 15,
-        "displaylogic-valid": 15,
-        "field-presence": 147,
-        "field-type": 147,
-        "readonlylogic-evaluable": 64,
-        "readonlylogic-valid": 64,
+        "action-endpoint": 26,
+        "crud-flags": 12,
+        "default-value-type": 38,
+        "displaylogic-evaluable": 17,
+        "displaylogic-valid": 17,
+        "field-presence": 148,
+        "field-type": 148,
+        "readonlylogic-evaluable": 63,
+        "readonlylogic-valid": 63,
         "rule-declared": 21,
         "searchable-filters": 6,
-        "selector-endpoint": 51,
-        "system-field": 328,
-        "visibility": 13
+        "selector-endpoint": 50,
+        "system-field": 315,
+        "visibility": 12
       },
       "byRunner": {
-        "node": 945,
+        "node": 936,
         "junit": 0
       }
     }

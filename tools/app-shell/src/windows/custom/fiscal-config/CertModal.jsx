@@ -10,7 +10,10 @@ function AlertBox({ type, title, body, onDismiss }) {
   if (type === 'error') {
     return (
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-sm text-red-600">
-        <TriangleAlert size={16} className="text-red-500 flex-shrink-0" />
+        <TriangleAlert
+          size={16}
+          className="text-red-500 flex-shrink-0"
+          data-testid="TriangleAlert__a22bc2" />
         <span className="flex-1">{title}</span>
         {onDismiss && (
           <button type="button" onClick={onDismiss} className="flex-shrink-0 text-muted-foreground hover:text-foreground">✕</button>
@@ -21,13 +24,21 @@ function AlertBox({ type, title, body, onDismiss }) {
   const styles = {
     success: {
       wrap: 'bg-green-50 border-l-[3px] border-l-green-500',
-      icon: <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5"><Check size={13} strokeWidth={2.5} className="text-white" /></div>,
+      icon: <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5"><Check
+        size={13}
+        strokeWidth={2.5}
+        className="text-white"
+        data-testid="Check__a22bc2" /></div>,
       title: 'text-green-800 font-semibold',
       body:  'text-green-700',
     },
     warning: {
       wrap: 'bg-amber-50 border-l-[3px] border-l-amber-400',
-      icon: <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5"><Info size={13} strokeWidth={2.5} className="text-white" /></div>,
+      icon: <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center flex-shrink-0 mt-0.5"><Info
+        size={13}
+        strokeWidth={2.5}
+        className="text-white"
+        data-testid="Info__a22bc2" /></div>,
       title: 'text-amber-800 font-semibold',
       body:  'text-amber-700',
     },
@@ -62,7 +73,7 @@ function MiniStepper({ step, ui }) {
           done={i < idx}
           active={i === idx}
           isFirst={i === 0}
-        />
+          data-testid="FiscalStepItem__a22bc2" />
       ))}
     </div>
   );
@@ -239,7 +250,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
           </button>
         </div>
 
-        <MiniStepper step={step} ui={ui} />
+        <MiniStepper step={step} ui={ui} data-testid="MiniStepper__a22bc2" />
 
         {/* Body */}
         <div className="px-6 pb-4 overflow-y-auto max-h-[60vh]">
@@ -257,8 +268,12 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                 <div className={`w-11 h-11 mx-auto mb-3 rounded-xl flex items-center justify-center
                   ${file ? 'bg-[#121217]' : 'bg-muted text-foreground'}`}>
                   {file
-                    ? <FileText size={20} strokeWidth={1.5} className="text-white" />
-                    : <Upload size={20} strokeWidth={1.5} />}
+                    ? <FileText
+                    size={20}
+                    strokeWidth={1.5}
+                    className="text-white"
+                    data-testid="FileText__a22bc2" />
+                    : <Upload size={20} strokeWidth={1.5} data-testid="Upload__a22bc2" />}
                 </div>
                 {file ? (
                   <>
@@ -282,7 +297,11 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
               </div>
 
               {errMsg && (
-                <AlertBox type="error" title={errMsg} onDismiss={() => setErrMsg(null)} />
+                <AlertBox
+                  type="error"
+                  title={errMsg}
+                  onDismiss={() => setErrMsg(null)}
+                  data-testid="AlertBox__a22bc2" />
               )}
 
               {/* Password */}
@@ -304,21 +323,25 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
                     className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground"
                     aria-label={showPwd ? ui('fiscal.cert.pwd.hide') : ui('fiscal.cert.pwd.show')}
                   >
-                    {showPwd ? <EyeOff size={14} strokeWidth={1.75} /> : <Eye size={14} strokeWidth={1.75} />}
+                    {showPwd ? <EyeOff size={14} strokeWidth={1.75} data-testid="EyeOff__a22bc2" /> : <Eye size={14} strokeWidth={1.75} data-testid="Eye__a22bc2" />}
                   </button>
                 </div>
                 <p className="text-xs text-[#121217] mt-1.5 flex items-center gap-1">
-                  <Lock size={11} strokeWidth={2} /> {ui('fiscal.cert.pwd.hint')}
+                  <Lock size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.pwd.hint')}
                 </p>
               </div>
 
-              <AlertBox type="warning" title={ui('fiscal.cert.info.title')} body={ui('fiscal.cert.info.body')} />
+              <AlertBox
+                type="warning"
+                title={ui('fiscal.cert.info.title')}
+                body={ui('fiscal.cert.info.body')}
+                data-testid="AlertBox__a22bc2" />
             </div>
           )}
 
           {step === 'verify' && (
             <div className="py-8 text-center">
-              <CircularProgress progress={progress} />
+              <CircularProgress progress={progress} data-testid="CircularProgress__a22bc2" />
               <p className="text-sm font-semibold mt-4">{ui('fiscal.cert.verifying.title')}</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
                 {ui('fiscal.cert.verifying.body')}
@@ -328,7 +351,11 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
 
           {step === 'confirmNif' && (
             <div className="space-y-4">
-              <AlertBox type="warning" title={ui('fiscal.cert.nif.warning.title')} body={ui('fiscal.cert.nif.warning.body', { nif: pendingNif })} />
+              <AlertBox
+                type="warning"
+                title={ui('fiscal.cert.nif.warning.title')}
+                body={ui('fiscal.cert.nif.warning.body', { nif: pendingNif })}
+                data-testid="AlertBox__a22bc2" />
               <div className="rounded-xl border border-border divide-y divide-border text-sm">
                 <div className="flex items-center px-4 py-2.5 gap-4">
                   <span className="text-muted-foreground flex-shrink-0 min-w-[7rem]">{ui('fiscal.cert.nif.row.file')}</span>
@@ -344,7 +371,11 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
 
           {step === 'done' && (
             <div className="space-y-4">
-              <AlertBox type="success" title={ui('fiscal.cert.success.title')} body={ui('fiscal.cert.success.body')} />
+              <AlertBox
+                type="success"
+                title={ui('fiscal.cert.success.title')}
+                body={ui('fiscal.cert.success.body')}
+                data-testid="AlertBox__a22bc2" />
 
               <div className="rounded-xl border border-border divide-y divide-border text-sm">
                 {[
@@ -363,7 +394,7 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
               </div>
 
               <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Lock size={11} strokeWidth={2} /> {ui('fiscal.cert.success.encrypted')}
+                <Lock size={11} strokeWidth={2} data-testid="Lock__a22bc2" /> {ui('fiscal.cert.success.encrypted')}
               </p>
             </div>
           )}
@@ -373,23 +404,33 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
         <div className="flex items-center justify-between px-6 py-4 border-t border-border gap-3">
           {step === 'pick' && (
             <div className="flex items-center justify-end w-full">
-              <Button onClick={verify} disabled={!file || !pwd} className="rounded-full">
-                <Check size={14} className="mr-1.5" />{ui('fiscal.cert.btn.verify')}
+              <Button
+                onClick={verify}
+                disabled={!file || !pwd}
+                className="rounded-full"
+                data-testid="Button__a22bc2">
+                <Check size={14} className="mr-1.5" data-testid="Check__a22bc2" />{ui('fiscal.cert.btn.verify')}
               </Button>
             </div>
           )}
           {step === 'verify' && (
             <>
               <span />
-              <Button variant="outline" disabled>{ui('fiscal.cert.btn.cancel')}</Button>
+              <Button variant="outline" disabled data-testid="Button__a22bc2">{ui('fiscal.cert.btn.cancel')}</Button>
             </>
           )}
           {step === 'confirmNif' && (
             <>
-              <Button variant="outline" onClick={() => { setStep('pick'); setPendingNif(null); }}>
+              <Button
+                variant="outline"
+                onClick={() => { setStep('pick'); setPendingNif(null); }}
+                data-testid="Button__a22bc2">
                 {ui('fiscal.cert.btn.change')}
               </Button>
-              <Button onClick={confirmWithNif} className="rounded-full">
+              <Button
+                onClick={confirmWithNif}
+                className="rounded-full"
+                data-testid="Button__a22bc2">
                 {ui('fiscal.cert.btn.useNif', { nif: pendingNif })}
               </Button>
             </>
@@ -398,10 +439,13 @@ export default function CertModal({ context, orgId, apiBaseUrl, onClose, onUploa
             <>
               <span />
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => { setStep('pick'); setFile(null); setPwd(''); setCertDetails(null); setPendingNif(null); }}>
+                <Button
+                  variant="outline"
+                  onClick={() => { setStep('pick'); setFile(null); setPwd(''); setCertDetails(null); setPendingNif(null); }}
+                  data-testid="Button__a22bc2">
                   {ui('fiscal.cert.btn.change')}
                 </Button>
-                <Button onClick={finish} className="rounded-full">{ui('fiscal.cert.btn.use')}</Button>
+                <Button onClick={finish} className="rounded-full" data-testid="Button__a22bc2">{ui('fiscal.cert.btn.use')}</Button>
               </div>
             </>
           )}

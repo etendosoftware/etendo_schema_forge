@@ -31,8 +31,12 @@ vi.mock('../AdvancedFilterBuilder.jsx', () => ({
   AdvancedFilterBuilder: (props) => <div data-testid="advanced-filter-builder" />,
 }));
 
+const lastDistinctValuesListProps = { current: null };
 vi.mock('../DistinctValuesList.jsx', () => ({
-  DistinctValuesList: () => <div data-testid="distinct-values-list" />,
+  DistinctValuesList: (props) => {
+    lastDistinctValuesListProps.current = props;
+    return <div data-testid="distinct-values-list" />;
+  },
 }));
 
 // Mock the Calendar component
@@ -67,8 +71,7 @@ describe('ListFilterBar', () => {
 
   it('renders the advanced filter (funnel) button', () => {
     render(<ListFilterBar columns={COLUMNS} />);
-    // The funnel button has title from ui('advancedFilters')
-    const funnelBtn = screen.getByTitle('advancedFilters');
+    const funnelBtn = screen.getByTestId('filter-advanced');
     expect(funnelBtn).toBeInTheDocument();
   });
 
@@ -149,6 +152,33 @@ describe('ListFilterBar', () => {
     );
     expect(screen.queryByText('1')).not.toBeInTheDocument();
     expect(screen.queryByText('2')).not.toBeInTheDocument();
+  });
+
+  it('hides the status filter trigger when hideStatusFilter is true, even if a status column exists', () => {
+    render(
+      <ListFilterBar
+        columns={COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        hideStatusFilter
+      />
+    );
+    // The status filter button (data-testid="filter-status") must not render
+    expect(screen.queryByTestId('filter-status')).not.toBeInTheDocument();
+    // The allStatuses label must not appear either
+    expect(screen.queryByText('allStatuses')).not.toBeInTheDocument();
+  });
+
+  it('still renders the status filter when hideStatusFilter is false (default)', () => {
+    render(
+      <ListFilterBar
+        columns={COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        hideStatusFilter={false}
+      />
+    );
+    expect(screen.getByText('allStatuses')).toBeInTheDocument();
   });
 });
 
@@ -375,5 +405,186 @@ describe('ListFilterBar date range adapters', () => {
     );
 
     expect(screen.getByText('dateRangeCustom')).toBeInTheDocument();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Type filter: isTypeFilter column flag, labelForType, handleTypeSelect,
+// mergedTypeCodes deduplication
+// ─────────────────────────────────────────────────────────────────────────────
+describe('ListFilterBar type filter', () => {
+  const TYPE_COLUMNS = [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'docType', label: 'Document Type', type: 'string', isTypeFilter: true },
+  ];
+
+  beforeEach(() => {
+    lastDistinctValuesListProps.current = null;
+  });
+
+  const openTypePopover = async () => {
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('filter-type'));
+    await Promise.resolve();
+  };
+
+  it('renders type filter button when a column has isTypeFilter: true', () => {
+    render(
+      <ListFilterBar columns={TYPE_COLUMNS} columnFilters={{}} onFilterChange={vi.fn()} />
+    );
+    expect(screen.getByTestId('filter-type')).toBeInTheDocument();
+  });
+
+  it('does not render type filter when no column has isTypeFilter', () => {
+    const cols = [{ key: 'name', label: 'Name', type: 'string' }];
+    render(
+      <ListFilterBar columns={cols} columnFilters={{}} onFilterChange={vi.fn()} />
+    );
+    expect(screen.queryByTestId('filter-type')).not.toBeInTheDocument();
+  });
+
+  it('shows allTypes label when no type filter is active', () => {
+    render(
+      <ListFilterBar columns={TYPE_COLUMNS} columnFilters={{}} onFilterChange={vi.fn()} />
+    );
+    expect(screen.getByTestId('filter-type')).toHaveTextContent('allTypes');
+  });
+
+  it('shows the active type code as label when a type filter is active', () => {
+    render(
+      <ListFilterBar
+        columns={TYPE_COLUMNS}
+        columnFilters={{ docType: { mode: 'enumLabel', value: ['AP'], originalValue: 'AP' } }}
+        onFilterChange={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('filter-type')).toHaveTextContent('AP');
+  });
+
+  it('uses enumLabels to resolve the active type label via ui()', () => {
+    const colsWithLabels = [
+      { key: 'name', label: 'Name', type: 'string' },
+      {
+        key: 'docType',
+        label: 'Document Type',
+        type: 'string',
+        isTypeFilter: true,
+        enumLabels: { AP: 'invoice.type.ap' },
+      },
+    ];
+    render(
+      <ListFilterBar
+        columns={colsWithLabels}
+        columnFilters={{ docType: { mode: 'enumLabel', value: ['AP'], originalValue: 'AP' } }}
+        onFilterChange={vi.fn()}
+      />
+    );
+    // Mocked ui() returns the key as-is
+    expect(screen.getByTestId('filter-type')).toHaveTextContent('invoice.type.ap');
+  });
+
+  it('handleTypeSelect emits an enumLabel filter for a selected code', async () => {
+    const onFilterChange = vi.fn();
+    render(
+      <ListFilterBar
+        columns={TYPE_COLUMNS}
+        columnFilters={{}}
+        onFilterChange={onFilterChange}
+      />
+    );
+
+    await openTypePopover();
+    expect(lastDistinctValuesListProps.current).not.toBeNull();
+    act(() => {
+      lastDistinctValuesListProps.current.onSelect('AP');
+    });
+
+    expect(onFilterChange).toHaveBeenCalledWith('docType', {
+      mode: 'enumLabel',
+      value: ['AP'],
+      originalValue: 'AP',
+    });
+  });
+
+  it('handleTypeSelect(null) clears the type filter', async () => {
+    const onFilterChange = vi.fn();
+    render(
+      <ListFilterBar
+        columns={TYPE_COLUMNS}
+        columnFilters={{ docType: { mode: 'enumLabel', value: ['AP'], originalValue: 'AP' } }}
+        onFilterChange={onFilterChange}
+      />
+    );
+
+    await openTypePopover();
+    act(() => {
+      lastDistinctValuesListProps.current.onSelect(null);
+    });
+
+    expect(onFilterChange).toHaveBeenCalledWith('docType', null);
+  });
+
+  it('mergedTypeCodes includes codes from in-memory rows, deduplicated', async () => {
+    const rows = [
+      { docType: 'AP' },
+      { docType: 'AR' },
+      { docType: 'AP' },
+    ];
+    render(
+      <ListFilterBar
+        columns={TYPE_COLUMNS}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        rows={rows}
+      />
+    );
+
+    await openTypePopover();
+    const codes = lastDistinctValuesListProps.current.codes;
+    expect(codes).toContain('AP');
+    expect(codes).toContain('AR');
+    expect(codes.filter(c => c === 'AP').length).toBe(1);
+  });
+
+  it('mergedTypeCodes appends the active code when absent from rows and backend', async () => {
+    render(
+      <ListFilterBar
+        columns={TYPE_COLUMNS}
+        columnFilters={{ docType: { mode: 'enumLabel', value: ['GL'], originalValue: 'GL' } }}
+        onFilterChange={vi.fn()}
+        rows={[]}
+      />
+    );
+
+    await openTypePopover();
+    const codes = lastDistinctValuesListProps.current.codes;
+    expect(codes).toContain('GL');
+  });
+
+  it('uses backendFilterKey to read type code from row when specified', async () => {
+    const colsWithBackendKey = [
+      { key: 'name', label: 'Name', type: 'string' },
+      {
+        key: 'docType',
+        label: 'Document Type',
+        type: 'string',
+        isTypeFilter: true,
+        backendFilterKey: 'docType$_identifier',
+      },
+    ];
+    const rows = [{ 'docType$_identifier': 'AP' }, { 'docType$_identifier': 'AR' }];
+    render(
+      <ListFilterBar
+        columns={colsWithBackendKey}
+        columnFilters={{}}
+        onFilterChange={vi.fn()}
+        rows={rows}
+      />
+    );
+
+    await openTypePopover();
+    const codes = lastDistinctValuesListProps.current.codes;
+    expect(codes).toContain('AP');
+    expect(codes).toContain('AR');
   });
 });

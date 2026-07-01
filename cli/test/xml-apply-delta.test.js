@@ -42,6 +42,24 @@ test('upsert with matching natural key preserves prev UUID and replaces columns'
   assert.equal(out.field[0].ISREADONLY, 'Y', 'column updated from delta');
 });
 
+test('upsert null value clears a previous optional column', () => {
+  const prev = makePrev();
+  prev.field[0].AGENT_PROMPT = 'Old prompt';
+  const delta = {
+    spec: 'sales-order',
+    tables: {
+      ETGO_SF_SPEC:   { upserts: [{ _naturalKey: 'sales-order', ETGO_SF_SPEC_ID: 'SPEC-A', NAME: 'sales-order' }], deletes: [] },
+      ETGO_SF_ENTITY: { upserts: [{ _naturalKey: 'sales-order/187', ETGO_SF_ENTITY_ID: 'ENT-1', ETGO_SF_SPEC_ID: 'SPEC-A', AD_TAB_ID: '187', NAME: 'Header' }], deletes: [] },
+      ETGO_SF_FIELD:  { upserts: [{ _naturalKey: 'sales-order/187/2070', ETGO_SF_FIELD_ID: 'FLD-1', ETGO_SF_ENTITY_ID: 'ENT-1', AD_COLUMN_ID: '2070', AGENT_PROMPT: null }], deletes: [] },
+    },
+  };
+
+  const out = applyDelta(prev, delta);
+
+  assert.equal(out.field[0].AGENT_PROMPT, undefined);
+  assert.doesNotMatch(serializeTable('ETGO_SF_FIELD', out.field), /AGENT_PROMPT/);
+});
+
 test('upsert with new natural key appends row with delta-supplied UUID', () => {
   const prev = makePrev();
   const delta = {

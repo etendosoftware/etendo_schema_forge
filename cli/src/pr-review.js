@@ -53,6 +53,11 @@ function stripStringLiterals(line) {
 }
 
 function stripComments(line) {
+  // JSDoc / block-comment continuation lines (e.g. ` *   - E2E_PASSWORD=<password>`)
+  // carry no code: the opening `/*` is on a previous line, so the `/* */` handling
+  // below cannot see it. Treat any line whose first non-space char is `*` as a comment.
+  if (/^\s*\*/.test(line)) return '';
+
   const lineCommentStart = line.indexOf('//');
   let cleaned = lineCommentStart === -1 ? line : line.slice(0, lineCommentStart);
 
@@ -261,6 +266,7 @@ function analyzeSecrets(changedFiles, fileContents, addedLineContents) {
   const secretMatches = [];
   for (const path of changedFiles) {
     const hasSecretMatch = getRelevantLines(path, addedLineContents, fileContents)
+      .map((line) => stripComments(line))
       .map((line) => stripStringLiterals(line))
       .some((line) => secretPattern.test(line));
 
@@ -315,6 +321,12 @@ function analyzeLargeFiles(changedFiles) {
     // Generated AD metadata cache (offline-regen snapshot): intentionally large
     // and machine-generated — same rationale as the contract snapshots above.
     if (path.startsWith('cli/cache/')) {
+      continue;
+    }
+    // Frozen, hand-authored data-fix migrations (chart of accounts, etc.):
+    // intentionally large sampledata dumps, gated by the data-fixes review
+    // criterion rather than the handwritten-source size gate.
+    if (/^cli\/src\/data-fixes\/sql\/.*\.sql$/.test(path)) {
       continue;
     }
     if (!existsSync(path)) {

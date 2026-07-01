@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { toast } from 'sonner';
 import { INVOICE_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
 import HeaderTable from '../../../custom/InvoiceHeaderTable';
 import HeaderForm from './HeaderForm';
@@ -26,7 +27,9 @@ const statusField = 'documentStatus';
 // @sf-generated-end summary:header
 
 // @sf-generated-start extraBadges:header
-const extraBadges = [];
+const extraBadges = [
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+];
 // @sf-generated-end extraBadges:header
 
 // @sf-generated-start processes:header
@@ -45,7 +48,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'paymentMethod'];
+const requiredHeaderFields = ['transactionDocument', 'invoiceDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'paymentMethod'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -55,7 +58,7 @@ const addLineFields = {
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
     { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', required: true, label: 'Invoiced Quantity', defaultValue: 1, min: 0 },
     { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'List Price', min: 0 },
-    { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0 },
+    { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineNetAmount"] },
   ],
   derived: [
@@ -164,17 +167,6 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/purchase-invoice/paymentDetails",
       "detailUrl": "/sws/neo/purchase-invoice/paymentDetails/{id}",
-      "supportedFilters": []
-    },
-    "reversedInvoices": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/purchase-invoice/reversedInvoices",
-      "detailUrl": "/sws/neo/purchase-invoice/reversedInvoices/{id}",
       "supportedFilters": []
     },
     "exchangeRates": {
@@ -573,14 +565,6 @@ export const api = {
       "url": "/sws/neo/purchase-invoice/paymentDetails/selectors/finPaymentID"
     },
     {
-      "entity": "reversedInvoices",
-      "field": "reversedInvoice",
-      "column": "Reversed_C_Invoice_ID",
-      "reference": "Invoice",
-      "inputMode": "search",
-      "url": "/sws/neo/purchase-invoice/reversedInvoices/selectors/reversedInvoice"
-    },
-    {
       "entity": "exchangeRates",
       "field": "currency",
       "column": "C_Currency_ID",
@@ -732,12 +716,6 @@ export const api = {
     },
     {
       "entity": "header",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/purchase-invoice/header/{id}/action/posted"
-    },
-    {
-      "entity": "header",
       "field": "aPRMProcessinvoice",
       "column": "EM_APRM_Processinvoice",
       "url": "/sws/neo/purchase-invoice/header/{id}/action/aPRMProcessinvoice",
@@ -863,6 +841,30 @@ export const api = {
       "processType": "obuiapp"
     },
     {
+      "entity": "header",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/eTPRRemovePayment",
+      "processId": "745FCF75B6F14024B96CC14429D8E952",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/purchase-invoice/header/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
       "entity": "lines",
       "field": "explode",
       "column": "Explode",
@@ -924,13 +926,15 @@ export const api = {
       "POReference": "Nº documento",
       "OutstandingAmt": "Pendiente de pago",
       "EM_Etgo_Due_Date": "Vencimiento",
-      "em_etgo_delivery_status": "Estado de entrega"
+      "em_etgo_delivery_status": "Estado de recepción",
+      "C_DocTypeTarget_ID": "Tipo de documento"
     },
     "en_US": {
       "POReference": "Document No.",
       "OutstandingAmt": "Pending Payment",
       "EM_Etgo_Due_Date": "Due Date",
-      "em_etgo_delivery_status": "Delivery Status"
+      "em_etgo_delivery_status": "Reception Status",
+      "C_DocTypeTarget_ID": "Document Type"
     }
   }
 };
@@ -941,6 +945,7 @@ const labelOverrides = api.labelOverrides;
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         detailEntity="lines"
@@ -971,6 +976,10 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         notesField="description"
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "C_Invoice", config: {} } }, { key: 'sif', labelKey: 'sifDataTabs.sectionTitle', Component: SifTab, placement: 'tab' }]}
         bottomSection={PurchaseInvoiceBottomPanel}
+        menuActions={({ data, status }) => [
+          { key: 'reactivate', label: 'Reactivate', visible: status === 'CO', labelKey: 'reactivate', successKey: 'reactivated', preUnpost: true, documentAction: 'RE',  },
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+        ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
@@ -979,6 +988,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         sendDocument={{"enabled":true,"allowEmail":false}}
         {...props}
       />
+      </>
     );
   }
 
@@ -990,6 +1000,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      subsetFilters={[{"label":"allTab"},{"label":"invoicesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"},{"label":"creditNotesTab","filter":"criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D"}]}
       dateFilterKey="invoiceDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{}}

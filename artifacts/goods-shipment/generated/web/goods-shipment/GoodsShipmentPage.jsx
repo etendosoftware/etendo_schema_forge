@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { toast } from 'sonner';
 import GoodsShipmentTable from './GoodsShipmentTable';
 import GoodsShipmentForm from './GoodsShipmentForm';
 import GoodsShipmentLineTable from './GoodsShipmentLineTable';
@@ -19,18 +20,23 @@ const breadcrumb = 'Sales / Goods Shipment';
 // @sf-generated-start summary:goodsShipment
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
+  { key: 'etblkpAccountingstatus', column: 'EM_Etblkp_Accountingstatus', type: 'status' },
+  { key: 'etblkpBulkposting', column: 'EM_Etblkp_Bulkposting', type: 'string' },
 ];
 
 const statusField = 'documentStatus';
 // @sf-generated-end summary:goodsShipment
 
 // @sf-generated-start extraBadges:goodsShipment
-const extraBadges = [];
+const extraBadges = [
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+];
 // @sf-generated-end extraBadges:goodsShipment
 
 // @sf-generated-start processes:goodsShipment
 const processes = [
-
+  { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
+    displayLogicRaw: "@Processed@='Y' & @#ShowAcct@='Y'" },
 ];
 // @sf-generated-end processes:goodsShipment
 
@@ -39,7 +45,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:goodsShipment
 
 // @sf-generated-start requiredHeaderFields:goodsShipment
-const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate'];
+const requiredHeaderFields = ['documentNo', 'warehouse', 'businessPartner', 'partnerAddress', 'movementDate', 'etblkpAccountingstatus', 'etblkpBulkposting'];
 // @sf-generated-end requiredHeaderFields:goodsShipment
 
 // @sf-generated-start addLineFields:goodsShipmentLine
@@ -161,12 +167,6 @@ export const api = {
     },
     {
       "entity": "goodsShipment",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/posted"
-    },
-    {
-      "entity": "goodsShipment",
       "field": "calculateFreight",
       "column": "Calculate_Freight",
       "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/calculateFreight",
@@ -214,6 +214,14 @@ export const api = {
       "processType": "obuiapp"
     },
     {
+      "entity": "goodsShipment",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/goods-shipment/goodsShipment/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
+      "processType": "obuiapp"
+    },
+    {
       "entity": "goodsShipmentLine",
       "field": "explode",
       "column": "Explode",
@@ -252,6 +260,7 @@ export const api = {
 export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="goodsShipment"
         detailEntity="goodsShipmentLine"
@@ -278,12 +287,17 @@ export default function GoodsShipmentPage({ windowName, recordId, ...props }) {
         bottomSection={GoodsShipmentBottomPanel}
         topbarRight={GoodsShipmentActions}
         topbarExtra={GoodsShipmentBillingBadge}
+        menuActions={({ data, status }) => [
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
+        ]}
         requiredHeaderFields={requiredHeaderFields}
         salesTheme
         linesLayout="inlineEditable"
         sendDocument
         {...props}
       />
+      </>
     );
   }
 

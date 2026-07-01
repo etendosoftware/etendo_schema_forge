@@ -40,7 +40,7 @@ describe('SyncStatusInline', () => {
   });
 
   it('renders the "Conectar PSD2" link by default for card accounts', () => {
-    render(<SyncStatusInline account={{ type: 'T' }} />);
+    render(<SyncStatusInline account={{ type: 'CA' }} />);
     expect(screen.getByText('Conectar PSD2')).toBeInTheDocument();
   });
 });

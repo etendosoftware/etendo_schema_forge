@@ -46,9 +46,11 @@ describe('SendToSifButton', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders for completed invoices with pending fiscal targets', () => {
+  it('renders for completed invoices with pending fiscal targets', async () => {
     renderButton();
-    expect(screen.getByRole('button', { name: 'sendToSif' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'sendToSif' })).toBeInTheDocument();
+    });
   });
 
   it('does not render for completed invoices when all targets were already sent', () => {

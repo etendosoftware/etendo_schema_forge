@@ -60,6 +60,7 @@ Rules are grouped by the artifact kind they apply to (see [Artifact Classificati
 | F14 | BLOCK | `contract.json` is missing `formState` on contracts `0.7.0+`. | Re-run contract generation so agent form-fidelity metadata is emitted. |
 | F15 | BLOCK | `contract.json` is missing `agentProfile`, or the profile references fields, selectors, or actions that do not exist in the generated contract, on contracts `0.7.0+`. | Re-run contract generation or fix the profile generator/curated metadata so references match generated contract metadata. |
 | F16 | BLOCK | A key file under `artifacts/<window>/generated/` is newer than `contract.json`, which indicates a possible manual edit to generated output. | Never edit generated output manually. Fix the generator or source metadata, then regenerate the artifact. |
+| F17 | BLOCK | `decisions.json` `window.balanceFooter` is missing `debitField`/`creditField`, or references a field that does not exist on the lines entity (validated against `frontendContract.entities.<lineEntity>.fields[].name`). | Set `window.balanceFooter` to `{ debitField, creditField }` using amount-typed line-entity field names that exist in the contract. |
 
 ### Report rules
 
@@ -98,7 +99,7 @@ Rules applied per kind:
 
 | Kind | Rules checked |
 |------|--------------|
-| window | F1, F2, F3, F4, F5, F6, F7, F10, F11, F12, F13, F14, F15, F16 |
+| window | F1, F2, F3, F4, F5, F6, F7, F10, F11, F12, F13, F14, F15, F16, F17 |
 | report | F8 |
 | aggregate | F9 |
 | aggregate-section | none (whitelisted) |

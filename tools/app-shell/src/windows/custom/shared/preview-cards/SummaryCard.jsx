@@ -14,11 +14,18 @@ export function CardShell({ children }) {
   );
 }
 
-function CardHeader({ title, amount }) {
+function CardHeader({ title, amount, badge }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
       <span className="font-bold text-gray-900 text-sm">{title}</span>
-      <span className="font-bold text-base tabular-nums text-gray-900">{amount}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="font-bold text-base tabular-nums text-gray-900">{amount}</span>
+        {badge && (
+          <span className="text-[11px] font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+            {badge}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -56,23 +63,54 @@ export function PercentBar({ value }) {
   );
 }
 
+// ── MovementSummaryCard ───────────────────────────────────────────────────────
+
+/**
+ * Shared card for movement-type documents (shipment, receipt, return).
+ * Renders a titled CardShell with a fixed set of rows + a status badge row,
+ * followed by optional extra rows (children).
+ */
+export function MovementSummaryCard({ title, rows, statusRowLabel, statusLabel, statusBadgeClass, children }) {
+  return (
+    <CardShell data-testid="CardShell__a696d7">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <span className="font-bold text-gray-900 text-sm">{title}</span>
+      </div>
+      <div className="px-4 py-2">
+        {rows.map(({ label, value }) => (
+          <InfoRow key={label} label={label} value={value} data-testid="InfoRow__a696d7" />
+        ))}
+        <InfoRow label={statusRowLabel} data-testid="InfoRow__a696d7">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass}`}>
+            {statusLabel}
+          </span>
+        </InfoRow>
+        {children}
+      </div>
+    </CardShell>
+  );
+}
+
 // ── SummaryCard ───────────────────────────────────────────────────────────────
 
 /**
  * SummaryCard — top card shown in all preview right panels.
  *
  * Props:
- *   currencyCode   string   — e.g. "EUR"
- *   grandTotal     number
- *   contact        string   — business partner name
- *   date           string   — ISO date string or formatted string
- *   statusCode     string   — raw doc status code (e.g. "CO", "DR")
- *   statusLabel    string   — human-readable label (e.g. "Completado")
- *   validUntil     string?  — ISO date, shown only when truthy (quotations)
- *   dueDate        string?  — ISO date, shown between Date and Status when provided (invoices)
- *   invoicePercent number?  — 0-100, shows "X%" row when provided (orders)
- *   deliveryPercent number? — 0-100, shows "X%" row when provided (orders)
- *   children       node?    — extra InfoRow(s) appended after standard rows
+ *   currencyCode    string   — e.g. "EUR"
+ *   grandTotal      number
+ *   contact         string   — business partner name
+ *   date            string   — ISO date string or formatted string
+ *   statusCode      string   — raw doc status code (e.g. "CO", "DR")
+ *   statusLabel     string   — human-readable label (e.g. "Completado")
+ *   validUntil      string?  — ISO date, shown only when truthy (quotations)
+ *   dueDate         string?  — ISO date, shown between Date and Status when provided (invoices)
+ *   invoicePercent  number?  — 0-100, shows "X%" row when provided (orders)
+ *   deliveryPercent number?  — 0-100, shows "X%" row when provided (orders)
+ *   orgCurrencyCode string?  — e.g. "EUR". Shown below grand total when different from currencyCode.
+ *   exchangeRate    number?  — e.g. 1.09. Shown as rate note next to orgGrandTotal.
+ *   orgGrandTotal   number?  — pre-computed equivalent in org currency. Shown below grand total.
+ *   children        node?    — extra InfoRow(s) appended after standard rows
  */
 export default function SummaryCard({
   currencyCode = '',
@@ -85,6 +123,10 @@ export default function SummaryCard({
   dueDate,
   invoicePercent,
   deliveryPercent,
+  orgCurrencyCode,
+  exchangeRate,
+  orgGrandTotal,
+  ratePrecision = 4,
   children,
 }) {
   const ui = useUI();
@@ -93,31 +135,64 @@ export default function SummaryCard({
   const formattedDate = date ? formatCalendarDate(date, locale) : '—';
   const formattedValidUntil = validUntil ? formatCalendarDate(validUntil, locale) : null;
   const formattedDueDate = dueDate ? formatCalendarDate(dueDate, locale) : null;
-  const amountStr = `${currencyCode} ${formatAmount(grandTotal ?? 0)}`;
+
+  // Dual-currency display (Holded-style):
+  //   primary  = org-currency amount + doc-currency badge   e.g. "261.81 €  [USD]"
+  //   secondary = (rate) doc-currency amount                e.g. "(1.1647) $304.92"
+  // When currencies are the same: primary = doc-currency amount, no secondary.
+  const showOrgTotal = orgCurrencyCode && orgCurrencyCode !== currencyCode && orgGrandTotal != null;
+  const primaryAmount = showOrgTotal
+    ? formatAmount(orgGrandTotal, orgCurrencyCode)
+    : formatAmount(grandTotal ?? 0, currencyCode || undefined);
+  const docAmountStr = showOrgTotal
+    ? formatAmount(grandTotal ?? 0, currencyCode || undefined)
+    : null;
+  const rateNote = showOrgTotal && exchangeRate
+    ? `(${exchangeRate.toLocaleString(undefined, { minimumFractionDigits: ratePrecision, maximumFractionDigits: ratePrecision })})`
+    : null;
 
   return (
-    <CardShell>
-      <CardHeader title={ui('previewCardTotal')} amount={amountStr} />
+    <CardShell data-testid="CardShell__a696d7">
+      <CardHeader title={ui('previewCardTotal')} amount={primaryAmount} badge={showOrgTotal ? currencyCode : null} data-testid="CardHeader__a696d7" />
+      {showOrgTotal && (
+        <div className="flex items-center justify-end gap-1.5 px-4 pb-1 tabular-nums">
+          {rateNote && <span className="text-xs text-gray-500 font-bold">{rateNote}</span>}
+          {docAmountStr && <span className="text-sm text-gray-900 font-bold">{docAmountStr}</span>}
+        </div>
+      )}
       <div className="px-4 py-2">
-        <InfoRow label={ui('previewCardContact')} value={contact} />
-        <InfoRow label={ui('previewCardDate')} value={formattedDate} />
+        <InfoRow
+          label={ui('previewCardContact')}
+          value={contact}
+          data-testid="InfoRow__a696d7" />
+        <InfoRow
+          label={ui('previewCardDate')}
+          value={formattedDate}
+          data-testid="InfoRow__a696d7" />
         {formattedValidUntil && (
-          <InfoRow label={ui('previewCardValidUntil')} value={formattedValidUntil} />
+          <InfoRow
+            label={ui('previewCardValidUntil')}
+            value={formattedValidUntil}
+            data-testid="InfoRow__a696d7" />
         )}
         {formattedDueDate && (
-          <InfoRow label={ui('previewCardDueDate')} value={formattedDueDate} underline />
+          <InfoRow
+            label={ui('previewCardDueDate')}
+            value={formattedDueDate}
+            underline
+            data-testid="InfoRow__a696d7" />
         )}
-        <InfoRow label={ui('previewCardStatus')}>
-          <Badge {...getStatusBadgeProps(statusCode)}>{statusLabel ?? statusCode}</Badge>
+        <InfoRow label={ui('previewCardStatus')} data-testid="InfoRow__a696d7">
+          <Badge {...getStatusBadgeProps(statusCode)} data-testid="Badge__a696d7">{statusLabel ?? statusCode}</Badge>
         </InfoRow>
         {invoicePercent != null && (
-          <InfoRow label={ui('previewCardInvoicePercent')}>
-            <PercentBar value={invoicePercent} />
+          <InfoRow label={ui('previewCardInvoicePercent')} data-testid="InfoRow__a696d7">
+            <PercentBar value={invoicePercent} data-testid="PercentBar__a696d7" />
           </InfoRow>
         )}
         {deliveryPercent != null && (
-          <InfoRow label={ui('previewCardDeliveryPercent')}>
-            <PercentBar value={deliveryPercent} />
+          <InfoRow label={ui('previewCardDeliveryPercent')} data-testid="InfoRow__a696d7">
+            <PercentBar value={deliveryPercent} data-testid="PercentBar__a696d7" />
           </InfoRow>
         )}
         {children}

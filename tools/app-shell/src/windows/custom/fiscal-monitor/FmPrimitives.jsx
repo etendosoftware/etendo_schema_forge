@@ -71,7 +71,11 @@ export const NumFactura = ({ n, onOpen }) => {
       title={ui('fiscalMonitor.openInvoice')}
     >
       {n}
-      <ArrowUpRight size={14} strokeWidth={2} className="fm-num-factura-arrow" />
+      <ArrowUpRight
+        size={14}
+        strokeWidth={2}
+        className="fm-num-factura-arrow"
+        data-testid="ArrowUpRight__29f91c" />
     </a>
   );
 };
@@ -143,18 +147,62 @@ export function useFmSelection(rows) {
   return { selectedIds, setSelectedIds, allSelected, someSelected, handleToggleAll, handleToggleRow };
 }
 
+/**
+ * Fetches ALL rows from a NEO list endpoint (no pagination) via the section's
+ * own apiFetch, then builds and downloads a CSV client-side using columnDefs.
+ * columnDefs: Array<{ label: string, get: (row) => string }>
+ */
+export async function fetchCsvAndDownload(apiFetch, path, params, filename, columnDefs) {
+  const search = new URLSearchParams();
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') search.append(k, v);
+  });
+  const res = await apiFetch(`${path}?${search}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const rows = json?.response?.data ?? [];
+  buildCsvAndDownload(filename, columnDefs, rows);
+}
+
+/**
+ * Builds a CSV from columnDefs + rows and triggers a browser file download.
+ * Adds a UTF-8 BOM so Excel opens it correctly without encoding issues.
+ */
+export function buildCsvAndDownload(filename, columnDefs, rows) {
+  const header = columnDefs.map(c => `"${c.label}"`).join(',');
+  const body = rows.map(row =>
+    columnDefs.map(c => {
+      const val = c.get(row) ?? '';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    }).join(',')
+  );
+  const csv = '﻿' + [header, ...body].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename.endsWith('.csv') ? filename : `${filename}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export const WipBadge = ({ inline = false }) => {
   const ui = useUI();
   return (
     <div className={inline ? '' : 'absolute top-3 right-4 z-10'}>
-      <TooltipProvider delayDuration={600}>
-        <Tooltip>
-          <TooltipTrigger asChild>
+      <TooltipProvider delayDuration={600} data-testid="TooltipProvider__29f91c">
+        <Tooltip data-testid="Tooltip__29f91c">
+          <TooltipTrigger asChild data-testid="TooltipTrigger__29f91c">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300 cursor-default select-none">
-              <TriangleAlert size={12} strokeWidth={2} /> {ui('fiscal.wip.badge')}
+              <TriangleAlert size={12} strokeWidth={2} data-testid="TriangleAlert__29f91c" /> {ui('fiscal.wip.badge')}
             </span>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-[260px] text-center">
+          <TooltipContent
+            side="bottom"
+            className="max-w-[260px] text-center"
+            data-testid="TooltipContent__29f91c">
             {ui('fiscal.wip.tooltip')}
           </TooltipContent>
         </Tooltip>

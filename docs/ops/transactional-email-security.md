@@ -85,6 +85,8 @@ Suppression sources:
 
 Suppression records should include recipient or domain, reason, source, actor, timestamp, and optional expiry. Avoid storing full message content.
 
+The safety store keeps a per-address and per-domain suppression list (ETP-4226). Per-address entries are keyed by the SHA-256 hash of the normalized address; per-domain entries store the plaintext lower-cased domain. Suppression is checked for **every** address in the final recipient set — base, user-added To, and CC alike — before the provider is called; any hit returns `SUPPRESSED`. User-edited document recipients get no relaxed treatment: an address added through `recipientEdits` is suppressed exactly like a server-resolved one.
+
 ## Kill Switches
 
 Kill switches are required at multiple levels.
@@ -106,7 +108,7 @@ Use this procedure when suspicious send volume, recipient complaints, or provide
 1. Enable the narrowest effective kill switch.
 2. Check metrics by contract, tenant, recipient, domain, and source IP.
 3. Identify whether traffic came from UI, system job, public auth flow, or support/admin contract.
-4. Review audit events for unauthorized attempts, throttle misses, duplicate keys, and custom HTML usage.
+4. Review audit events for unauthorized attempts, throttle misses, duplicate keys, custom HTML usage, and suspicious recipient-edit patterns (per-channel added/removed hash lists from edited document sends).
 5. Suppress affected recipients or domains if required.
 6. Rotate provider secrets if exposure is possible.
 7. Patch the contract, throttle, or authorization gap.
@@ -122,6 +124,28 @@ When provider events are available:
 - keep soft bounces as metrics first, then suppress after repeated failures
 - audit provider event IDs and timestamps
 - never expose bounce/complaint internals to general users
+
+## Email Audit Redaction & Storage Policy
+
+This is the formally named redaction and storage policy for transactional email audit data. Earlier documents referenced this policy by name without defining it; this section is the canonical definition. The Logging Rules, observability sink table, and metrics guidance below implement it.
+
+**Persistence rules:**
+
+- Only **SHA-256 hashes** of recipient addresses are persisted. Raw email addresses are never written to audit rows, structured logs, or metrics labels.
+- Multi-recipient sends (ETP-4226) persist **per-channel hash lists** as audit evidence: base recipient hashes, added recipient hashes by channel (`to`/`cc`), removed recipient hashes, and final recipient hashes by channel. The legacy single `recipientHash` field stays populated with the first final `to` hash for dashboard compatibility.
+- **Plaintext domains are allowed**: `recipientDomain` and the final-recipient domain list may be stored and logged in plaintext (domains are low-sensitivity and needed for abuse triage), matching the existing `recipientDomain` precedent.
+- Audit rows never store provider secrets, full message bodies, raw HTML from custom sends, or reset tokens.
+
+**Observability rules:**
+
+- Metrics labels never carry raw addresses or `recipientHash` (high cardinality + PII risk). Use `recipientDomain` and the low-cardinality labels listed under Metrics and Alerts.
+- `recipientHash` values appear only in logs and investigation queries.
+
+**Edited document recipients (ETP-4226):**
+
+- When a send carried `recipientEdits`, the audit row's base/added/removed/final hash lists make the user's edit reconstructable in hashed form — who was proposed, what was removed, what was added per channel, and what was finally delivered. No reason text is captured for the edit (waived by stakeholder decision 2026-06-11; see the framework rule 6 amendment).
+- During incident review, compare added-recipient hashes against suppression entries and known-abuse hashes, and check the final-domain list for unexpected external domains. Investigators query by hash; raw addresses are requested only where support policy explicitly permits it and the storage location is approved for PII.
+- Suspicious edit patterns (high add volume, repeated removed-base sends, throttle hits on added domains) feed the Abuse Incident Response procedure below; the narrowest fix is a per-address or per-domain suppression entry, not a code change.
 
 ## Logging Rules
 

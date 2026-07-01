@@ -12,7 +12,7 @@ describe('FmListPage — exports', () => {
 });
 
 describe('FmListPage — upcoming deadlines widget', () => {
-  it('renders fm-upcoming container', () => assert.match(src, /fm-upcoming/));
+  it('renders upcoming count as KPI value', () => assert.match(src, /upcomingCount/));
   it('uses computeUpcomingDeadlines', () => assert.match(src, /computeUpcomingDeadlines/));
   it('passes year+model filtered decls to the widget', () => assert.match(src, /decls={modelYearFiltered}/));
 });
@@ -21,7 +21,7 @@ describe('FmListPage — table', () => {
   it('renders fm-table', () => assert.match(src, /fm-table/));
   it('shows model column', () => assert.match(src, /decl\.model/));
   it('shows year column', () => assert.match(src, /decl\.year/));
-  it('renders StatusPillMenu for status column', () => assert.match(src, /StatusPillMenu/));
+  it('renders status pill via StatusText', () => assert.match(src, /StatusText/));
 });
 
 describe('FmListPage — navigation', () => {

@@ -6,6 +6,9 @@
     "attachments": false
   },
   "entities": {
+    "facturasParcialmenteAceptadas": {
+      "javaQualifier": "mark-subsanation-handler"
+    },
     "cabeceraDeEmisor": {
       "fields": {
         "organization": {
@@ -15,6 +18,9 @@
         "client": {
           "visibility": "system",
           "derivation": "fromParent"
+        },
+        "refreshData": {
+          "visibility": "discarded"
         }
       }
     }

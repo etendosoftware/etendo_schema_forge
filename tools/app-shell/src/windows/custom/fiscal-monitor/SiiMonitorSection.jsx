@@ -5,7 +5,7 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { formatAmount } from '@/lib/formatAmount.js';
 import { FileUp, FileDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection } from './FmPrimitives.jsx';
+import { StatusPill, NumFactura, ScrollSentinel, isErrorStatus, isPendingStatus, fmtDate, PAGE_SIZE, ExportIcon, useFmSelection, fetchCsvAndDownload } from './FmPrimitives.jsx';
 import {
   SII_SPEC,
   SII_EMITIDAS_ENTITY,
@@ -32,6 +32,19 @@ const SUBTAB_ENTITIES = {
   issuedPrevious:   SII_EMITIDAS_ANT_ENTITY,
   receivedPrevious: SII_RECIBIDAS_ANT_ENTITY,
 };
+
+const SII_EXPORT_COLS = [
+  { label: 'Date',             get: r => r.invoiceDate ?? '' },
+  { label: 'Invoice No.',      get: r => r.documentNo ?? '' },
+  { label: 'Business Partner', get: r => r['businessPartner$_identifier'] ?? r.businessPartnerIdentifier ?? r.businessPartner ?? '' },
+  { label: 'Type',             get: r => siiTipoLabel(r.aeatsiiClaveTipo ?? r.aeatsiiClaveTipoFc) },
+  { label: 'Total',            get: r => r.grandTotalAmount ?? '' },
+  { label: 'Currency',         get: r => r['currency$_identifier'] ?? '' },
+  { label: 'Status',           get: r => r.aeatsiiEstado ?? '' },
+  { label: 'CSV',              get: r => r.cdigoCSV ?? '' },
+  { label: 'Error Code',       get: r => r.aeatsiiErrorCode ?? '' },
+  { label: 'Error',            get: r => r.aeatsiiErrorMsg ?? '' },
+];
 
 // Entities that hold the CSV code (aeatsii_facturas table)
 const SUBTAB_SII_DATA_ENTITIES = {
@@ -119,7 +132,11 @@ function SiiTableContent({
       <table className="fm-table" data-testid="fm-data-table">
         <thead>
           <tr>
-            <th><Checkbox checked={allSelected} indeterminate={someSelected} onChange={onToggleAll} /></th>
+            <th><Checkbox
+              checked={allSelected}
+              indeterminate={someSelected}
+              onChange={onToggleAll}
+              data-testid="Checkbox__be1aa5" /></th>
             <th className="sortable sorted">{ui('fiscalMonitor.col.date')}</th>
             <th>{ui('fiscalMonitor.col.invoiceNumber')}</th>
             <th>{partyHeader}</th>
@@ -144,19 +161,22 @@ function SiiTableContent({
             const invoiceId = row.id ?? row[INVOICE_FK_FIELD];
             let pillClick;
             if (isErrorStatus(row.aeatsiiEstado) && row.businessPartner) {
-              pillClick = () => onBpClick?.(row.businessPartner);
+              pillClick = () => onBpClick?.(row.businessPartner, invoiceId, specHint);
             } else if (isPendingStatus(row.aeatsiiEstado) && row[INVOICE_FK_FIELD]) {
               pillClick = () => onInvoiceOpen?.(row[INVOICE_FK_FIELD], specHint);
             }
             return (
               <tr key={row.id ?? i}>
-                <td><Checkbox checked={selectedIds.has(row.id)} onChange={() => onToggleRow(row.id)} /></td>
+                <td><Checkbox
+                  checked={selectedIds.has(row.id)}
+                  onChange={() => onToggleRow(row.id)}
+                  data-testid="Checkbox__be1aa5" /></td>
                 <td>{fmtDate(row.invoiceDate)}</td>
                 <td className="num-factura">
                   <NumFactura
                     n={row.documentNo ?? row[INVOICE_FK_FIELD] ?? '—'}
                     onOpen={() => onInvoiceOpen?.(invoiceId, specHint)}
-                  />
+                    data-testid="NumFactura__be1aa5" />
                 </td>
                 <td>
                   {row['businessPartner$_identifier'] ?? row.businessPartnerIdentifier ?? row.businessPartner ?? '—'}
@@ -168,7 +188,7 @@ function SiiTableContent({
                     estado={row.aeatsiiEstado}
                     onClick={pillClick}
                     title={isPendingStatus(row.aeatsiiEstado) ? ui('fiscalMonitor.openInvoice') : undefined}
-                  />
+                    data-testid="StatusPill__be1aa5" />
                   {row.aeatsiiErrorMsg && (
                     <div className="fm-err-text">
                       {row.aeatsiiErrorCode ? `[${row.aeatsiiErrorCode}] ` : ''}{row.aeatsiiErrorMsg}
@@ -181,7 +201,11 @@ function SiiTableContent({
           })}
         </tbody>
       </table>
-      <ScrollSentinel hasMore={rows.length < totalRows} loading={loading} onVisible={onLoadMore} />
+      <ScrollSentinel
+        hasMore={rows.length < totalRows}
+        loading={loading}
+        onVisible={onLoadMore}
+        data-testid="ScrollSentinel__be1aa5" />
     </>
   );
 }
@@ -208,6 +232,7 @@ export default function SiiMonitorSection({
   const [error, setError]         = useState(null);
   const [csvMap, setCsvMap]       = useState({});
   const { selectedIds, setSelectedIds, handleToggleAll, handleToggleRow } = useFmSelection(rows);
+  const [exporting, setExporting] = useState(false);
 
   function changeTab(newTab, newPeriod) {
     setTab(newTab);
@@ -247,7 +272,12 @@ export default function SiiMonitorSection({
       setError(null);
       return;
     }
-    if (!parentId) return;
+    if (!parentId) {
+      setLoading(false);
+      setRows([]);
+      setTotalRows(0);
+      return;
+    }
     setLoading(true);
     setError(null);
     fetchSubtab(apiFetch, entityKey, parentId, orgId, page)
@@ -262,6 +292,22 @@ export default function SiiMonitorSection({
 
   // Reset to first page, rows and selection when tab/period changes
   useEffect(() => { setPage(1); setRows([]); setCsvMap({}); setSelectedIds(new Set()); }, [tab, period, setSelectedIds]);
+
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await fetchCsvAndDownload(
+        apiFetch,
+        `/${SII_SPEC}/${encodeURIComponent(SUBTAB_ENTITIES[entityKey])}`,
+        { parentId },
+        `sii_${tab}_${period}`,
+        SII_EXPORT_COLS,
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const siiKpis        = kpis?.sii ?? {};
   const issuedTotal    = (siiKpis.issued ?? 0) + (siiKpis.issuedPrevious ?? 0);
@@ -282,7 +328,7 @@ export default function SiiMonitorSection({
             className={`tab${tab === 'issued' ? ' active' : ''}`}
             onClick={() => changeTab('issued', period)}
           >
-            <FileUp size={14} strokeWidth={2} />
+            <FileUp size={14} strokeWidth={2} data-testid="FileUp__be1aa5" />
             {ui('fiscalMonitor.sii.tab.issued')}
             {issuedTotal > 0 && <span className="tab-count">{issuedTotal}</span>}
           </button>
@@ -290,7 +336,7 @@ export default function SiiMonitorSection({
             className={`tab${tab === 'received' ? ' active' : ''}`}
             onClick={() => changeTab('received', period)}
           >
-            <FileDown size={14} strokeWidth={2} />
+            <FileDown size={14} strokeWidth={2} data-testid="FileDown__be1aa5" />
             {ui('fiscalMonitor.sii.tab.received')}
             {receivedTotal > 0 && <span className="tab-count">{receivedTotal}</span>}
           </button>
@@ -302,13 +348,13 @@ export default function SiiMonitorSection({
       <div className="fm-filter-bar">
         {compact ? (
           // Compact: segmented control (invoice type) + period dropdown immediately adjacent
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          (<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div className="fm-filter-pills">
               <button
                 className={`fm-filter-pill${tab === 'issued' ? ' active' : ''}`}
                 onClick={() => changeTab('issued', period)}
               >
-                <FileUp size={14} strokeWidth={2} />
+                <FileUp size={14} strokeWidth={2} data-testid="FileUp__be1aa5" />
                 {ui('fiscalMonitor.sii.tab.issued')}
                 {issuedTotal > 0 && <span className="pill-count">{issuedTotal}</span>}
               </button>
@@ -316,14 +362,14 @@ export default function SiiMonitorSection({
                 className={`fm-filter-pill${tab === 'received' ? ' active' : ''}`}
                 onClick={() => changeTab('received', period)}
               >
-                <FileDown size={14} strokeWidth={2} />
+                <FileDown size={14} strokeWidth={2} data-testid="FileDown__be1aa5" />
                 {ui('fiscalMonitor.sii.tab.received')}
                 {receivedTotal > 0 && <span className="pill-count">{receivedTotal}</span>}
               </button>
             </div>
             <div className="fm-period-dropdown" ref={dropRef}>
               <button className="fm-period-btn" onClick={() => setShowPeriodDrop(d => !d)}>
-                {periodLabel} <ChevDownIcon />
+                {periodLabel} <ChevDownIcon data-testid="ChevDownIcon__be1aa5" />
               </button>
               {showPeriodDrop && (
                 <div className="fm-period-menu">
@@ -336,10 +382,10 @@ export default function SiiMonitorSection({
                 </div>
               )}
             </div>
-          </div>
+          </div>)
         ) : (
           // Standard: period pills in segmented control
-          <div className="fm-filter-pills" data-testid="fm-period-toggle">
+          (<div className="fm-filter-pills" data-testid="fm-period-toggle">
             <button
               className={`fm-filter-pill${period === 'current' ? ' active' : ''}`}
               onClick={() => changeTab(tab, 'current')}
@@ -354,10 +400,10 @@ export default function SiiMonitorSection({
               {ui('fiscalMonitor.sii.period.previous')}
               {previousCount > 0 && <span className="pill-count">{previousCount}</span>}
             </button>
-          </div>
+          </div>)
         )}
-        <button className="fm-export-btn">
-          <ExportIcon /> {ui('fiscalMonitor.export')}
+        <button className="fm-export-btn" onClick={handleExport} disabled={loading || exporting}>
+          <ExportIcon data-testid="ExportIcon__be1aa5" /> {ui('fiscalMonitor.export')}
         </button>
       </div>
 
@@ -377,7 +423,7 @@ export default function SiiMonitorSection({
         selectedIds={selectedIds}
         onToggleAll={handleToggleAll}
         onToggleRow={handleToggleRow}
-      />
+        data-testid="SiiTableContent__be1aa5" />
     </>
   );
 

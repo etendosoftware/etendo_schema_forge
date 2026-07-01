@@ -1,9 +1,8 @@
+import { useCallback } from 'react';
 import { useUI } from '@/i18n';
 import { buildOrderData, buildDocumentPdfLabels, useDocumentPdf } from './documentPdf.js';
 
-const buildPurchaseOrderData = (orderId, base, token) => buildOrderData('purchase-order', orderId, base, token);
-
-export function usePurchaseOrderPdf(orderId, apiBaseUrl, token) {
+export function usePurchaseOrderPdf(orderId, apiBaseUrl, token, currencyData = null) {
   const ui = useUI();
   const labels = buildDocumentPdfLabels(ui, {
     title:           ui('purchaseOrderPdfTitle'),
@@ -12,5 +11,10 @@ export function usePurchaseOrderPdf(orderId, apiBaseUrl, token) {
     date:            ui('orderPdfDate'),
     colQty:          ui('orderPdfColQty'),
   });
+  const buildPurchaseOrderData = useCallback(
+    (recordId, base, tk) => buildOrderData('purchase-order', recordId, base, tk, currencyData),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [currencyData?.exchangeRate, currencyData?.orgCurrencyCode],
+  );
   return useDocumentPdf(orderId, apiBaseUrl, token, buildPurchaseOrderData, labels);
 }

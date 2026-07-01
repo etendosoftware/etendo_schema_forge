@@ -59,7 +59,22 @@ describe('AccountsToolbar', () => {
     expect(onSearchChange).toHaveBeenCalledWith('BBVA');
   });
 
-  it('fires a toast pointing to T5 when "Reglas de matcheo" is clicked', () => {
+  it('calls onMatchingRules when "Reglas de matcheo" is clicked', () => {
+    const onMatchingRules = vi.fn();
+    render(
+      <AccountsToolbar
+        typeFilter={null}
+        onTypeFilterChange={vi.fn()}
+        search=""
+        onSearchChange={vi.fn()}
+        onMatchingRules={onMatchingRules}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('cuentas-matching-rules-button'));
+    expect(onMatchingRules).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render the advanced ("by conditions") filter', () => {
     render(
       <AccountsToolbar
         typeFilter={null}
@@ -68,8 +83,7 @@ describe('AccountsToolbar', () => {
         onSearchChange={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByTestId('cuentas-matching-rules-button'));
-    expect(toast).toHaveBeenCalledWith('Próximamente en T5');
+    expect(screen.queryByTestId('cuentas-advanced-filter')).not.toBeInTheDocument();
   });
 
   it('keeps the "Nueva cuenta" button enabled with no click handler in T1', () => {

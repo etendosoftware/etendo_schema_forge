@@ -197,3 +197,80 @@ describe('RelatedDocuments (purchase-invoice)', () => {
     expect(screen.getByTestId('chip-order')).toBeInTheDocument();
   });
 });
+
+describe('RelatedDocuments — Return Invoice (Factura de Devolución)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockFetchByCriteria.mockResolvedValue([]);
+    mockFetchChild.mockResolvedValue([]);
+    mockFetchById.mockResolvedValue(null);
+  });
+
+  const RETURN_DATA = { 'transactionDocument$_identifier': 'Return Material Purchase Invoice' };
+
+  it('renders return-to-vendor chip when invoice lines reference a return delivery', async () => {
+    mockFetchChild.mockResolvedValueOnce([{ id: 'line-1', goodsShipmentLine: 'sl-1' }]); // lines
+    mockFetchChild.mockResolvedValueOnce([]); // paymentPlan
+    mockFetchById.mockResolvedValueOnce({ id: 'sl-1', parentId: 'ret-ship-1' });
+    mockFetchById.mockResolvedValueOnce({ id: 'ret-ship-1', documentNo: 'RET-001' });
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={RETURN_DATA} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.getByTestId('chip-return-to-vendor')).toBeInTheDocument();
+  });
+
+  it('does not render purchase order or receipt chips for Return Invoice', async () => {
+    mockFetchChild.mockResolvedValueOnce([]); // lines (empty)
+    mockFetchChild.mockResolvedValueOnce([]); // paymentPlan
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={RETURN_DATA} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.queryByTestId('chip-order')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chip-receipt')).not.toBeInTheDocument();
+  });
+
+  it('renders no return-to-vendor chip when lines have no goodsShipmentLine', async () => {
+    mockFetchChild.mockResolvedValueOnce([{ id: 'line-1', goodsShipmentLine: null }]);
+    mockFetchChild.mockResolvedValueOnce([]);
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={RETURN_DATA} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.queryByTestId('chip-return-to-vendor')).not.toBeInTheDocument();
+  });
+
+  it('deduplicates return deliveries when multiple lines share the same shipment', async () => {
+    mockFetchChild.mockResolvedValueOnce([
+      { id: 'line-1', goodsShipmentLine: 'sl-1' },
+      { id: 'line-2', goodsShipmentLine: 'sl-2' },
+    ]);
+    mockFetchChild.mockResolvedValueOnce([]);
+    mockFetchById.mockResolvedValueOnce({ id: 'sl-1', parentId: 'ret-ship-1' });
+    mockFetchById.mockResolvedValueOnce({ id: 'sl-2', parentId: 'ret-ship-1' });
+    mockFetchById.mockResolvedValueOnce({ id: 'ret-ship-1', documentNo: 'RET-001' });
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={RETURN_DATA} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.getAllByTestId('chip-return-to-vendor')).toHaveLength(1);
+  });
+
+  it('also triggers for Spanish identifier "Factura de Devolución" (after transformRecord)', async () => {
+    mockFetchChild.mockResolvedValueOnce([{ id: 'line-1', goodsShipmentLine: 'sl-1' }]);
+    mockFetchChild.mockResolvedValueOnce([]);
+    mockFetchById.mockResolvedValueOnce({ id: 'sl-1', parentId: 'ret-ship-1' });
+    mockFetchById.mockResolvedValueOnce({ id: 'ret-ship-1', documentNo: 'RET-001' });
+
+    render(<RelatedDocuments {...DEFAULT_PROPS} data={{ 'transactionDocument$_identifier': 'Factura de Devolución' }} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('shell').dataset.loading).toBe('false')
+    );
+    expect(screen.getByTestId('chip-return-to-vendor')).toBeInTheDocument();
+  });
+});

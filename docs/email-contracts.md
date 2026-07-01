@@ -49,7 +49,33 @@ Content-Type: application/json
 
 The browser must not send provider API keys, sender addresses, raw templates, or arbitrary provider payloads.
 
-For the app-shell document send flow, `SendDocumentModal` posts only the contract command to `/sws/neo/email-contracts/{document-contract}/send`, such as `sales-invoice-send`, `sales-order-send`, or `sales-quotation-send`. The UI must not include `to`, `template`, `data`, `subject`, `body`, sender, Reply-To, or provider metadata in that request; those values are resolved by the server-side contract.
+For the app-shell document send flow, `SendDocumentModal` posts only the contract command to `/sws/neo/email-contracts/{document-contract}/send`, such as `sales-invoice-send`, `sales-order-send`, or `sales-quotation-send`. The UI must not include `to`, `template`, `data`, `subject`, `body`, sender, Reply-To, or provider metadata in that request; those values are resolved by the server-side contract. The only recipient-related field the document-send UI may add is the allowlisted `recipientEdits` described below.
+
+### `recipientEdits` (document-send family only)
+
+Document-send contracts accept an optional `recipientEdits` command field by default (ETP-4226). It carries the user's edits to the recipient lists in two channels — `to` (add/remove) and `cc` (add only; base recipients never originate in CC):
+
+```json
+{
+  "version": "v1",
+  "recordId": "E2F7A13B...",
+  "intent": "send-document",
+  "recipientEdits": {
+    "to": {
+      "add": ["ap@customer.com", "billing@customer.com"],
+      "remove": ["contact@customer.com"]
+    },
+    "cc": { "add": ["pm@customer.com"] }
+  }
+}
+```
+
+Semantics:
+
+- **Absence means legacy behavior.** A command without `recipientEdits` resolves exactly the trusted base recipient set, as before. The frontend only includes the field when the user actually changed something, so untouched sends remain byte-identical to the legacy command — that is the backward-compatibility guarantee.
+- **The backend is authoritative.** The contract re-resolves the document, access rights, document state, and base recipients, then normalizes the edits, applies `to.remove`/`to.add`/`cc.add`, deduplicates across channels (`to` wins over `cc`), and enforces the final constraints (non-empty `to`, max recipients across both channels, suppression, syntax validity). Frontend validation is user experience only.
+- **The client `idempotencyKey` is omitted and ignored when edits are present.** The server derives the authoritative key as `{contractName}:{tenantId}:{recordId}:send:v1:{recipientSetHash}`, where `recipientSetHash` is a SHA-256 over the sorted, normalized `channel:address` tuples of the final recipient set. The frontend cannot compute this key (it does not know `tenantId` and is not authoritative over the final set).
+- **Family-scoped.** Contracts outside the document-send family (auth/account contracts) reject a command containing `recipientEdits` with `VALIDATION_FAILED`, as does a document contract whose editing hook or window override disables editing.
 
 Temporary preview-cache bridge: until document email downloads are stored in S3-backed storage, app-shell may cache an already generated PDF blob through `/sws/neo/preview-file` immediately before calling the email contract. This is only file preparation for the backend signed download link; it must not add provider payload fields or caller-provided download links to the contract command.
 
@@ -102,10 +128,11 @@ Allowed recipient sources:
 |--------|-------------|-------|
 | `account-owner` | Auth/account flows | Uses account user email from server records |
 | `business-partner-contact` | Document flows | Uses the selected contact on the document or business partner |
+| `business-partner-contact-with-command-edits` | Document-send family | Base `to` set from the trusted contact, then applies the allowlisted `recipientEdits` field (default for document sends; disable per contract hook or `window.sendDocument` override) |
 | `responsible-user` | Internal alerts | Uses the server-side assigned user |
 | `caller-provided` | Admin/support only | Requires explicit contract, role check, reason, validation, and audit |
 
-Reject any command that tries to override recipient, sender, Reply-To, template, or provider metadata outside the contract schema.
+Reject any command that tries to override recipient, sender, Reply-To, template, or provider metadata outside the contract schema. `recipientEdits` is part of the document-send command schema; every other recipient override remains forbidden.
 
 ## Reply-To Policy
 
@@ -238,6 +265,24 @@ Required edge cases:
 
 Current status: the contract remains registered but login does not trigger it yet. Login alerts are deferred until the SSO and risk-policy model exists.
 
+### Shared: document-send recipient policy
+
+The three document `*-send` contracts (`sales-invoice-send`, `sales-order-send`,
+`sales-quotation-send`) share one recipient policy. It is defined once here and
+referenced from each descriptor sketch below as
+`"recipient": { "$shared": "document-send-recipient-policy" }` so the three stay
+in sync:
+
+```json
+{
+  "source": "business-partner-contact-with-command-edits",
+  "recordId": "request.recordId",
+  "editingEnabled": true,
+  "channels": ["to", "cc"],
+  "maxRecipientsTotal": 10
+}
+```
+
 ### `sales-invoice-send`
 
 Purpose: send an invoice/document notification to the recipient resolved from the document.
@@ -255,7 +300,7 @@ Descriptor sketch:
     "recordAccess": "recordId",
     "requiresReadableDocument": true
   },
-  "recipient": { "source": "business-partner-contact", "recordId": "request.recordId" },
+  "recipient": { "$shared": "document-send-recipient-policy" },
   "variables": {
     "name": { "type": "string", "source": "businessPartner.name", "required": true },
     "document_type": { "type": "string", "source": "contract.documentType", "required": true },
@@ -265,7 +310,7 @@ Descriptor sketch:
     "download_link": { "type": "url", "source": "documentDownload.url", "required": true }
   },
   "replyTo": { "enabled": false },
-  "idempotency": { "key": "sales-invoice-send:{tenantId}:{recordId}:v1", "windowSeconds": 3600 }
+  "idempotency": { "key": "sales-invoice-send:{tenantId}:{recordId}:send:v1:{recipientSetHash}", "derivation": "server-side", "windowSeconds": 3600 }
 }
 ```
 
@@ -292,7 +337,7 @@ Descriptor sketch:
     "recordAccess": "recordId",
     "requiresReadableDocument": true
   },
-  "recipient": { "source": "business-partner-contact", "recordId": "request.recordId" },
+  "recipient": { "$shared": "document-send-recipient-policy" },
   "variables": {
     "name": { "type": "string", "source": "businessPartner.name", "required": true },
     "document_type": { "type": "string", "source": "contract.documentType", "required": true },
@@ -300,7 +345,7 @@ Descriptor sketch:
     "download_link": { "type": "url", "source": "documentDownload.url", "required": true }
   },
   "replyTo": { "enabled": false },
-  "idempotency": { "key": "sales-order-send:{tenantId}:{recordId}:v1", "windowSeconds": 3600 }
+  "idempotency": { "key": "sales-order-send:{tenantId}:{recordId}:send:v1:{recipientSetHash}", "derivation": "server-side", "windowSeconds": 3600 }
 }
 ```
 
@@ -327,7 +372,7 @@ Descriptor sketch:
     "recordAccess": "recordId",
     "requiresReadableDocument": true
   },
-  "recipient": { "source": "business-partner-contact", "recordId": "request.recordId" },
+  "recipient": { "$shared": "document-send-recipient-policy" },
   "variables": {
     "name": { "type": "string", "source": "businessPartner.name", "required": true },
     "document_type": { "type": "string", "source": "contract.documentType", "required": true },
@@ -335,7 +380,7 @@ Descriptor sketch:
     "download_link": { "type": "url", "source": "documentDownload.url", "required": true }
   },
   "replyTo": { "enabled": false },
-  "idempotency": { "key": "sales-quotation-send:{tenantId}:{recordId}:v1", "windowSeconds": 3600 }
+  "idempotency": { "key": "sales-quotation-send:{tenantId}:{recordId}:send:v1:{recipientSetHash}", "derivation": "server-side", "windowSeconds": 3600 }
 }
 ```
 
@@ -389,6 +434,8 @@ Required edge cases:
 - Keep old versions only while clients still need them.
 - Deprecate a version by documenting the replacement and adding observability for remaining usage.
 - Do not change a contract in place when it can cause a client to send a different recipient, template, or set of variables.
+
+**Recorded waiver (ETP-4226, 2026-06-11):** the addition of the optional `recipientEdits` field and the switch to server-derived idempotency were applied to the document-send contracts **in place on v1**, against the first and last rules above. The waiver is allowed because the only client of the email contracts is the bundled app-shell, deployed atomically with the backend — there is no client that can observe a mixed old/new state, and a command without `recipientEdits` stays byte-identical to the previous shape. The moment any external client consumes email contracts, this waiver expires: request-shape changes again require a new contract version and version-coexistence infrastructure (registry keyed by name+version, version routing) before shipping.
 
 ## Review Checklist
 

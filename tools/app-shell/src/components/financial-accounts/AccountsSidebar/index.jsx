@@ -15,7 +15,7 @@ function SyncPill({ ui }) {
   return (
     <div className="flex items-center gap-2">
       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#EEFBF4]">
-        <Check className="h-3 w-3 text-[#17663A]" />
+        <Check className="h-3 w-3 text-[#17663A]" data-testid="Check__5d6a4a" />
       </span>
       <span className="text-xs font-normal leading-4 text-[#17663A]">
         {ui('financeAccountsSyncUpdatedAgo')}
@@ -87,21 +87,9 @@ function PendingCard({ pending, ui }) {
       <div className="flex flex-col gap-3 py-3">
         <PendingIndicator
           dotColor="#F3164E"
-          label={ui('financeAccountsPendingAccountsRow', {
-            count: pending.accountsWithPending ?? 0,
-          })}
+          label={ui('financeAccountsPendingAccountsRow')}
           value={pending.accountsWithPending ?? 0}
-        />
-        <PendingIndicator
-          dotColor="#7047EB"
-          label={ui('financeAccountsPendingSuggestions')}
-          value={pending.suggestionsReady ?? 0}
-        />
-        <PendingIndicator
-          dotColor="#FAAF00"
-          label={ui('financeAccountsPendingByRule')}
-          value={pending.byRule ?? 0}
-        />
+          data-testid="PendingIndicator__5d6a4a" />
       </div>
     </div>
   );
@@ -129,12 +117,11 @@ export function AccountsSidebar({ summary, loading }) {
             aria-label={ui('financeAccountsBalanceInfo')}
             className="flex h-6 w-6 items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9]"
           >
-            <Info className="h-4 w-4" />
+            <Info className="h-4 w-4" data-testid="Info__5d6a4a" />
           </button>
         </div>
-        <SyncPill ui={ui} />
+        <SyncPill ui={ui} data-testid="SyncPill__5d6a4a" />
       </header>
-
       <div className="flex items-center px-3" style={{ minHeight: 32 }}>
         <span
           className="text-[30px] font-medium leading-8 text-[#121217] tabular-nums"
@@ -143,13 +130,15 @@ export function AccountsSidebar({ summary, loading }) {
           {loading ? '—' : formatCurrency(primaryIso, totalBalance)}
         </span>
       </div>
-
       <div className="px-3 py-3">
-        <CurrencyBreakdown rows={byCurrency} primaryIso={primaryIso} ui={ui} />
+        <CurrencyBreakdown
+          rows={byCurrency}
+          primaryIso={primaryIso}
+          ui={ui}
+          data-testid="CurrencyBreakdown__5d6a4a" />
       </div>
-
       <div className="px-3" data-testid="pending-reconcile-card">
-        <PendingCard pending={pending} ui={ui} />
+        <PendingCard pending={pending} ui={ui} data-testid="PendingCard__5d6a4a" />
       </div>
     </aside>
   );

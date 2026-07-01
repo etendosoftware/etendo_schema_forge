@@ -27,8 +27,14 @@ export default function PurchaseOrderTopbar({ data }) {
 
   return (
     <>
-      <PercentPill label={ui('purchaseOrder.topbar.deliveryStatus')} value={data.deliveryStatusPurchase} />
-      <PercentPill label={ui('purchaseOrder.topbar.invoiceStatus')} value={data.invoiceStatus} />
+      <PercentPill
+        label={ui('purchaseOrder.topbar.deliveryStatus')}
+        value={data.deliveryStatusPurchase}
+        data-testid="PercentPill__f94e17" />
+      <PercentPill
+        label={ui('purchaseOrder.topbar.invoiceStatus')}
+        value={data.invoiceStatus}
+        data-testid="PercentPill__f94e17" />
     </>
   );
 }

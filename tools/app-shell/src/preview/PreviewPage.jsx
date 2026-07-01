@@ -91,12 +91,16 @@ export default function PreviewPage() {
             variant={activeComponent === name ? 'default' : 'outline'}
             size="sm"
             onClick={() => setActiveComponent(name)}
-          >
+            data-testid="Button__43c252">
             {name}
           </Button>
         ))}
         <div className="flex-1" />
-        <Button variant="outline" size="sm" onClick={sendToIframe}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={sendToIframe}
+          data-testid="Button__43c252">
           Refresh
         </Button>
       </div>

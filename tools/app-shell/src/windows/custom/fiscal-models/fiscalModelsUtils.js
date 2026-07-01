@@ -107,7 +107,10 @@ export function formatAmount(amount) {
 
 export function formatPercent(value) {
   if (value == null) return '—';
-  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(value) + ' %';
+  return new Intl.NumberFormat('es-ES', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
 export function fmtDecl(decl) {

@@ -6,7 +6,9 @@ function KpiCard({ title, value, icon: Icon, loading }) {
     <div className="flex-1 rounded-xl border border-border bg-card px-5 py-4 flex flex-col gap-2 min-w-0">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm text-muted-foreground font-medium truncate">{title}</span>
-        {Icon && <Icon className="h-4 w-4 text-muted-foreground shrink-0" />}
+        {Icon && <Icon
+          className="h-4 w-4 text-muted-foreground shrink-0"
+          data-testid="Icon__4634d4" />}
       </div>
       {loading ? (
         <div className="h-7 w-16 rounded bg-muted animate-pulse" />
@@ -28,9 +30,22 @@ export default function ContactsKpiCards({ items = [], loading = false }) {
 
   return (
     <div className="flex gap-4 mb-4">
-      <KpiCard title={t('totalContacts')} value={total || null} icon={Users} loading={loading} />
-      <KpiCard title={t('customers')} value={customerCount || null} loading={loading} />
-      <KpiCard title={t('vendors')} value={vendorCount || null} loading={loading} />
+      <KpiCard
+        title={t('totalContacts')}
+        value={total || null}
+        icon={Users}
+        loading={loading}
+        data-testid="KpiCard__4634d4" />
+      <KpiCard
+        title={t('customers')}
+        value={customerCount || null}
+        loading={loading}
+        data-testid="KpiCard__4634d4" />
+      <KpiCard
+        title={t('vendors')}
+        value={vendorCount || null}
+        loading={loading}
+        data-testid="KpiCard__4634d4" />
     </div>
   );
 }

@@ -112,8 +112,8 @@ function CollapsedGroupPopover({
 
   const GroupIcon = ICON_MAP[iconKey] || Package;
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen} data-testid="Popover__247c75">
+      <PopoverTrigger asChild data-testid="PopoverTrigger__247c75">
         <button
           type="button"
           aria-label={tMenu(group)}
@@ -126,7 +126,10 @@ function CollapsedGroupPopover({
               : 'bg-page-bg text-muted-foreground hover:text-foreground'
           )}
         >
-          <GroupIcon weight={isGroupActive ? 'fill' : 'regular'} className="h-5 w-5" />
+          <GroupIcon
+            weight={isGroupActive ? 'fill' : 'regular'}
+            className="h-5 w-5"
+            data-testid="GroupIcon__247c75" />
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -135,7 +138,7 @@ function CollapsedGroupPopover({
         onMouseEnter={cancelClose}
         onMouseLeave={scheduleClose}
         className="w-52 p-0 overflow-hidden"
-      >
+        data-testid="PopoverContent__247c75">
         <p className="px-3 pt-3 pb-1 text-xs font-semibold text-[#6C6C89] uppercase tracking-wide">
           {tMenu(group)}
         </p>
@@ -159,7 +162,7 @@ function CollapsedGroupPopover({
                     ? 'bg-accent-highlight text-accent-highlight-foreground font-semibold'
                     : 'text-foreground hover:bg-muted/50'
                 )}
-              >
+                data-testid={`menu-item-${item.slug || item.name?.replace(/\s+/g, '-').toLowerCase()}`}>
                 {tMenu(item.label)}
               </NavLink>
             );
@@ -220,11 +223,11 @@ function ExpandedDirectLink({ group, singleItem, Icon, showSectionLabel, section
               ? 'bg-accent-highlight text-accent-highlight-foreground font-medium'
               : 'hover:bg-muted/50'
           )}
-        >
+          data-testid={`menu-item-${singleItem.slug || singleItem.name?.replace(/\s+/g, '-').toLowerCase()}`}>
           <Icon
             weight={isActive ? 'fill' : 'regular'}
             className={cn('h-5 w-5 shrink-0', !isActive && 'text-muted-foreground')}
-          />
+            data-testid="Icon__247c75" />
           <span className={cn('flex-1 text-left truncate', !isActive && 'text-text-primary')}>
             {itemLabel}
           </span>
@@ -285,7 +288,7 @@ function ExpandedGroupSection({
           <Icon
             weight={isGroupActive ? 'fill' : 'regular'}
             className={cn('h-5 w-5 shrink-0', !isGroupActive && 'text-muted-foreground')}
-          />
+            data-testid="Icon__247c75" />
           <span className={cn('flex-1 text-left truncate', !(isGroupActive && !isOpen) && 'text-text-primary')}>
             {groupLabel}
           </span>
@@ -294,7 +297,7 @@ function ExpandedGroupSection({
               'h-3.5 w-3.5 shrink-0 transition-transform duration-200 text-muted-foreground',
               isOpen && 'rotate-180'
             )}
-          />
+            data-testid="ChevronDown__247c75" />
         </button>
       </div>
       {isOpen && (
@@ -316,7 +319,7 @@ function ExpandedGroupSection({
                 >
                   <span className="absolute left-[33px] top-0 bottom-0 w-px bg-[#E8EAEF]" />
                   <span className="flex-1 text-left">{andNMoreLabel}</span>
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0" data-testid="ChevronDown__247c75" />
                 </button>
               )
           )}
@@ -391,7 +394,7 @@ export default function SideMenu({
   const width = expanded ? EXPANDED_W : COLLAPSED_W;
 
   return (
-    <TooltipProvider>
+    <TooltipProvider data-testid="TooltipProvider__247c75">
       <nav
         aria-label={ui('navigation')}
         className="fixed inset-y-0 left-0 z-40 flex flex-col bg-page-bg transition-[width] duration-200 ease-in-out overflow-hidden"
@@ -400,8 +403,8 @@ export default function SideMenu({
         {/* Header */}
         {expanded ? (
           <div className="relative flex shrink-0 items-center h-[62px] px-3 gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <DropdownMenu data-testid="DropdownMenu__247c75">
+              <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__247c75">
                 <button
                   type="button"
                   aria-label={ui('switchCompany')}
@@ -415,13 +418,15 @@ export default function SideMenu({
                   <span className="flex-1 text-left text-sm font-semibold text-foreground truncate">
                     {selectedOrg?.name || ui('yourCompany')}
                   </span>
-                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <ChevronDown
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    data-testid="ChevronDown__247c75" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel>{ui('switchCompany')}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem disabled>
+              <DropdownMenuContent align="start" className="w-56" data-testid="DropdownMenuContent__247c75">
+                <DropdownMenuLabel data-testid="DropdownMenuLabel__247c75">{ui('switchCompany')}</DropdownMenuLabel>
+                <DropdownMenuSeparator data-testid="DropdownMenuSeparator__247c75" />
+                <DropdownMenuItem disabled data-testid="DropdownMenuItem__247c75">
                   <img
                     src={logoSrc}
                     alt=""
@@ -439,25 +444,25 @@ export default function SideMenu({
               aria-label={ui('collapseMenu')}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             >
-              <PanelLeftClose className="h-4 w-4" />
+              <PanelLeftClose className="h-4 w-4" data-testid="PanelLeftClose__247c75" />
             </button>
             <div className="absolute bottom-0 left-3 right-3 border-t border-border/50" />
           </div>
         ) : (
           <div className="flex flex-row items-center justify-center h-[63px] px-2">
             <div className="flex items-center w-10 h-full border-b border-[#E8EAEF]">
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
+              <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
+                <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
                   <button
                     type="button"
                     onClick={onToggle}
                     aria-label={ui('expandMenu')}
                     className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    <PanelLeftOpen className="h-5 w-5" />
+                    <PanelLeftOpen className="h-5 w-5" data-testid="PanelLeftOpen__247c75" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">{ui('expandMenu')}</TooltipContent>
+                <TooltipContent side="right" data-testid="TooltipContent__247c75">{ui('expandMenu')}</TooltipContent>
               </Tooltip>
             </div>
           </div>
@@ -486,8 +491,8 @@ export default function SideMenu({
                     key={g.group}
                     className="flex justify-center"
                   >
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
+                    <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
+                      <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
                         <NavLink
                           to={`/${itemPath}`}
                           className={cn(
@@ -496,11 +501,14 @@ export default function SideMenu({
                               ? 'bg-accent-highlight text-accent-highlight-foreground'
                               : 'bg-page-bg text-muted-foreground hover:text-foreground'
                           )}
-                        >
-                          <Icon weight={isItemActive || isGroupActive ? 'fill' : 'regular'} className="h-5 w-5" />
+                          data-testid={`menu-item-${singleItem.slug || singleItem.name?.replace(/\s+/g, '-').toLowerCase()}`}>
+                          <Icon
+                            weight={isItemActive || isGroupActive ? 'fill' : 'regular'}
+                            className="h-5 w-5"
+                            data-testid="Icon__247c75" />
                         </NavLink>
                       </TooltipTrigger>
-                      <TooltipContent side="right">{tMenu(singleItem.label)}</TooltipContent>
+                      <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu(singleItem.label)}</TooltipContent>
                     </Tooltip>
                   </div>
                 );
@@ -520,7 +528,7 @@ export default function SideMenu({
                     locationSearch={location.search}
                     tMenu={tMenu}
                     emptyLabel={g.group === 'Favorites' ? ui('noFavoritesYet') : null}
-                  />
+                    data-testid="CollapsedGroupPopover__247c75" />
                 </div>
               );
             }
@@ -541,7 +549,7 @@ export default function SideMenu({
                   isItemActive={isItemActive}
                   isGroupActive={isGroupActive}
                   itemLabel={tMenu(singleItem.label)}
-                />
+                  data-testid="ExpandedDirectLink__247c75" />
               );
             }
 
@@ -561,7 +569,7 @@ export default function SideMenu({
                       ? 'text-accent-highlight-foreground font-semibold'
                       : 'text-text-primary hover:bg-muted/50'
                   )}
-                >
+                  data-testid={`menu-item-${item.slug || item.name?.replace(/\s+/g, '-').toLowerCase()}`}>
                   <span className={cn(
                     'absolute left-[33px] top-0 bottom-0 w-px',
                     isItemActive ? 'bg-white/40' : 'bg-[#E8EAEF]'
@@ -584,7 +592,7 @@ export default function SideMenu({
                   key={item.name}
                   to={`/${itemPath}`}
                   className="relative flex w-full items-center pl-[52px] pr-4 py-1.5 text-sm text-text-primary hover:bg-muted/50 transition-colors"
-                >
+                  data-testid="NavLink__247c75">
                   <span className="absolute left-[33px] top-0 bottom-0 w-px bg-[#E8EAEF]" />
                   <span className="relative z-10">
                     {item.labels?.[locale] || tMenu(favNameMap[itemPath] || item.label)}
@@ -614,7 +622,7 @@ export default function SideMenu({
                 andNMoreLabel={ui('andNMore', { n: g.items.length - FAVORITES_VISIBLE })}
                 renderItem={renderMenuItemLink}
                 renderFavoriteOverflowItem={renderFavoriteOverflowItem}
-              />
+                data-testid="ExpandedGroupSection__247c75" />
             );
           })}
         </div>
@@ -626,15 +634,15 @@ export default function SideMenu({
         )}>
           <div className={cn('border-t border-[#E8EAEF] mb-1', expanded ? 'mx-[-8px]' : 'w-10')} />
           {!expanded ? (
-            <Tooltip delayDuration={0}>
-              <TooltipTrigger asChild>
+            <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
+              <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
                 <button
                   type="button"
                   onClick={handleHelpClick}
                   aria-label={ui('helpAndSupport')}
                   className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  <Headphones className="h-5 w-5" />
+                  <Headphones className="h-5 w-5" data-testid="Headphones__247c75" />
                   {unreadCount > 0 && (
                     <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ring-2 ring-white">
                       {unreadCount > 9 ? '9+' : unreadCount}
@@ -642,7 +650,7 @@ export default function SideMenu({
                   )}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right">{ui('helpAndSupport')}</TooltipContent>
+              <TooltipContent side="right" data-testid="TooltipContent__247c75">{ui('helpAndSupport')}</TooltipContent>
             </Tooltip>
           ) : (
             <button
@@ -651,7 +659,7 @@ export default function SideMenu({
               className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
             >
               <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <Headphones className="h-4 w-4" />
+                <Headphones className="h-4 w-4" data-testid="Headphones__247c75" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ring-2 ring-white">
                     {unreadCount > 9 ? '9+' : unreadCount}
@@ -664,7 +672,11 @@ export default function SideMenu({
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
-              {unreadCount === 0 && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+              {unreadCount === 0 && (
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  data-testid="ChevronRight__247c75" />
+              )}
             </button>
           )}
 
@@ -672,13 +684,13 @@ export default function SideMenu({
             'flex items-center',
             expanded ? '' : 'justify-center'
           )}>
-            <UserAvatarButton expanded={expanded} />
+            <UserAvatarButton expanded={expanded} data-testid="UserAvatarButton__247c75" />
           </div>
 
           {import.meta.env.VITE_SHOW_ARTIFACTS === 'true' && (
             !expanded ? (
-              <Tooltip delayDuration={0}>
-                <TooltipTrigger asChild>
+              <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
+                <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
                   <NavLink
                     to="/artifacts"
                     className={cn(
@@ -687,11 +699,11 @@ export default function SideMenu({
                         ? 'text-foreground bg-muted'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
-                  >
-                    <FileJson className="h-5 w-5" />
+                    data-testid="NavLink__247c75">
+                    <FileJson className="h-5 w-5" data-testid="FileJson__247c75" />
                   </NavLink>
                 </TooltipTrigger>
-                <TooltipContent side="right">{tMenu('Artifacts')}</TooltipContent>
+                <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu('Artifacts')}</TooltipContent>
               </Tooltip>
             ) : (
               <NavLink
@@ -702,23 +714,25 @@ export default function SideMenu({
                     ? 'text-foreground bg-muted'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 )}
-              >
-                <FileJson className="h-4 w-4" />
+                data-testid="NavLink__247c75">
+                <FileJson className="h-4 w-4" data-testid="FileJson__247c75" />
                 <span>{tMenu('Artifacts')}</span>
               </NavLink>
             )
           )}
         </div>
       </nav>
-
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{ui('helpAndSupport')}</DialogTitle>
-            <DialogDescription>{ui('helpComingSoon')}</DialogDescription>
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen} data-testid="Dialog__247c75">
+        <DialogContent data-testid="DialogContent__247c75">
+          <DialogHeader data-testid="DialogHeader__247c75">
+            <DialogTitle data-testid="DialogTitle__247c75">{ui('helpAndSupport')}</DialogTitle>
+            <DialogDescription data-testid="DialogDescription__247c75">{ui('helpComingSoon')}</DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setHelpOpen(false)}>
+          <DialogFooter data-testid="DialogFooter__247c75">
+            <Button
+              variant="outline"
+              onClick={() => setHelpOpen(false)}
+              data-testid="Button__247c75">
               {ui('close')}
             </Button>
           </DialogFooter>

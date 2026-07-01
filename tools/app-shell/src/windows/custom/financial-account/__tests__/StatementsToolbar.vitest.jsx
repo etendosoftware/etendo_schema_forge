@@ -113,4 +113,24 @@ describe('StatementsToolbar', () => {
     expect(screen.getByTestId('date-range-popover')).toHaveAttribute('data-value', 'set');
     expect(screen.getByTestId('status-filter')).toHaveAttribute('data-value', 'PARTIAL');
   });
+
+  it('keeps the "Create manually" menu closed until the split arrow is clicked', () => {
+    renderToolbar({ onManualClick: vi.fn() });
+    expect(screen.queryByTestId('statements-manual-create')).not.toBeInTheDocument();
+  });
+
+  it('opens the split menu and calls onManualClick on "Create manually"', async () => {
+    const user = userEvent.setup();
+    const onManualClick = vi.fn();
+    renderToolbar({ onManualClick });
+
+    await user.click(screen.getByTestId('statements-import-split'));
+    const item = screen.getByTestId('statements-manual-create');
+    expect(item).toBeInTheDocument();
+
+    await user.click(item);
+    expect(onManualClick).toHaveBeenCalledTimes(1);
+    // Menu closes after choosing an item.
+    expect(screen.queryByTestId('statements-manual-create')).not.toBeInTheDocument();
+  });
 });

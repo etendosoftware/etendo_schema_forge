@@ -32,7 +32,6 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) 
       >
         {ui('sendToSif')}
       </button>
-
       {modalOpen && (
         <SifSendingModal
           pendingTargets={pendingTargets}
@@ -50,7 +49,7 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status }) 
           onAfterSend={(next) => {
             if (Object.values(next).some((r) => r?.ok)) setSentSuccessfully(true);
           }}
-        />
+          data-testid="SifSendingModal__1d018f" />
       )}
     </>
   );

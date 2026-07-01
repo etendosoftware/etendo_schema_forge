@@ -80,3 +80,22 @@ export function useCreatePayment() {
   const { run, busy, error } = usePostAction('create-payment');
   return { createPayment: run, creating: busy, error };
 }
+
+/**
+ * Hook for transferring funds between two financial accounts (ETP-4272).
+ *
+ * POST /sws/neo/financial-account-transactions?action=transfer
+ * body: {
+ *   sourceAccountId, destinationAccountId, amount, glItemId?, transferDate?,
+ *   conversionRate?, bankFee?, bankFeeFrom?, bankFeeTo?, description?
+ * }
+ *
+ * The backend validates and delegates to Etendo Classic's funds-transfer flow,
+ * creating the paired withdrawal/deposit (+ optional bank fee) transactions.
+ *
+ * Returns `{ transfer, transferring, error }`.
+ */
+export function useFundsTransfer() {
+  const { run, busy, error } = usePostAction('transfer');
+  return { transfer: run, transferring: busy, error };
+}

@@ -19,7 +19,9 @@ const statusField = null;
 // @sf-generated-end summary:warehouse
 
 // @sf-generated-start extraBadges:warehouse
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:warehouse
 
 // @sf-generated-start processes:warehouse
@@ -33,7 +35,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:warehouse
 
 // @sf-generated-start requiredHeaderFields:warehouse
-const requiredHeaderFields = ['searchKey', 'name', 'locationAddress', 'allocated'];
+const requiredHeaderFields = ['searchKey', 'name', 'locationAddress'];
 // @sf-generated-end requiredHeaderFields:warehouse
 
 
@@ -98,14 +100,6 @@ export const api = {
       "reference": "Location",
       "inputMode": "search",
       "url": "/sws/neo/warehouse/warehouse/selectors/locationAddress"
-    },
-    {
-      "entity": "warehouse",
-      "field": "warehouseRule",
-      "column": "M_Warehouse_Rule_ID",
-      "reference": "Warehouse_Rule",
-      "inputMode": "selector",
-      "url": "/sws/neo/warehouse/warehouse/selectors/warehouseRule"
     },
     {
       "entity": "storageBin",
@@ -236,6 +230,7 @@ export const api = {
 export default function WarehousePage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="warehouse"
         Form={WarehouseForm}
@@ -252,10 +247,12 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
         secondaryTabs={[
           { key: 'productTransactions', label: 'Transactions', Panel: WarehouseTransactionsTable },
         ]}
+        hidePrint
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Warehouse", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 
@@ -267,6 +264,10 @@ export default function WarehousePage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      listbarPaddingX="px-2"
+      tablePaddingX="px-2"
+      hidePrint
+      hideLink
       rowQuickActions={{}}
       {...props}
     />

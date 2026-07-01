@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUI } from '@/i18n';
+import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { Star, Play, ArrowUpRight, Info, OctagonAlert, TriangleAlert, X } from 'lucide-react';
+import { Star, Play, ArrowUpRight, Info, OctagonAlert, TriangleAlert, X, Check } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import './fiscal-models.css';
 
 function parseCityLine(cityLine) {
@@ -43,64 +45,107 @@ export function PresentModal({ decl, onConfirm, onClose }) {
     onClose();
   }
 
+  const PATHS = [
+    { id: 'submitted_ack', icon: <Star size={16} strokeWidth={1.75} data-testid="Star__cda0bb" />, titleKey: 'fm.present.path.acuse',      descKey: 'fm.present.path.acuse_desc' },
+    { id: 'submitted',     icon: <Play size={16} strokeWidth={1.75} data-testid="Play__cda0bb" />, titleKey: 'fm.present.path.sin_acuse',  descKey: 'fm.present.path.sin_acuse_desc' },
+    { id: 'submitted_ext', icon: <ArrowUpRight size={16} strokeWidth={1.75} data-testid="ArrowUpRight__cda0bb" />, titleKey: 'fm.present.path.otra', descKey: 'fm.present.path.otra_desc' },
+  ];
+
   return (
-    <div className="fm-modal-overlay" role="dialog" aria-modal="true">
-      <div className="fm-present-modal">
-        <div className="fm-present-modal__title">{t('fm.present.title')}</div>
-        <div className="fm-present-modal__paths">
-          <div
-            className={`fm-present-modal__path${path === 'submitted_ack' ? ' fm-present-modal__path--selected' : ''}`}
-            onClick={() => setPath('submitted_ack')}
-          >
-            <div className="fm-present-modal__path-title"><Star size={12} /> {t('fm.present.path.acuse')}</div>
-            <div className="fm-present-modal__path-desc">{t('fm.present.path.acuse_desc')}</div>
-            {path === 'submitted_ack' && (
-              <div className="fm-present-modal__upload">
-                <button
-                  type="button"
-                  style={{ fontSize: 11, padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: 4, cursor: 'pointer', background: '#f9fafb' }}
-                  onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
-                >
-                  {acuseFile ? acuseFile.name : t('fm.present.upload_acuse')}
-                </button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".pdf,.xml"
-                  style={{ display: 'none' }}
-                  onChange={e => setAcuseFile(e.target.files?.[0] ?? null)}
-                />
+    <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="fm-config-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="fm-config-modal__header">
+          <div className="fm-config-modal__titles">
+            <div className="fm-config-modal__title">{t('fm.present.title')}</div>
+            <div className="fm-config-modal__sub">{t('fm.present.subtitle') ?? 'Selecciona cómo fue presentada la declaración'}</div>
+          </div>
+          <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {PATHS.map(p => (
+              <div
+                key={p.id}
+                onClick={() => setPath(p.id)}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                  padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
+                  border: `1px solid ${path === p.id ? '#121217' : '#E8EAEF'}`,
+                  background: path === p.id ? '#F5F7F9' : '#fff',
+                  transition: 'border-color .12s, background .12s',
+                }}
+              >
+                <span style={{
+                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: path === p.id ? '#121217' : '#F5F7F9',
+                  color: path === p.id ? '#fff' : '#828FA3',
+                  transition: 'background .12s, color .12s',
+                }}>
+                  {p.icon}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#121217', lineHeight: '20px' }}>
+                    {t(p.titleKey)}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 400, color: '#828FA3', lineHeight: '18px', marginTop: 2 }}>
+                    {t(p.descKey)}
+                  </div>
+                  {p.id === 'submitted_ack' && path === 'submitted_ack' && (
+                    <div style={{ marginTop: 10 }}>
+                      <button
+                        type="button"
+                        style={{
+                          fontSize: 12, padding: '5px 12px',
+                          border: '1px solid #D1D4DB', borderRadius: 8,
+                          cursor: 'pointer', background: '#fff', color: '#121217',
+                        }}
+                        onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+                      >
+                        {acuseFile ? acuseFile.name : t('fm.present.upload_acuse')}
+                      </button>
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept=".pdf,.xml"
+                        style={{ display: 'none' }}
+                        onChange={e => setAcuseFile(e.target.files?.[0] ?? null)}
+                      />
+                    </div>
+                  )}
+                </div>
+                <span style={{
+                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 1,
+                  border: `2px solid ${path === p.id ? '#121217' : '#D1D4DB'}`,
+                  background: path === p.id ? '#121217' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'border-color .12s, background .12s',
+                }}>
+                  {path === p.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', display: 'block' }} />}
+                </span>
               </div>
-            )}
-          </div>
-
-          <div
-            className={`fm-present-modal__path${path === 'submitted' ? ' fm-present-modal__path--selected' : ''}`}
-            onClick={() => setPath('submitted')}
-          >
-            <div className="fm-present-modal__path-title"><Play size={12} /> {t('fm.present.path.sin_acuse')}</div>
-            <div className="fm-present-modal__path-desc">{t('fm.present.path.sin_acuse_desc')}</div>
-          </div>
-
-          <div
-            className={`fm-present-modal__path${path === 'submitted_ext' ? ' fm-present-modal__path--selected' : ''}`}
-            onClick={() => setPath('submitted_ext')}
-          >
-            <div className="fm-present-modal__path-title"><ArrowUpRight size={12} /> {t('fm.present.path.otra')}</div>
-            <div className="fm-present-modal__path-desc">{t('fm.present.path.otra_desc')}</div>
+            ))}
           </div>
         </div>
 
-        <div className="fm-present-modal__actions">
-          <button className="fm-present-modal__btn" onClick={onClose}>{t('fm.action.cancel')}</button>
+        {/* Footer */}
+        <div className="fm-config-modal__footer">
+          <button className="fm-btn fm-btn--cancel-pill" onClick={onClose}>
+            {t('fm.action.cancel')}
+          </button>
           <button
-            className="fm-present-modal__btn fm-present-modal__btn--primary"
+            className={`fm-btn fm-btn--save-pill${canConfirm ? ' fm-btn--save-pill--active' : ''}`}
             disabled={!canConfirm}
             onClick={handleConfirm}
           >
             {t('fm.action.confirm_presentation')}
           </button>
         </div>
+
       </div>
     </div>
   );
@@ -111,33 +156,56 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
   const t = ui;
   const [phone,   setPhone]   = React.useState(decl?.phone   ?? '');
   const [contact, setContact] = React.useState(decl?.contact ?? '');
-  const FIELD = { fontSize: 12, padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: 4, width: '100%', outline: 'none' };
+  const inputSt = {
+    width: '100%', fontSize: 14, padding: '8px 12px',
+    border: '1px solid #D1D4DB', borderRadius: 8, height: 40,
+    boxSizing: 'border-box', color: '#121217', outline: 'none', background: '#fff',
+  };
   return (
-    <div className="fm-modal-overlay" role="dialog" aria-modal="true">
-      <div className="fm-present-modal">
-        <div className="fm-present-modal__title">{t('fm.filegen.title')}</div>
-        <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>
-          {t('fm.filegen.desc')} <strong>{decl?.model} {decl?.year} {decl?.period}</strong>
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          <label style={{ fontSize: 11, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {t('fm.filegen.contact_name')} <span style={{ fontSize: 10, color: '#9ca3af' }}>{t('fm.filegen.contact_name_hint')}</span>
-            <input style={FIELD} value={contact} onChange={e => setContact(e.target.value)} placeholder={t('fm.filegen.contact_name_placeholder')} />
-          </label>
-          <label style={{ fontSize: 11, color: '#374151', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {t('fm.filegen.contact_phone')}
-            <input style={FIELD} value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('fm.filegen.contact_phone_placeholder')} />
-          </label>
+    <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="fm-config-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="fm-config-modal__header">
+          <div className="fm-config-modal__titles">
+            <div className="fm-config-modal__title">{t('fm.filegen.title')}</div>
+            <div className="fm-config-modal__sub">
+              {t('fm.filegen.desc')} <strong>{decl?.model} {decl?.year} {decl?.period}</strong>
+            </div>
+          </div>
+          <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
         </div>
-        <div className="fm-present-modal__actions">
-          <button className="fm-present-modal__btn" onClick={onClose}>{t('fm.action.cancel')}</button>
+
+        {/* Body */}
+        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>
+              {t('fm.filegen.contact_name')}
+              {t('fm.filegen.contact_name_hint') && (
+                <span style={{ fontSize: 12, color: '#828FA3', marginLeft: 6 }}>{t('fm.filegen.contact_name_hint')}</span>
+              )}
+            </div>
+            <input style={inputSt} value={contact} onChange={e => setContact(e.target.value)} placeholder={t('fm.filegen.contact_name_placeholder')} />
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>{t('fm.filegen.contact_phone')}</div>
+            <input style={inputSt} value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('fm.filegen.contact_phone_placeholder')} />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="fm-config-modal__footer">
+          <button className="fm-btn fm-btn--cancel-pill" onClick={onClose}>
+            {t('fm.action.cancel')}
+          </button>
           <button
-            className="fm-present-modal__btn fm-present-modal__btn--primary"
+            className="fm-btn fm-btn--save-pill fm-btn--save-pill--active"
             onClick={() => { onConfirm?.({ phone, contact }); onClose(); }}
           >
             {t('fm.filegen.generate')}
           </button>
         </div>
+
       </div>
     </div>
   );
@@ -147,7 +215,8 @@ export function NewDeclModal({ onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
   const [model, setModel] = useState('303');
-  const [year, setYear] = useState(new Date().getFullYear());
+  const _cy = new Date().getFullYear();
+  const [year, setYear] = useState(SUPPORTED_YEARS.includes(_cy) ? _cy : SUPPORTED_YEARS[SUPPORTED_YEARS.length - 1]);
   const [period, setPeriod] = useState('T1');
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true">
@@ -163,14 +232,15 @@ export function NewDeclModal({ onConfirm, onClose }) {
           </label>
           <label style={{ fontSize: 12, color: '#374151' }}>
             {t('fm.new_decl.year')}
-            <input
-              type="number"
+            <select
               value={year}
               onChange={e => setYear(Number(e.target.value))}
-              min={2020}
-              max={2099}
-              style={{ marginLeft: 8, fontSize: 12, width: 70 }}
-            />
+              style={{ marginLeft: 8, fontSize: 12 }}
+            >
+              {SUPPORTED_YEARS.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
           </label>
           <label style={{ fontSize: 12, color: '#374151' }}>
             {t('fm.new_decl.period')}
@@ -208,7 +278,7 @@ export function IncidentTray({ incidents, onClose }) {
           onClick={onClose}
           aria-label={t('fm.action.close')}
         >
-          <X size={14} />
+          <X size={14} data-testid="X__cda0bb" />
         </button>
       </div>
       {incidents.map((inc) => (
@@ -216,7 +286,7 @@ export function IncidentTray({ incidents, onClose }) {
           key={inc.message}
           className={`fm-incident-tray__item fm-incident-tray__item--${inc.blocking ? 'blocking' : 'warning'}`}
         >
-          {inc.blocking ? <OctagonAlert size={14} /> : <TriangleAlert size={14} />} {inc.message}
+          {inc.blocking ? <OctagonAlert size={14} data-testid="OctagonAlert__cda0bb" /> : <TriangleAlert size={14} data-testid="TriangleAlert__cda0bb" />} {inc.message}
         </div>
       ))}
     </div>
@@ -226,7 +296,7 @@ export function IncidentTray({ incidents, onClose }) {
 function CfgSection({ title, children }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ fontWeight: 600, fontSize: 12, color: '#374151', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid #f3f4f6' }}>{title}</div>
+      <div style={{ fontWeight: 600, fontSize: 14, color: '#121217', marginBottom: 12 }}>{title}</div>
       {children}
     </div>
   );
@@ -234,18 +304,23 @@ function CfgSection({ title, children }) {
 
 function CfgField({ label, children, style }) {
   return (
-    <div style={{ marginBottom: 10, ...style }}>
-      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>{label}</div>
+    <div style={{ marginBottom: 12, ...style }}>
+      <div style={{ fontSize: 14, color: '#121217', fontWeight: 400, marginBottom: 6 }}>{label}</div>
       {children}
     </div>
   );
 }
 
-const INPUT_ST = { width: '100%', fontSize: 12, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 4, boxSizing: 'border-box' };
+const INPUT_ST = {
+  width: '100%', fontSize: 14, padding: '8px 12px',
+  border: '1px solid #D1D4DB', borderRadius: 8, height: 40,
+  boxSizing: 'border-box', color: '#121217', outline: 'none',
+  background: '#fff',
+};
 
 function CfgSection303({ t }) {
   return (
-    <CfgSection title={t('fm.config.m303.title')}>
+    <CfgSection title={t('fm.config.m303.title')} data-testid="CfgSection__cda0bb">
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', cursor: 'pointer', marginBottom: 8 }}>
         <input type="checkbox" defaultChecked />
         {t('fm.config.m303.redeme')}
@@ -254,13 +329,13 @@ function CfgSection303({ t }) {
         <input type="checkbox" />
         {t('fm.config.m303.recc')}
       </label>
-      <CfgField label={t('fm.config.m303.prorata')}>
+      <CfgField label={t('fm.config.m303.prorata')} data-testid="CfgField__cda0bb">
         <select style={INPUT_ST}>
           <option>{t('fm.config.m303.prorata_general')}</option>
           <option>{t('fm.config.m303.prorata_especial')}</option>
         </select>
       </CfgField>
-      <CfgField label={t('fm.config.m303.iban')}>
+      <CfgField label={t('fm.config.m303.iban')} data-testid="CfgField__cda0bb">
         <input type="text" placeholder="ES00 0000 0000 0000 0000 0000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
       </CfgField>
     </CfgSection>
@@ -269,26 +344,32 @@ function CfgSection303({ t }) {
 
 function CfgSection349({ t }) {
   return (
-    <CfgSection title={t('fm.config.m349.title')}>
+    <CfgSection title={t('fm.config.m349.title')} data-testid="CfgSection__cda0bb">
       <div style={{ display: 'flex', gap: 8 }}>
-        <CfgField label={t('fm.config.m349.periodicity')} style={{ flex: 1 }}>
+        <CfgField
+          label={t('fm.config.m349.periodicity')}
+          style={{ flex: 1 }}
+          data-testid="CfgField__cda0bb">
           <select style={INPUT_ST}>
             <option>{t('fm.config.m349.periodicity_monthly')}</option>
             <option>{t('fm.config.m349.periodicity_quarterly')}</option>
             <option>{t('fm.config.m349.periodicity_annual')}</option>
           </select>
         </CfgField>
-        <CfgField label={t('fm.config.m349.threshold')} style={{ flex: 1 }}>
+        <CfgField
+          label={t('fm.config.m349.threshold')}
+          style={{ flex: 1 }}
+          data-testid="CfgField__cda0bb">
           <input type="text" defaultValue="50.000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
         </CfgField>
       </div>
-      <CfgField label={t('fm.config.m349.viespref')}>
+      <CfgField label={t('fm.config.m349.viespref')} data-testid="CfgField__cda0bb">
         <select style={INPUT_ST}>
           <option>{t('fm.config.m349.viespref_auto')}</option>
           <option>{t('fm.config.m349.viespref_manual')}</option>
         </select>
       </CfgField>
-      <CfgField label={t('fm.config.m349.keys')}>
+      <CfgField label={t('fm.config.m349.keys')} data-testid="CfgField__cda0bb">
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {['E', 'A', 'T', 'S', 'I'].map(k => (
             <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
@@ -302,16 +383,20 @@ function CfgSection349({ t }) {
   );
 }
 
-// model: '303' | '349' | undefined — when provided, shows only that model's section;
-// undefined shows all sections (global config from the declaration detail page).
+// model: '303' | '349' | undefined — when provided, opens with that model's tab active;
+// undefined shows both tabs starting with Declarante.
 export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
-  const subtitle = model
-    ? t(`fm.config.m${model}.title`)
-    : t('fm.config.sub');
 
-  const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '' });
+  // Available tabs: always Declarante, then per-model tabs for active models
+  const modelTab = model ?? '303';
+  const [activeTab, setActiveTab] = useState('declarante');
+
+  const [form, setForm] = useState({ nif: '', name: '', phone: '', address: '', postal: '', city: '', province: '', conceptCondition: 'condición', amountTolerance: '0%' });
+  const [redeme, setRedeme] = useState(true);
+  const [recc, setRecc] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (!token || !apiBaseUrl) return;
@@ -337,7 +422,28 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
     return () => controller.abort();
   }, [token, apiBaseUrl]);
 
-  const set = (key) => (e) => setForm(prev => ({ ...prev, [key]: e.target.value }));
+  const set = (key) => (e) => { setForm(prev => ({ ...prev, [key]: e.target.value })); setIsDirty(true); };
+
+  const TABS = [
+    { id: 'declarante', label: t('fm.config.declarant.title') ?? 'Declarante' },
+    { id: 'model',      label: t(`fm.config.m${modelTab}.title`) ?? `Modelo ${modelTab}` },
+  ];
+
+  // Tab button style — segmented control (same as fiscal-config TabBar)
+  const tabStyle = (id) => ({
+    padding: '5px 16px', fontSize: 14,
+    fontWeight: activeTab === id ? 500 : 400,
+    color: '#121217',
+    background: activeTab === id ? '#fff' : 'transparent',
+    border: 'none',
+    borderRadius: 8,
+    cursor: 'pointer',
+    boxShadow: activeTab === id
+      ? '0px 1px 3px rgba(18,18,23,0.1), 0px 1px 2px rgba(18,18,23,0.06)'
+      : 'none',
+    transition: 'all 0.1s',
+    whiteSpace: 'nowrap',
+  });
 
   return (
     <div className="fm-catalog-overlay" onClick={onClose}>
@@ -345,28 +451,153 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
         <div className="fm-config-modal__header">
           <div className="fm-config-modal__titles">
             <div className="fm-config-modal__title">{t('fm.config.title')}</div>
-            <div className="fm-config-modal__sub">{subtitle}</div>
+            <div className="fm-config-modal__sub">{t('fm.config.sub')}</div>
           </div>
           <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
         </div>
-        <div className="fm-config-modal__body">
-          <CfgSection title={t('fm.config.declarant.title')}>
-            <CfgField label={t('fm.config.declarant.nif')}><input type="text" value={form.nif} onChange={set('nif')} placeholder="A78901234" style={INPUT_ST} /></CfgField>
-            <CfgField label={t('fm.config.declarant.name')}><input type="text" value={form.name} onChange={set('name')} style={INPUT_ST} /></CfgField>
-            <CfgField label={t('fm.config.declarant.phone')}><input type="tel" value={form.phone} onChange={set('phone')} placeholder="+34 ..." style={INPUT_ST} /></CfgField>
-            <CfgField label={t('fm.config.declarant.address')}><input type="text" value={form.address} onChange={set('address')} style={INPUT_ST} /></CfgField>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <CfgField label={t('fm.config.declarant.postal')} style={{ flex: '0 0 90px' }}><input type="text" value={form.postal} onChange={set('postal')} style={INPUT_ST} /></CfgField>
-              <CfgField label={t('fm.config.declarant.city')} style={{ flex: 1 }}><input type="text" value={form.city} onChange={set('city')} style={INPUT_ST} /></CfgField>
-              <CfgField label={t('fm.config.declarant.province')} style={{ flex: 1 }}><input type="text" value={form.province} onChange={set('province')} style={INPUT_ST} /></CfgField>
-            </div>
-          </CfgSection>
-          {(!model || model === '303') && <CfgSection303 t={t} />}
-          {(!model || model === '349') && <CfgSection349 t={t} />}
+
+        {/* Tab navigation */}
+        <div style={{ padding: '12px 20px 16px' }}>
+        <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: '#F5F7F9' }}>
+          {TABS.map(tab => (
+            <button key={tab.id} style={{ ...tabStyle(tab.id), flex: 1, textAlign: 'center' }} onClick={() => setActiveTab(tab.id)}>
+              {tab.label}
+            </button>
+          ))}
         </div>
+        </div>
+
+        <div className="fm-config-modal__body">
+          {activeTab === 'declarante' && (
+            <>
+              {/* Row 1: NIF + Razón social */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <CfgField
+                  label={t('fm.config.declarant.nif') ?? 'NIF / CIF'}
+                  data-testid="CfgField__cda0bb">
+                  <input type="text" value={form.nif} onChange={set('nif')} placeholder="A12345678" style={INPUT_ST} />
+                </CfgField>
+                <CfgField
+                  label={t('fm.config.declarant.name') ?? 'Razón social'}
+                  data-testid="CfgField__cda0bb">
+                  <input type="text" value={form.name} onChange={set('name')} style={INPUT_ST} />
+                </CfgField>
+              </div>
+              {/* Row 2: Teléfono + Dirección */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <CfgField
+                  label={t('fm.config.declarant.phone') ?? 'Teléfono'}
+                  data-testid="CfgField__cda0bb">
+                  <input type="tel" value={form.phone} onChange={set('phone')} placeholder="+34" style={INPUT_ST} />
+                </CfgField>
+                <CfgField
+                  label={t('fm.config.declarant.address') ?? 'Dirección'}
+                  data-testid="CfgField__cda0bb">
+                  <input type="text" value={form.address} onChange={set('address')} style={INPUT_ST} />
+                </CfgField>
+              </div>
+              {/* Row 3: Condición sobre el concepto + Tolerancia de importe */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <CfgField
+                  label={t('fm.config.declarant.concept_condition') ?? 'Condición sobre el concepto'}
+                  data-testid="CfgField__cda0bb">
+                  <select value={form.conceptCondition} onChange={set('conceptCondition')} style={INPUT_ST}>
+                    <option value="condición">condición</option>
+                    <option value="ninguna">ninguna</option>
+                  </select>
+                </CfgField>
+                <CfgField
+                  label={t('fm.config.declarant.amount_tolerance') ?? 'Tolerancia de importe'}
+                  data-testid="CfgField__cda0bb">
+                  <select value={form.amountTolerance} onChange={set('amountTolerance')} style={INPUT_ST}>
+                    <option value="0%">0%</option>
+                    <option value="1%">1%</option>
+                    <option value="2%">2%</option>
+                    <option value="5%">5%</option>
+                  </select>
+                </CfgField>
+              </div>
+              {/* Row 4: CP + Municipio + Provincia */}
+              <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr', gap: 12 }}>
+                <CfgField
+                  label={t('fm.config.declarant.postal') ?? 'CP'}
+                  data-testid="CfgField__cda0bb">
+                  <input type="text" value={form.postal} onChange={set('postal')} style={INPUT_ST} />
+                </CfgField>
+                <CfgField
+                  label={t('fm.config.declarant.city') ?? 'Municipio'}
+                  data-testid="CfgField__cda0bb">
+                  <input type="text" value={form.city} onChange={set('city')} style={INPUT_ST} />
+                </CfgField>
+                <CfgField
+                  label={t('fm.config.declarant.province') ?? 'Provincia'}
+                  data-testid="CfgField__cda0bb">
+                  <input type="text" value={form.province} onChange={set('province')} style={INPUT_ST} />
+                </CfgField>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'model' && modelTab === '303' && (
+            <>
+              {/* Regímenes fiscales */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#121217', marginBottom: 12 }}>
+                  {t('fm.config.m303.regimes') ?? 'Regímenes fiscales'}
+                </div>
+                <div style={{ display: 'flex', gap: 20 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer' }}>
+                    <Checkbox
+                      checked={redeme}
+                      onChange={() => { setRedeme(v => !v); setIsDirty(true); }}
+                      data-testid="Checkbox__cda0bb" />
+                    {t('fm.config.m303.redeme') ?? 'Inscrito en REDEME'}
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer' }}>
+                    <Checkbox
+                      checked={recc}
+                      onChange={() => { setRecc(v => !v); setIsDirty(true); }}
+                      data-testid="Checkbox__cda0bb" />
+                    {t('fm.config.m303.recc') ?? 'Régimen RECC'}
+                  </label>
+                </div>
+              </div>
+              {/* Prorrata + IBAN */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <CfgField
+                  label={t('fm.config.m303.prorata') ?? 'Prorrata'}
+                  data-testid="CfgField__cda0bb">
+                  <select style={INPUT_ST}>
+                    <option>{t('fm.config.m303.prorata_general') ?? 'General'}</option>
+                    <option>{t('fm.config.m303.prorata_especial') ?? 'Especial'}</option>
+                  </select>
+                </CfgField>
+                <CfgField
+                  label={t('fm.config.m303.iban') ?? 'IBAN Domiciliación'}
+                  data-testid="CfgField__cda0bb">
+                  <input type="text" placeholder="ES00 0000 0000 0000 0000 0000" style={{ ...INPUT_ST, fontFamily: 'monospace' }} />
+                </CfgField>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'model' && modelTab === '349' && (
+            <CfgSection349 t={t} data-testid="CfgSection349__cda0bb" />
+          )}
+        </div>
+
         <div className="fm-config-modal__footer">
-          <button className="fm-btn" onClick={onClose}>{t('fm.action.cancel')}</button>
-          <button className="fm-btn fm-btn--primary" onClick={onClose}>{t('fm.action.save')}</button>
+          <button className="fm-btn fm-btn--cancel-pill" onClick={onClose}>
+            {t('fm.action.cancel') ?? 'Cancelar'}
+          </button>
+          <button
+            className={`fm-btn fm-btn--save-pill${isDirty ? ' fm-btn--save-pill--active' : ''}`}
+            onClick={() => { setIsDirty(false); onClose(); }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Check size={14} strokeWidth={2} data-testid="Check__cda0bb" />
+            {t('fm.action.save') ?? 'Guardar'}
+          </button>
         </div>
       </div>
     </div>
@@ -404,54 +635,71 @@ export function CompareDrawer({ decl, prevDecl, onClose }) {
   const devImproved    = (boxes[27] ?? 0) > (pb[27] ?? 0);
 
   return (
-    <div style={{ position: 'fixed', top: 0, right: 0, height: '100%', width: 400, background: '#fff', borderLeft: '1px solid #e5e7eb', boxShadow: '-4px 0 16px rgba(0,0,0,.10)', zIndex: 55, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{t('fm.compare.title')}</span>
-          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{prevLabel} → {currLabel}</div>
+    <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="fm-config-modal" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="fm-config-modal__header">
+          <div className="fm-config-modal__titles">
+            <div className="fm-config-modal__title">{t('fm.compare.title')}</div>
+            <div className="fm-config-modal__sub">{prevLabel} → {currLabel}</div>
+          </div>
+          <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
         </div>
-        <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#6b7280' }} onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '6px 0', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e5e7eb' }}>
-          <span />
-          <span style={{ textAlign: 'right' }}>{prevLabel}</span>
-          <span style={{ textAlign: 'right' }}>{currLabel}</span>
-          <span style={{ textAlign: 'right' }}>{t('fm.compare.delta')}</span>
+
+        {/* Body */}
+        <div className="fm-config-modal__body" style={{ minHeight: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '6px 0', fontSize: 12, fontWeight: 400, color: '#121217', borderBottom: '1px solid #E8EAEF' }}>
+            <span />
+            <span style={{ textAlign: 'right', minWidth: 100 }}>{prevLabel}</span>
+            <span style={{ textAlign: 'right', minWidth: 100 }}>{currLabel}</span>
+            <span style={{ textAlign: 'right', minWidth: 72 }}>{t('fm.compare.delta')}</span>
+          </div>
+          {rows.map((r) => {
+            const d      = r.curr - r.prev;
+            const up     = d >= 0;
+            const pctNum = r.prev !== 0 ? (d / Math.abs(r.prev)) * 100 : null;
+            let deltaColor = '#828FA3';
+            if (pctNum != null) deltaColor = up ? '#17663A' : '#D50B3E';
+            const arrow     = up ? '↑' : '↓';
+            const deltaText = pctNum == null ? '—' : `${arrow} ${Math.abs(pctNum).toFixed(1)}%`;
+            return (
+              <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '10px 0', borderBottom: r.separator ? '2px solid #E8EAEF' : '1px solid #F5F7F9', fontSize: 14, alignItems: 'center' }}>
+                <span style={{ color: '#121217' }}>{r.label}</span>
+                <span style={{ textAlign: 'right', minWidth: 100, color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.prev)}</span>
+                <span style={{ textAlign: 'right', minWidth: 100, color: '#121217', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.curr)}</span>
+                <span style={{ textAlign: 'right', minWidth: 72, color: deltaColor, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                  {deltaText}
+                </span>
+              </div>
+            );
+          })}
+          <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--fm-info-bg)', borderRadius: 12, fontSize: 14, color: 'var(--fm-info-fg)', display: 'flex', gap: 8 }}>
+            <Info
+              size={14}
+              style={{ flexShrink: 0, marginTop: 1, color: 'var(--fm-info-fg)' }}
+              data-testid="Info__cda0bb" />
+            <span>
+              {devImproved
+                ? t('fm.compare.insight.dev_improved', { prev: prevLabel })
+                : t('fm.compare.insight.dev_fell', { prev: prevLabel })
+              }
+              {' '}
+              {resultImproved
+                ? t('fm.compare.insight.result_higher', { curr: currLabel })
+                : t('fm.compare.insight.result_lower', { curr: currLabel })
+              }
+            </span>
+          </div>
         </div>
-        {rows.map((r) => {
-          const d      = r.curr - r.prev;
-          const up     = d >= 0;
-          const pctNum = r.prev !== 0 ? (d / Math.abs(r.prev)) * 100 : null;
-          let deltaColor = '#9ca3af';
-          if (pctNum != null) deltaColor = up ? '#059669' : '#dc2626';
-          const arrow      = up ? '↑' : '↓';
-          const deltaText  = pctNum == null ? '—' : `${arrow} ${Math.abs(pctNum).toFixed(1)}%`;
-          return (
-            <div key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: 8, padding: '8px 0', borderBottom: r.separator ? '2px solid #e5e7eb' : '1px solid #f3f4f6', fontSize: 12, alignItems: 'center' }}>
-              <span style={{ color: '#374151' }}>{r.label}</span>
-              <span style={{ textAlign: 'right', color: '#6b7280', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.prev)}</span>
-              <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(r.curr)}</span>
-              <span style={{ textAlign: 'right', color: deltaColor, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                {deltaText}
-              </span>
-            </div>
-          );
-        })}
-        <div style={{ marginTop: 16, padding: '12px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 12, color: '#1e40af', display: 'flex', gap: 8 }}>
-          <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-          <span>
-            {devImproved
-              ? t('fm.compare.insight.dev_improved', { prev: prevLabel })
-              : t('fm.compare.insight.dev_fell', { prev: prevLabel })
-            }
-            {' '}
-            {resultImproved
-              ? t('fm.compare.insight.result_higher', { curr: currLabel })
-              : t('fm.compare.insight.result_lower', { curr: currLabel })
-            }
-          </span>
+
+        {/* Footer */}
+        <div className="fm-config-modal__footer" style={{ justifyContent: 'flex-end' }}>
+          <button className="fm-btn fm-btn--save-pill fm-btn--save-pill--active" onClick={onClose}>
+            {t('fm.action.close') ?? 'Cerrar'}
+          </button>
         </div>
+
       </div>
     </div>
   );

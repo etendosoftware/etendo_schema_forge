@@ -84,20 +84,22 @@ export default function SmartScanPage() {
             <div>
               <p className="text-sm text-muted-foreground">{ui('smartScanSubtitle')}</p>
             </div>
-            <Button>
-              <ScanLine className="h-4 w-4 mr-2" />
+            <Button data-testid="Button__d92e96">
+              <ScanLine className="h-4 w-4 mr-2" data-testid="ScanLine__d92e96" />
               {ui('newScan')}
             </Button>
           </div>
 
           {/* Upload area */}
-          <Card>
-            <CardContent className="p-8">
+          <Card data-testid="Card__d92e96">
+            <CardContent className="p-8" data-testid="CardContent__d92e96">
               <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-10 text-center space-y-3">
-                <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
+                <Upload
+                  className="h-10 w-10 mx-auto text-muted-foreground"
+                  data-testid="Upload__d92e96" />
                 <p className="text-sm font-medium">{translatedUploadTitle}</p>
                 <p className="text-xs text-muted-foreground">{translatedUploadHint}</p>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" data-testid="Button__d92e96">
                   {translatedBrowseFiles}
                 </Button>
               </div>
@@ -109,10 +111,10 @@ export default function SmartScanPage() {
         {KPIS.map((kpi) => {
           const Icon = kpi.icon;
           return (
-            <Card key={kpi.label}>
-              <CardContent className="p-4 flex items-start gap-3">
+            <Card key={kpi.label} data-testid="Card__d92e96">
+              <CardContent className="p-4 flex items-start gap-3" data-testid="CardContent__d92e96">
                 <div className="rounded-md bg-muted p-2">
-                  <Icon className="h-4 w-4 text-muted-foreground" />
+                  <Icon className="h-4 w-4 text-muted-foreground" data-testid="Icon__d92e96" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{kpi.label}</p>
@@ -129,14 +131,14 @@ export default function SmartScanPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Scans Table */}
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-muted-foreground" />
+          <Card data-testid="Card__d92e96">
+            <CardHeader data-testid="CardHeader__d92e96">
+              <CardTitle className="flex items-center gap-2" data-testid="CardTitle__d92e96">
+                <FileText className="h-5 w-5 text-muted-foreground" data-testid="FileText__d92e96" />
                 {translatedRecentScans}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent data-testid="CardContent__d92e96">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -154,7 +156,9 @@ export default function SmartScanPage() {
                         <td className="py-2 font-medium">{scan.name}</td>
                         <td className="py-2">{scan.type}</td>
                         <td className="py-2">
-                          <Badge variant={STATUS_VARIANT[scan.statusKey] || 'outline'}>
+                          <Badge
+                            variant={STATUS_VARIANT[scan.statusKey] || 'outline'}
+                            data-testid="Badge__d92e96">
                             {scan.status}
                           </Badge>
                         </td>
@@ -171,17 +175,19 @@ export default function SmartScanPage() {
 
         {/* Activity Feed */}
         <div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Activity className="h-5 w-5 text-muted-foreground" />
+          <Card data-testid="Card__d92e96">
+            <CardHeader data-testid="CardHeader__d92e96">
+              <CardTitle
+                className="flex items-center gap-2 text-base"
+                data-testid="CardTitle__d92e96">
+                <Activity className="h-5 w-5 text-muted-foreground" data-testid="Activity__d92e96" />
                 {translatedActivityTitle}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3" data-testid="CardContent__d92e96">
               {ACTIVITY_FEED.map((entry, idx) => (
                 <div key={entry.id}>
-                  {idx > 0 && <Separator className="mb-3" />}
+                  {idx > 0 && <Separator className="mb-3" data-testid="Separator__d92e96" />}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm">{entry.label}</p>
                     <span className="text-xs text-muted-foreground">{entry.time}</span>

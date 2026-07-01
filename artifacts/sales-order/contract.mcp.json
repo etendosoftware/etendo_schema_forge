@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.12.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-05-19T17:48:06.208Z",
-  "contractChecksum": "d40abae2a9c58614",
+  "updatedAt": "2026-06-25T14:15:39.328Z",
+  "contractChecksum": "96b47a5663c08af8",
   "apiPrediction": {
     "specName": "sales-order",
     "baseUrl": "/sws/neo/sales-order",
@@ -148,6 +148,14 @@
             }
           ]
         }
+      },
+      {
+        "entity": "lines",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-order/lines/selectors/currency"
       }
     ],
     "actions": [
@@ -588,6 +596,52 @@
         "processType": "obuiapp"
       },
       {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
+        "entity": "header",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sales-order/header/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "header",
+        "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+        "processType": "obuiapp"
+      },
+      {
         "name": "manageReservation",
         "actionType": "utilityAction",
         "entity": "lines",
@@ -756,8 +810,8 @@
             "required": true
           },
           "currency": {
-            "readOnly": true,
             "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@C_Currency_ID@"
           },
           "description": {},
@@ -773,7 +827,8 @@
           "processed": {
             "readOnly": true,
             "required": true
-          }
+          },
+          "eTGOCurrencyRate": {}
         }
       },
       "lines": {
@@ -811,6 +866,10 @@
           "grossUnitPrice": {
             "readOnlyLogic": "@Processed@='Y' | @GROSSPRICE@='N'",
             "defaultValue": "0"
+          },
+          "currency": {
+            "required": true,
+            "defaultValue": "@C_Currency_ID@"
           }
         }
       }
@@ -830,14 +889,16 @@
         "partnerAddress",
         "priceList",
         "paymentTerms",
-        "warehouse"
+        "warehouse",
+        "currency"
       ],
       "lineFields": [
         "product",
         "orderedQuantity",
         "listPrice",
         "tax",
-        "unitPrice"
+        "unitPrice",
+        "currency"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -943,7 +1004,8 @@
           "partnerAddress",
           "priceList",
           "paymentTerms",
-          "warehouse"
+          "warehouse",
+          "currency"
         ]
       },
       {
@@ -954,7 +1016,8 @@
           "orderedQuantity",
           "listPrice",
           "tax",
-          "unitPrice"
+          "unitPrice",
+          "currency"
         ]
       },
       {
@@ -970,5 +1033,5 @@
       "confirmCancelAndReplace"
     ]
   },
-  "checksum": "91eecb3a5927a9c6"
+  "checksum": "407d688588ba6a97"
 }

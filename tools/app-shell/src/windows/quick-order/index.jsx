@@ -13,5 +13,11 @@ const SLUG_TO_TYPE = {
 export default function QuickOrderWindow({ token, windowName }) {
   const type = SLUG_TO_TYPE[windowName] || 'sales';
   const iframeUrl = `${APP.iframeUrl}?type=${encodeURIComponent(type)}`;
-  return <AppIframeHost appUrl={iframeUrl} appId={APP.appId} token={token} />;
+  return (
+    <AppIframeHost
+      appUrl={iframeUrl}
+      appId={APP.appId}
+      token={token}
+      data-testid="AppIframeHost__9b0138" />
+  );
 }

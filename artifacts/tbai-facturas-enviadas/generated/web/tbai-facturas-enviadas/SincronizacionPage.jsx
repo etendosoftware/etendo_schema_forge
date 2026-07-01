@@ -21,7 +21,9 @@ const statusField = null;
 // @sf-generated-end summary:sincronización
 
 // @sf-generated-start extraBadges:sincronización
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:sincronización
 
 // @sf-generated-start processes:sincronización
@@ -112,6 +114,7 @@ export const api = {
 export default function SincronizacionPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="sincronización"
         detailEntity="resultadoValidación"
@@ -133,6 +136,7 @@ export default function SincronizacionPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

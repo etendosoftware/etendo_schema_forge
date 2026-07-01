@@ -80,17 +80,19 @@ export function AmountFilter({ value, onChange }) {
   })();
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen} data-testid="Popover__c66309">
+      <PopoverTrigger asChild data-testid="PopoverTrigger__c66309">
         <button
           type="button"
           className="inline-flex h-10 items-center justify-between gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
         >
           <span className="truncate text-left">{triggerLabel}</span>
-          <ChevronDown className="h-5 w-5 shrink-0 text-[#828FA3]" />
+          <ChevronDown
+            className="h-5 w-5 shrink-0 text-[#828FA3]"
+            data-testid="ChevronDown__c66309" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 p-0">
+      <PopoverContent align="start" className="w-72 p-0" data-testid="PopoverContent__c66309">
         {/* Presets */}
         <div className="flex flex-col py-1">
           <button
@@ -102,7 +104,7 @@ export function AmountFilter({ value, onChange }) {
             )}
           >
             <span className="flex-1">{ui('financeAccountMovementsFilterAmountAll')}</span>
-            {!value ? <Check className="h-4 w-4 shrink-0" /> : null}
+            {!value ? <Check className="h-4 w-4 shrink-0" data-testid="Check__c66309" /> : null}
           </button>
           {presets.map((preset) => {
             const active = activePresetId === preset.id;
@@ -117,7 +119,7 @@ export function AmountFilter({ value, onChange }) {
                 )}
               >
                 <span className="flex-1">{preset.label}</span>
-                {active ? <Check className="h-4 w-4 shrink-0" /> : null}
+                {active ? <Check className="h-4 w-4 shrink-0" data-testid="Check__c66309" /> : null}
               </button>
             );
           })}
@@ -149,14 +151,14 @@ export function AmountFilter({ value, onChange }) {
               onChange={setDraftMin}
               placeholder={ui('financeAccountMovementsFilterAmountMin')}
               invalid={!minValid || !rangeValid}
-            />
+              data-testid="NumberField__c66309" />
             <span className="text-sm text-[#6C6C89]">–</span>
             <NumberField
               value={draftMax}
               onChange={setDraftMax}
               placeholder={ui('financeAccountMovementsFilterAmountMax')}
               invalid={!maxValid || !rangeValid}
-            />
+              data-testid="NumberField__c66309" />
           </div>
           {!rangeValid && (
             <p className="mt-2 text-xs text-[#D50B3E]">

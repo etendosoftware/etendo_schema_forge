@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-29T19:46:12.773Z",
-  "updatedAt": "2026-05-20T11:45:15.459Z",
-  "checksum": "25b7a5dad3be9738",
+  "updatedAt": "2026-06-29T12:09:16.843Z",
+  "checksum": "165aaea670dfa29e",
   "frontendContract": {
     "window": {
       "id": "FF808081330213E60133021822E40007",
@@ -55,71 +55,122 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Automatic Evaluation"
+                "name": "Automatic Evaluation",
+                "labels": {
+                  "es_ES": "Evaluación Automática"
+                }
               },
               {
                 "value": "CO",
-                "name": "Booked"
+                "name": "Booked",
+                "labels": {
+                  "es_ES": "Registrado"
+                }
               },
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "ETGO_CI",
-                "name": "Closed - Invoice Created"
+                "name": "Closed - Invoice Created",
+                "labels": {
+                  "es_ES": "Closed - Invoice Created"
+                }
               },
               {
                 "value": "CA",
-                "name": "Closed - Order Created"
+                "name": "Closed - Order Created",
+                "labels": {
+                  "es_ES": "Cerrado - Pedido creado"
+                }
               },
               {
                 "value": "CJ",
-                "name": "Closed - Rejected"
+                "name": "Closed - Rejected",
+                "labels": {
+                  "es_ES": "Cerrado - Rechazado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "ME",
-                "name": "Manual Evaluation"
+                "name": "Manual Evaluation",
+                "labels": {
+                  "es_ES": "Evaluación Manual"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "NC",
-                "name": "Not Confirmed"
+                "name": "Not Confirmed",
+                "labels": {
+                  "es_ES": "No Confirmado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "UE",
-                "name": "Under Evaluation"
+                "name": "Under Evaluation",
+                "labels": {
+                  "es_ES": "Bajo evaluación"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR",
@@ -618,7 +669,7 @@
             "inputMode": "selector",
             "section": "principal",
             "validationRule": {
-              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID=@AD_CLIENT_ID@ AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
               "cascadeParams": [
                 "DateInvoiced",
@@ -1531,6 +1582,30 @@
             "apiKey": "etgoTotalDiscount",
             "column": "EM_Etgo_Total_Discount",
             "type": "decimal",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "psd2GenerateBankPayment",
+            "apiKey": "psd2GenerateBankPayment",
+            "column": "EM_Psd2_Generate_Bank_Payment",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTPRRemovePayment",
+            "apiKey": "eTPRRemovePayment",
+            "column": "EM_Etpr_Remove_Payment",
+            "type": "button",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
             "visibility": "system",
             "required": false
           }
@@ -2490,6 +2565,22 @@
         "processType": "obuiapp"
       },
       {
+        "entity": "customerReturn",
+        "field": "psd2GenerateBankPayment",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "url": "/sws/neo/returns/customerReturn/{id}/action/psd2GenerateBankPayment",
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "customerReturn",
+        "field": "eTPRRemovePayment",
+        "column": "EM_Etpr_Remove_Payment",
+        "url": "/sws/neo/returns/customerReturn/{id}/action/eTPRRemovePayment",
+        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+        "processType": "obuiapp"
+      },
+      {
         "entity": "customerReturnLine",
         "field": "selectOrderLine",
         "column": "Relate_Orderline",
@@ -2614,6 +2705,14 @@
         "description": "Action endpoint for 'documentAction' in customerReturn should exist"
       },
       {
+        "id": "t-action-endpoint-customerReturn-eTPRRemovePayment",
+        "category": "action-endpoint",
+        "entity": "customerReturn",
+        "field": "eTPRRemovePayment",
+        "runner": "node",
+        "description": "Action endpoint for 'eTPRRemovePayment' in customerReturn should exist"
+      },
+      {
         "id": "t-action-endpoint-customerReturn-generateTemplate",
         "category": "action-endpoint",
         "entity": "customerReturn",
@@ -2636,6 +2735,14 @@
         "field": "processNow",
         "runner": "node",
         "description": "Action endpoint for 'processNow' in customerReturn should exist"
+      },
+      {
+        "id": "t-action-endpoint-customerReturn-psd2GenerateBankPayment",
+        "category": "action-endpoint",
+        "entity": "customerReturn",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "Action endpoint for 'psd2GenerateBankPayment' in customerReturn should exist"
       },
       {
         "id": "t-action-endpoint-customerReturn-rMAddOrphanLine",
@@ -3830,12 +3937,28 @@
         "description": "System field 'dropShipPartner' should exist in backend but not frontend for customerReturn"
       },
       {
+        "id": "t-system-field-customerReturn-eTGOCurrencyRate",
+        "category": "system-field",
+        "entity": "customerReturn",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "System field 'eTGOCurrencyRate' should exist in backend but not frontend for customerReturn"
+      },
+      {
         "id": "t-system-field-customerReturn-etgoTotalDiscount",
         "category": "system-field",
         "entity": "customerReturn",
         "field": "etgoTotalDiscount",
         "runner": "node",
         "description": "System field 'etgoTotalDiscount' should exist in backend but not frontend for customerReturn"
+      },
+      {
+        "id": "t-system-field-customerReturn-eTPRRemovePayment",
+        "category": "system-field",
+        "entity": "customerReturn",
+        "field": "eTPRRemovePayment",
+        "runner": "node",
+        "description": "System field 'eTPRRemovePayment' should exist in backend but not frontend for customerReturn"
       },
       {
         "id": "t-system-field-customerReturn-externalBusinessPartnerReference",
@@ -4060,6 +4183,14 @@
         "field": "project",
         "runner": "node",
         "description": "System field 'project' should exist in backend but not frontend for customerReturn"
+      },
+      {
+        "id": "t-system-field-customerReturn-psd2GenerateBankPayment",
+        "category": "system-field",
+        "entity": "customerReturn",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "System field 'psd2GenerateBankPayment' should exist in backend but not frontend for customerReturn"
       },
       {
         "id": "t-system-field-customerReturn-quotation",
@@ -4765,9 +4896,9 @@
       }
     ],
     "summary": {
-      "total": 279,
+      "total": 284,
       "byCategory": {
-        "action-endpoint": 21,
+        "action-endpoint": 23,
         "crud-flags": 2,
         "default-value-type": 5,
         "displaylogic-evaluable": 1,
@@ -4779,11 +4910,11 @@
         "rule-declared": 6,
         "searchable-filters": 5,
         "selector-endpoint": 11,
-        "system-field": 151,
+        "system-field": 154,
         "visibility": 2
       },
       "byRunner": {
-        "node": 279,
+        "node": 284,
         "junit": 0
       }
     }

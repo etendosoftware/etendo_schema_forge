@@ -272,10 +272,9 @@ export function AdvancedFilterBuilder({
   return (
     <div className="flex flex-col gap-3 min-w-[560px]">
       <div className="flex items-center gap-2 text-sm font-semibold">
-        <SlidersHorizontal className="h-4 w-4 text-primary" />
+        <SlidersHorizontal className="h-4 w-4 text-primary" data-testid="SlidersHorizontal__4eedf1" />
         {ui('advancedFilterTitle')}
       </div>
-
       <div className="flex flex-col gap-2">
         {draft.conditions.map((row, idx) => {
           const col = columnByKey[row.field] || null;
@@ -293,53 +292,57 @@ export function AdvancedFilterBuilder({
                     {ui('advancedFilterWhere')}
                   </div>
                 ) : (
-                  <Select value={draft.rowOperator} onValueChange={setRowOperator}>
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue />
+                  <Select
+                    value={draft.rowOperator}
+                    onValueChange={setRowOperator}
+                    data-testid="Select__4eedf1">
+                    <SelectTrigger className="h-9 text-xs" data-testid="SelectTrigger__4eedf1">
+                      <SelectValue data-testid="SelectValue__4eedf1" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="and">{ui('advancedFilterAnd')}</SelectItem>
-                      <SelectItem value="or">{ui('advancedFilterOr')}</SelectItem>
+                    <SelectContent data-testid="SelectContent__4eedf1">
+                      <SelectItem value="and" data-testid="SelectItem__4eedf1">{ui('advancedFilterAnd')}</SelectItem>
+                      <SelectItem value="or" data-testid="SelectItem__4eedf1">{ui('advancedFilterOr')}</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
               </div>
-
               {/* Field */}
               <div className="flex-1 min-w-0">
                 <Select
                   value={row.field || undefined}
                   onValueChange={(v) => updateRow(idx, { field: v })}
-                >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder={ui('advancedFilterSelectField')} />
+                  data-testid="Select__4eedf1">
+                  <SelectTrigger className="h-9 text-xs" data-testid="SelectTrigger__4eedf1">
+                    <SelectValue
+                      placeholder={ui('advancedFilterSelectField')}
+                      data-testid="SelectValue__4eedf1" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent data-testid="SelectContent__4eedf1">
                     {filterableColumns.map((c) => (
-                      <SelectItem key={c.key} value={c.key}>{columnLabel(c)}</SelectItem>
+                      <SelectItem key={c.key} value={c.key} data-testid="SelectItem__4eedf1">{columnLabel(c)}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
               {/* Operator */}
               <div className="flex-1 min-w-0">
                 <Select
                   value={row.operator || undefined}
                   onValueChange={(v) => updateRow(idx, { operator: v })}
                   disabled={!col}
-                >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder={ui('advancedFilterSelectOp')} />
+                  data-testid="Select__4eedf1">
+                  <SelectTrigger className="h-9 text-xs" data-testid="SelectTrigger__4eedf1">
+                    <SelectValue
+                      placeholder={ui('advancedFilterSelectOp')}
+                      data-testid="SelectValue__4eedf1" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent data-testid="SelectContent__4eedf1">
                     {ops.map((op) => (
-                      <SelectItem key={op} value={op}>{ui(opLabels[op])}</SelectItem>
+                      <SelectItem key={op} value={op} data-testid="SelectItem__4eedf1">{ui(opLabels[op])}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
               {/* Value */}
               <div className="flex-1 min-w-0">
                 {showValue && col && (
@@ -355,10 +358,9 @@ export function AdvancedFilterBuilder({
                     entity={entity}
                     apiBaseUrl={apiBaseUrl}
                     labelOverrides={labelOverrides}
-                  />
+                    data-testid="ValueInput__4eedf1" />
                 )}
               </div>
-
               {/* Remove row */}
               <button
                 type="button"
@@ -366,36 +368,37 @@ export function AdvancedFilterBuilder({
                 className="h-9 w-9 shrink-0 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Remove condition"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" data-testid="Trash2__4eedf1" />
               </button>
             </div>
           );
         })}
       </div>
-
       <button
         type="button"
         onClick={addRow}
         className="self-start flex items-center gap-1 text-xs font-medium text-primary hover:underline"
       >
-        <Plus className="h-3.5 w-3.5" />
+        <Plus className="h-3.5 w-3.5" data-testid="Plus__4eedf1" />
         {ui('advancedFilterAddCondition')}
       </button>
-
       <div className="flex items-center justify-between pt-2 border-t border-border/60">
         {presetsEnabled ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <DropdownMenu data-testid="DropdownMenu__4eedf1">
+            <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__4eedf1">
               <button
                 type="button"
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                <Bookmark className="h-3.5 w-3.5" />
+                <Bookmark className="h-3.5 w-3.5" data-testid="Bookmark__4eedf1" />
                 {ui('filterPresetsButton')}
-                <ChevronDown className="h-3 w-3" />
+                <ChevronDown className="h-3 w-3" data-testid="ChevronDown__4eedf1" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64 max-h-80 overflow-auto">
+            <DropdownMenuContent
+              align="start"
+              className="w-64 max-h-80 overflow-auto"
+              data-testid="DropdownMenuContent__4eedf1">
               {presetNames.length === 0 && (
                 <div className="px-2 py-1.5 text-xs text-muted-foreground">
                   {ui('filterPresetsEmpty')}
@@ -406,7 +409,7 @@ export function AdvancedFilterBuilder({
                   key={name}
                   onClick={() => handleApplyPresetClick(name)}
                   className="flex items-center gap-2"
-                >
+                  data-testid="DropdownMenuItem__4eedf1">
                   <span className="flex-1 truncate">{name}</span>
                   {onDeletePreset && (
                     <button
@@ -415,20 +418,20 @@ export function AdvancedFilterBuilder({
                       className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                       title={ui('filterPresetDelete')}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__4eedf1" />
                     </button>
                   )}
                 </DropdownMenuItem>
               ))}
               {onSavePreset && (
                 <>
-                  {presetNames.length > 0 && <DropdownMenuSeparator />}
+                  {presetNames.length > 0 && <DropdownMenuSeparator data-testid="DropdownMenuSeparator__4eedf1" />}
                   <DropdownMenuItem
                     onClick={handleSavePresetClick}
                     disabled={!canSavePreset}
                     className="flex items-center gap-2"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
+                    data-testid="DropdownMenuItem__4eedf1">
+                    <Plus className="h-3.5 w-3.5" data-testid="Plus__4eedf1" />
                     <span className="flex-1">{ui('filterPresetSaveCurrent')}</span>
                   </DropdownMenuItem>
                 </>
@@ -442,7 +445,7 @@ export function AdvancedFilterBuilder({
             title={ui('advancedFilterSaveComingSoon')}
             className="flex items-center gap-1.5 text-xs text-muted-foreground/60 cursor-not-allowed"
           >
-            <Save className="h-3.5 w-3.5" />
+            <Save className="h-3.5 w-3.5" data-testid="Save__4eedf1" />
             {ui('advancedFilterSave')}
           </button>
         )}
@@ -453,7 +456,7 @@ export function AdvancedFilterBuilder({
             className="h-8 text-xs"
             onClick={handleClear}
             disabled={!anyStarted && !hasAppliedFilter}
-          >
+            data-testid="Button__4eedf1">
             {ui('advancedFilterClear')}
           </Button>
           <Button
@@ -461,21 +464,20 @@ export function AdvancedFilterBuilder({
             className="h-8 text-xs"
             onClick={handleApply}
             disabled={!allComplete}
-          >
+            data-testid="Button__4eedf1">
             {ui('advancedFilterApply')}
           </Button>
         </div>
       </div>
-
       <Dialog
         open={presetDialog.mode !== null}
         onOpenChange={(next) => { if (!next) closePresetDialog(); }}
-      >
-        <DialogContent className="sm:max-w-md">
+        data-testid="Dialog__4eedf1">
+        <DialogContent className="sm:max-w-md" data-testid="DialogContent__4eedf1">
           {presetDialog.mode === 'save' && (
             <form onSubmit={handleSaveDialogSubmit}>
-              <DialogHeader>
-                <DialogTitle>{ui('filterPresetSaveCurrent')}</DialogTitle>
+              <DialogHeader data-testid="DialogHeader__4eedf1">
+                <DialogTitle data-testid="DialogTitle__4eedf1">{ui('filterPresetSaveCurrent')}</DialogTitle>
               </DialogHeader>
               <div className="py-3">
                 <label className="text-sm text-muted-foreground">
@@ -486,13 +488,20 @@ export function AdvancedFilterBuilder({
                   value={presetNameDraft}
                   onChange={(e) => setPresetNameDraft(e.target.value)}
                   className="mt-2"
-                />
+                  data-testid="Input__4eedf1" />
               </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={closePresetDialog}>
+              <DialogFooter data-testid="DialogFooter__4eedf1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closePresetDialog}
+                  data-testid="Button__4eedf1">
                   {ui('cancel')}
                 </Button>
-                <Button type="submit" disabled={!presetNameDraft.trim()}>
+                <Button
+                  type="submit"
+                  disabled={!presetNameDraft.trim()}
+                  data-testid="Button__4eedf1">
                   {ui('save')}
                 </Button>
               </DialogFooter>
@@ -501,16 +510,19 @@ export function AdvancedFilterBuilder({
 
           {presetDialog.mode === 'overwrite' && (
             <>
-              <DialogHeader>
-                <DialogTitle>
+              <DialogHeader data-testid="DialogHeader__4eedf1">
+                <DialogTitle data-testid="DialogTitle__4eedf1">
                   {ui('filterPresetOverwriteConfirm', { name: presetDialog.name })}
                 </DialogTitle>
               </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={closePresetDialog}>
+              <DialogFooter data-testid="DialogFooter__4eedf1">
+                <Button
+                  variant="outline"
+                  onClick={closePresetDialog}
+                  data-testid="Button__4eedf1">
                   {ui('cancel')}
                 </Button>
-                <Button onClick={handleConfirmOverwrite}>
+                <Button onClick={handleConfirmOverwrite} data-testid="Button__4eedf1">
                   {ui('filterPresetOverwriteAction')}
                 </Button>
               </DialogFooter>
@@ -519,16 +531,22 @@ export function AdvancedFilterBuilder({
 
           {presetDialog.mode === 'delete' && (
             <>
-              <DialogHeader>
-                <DialogTitle>
+              <DialogHeader data-testid="DialogHeader__4eedf1">
+                <DialogTitle data-testid="DialogTitle__4eedf1">
                   {ui('filterPresetDeleteConfirm', { name: presetDialog.name })}
                 </DialogTitle>
               </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={closePresetDialog}>
+              <DialogFooter data-testid="DialogFooter__4eedf1">
+                <Button
+                  variant="outline"
+                  onClick={closePresetDialog}
+                  data-testid="Button__4eedf1">
                   {ui('cancel')}
                 </Button>
-                <Button variant="destructive" onClick={handleConfirmDelete}>
+                <Button
+                  variant="destructive"
+                  onClick={handleConfirmDelete}
+                  data-testid="Button__4eedf1">
                   {ui('delete')}
                 </Button>
               </DialogFooter>
@@ -544,20 +562,20 @@ function betweenOperator(value, mode, onChange) {
   const pair = Array.isArray(value) ? value : ['', ''];
   const inputType = mode === 'date' ? 'date' : mode === 'numeric' ? 'number' : 'text';
   return (
-      <div className="flex gap-1">
-        <Input
-            type={inputType}
-            value={pair[0] ?? ''}
-            onChange={(e) => onChange([e.target.value, pair[1] ?? ''])}
-            className="h-9 text-xs"
-        />
-        <Input
-            type={inputType}
-            value={pair[1] ?? ''}
-            onChange={(e) => onChange([pair[0] ?? '', e.target.value])}
-            className="h-9 text-xs"
-        />
-      </div>
+    <div className="flex gap-1">
+      <Input
+        type={inputType}
+        value={pair[0] ?? ''}
+        onChange={(e) => onChange([e.target.value, pair[1] ?? ''])}
+        className="h-9 text-xs"
+        data-testid="Input__4eedf1" />
+      <Input
+        type={inputType}
+        value={pair[1] ?? ''}
+        onChange={(e) => onChange([pair[0] ?? '', e.target.value])}
+        className="h-9 text-xs"
+        data-testid="Input__4eedf1" />
+    </div>
   );
 }
 
@@ -586,7 +604,7 @@ function ValueInput({ col, mode, operator, value, onChange, ui, dictionary, rows
         onChange={onChange}
         ui={ui}
         labelOverrides={labelOverrides}
-      />
+        data-testid="IdentifierMultiPicker__4eedf1" />
     );
   }
 
@@ -603,7 +621,7 @@ function ValueInput({ col, mode, operator, value, onChange, ui, dictionary, rows
           onChange={(e) => onChange(e.target.value)}
           placeholder={ui('advancedFilterInSetPlaceholder')}
           className="h-9 text-xs"
-        />
+          data-testid="Input__4eedf1" />
       );
     }
     return (
@@ -616,7 +634,7 @@ function ValueInput({ col, mode, operator, value, onChange, ui, dictionary, rows
         onChange={onChange}
         ui={ui}
         dictionary={dictionary}
-      />
+        data-testid="DistinctEnumPicker__4eedf1" />
     );
   }
 
@@ -625,13 +643,18 @@ function ValueInput({ col, mode, operator, value, onChange, ui, dictionary, rows
     const falseLabel = resolveBadgeText(col.badgeLabels?.false, locale, ui('no') ?? 'No');
     const selected = value === true || value === 'true' ? 'true' : value === false || value === 'false' ? 'false' : undefined;
     return (
-      <Select value={selected} onValueChange={(v) => onChange(v === 'true')}>
-        <SelectTrigger className="h-9 text-xs">
-          <SelectValue placeholder={ui('advancedFilterSelectValue')} />
+      <Select
+        value={selected}
+        onValueChange={(v) => onChange(v === 'true')}
+        data-testid="Select__4eedf1">
+        <SelectTrigger className="h-9 text-xs" data-testid="SelectTrigger__4eedf1">
+          <SelectValue
+            placeholder={ui('advancedFilterSelectValue')}
+            data-testid="SelectValue__4eedf1" />
         </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="true">{trueLabel}</SelectItem>
-          <SelectItem value="false">{falseLabel}</SelectItem>
+        <SelectContent data-testid="SelectContent__4eedf1">
+          <SelectItem value="true" data-testid="SelectItem__4eedf1">{trueLabel}</SelectItem>
+          <SelectItem value="false" data-testid="SelectItem__4eedf1">{falseLabel}</SelectItem>
         </SelectContent>
       </Select>
     );
@@ -644,7 +667,7 @@ function ValueInput({ col, mode, operator, value, onChange, ui, dictionary, rows
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value)}
       className="h-9 text-xs"
-    />
+      data-testid="Input__4eedf1" />
   );
 }
 
@@ -735,8 +758,8 @@ function IdentifierMultiPicker({ col, entity, apiBaseUrl, rows, value, onChange,
   const colLabelKey = labelOf(col.column) ?? col.label ?? col.key;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen} data-testid="Popover__4eedf1">
+      <PopoverTrigger asChild data-testid="PopoverTrigger__4eedf1">
         <button
           type="button"
           className={[
@@ -746,12 +769,16 @@ function IdentifierMultiPicker({ col, entity, apiBaseUrl, rows, value, onChange,
         >
           <span className="truncate">{triggerLabel}</span>
           {distinct.loading && (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0 ml-1" />
+            <Loader2
+              className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0 ml-1"
+              data-testid="Loader2__4eedf1" />
           )}
-          <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0 ml-1" />
+          <ChevronDown
+            className="h-3.5 w-3.5 opacity-50 shrink-0 ml-1"
+            data-testid="ChevronDown__4eedf1" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 p-0">
+      <PopoverContent align="start" className="w-64 p-0" data-testid="PopoverContent__4eedf1">
         <div className="px-3 pt-3 pb-2 text-xs font-normal leading-6" style={{ color: '#6C6C89' }}>
           {ui('advancedFilterSelectorOf', { label: colLabelKey })}
         </div>
@@ -762,7 +789,7 @@ function IdentifierMultiPicker({ col, entity, apiBaseUrl, rows, value, onChange,
             onChange={(e) => distinct.setSearch(e.target.value)}
             placeholder={ui('search') || 'Search'}
             className="h-8 text-xs"
-          />
+            data-testid="Input__4eedf1" />
         </div>
         <div className="max-h-60 overflow-auto pb-2">
           {mergedOptions.length === 0 && !distinct.loading && (
@@ -783,7 +810,7 @@ function IdentifierMultiPicker({ col, entity, apiBaseUrl, rows, value, onChange,
                     isSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-input',
                   ].join(' ')}
                 >
-                  {isSelected && <Check className="h-3 w-3" />}
+                  {isSelected && <Check className="h-3 w-3" data-testid="Check__4eedf1" />}
                 </span>
                 <span className="flex-1 truncate">{opt.label}</span>
               </button>
@@ -791,13 +818,15 @@ function IdentifierMultiPicker({ col, entity, apiBaseUrl, rows, value, onChange,
           })}
           {distinct.loading && mergedOptions.length === 0 && (
             <div className="flex items-center justify-center py-4 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__4eedf1" />
             </div>
           )}
           {distinct.hasMore && (
             <div ref={sentinelRef} className="flex items-center justify-center py-2">
               {distinct.loadingMore && (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader2
+                  className="h-4 w-4 animate-spin text-muted-foreground"
+                  data-testid="Loader2__4eedf1" />
               )}
             </div>
           )}
@@ -818,7 +847,11 @@ function resolveEnumOptions(col, dictionary) {
   return Object.keys(rawMap)
     .map((code) => ({
       code,
-      label: dictionary?.statuses?.[code]?.label || rawMap[code] || code,
+      // The column's own enumLabels (rawMap) take precedence over the global
+      // status dictionary, so a code that collides with an unrelated global
+      // status (e.g. account type "CA" vs an order status "CA") keeps the
+      // column's intended label.
+      label: rawMap[code] || dictionary?.statuses?.[code]?.label || code,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -852,7 +885,15 @@ function DistinctEnumPicker({ col, entity, apiBaseUrl, rows, value, onChange, ui
     );
   }, [col, dictionary]);
 
-  const labelFor = (code) => dictionary?.statuses?.[code]?.label || labelMap[code] || code;
+  // The column's own enumLabels (labelMap) win over the global status dictionary
+  // so a code colliding with an unrelated global status keeps the column's label.
+  // enumLabels values may be i18n keys, so run them through ui() (literal labels
+  // pass through unchanged), mirroring ListFilterBar's labelForStatus.
+  const labelFor = (code) => {
+    const declared = labelMap[code];
+    if (declared != null) return (ui && ui(declared)) || declared;
+    return dictionary?.statuses?.[code]?.label || code;
+  };
 
   const inMemoryCodes = useMemo(() => {
     const seen = new Set();
@@ -871,19 +912,28 @@ function DistinctEnumPicker({ col, entity, apiBaseUrl, rows, value, onChange, ui
   const mergedCodes = useMemo(() => {
     const seen = new Set();
     const out = [];
-    for (const entry of distinct.values) {
-      const c = entry?.id;
-      if (c == null || c === '') continue;
-      if (!seen.has(c)) { seen.add(c); out.push(c); }
-    }
-    const q = distinct.search.trim().toLowerCase();
-    for (const c of inMemoryCodes) {
-      if (seen.has(c)) continue;
-      if (q && !labelFor(c).toLowerCase().includes(q) && !String(c).toLowerCase().includes(q)) continue;
+    // Boolean-valued columns surface the same value in two shapes: the distinct
+    // endpoint returns the string "true"/"false" while in-memory rows hold the
+    // boolean true/false. Normalize to a single canonical string so they collapse
+    // to one option instead of rendering duplicate labels (the enumLabels keys are
+    // strings too, so labelFor still resolves the canonical form).
+    const canon = (c) => (typeof c === 'boolean' ? String(c) : c);
+    const add = (code) => {
+      if (code == null || code === '') return;
+      const c = canon(code);
+      if (seen.has(c)) return;
       seen.add(c);
       out.push(c);
+    };
+    for (const entry of distinct.values) add(entry?.id);
+    const q = distinct.search.trim().toLowerCase();
+    for (const c of inMemoryCodes) {
+      const cc = canon(c);
+      if (seen.has(cc)) continue;
+      if (q && !labelFor(cc).toLowerCase().includes(q) && !String(cc).toLowerCase().includes(q)) continue;
+      add(c);
     }
-    if (value && !seen.has(value)) { seen.add(value); out.push(value); }
+    if (value != null && value !== '') add(value);
     // Fallback: for virtual columns with static enumLabels and no dynamic data, use the
     // enumLabels keys directly so the picker is not empty.
     fillFallbackCodes(out, labelMap, seen);
@@ -893,8 +943,8 @@ function DistinctEnumPicker({ col, entity, apiBaseUrl, rows, value, onChange, ui
   const activeLabel = value ? labelFor(value) : null;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen} data-testid="Popover__4eedf1">
+      <PopoverTrigger asChild data-testid="PopoverTrigger__4eedf1">
         <Button
           variant="outline"
           size="sm"
@@ -902,17 +952,19 @@ function DistinctEnumPicker({ col, entity, apiBaseUrl, rows, value, onChange, ui
             'w-full justify-between gap-1.5 h-9 text-xs font-normal rounded-md bg-white',
             value ? 'text-foreground' : 'text-muted-foreground',
           ].join(' ')}
-        >
+          data-testid="Button__4eedf1">
           <span className="truncate">
             {activeLabel || ui('advancedFilterSelectValue')}
           </span>
           <span className="flex items-center gap-1 shrink-0">
-            {distinct.loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-            <ChevronDown className="h-3.5 w-3.5" />
+            {distinct.loading && <Loader2
+              className="h-3.5 w-3.5 animate-spin text-muted-foreground"
+              data-testid="Loader2__4eedf1" />}
+            <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__4eedf1" />
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 p-0">
+      <PopoverContent align="start" className="w-64 p-0" data-testid="PopoverContent__4eedf1">
         <DistinctValuesList
           activeCode={value || null}
           allLabel={null}
@@ -924,7 +976,7 @@ function DistinctEnumPicker({ col, entity, apiBaseUrl, rows, value, onChange, ui
             setOpen(false);
           }}
           searchPlaceholder={ui('searchValues')}
-        />
+          data-testid="DistinctValuesList__4eedf1" />
       </PopoverContent>
     </Popover>
   );

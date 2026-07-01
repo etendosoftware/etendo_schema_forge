@@ -27,6 +27,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 38907,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 38907,
     "etsgDateOperation": "2026-01-15",
@@ -40,6 +41,7 @@ export const header = [
     "aeatsiiPeriodo": 90,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -77,6 +79,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 9306,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 9306,
     "etsgDateOperation": "2026-01-16",
@@ -90,6 +93,7 @@ export const header = [
     "aeatsiiPeriodo": 93,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -127,6 +131,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 11544,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 11544,
     "etsgDateOperation": "2026-01-17",
@@ -140,6 +145,7 @@ export const header = [
     "aeatsiiPeriodo": 8,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -177,6 +183,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 11872,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 11872,
     "etsgDateOperation": "2026-01-18",
@@ -190,6 +197,7 @@ export const header = [
     "aeatsiiPeriodo": 91,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -227,6 +235,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 48460,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 48460,
     "etsgDateOperation": "2026-01-19",
@@ -240,6 +249,7 @@ export const header = [
     "aeatsiiPeriodo": 72,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -277,6 +287,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 45418,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 45418,
     "etsgDateOperation": "2026-01-20",
@@ -290,6 +301,7 @@ export const header = [
     "aeatsiiPeriodo": 78,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -327,6 +339,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 33840,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 33840,
     "etsgDateOperation": "2026-01-21",
@@ -340,6 +353,7 @@ export const header = [
     "aeatsiiPeriodo": 31,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -377,6 +391,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 25716,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 25716,
     "etsgDateOperation": "2026-01-22",
@@ -390,6 +405,7 @@ export const header = [
     "aeatsiiPeriodo": 97,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -427,6 +443,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 44780,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 44780,
     "etsgDateOperation": "2026-01-23",
@@ -440,6 +457,7 @@ export const header = [
     "aeatsiiPeriodo": 70,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -477,6 +495,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 12483,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 12483,
     "etsgDateOperation": "2026-01-24",
@@ -490,6 +509,7 @@ export const header = [
     "aeatsiiPeriodo": 77,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -527,6 +547,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 46022,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 46022,
     "etsgDateOperation": "2026-01-25",
@@ -540,6 +561,7 @@ export const header = [
     "aeatsiiPeriodo": 32,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -577,6 +599,7 @@ export const header = [
     "salesRepresentative": "Sample salesRepresentative",
     "chargeAmount": 38634,
     "charge": "Sample charge",
+    "posted": "Sample posted",
     "project": "Sample project",
     "prepaymentAmount": 38634,
     "etsgDateOperation": "2026-01-26",
@@ -590,6 +613,7 @@ export const header = [
     "aeatsiiPeriodo": 26,
     "aeatsiiIsauthorization": "Sample aeatsiiIsauthorization",
     "tbaiIssent": "Sample tbaiIssent",
+    "processed": "Sample processed",
     "aeatsiiCauseExemption": "Sample aeatsiiCauseExemption",
     "etvfacDateIssue": "Sample etvfacDateIssue",
     "etvfacHash": "Sample etvfacHash",
@@ -1760,69 +1784,6 @@ export const paymentDetails = [
     "canceled": "Sample canceled",
     "finPaymentID": "Sample finPaymentID",
     "invoicePaid": "Sample invoicePaid",
-    "headerId": "mock-header-012"
-  }
-];
-
-export const reversedInvoices = [
-  {
-    "id": "mock-reversedInvoices-001",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-001"
-  },
-  {
-    "id": "mock-reversedInvoices-002",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-002"
-  },
-  {
-    "id": "mock-reversedInvoices-003",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-003"
-  },
-  {
-    "id": "mock-reversedInvoices-004",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-004"
-  },
-  {
-    "id": "mock-reversedInvoices-005",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-005"
-  },
-  {
-    "id": "mock-reversedInvoices-006",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-006"
-  },
-  {
-    "id": "mock-reversedInvoices-007",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-007"
-  },
-  {
-    "id": "mock-reversedInvoices-008",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-008"
-  },
-  {
-    "id": "mock-reversedInvoices-009",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-009"
-  },
-  {
-    "id": "mock-reversedInvoices-010",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-010"
-  },
-  {
-    "id": "mock-reversedInvoices-011",
-    "reversedInvoice": "Sample reversedInvoice",
-    "headerId": "mock-header-011"
-  },
-  {
-    "id": "mock-reversedInvoices-012",
-    "reversedInvoice": "Sample reversedInvoice",
     "headerId": "mock-header-012"
   }
 ];

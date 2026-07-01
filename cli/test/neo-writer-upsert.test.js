@@ -146,10 +146,10 @@ describe('upsertSpec (update)', () => {
     assert.equal(client.inserts.length, 0);
 
     // UPDATE params: [name, specType, windowId, processId, moduleId,
-    //                 description, updated, updatedby, existingId]
+    //                 description, agentPrompt, updated, updatedby, existingId]
     const params = client.updates[0];
     assert.equal(params[0], 'purchase-order');
-    assert.equal(params[8], 'SPEC123', 'WHERE id is the existing spec id');
+    assert.equal(params[9], 'SPEC123', 'WHERE id is the existing spec id');
   });
 
   it('updates when no other spec uses the name (dup check returns nothing)', async () => {
@@ -171,6 +171,49 @@ describe('upsertSpec (update)', () => {
 // ---------------------------------------------------------------------------
 // Duplicate-name guard
 // ---------------------------------------------------------------------------
+
+describe('upsertSpec (agentPrompt)', () => {
+  it('persists agentPrompt as the last INSERT param', async () => {
+    const client = createMockClient();
+
+    await upsertSpec(client, {
+      name: 'purchase-order',
+      moduleId: 'MOD001',
+      windowId: 'WIN001',
+      agentPrompt: 'Always confirm before completing the order.',
+    });
+
+    // agent_prompt is appended as the final INSERT column (index 14) so the
+    // existing positional assertions for columns 0-13 stay valid.
+    assert.equal(client.inserts[0][14], 'Always confirm before completing the order.');
+  });
+
+  it('defaults agentPrompt to null when omitted (INSERT)', async () => {
+    const client = createMockClient();
+
+    await upsertSpec(client, { name: 'tax', moduleId: 'MOD001', windowId: 'WIN001' });
+
+    assert.equal(client.inserts[0][14], null);
+  });
+
+  it('persists agentPrompt on UPDATE', async () => {
+    const client = createMockClient({
+      existingSpecs: [{ etgo_sf_spec_id: 'SPEC123', name: 'purchase-order' }],
+    });
+
+    await upsertSpec(client, {
+      name: 'purchase-order',
+      moduleId: 'MOD001',
+      windowId: 'WIN001',
+      specId: 'SPEC123',
+      agentPrompt: 'Be careful.',
+    });
+
+    const params = client.updates[0];
+    assert.equal(params[6], 'Be careful.', 'agent_prompt is the SET param after description');
+    assert.equal(params[9], 'SPEC123', 'WHERE id remains the last param');
+  });
+});
 
 describe('upsertSpec (duplicate name)', () => {
   it('throws when inserting a name that already exists', async () => {

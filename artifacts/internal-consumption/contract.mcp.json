@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
-  "generatedAt": "2026-04-29T19:05:49.589Z",
-  "updatedAt": "2026-05-26T18:48:56.870Z",
-  "contractChecksum": "b2a99362d3bce3c7",
+  "version": "0.12.0",
+  "generatedAt": "2026-06-26T00:48:58.290Z",
+  "updatedAt": "2026-06-26T02:39:48.121Z",
+  "contractChecksum": "f9b0e1b320251451",
   "apiPrediction": {
     "specName": "internal-consumption",
     "baseUrl": "/sws/neo/internal-consumption",
@@ -138,6 +138,46 @@
           "Document has pending lines or missing required fields",
           "User lacks permission to execute the action"
         ]
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "internalConsumption",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -166,9 +206,9 @@
             "readOnlyLogic": "@Processed@='Y'"
           },
           "name": {
-            "required": true
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
           },
-          "description": {},
           "status": {
             "required": true,
             "defaultValue": "DR"
@@ -223,7 +263,8 @@
     "selectorContexts": [],
     "actions": [
       "processNow",
-      "posted"
+      "posted",
+      "etblkpBulkposting"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -268,5 +309,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "73a9616de747b9f8"
+  "checksum": "ae10ac2d3dabfd92"
 }

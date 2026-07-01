@@ -103,7 +103,7 @@ export function ConversationItem({
             onBlur={commitRename}
             onKeyDown={handleKeyDown}
             className="h-6 flex-1 py-0 text-sm"
-          />
+            data-testid="Input__238ff6" />
           <button
             type="button"
             onClick={(e) => {
@@ -113,7 +113,7 @@ export function ConversationItem({
             className="text-muted-foreground hover:text-foreground"
             aria-label={ui('save')}
           >
-            <Check className="h-3.5 w-3.5" />
+            <Check className="h-3.5 w-3.5" data-testid="Check__238ff6" />
           </button>
         </div>
       ) : (
@@ -136,7 +136,7 @@ export function ConversationItem({
                   className="rounded p-0.5 text-muted-foreground hover:text-foreground"
                   aria-label={ui('copilotRestoreConversation')}
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
+                  <RotateCcw className="h-3.5 w-3.5" data-testid="RotateCcw__238ff6" />
                 </button>
                 <button
                   type="button"
@@ -147,7 +147,7 @@ export function ConversationItem({
                   className="rounded p-0.5 text-muted-foreground hover:text-destructive"
                   aria-label={ui('copilotPermanentDelete')}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__238ff6" />
                 </button>
               </>
             ) : (
@@ -158,7 +158,7 @@ export function ConversationItem({
                   className="rounded p-0.5 text-muted-foreground hover:text-foreground"
                   aria-label={ui('copilotRenameConversation')}
                 >
-                  <Pencil className="h-3.5 w-3.5" />
+                  <Pencil className="h-3.5 w-3.5" data-testid="Pencil__238ff6" />
                 </button>
                 <button
                   type="button"
@@ -169,7 +169,7 @@ export function ConversationItem({
                   className="rounded p-0.5 text-muted-foreground hover:text-destructive"
                   aria-label={ui('copilotDeleteConversation')}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__238ff6" />
                 </button>
               </>
             )}

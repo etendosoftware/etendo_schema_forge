@@ -1,0 +1,1288 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-06-11T18:36:13.442Z",
+  "updatedAt": "2026-06-23T03:05:27.020Z",
+  "checksum": "01438675ab0c702a",
+  "frontendContract": {
+    "window": {
+      "id": "24963D64E83B4543A7F6BD248CF944EE",
+      "name": "Match Rule",
+      "primaryEntity": "etgoMatchRuleHeader",
+      "category": "finance",
+      "templateConfig": {
+        "titleKey": "matchRuleNewTitle",
+        "editTitleKey": "matchRuleEditTitle",
+        "subtitleKey": "matchRuleNewSubtitle",
+        "submitLabelKey": "matchRuleSubmitCreate",
+        "editSubmitLabelKey": "matchRuleSubmitSave",
+        "bannerKey": "matchRuleBanner",
+        "searchPlaceholderKey": "matchRuleSearchPlaceholder",
+        "newLabelKey": "matchRuleNew",
+        "autoPriorityField": "priority",
+        "autoPriorityStep": 10,
+        "allowClone": true,
+        "sectionGrid": {
+          "general": 3,
+          "dimensions": 3
+        },
+        "sections": [
+          {
+            "key": "general"
+          },
+          {
+            "key": "dimensions",
+            "label": "matchRuleSectionDimensions"
+          }
+        ],
+        "backLabelKey": "cancel",
+        "toolbarFilters": [
+          {
+            "key": "active",
+            "field": "active",
+            "allLabelKey": "matchRuleFilterAllRules",
+            "options": [
+              {
+                "value": "Y",
+                "labelKey": "matchRuleFilterActive"
+              },
+              {
+                "value": "N",
+                "labelKey": "matchRuleFilterInactive"
+              }
+            ]
+          }
+        ]
+      },
+      "breadcrumb": "Finance / Accounts / Match Rule",
+      "detailEntity": null,
+      "labelOverrides": {
+        "es_ES": {
+          "Name": "Nombre",
+          "Priority": "Prioridad",
+          "TextCondition": "Condición sobre el concepto",
+          "TextPattern": "Patrón a buscar",
+          "ETGO_Transaction_Type_ID": "Tipo de transacción",
+          "C_GLItem_ID": "Concepto contable",
+          "MatchCount": "Conciliaciones",
+          "Isactive": "Activa",
+          "C_BPartner_ID": "Contacto",
+          "FIN_Financial_Account_ID": "Afecta a",
+          "C_Project_ID": "Proyecto",
+          "C_Costcenter_ID": "Centro de coste",
+          "M_Product_ID": "Producto"
+        },
+        "en_US": {
+          "Name": "Name",
+          "Priority": "Priority",
+          "TextCondition": "Concept condition",
+          "TextPattern": "Pattern to match",
+          "ETGO_Transaction_Type_ID": "Transaction type",
+          "C_GLItem_ID": "Accounting concept",
+          "MatchCount": "Reconciliations",
+          "Isactive": "Active",
+          "C_BPartner_ID": "Contact",
+          "FIN_Financial_Account_ID": "Applies to",
+          "C_Project_ID": "Project",
+          "C_Costcenter_ID": "Cost center",
+          "M_Product_ID": "Product"
+        }
+      },
+      "layoutType": "list-modal"
+    },
+    "entities": {
+      "etgoMatchRuleHeader": {
+        "tableName": "ETGO_Match_Rule",
+        "tabId": "45453F895E984169AB4CC0BBAA3F9683",
+        "tabName": "ETGO Match Rule Header",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "label": "Active",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            },
+            "defaultValue": "Y",
+            "section": "general",
+            "seq": 10,
+            "cellType": "toggle",
+            "gridLabelKey": "matchRuleColActive",
+            "gridOrder": 7,
+            "inlineToggle": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "placeholderKey": "matchRuleNamePlaceholder",
+            "section": "general",
+            "seq": 1,
+            "cellType": "nameWithSubline",
+            "subField": "financialAccount",
+            "subEmptyKey": "matchRuleAllAccounts",
+            "gridLabelKey": "matchRuleColName",
+            "gridOrder": 2
+          },
+          {
+            "name": "priority",
+            "apiKey": "priority",
+            "column": "Priority",
+            "label": "Priority",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "general",
+            "seq": 8,
+            "cellType": "priorityPill",
+            "gridLabelKey": "matchRuleColPriority",
+            "gridOrder": 1,
+            "inlineEdit": true
+          },
+          {
+            "name": "textPattern",
+            "apiKey": "textPattern",
+            "column": "TextPattern",
+            "label": "Text Pattern",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "placeholderKey": "matchRulePatternPlaceholder",
+            "section": "general",
+            "seq": 2
+          },
+          {
+            "name": "transactionType",
+            "apiKey": "transactionType",
+            "column": "ETGO_Transaction_Type_ID",
+            "label": "Transaction Type",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ETGO_Transaction_Type",
+            "inputMode": "selector",
+            "searchSelect": true,
+            "allowCreate": true,
+            "createLabelKey": "matchRuleTypeCreate",
+            "createTitleKey": "matchRuleTypeCreateTitle",
+            "createNamePlaceholderKey": "matchRuleTypeNamePlaceholder",
+            "createSpec": "transaction-type",
+            "createEntity": "transactionType",
+            "placeholderKey": "matchRuleTypePlaceholder",
+            "section": "general",
+            "seq": 4,
+            "gridLabelKey": "matchRuleColType",
+            "gridOrder": 4
+          },
+          {
+            "name": "matchCount",
+            "apiKey": "matchCount",
+            "column": "MatchCount",
+            "label": "Match Count",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            },
+            "defaultValue": "0",
+            "cellType": "boldText",
+            "gridLabelKey": "matchRuleColReconciliations",
+            "gridOrder": 6
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "label": "Business Partner",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "BPartner",
+            "inputMode": "selector",
+            "searchSelect": true,
+            "section": "general",
+            "seq": 9
+          },
+          {
+            "name": "financialAccount",
+            "apiKey": "financialAccount",
+            "column": "FIN_Financial_Account_ID",
+            "label": "Financial Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Financial_Account",
+            "inputMode": "selector",
+            "searchSelect": true,
+            "emptyOptionLabelKey": "matchRuleAllAccounts",
+            "section": "general",
+            "seq": 3
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "selector",
+            "searchSelect": true,
+            "section": "dimensions",
+            "seq": 20
+          },
+          {
+            "name": "costCenter",
+            "apiKey": "costCenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "searchSelect": true,
+            "section": "dimensions",
+            "seq": 21
+          },
+          {
+            "name": "textCondition",
+            "apiKey": "textCondition",
+            "column": "TextCondition",
+            "label": "Text Condition",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "enumValues": [
+              {
+                "value": "C",
+                "name": "Contains"
+              },
+              {
+                "value": "R",
+                "name": "Regex"
+              },
+              {
+                "value": "S",
+                "name": "Starts with"
+              }
+            ],
+            "searchSelect": true,
+            "placeholderKey": "matchRuleConditionPlaceholder",
+            "section": "general",
+            "seq": 6,
+            "cellType": "conditionChip",
+            "kindField": "textCondition",
+            "patternField": "textPattern",
+            "kindLabels": {
+              "C": "matchRuleConditionContains",
+              "S": "matchRuleConditionStartsWith",
+              "R": "matchRuleConditionRegex"
+            },
+            "gridLabelKey": "matchRuleColCondition",
+            "gridOrder": 3
+          },
+          {
+            "name": "accountingConcept",
+            "apiKey": "accountingConcept",
+            "column": "C_GLItem_ID",
+            "label": "Accounting concept",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "reference": "GLItem",
+            "inputMode": "selector",
+            "searchSelect": true,
+            "section": "general",
+            "seq": 5,
+            "gridLabelKey": "matchRuleColConcept",
+            "gridOrder": 5
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "label": "Product",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "selector",
+            "searchSelect": true,
+            "section": "dimensions",
+            "seq": 24
+          }
+        ],
+        "searchableFields": [
+          "name",
+          "textPattern"
+        ],
+        "computedFields": [
+          {
+            "name": "active",
+            "derivation": {
+              "type": "computed",
+              "source": "Y"
+            }
+          },
+          {
+            "name": "matchCount",
+            "derivation": {
+              "type": "computed",
+              "source": "0"
+            }
+          }
+        ],
+        "javaQualifier": "match-rule"
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "24963D64E83B4543A7F6BD248CF944EE",
+      "name": "Match Rule",
+      "primaryEntity": "etgoMatchRuleHeader",
+      "category": "finance",
+      "templateConfig": {
+        "titleKey": "matchRuleNewTitle",
+        "editTitleKey": "matchRuleEditTitle",
+        "subtitleKey": "matchRuleNewSubtitle",
+        "submitLabelKey": "matchRuleSubmitCreate",
+        "editSubmitLabelKey": "matchRuleSubmitSave",
+        "bannerKey": "matchRuleBanner",
+        "searchPlaceholderKey": "matchRuleSearchPlaceholder",
+        "newLabelKey": "matchRuleNew",
+        "autoPriorityField": "priority",
+        "autoPriorityStep": 10,
+        "allowClone": true,
+        "sectionGrid": {
+          "general": 3,
+          "dimensions": 3
+        },
+        "sections": [
+          {
+            "key": "general"
+          },
+          {
+            "key": "dimensions",
+            "label": "matchRuleSectionDimensions"
+          }
+        ],
+        "backLabelKey": "cancel",
+        "toolbarFilters": [
+          {
+            "key": "active",
+            "field": "active",
+            "allLabelKey": "matchRuleFilterAllRules",
+            "options": [
+              {
+                "value": "Y",
+                "labelKey": "matchRuleFilterActive"
+              },
+              {
+                "value": "N",
+                "labelKey": "matchRuleFilterInactive"
+              }
+            ]
+          }
+        ]
+      },
+      "breadcrumb": "Finance / Accounts / Match Rule",
+      "detailEntity": null,
+      "labelOverrides": {
+        "es_ES": {
+          "Name": "Nombre",
+          "Priority": "Prioridad",
+          "TextCondition": "Condición sobre el concepto",
+          "TextPattern": "Patrón a buscar",
+          "ETGO_Transaction_Type_ID": "Tipo de transacción",
+          "C_GLItem_ID": "Concepto contable",
+          "MatchCount": "Conciliaciones",
+          "Isactive": "Activa",
+          "C_BPartner_ID": "Contacto",
+          "FIN_Financial_Account_ID": "Afecta a",
+          "C_Project_ID": "Proyecto",
+          "C_Costcenter_ID": "Centro de coste",
+          "M_Product_ID": "Producto"
+        },
+        "en_US": {
+          "Name": "Name",
+          "Priority": "Priority",
+          "TextCondition": "Concept condition",
+          "TextPattern": "Pattern to match",
+          "ETGO_Transaction_Type_ID": "Transaction type",
+          "C_GLItem_ID": "Accounting concept",
+          "MatchCount": "Reconciliations",
+          "Isactive": "Active",
+          "C_BPartner_ID": "Contact",
+          "FIN_Financial_Account_ID": "Applies to",
+          "C_Project_ID": "Project",
+          "C_Costcenter_ID": "Cost center",
+          "M_Product_ID": "Product"
+        }
+      },
+      "layoutType": "list-modal"
+    },
+    "entities": {
+      "etgoMatchRuleHeader": {
+        "tableName": "ETGO_Match_Rule",
+        "tabId": "45453F895E984169AB4CC0BBAA3F9683",
+        "tabName": "ETGO Match Rule Header",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "Isactive",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "priority",
+            "apiKey": "priority",
+            "column": "Priority",
+            "type": "integer",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "textPattern",
+            "apiKey": "textPattern",
+            "column": "TextPattern",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "transactionType",
+            "apiKey": "transactionType",
+            "column": "ETGO_Transaction_Type_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "matchCount",
+            "apiKey": "matchCount",
+            "column": "MatchCount",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_BPartner_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "financialAccount",
+            "apiKey": "financialAccount",
+            "column": "FIN_Financial_Account_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "costCenter",
+            "apiKey": "costCenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "textCondition",
+            "apiKey": "textCondition",
+            "column": "TextCondition",
+            "type": "enum",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "matchRule",
+            "apiKey": "matchRule",
+            "column": "Etgo_Match_Rule_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "Createdby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "Updatedby",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "accountingConcept",
+            "apiKey": "accountingConcept",
+            "column": "C_GLItem_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          }
+        ],
+        "javaQualifier": "match-rule"
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/etgoMatchRuleHeader",
+        "entity": "etgoMatchRuleHeader",
+        "supportedFilters": [
+          "name",
+          "textPattern"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/etgoMatchRuleHeader/:id",
+        "entity": "etgoMatchRuleHeader",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/etgoMatchRuleHeader",
+        "entity": "etgoMatchRuleHeader",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/etgoMatchRuleHeader/:id",
+        "entity": "etgoMatchRuleHeader",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/etgoMatchRuleHeader/:id",
+        "entity": "etgoMatchRuleHeader",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "match-rule",
+    "baseUrl": "/sws/neo/match-rule",
+    "crud": {
+      "etgoMatchRuleHeader": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/match-rule/etgoMatchRuleHeader",
+        "detailUrl": "/sws/neo/match-rule/etgoMatchRuleHeader/{id}",
+        "supportedFilters": [
+          "name",
+          "textPattern"
+        ]
+      }
+    },
+    "selectors": [
+      {
+        "entity": "etgoMatchRuleHeader",
+        "field": "transactionType",
+        "column": "ETGO_Transaction_Type_ID",
+        "reference": "ETGO_Transaction_Type",
+        "inputMode": "selector",
+        "url": "/sws/neo/match-rule/etgoMatchRuleHeader/selectors/transactionType"
+      },
+      {
+        "entity": "etgoMatchRuleHeader",
+        "field": "businessPartner",
+        "column": "C_BPartner_ID",
+        "reference": "BPartner",
+        "inputMode": "selector",
+        "url": "/sws/neo/match-rule/etgoMatchRuleHeader/selectors/businessPartner"
+      },
+      {
+        "entity": "etgoMatchRuleHeader",
+        "field": "financialAccount",
+        "column": "FIN_Financial_Account_ID",
+        "reference": "Financial_Account",
+        "inputMode": "selector",
+        "url": "/sws/neo/match-rule/etgoMatchRuleHeader/selectors/financialAccount"
+      },
+      {
+        "entity": "etgoMatchRuleHeader",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "selector",
+        "url": "/sws/neo/match-rule/etgoMatchRuleHeader/selectors/project"
+      },
+      {
+        "entity": "etgoMatchRuleHeader",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/match-rule/etgoMatchRuleHeader/selectors/costCenter"
+      },
+      {
+        "entity": "etgoMatchRuleHeader",
+        "field": "accountingConcept",
+        "column": "C_GLItem_ID",
+        "reference": "GLItem",
+        "inputMode": "selector",
+        "url": "/sws/neo/match-rule/etgoMatchRuleHeader/selectors/accountingConcept"
+      },
+      {
+        "entity": "etgoMatchRuleHeader",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "selector",
+        "url": "/sws/neo/match-rule/etgoMatchRuleHeader/selectors/product"
+      }
+    ],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Nombre",
+        "Priority": "Prioridad",
+        "TextCondition": "Condición sobre el concepto",
+        "TextPattern": "Patrón a buscar",
+        "ETGO_Transaction_Type_ID": "Tipo de transacción",
+        "C_GLItem_ID": "Concepto contable",
+        "MatchCount": "Conciliaciones",
+        "Isactive": "Activa",
+        "C_BPartner_ID": "Contacto",
+        "FIN_Financial_Account_ID": "Afecta a",
+        "C_Project_ID": "Proyecto",
+        "C_Costcenter_ID": "Centro de coste",
+        "M_Product_ID": "Producto"
+      },
+      "en_US": {
+        "Name": "Name",
+        "Priority": "Priority",
+        "TextCondition": "Concept condition",
+        "TextPattern": "Pattern to match",
+        "ETGO_Transaction_Type_ID": "Transaction type",
+        "C_GLItem_ID": "Accounting concept",
+        "MatchCount": "Reconciliations",
+        "Isactive": "Active",
+        "C_BPartner_ID": "Contact",
+        "FIN_Financial_Account_ID": "Applies to",
+        "C_Project_ID": "Project",
+        "C_Costcenter_ID": "Cost center",
+        "M_Product_ID": "Product"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "etgoMatchRuleHeader": {
+        "fields": {
+          "active": {
+            "required": true,
+            "defaultValue": "Y"
+          },
+          "name": {
+            "required": true
+          },
+          "priority": {
+            "required": true
+          },
+          "textPattern": {
+            "required": true
+          },
+          "transactionType": {},
+          "matchCount": {
+            "readOnly": true,
+            "defaultValue": "0"
+          },
+          "businessPartner": {},
+          "financialAccount": {},
+          "project": {},
+          "costCenter": {},
+          "textCondition": {
+            "required": true
+          },
+          "accountingConcept": {
+            "required": true
+          },
+          "product": {}
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage match rule financial records.",
+    "whenToUse": [
+      "Use for match rule management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "active",
+        "name",
+        "priority",
+        "textPattern",
+        "textCondition",
+        "accountingConcept"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [
+      "Create draft header with required fields"
+    ],
+    "edgeCases": [
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "active",
+          "name",
+          "priority",
+          "textPattern",
+          "textCondition",
+          "accountingConcept"
+        ]
+      }
+    ],
+    "warnings": [
+      "Transactional spec has no generated lifecycle action metadata"
+    ],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-crud-flags-etgoMatchRuleHeader",
+        "category": "crud-flags",
+        "entity": "etgoMatchRuleHeader",
+        "runner": "node",
+        "description": "CRUD flags for 'etgoMatchRuleHeader' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-etgoMatchRuleHeader-active",
+        "category": "default-value-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "active",
+        "runner": "node",
+        "description": "Default value for 'active' in etgoMatchRuleHeader should be a string"
+      },
+      {
+        "id": "t-default-value-type-etgoMatchRuleHeader-matchCount",
+        "category": "default-value-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "matchCount",
+        "runner": "node",
+        "description": "Default value for 'matchCount' in etgoMatchRuleHeader should be a string"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-accountingConcept",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "accountingConcept",
+        "runner": "node",
+        "description": "Field 'accountingConcept' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-active",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-businessPartner",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-costCenter",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Field 'costCenter' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-financialAccount",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "Field 'financialAccount' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-matchCount",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "matchCount",
+        "runner": "node",
+        "description": "Field 'matchCount' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-name",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-priority",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "priority",
+        "runner": "node",
+        "description": "Field 'priority' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-product",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-project",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-textCondition",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "textCondition",
+        "runner": "node",
+        "description": "Field 'textCondition' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-textPattern",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "textPattern",
+        "runner": "node",
+        "description": "Field 'textPattern' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-presence-etgoMatchRuleHeader-transactionType",
+        "category": "field-presence",
+        "entity": "etgoMatchRuleHeader",
+        "field": "transactionType",
+        "runner": "node",
+        "description": "Field 'transactionType' should be present in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-accountingConcept",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "accountingConcept",
+        "runner": "node",
+        "description": "Field 'accountingConcept' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-active",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "active",
+        "runner": "node",
+        "description": "Field 'active' should have type 'boolean' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-businessPartner",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-costCenter",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Field 'costCenter' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-financialAccount",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "Field 'financialAccount' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-matchCount",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "matchCount",
+        "runner": "node",
+        "description": "Field 'matchCount' should have type 'number' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-name",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-priority",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "priority",
+        "runner": "node",
+        "description": "Field 'priority' should have type 'number' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-product",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-project",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-textCondition",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "textCondition",
+        "runner": "node",
+        "description": "Field 'textCondition' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-textPattern",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "textPattern",
+        "runner": "node",
+        "description": "Field 'textPattern' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-field-type-etgoMatchRuleHeader-transactionType",
+        "category": "field-type",
+        "entity": "etgoMatchRuleHeader",
+        "field": "transactionType",
+        "runner": "node",
+        "description": "Field 'transactionType' should have type 'string' in etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-searchable-filters-etgoMatchRuleHeader-name",
+        "category": "searchable-filters",
+        "entity": "etgoMatchRuleHeader",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-searchable-filters-etgoMatchRuleHeader-textPattern",
+        "category": "searchable-filters",
+        "entity": "etgoMatchRuleHeader",
+        "field": "textPattern",
+        "runner": "node",
+        "description": "Field 'textPattern' should be a supported filter for etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-selector-endpoint-etgoMatchRuleHeader-accountingConcept",
+        "category": "selector-endpoint",
+        "entity": "etgoMatchRuleHeader",
+        "field": "accountingConcept",
+        "runner": "node",
+        "description": "Selector endpoint for 'accountingConcept' in etgoMatchRuleHeader should exist"
+      },
+      {
+        "id": "t-selector-endpoint-etgoMatchRuleHeader-businessPartner",
+        "category": "selector-endpoint",
+        "entity": "etgoMatchRuleHeader",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Selector endpoint for 'businessPartner' in etgoMatchRuleHeader should exist"
+      },
+      {
+        "id": "t-selector-endpoint-etgoMatchRuleHeader-costCenter",
+        "category": "selector-endpoint",
+        "entity": "etgoMatchRuleHeader",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costCenter' in etgoMatchRuleHeader should exist"
+      },
+      {
+        "id": "t-selector-endpoint-etgoMatchRuleHeader-financialAccount",
+        "category": "selector-endpoint",
+        "entity": "etgoMatchRuleHeader",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "Selector endpoint for 'financialAccount' in etgoMatchRuleHeader should exist"
+      },
+      {
+        "id": "t-selector-endpoint-etgoMatchRuleHeader-product",
+        "category": "selector-endpoint",
+        "entity": "etgoMatchRuleHeader",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in etgoMatchRuleHeader should exist"
+      },
+      {
+        "id": "t-selector-endpoint-etgoMatchRuleHeader-project",
+        "category": "selector-endpoint",
+        "entity": "etgoMatchRuleHeader",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in etgoMatchRuleHeader should exist"
+      },
+      {
+        "id": "t-selector-endpoint-etgoMatchRuleHeader-transactionType",
+        "category": "selector-endpoint",
+        "entity": "etgoMatchRuleHeader",
+        "field": "transactionType",
+        "runner": "node",
+        "description": "Selector endpoint for 'transactionType' in etgoMatchRuleHeader should exist"
+      },
+      {
+        "id": "t-system-field-etgoMatchRuleHeader-client",
+        "category": "system-field",
+        "entity": "etgoMatchRuleHeader",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-system-field-etgoMatchRuleHeader-createdBy",
+        "category": "system-field",
+        "entity": "etgoMatchRuleHeader",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-system-field-etgoMatchRuleHeader-creationDate",
+        "category": "system-field",
+        "entity": "etgoMatchRuleHeader",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-system-field-etgoMatchRuleHeader-matchRule",
+        "category": "system-field",
+        "entity": "etgoMatchRuleHeader",
+        "field": "matchRule",
+        "runner": "node",
+        "description": "System field 'matchRule' should exist in backend but not frontend for etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-system-field-etgoMatchRuleHeader-organization",
+        "category": "system-field",
+        "entity": "etgoMatchRuleHeader",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-system-field-etgoMatchRuleHeader-updated",
+        "category": "system-field",
+        "entity": "etgoMatchRuleHeader",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-system-field-etgoMatchRuleHeader-updatedBy",
+        "category": "system-field",
+        "entity": "etgoMatchRuleHeader",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for etgoMatchRuleHeader"
+      },
+      {
+        "id": "t-visibility-etgoMatchRuleHeader",
+        "category": "visibility",
+        "entity": "etgoMatchRuleHeader",
+        "runner": "node",
+        "description": "Entity 'etgoMatchRuleHeader' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 46,
+      "byCategory": {
+        "crud-flags": 1,
+        "default-value-type": 2,
+        "field-presence": 13,
+        "field-type": 13,
+        "searchable-filters": 2,
+        "selector-endpoint": 7,
+        "system-field": 7,
+        "visibility": 1
+      },
+      "byRunner": {
+        "node": 46,
+        "junit": 0
+      }
+    }
+  }
+}

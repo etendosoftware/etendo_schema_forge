@@ -129,3 +129,46 @@ describe('StatusPill — title prop override', () => {
     assert.match(src, /fiscalMonitor\.openInvoice/);
   });
 });
+
+// Guards: CSV export functions are exported from FmPrimitives
+describe('FmPrimitives — CSV export exports', () => {
+  it('exports buildCsvAndDownload', () => {
+    assert.match(src, /export(?:\s+async)?\s+function\s+buildCsvAndDownload/);
+  });
+
+  it('exports fetchCsvAndDownload', () => {
+    assert.match(src, /export(?:\s+async)?\s+function\s+fetchCsvAndDownload/);
+  });
+
+  it('buildCsvAndDownload accepts filename, columnDefs, rows params', () => {
+    assert.match(src, /buildCsvAndDownload\s*\(\s*filename\s*,\s*columnDefs\s*,\s*rows\s*\)/);
+  });
+
+  it('fetchCsvAndDownload accepts apiFetch, path, params, filename, columnDefs params', () => {
+    assert.match(src, /fetchCsvAndDownload\s*\(\s*apiFetch\s*,\s*path\s*,\s*params\s*,\s*filename\s*,\s*columnDefs\s*\)/);
+  });
+
+  it('buildCsvAndDownload adds a UTF-8 BOM character', () => {
+    assert.match(src, /\\ufeff|﻿/);
+  });
+
+  it('buildCsvAndDownload appends .csv when extension is missing', () => {
+    assert.match(src, /\.endsWith\(['"]\.csv['"]\)/);
+  });
+
+  it('fetchCsvAndDownload throws on non-ok HTTP response', () => {
+    assert.match(src, /throw new Error\(`HTTP \$\{res\.status\}`\)/);
+  });
+
+  it('fetchCsvAndDownload extracts rows from json.response.data', () => {
+    assert.match(src, /json\?\.response\?\.data/);
+  });
+
+  it('buildCsvAndDownload calls URL.createObjectURL', () => {
+    assert.match(src, /URL\.createObjectURL/);
+  });
+
+  it('buildCsvAndDownload calls URL.revokeObjectURL after click', () => {
+    assert.match(src, /URL\.revokeObjectURL/);
+  });
+});

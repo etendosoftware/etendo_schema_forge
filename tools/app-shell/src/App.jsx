@@ -17,6 +17,7 @@ import HrPage from './pages/HrPage.jsx';
 import ProjectsPage from './pages/ProjectsPage.jsx';
 import ReportViewerPage from './pages/ReportViewerPage.jsx';
 import FinancialAccountsPage from './pages/FinancialAccountsPage.jsx';
+import Psd2CallbackPage from './pages/Psd2CallbackPage.jsx';
 import { buildMenuGroups, buildWindowMap } from './windows/registry.js';
 import { createMockFetch } from './lib/mockFetch.js';
 import { LocaleProvider } from './i18n/index.js';
@@ -71,11 +72,9 @@ async function loadAllMockData() {
     import('@generated/warehouse/generated/web/warehouse/mockData.js'),
     import('@generated/price-list/generated/web/price-list/mockData.js'),
     import('@generated/payment-term/generated/web/payment-term/mockData.js'),
-    import('@generated/payment-method/generated/web/payment-method/mockData.js'),
     import('@generated/product/generated/web/product/mockData.js'),
     import('@generated/product-category/generated/web/product-category/mockData.js'),
     import('@generated/tax/generated/web/tax/mockData.js'),
-    import('@generated/unit-of-measure/generated/web/unit-of-measure/mockData.js'),
     import('@generated/user/generated/web/user/mockData.js'),
     import('@generated/purchase-order/generated/web/purchase-order/mockData.js'),
     import('@generated/goods-receipt/generated/web/goods-receipt/mockData.js'),
@@ -93,8 +92,8 @@ async function loadAllMockData() {
     import('@generated/purchase-invoice/generated/web/purchase-invoice/mockData.js'),
     import('@generated/payment-in/custom/mockData.js'),
     import('@generated/payment-out/generated/web/payment-out/mockData.js'),
-    import('@generated/bank-reconciliation/generated/web/bank-reconciliation/mockData.js'),
     import('@generated/chart-of-accounts/generated/web/chart-of-accounts/mockData.js'),
+    import('@generated/simple-g-l-journal/generated/web/simple-g-l-journal/mockData.js'),
     import('@generated/assets/generated/web/assets/mockData.js'),
     import('@generated/amortization/generated/web/amortization/mockData.js'),
     import('@generated/deal/generated/web/deal/mockData.js'),
@@ -106,12 +105,14 @@ async function loadAllMockData() {
     import('@generated/project/generated/web/project/mockData.js'),
     import('@generated/document/generated/web/document/mockData.js'),
     import('@generated/recurring-invoice/generated/web/recurring-invoice/mockData.js'),
-    import('@generated/unit-of-measure/generated/web/unit-of-measure/mockData.js'),
     import('@generated/fiscal-config/custom/mockData.js'),
     import('@generated/fiscal-monitor/custom/mockData.js'),
     import('@generated/fiscal-models/custom/mockData.js'),
     import('@generated/conversion-rates/generated/web/conversion-rates/mockData.js'),
     import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/mockData.js'),
+    import('@generated/open-close-period-control/generated/web/open-close-period-control/mockData.js'),
+    import('@generated/general-ledger-configuration/generated/web/general-ledger-configuration/mockData.js'),
+    import('@generated/tax-category/generated/web/tax-category/mockData.js'),
   ]);
 
   const merged = {};
@@ -129,7 +130,12 @@ function AuthGuard({ children }) {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   if (!isAuthenticated) {
-    return <Navigate to={buildOnboardingReturnTo(location)} replace />;
+    return (
+      <Navigate
+        to={buildOnboardingReturnTo(location)}
+        replace
+        data-testid="Navigate__ecaf3f" />
+    );
   }
   return children;
 }
@@ -138,7 +144,7 @@ function AppRoutes({ menuGroups, windowMap }) {
   const location = useLocation();
 
   // Public routes render without waiting for menu data
-  const publicPaths = ['/onboarding'];
+  const publicPaths = ['/onboarding', '/financial-account/psd2-callback'];
   const isPublicRoute = publicPaths.some(p => location.pathname.startsWith(p));
 
   if (!isPublicRoute && menuGroups.length === 0) {
@@ -146,53 +152,148 @@ function AppRoutes({ menuGroups, windowMap }) {
   }
 
   return (
-    <Routes>
+    <Routes data-testid="Routes__ecaf3f">
       <Route
         path="/onboarding"
         element={
-          <Suspense fallback={<div className="p-8 text-muted-foreground">Loading...</div>}>
-            <OnboardingPage />
+          <Suspense
+            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
+            data-testid="Suspense__ecaf3f">
+            <OnboardingPage data-testid="OnboardingPage__ecaf3f" />
           </Suspense>
         }
-      />
-      <Route path="/login" element={<Navigate to="/onboarding" replace />} />
+        data-testid="Route__ecaf3f" />
+      <Route
+        path="/login"
+        element={<Navigate to="/onboarding" replace data-testid="Navigate__ecaf3f" />}
+        data-testid="Route__ecaf3f" />
+      <Route
+        path="/financial-account/psd2-callback"
+        element={<Psd2CallbackPage data-testid="Psd2CallbackPage__ecaf3f" />}
+        data-testid="Route__ecaf3f" />
       <Route
         element={
-          <AuthGuard>
-            <AppLayout menuGroups={menuGroups} />
+          <AuthGuard data-testid="AuthGuard__ecaf3f">
+            <AppLayout menuGroups={menuGroups} data-testid="AppLayout__ecaf3f" />
           </AuthGuard>
         }
-      >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardPage apiBaseUrl={API_BASE_URL} />} />
-        <Route path="first-steps" element={<FirstStepsPage />} />
-        <Route path="preview" element={<PreviewPage />} />
-        <Route path="sales" element={<SalesPage />} />
-        <Route path="inventory" element={<InventoryPage />} />
-        <Route path="purchases" element={<PurchasesPage />} />
-        <Route path="accounting" element={<AccountingPage />} />
-        <Route path="finance/accounts" element={<FinancialAccountsPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="report-viewer" element={<ReportViewerPage />} />
-        <Route path="crm" element={<CrmPage />} />
-        <Route path="hr" element={<HrPage />} />
-        <Route path="projects" element={<ProjectsPage />} />
-        <Route path="smart-scan" element={<Suspense fallback={<div className="p-8 text-muted-foreground">Loading...</div>}><SmartScanPage /></Suspense>} />
-        <Route path="oauth2-clients" element={<Suspense fallback={<div className="p-8 text-muted-foreground">Loading...</div>}><OAuth2ClientsPage /></Suspense>} />
-        <Route path="authorize" element={<Suspense fallback={<div className="p-8 text-muted-foreground">Loading...</div>}><AuthorizePage /></Suspense>} />
-        <Route path="quick-sales-order" element={<Suspense fallback={<div className="p-8 text-muted-foreground">Loading...</div>}><QuickSalesOrderPage apiBaseUrl={API_BASE_URL} /></Suspense>} />
-        <Route path="quick-purchase-order" element={<Suspense fallback={<div className="p-8 text-muted-foreground">Loading...</div>}><QuickPurchaseOrderPage apiBaseUrl={API_BASE_URL} /></Suspense>} />
-        <Route path="app-store" element={<Suspense fallback={<div className="p-8 text-muted-foreground">Loading...</div>}><AppStorePage /></Suspense>} />
-        <Route path="artifacts" element={<ArtifactViewerPage />} />
-        <Route path="artifacts/:windowName" element={<ArtifactViewerPage />} />
+        data-testid="Route__ecaf3f">
+        <Route
+          index
+          element={<Navigate to="/dashboard" replace data-testid="Navigate__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="dashboard"
+          element={<DashboardPage apiBaseUrl={API_BASE_URL} data-testid="DashboardPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="first-steps"
+          element={<FirstStepsPage data-testid="FirstStepsPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="preview"
+          element={<PreviewPage data-testid="PreviewPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="sales"
+          element={<SalesPage data-testid="SalesPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="inventory"
+          element={<InventoryPage data-testid="InventoryPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="purchases"
+          element={<PurchasesPage data-testid="PurchasesPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="accounting"
+          element={<AccountingPage data-testid="AccountingPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="finance/accounts"
+          element={<FinancialAccountsPage data-testid="FinancialAccountsPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="reports"
+          element={<ReportsPage data-testid="ReportsPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="report-viewer"
+          element={<ReportViewerPage data-testid="ReportViewerPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="crm"
+          element={<CrmPage data-testid="CrmPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="hr"
+          element={<HrPage data-testid="HrPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="projects"
+          element={<ProjectsPage data-testid="ProjectsPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="smart-scan"
+          element={<Suspense
+            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
+            data-testid="Suspense__ecaf3f"><SmartScanPage data-testid="SmartScanPage__ecaf3f" /></Suspense>}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="oauth2-clients"
+          element={<Suspense
+            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
+            data-testid="Suspense__ecaf3f"><OAuth2ClientsPage data-testid="OAuth2ClientsPage__ecaf3f" /></Suspense>}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="authorize"
+          element={<Suspense
+            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
+            data-testid="Suspense__ecaf3f"><AuthorizePage data-testid="AuthorizePage__ecaf3f" /></Suspense>}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="quick-sales-order"
+          element={<Suspense
+            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
+            data-testid="Suspense__ecaf3f"><QuickSalesOrderPage apiBaseUrl={API_BASE_URL} data-testid="QuickSalesOrderPage__ecaf3f" /></Suspense>}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="quick-purchase-order"
+          element={<Suspense
+            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
+            data-testid="Suspense__ecaf3f"><QuickPurchaseOrderPage apiBaseUrl={API_BASE_URL} data-testid="QuickPurchaseOrderPage__ecaf3f" /></Suspense>}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="app-store"
+          element={<Suspense
+            fallback={<div className="p-8 text-muted-foreground">Loading...</div>}
+            data-testid="Suspense__ecaf3f"><AppStorePage data-testid="AppStorePage__ecaf3f" /></Suspense>}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="artifacts"
+          element={<ArtifactViewerPage data-testid="ArtifactViewerPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
+        <Route
+          path="artifacts/:windowName"
+          element={<ArtifactViewerPage data-testid="ArtifactViewerPage__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
         <Route
           path=":windowName/:recordId"
-          element={<WindowLoader key="with-record" windowMap={windowMap} apiBaseUrl={API_BASE_URL} />}
-        />
+          element={<WindowLoader
+            key="with-record"
+            windowMap={windowMap}
+            apiBaseUrl={API_BASE_URL}
+            data-testid="WindowLoader__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
         <Route
           path=":windowName"
-          element={<WindowLoader key="list" windowMap={windowMap} apiBaseUrl={API_BASE_URL} />}
-        />
+          element={<WindowLoader
+            key="list"
+            windowMap={windowMap}
+            apiBaseUrl={API_BASE_URL}
+            data-testid="WindowLoader__ecaf3f" />}
+          data-testid="Route__ecaf3f" />
       </Route>
     </Routes>
   );
@@ -259,14 +360,20 @@ export default function App() {
   }, []);
 
   return (
-    <BrowserRouter basename={routerBase}>
-      <ObservabilityRouteTracker />
-      <ServiceWorkerManager />
-      <AppStoreKeyWatcher />
-      <LocaleProvider locale={locale} setLocale={setLocale}>
-        <AuthProvider>
-          <CurrencyProvider>
-            <AppRoutes menuGroups={menuGroups} windowMap={windowMap} />
+    <BrowserRouter basename={routerBase} data-testid="BrowserRouter__ecaf3f">
+      <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
+      <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
+      <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
+      <LocaleProvider
+        locale={locale}
+        setLocale={setLocale}
+        data-testid="LocaleProvider__ecaf3f">
+        <AuthProvider data-testid="AuthProvider__ecaf3f">
+          <CurrencyProvider data-testid="CurrencyProvider__ecaf3f">
+            <AppRoutes
+              menuGroups={menuGroups}
+              windowMap={windowMap}
+              data-testid="AppRoutes__ecaf3f" />
           </CurrencyProvider>
         </AuthProvider>
       </LocaleProvider>

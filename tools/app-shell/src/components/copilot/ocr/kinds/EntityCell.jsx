@@ -50,7 +50,10 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
         className="flex w-full items-center justify-between gap-2 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm hover:border-gray-400"
       >
         <span className={`truncate text-left ${chipDim}`}>{chipLabel}</span>
-        <ChevronDown size={14} className="shrink-0 text-gray-500" />
+        <ChevronDown
+          size={14}
+          className="shrink-0 text-gray-500"
+          data-testid="ChevronDown__65a761" />
       </button>
     );
   }
@@ -58,7 +61,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
   return (
     <div className="relative" ref={wrapRef}>
       <div className="flex items-center gap-2 rounded-md border border-gray-900 bg-white px-2 py-1.5">
-        <Search size={12} className="shrink-0 text-gray-400" />
+        <Search size={12} className="shrink-0 text-gray-400" data-testid="Search__65a761" />
         <input
           ref={inputRef}
           type="text"
@@ -67,7 +70,10 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
           placeholder={ui(column.searchPlaceholder || 'ocrLinesTaxSearch')}
           className="flex-1 text-sm text-gray-900 placeholder-gray-500 outline-none"
         />
-        {loading && <Loader2 size={12} className="animate-spin text-gray-400" />}
+        {loading && <Loader2
+          size={12}
+          className="animate-spin text-gray-400"
+          data-testid="Loader2__65a761" />}
       </div>
       <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
         <button
@@ -99,7 +105,7 @@ export default function EntityCell({ column, value, token, apiBaseUrl, onChange 
               }}
               className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50 ${itemCls}`}
             >
-              <span className="w-4 shrink-0">{selected ? <Check size={14} /> : null}</span>
+              <span className="w-4 shrink-0">{selected ? <Check size={14} data-testid="Check__65a761" /> : null}</span>
               <span className="truncate">{label}</span>
             </button>
           );

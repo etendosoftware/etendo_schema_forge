@@ -32,7 +32,17 @@
         "label": "Reactivate",
         "labelKey": "reactivate",
         "visibleWhenFieldTrue": "processed",
-        "columnName": "Processed"
+        "columnName": "Processed",
+        "preUnpost": true
+      },
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
       }
     ],
     "labelOverrides": {
@@ -76,10 +86,24 @@
         "EM_Etadas_C_Activity_ID": "Activity",
         "EM_Etadas_Campaign_ID": "Sales Campaign"
       }
-    }
+    },
+    "processOverrides": {
+      "etblkpBulkposting": {
+        "exclude": true
+      }
+    },
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ]
   },
   "entities": {
     "header": {
+      "javaQualifier": "amortizationHeaderHandler",
       "fields": {
         "name": {
           "grid": true,
@@ -96,7 +120,8 @@
           "grid": true,
           "searchable": true,
           "seq": 20,
-          "dot": false
+          "dot": false,
+          "defaultExpr": "@#Date@"
         },
         "startingDate": {
           "grid": true,
@@ -129,8 +154,14 @@
           "searchable": false,
           "columnType": "status",
           "enumValues": [
-            { "value": "N", "name": "statusDraft" },
-            { "value": "Y", "name": "statusProcessed" }
+            {
+              "value": "N",
+              "name": "statusDraft"
+            },
+            {
+              "value": "Y",
+              "name": "statusProcessed"
+            }
           ]
         },
         "project": {
@@ -152,6 +183,27 @@
         "ndDimension": {
           "visibility": "discarded",
           "reason": "Accounting dimension — out of MVP scope"
+        },
+        "posted": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "en_US": "Posted",
+              "es_ES": "Contabilizado"
+            },
+            "false": {
+              "en_US": "Not posted",
+              "es_ES": "Sin contabilizar"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         }
       }
     },

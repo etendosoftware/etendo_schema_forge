@@ -16,6 +16,7 @@ import {
   wrapIf,
   jsonWrapIf,
   pick,
+  buildHeaderLogicMaps,
 } from '../src/generate-frontend.js';
 
 // ---------------------------------------------------------------------------
@@ -309,6 +310,37 @@ describe('generateTableComponent', () => {
     const code = generateTableComponent('order', masterDetailContract);
     assert.ok(!code.includes('useState'));
     assert.ok(!code.includes('filteredData'));
+  });
+
+  it('emits excludeValueOf on the grid column when declared on a selector field', () => {
+    const contract = {
+      ...masterDetailContract,
+      frontendContract: {
+        ...masterDetailContract.frontendContract,
+        entities: {
+          ...masterDetailContract.frontendContract.entities,
+          orderLine: {
+            ...masterDetailContract.frontendContract.entities.orderLine,
+            fields: [
+              ...masterDetailContract.frontendContract.entities.orderLine.fields,
+              { name: 'newStorageBin', column: 'M_LocatorTo_ID', type: 'foreignKey', tsType: 'string',
+                visibility: 'editable', required: true, grid: true, form: true, reference: 'Locator',
+                inputMode: 'selector', excludeValueOf: 'storageBin' },
+            ],
+          },
+        },
+      },
+    };
+    const code = generateTableComponent('orderLine', contract);
+    assert.ok(
+      /key: 'newStorageBin'[^}]*excludeValueOf: 'storageBin'/.test(code),
+      `expected excludeValueOf on newStorageBin grid column, got:\n${code}`,
+    );
+  });
+
+  it('omits excludeValueOf on grid columns when not declared', () => {
+    const code = generateTableComponent('orderLine', masterDetailContract);
+    assert.ok(!code.includes('excludeValueOf'));
   });
 });
 
@@ -639,6 +671,39 @@ describe('generatePageComponent', () => {
     assert.ok(!code.includes('forceCalloutFields'));
   });
 
+  it('emits excludeValueOf on the addLineFields entry when declared on a selector field', () => {
+    const contract = {
+      ...masterDetailContract,
+      frontendContract: {
+        ...masterDetailContract.frontendContract,
+        entities: {
+          ...masterDetailContract.frontendContract.entities,
+          orderLine: {
+            ...masterDetailContract.frontendContract.entities.orderLine,
+            fields: [
+              ...masterDetailContract.frontendContract.entities.orderLine.fields,
+              { name: 'newStorageBin', column: 'M_LocatorTo_ID', type: 'foreignKey', tsType: 'string',
+                visibility: 'editable', required: true, grid: true, form: true, reference: 'Locator',
+                inputMode: 'selector', excludeValueOf: 'storageBin' },
+            ],
+          },
+        },
+      },
+    };
+    const code = generatePageComponent('order', 'orderLine', contract);
+    const entryMatch = code.match(/entry: \[([\s\S]*?)\]/);
+    assert.ok(entryMatch, 'addLineFields entry array not found');
+    assert.ok(
+      /key: 'newStorageBin'[^}]*excludeValueOf: 'storageBin'/.test(entryMatch[1]),
+      `expected excludeValueOf on newStorageBin entry field, got:\n${entryMatch[1]}`,
+    );
+  });
+
+  it('omits excludeValueOf on the addLineFields entry when not declared', () => {
+    const code = generatePageComponent('order', 'orderLine', masterDetailContract);
+    assert.ok(!code.includes('excludeValueOf'));
+  });
+
   it('passes config props to MasterDetailPage', () => {
     const code = generatePageComponent('order', 'orderLine', masterDetailContract);
     assert.ok(code.includes('entity="order"'));
@@ -658,6 +723,28 @@ describe('generatePageComponent', () => {
     const code = generatePageComponent('order', 'orderLine', masterDetailContract);
     assert.ok(code.includes('entityLabel="Order"'));
     assert.ok(code.includes('detailLabel="Order Line"'));
+  });
+
+  it('emits balanceFooter prop when window.balanceFooter is declared', () => {
+    const contract = {
+      ...masterDetailContract,
+      frontendContract: {
+        ...masterDetailContract.frontendContract,
+        window: {
+          ...masterDetailContract.frontendContract.window,
+          balanceFooter: { debitField: 'amtSourceDr', creditField: 'amtSourceCr' },
+        },
+      },
+    };
+    const code = generatePageComponent('order', 'orderLine', contract);
+    assert.ok(code.includes('balanceFooter={'), `expected balanceFooter prop, got:\n${code}`);
+    assert.ok(code.includes('"debitField":"amtSourceDr"'));
+    assert.ok(code.includes('"creditField":"amtSourceCr"'));
+  });
+
+  it('omits balanceFooter prop when not declared', () => {
+    const code = generatePageComponent('order', 'orderLine', masterDetailContract);
+    assert.ok(!code.includes('balanceFooter={'));
   });
 
   it('does NOT contain inline CSS or state hooks', () => {
@@ -710,6 +797,85 @@ describe('generatePageComponent', () => {
     const code = generatePageComponent('contact', null, sidebarContract);
     assert.ok(code.includes('sidebarContent='), 'should render the sidebar slot');
     assert.ok(code.includes('token={props.token}'), 'sidebar custom component should receive token for legacy compatibility');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sendDocument recipient-policy override emission (ETP-4226)
+// ---------------------------------------------------------------------------
+
+describe('generatePageComponent — sendDocument recipient policy (ETP-4226)', () => {
+  // A documental window (header has a non-discarded `documentNo`) enables the
+  // envelope by default. `window.sendDocument` recipient-policy keys flow
+  // verbatim into the emitted `sendDocument` prop so ListView/DetailView can
+  // forward them to SendDocumentModal as `sendPolicy`.
+  function buildDocumentalContract(sendDocument) {
+    const window = { id: '1', name: 'Sales Order', primaryEntity: 'order', category: 'sales' };
+    if (sendDocument !== undefined) window.sendDocument = sendDocument;
+    return {
+      frontendContract: {
+        window,
+        entities: {
+          order: {
+            fields: [
+              { name: 'documentNo', column: 'DocumentNo', type: 'string', tsType: 'string', visibility: 'readOnly', required: true, grid: true, form: true },
+              { name: 'docStatus', column: 'DocStatus', type: 'string', tsType: 'string', visibility: 'readOnly', required: true, grid: true, form: true },
+            ],
+            searchableFields: [],
+            computedFields: [],
+          },
+          orderLine: {
+            fields: [
+              { name: 'product', column: 'M_Product_ID', type: 'foreignKey', tsType: 'string', visibility: 'editable', required: true, grid: true, form: true },
+            ],
+            searchableFields: [],
+            computedFields: [],
+          },
+        },
+      },
+      backendContract: { processEndpoints: [] },
+    };
+  }
+
+  it('emits a bare sendDocument prop (no value) when only the defaults apply', () => {
+    const code = generatePageComponent('order', 'orderLine', buildDocumentalContract(undefined));
+    // Default {enabled:true, allowEmail:true} → prop is emitted without a value...
+    assert.ok(/sendDocument(?![=A-Za-z])/.test(code), 'bare sendDocument prop should be present');
+    // ...and never serialized as a JSON object.
+    assert.ok(!code.includes('sendDocument={{'), 'defaults must not emit a JSON sendDocument value');
+  });
+
+  it('serializes recipient-policy keys verbatim when window.sendDocument declares them', () => {
+    const code = generatePageComponent(
+      'order',
+      'orderLine',
+      buildDocumentalContract({ editableRecipients: false, cc: false, maxRecipients: 5 }),
+    );
+    assert.ok(
+      code.includes('sendDocument={{"enabled":true,"allowEmail":true,"editableRecipients":false,"cc":false,"maxRecipients":5}}'),
+      'recipient-policy keys should be emitted verbatim alongside enabled/allowEmail',
+    );
+  });
+
+  it('forwards the policy to BOTH the ListView and DetailView sendDocument props', () => {
+    const code = generatePageComponent(
+      'order',
+      'orderLine',
+      buildDocumentalContract({ editableRecipients: true, maxRecipients: 10 }),
+    );
+    const matches = code.match(/sendDocument=\{\{[^}]*"maxRecipients":10[^}]*\}\}/g) || [];
+    assert.equal(matches.length, 2, 'policy should be emitted for ListView and DetailView');
+  });
+
+  it('emits sendDocument={{"enabled":false}} when the feature is force-disabled', () => {
+    // Must emit the prop explicitly so ListView receives sendDocument != null and
+    // skips its documentNo auto-detection heuristic (which would re-enable the envelope).
+    const code = generatePageComponent(
+      'order',
+      'orderLine',
+      buildDocumentalContract({ enabled: false, editableRecipients: true }),
+    );
+    assert.ok(/sendDocument=\{.*"enabled":false/.test(code), 'force-disabled window emits sendDocument={{"enabled":false}}');
   });
 });
 
@@ -1499,8 +1665,8 @@ describe('generatePageComponent — menuActions visibleWhenFieldFalse', () => {
     ]);
     const code = generatePageComponent('header', null, contract);
     assert.ok(
-      code.includes("visible: status === 'CO' && !data?.hasLinkedDocuments"),
-      'should combine status check and field check with &&',
+      code.includes("visible: status === 'CO' && !(data?.hasLinkedDocuments === 'Y' || data?.hasLinkedDocuments === true)"),
+      'should combine status check and Y/N-aware field check with &&',
     );
   });
 
@@ -1509,7 +1675,10 @@ describe('generatePageComponent — menuActions visibleWhenFieldFalse', () => {
       { key: 'duplicate', label: 'Duplicate', visibleWhenFieldFalse: 'isDraft' },
     ]);
     const code = generatePageComponent('header', null, contract);
-    assert.ok(code.includes('visible: !data?.isDraft'), 'should emit only field condition when no status filter');
+    assert.ok(
+      code.includes("visible: !(data?.isDraft === 'Y' || data?.isDraft === true)"),
+      'should emit only the Y/N-aware field condition when no status filter',
+    );
     assert.ok(!code.includes('status ==='), 'should not include status check when visibleWhenStatus is absent');
   });
 
@@ -1520,7 +1689,7 @@ describe('generatePageComponent — menuActions visibleWhenFieldFalse', () => {
     ]);
     const code = generatePageComponent('header', null, contract);
     assert.ok(
-      code.includes("visible: status === 'CO' && !data?.hasLinkedDocuments"),
+      code.includes("visible: status === 'CO' && !(data?.hasLinkedDocuments === 'Y' || data?.hasLinkedDocuments === true)"),
       'reactivate should have compound condition',
     );
     assert.ok(
@@ -1772,6 +1941,82 @@ describe('generatePageComponent — F3 drawer + display emission (secondary-tab 
   });
 });
 
+// ---------------------------------------------------------------------------
+// generatePageComponent — clearsField and labels in secondary-tab addLineFields
+// ---------------------------------------------------------------------------
+
+const clearsFieldTabContract = {
+  frontendContract: {
+    window: {
+      id: '810',
+      name: 'G/L Journal',
+      primaryEntity: 'glJournal',
+      category: 'accounting',
+      secondaryTabs: {
+        glJournalLine: {
+          label: 'Lines',
+          tabOrder: 1,
+          addLineFields: ['debit', 'credit'],
+        },
+      },
+    },
+    entities: {
+      glJournal: {
+        fields: [
+          { name: 'documentNo', column: 'DocumentNo', type: 'string', tsType: 'string',
+            visibility: 'readOnly', required: true, grid: true, form: true },
+        ],
+        searchableFields: ['documentNo'],
+        computedFields: [],
+      },
+      glJournalLine: {
+        fields: [
+          { name: 'debit', column: 'AmtSourceDr', type: 'amount', tsType: 'number',
+            visibility: 'editable', required: false, grid: true, form: true,
+            clearsField: 'credit',
+            labels: { zero: 'DR', positive: 'Debit' } },
+          { name: 'credit', column: 'AmtSourceCr', type: 'amount', tsType: 'number',
+            visibility: 'editable', required: false, grid: true, form: true,
+            clearsField: 'debit' },
+        ],
+        searchableFields: [],
+        computedFields: [],
+      },
+    },
+  },
+  backendContract: { processEndpoints: [] },
+};
+
+describe('generatePageComponent — clearsField and labels in secondary-tab addLineFields', () => {
+  it('emits clearsField for a field that declares it', () => {
+    const code = generatePageComponent('glJournal', null, clearsFieldTabContract);
+    assert.ok(
+      code.includes("clearsField: 'credit'"),
+      `expected clearsField: 'credit' in addLineFields entry`,
+    );
+  });
+
+  it('emits labels dict for a field that declares labels', () => {
+    const code = generatePageComponent('glJournal', null, clearsFieldTabContract);
+    assert.ok(
+      code.includes('"zero":"DR"') || code.includes('"zero": "DR"'),
+      `expected labels dict with zero key in addLineFields entry`,
+    );
+  });
+
+  it('does NOT emit clearsField for a field that lacks it', () => {
+    // Build a contract where only debit has clearsField — verify credit entry omits it
+    const codeWithOneSide = (() => {
+      const oneSide = JSON.parse(JSON.stringify(clearsFieldTabContract));
+      oneSide.frontendContract.entities.glJournalLine.fields[1].clearsField = undefined;
+      return generatePageComponent('glJournal', null, oneSide);
+    })();
+    const creditEntry = codeWithOneSide.match(/\{\s*key:\s*'credit'[^}]*\}/);
+    assert.ok(creditEntry, 'expected credit entry to be emitted');
+    assert.ok(!creditEntry[0].includes('clearsField'), 'credit entry must not include clearsField when not declared');
+  });
+});
+
 describe('fragmentIf', () => {
   it('returns the string when the condition is truthy', () => {
     assert.equal(fragmentIf(true, ', required: true'), ', required: true');
@@ -1870,5 +2115,292 @@ describe('pick', () => {
     assert.equal(pick(false, '#10b981', '#f59e0b'), '#f59e0b');
     assert.equal(pick(null, 'draftModeWithConfirm', 'draftMode'), 'draftMode');
     assert.equal(pick(undefined, '({ data, status })', '({ status })'), '({ status })');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildHeaderLogicMaps
+// ---------------------------------------------------------------------------
+
+describe('buildHeaderLogicMaps', () => {
+  it('maps column to name for fields that have both column and name', () => {
+    const contract = {
+      frontendContract: {
+        entities: {
+          header: {
+            fields: [
+              { name: 'documentNo', column: 'DocumentNo', type: 'string' },
+              { name: 'grandTotal', column: 'GrandTotal', type: 'amount' },
+            ],
+          },
+        },
+      },
+    };
+    const { headerColumnMap } = buildHeaderLogicMaps(contract, 'header');
+    assert.deepEqual(headerColumnMap, { DocumentNo: 'documentNo', GrandTotal: 'grandTotal' });
+  });
+
+  it('skips fields missing column or missing name', () => {
+    const contract = {
+      frontendContract: {
+        entities: {
+          header: {
+            fields: [
+              { name: 'documentNo', column: 'DocumentNo', type: 'string' },
+              { name: 'noColumn', type: 'string' },
+              { column: 'NoName', type: 'string' },
+            ],
+          },
+        },
+      },
+    };
+    const { headerColumnMap } = buildHeaderLogicMaps(contract, 'header');
+    assert.deepEqual(headerColumnMap, { DocumentNo: 'documentNo' });
+    assert.ok(!('NoName' in headerColumnMap), 'field without name should be skipped');
+  });
+
+  it('collects boolean fields when tsType is boolean or type is boolean', () => {
+    const contract = {
+      frontendContract: {
+        entities: {
+          header: {
+            fields: [
+              { name: 'isActive', column: 'IsActive', tsType: 'boolean' },
+              { name: 'processed', column: 'Processed', type: 'boolean' },
+            ],
+          },
+        },
+      },
+    };
+    const { headerBooleanFields } = buildHeaderLogicMaps(contract, 'header');
+    assert.ok(headerBooleanFields.includes('isActive'), 'tsType boolean should be collected');
+    assert.ok(headerBooleanFields.includes('processed'), 'type boolean should be collected');
+  });
+
+  it('does not collect non-boolean fields into headerBooleanFields', () => {
+    const contract = {
+      frontendContract: {
+        entities: {
+          header: {
+            fields: [
+              { name: 'documentNo', column: 'DocumentNo', type: 'string', tsType: 'string' },
+              { name: 'grandTotal', column: 'GrandTotal', type: 'amount', tsType: 'number' },
+            ],
+          },
+        },
+      },
+    };
+    const { headerBooleanFields } = buildHeaderLogicMaps(contract, 'header');
+    assert.deepEqual(headerBooleanFields, []);
+  });
+
+  it('returns empty maps without throwing when the entity is absent', () => {
+    const contract = { frontendContract: { entities: {} } };
+    const result = buildHeaderLogicMaps(contract, 'header');
+    assert.deepEqual(result, { headerColumnMap: {}, headerBooleanFields: [] });
+  });
+
+  it('returns empty maps when the entity exists but has no fields array', () => {
+    const contract = { frontendContract: { entities: { header: {} } } };
+    const result = buildHeaderLogicMaps(contract, 'header');
+    assert.deepEqual(result, { headerColumnMap: {}, headerBooleanFields: [] });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateTableComponent — gridReadOnly
+// ---------------------------------------------------------------------------
+
+describe('generateTableComponent — gridReadOnly', () => {
+  const gridReadOnlyContract = {
+    frontendContract: {
+      window: { id: '900', name: 'Return To Vendor', primaryEntity: 'shipment', category: 'purchasing' },
+      entities: {
+        shipment: {
+          fields: [
+            { name: 'documentNo', column: 'DocumentNo', type: 'string', tsType: 'string',
+              visibility: 'readOnly', required: true, grid: true, form: true },
+            { name: 'quantity', column: 'Qty', type: 'number', tsType: 'number',
+              visibility: 'editable', required: true, grid: true, form: true,
+              gridReadOnly: true },
+            { name: 'product', column: 'M_Product_ID', type: 'foreignKey', tsType: 'string',
+              visibility: 'editable', required: true, grid: true, form: true },
+          ],
+          searchableFields: ['documentNo'],
+          computedFields: [],
+        },
+      },
+    },
+    backendContract: { processEndpoints: [] },
+  };
+
+  it('emits readOnly: true in column definition when field has gridReadOnly: true', () => {
+    const code = generateTableComponent('shipment', gridReadOnlyContract);
+    assert.ok(
+      code.includes(", readOnly: true"),
+      'column with gridReadOnly should have readOnly: true'
+    );
+  });
+
+  it('does NOT emit readOnly: true for fields without gridReadOnly', () => {
+    const code = generateTableComponent('shipment', gridReadOnlyContract);
+    // Only the quantity field has gridReadOnly — verify that the count of
+    // readOnly: true occurrences matches exactly one field
+    const matches = code.match(/, readOnly: true/g) ?? [];
+    assert.equal(matches.length, 1, 'exactly one column should have readOnly: true');
+  });
+
+  it('gridReadOnly field still appears as a column in the table', () => {
+    const code = generateTableComponent('shipment', gridReadOnlyContract);
+    assert.ok(code.includes("key: 'quantity'"), 'gridReadOnly field should still be present as a column');
+  });
+
+  it('field without gridReadOnly does NOT get readOnly: true in its column entry', () => {
+    // product column should not contain readOnly
+    const code = generateTableComponent('shipment', gridReadOnlyContract);
+    const lines = code.split('\n');
+    const productLine = lines.find(l => l.includes("key: 'product'"));
+    assert.ok(productLine, 'product column should exist');
+    assert.ok(!productLine.includes('readOnly: true'), 'product column should not have readOnly: true');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildEntryFieldLine — skipDefault (HandleDefaults opt-out)
+// ---------------------------------------------------------------------------
+// A line field flagged skipDefault must surface in the add-row entry literal so
+// DataTable can skip applying a backend-resolved default to it.
+describe('buildEntryFieldLine — skipDefault', () => {
+  const skipDefaultContract = {
+    frontendContract: {
+      window: { id: '900', name: 'GL Journal', primaryEntity: 'header', category: 'finance' },
+      entities: {
+        header: {
+          fields: [
+            { name: 'documentNo', column: 'DocumentNo', type: 'string', tsType: 'string', visibility: 'readOnly', required: true, grid: true, form: true },
+          ],
+          searchableFields: ['documentNo'],
+          computedFields: [],
+        },
+        line: {
+          fields: [
+            { name: 'account', column: 'Account_ID', type: 'foreignKey', tsType: 'string', visibility: 'editable', required: true, grid: true, form: true, reference: 'Account', inputMode: 'selector' },
+            { name: 'note', column: 'Note', type: 'string', tsType: 'string', visibility: 'editable', required: false, grid: true, form: true, skipDefault: true },
+          ],
+          searchableFields: ['account'],
+          computedFields: [],
+        },
+      },
+    },
+    backendContract: { processEndpoints: [] },
+  };
+
+  it('emits skipDefault in the add-row entry literal for a flagged field', () => {
+    const code = generatePageComponent('header', 'line', skipDefaultContract);
+    const entryMatch = code.match(/entry: \[([\s\S]*?)\],/);
+    assert.ok(entryMatch, 'addLineFields.entry array present');
+    assert.match(entryMatch[1], /key: 'note'[^}]*skipDefault: true/);
+  });
+
+  it('does not emit skipDefault for an unflagged field', () => {
+    const code = generatePageComponent('header', 'line', skipDefaultContract);
+    const entryMatch = code.match(/entry: \[([\s\S]*?)\],/);
+    assert.ok(entryMatch);
+    const accountLine = entryMatch[1].split('\n').find(l => l.includes("key: 'account'"));
+    assert.ok(accountLine, 'account entry present');
+    assert.ok(!accountLine.includes('skipDefault'), 'account must not carry skipDefault');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ETP-4277 — max constraint in generated column and entry field literals
+// ---------------------------------------------------------------------------
+describe('generateTableComponent — max column prop (ETP-4277)', () => {
+  const maxContract = {
+    frontendContract: {
+      window: { id: '901', name: 'Sales Order', primaryEntity: 'header', category: 'sales' },
+      entities: {
+        header: {
+          fields: [
+            { name: 'documentNo', column: 'DocumentNo', type: 'string', tsType: 'string',
+              visibility: 'readOnly', required: true, grid: true, form: true },
+          ],
+          searchableFields: ['documentNo'],
+          computedFields: [],
+        },
+        line: {
+          fields: [
+            { name: 'discount', column: 'Discount', type: 'number', tsType: 'number',
+              visibility: 'editable', required: false, grid: true, form: true, max: 100 },
+            { name: 'quantity', column: 'QtyOrdered', type: 'number', tsType: 'number',
+              visibility: 'editable', required: false, grid: true, form: true },
+          ],
+          searchableFields: [],
+          computedFields: [],
+        },
+      },
+    },
+    backendContract: { processEndpoints: [] },
+  };
+
+  it('emits max: 100 in the column entry for a field with max declared', () => {
+    const code = generateTableComponent('line', maxContract);
+    const lines = code.split('\n');
+    const discountLine = lines.find(l => l.includes("key: 'discount'"));
+    assert.ok(discountLine, 'discount column should exist');
+    assert.ok(discountLine.includes(', max: 100'), 'discount column must include max: 100');
+  });
+
+  it('does not emit max in the column entry for a field without max', () => {
+    const code = generateTableComponent('line', maxContract);
+    const lines = code.split('\n');
+    const qtyLine = lines.find(l => l.includes("key: 'quantity'"));
+    assert.ok(qtyLine, 'quantity column should exist');
+    assert.ok(!qtyLine.includes(', max:'), 'quantity column must not include max');
+  });
+});
+
+describe('generatePageComponent — max entry prop (ETP-4277)', () => {
+  const maxPageContract = {
+    frontendContract: {
+      window: { id: '902', name: 'Sales Order', primaryEntity: 'header', category: 'sales' },
+      entities: {
+        header: {
+          fields: [
+            { name: 'documentNo', column: 'DocumentNo', type: 'string', tsType: 'string',
+              visibility: 'readOnly', required: true, grid: true, form: true },
+          ],
+          searchableFields: ['documentNo'],
+          computedFields: [],
+        },
+        line: {
+          fields: [
+            { name: 'discount', column: 'Discount', type: 'number', tsType: 'number',
+              visibility: 'editable', required: false, grid: true, form: true, max: 100 },
+            { name: 'quantity', column: 'QtyOrdered', type: 'number', tsType: 'number',
+              visibility: 'editable', required: true, grid: true, form: true },
+          ],
+          searchableFields: [],
+          computedFields: [],
+        },
+      },
+    },
+    backendContract: { processEndpoints: [] },
+  };
+
+  it('emits max: 100 in the addLineFields entry literal for a field with max declared', () => {
+    const code = generatePageComponent('header', 'line', maxPageContract);
+    const entryMatch = code.match(/entry: \[([\s\S]*?)\],/);
+    assert.ok(entryMatch, 'addLineFields.entry array present');
+    assert.match(entryMatch[1], /key: 'discount'[^}]*, max: 100/);
+  });
+
+  it('does not emit max in the addLineFields entry literal for a field without max', () => {
+    const code = generatePageComponent('header', 'line', maxPageContract);
+    const entryMatch = code.match(/entry: \[([\s\S]*?)\],/);
+    assert.ok(entryMatch, 'addLineFields.entry array present');
+    const qtyLine = entryMatch[1].split('\n').find(l => l.includes("key: 'quantity'"));
+    assert.ok(qtyLine, 'quantity entry present');
+    assert.ok(!qtyLine.includes(', max:'), 'quantity entry must not include max');
   });
 });

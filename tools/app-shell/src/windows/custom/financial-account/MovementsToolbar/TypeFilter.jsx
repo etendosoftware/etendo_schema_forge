@@ -35,6 +35,6 @@ export function TypeFilter({ value, onChange }) {
       allLabel={ui('financeAccountMovementsFilterTypeAll')}
       searchPlaceholder={ui('financeAccountMovementsFilterTypeSearchPlaceholder')}
       popoverWidth="w-56"
-    />
+      data-testid="DistinctValuesFilter__ab7f27" />
   );
 }

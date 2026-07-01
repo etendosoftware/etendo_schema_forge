@@ -1,0 +1,107 @@
+{
+  "version": "0.6.0",
+  "generatedAt": "2026-03-09T10:00:00.000Z",
+  "updatedAt": "2026-06-27T02:03:57.118Z",
+  "contractChecksum": "4c677836ec6f4c52",
+  "apiPrediction": {
+    "specName": "chart-of-accounts",
+    "baseUrl": "/sws/neo/chart-of-accounts",
+    "crud": {
+      "elementValue": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/chart-of-accounts/elementValue",
+        "detailUrl": "/sws/neo/chart-of-accounts/elementValue/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [],
+    "actions": [],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "accounting"
+    }
+  },
+  "formState": {
+    "entities": {
+      "elementValue": {
+        "fields": {
+          "searchKey": {
+            "required": true,
+            "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'"
+          },
+          "name": {
+            "required": true,
+            "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'"
+          },
+          "description": {
+            "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'"
+          },
+          "accountType": {
+            "required": true,
+            "readOnlyLogic": "@ProtectedParentLikeSubaccount@='Y'",
+            "defaultValue": "E"
+          },
+          "active": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "Y"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage chart of accounts records.",
+    "whenToUse": [
+      "Use for chart of accounts management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "searchKey",
+        "name",
+        "accountType"
+      ],
+      "recommendedOrder": [
+        "createHeader"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [],
+    "workflow": [],
+    "edgeCases": [],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "searchKey",
+          "name",
+          "accountType"
+        ]
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "747de3c379702005"
+}

@@ -96,21 +96,26 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
   return (
     <div>
       {record?.etsgSifTerritory && (
-        <SectionRow label={ui('fiscal.tbai.territory.label')} noBorderTop>
-          <Badge variant="secondary">{formatTerritory(record.etsgSifTerritory)}</Badge>
+        <SectionRow
+          label={ui('fiscal.tbai.territory.label')}
+          noBorderTop
+          data-testid="SectionRow__f06d4b">
+          <Badge variant="secondary" data-testid="Badge__f06d4b">{formatTerritory(record.etsgSifTerritory)}</Badge>
         </SectionRow>
       )}
-
       {/* Fecha acogida TBAI — top-level, no section name */}
       <div className={`flex items-start py-6 gap-6 ${record?.etsgSifTerritory ? 'border-t border-[#E8EAEF]' : ''}`}>
         <div className="w-[160px] flex-shrink-0">
           <span className="text-sm font-medium text-[#121217]">{ui('fiscal.tbai.field.enrollDate')}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <DateField value={form.tbaisystemdate} onChange={(iso) => set('tbaisystemdate', iso)} className="max-w-[376px]" />
+          <DateField
+            value={form.tbaisystemdate}
+            onChange={(iso) => set('tbaisystemdate', iso)}
+            className="max-w-[376px]"
+            data-testid="DateField__f06d4b" />
         </div>
       </div>
-
       {/* Entorno producción — top-level */}
       <div className="flex items-start py-6 gap-6 border-t border-[#E8EAEF]">
         <div className="w-[160px] flex-shrink-0">
@@ -120,57 +125,69 @@ const TbaiSection = forwardRef(function TbaiSection({ record, apiBaseUrl, orgId,
           <Switch
             checked={isEtendoTrue(form.productionEnv)}
             onCheckedChange={v => set('productionEnv', v ? 'Y' : 'N')}
-          />
+            data-testid="Switch__f06d4b" />
         </div>
       </div>
-
       {/* Facturación */}
-      <SectionRow label={ui('fiscal.tbai.legend.billing')}>
+      <SectionRow label={ui('fiscal.tbai.legend.billing')} data-testid="SectionRow__f06d4b">
         <div className="flex flex-wrap gap-4 items-start">
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.uSEAsproductDesc)}
               onCheckedChange={v => set('uSEAsproductDesc', v ? 'Y' : 'N')}
-            />
+              data-testid="Switch__f06d4b" />
             <span className="text-sm text-[#121217]">{ui('fiscal.tbai.field.useAsProduct')}</span>
           </div>
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.autoSendInvoices)}
               onCheckedChange={v => set('autoSendInvoices', v ? 'Y' : 'N')}
-            />
+              data-testid="Switch__f06d4b" />
             <span className="text-sm text-[#121217]">{ui('fiscal.tbai.field.autoSend')}</span>
           </div>
           <div className="space-y-1 w-[376px]">
-            <Label>{ui('fiscal.tbai.field.invoiceDesc')}</Label>
-            <Input value={form.invoiceDescription} onChange={e => set('invoiceDescription', e.target.value)} className="bg-white" />
+            <Label data-testid="Label__f06d4b">{ui('fiscal.tbai.field.invoiceDesc')}</Label>
+            <Input
+              value={form.invoiceDescription}
+              onChange={e => set('invoiceDescription', e.target.value)}
+              className="bg-white"
+              data-testid="Input__f06d4b" />
           </div>
         </div>
       </SectionRow>
-
       {/* Técnico */}
-      <SectionRow label={ui('fiscal.tbai.legend.technical')}>
+      <SectionRow
+        label={ui('fiscal.tbai.legend.technical')}
+        data-testid="SectionRow__f06d4b">
         <div className="flex items-center gap-2">
           <Switch
             checked={isEtendoTrue(form.validatePreviousInvoice)}
             onCheckedChange={v => set('validatePreviousInvoice', v ? 'Y' : 'N')}
-          />
+            data-testid="Switch__f06d4b" />
           <span className="text-sm text-[#121217]">{ui('fiscal.tbai.field.validatePrev')}</span>
         </div>
       </SectionRow>
-
       {/* Certificado digital */}
       {!hideCert && (
         <SectionRow
           label={ui('fiscal.cert.section.legend')}
           boldLabel
           labelExtra={<span className="text-xs text-[#121217] leading-tight">{ui('fiscal.cert.section.hint')}</span>}
-        >
-          <CertSection context="tbai" orgId={orgId} apiBaseUrl={apiBaseUrl} />
+          data-testid="SectionRow__f06d4b">
+          <CertSection
+            context="tbai"
+            orgId={orgId}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="CertSection__f06d4b" />
         </SectionRow>
       )}
-
-      <SectionSaveButton error={error} hideSave={hideSave} save={save} saving={saving} ui={ui} />
+      <SectionSaveButton
+        error={error}
+        hideSave={hideSave}
+        save={save}
+        saving={saving}
+        ui={ui}
+        data-testid="SectionSaveButton__f06d4b" />
     </div>
   );
 });

@@ -114,6 +114,93 @@ test('field visibility flip — readOnly maps to ISINCLUDED=Y, ISREADONLY=Y', ()
   assert.equal(partnerField.ISREADONLY, 'N', 'editable visibility → ISREADONLY=N');
 });
 
+test('agentPrompt decisions are emitted for spec and matching fields', () => {
+  const delta = computeWindowDelta({
+    specName: 'sales-order',
+    windowId: '143',
+    moduleId: 'M1',
+    contract: baseContract(),
+    decisions: {
+      window: { agentPrompt: '  Confirm before completing.  ' },
+      entities: {
+        Order: {
+          fields: {
+            partner: { agentPrompt: '  Pick the correct customer.  ' },
+          },
+        },
+      },
+    },
+    adTabs: baseAdTabs(),
+    adColumns: baseAdColumns(),
+    prevSnapshot: emptyPrev(),
+  });
+
+  const specRow = delta.tables.ETGO_SF_SPEC.upserts[0];
+  const partnerField = delta.tables.ETGO_SF_FIELD.upserts.find(r => r.AD_COLUMN_ID === '2071');
+  assert.equal(specRow.AGENT_PROMPT, 'Confirm before completing.');
+  assert.equal(partnerField.AGENT_PROMPT, 'Pick the correct customer.');
+});
+
+test('missing field agentPrompt emits null when previous XML had one', () => {
+  const prev = {
+    spec: [{ ETGO_SF_SPEC_ID: 'PREV-SPEC', NAME: 'sales-order' }],
+    entity: [{ ETGO_SF_ENTITY_ID: 'PREV-ENT', ETGO_SF_SPEC_ID: 'PREV-SPEC', AD_TAB_ID: '187' }],
+    field: [
+      {
+        ETGO_SF_FIELD_ID: 'PREV-FIELD',
+        ETGO_SF_ENTITY_ID: 'PREV-ENT',
+        AD_COLUMN_ID: '2071',
+        AGENT_PROMPT: 'Old prompt',
+      },
+    ],
+  };
+
+  const delta = computeWindowDelta({
+    specName: 'sales-order',
+    windowId: '143',
+    moduleId: 'M1',
+    contract: baseContract(),
+    decisions: {},
+    adTabs: baseAdTabs(),
+    adColumns: baseAdColumns(),
+    prevSnapshot: prev,
+  });
+
+  const partnerField = delta.tables.ETGO_SF_FIELD.upserts.find(r => r.AD_COLUMN_ID === '2071');
+  assert.equal(partnerField.AGENT_PROMPT, null);
+});
+
+test('missing agentPrompt emits null when previous XML column exists with empty value', () => {
+  const prev = {
+    spec: [{ ETGO_SF_SPEC_ID: 'PREV-SPEC', NAME: 'sales-order', AGENT_PROMPT: '' }],
+    entity: [{ ETGO_SF_ENTITY_ID: 'PREV-ENT', ETGO_SF_SPEC_ID: 'PREV-SPEC', AD_TAB_ID: '187' }],
+    field: [
+      {
+        ETGO_SF_FIELD_ID: 'PREV-FIELD',
+        ETGO_SF_ENTITY_ID: 'PREV-ENT',
+        AD_COLUMN_ID: '2071',
+        AGENT_PROMPT: '',
+      },
+    ],
+  };
+
+  const delta = computeWindowDelta({
+    specName: 'sales-order',
+    windowId: '143',
+    moduleId: 'M1',
+    contract: baseContract(),
+    decisions: {},
+    adTabs: baseAdTabs(),
+    adColumns: baseAdColumns(),
+    prevSnapshot: prev,
+  });
+
+  const specRow = delta.tables.ETGO_SF_SPEC.upserts[0];
+  const partnerField = delta.tables.ETGO_SF_FIELD.upserts.find(r => r.AD_COLUMN_ID === '2071');
+  assert.equal(specRow.AGENT_PROMPT, null);
+  assert.equal(partnerField.AGENT_PROMPT, null);
+});
+
 test('field deleted — prev has a field whose column is no longer in contract emits a delete', () => {
   const prev = {
     spec: [{ ETGO_SF_SPEC_ID: 'PREV-SPEC', NAME: 'sales-order' }],

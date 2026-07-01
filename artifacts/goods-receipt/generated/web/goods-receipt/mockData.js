@@ -13,12 +13,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Standard order for Q1 delivery",
     "documentStatus": "DR",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "DR"
+    "invoiceStatus": "DR",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-002",
@@ -32,12 +34,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Rush order - priority shipping required",
     "documentStatus": "CO",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "CO"
+    "invoiceStatus": "CO",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-003",
@@ -51,12 +55,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Bulk purchase for warehouse restocking",
     "documentStatus": "VO",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "VO"
+    "invoiceStatus": "VO",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-004",
@@ -70,12 +76,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Sample order for client evaluation",
     "documentStatus": "IP",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "IP"
+    "invoiceStatus": "IP",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-005",
@@ -89,12 +97,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Recurring monthly supply order",
     "documentStatus": "DR",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "DR"
+    "invoiceStatus": "DR",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-006",
@@ -108,12 +118,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Special pricing agreement applies",
     "documentStatus": "CO",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "CO"
+    "invoiceStatus": "CO",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-007",
@@ -127,12 +139,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Consolidated order from multiple requests",
     "documentStatus": "VO",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "VO"
+    "invoiceStatus": "VO",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-008",
@@ -146,12 +160,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Trial order for new product line",
     "documentStatus": "IP",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "IP"
+    "invoiceStatus": "IP",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-009",
@@ -165,12 +181,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Replacement for damaged goods",
     "documentStatus": "DR",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "DR"
+    "invoiceStatus": "DR",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-010",
@@ -184,12 +202,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Pre-season inventory build-up",
     "documentStatus": "CO",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "CO"
+    "invoiceStatus": "CO",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-011",
@@ -203,12 +223,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Customer-specific configuration",
     "documentStatus": "VO",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "VO"
+    "invoiceStatus": "VO",
+    "processed": "Sample processed"
   },
   {
     "id": "mock-goodsReceipt-012",
@@ -222,12 +244,14 @@ export const goodsReceipt = [
     "orderReference": "Sample orderReference",
     "description": "Government contract fulfillment",
     "documentStatus": "IP",
+    "posted": "Sample posted",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "asset": "Sample asset",
     "stDimension": "Sample stDimension",
     "ndDimension": "Sample ndDimension",
-    "invoiceStatus": "IP"
+    "invoiceStatus": "IP",
+    "processed": "Sample processed"
   }
 ];
 

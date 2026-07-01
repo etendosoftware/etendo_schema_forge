@@ -23,7 +23,7 @@ const LIST_COLUMNS = [
 ];
 
 function CustomHeaderTable(props) {
-  return <HeaderTable columns={LIST_COLUMNS} {...props} />;
+  return <HeaderTable columns={LIST_COLUMNS} {...props} data-testid="HeaderTable__6339e4" />;
 }
 
 const LABEL_OVERRIDES = {
@@ -90,7 +90,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
           draftMode={draftModeWithModal}
           linesEmptyState={LinesEmptyState}
           {...rest}
-        />
+          data-testid="GeneratedApp__6339e4" />
         {contactPortal}
       </CreateContactContext.Provider>
     );
@@ -112,8 +112,8 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
         hidePrint
         bulkActions={(ctx) => (
           <>
-            <BulkOrderMoreMenu {...ctx} />
-            <OrderReactivateBulkAction {...ctx} />
+            <BulkOrderMoreMenu {...ctx} data-testid="BulkOrderMoreMenu__6339e4" />
+            <OrderReactivateBulkAction {...ctx} data-testid="OrderReactivateBulkAction__6339e4" />
           </>
         )}
         dateFilterKey="orderDate"
@@ -122,7 +122,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
         {...rest}
-      />
+        data-testid="ListView__6339e4" />
       {deleteDialog}
       {cloneTargets && createPortal(
         <CloneOrderModal
@@ -132,7 +132,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
           routePrefix="/sales-order/"
           onClose={() => setCloneTargets(null)}
           onCloned={() => setRefreshKey(k => k + 1)}
-        />,
+          data-testid="CloneOrderModal__6339e4" />,
         document.body,
       )}
       {confirmPortal}

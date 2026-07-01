@@ -18,7 +18,9 @@ const statusField = null;
 // @sf-generated-end summary:tax
 
 // @sf-generated-start extraBadges:tax
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:tax
 
 // @sf-generated-start processes:tax
@@ -99,6 +101,7 @@ const labelOverrides = api.labelOverrides;
 export default function TaxPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="tax"
         Form={TaxForm}
@@ -119,6 +122,7 @@ export default function TaxPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         {...props}
       />
+      </>
     );
   }
 

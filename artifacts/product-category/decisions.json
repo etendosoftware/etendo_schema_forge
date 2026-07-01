@@ -3,7 +3,21 @@
   "window": {
     "category": "inventory",
     "name": "Product Category",
-    "detailEntity": "assignedProducts"
+    "detailEntity": "accounting",
+    "linesLayout": "inlineEditable",
+    "formCardPadding": "p-2",
+    "toolbarPaddingX": "px-2",
+    "tabsBarPaddingX": "px-2",
+    "formScrollPaddingX": "px-2",
+    "noHeaderBorder": true,
+    "toolbarBorderBottom": true,
+    "whiteFormBackground": true,
+    "autoSaveOnBlur": true,
+    "hidePrint": true,
+    "hideLink": true,
+    "listbarPaddingX": "px-2",
+    "tablePaddingX": "px-2",
+    "maxDetailLines": 1
   },
   "entities": {
     "productCategory": {
@@ -23,7 +37,9 @@
         "description": {
           "type": "textarea",
           "section": "principal",
-          "seq": 3
+          "seq": 3,
+          "span": 2,
+          "rows": 1
         },
         "default": {
           "section": "principal",
@@ -34,9 +50,7 @@
           "seq": 5
         },
         "image": {
-          "type": "image",
-          "section": "other",
-          "seq": 6
+          "visibility": "discarded"
         },
         "plannedMargin": {
           "visibility": "discarded"
@@ -47,28 +61,63 @@
       }
     },
     "accounting": {
-      "exclude": true
-    },
-    "assignedProducts": {
+      "javaQualifier": "productCategoryAccountingHandler",
       "fields": {
-        "searchKey": {
-          "visibility": "readOnly",
+        "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
+        "fixedAsset": {
+          "visibility": "editable",
           "grid": true,
-          "searchable": true
+          "seq": 1
         },
-        "name": {
-          "visibility": "readOnly",
+        "productExpense": {
+          "visibility": "editable",
           "grid": true,
-          "searchable": true
+          "grow": true,
+          "seq": 2
         },
-        "productType": {
-          "visibility": "readOnly",
+        "productRevenue": {
+          "visibility": "editable",
           "grid": true,
-          "searchable": true,
-          "reference": "ProductType",
-          "inputMode": "selector"
+          "grow": true,
+          "seq": 3
+        },
+        "productCOGS": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 4
+        },
+        "pDefExpenseAcct": {
+          "visibility": "discarded"
+        },
+        "productDeferredRevenue": {
+          "visibility": "discarded"
+        },
+        "invoicePriceVariance": {
+          "visibility": "discarded"
+        },
+        "productRevenueReturn": {
+          "visibility": "discarded"
+        },
+        "productCOGSReturn": {
+          "visibility": "discarded"
+        },
+        "purchasePriceVariance": {
+          "visibility": "discarded"
+        },
+        "tradeDiscountReceived": {
+          "visibility": "discarded"
+        },
+        "tradeDiscountGranted": {
+          "visibility": "discarded"
+        },
+        "processNow": {
+          "visibility": "discarded"
         }
       }
+    },
+    "assignedProducts": {
+      "exclude": true
     },
     "translation": {
       "exclude": true

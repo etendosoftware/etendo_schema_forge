@@ -37,9 +37,11 @@ describe('GoodsReceiptDraftChips', () => {
     expect(screen.getByText('50%')).toBeInTheDocument();
   });
 
-  it('shows 0% when invoiceStatus is 0', () => {
-    render(<GoodsReceiptDraftChips data={{ documentStatus: 'CO', invoiceStatus: 0 }} />);
-    expect(screen.getByText('0%')).toBeInTheDocument();
+  it('renders nothing when invoiceStatus is 0 (badge hidden until invoiced)', () => {
+    const { container } = render(
+      <GoodsReceiptDraftChips data={{ documentStatus: 'CO', invoiceStatus: 0 }} />,
+    );
+    expect(container.firstChild).toBeNull();
   });
 
   it('shows 100% when fully invoiced', () => {

@@ -5,9 +5,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'bankName', column: 'Bank_Name', type: 'string', label: 'Bank Name' },
   { key: 'country', column: 'C_Country_ID', type: 'selector', label: 'Country' },
-  { key: 'bankFormat', column: 'BankFormat', type: 'enum', label: 'Bank Account Format', enumLabels: { 'GENERIC': 'Use Generic Account No.', 'IBAN': 'Use IBAN', 'SWIFT': 'Use SWIFT + Generic Account No.', 'SPANISH': 'Use Spanish' }, required: true },
-  { key: 'accountNo', column: 'AccountNo', type: 'string', label: 'Generic Account No.' },
-  { key: 'iBAN', column: 'Iban', type: 'string', label: 'IBAN' },
+  { key: 'bankFormat', column: 'BankFormat', type: 'enum', labels: {"en_US":"Format","es_ES":"Formato"}, label: 'Bank Account Format', enumLabels: { 'GENERIC': 'Use Generic Account No.', 'IBAN': 'Use IBAN', 'SWIFT': 'Use SWIFT + Generic Account No.', 'SPANISH': 'Use Spanish' }, required: true, minWidth: 320 },
+  { key: 'accountNo', column: 'AccountNo', type: 'string', label: 'Generic Account No.', minWidth: 360 },
+  { key: 'iBAN', column: 'Iban', type: 'string', label: 'IBAN', minWidth: 400 },
   { key: 'swiftCode', column: 'SwiftCode', type: 'string', label: 'SWIFT Code' },
 ];
 // @sf-generated-end columns:bankAccount

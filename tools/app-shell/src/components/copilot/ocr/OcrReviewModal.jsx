@@ -37,7 +37,11 @@ function FieldRow({ labelText, valueText, checked, onToggle, toggleDisabled, exp
         <div className="min-w-0 flex-1 text-sm text-gray-900">
           {labelText}: {valueText ? <span className="font-semibold">{valueText}</span> : null}
         </div>
-        <Toggle checked={checked} onChange={onToggle} disabled={toggleDisabled} />
+        <Toggle
+          checked={checked}
+          onChange={onToggle}
+          disabled={toggleDisabled}
+          data-testid="Toggle__80a87a" />
       </div>
       {expanded && <div className="pb-2">{children}</div>}
     </div>
@@ -135,7 +139,7 @@ export default function OcrReviewModal({
             aria-label={ui('ocrReviewCancel')}
             className="text-gray-400 hover:text-gray-600"
           >
-            <X size={18} />
+            <X size={18} data-testid="X__80a87a" />
           </button>
         </div>
 
@@ -155,7 +159,7 @@ export default function OcrReviewModal({
                 onToggle={(checked) => updateField(field.key, { enabled: checked, editing: checked ? state[field.key]?.editing : false })}
                 toggleDisabled={(field.key === 'vendor' && resolving) || !hasResolvedValue}
                 expanded={!entry.enabled || !hasResolvedValue || entry.editing}
-              >
+                data-testid={"FieldRow__" + field.id}>
                 <KindRenderer
                   mode="field"
                   kind={field.kind}
@@ -166,7 +170,7 @@ export default function OcrReviewModal({
                   contactsBase={contactsBase}
                   createComponent={field.createComponent ? CREATE_COMPONENTS[field.createComponent] : null}
                   onChange={(value) => updateField(field.key, { value, enabled: true, editing: true })}
-                />
+                  data-testid={"KindRenderer__" + field.id} />
               </FieldRow>
             );
           })}

@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:binContents
 const columns = [
-
+  { key: 'etgoValuation', column: 'EM_Etgo_Valuation', type: 'amount', label: 'Valuation' },
 ];
 // @sf-generated-end columns:binContents
 

@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // i18n stub — return the key so we can assert on it.
@@ -8,10 +8,11 @@ vi.mock('@/i18n', () => ({
 
 // useDocumentAction stub — exposes a controllable execute() + loading flag.
 const docActionExecuteMock = vi.fn().mockResolvedValue({ ok: true });
+let docActionLoadingFlag = false;
 vi.mock('@/hooks/useDocumentAction', () => ({
   useDocumentAction: () => ({
     execute: docActionExecuteMock,
-    loading: false,
+    get loading() { return docActionLoadingFlag; },
     error: null,
   }),
 }));
@@ -55,6 +56,7 @@ function setup(props = {}) {
 describe('RowQuickActions', () => {
   beforeEach(() => {
     docActionExecuteMock.mockClear();
+    docActionLoadingFlag = false;
   });
 
   it('renders Edit and Clone buttons by default (no menu, no email)', () => {
@@ -194,6 +196,87 @@ describe('RowQuickActions', () => {
       // The dropdown closes immediately on click; nothing else to assert without DOM hooks.
       resolveDoc({ ok: true });
       await new Promise((r) => setTimeout(r, 0));
+    });
+  });
+
+  // ── Lines 92-93: catch branch in runWithInFlight ──────────────────────────
+  describe('runWithInFlight error handling', () => {
+    it('catches a thrown handler error and console.errors without rethrowing (lines 92-93)', async () => {
+      const user = userEvent.setup();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const onEdit = vi.fn().mockRejectedValue(new Error('boom'));
+      setup({ onEdit });
+      await user.click(screen.getByTestId('row-quick-action-edit'));
+      // Wait for the async handler to settle
+      await new Promise((r) => setTimeout(r, 0));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Quick action 'edit' failed:"),
+        expect.any(Error),
+      );
+      consoleSpy.mockRestore();
+    });
+  });
+
+  // ── Line 148: menuActions as a function branch ────────────────────────────
+  describe('menuActions as a function', () => {
+    it('resolves menu items when menuActions is a function (line 148)', async () => {
+      const user = userEvent.setup();
+      const menuActions = vi.fn(({ row: _r, status: _s }) => [
+        { key: 'fn-action', label: 'Function Action' },
+      ]);
+      setup({ menuActions, statusField: 'documentStatus' });
+      const more = screen.getByTestId('row-quick-action-more');
+      await user.click(more);
+      expect(screen.getByText('Function Action')).toBeTruthy();
+      // Verify the function was called with the expected shape
+      expect(menuActions).toHaveBeenCalledWith(
+        expect.objectContaining({ row: DRAFT_ROW, status: 'DR' }),
+      );
+    });
+
+    it('passes undefined as status when statusField is not set', async () => {
+      const user = userEvent.setup();
+      const menuActions = vi.fn(() => [{ key: 'x', label: 'X' }]);
+      setup({ menuActions }); // no statusField
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      expect(menuActions).toHaveBeenCalledWith(
+        expect.objectContaining({ status: undefined }),
+      );
+    });
+  });
+
+  // ── Line 184: action.onClick path calls onMenuActionExecuted ─────────────
+  describe('action.onClick with onMenuActionExecuted callback', () => {
+    it('passes onClick result to onMenuActionExecuted (line 184)', async () => {
+      const user = userEvent.setup();
+      const onClick = vi.fn().mockResolvedValue({ handled: true });
+      const menuActions = [{ key: 'custom2', label: 'Custom2', onClick }];
+      const { onMenuActionExecuted } = setup({ menuActions, windowName: 'sales-order' });
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      await user.click(screen.getByText('Custom2'));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(onClick).toHaveBeenCalledWith(
+        expect.objectContaining({ row: DRAFT_ROW, windowName: 'sales-order' }),
+      );
+      expect(onMenuActionExecuted).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'custom2' }),
+        { handled: true },
+      );
+    });
+  });
+
+  // ── Line 301: pending class on menu button while docAction.loading ────────
+  describe('menu button pending class (line 301)', () => {
+    it('applies opacity-50 cursor-not-allowed class to menu button when docAction.loading is true', async () => {
+      const user = userEvent.setup();
+      docActionLoadingFlag = true;
+      const menuActions = [{ key: 'post', label: 'Post', documentAction: 'CO' }];
+      setup({ menuActions });
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      const menuBtn = screen.getByTestId('menu-action-post');
+      expect(menuBtn.className).toContain('opacity-50');
+      expect(menuBtn.className).toContain('cursor-not-allowed');
+      expect(menuBtn).toHaveProperty('disabled', true);
     });
   });
 

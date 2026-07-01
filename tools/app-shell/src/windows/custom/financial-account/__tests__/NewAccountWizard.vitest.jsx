@@ -24,6 +24,14 @@ vi.mock('@/hooks/useAccountMutations.js', () => ({
   useAccountMutations: () => ({ createAccount, fetchDefaults }),
 }));
 
+// usePsd2Actions calls useAuth internally. The BankPicker fetches the Salt Edge
+// catalog via fetchProviders; returning [] makes it fall back to the static
+// bank catalog (searchBanks), which is what these tests assert against.
+const fetchProviders = vi.fn();
+vi.mock('@/hooks/usePsd2Actions', () => ({
+  usePsd2Actions: () => ({ fetchProviders, connect: vi.fn() }),
+}));
+
 import { NewAccountWizard } from '../NewAccountWizard.jsx';
 
 const DEFAULTS = {
@@ -43,6 +51,9 @@ describe('NewAccountWizard', () => {
     toastError.mockClear();
     createAccount.mockReset();
     fetchDefaults.mockReset();
+    fetchProviders.mockReset();
+    // Empty catalog → BankPicker falls back to the static bank list.
+    fetchProviders.mockResolvedValue([]);
     fetchDefaults.mockResolvedValue(DEFAULTS);
     createAccount.mockResolvedValue({ id: 'acc-new', name: 'BBVA' });
   });
@@ -51,7 +62,7 @@ describe('NewAccountWizard', () => {
     renderWizard();
     expect(screen.getByTestId('new-account-type-B')).toBeInTheDocument();
     expect(screen.getByTestId('new-account-type-C')).toBeInTheDocument();
-    expect(screen.getByTestId('new-account-type-T')).toBeInTheDocument();
+    expect(screen.getByTestId('new-account-type-CA')).toBeInTheDocument();
   });
 
   it('walks Bank → connection → bank picker → institution → form', async () => {
@@ -110,12 +121,42 @@ describe('NewAccountWizard', () => {
     expect(screen.queryByTestId('account-form-iban')).not.toBeInTheDocument();
   });
 
-  it('shows the "coming soon" placeholder when Tarjeta is picked', async () => {
+  it('walks Card → connection → bank skip → form (Name + Currency, no IBAN)', async () => {
     const user = userEvent.setup();
     renderWizard();
 
-    await user.click(screen.getByTestId('new-account-type-T'));
-    expect(screen.getByTestId('new-account-card-soon')).toBeInTheDocument();
+    await user.click(screen.getByTestId('new-account-type-CA'));
+    // Card reuses the bank flow: connection step first.
+    expect(screen.getByTestId('account-connection-options')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('account-connection-offline'));
+    expect(screen.getByTestId('new-account-bank-search')).toBeInTheDocument();
+
+    // Skipping the bank lands on the card form, which has no IBAN/BIC.
+    await user.click(screen.getByTestId('new-account-bank-skip'));
+    expect(screen.getByTestId('account-form')).toBeInTheDocument();
+    expect(screen.queryByTestId('account-form-iban')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('account-form-bic')).not.toBeInTheDocument();
+  });
+
+  it('creates a Card account with type=CA on submit', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+
+    await user.click(screen.getByTestId('new-account-type-CA'));
+    await waitFor(() => expect(fetchDefaults).toHaveBeenCalled());
+    await user.click(screen.getByTestId('account-connection-offline'));
+    await user.click(screen.getByTestId('new-account-bank-skip'));
+
+    await user.type(screen.getByTestId('account-form-name'), 'Visa Oro');
+    await user.click(screen.getByTestId('account-form-submit'));
+
+    await waitFor(() => expect(createAccount).toHaveBeenCalledTimes(1));
+    expect(createAccount.mock.calls[0][0]).toMatchObject({
+      name: 'Visa Oro',
+      type: 'CA',
+      currencyId: '102',
+    });
   });
 
   it('creates the account on submit and calls onCreated + onClose', async () => {

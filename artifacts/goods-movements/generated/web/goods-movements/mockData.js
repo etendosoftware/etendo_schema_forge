@@ -6,7 +6,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-15",
     "description": "Standard order for Q1 delivery",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00001",
     "processed": "Sample processed"
   },
@@ -15,7 +14,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-16",
     "description": "Rush order - priority shipping required",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00002",
     "processed": "Sample processed"
   },
@@ -24,7 +22,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-17",
     "description": "Bulk purchase for warehouse restocking",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00003",
     "processed": "Sample processed"
   },
@@ -33,7 +30,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-18",
     "description": "Sample order for client evaluation",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00004",
     "processed": "Sample processed"
   },
@@ -42,7 +38,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-19",
     "description": "Recurring monthly supply order",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00005",
     "processed": "Sample processed"
   },
@@ -51,7 +46,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-20",
     "description": "Special pricing agreement applies",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00006",
     "processed": "Sample processed"
   },
@@ -60,7 +54,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-21",
     "description": "Consolidated order from multiple requests",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00007",
     "processed": "Sample processed"
   },
@@ -69,7 +62,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-22",
     "description": "Trial order for new product line",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00008",
     "processed": "Sample processed"
   },
@@ -78,7 +70,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-23",
     "description": "Replacement for damaged goods",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00009",
     "processed": "Sample processed"
   },
@@ -87,7 +78,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-24",
     "description": "Pre-season inventory build-up",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00010",
     "processed": "Sample processed"
   },
@@ -96,7 +86,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-25",
     "description": "Customer-specific configuration",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00011",
     "processed": "Sample processed"
   },
@@ -105,7 +94,6 @@ export const movement = [
     "name": "Sample name",
     "movementDate": "2026-01-26",
     "description": "Government contract fulfillment",
-    "processNow": "Sample processNow",
     "documentNo": "MO-00012",
     "processed": "Sample processed"
   }

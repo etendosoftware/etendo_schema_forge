@@ -2,9 +2,10 @@ import { useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 
-const STATEMENT_STATUSES = ['PENDING', 'PARTIAL', 'RECONCILED'];
+const STATEMENT_STATUSES = ['DRAFT', 'PENDING', 'PARTIAL', 'RECONCILED'];
 
 const LABEL_KEYS = {
+  DRAFT:      'financeAccountStatementsStatusDraft',
   PENDING:    'financeAccountStatementsStatusPending',
   PARTIAL:    'financeAccountStatementsStatusPartial',
   RECONCILED: 'financeAccountStatementsStatusReconciled',
@@ -12,8 +13,8 @@ const LABEL_KEYS = {
 
 /**
  * Filter dropdown for the imported-statement status. Thin wrapper around
- * {@link DistinctValuesFilter} for the 3 derived statuses
- * (PENDING / PARTIAL / RECONCILED).
+ * {@link DistinctValuesFilter} for the derived statuses
+ * (DRAFT / PENDING / PARTIAL / RECONCILED).
  *
  * @param {{ value: string|null, onChange: (v: string|null) => void }} props
  */
@@ -36,6 +37,6 @@ export function StatementStatusFilter({ value, onChange }) {
       labelFor={(code) => labelMap[code] ?? code}
       allLabel={ui('financeAccountStatementsFilterAllStatuses')}
       searchPlaceholder={ui('searchStatuses')}
-    />
+      data-testid="DistinctValuesFilter__de91e6" />
   );
 }

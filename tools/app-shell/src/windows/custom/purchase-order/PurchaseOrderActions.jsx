@@ -125,7 +125,7 @@ export default function PurchaseOrderActions({
                 whiteSpace: 'nowrap',
               }}
             >
-              {ui('poViewInvoice')}
+              {ui('poViewInvoice')} →
             </button>
           </div>
         ), { duration: 10000 });
@@ -237,7 +237,6 @@ export default function PurchaseOrderActions({
           </button>
         </>
       )}
-
       {/* ── CONFIRMED STATE ── */}
       {isConfirmed && (
         <>
@@ -307,7 +306,6 @@ export default function PurchaseOrderActions({
           </button>
         </>
       )}
-
       {/* ── CONFIRM MODAL ── */}
       {showConfirmModal &&
         createPortal(
@@ -317,7 +315,7 @@ export default function PurchaseOrderActions({
             token={token}
             apiBaseUrl={apiBaseUrl}
             onClose={() => setShowConfirmModal(false)}
-          />,
+            data-testid="ConfirmOrderModal__4da6de" />,
           document.body,
         )}
     </>
@@ -519,7 +517,7 @@ function ConfirmOrderModal({
             </button>
             {!isConfirmOnly && createdDoc.id && (
               <button type="button" onClick={handleGoToDoc} style={btnPrimary}>
-                {ui('soViewInvoice')}
+                {ui('soViewInvoice')} →
               </button>
             )}
           </div>
@@ -578,17 +576,17 @@ function ConfirmOrderModal({
           <OptionCard
             selected={selected === 'invoice'}
             onClick={() => setSelected('invoice')}
-            icon={<FileText size={16} />}
+            icon={<FileText size={16} data-testid="FileText__4da6de" />}
             title={ui('poConfirmWithInvoice')}
             subtitle={ui('poConfirmWithInvoiceDesc')}
-          />
+            data-testid="OptionCard__4da6de" />
           <OptionCard
             selected={selected === 'confirm'}
             onClick={() => setSelected('confirm')}
-            icon={<Check size={16} />}
+            icon={<Check size={16} data-testid="Check__4da6de" />}
             title={ui('soConfirmOnly')}
             subtitle={ui('soOnlyConfirmDesc')}
-          />
+            data-testid="OptionCard__4da6de" />
         </div>
 
         {/* Error */}

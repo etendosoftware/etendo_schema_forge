@@ -1,7 +1,8 @@
 {
-  "version": "0.1.0",
-  "generatedAt": "2026-05-27T18:35:53.685Z",
-  "contractChecksum": "864945e82c71cdc9",
+  "version": "0.13.0",
+  "generatedAt": "2026-06-26T16:40:04.731Z",
+  "updatedAt": "2026-06-26T17:15:16.334Z",
+  "contractChecksum": "4bd3c5244f490221",
   "apiPrediction": {
     "specName": "sales-quotation",
     "baseUrl": "/sws/neo/sales-quotation",
@@ -40,6 +41,30 @@
     "selectors": [
       {
         "entity": "quotation",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-quotation/quotation/selectors/currency"
+      },
+      {
+        "entity": "quotation",
+        "field": "priceList",
+        "column": "M_PriceList_ID",
+        "reference": "PriceList",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-quotation/quotation/selectors/priceList",
+        "context": {
+          "required": [
+            {
+              "param": "isSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "quotation",
         "field": "businessPartner",
         "column": "C_BPartner_ID",
         "reference": "BusinessPartner",
@@ -59,22 +84,6 @@
               "param": "C_BPartner_ID",
               "source": "field",
               "field": "businessPartner"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "quotation",
-        "field": "priceList",
-        "column": "M_PriceList_ID",
-        "reference": "PriceList",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-quotation/quotation/selectors/priceList",
-        "context": {
-          "required": [
-            {
-              "param": "isSOTrx",
-              "source": "windowCategory"
             }
           ]
         }
@@ -110,14 +119,6 @@
         "reference": "Reject_Reason",
         "inputMode": "selector",
         "url": "/sws/neo/sales-quotation/quotation/selectors/rejectReason"
-      },
-      {
-        "entity": "quotation",
-        "field": "currency",
-        "column": "C_Currency_ID",
-        "reference": "Currency",
-        "inputMode": "selector",
-        "url": "/sws/neo/sales-quotation/quotation/selectors/currency"
       },
       {
         "entity": "quotationLine",
@@ -543,6 +544,52 @@
         "processType": "obuiapp"
       },
       {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "quotation",
+        "column": "EM_Etpr_Remove_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sales-quotation/quotation/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
+        "entity": "quotation",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/sales-quotation/quotation/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
         "name": "rMAddOrphanLine",
         "actionType": "utilityAction",
         "entity": "quotation",
@@ -709,6 +756,15 @@
     "entities": {
       "quotation": {
         "fields": {
+          "currency": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@C_Currency_ID@"
+          },
+          "priceList": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @DocStatus@='TMP'"
+          },
           "documentNo": {
             "readOnly": true,
             "required": true,
@@ -724,10 +780,6 @@
             "readOnlyLogic": "@Processed@='Y' | @DocStatus@='TMP'"
           },
           "partnerAddress": {
-            "required": true,
-            "readOnlyLogic": "@Processed@='Y' | @DocStatus@='TMP'"
-          },
-          "priceList": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @DocStatus@='TMP'"
           },
@@ -758,11 +810,6 @@
             "readOnly": true,
             "required": true
           },
-          "currency": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "@C_Currency_ID@"
-          },
           "description": {
             "readOnlyLogic": "@Processed@='Y'"
           },
@@ -772,7 +819,8 @@
           "processed": {
             "readOnly": true,
             "required": true
-          }
+          },
+          "eTGOCurrencyRate": {}
         }
       },
       "quotationLine": {
@@ -824,10 +872,11 @@
     ],
     "minimumCreate": {
       "headerFields": [
+        "currency",
+        "priceList",
         "orderDate",
         "businessPartner",
         "partnerAddress",
-        "priceList",
         "paymentTerms"
       ],
       "lineFields": [
@@ -846,6 +895,18 @@
     "selectorContexts": [
       {
         "entity": "quotation",
+        "field": "priceList",
+        "context": {
+          "required": [
+            {
+              "param": "isSOTrx",
+              "source": "windowCategory"
+            }
+          ]
+        }
+      },
+      {
+        "entity": "quotation",
         "field": "partnerAddress",
         "context": {
           "required": [
@@ -853,18 +914,6 @@
               "param": "C_BPartner_ID",
               "source": "field",
               "field": "businessPartner"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "quotation",
-        "field": "priceList",
-        "context": {
-          "required": [
-            {
-              "param": "isSOTrx",
-              "source": "windowCategory"
             }
           ]
         }
@@ -937,10 +986,11 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
+          "currency",
+          "priceList",
           "orderDate",
           "businessPartner",
           "partnerAddress",
-          "priceList",
           "paymentTerms"
         ]
       },
@@ -969,5 +1019,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "74994103aef426bd"
+  "checksum": "609d5c5455dfa503"
 }

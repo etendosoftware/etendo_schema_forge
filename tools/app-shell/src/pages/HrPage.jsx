@@ -54,25 +54,24 @@ export default function HrPage() {
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <KPIHeader kpis={KPIS} />
-
+      <KPIHeader kpis={KPIS} data-testid="KPIHeader__7ba56e" />
       {/* Two-column layout: Employee Directory (2/3) + Absences (1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Employee Directory Table */}
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-muted-foreground" />
+          <Card data-testid="Card__7ba56e">
+            <CardHeader data-testid="CardHeader__7ba56e">
+              <CardTitle className="flex items-center gap-2" data-testid="CardTitle__7ba56e">
+                <Users className="h-5 w-5 text-muted-foreground" data-testid="Users__7ba56e" />
                 {ui('employeeDirectory')}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent data-testid="CardContent__7ba56e">
               <DataTable
                 columns={TABLE_COLUMNS}
                 filters={TABLE_FILTERS}
                 data={TABLE_DATA}
-              />
+                data-testid="DataTable__7ba56e" />
             </CardContent>
           </Card>
         </div>
@@ -85,22 +84,23 @@ export default function HrPage() {
             onDragEnd={handleDragEnd}
             onCardClick={handleCardClick}
             emptyMessage="No absences"
-          />
+            data-testid="KanbanBoard__7ba56e" />
         </div>
       </div>
-
       {/* HR Updates Feed */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Bell className="h-5 w-5 text-muted-foreground" />
+      <Card data-testid="Card__7ba56e">
+        <CardHeader data-testid="CardHeader__7ba56e">
+          <CardTitle
+            className="flex items-center gap-2 text-base"
+            data-testid="CardTitle__7ba56e">
+            <Bell className="h-5 w-5 text-muted-foreground" data-testid="Bell__7ba56e" />
             {ui('hrUpdates')}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3" data-testid="CardContent__7ba56e">
           {HR_FEED.map((entry, idx) => (
             <div key={entry.id}>
-              {idx > 0 && <Separator className="mb-3" />}
+              {idx > 0 && <Separator className="mb-3" data-testid="Separator__7ba56e" />}
               <div className="flex items-start gap-3">
                 {entry.direction && (
                   <div className={`mt-0.5 rounded-full p-1 ${
@@ -109,8 +109,8 @@ export default function HrPage() {
                       : 'bg-blue-100 text-blue-600'
                   }`}>
                     {entry.direction === 'in'
-                      ? <ArrowUp className="h-3.5 w-3.5" />
-                      : <ArrowDown className="h-3.5 w-3.5" />
+                      ? <ArrowUp className="h-3.5 w-3.5" data-testid="ArrowUp__7ba56e" />
+                      : <ArrowDown className="h-3.5 w-3.5" data-testid="ArrowDown__7ba56e" />
                     }
                   </div>
                 )}

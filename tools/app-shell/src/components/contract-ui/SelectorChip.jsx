@@ -18,7 +18,7 @@ import { X } from 'lucide-react';
  * @param {string}   clearAriaLabel - aria-label for the X (typically `ui('clear')`).
  * @param {string}   testId        - data-testid for the chip button.
  */
-export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId }) {
+export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, clearable = true }) {
   const triggerClear = (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -37,16 +37,20 @@ export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId }
       className="inline-flex items-center gap-1 max-w-full min-w-0 px-2 py-1 rounded-lg bg-[#F5F7F9] text-sm text-[#3F3F50] hover:brightness-95 transition cursor-text"
     >
       <span className="truncate">{label}</span>
-      <span
-        role="button"
-        tabIndex={0}
-        aria-label={clearAriaLabel}
-        onMouseDown={triggerClear}
-        onKeyDown={onClearKeyDown}
-        className="shrink-0 inline-flex items-center justify-center"
-      >
-        <X className="h-4 w-4 text-[#828FA3] hover:text-foreground transition-colors" />
-      </span>
+      {clearable && (
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={clearAriaLabel}
+          onMouseDown={triggerClear}
+          onKeyDown={onClearKeyDown}
+          className="shrink-0 inline-flex items-center justify-center"
+        >
+          <X
+            className="h-4 w-4 text-[#828FA3] hover:text-foreground transition-colors"
+            data-testid="X__88e7eb" />
+        </span>
+      )}
     </button>
   );
 }

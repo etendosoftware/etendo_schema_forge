@@ -256,6 +256,7 @@ describe('onboarding state helpers', () => {
       currency: 'EUR',
       language: 'es_ES',
       countryCode: 'ES',
+      address: 'QA Street',
     });
 
     const storage = buildEnvironmentSessionStorage(

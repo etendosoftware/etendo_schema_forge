@@ -28,7 +28,9 @@ const statusField = 'documentStatus';
 // @sf-generated-end summary:header
 
 // @sf-generated-start extraBadges:header
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:header
 
 // @sf-generated-start processes:header
@@ -595,6 +597,22 @@ export const api = {
       "processType": "obuiapp"
     },
     {
+      "entity": "header",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/return-to-vendor/header/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/return-to-vendor/header/{id}/action/eTPRRemovePayment",
+      "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+      "processType": "obuiapp"
+    },
+    {
       "entity": "lines",
       "field": "explode",
       "column": "Explode",
@@ -657,6 +675,7 @@ export const api = {
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         detailEntity="lines"
@@ -686,6 +705,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         linesLayout="inlineEditable"
         {...props}
       />
+      </>
     );
   }
 

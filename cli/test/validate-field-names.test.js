@@ -14,7 +14,7 @@ const ROOT = resolve(__dirname, '..', '..');
 const ARTIFACTS = resolve(ROOT, 'artifacts');
 
 // Unique, deterministic temp spec dir under the real artifacts/ (contract path is hardcoded).
-const TEST_SPEC = '__test-vfn-fixture';
+const TEST_SPEC = '.__test-vfn-fixture';
 const TEST_SPEC_DIR = resolve(ARTIFACTS, TEST_SPEC);
 const CONTRACT_PATH = resolve(TEST_SPEC_DIR, 'contract.json');
 

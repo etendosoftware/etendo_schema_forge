@@ -27,10 +27,10 @@ const SKELETON_COL_KEYS = ['lineno', 'date', 'description', 'reference', 'bpartn
 function renderBody({ loading, lines, emptyLabel, renderRow }) {
   if (loading) {
     return SKELETON_ROWS.map((n) => (
-      <TableRow key={n}>
+      <TableRow key={n} data-testid="TableRow__2364e3">
         {SKELETON_COL_KEYS.map((k) => (
-          <TableCell key={k}>
-            <Skeleton className="h-4 w-full" />
+          <TableCell key={k} data-testid="TableCell__2364e3">
+            <Skeleton className="h-4 w-full" data-testid="Skeleton__2364e3" />
           </TableCell>
         ))}
       </TableRow>
@@ -38,8 +38,11 @@ function renderBody({ loading, lines, emptyLabel, renderRow }) {
   }
   if (lines.length === 0) {
     return (
-      <TableRow>
-        <TableCell colSpan={7} className="py-16 text-center text-sm text-[#6c6c89]">
+      <TableRow data-testid="TableRow__2364e3">
+        <TableCell
+          colSpan={7}
+          className="py-16 text-center text-sm text-[#6c6c89]"
+          data-testid="TableCell__2364e3">
           {emptyLabel}
         </TableCell>
       </TableRow>
@@ -57,19 +60,21 @@ export function StatementLinesTable({ lines, loading, currency = 'EUR' }) {
   const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[#121217]">
-          <TableHead>{ui('financeAccountStatementLinesColLineNo')}</TableHead>
-          <TableHead>{ui('financeAccountStatementLinesColDate')}</TableHead>
-          <TableHead>{ui('financeAccountStatementLinesColDescription')}</TableHead>
-          <TableHead>{ui('financeAccountStatementLinesColReference')}</TableHead>
-          <TableHead>{ui('financeAccountStatementLinesColBpartner')}</TableHead>
-          <TableHead>{ui('financeAccountStatementLinesColAmount')}</TableHead>
-          <TableHead>{ui('financeAccountStatementLinesColMatched')}</TableHead>
+    <Table data-testid="Table__2364e3">
+      <TableHeader data-testid="TableHeader__2364e3">
+        <TableRow
+          className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[#121217]"
+          data-testid="TableRow__2364e3">
+          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColLineNo')}</TableHead>
+          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColDate')}</TableHead>
+          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColDescription')}</TableHead>
+          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColReference')}</TableHead>
+          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColBpartner')}</TableHead>
+          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColAmount')}</TableHead>
+          <TableHead data-testid="TableHead__2364e3">{ui('financeAccountStatementLinesColMatched')}</TableHead>
         </TableRow>
       </TableHeader>
-      <TableBody>
+      <TableBody data-testid="TableBody__2364e3">
         {renderBody({
           loading,
           lines,
@@ -80,24 +85,28 @@ export function StatementLinesTable({ lines, loading, currency = 'EUR' }) {
               data-testid={`statement-line-row-${line.id}`}
               className="bg-white"
             >
-              <TableCell className="text-sm text-[#6c6c89]">{line.lineNo}</TableCell>
-              <TableCell className="whitespace-nowrap text-sm text-[#121217]">
+              <TableCell className="text-sm text-[#6c6c89]" data-testid="TableCell__2364e3">{line.lineNo}</TableCell>
+              <TableCell
+                className="whitespace-nowrap text-sm text-[#121217]"
+                data-testid="TableCell__2364e3">
                 {formatDate(line.date, bcpLocale)}
               </TableCell>
-              <TableCell className="max-w-[220px] truncate text-sm text-[#121217]">
+              <TableCell
+                className="max-w-[220px] truncate text-sm text-[#121217]"
+                data-testid="TableCell__2364e3">
                 {line.description || '—'}
               </TableCell>
-              <TableCell className="text-sm text-[#121217]">{line.reference || '—'}</TableCell>
-              <TableCell className="text-sm text-[#121217]">{line.bpartnerName || '—'}</TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-sm text-[#121217]" data-testid="TableCell__2364e3">{line.reference || '—'}</TableCell>
+              <TableCell className="text-sm text-[#121217]" data-testid="TableCell__2364e3">{line.bpartnerName || '—'}</TableCell>
+              <TableCell className="text-right" data-testid="TableCell__2364e3">
                 <MoneyAmount
                   value={line.amount}
                   currency={currency}
                   tone="auto"
                   className="text-sm font-semibold"
-                />
+                  data-testid="MoneyAmount__2364e3" />
               </TableCell>
-              <TableCell>
+              <TableCell data-testid="TableCell__2364e3">
                 <span
                   className="inline-block h-2 w-2 rounded-full"
                   style={{ backgroundColor: line.matched ? '#26A95F' : '#D1D4DB' }}

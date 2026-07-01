@@ -8,8 +8,8 @@ export default function KindRenderer({ mode = 'field', kind, ...props }) {
 
   if (kind === 'entity') {
     return mode === 'cell'
-      ? <EntityCell {...props} />
-      : <EntityField {...props} />;
+      ? <EntityCell {...props} data-testid="EntityCell__c86eb6" />
+      : <EntityField {...props} data-testid="EntityField__c86eb6" />;
   }
   if (kind === 'date') {
     return <input type="date" value={props.value ?? ''} onChange={(e) => props.onChange(e.target.value)} className={className} />;

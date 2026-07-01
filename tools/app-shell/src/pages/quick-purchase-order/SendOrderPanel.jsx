@@ -39,7 +39,7 @@ export default function SendOrderPanel({
             onClick={onBack}
             className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
-            <ChevronUp className="h-3 w-3" />
+            <ChevronUp className="h-3 w-3" data-testid="ChevronUp__9c5975" />
             {ui('qpoBackToCart')}
           </button>
         </div>
@@ -63,7 +63,7 @@ export default function SendOrderPanel({
                       : 'border-border bg-white text-muted-foreground hover:border-primary/30'
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-4 w-4" data-testid="Icon__9c5975" />
                   {ui(m.labelKey)}
                 </button>
               );
@@ -78,7 +78,7 @@ export default function SendOrderPanel({
               {ui('qpoEmailTo')}
             </label>
             <div className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm">
-              <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+              <Mail className="h-3.5 w-3.5 text-muted-foreground" data-testid="Mail__9c5975" />
               <span className="text-muted-foreground">{supplier?.email || '—'}</span>
             </div>
             <p className="text-xs text-muted-foreground">{ui('qpoEmailTemplateHint')}</p>
@@ -99,7 +99,7 @@ export default function SendOrderPanel({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 font-medium"
             >
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="h-3 w-3" data-testid="ExternalLink__9c5975" />
               {ui('qpoOpenWhatsApp')}
             </a>
           </div>
@@ -112,7 +112,11 @@ export default function SendOrderPanel({
         )}
 
         {/* Confirm */}
-        <Button className="w-full" onClick={onConfirm} disabled={!supplier}>
+        <Button
+          className="w-full"
+          onClick={onConfirm}
+          disabled={!supplier}
+          data-testid="Button__9c5975">
           {sendMethod === 'email' && ui('qpoSendEmail')}
           {sendMethod === 'whatsapp' && ui('qpoSendWhatsApp')}
           {sendMethod === 'pdf' && ui('qpoGeneratePDF')}

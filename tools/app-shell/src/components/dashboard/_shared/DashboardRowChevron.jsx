@@ -19,7 +19,7 @@ const ICON_STYLE = {
 export function DashboardRowChevron() {
   return (
     <div style={WRAPPER_STYLE}>
-      <ChevronRight style={ICON_STYLE} />
+      <ChevronRight style={ICON_STYLE} data-testid="ChevronRight__e40207" />
     </div>
   );
 }

@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.13.1",
   "generatedAt": "2026-04-29T18:11:26.703Z",
-  "updatedAt": "2026-05-26T18:48:57.009Z",
-  "contractChecksum": "25678f671a86073d",
+  "updatedAt": "2026-06-08T22:49:39.501Z",
+  "contractChecksum": "06c1fdafac2d7a61",
   "apiPrediction": {
     "specName": "product-category",
     "baseUrl": "/sws/neo/product-category",
@@ -21,32 +21,61 @@
           "name"
         ]
       },
-      "assignedProducts": {
+      "accounting": {
         "get": true,
         "getById": true,
         "post": true,
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/product-category/assignedProducts",
-        "detailUrl": "/sws/neo/product-category/assignedProducts/{id}",
-        "supportedFilters": [
-          "searchKey",
-          "name",
-          "productType"
-        ]
+        "listUrl": "/sws/neo/product-category/accounting",
+        "detailUrl": "/sws/neo/product-category/accounting/{id}",
+        "supportedFilters": []
       }
     },
-    "selectors": [],
+    "selectors": [
+      {
+        "entity": "accounting",
+        "field": "fixedAsset",
+        "column": "P_Asset_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product-category/accounting/selectors/fixedAsset"
+      },
+      {
+        "entity": "accounting",
+        "field": "productExpense",
+        "column": "P_Expense_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product-category/accounting/selectors/productExpense"
+      },
+      {
+        "entity": "accounting",
+        "field": "productRevenue",
+        "column": "P_Revenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product-category/accounting/selectors/productRevenue"
+      },
+      {
+        "entity": "accounting",
+        "field": "productCOGS",
+        "column": "P_Cogs_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/product-category/accounting/selectors/productCOGS"
+      }
+    ],
     "actions": [
       {
         "name": "processNow",
         "actionType": "documentAction",
-        "entity": "assignedProducts",
+        "entity": "accounting",
         "column": "Processing",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/product-category/assignedProducts/{id}/action/processNow",
+        "url": "/sws/neo/product-category/accounting/{id}/action/processNow",
         "parameters": [
           {
             "name": "docAction",
@@ -76,163 +105,8 @@
           "Document has pending lines or missing required fields",
           "User lacks permission to execute the action"
         ],
-        "processId": "136",
+        "processId": "140",
         "processType": "classic"
-      },
-      {
-        "name": "copyservicemodifytaxconfig",
-        "actionType": "utilityAction",
-        "entity": "assignedProducts",
-        "column": "Copyservicemodifytaxconfig",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/product-category/assignedProducts/{id}/action/copyservicemodifytaxconfig",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "CBBD7BB6BDFE4705B68DD3D9FF788D4E",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "createVariants",
-        "actionType": "createFrom",
-        "entity": "assignedProducts",
-        "column": "CreateVariants",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/product-category/assignedProducts/{id}/action/createVariants",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
-        ],
-        "processId": "3C386BC12832466790E50F2F8C5EBD85",
-        "processType": "classic"
-      },
-      {
-        "name": "manageVariants",
-        "actionType": "utilityAction",
-        "entity": "assignedProducts",
-        "column": "ManageVariants",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/product-category/assignedProducts/{id}/action/manageVariants",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "FE3A8C134D41488DB3A69837BD54B56A",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "relateprodcattaxtoservice",
-        "actionType": "utilityAction",
-        "entity": "assignedProducts",
-        "column": "Relateprodcattaxtoservice",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/product-category/assignedProducts/{id}/action/relateprodcattaxtoservice",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "E0870062F05F4DC88E589ABC6A45DF4C",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "relateprodcattoservice",
-        "actionType": "utilityAction",
-        "entity": "assignedProducts",
-        "column": "Relateprodcattoservice",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/product-category/assignedProducts/{id}/action/relateprodcattoservice",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "8E5996F1F3154B498468938B5341A0CB",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "relateprodtoservice",
-        "actionType": "utilityAction",
-        "entity": "assignedProducts",
-        "column": "Relateprodtoservice",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/product-category/assignedProducts/{id}/action/relateprodtoservice",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "E66C669B0B01498C8EB3F99CD371CF9A",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "updateInvariants",
-        "actionType": "utilityAction",
-        "entity": "assignedProducts",
-        "column": "Updateinvariants",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/product-category/assignedProducts/{id}/action/updateInvariants",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "7DC2C8DC186B4C1DB18E147911950861",
-        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -269,24 +143,22 @@
           "summaryLevel": {
             "required": true,
             "defaultValue": "N"
-          },
-          "image": {}
+          }
         }
       },
-      "assignedProducts": {
+      "accounting": {
         "fields": {
-          "searchKey": {
-            "readOnly": true,
+          "fixedAsset": {
             "required": true
           },
-          "name": {
-            "readOnly": true,
+          "productExpense": {
             "required": true
           },
-          "productType": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "I"
+          "productRevenue": {
+            "required": true
+          },
+          "productCOGS": {
+            "required": true
           }
         }
       }
@@ -306,17 +178,24 @@
         "default",
         "summaryLevel"
       ],
+      "lineFields": [
+        "fixedAsset",
+        "productExpense",
+        "productRevenue",
+        "productCOGS"
+      ],
       "recommendedOrder": [
-        "createHeader"
+        "createHeader",
+        "createLines"
       ]
     },
     "selectorContexts": [],
     "actions": [
-      "processNow",
-      "createVariants"
+      "processNow"
     ],
     "workflow": [
       "Create draft header with required fields",
+      "Add at least one valid line",
       "Validate form state",
       "Complete the document"
     ],
@@ -324,13 +203,9 @@
       "Document is already completed or closed",
       "Document has pending lines or missing required fields",
       "User lacks permission to execute the action",
-      "Required context is missing",
-      "User lacks permission",
-      "Record is in an incompatible state",
-      "Source document has no valid lines to copy",
-      "Target entity already has linked records",
-      "Required reference data is missing (price list, warehouse, etc.)",
-      "Required field without default value must be provided"
+      "Required field without default value must be provided",
+      "Validate the current form state before running lifecycle actions",
+      "Do not run destructive lifecycle actions without explicit user confirmation"
     ],
     "examples": [
       {
@@ -344,6 +219,16 @@
         ]
       },
       {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "fixedAsset",
+          "productExpense",
+          "productRevenue",
+          "productCOGS"
+        ]
+      },
+      {
         "operation": "completeDocument",
         "description": "Validate form state and run the document lifecycle action when the draft is complete.",
         "action": "processNow"
@@ -353,5 +238,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "71bfb479e2a0e4fc"
+  "checksum": "0c4bc8795b96017a"
 }

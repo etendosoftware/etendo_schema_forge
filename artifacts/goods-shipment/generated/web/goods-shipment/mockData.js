@@ -10,9 +10,12 @@ export const goodsShipment = [
     "description": "Standard order for Q1 delivery",
     "movementDate": "2026-01-15",
     "documentStatus": "DR",
+    "posted": "Sample posted",
     "invoiceStatus": "DR",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-002",
@@ -23,9 +26,12 @@ export const goodsShipment = [
     "description": "Rush order - priority shipping required",
     "movementDate": "2026-01-16",
     "documentStatus": "CO",
+    "posted": "Sample posted",
     "invoiceStatus": "CO",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-003",
@@ -36,9 +42,12 @@ export const goodsShipment = [
     "description": "Bulk purchase for warehouse restocking",
     "movementDate": "2026-01-17",
     "documentStatus": "VO",
+    "posted": "Sample posted",
     "invoiceStatus": "VO",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-004",
@@ -49,9 +58,12 @@ export const goodsShipment = [
     "description": "Sample order for client evaluation",
     "movementDate": "2026-01-18",
     "documentStatus": "IP",
+    "posted": "Sample posted",
     "invoiceStatus": "IP",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-005",
@@ -62,9 +74,12 @@ export const goodsShipment = [
     "description": "Recurring monthly supply order",
     "movementDate": "2026-01-19",
     "documentStatus": "DR",
+    "posted": "Sample posted",
     "invoiceStatus": "DR",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-006",
@@ -75,9 +90,12 @@ export const goodsShipment = [
     "description": "Special pricing agreement applies",
     "movementDate": "2026-01-20",
     "documentStatus": "CO",
+    "posted": "Sample posted",
     "invoiceStatus": "CO",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-007",
@@ -88,9 +106,12 @@ export const goodsShipment = [
     "description": "Consolidated order from multiple requests",
     "movementDate": "2026-01-21",
     "documentStatus": "VO",
+    "posted": "Sample posted",
     "invoiceStatus": "VO",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-008",
@@ -101,9 +122,12 @@ export const goodsShipment = [
     "description": "Trial order for new product line",
     "movementDate": "2026-01-22",
     "documentStatus": "IP",
+    "posted": "Sample posted",
     "invoiceStatus": "IP",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-009",
@@ -114,9 +138,12 @@ export const goodsShipment = [
     "description": "Replacement for damaged goods",
     "movementDate": "2026-01-23",
     "documentStatus": "DR",
+    "posted": "Sample posted",
     "invoiceStatus": "DR",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-010",
@@ -127,9 +154,12 @@ export const goodsShipment = [
     "description": "Pre-season inventory build-up",
     "movementDate": "2026-01-24",
     "documentStatus": "CO",
+    "posted": "Sample posted",
     "invoiceStatus": "CO",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-011",
@@ -140,9 +170,12 @@ export const goodsShipment = [
     "description": "Customer-specific configuration",
     "movementDate": "2026-01-25",
     "documentStatus": "VO",
+    "posted": "Sample posted",
     "invoiceStatus": "VO",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
     "id": "mock-goodsShipment-012",
@@ -153,9 +186,12 @@ export const goodsShipment = [
     "description": "Government contract fulfillment",
     "movementDate": "2026-01-26",
     "documentStatus": "IP",
+    "posted": "Sample posted",
     "invoiceStatus": "IP",
     "invoiced": "Sample invoiced",
-    "processed": "Sample processed"
+    "processed": "Sample processed",
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting"
   }
 ];
 

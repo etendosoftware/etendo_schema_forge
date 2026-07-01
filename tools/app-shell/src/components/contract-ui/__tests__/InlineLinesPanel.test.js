@@ -60,7 +60,7 @@ describe('InlineLinesPanel', () => {
 
   it('autosaves on field commit via onUpdateRow', () => {
     assert.match(src, /commitField/);
-    assert.match(src, /onUpdateRow\?\.\(row, col\.key, value/);
+    assert.match(src, /onUpdateRow\?\.\(row, col\.key, effectiveValue/);
   });
 
   it('emits a deduplicated success toast after each inline save', () => {
@@ -85,10 +85,18 @@ describe('InlineLinesPanel', () => {
     assert.match(src, /onChange=\{\(id, label\) => onCommit\(id, \{ identifier: label \|\| '' \}\)\}/);
   });
 
-  it('opens ProductSearchDrawer for lookup/popup fields instead of the dropdown', () => {
-    assert.match(src, /import ProductSearchDrawer from '\.\/ProductSearchDrawer\.jsx'/);
+  it('opens a lookup drawer for lookup/popup fields instead of the dropdown', () => {
+    // The hard-wired ProductSearchDrawer import was replaced by the registry.
+    assert.doesNotMatch(src, /import ProductSearchDrawer from '\.\/ProductSearchDrawer\.jsx'/);
+    assert.match(src, /import \{ resolveLookupDrawer \} from '\.\/lookupDrawers\.js'/);
     assert.match(src, /function LookupTrigger\(/);
     assert.match(src, /if \(col\.lookup \|\| col\.popup\) \{/);
+    // LookupTrigger resolves the per-window drawer via the registry by field.lookupDrawer
+    // and renders it generically as <Drawer ... />.
+    assert.match(src, /const Drawer = resolveLookupDrawer\(field\.lookupDrawer\)/);
+    assert.match(src, /<Drawer\b/);
+    // The drawer receives a localized title (lookupTitle → label → '').
+    assert.match(src, /title=\{field\.lookupTitle \|\| field\.label \|\| ''\}/);
     // The drawer's onSelect must commit id, identifier, AND the full item so the parent
     // can extract the auxiliary values (product_PSTD, product_PLIM, …) that the callout
     // needs to compute the price.

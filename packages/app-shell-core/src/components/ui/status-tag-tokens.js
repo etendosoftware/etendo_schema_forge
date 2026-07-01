@@ -4,6 +4,7 @@ export const TONE_STYLES = {
   warning:     { background: '#FFF9EB', color: '#8A6100' },
   destructive: { background: '#FEF0F4', color: '#D50B3E' },
   neutral:     { background: '#F5F7F9', color: '#3F3F50' },
+  info:        { background: '#F0FAFF', color: '#0075AD' },
 };
 
 export const BASE_STYLE = {

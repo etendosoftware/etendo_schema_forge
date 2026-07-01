@@ -12,20 +12,20 @@ describe('AddLineButton — hideChevron prop', () => {
     assert.match(src, /hideChevron = false/);
   });
 
-  it('wraps divider and dropdown in !hideChevron guard', () => {
-    assert.match(src, /!hideChevron/);
+  it('forces the no-menu layout when hideChevron is true', () => {
+    // hideChevron makes hasMenu false so only the primary button renders.
+    assert.match(src, /hasMenu = !hideChevron && actions\.length > 0/);
   });
 
-  it('rounds all corners when hideChevron is true', () => {
-    assert.match(src, /hideChevron[\s\S]*?borderRadius: 7/);
+  it('renders only the primary button in the no-menu branch', () => {
+    assert.match(src, /if \(!hasMenu\)[\s\S]*?primaryButton\(7\)/);
   });
 
   it('still renders primary button regardless of hideChevron', () => {
     assert.match(src, /primaryButton/);
   });
 
-  it('DIVIDER_STYLE is only rendered inside !hideChevron block', () => {
-    const noChevronBlock = src.match(/!hideChevron[\s\S]*?<\/>/)?.[0] ?? '';
-    assert.ok(noChevronBlock.includes('DIVIDER_STYLE'));
+  it('no longer renders a "no additional actions" placeholder', () => {
+    assert.doesNotMatch(src, /noAdditionalActions/);
   });
 });

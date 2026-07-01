@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity';
+import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
@@ -13,8 +15,11 @@ import { ImageField } from './ImageField.jsx';
 import ProductSearchDrawer from './ProductSearchDrawer.jsx';
 import { CreateContactContext } from './CreateContactContext.js';
 import { PartnerAddressPicker } from './PartnerAddressPicker.jsx';
+import { CurrencyRatePicker } from './CurrencyRatePicker.jsx';
 import { SelectorChip } from './SelectorChip.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
+import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
+import { InlineCreateSelector } from './InlineCreateSelector.jsx';
 
 function buildSelectPlaceholder(ui, label) {
   return `${ui('selectLabelPrefix')} ${label}...`;
@@ -44,6 +49,11 @@ function buildSearchPlaceholder(ui, label) {
   return `${ui('searchLabelPrefix')} ${label}...`;
 }
 
+/** Resolve an i18n key to its label (falling back to the key), or undefined when absent. */
+function resolveUiKey(ui, key) {
+  return key ? (ui(key) ?? key) : undefined;
+}
+
 /**
  * Resolve the grid utility classes for an EntityForm container.
  * Extracted from a nested ternary to satisfy Sonar S3358 — the three branches
@@ -52,7 +62,7 @@ function buildSearchPlaceholder(ui, label) {
  */
 function resolveGridClass(cols, layout) {
   if (cols) return 'grid';
-  if (layout === 'horizontal') return 'grid grid-cols-2 gap-x-5 gap-y-5 md:grid-cols-4';
+  if (layout === 'horizontal') return `grid grid-cols-2 gap-x-5 ${ROW_GAP_Y} md:grid-cols-4`;
   return 'grid grid-cols-2 gap-3 md:grid-cols-3';
 }
 
@@ -69,9 +79,11 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         type="button"
         onClick={() => setOpen(true)}
         data-testid={`field-${field.key}`}
-        className="w-full h-10 text-sm rounded-lg border border-[#D1D4DB] bg-background p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[#D1D4DB] bg-white p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
-        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+        <Search
+          className="h-4 w-4 text-muted-foreground shrink-0"
+          data-testid={"Search__" + field.id} />
         {displayText ? (
           <span className="truncate text-foreground">{displayText}</span>
         ) : (
@@ -86,7 +98,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         selectorContext={selectorContext}
         token={token}
         title={label}
-      />
+        data-testid={"ProductSearchDrawer__" + field.id} />
     </>
   );
 }
@@ -213,7 +225,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
   const hasSelection = value != null && value !== '';
   // Chip mode: a selected value renders as the Figma tag/chip; clicking the chip
   // body flips editingIntent so the user can type to search again.
-  const showChip = hasSelection && !editingIntent;
+  const showChip = hasSelection && !editingIntent && field.clearable !== false;
   const handleChipClick = () => {
     setEditingIntent(true);
     requestAnimationFrame(() => {
@@ -242,7 +254,11 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
       and transparent so DevTools highlights this same wrapper as the field box
       — matching the SelectorInput inspector experience.
     */
-    <div className="relative flex h-10 w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary">
+    <div
+      data-testid={`field-${field.key}-wrapper`}
+      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary`}
+      onClick={showChip ? handleChipClick : undefined}
+    >
       {showChip ? (
         <SelectorChip
           label={displayValue || query}
@@ -250,7 +266,8 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
           onClear={handleClear}
           clearAriaLabel={ui('clear')}
           testId={`field-${field.key}-chip`}
-        />
+          clearable={field.clearable !== false}
+          data-testid={"SelectorChip__" + field.id} />
       ) : (
         <input
           ref={inputRef}
@@ -294,9 +311,29 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
         />
       )}
       {fetching ? (
-        <Loader2 className="h-4 w-4 text-[#828FA3] animate-spin shrink-0 ml-auto" />
+        <Loader2
+          className="h-4 w-4 text-[#828FA3] animate-spin shrink-0 ml-auto"
+          data-testid={"Loader2__" + field.id} />
       ) : (
-        <ChevronDown className="h-4 w-4 text-[#828FA3] pointer-events-none shrink-0 ml-auto" />
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (showChip) { handleChipClick(); return; }
+            if (open) {
+              setOpen(false);
+            } else {
+              setOpen(true);
+              inputRef.current?.focus();
+              if (!catalogOptions && !serverResults) triggerServerSearch(query);
+            }
+          }}
+          className="shrink-0 ml-auto flex items-center"
+        >
+          <ChevronDown
+            className="h-4 w-4 text-[#828FA3]"
+            data-testid={"ChevronDown__" + field.id} />
+        </button>
       )}
       {open && (canCreate || filtered.length > 0) && (
         <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
@@ -373,9 +410,10 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
           // the new options list, auto-select the first available option (FIC parity —
           // the user explicitly chose the parent, so filling the dependent is helpful).
           // If no options exist and the field had a stale value, clear it.
+          const noAutoSelect = field.dependsOn?.noAutoSelect;
           const currentValid = value && items.some(i => i.id === value);
           if (!currentValid) {
-            if (items.length > 0) {
+            if (!noAutoSelect && items.length > 0) {
               onChange(items[0].id, items[0].name);
             } else if (value) {
               onChange('', '');
@@ -415,15 +453,17 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
       }}
       required={field.required}
       disabled={(!parentValue && !value) || loading}
-    >
+      data-testid={"Select__" + field.id}>
       <SelectTrigger id={field.key} data-testid={`field-${field.key}`} className="focus:ring-2 focus:ring-primary">
         <SelectValue
           placeholder={loading ? ui('loading') : (parentValue ? buildSelectPlaceholder(ui, resolvedLabel) : ui('selectParentFirst'))}
-        />
-        {loading && <Loader2 className="h-4 w-4 text-muted-foreground animate-spin ml-auto mr-1" />}
+          data-testid={"SelectValue__" + field.id} />
+        {loading && <Loader2
+          className="h-4 w-4 text-muted-foreground animate-spin ml-auto mr-1"
+          data-testid={"Loader2__" + field.id} />}
       </SelectTrigger>
-      <SelectContent>
-        {!field.required && <SelectItem value="__empty__">&nbsp;</SelectItem>}
+      <SelectContent data-testid={"SelectContent__" + field.id}>
+        {!field.required && <SelectItem value="__empty__" data-testid={"SelectItem__" + field.id}>&nbsp;</SelectItem>}
         {options.map(opt => (
           <SelectItem key={opt.id} value={opt.id} data-testid={`option-${field.key}-${opt.id}`}>{opt.name}</SelectItem>
         ))}
@@ -445,9 +485,11 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className="w-full flex items-center gap-2 h-10 rounded-lg border border-[#D1D4DB] bg-background p-2 text-sm text-left shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
+        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[#D1D4DB] bg-white p-2 text-sm text-left shadow-[0px_1px_2px_rgba(18,18,23,0.05)] hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors`}
       >
-        <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+        <Search
+          className="h-4 w-4 text-muted-foreground shrink-0"
+          data-testid={"Search__" + field.id} />
         {display ? (
           <span className="flex-1 truncate text-foreground">{display}</span>
         ) : (
@@ -465,7 +507,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         selectorContext={selectorContext}
         token={token}
         title={resolvedLabel}
-      />
+        data-testid={"ProductSearchDrawer__" + field.id} />
     </>
   );
 }
@@ -494,7 +536,9 @@ function applyLookupAuxData(auxData, isGross, onChange, f) {
   }
 }
 
-function renderSelectField(f, data, label, isReadOnly, onChange, ui, tMenu) {
+function renderSelectField(f, data, label, isReadOnly, onChange, ctx) {
+  const { ui, tMenu, optionalSuffix = false, locale = 'es_ES' } = ctx;
+  const optionLabel = (opt) => opt.labels?.[locale] ?? tMenu(opt.label);
   let selectValue;
   if (f.valueType === 'boolean') {
     if (data?.[f.key] === true || data?.[f.key] === 'Y' || data?.[f.key] === 'true') {
@@ -509,43 +553,72 @@ function renderSelectField(f, data, label, isReadOnly, onChange, ui, tMenu) {
   } else {
     selectValue = data?.[f.key] ?? '';
   }
-  return (
+
+  if (isReadOnly) {
+    const matchedOption = f.options?.find(o => String(o.value) === String(selectValue));
+    const displayLabel = matchedOption ? tMenu(matchedOption.label) : selectValue;
+    return (
       <div key={f.key} className="space-y-1.5">
-        <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
-          {label}{f.required && !isReadOnly ? <span className="text-red-500 ml-0.5">*</span> : ''}
+        <Label htmlFor={f.key} className="text-sm text-foreground font-medium" data-testid="Label__a8d626">
+          {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
         </Label>
-        <Select
-            value={selectValue || '__empty__'}
-            onValueChange={(val) => {
-              if (val === '__empty__') {
-                onChange?.(f.key, '', f.column);
-                return;
-              }
-              onChange?.(f.key, f.valueType === 'boolean' ? val === 'true' : val, f.column);
-            }}
-            disabled={isReadOnly}
-            required={f.required}
-        >
-          <SelectTrigger id={f.key} data-testid={`field-${f.key}`} className="focus:ring-2 focus:ring-primary">
-            <SelectValue placeholder={buildSelectPlaceholder(ui, label)}/>
-          </SelectTrigger>
-          <SelectContent>
-            {!f.required && <SelectItem value="__empty__">&nbsp;</SelectItem>}
-            {f.options.map(opt => (
-                <SelectItem key={opt.value} value={opt.value}>{tMenu(opt.label)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Input
+          id={f.key}
+          data-testid={`field-${f.key}`}
+          value={displayLabel}
+          readOnly
+          disabled
+          className="bg-muted/50 cursor-default"
+        />
       </div>
+    );
+  }
+
+  return (
+    <div key={f.key} className={LABEL_GAP}>
+      <Label
+        htmlFor={f.key}
+        className="text-sm text-foreground font-medium"
+        data-testid="Label__a8d626">
+        {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
+      </Label>
+      <Select
+        value={selectValue || '__empty__'}
+        onValueChange={(val) => {
+          if (val === '__empty__') {
+            onChange?.(f.key, '', f.column);
+            return;
+          }
+          onChange?.(f.key, f.valueType === 'boolean' ? val === 'true' : val, f.column);
+        }}
+        disabled={isReadOnly}
+        required={f.required}
+        data-testid="Select__a8d626">
+        <SelectTrigger id={f.key} data-testid={`field-${f.key}`} className="bg-white focus:ring-2 focus:ring-primary">
+          <SelectValue
+            placeholder={buildSelectPlaceholder(ui, label)}
+            data-testid="SelectValue__a8d626" />
+        </SelectTrigger>
+        <SelectContent data-testid="SelectContent__a8d626">
+          {!f.required && <SelectItem value="__empty__" data-testid="SelectItem__a8d626">&nbsp;</SelectItem>}
+          {f.options.map(opt => (
+              <SelectItem key={opt.value} value={opt.value} data-testid="SelectItem__a8d626">{optionLabel(opt)}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
 function PopupSearchField(props) {
-  return <div className="space-y-1.5">
-    <Label className="text-sm text-foreground font-medium">
-      {props.label}{props.f.required ? <span className="text-red-500 ml-0.5">*</span> : ""}
-    </Label>
-    <PopupSearchInput
+  return (
+    <div className={LABEL_GAP}>
+      <Label
+        className="text-sm text-foreground font-medium"
+        data-testid="Label__a8d626">
+        {props.label}{props.f.required ? <span className="text-red-500 ml-0.5">*</span> : ""}
+      </Label>
+      <PopupSearchInput
         field={props.f}
         value={props.data?.[props.f.key] ?? ""}
         displayValue={props.data?.[props.f.key + "$_identifier"]}
@@ -554,8 +627,9 @@ function PopupSearchField(props) {
         selectorUrl={props.selectorUrl}
         selectorContext={props.selectorContext}
         token={props.token}
-    />
-  </div>;
+        data-testid="PopupSearchInput__a8d626" />
+    </div>
+  );
 }
 
 function getCheckboxStateClass(checked) {
@@ -566,6 +640,32 @@ function getCheckboxStateClass(checked) {
 
 function requiredAsterisk(f) {
   return f.required ? <span className="text-red-500 ml-0.5">*</span> : '';
+}
+
+/**
+ * Trailing marker rendered after a field label.
+ * Required fields get a red asterisk; otherwise, when `optionalSuffix` is enabled
+ * for the form (Figma list-modal style), a muted "(opcional)" suffix is shown.
+ * Generic + opt-in: forms that don't pass `optionalSuffix` keep the old behaviour
+ * (asterisk only). The suffix text comes from the i18n `optional` key.
+ */
+function labelMarker(f, isReadOnly, optionalSuffix, ui) {
+  if (f.required && !isReadOnly) return <span className="text-[#F53D6B] ml-0.5">*</span>;
+  if (optionalSuffix && !isReadOnly) {
+    return <span className="ml-1 font-normal text-[#6C6C89]">({ui('optional')})</span>;
+  }
+  return '';
+}
+
+/**
+ * Helper text rendered below a field input (e.g. "Menor número = mayor prioridad").
+ * `f.help` is an i18n key resolved via useUI; raw strings are passed through so the
+ * component stays usable with literal copy too.
+ */
+function FieldHelp({ field, ui }) {
+  if (!field?.help) return null;
+  const text = ui(field.help) ?? field.help;
+  return <p className="text-sm leading-6 text-[#6C6C89]" data-testid={`help-${field.key}`}>{text}</p>;
 }
 
 function formatReadOnlyDisplayValue(f, isReadOnly, rawDisplayValue) {
@@ -590,16 +690,20 @@ function requiredAsteriskIfEditable(f, isReadOnly) {
 }
 
 function getInputStateClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50' : 'focus:ring-2 focus:ring-primary focus:outline-none';
+  return isReadOnly ? 'bg-muted/50' : 'bg-white focus:ring-2 focus:ring-primary focus:outline-none';
 }
 
 function DependentFkField(props) {
-  return <div className="space-y-1.5">
-    <Label htmlFor={props.f.key} className="text-sm text-foreground font-medium">
-      {props.label}{requiredAsterisk(props.f)}
-    </Label>
-    {props.f.column === "C_BPartner_Location_ID" ? (
-        <PartnerAddressPicker
+  return (
+    <div className={LABEL_GAP}>
+      <Label
+        htmlFor={props.f.key}
+        className="text-sm text-foreground font-medium"
+        data-testid="Label__a8d626">
+        {props.label}{requiredAsterisk(props.f)}
+      </Label>
+      {props.f.column === "C_BPartner_Location_ID" ? (
+          <PartnerAddressPicker
             field={props.f}
             value={props.data?.[props.f.key] ?? ""}
             displayValue={props.data?.[props.f.key + "$_identifier"]}
@@ -610,9 +714,9 @@ function DependentFkField(props) {
             selectorContext={props.selectorContext}
             token={props.token}
             apiBaseUrl={props.apiBaseUrl}
-        />
-    ) : (
-        <DependentSelect
+            data-testid="PartnerAddressPicker__a8d626" />
+      ) : (
+          <DependentSelect
             field={props.f}
             value={props.data?.[props.f.key] ?? ""}
             displayValue={props.data?.[props.f.key + "$_identifier"]}
@@ -623,13 +727,38 @@ function DependentFkField(props) {
             selectorUrl={props.selectorUrl}
             selectorContext={props.selectorContext}
             token={props.token}
-        />
-    )}
-  </div>;
+            data-testid="DependentSelect__a8d626" />
+      )}
+    </div>
+  );
 }
 
 function buildDependentSelectorUrl(apiBaseUrl, entity, f) {
   return apiBaseUrl ? `${apiBaseUrl}/${entity}/selectors/${f.column}` : null;
+}
+
+// Selector URL for a pure-dropdown FK field. Always computed from apiBaseUrl so the
+// full server path is included; appends query params from the api.selectors entry
+// (e.g. ?isSOTrx=Y) when present.
+function buildEntitySelectorUrl(apiBaseUrl, entity, f, api) {
+  if (!apiBaseUrl) return null;
+  const entry = api?.selectors?.find(s => s.entity === entity && s.field === f.key);
+  const base = `${apiBaseUrl}/${entity}/selectors/${f.column}`;
+  return entry?.url?.includes('?') ? `${base}?${entry.url.split('?')[1]}` : base;
+}
+
+// Propagate a selector's aux payload onto sibling form fields. `_aux` nests an
+// object of extra suffix→value pairs; any other key is a direct suffix write.
+function applySelectorAuxData(auxData, onChange, f) {
+  for (const [suffix, auxVal] of Object.entries(auxData)) {
+    if (suffix === '_aux' && auxVal && typeof auxVal === 'object') {
+      for (const [auxSuffix, auxSuffixVal] of Object.entries(auxVal)) {
+        onChange?.(f.key + auxSuffix, auxSuffixVal);
+      }
+    } else {
+      onChange?.(f.key + suffix, auxVal);
+    }
+  }
 }
 
 function isSelectFieldWithOptions(f) {
@@ -640,13 +769,110 @@ function getInputType(f) {
   return f.type === 'number' ? 'number' : 'text';
 }
 
+function isCurrencyRateSelectorField(entity, apiBaseUrl, f) {
+  return f.column === 'C_Currency_ID'
+    && (entity === 'header' || entity === 'quotation')
+    && /\/(sales-order|purchase-order|sales-quotation)(\/|$)/.test(apiBaseUrl || '');
+}
+
 
 function getFieldValue(isReadOnly, displayValue, data, f) {
   return isReadOnly ? displayValue : (data?.[f.key] ?? '');
 }
 
 function getReadOnlyBgClass(isReadOnly) {
-  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-background';
+  return isReadOnly ? 'bg-muted/50 cursor-default' : 'bg-white';
+}
+
+/**
+ * Commit-on-blur text/number input (opt-in via `field.calloutOn === 'blur'`).
+ *
+ * Unlike the default input — which is fully controlled by `data` and commits every
+ * keystroke to the parent form state — this variant keeps a LOCAL draft buffer while
+ * the field is focused and commits to the parent `onChange` ONLY on blur. The single
+ * blur commit both updates the form state (`hook.editing`) AND fires the column callout
+ * through the normal `onChange` path, so EVERYTHING that reads `editing` live (e.g. the
+ * Assets "Depreciation Summary" sidebar mirroring `assetValue`) stays stable until the
+ * user leaves the field — one mechanism for both the callout deferral and the mirror
+ * deferral.
+ *
+ * Controlled-input sync rules (classic "controlled input with local draft"):
+ *  - Initialize the buffer from `committedValue`.
+ *  - While UNFOCUSED, follow `committedValue` (callout results, record load/switch,
+ *    defaults applied externally) so the displayed value stays correct.
+ *  - While FOCUSED, hold the buffer untouched so external churn never clobbers the
+ *    user's in-progress typing.
+ *  - On blur, commit the buffer to the parent in a single `onChange(key, value, column)`.
+ *
+ * `committedValue` is the same `data?.[f.key] ?? ''` the default path reads, so the
+ * value semantics are identical — only the commit TIMING differs.
+ */
+function DeferredInput({ f, committedValue, onCommit, onFieldBlur, placeholder, className, required, disabled }) {
+  const [buffer, setBuffer] = useState(committedValue);
+  const focusedRef = useRef(false);
+  // The last value the USER actually committed (or that arrived externally while the field
+  // was idle). The on-blur "did it change?" gate compares against THIS, not committedValue
+  // (= hook.editing). committedValue is mutated by callout collateral writes behind the
+  // user's back — e.g. editing AssetValue makes the callout write DepreciationAmt and a 0
+  // Residual into editing; if we gated on committedValue, clearing AssetValue (→ '0') when a
+  // collateral 0 already sits in editing would compare 0 === 0 and SKIP the commit, so the
+  // Residual recompute never fires. Tracking the user's own last value fixes that. ETP-4333.
+  const lastUserValueRef = useRef(committedValue);
+
+  // While the field is not focused, follow the committed value so external updates
+  // (callout results, record switch, defaults) are reflected. While focused, the
+  // user's draft wins and we ignore committed-value changes to avoid clobbering input.
+  // Idle external changes also become the new "last value" baseline so they are not
+  // mistaken for a user edit on the next blur.
+  useEffect(() => {
+    if (!focusedRef.current) {
+      setBuffer(committedValue);
+      lastUserValueRef.current = committedValue;
+    }
+  }, [committedValue]);
+
+  const isNumber = getInputType(f) === 'number';
+  const sameAsLast = (v) => {
+    const prev = lastUserValueRef.current;
+    return isNumber ? Number(v) === Number(prev ?? '') : String(v) === String(prev ?? '');
+  };
+
+  return (
+    <Input
+      id={f.key}
+      name={f.key}
+      data-testid={`field-${f.key}`}
+      type={getInputType(f)}
+      value={buffer ?? ''}
+      onFocus={() => { focusedRef.current = true; }}
+      onChange={(e) => setBuffer(e.target.value)}
+      onBlur={(e) => {
+        focusedRef.current = false;
+        // For NUMBER fields, coerce a cleared/blank value to '0' on commit. Otherwise the
+        // empty string short-circuits the generic fireCallout guard (`if (!value) return`)
+        // in DetailView, so clearing the field would leave dependent amounts (e.g. the
+        // Assets Residual) stale. Committing '0' fires the callout with 0 and leaves the
+        // input showing 0. Text fields keep their raw value (no coercion). ETP-4333.
+        const raw = e.target.value;
+        const v = (isNumber && raw.trim() === '') ? '0' : raw;
+        // Re-sync the displayed buffer to the (possibly coerced) committed value.
+        setBuffer(v);
+        // Only COMMIT (fires the callout via onChange) when the value differs from the
+        // value the USER last committed — so a no-op blur (focus then leave untouched)
+        // does nothing, while a genuine edit (including clearing back to 0 after a
+        // collateral write) always fires. Record the new user value either way so the
+        // next blur compares against the correct baseline. ETP-4333.
+        const changed = !sameAsLast(v);
+        lastUserValueRef.current = v;
+        if (changed) onCommit?.(f.key, v, f.column);
+        onFieldBlur?.(f.key);
+      }}
+      placeholder={placeholder}
+      className={className}
+      required={required}
+      disabled={disabled}
+    />
+  );
 }
 
 /**
@@ -660,7 +886,7 @@ function getReadOnlyBgClass(isReadOnly) {
  *  - catalogs: Record<string, Array<{ id, name, ... }>> for FK reference data
  *  - displayLogic: { readOnly: { fieldName: bool }, visibility: { fieldName: bool } }
  */
-export function EntityForm({ entity, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors }) {
+export function EntityForm({ entity, fields = [], data, onChange, catalogs, layout, cols, section, excludeFields = [], displayLogic, api, token, apiBaseUrl, selectorContext = {}, readOnly: formReadOnly = false, onFieldBlur, savingField = null, labelOverrides, registerFields, fieldErrors, optionalSuffix = false }) {
   const t = useLabel(labelOverrides ?? api?.labelOverrides);
   const tMenu = useMenuLabel();
   const ui = useUI();
@@ -717,13 +943,441 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
   const gridClass = resolveGridClass(cols, layout);
   const gridStyle = cols ? { gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 16 } : undefined;
 
-  // If there's an image field, pin it to the right — rest of fields render in a 3-col grid on the left
-  const imageField = displayFields.find(f => f.type === 'image');
-  const fieldsToRender = imageField ? displayFields.filter(f => f.type !== 'image') : displayFields;
+  // If there's an image field (not inline), pin it to the right — rest of fields render in a 3-col grid on the left
+  const imageField = displayFields.find(f => f.type === 'image' && !f.inline);
+  const fieldsToRender = imageField ? displayFields.filter(f => f.type !== 'image' || f.inline) : displayFields;
+
+  // FK-style field renderers hoisted out of renderField to keep its cognitive
+  // complexity low. They close over the EntityForm scope; per-field values
+  // (f, label, isReadOnly) are passed in.
+  const renderReadOnlyFk = (f, label) => (
+    <div key={f.key} data-testid={`field-${f.key}`} className={LABEL_GAP}>
+      <Label
+        htmlFor={f.key}
+        className="text-sm text-foreground font-medium"
+        data-testid="Label__a8d626">
+        {label}
+      </Label>
+      <Input
+        id={f.key}
+        name={f.key}
+        value={resolveIdentifier(data, f.key) || data?.[f.key] || ''}
+        disabled
+        data-testid="Input__a8d626" />
+    </div>
+  );
+
+  // Opt-in (decisions: `searchSelect: true`): the searchable combobox instead of the
+  // plain pick-only dropdown. When the field also declares `allowCreate` + create target,
+  // render the create-capable variant whose "+ create" action opens a name-only modal
+  // (e.g. match-rule transaction type → ETGO_Transaction_Type). Only reached for editable
+  // fields (renderSelectorField returns early when read-only).
+  const renderSearchSelectField = (f, label, selectorOnChange, selectorUrl) => {
+    const commonProps = {
+      field: f,
+      value: data?.[f.key] ?? '',
+      displayValue: resolveIdentifier(data, f.key),
+      onChange: selectorOnChange,
+      formData: data,
+      resolvedLabel: label,
+      selectorUrl,
+      selectorContext: effectiveSelectorContext,
+      token,
+      emptyOptionLabel: resolveUiKey(ui, f.emptyOptionLabelKey),
+    };
+    const canCreate = !!(f.allowCreate && f.createSpec && f.createEntity && apiBaseUrl);
+    const createTitle = f.createTitleKey
+      ? resolveUiKey(ui, f.createTitleKey)
+      : (resolveUiKey(ui, f.createLabelKey) ?? '');
+    return (
+      <div key={f.key} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}{labelMarker(f, false, optionalSuffix, ui)}
+        </Label>
+        {canCreate ? (
+          <InlineCreateSelector
+            {...commonProps}
+            apiBaseUrl={apiBaseUrl}
+            createSpec={f.createSpec}
+            createEntity={f.createEntity}
+            createLabel={resolveUiKey(ui, f.createLabelKey)}
+            createTitle={createTitle}
+            namePlaceholder={resolveUiKey(ui, f.createNamePlaceholderKey)}
+            data-testid="InlineCreateSelector__a8d626" />
+        ) : (
+          <CreatableSearchSelect {...commonProps} data-testid="CreatableSearchSelect__a8d626" />
+        )}
+      </div>
+    );
+  };
+
+  const renderSelectorField = (f, label, isReadOnly) => {
+    if (isReadOnly) return renderReadOnlyFk(f, label);
+    const selectorOnChange = (val, lbl, auxData) => {
+      onChange?.(f.key, val, f.column);
+      if (lbl) onChange?.(f.key + '$_identifier', lbl);
+      else if (!val) onChange?.(f.key + '$_identifier', '');
+      if (auxData) applySelectorAuxData(auxData, onChange, f);
+    };
+    const selectorUrl = buildEntitySelectorUrl(apiBaseUrl, entity, f, api);
+    if (f.searchSelect) {
+      return renderSearchSelectField(f, label, selectorOnChange, selectorUrl);
+    }
+    const optionTranslator = f.reference === 'DocumentType'
+      ? (name) => {
+          const lower = name.toLowerCase();
+          if (lower.includes('reversed')) return null;
+          if (lower.includes('credit') || lower.includes('memo')) return ui('creditNotesTab');
+          if (lower.includes('return') || lower.includes('devoluci')) return ui('returnsTab');
+          return ui('invoicesTab');
+        }
+      : undefined;
+    return (
+      <div key={f.key} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
+        </Label>
+        <SelectorInput
+          entityName={entity}
+          field={f}
+          value={data?.[f.key] ?? ''}
+          displayValue={resolveIdentifier(data, f.key)}
+          onChange={selectorOnChange}
+          catalogs={catalogs}
+          resolvedLabel={label}
+          selectorUrl={selectorUrl}
+          selectorContext={effectiveSelectorContext}
+          token={token}
+          optionTranslator={optionTranslator}
+          data-testid="SelectorInput__a8d626" />
+      </div>
+    );
+  };
+
+  const renderSearchField = (f, label, isReadOnly) => {
+    if (isReadOnly) return renderReadOnlyFk(f, label);
+    const apiSelectorEntry = api?.selectors?.find(s => s.entity === entity && s.field === f.key);
+    const selectorUrl = buildSearchSelectorUrl(apiBaseUrl, entity, f, apiSelectorEntry);
+    const searchOnChange = (val, lbl, auxData) => {
+      onChange?.(f.key, val, f.column);
+      if (lbl) onChange?.(f.key + '$_identifier', lbl);
+      else if (!val) onChange?.(f.key + '$_identifier', '');
+      if (auxData) {
+        const isGross = auxData.isTaxIncluded !== false;
+        applyLookupAuxData(auxData, isGross, onChange, f);
+      }
+    };
+    if (f.popup) {
+      return (
+        <PopupSearchField
+          key={f.key}
+          label={label}
+          f={f}
+          data={data}
+          onChange={(val, lbl) => {
+            onChange?.(f.key, val, f.column);
+            if (lbl) onChange?.(f.key + '$_identifier', lbl);
+          }}
+          selectorUrl={selectorUrl}
+          selectorContext={effectiveSelectorContext}
+          token={token}
+          data-testid="PopupSearchField__a8d626" />
+      );
+    }
+    if (f.lookup) {
+      return (
+        <div key={f.key} className={LABEL_GAP}>
+          <Label
+            htmlFor={f.key}
+            className="text-sm text-foreground font-medium"
+            data-testid="Label__a8d626">
+            {label}{requiredAsterisk(f)}
+          </Label>
+          <LookupFormField
+            field={f}
+            value={data?.[f.key] ?? ''}
+            displayValue={data?.[f.key + '$_identifier']}
+            selectorUrl={selectorUrl}
+            selectorContext={effectiveSelectorContext}
+            token={token}
+            resolvedLabel={label}
+            onChange={searchOnChange}
+            data-testid="LookupFormField__a8d626" />
+        </div>
+      );
+    }
+    return (
+      <div key={f.key} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}{requiredAsterisk(f)}
+        </Label>
+        <SearchInput
+          entityName={entity}
+          field={f}
+          value={data?.[f.key] ?? ''}
+          displayValue={data?.[f.key + '$_identifier']}
+          onChange={searchOnChange}
+          catalogs={catalogs}
+          resolvedLabel={label}
+          selectorUrl={selectorUrl}
+          selectorContext={effectiveSelectorContext}
+          token={token}
+          data-testid="SearchInput__a8d626" />
+      </div>
+    );
+  };
+
+  // Enum/list field (`type: 'select'` with options) opted into the searchable combobox:
+  // local-filtered static options, no API call. Read-only renders a plain disabled input.
+  const renderStaticCreatableSelect = (f, label, isReadOnly) => {
+    const selOpt = f.options.find(o => o.value === (data?.[f.key] ?? ''));
+    if (isReadOnly) {
+      return (
+        <div key={f.key} data-testid={`field-${f.key}`} className={LABEL_GAP}>
+          <Label
+            htmlFor={f.key}
+            className="text-sm text-foreground font-medium"
+            data-testid="Label__a8d626">{label}</Label>
+          <Input
+            id={f.key}
+            name={f.key}
+            value={selOpt ? tMenu(selOpt.label) : ''}
+            disabled
+            data-testid="Input__a8d626" />
+        </div>
+      );
+    }
+    const staticOpts = f.options.map(o => ({ id: o.value, name: tMenu(o.label) }));
+    return (
+      <div key={f.key} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
+        </Label>
+        <CreatableSearchSelect
+          field={f}
+          value={data?.[f.key] ?? ''}
+          displayValue={selOpt ? tMenu(selOpt.label) : ''}
+          onChange={(id) => onChange?.(f.key, id, f.column)}
+          resolvedLabel={label}
+          staticOptions={staticOpts}
+          data-testid="CreatableSearchSelect__a8d626" />
+      </div>
+    );
+  };
+
+  // Date field (DateField wrapper).
+  const renderDateField = (f, label, isReadOnly) => (
+    <div key={f.key} className={LABEL_GAP}>
+      <Label
+        htmlFor={f.key}
+        className="text-sm text-foreground font-medium"
+        data-testid="Label__a8d626">
+        {label}{requiredAsteriskIfEditable(f, isReadOnly)}
+      </Label>
+      <DateField
+        id={f.key}
+        name={f.key}
+        data-testid={`field-${f.key}`}
+        value={data?.[f.key] ?? ''}
+        onChange={(iso) => onChange?.(f.key, iso, f.column)}
+        onBlur={() => onFieldBlur?.(f.key)}
+        disabled={isReadOnly || savingField === f.key}
+        required={f.required && !isReadOnly}
+      />
+    </div>
+  );
+
+  // Default single-line text/number input (the fall-through renderer).
+  // Opt-in `calloutOn: 'blur'` switches to a commit-on-blur input (DeferredInput): while
+  // typing, only a LOCAL buffer updates — the parent form state (`hook.editing`) and the
+  // column callout are NOT touched. On blur, a single onChange commits the value, which
+  // both updates `editing` (so anything mirroring it, e.g. the Assets sidebar, defers too)
+  // AND fires the callout in one shot. Fields without the flag keep the default fully
+  // controlled path: every keystroke commits and fires the callout immediately.
+  const renderInputField = (f, label, isReadOnly, displayValue) => {
+    const calloutOnBlur = f.calloutOn === 'blur';
+    return (
+      <div key={f.key} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
+        </Label>
+        {calloutOnBlur && !isReadOnly ? (
+          <DeferredInput
+            f={f}
+            committedValue={data?.[f.key] ?? ''}
+            onCommit={onChange}
+            onFieldBlur={onFieldBlur}
+            placeholder={resolveUiKey(ui, f.placeholderKey)}
+            className={getInputStateClass(isReadOnly)}
+            required={f.required && !isReadOnly}
+            disabled={isReadOnly || savingField === f.key}
+            data-testid="DeferredInput__a8d626" />
+        ) : (
+          <Input
+            id={f.key}
+            name={f.key}
+            data-testid={`field-${f.key}`}
+            type={getInputType(f)}
+            value={getFieldValue(isReadOnly, displayValue, data, f)}
+            onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
+            onBlur={() => onFieldBlur?.(f.key)}
+            placeholder={!isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined}
+            className={getInputStateClass(isReadOnly)}
+            required={f.required && !isReadOnly}
+            disabled={isReadOnly || savingField === f.key}
+          />
+        )}
+      </div>
+    );
+  };
+
+  // Multi-line text field. `rows` controls height; absent rows gets a min-height.
+  const renderTextareaField = (f, label, isReadOnly, displayValue) => {
+    const rowCount = f.rows ?? 4;
+    const minHeightClass = f.rows ? '' : ' min-h-[96px]';
+    const placeholder = !isReadOnly ? resolveUiKey(ui, f.placeholderKey) : undefined;
+    return (
+      <div key={f.key} className={LABEL_GAP}>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium"
+          data-testid="Label__a8d626">
+          {label}{requiredAsteriskIfEditable(f, isReadOnly)}
+        </Label>
+        <textarea
+          id={f.key}
+          name={f.key}
+          data-testid={`field-${f.key}`}
+          rows={rowCount}
+          value={getFieldValue(isReadOnly, displayValue, data, f)}
+          onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
+          onBlur={() => onFieldBlur?.(f.key)}
+          placeholder={placeholder}
+          disabled={isReadOnly}
+          className={[
+            'flex w-full rounded-lg border border-[#D1D4DB] p-2 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
+            `placeholder:text-muted-foreground resize-none${minHeightClass}`,
+            'focus:outline-none focus:ring-2 focus:ring-primary',
+            'disabled:bg-muted/50 disabled:cursor-not-allowed',
+            getReadOnlyBgClass(isReadOnly),
+          ].join(' ')}
+        />
+      </div>
+    );
+  };
+
+  // Dependent FK selector: options filtered by a parent field's value.
+  const renderDependentField = (f, label, isReadOnly) => {
+    if (isReadOnly) return renderReadOnlyFk(f, label);
+    const fieldSelectorUrl = buildDependentSelectorUrl(apiBaseUrl, entity, f);
+    const fieldOnChange = (val, lbl) => {
+      onChange?.(f.key, val, f.column);
+      if (lbl) onChange?.(f.key + '$_identifier', lbl);
+      else if (!val) onChange?.(f.key + '$_identifier', '');
+    };
+    return (
+      <DependentFkField
+        key={f.key}
+        f={f}
+        label={label}
+        data={data}
+        onChange={fieldOnChange}
+        selectorUrl={fieldSelectorUrl}
+        selectorContext={effectiveSelectorContext}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        catalogs={catalogs}
+        data-testid="DependentFkField__a8d626" />
+    );
+  };
+
+  // YESNO checkbox. Values arrive as boolean true, 'Y' or 'true' (checked), or
+  // false/'N'/'false'/null/undefined (unchecked) — plain `!!value` is wrong (`!!'N'` is true).
+  const renderCheckboxField = (f, label, isReadOnly) => {
+    const checked = data?.[f.key] === true || data?.[f.key] === 'Y' || data?.[f.key] === 'true';
+    return (
+      <div key={f.key} className="flex items-center gap-2 pt-6">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={checked}
+          disabled={isReadOnly}
+          id={f.key}
+          data-testid={`field-${f.key}`}
+          onClick={() => !isReadOnly && onChange?.(f.key, !checked, f.column)}
+          className={[
+            'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow',
+            'flex items-center justify-center',
+            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            'disabled:cursor-not-allowed disabled:opacity-50',
+            getCheckboxStateClass(checked),
+          ].join(' ')}
+        >
+          {checked && (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
+        </button>
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium cursor-pointer"
+          data-testid="Label__a8d626">
+          {label}
+        </Label>
+      </div>
+    );
+  };
+
+  // A boolean field flagged `toggle` (grid cellType 'toggle') renders as the shared PillToggle
+  // switch in its form position — same control as the grid, instead of a plain checkbox.
+  const renderToggleField = (f, label, isReadOnly) => {
+    const checked = data?.[f.key] === true || data?.[f.key] === 'Y' || data?.[f.key] === 'true';
+    return (
+      <div key={f.key} className="flex items-center gap-2 pt-6">
+        <PillToggle
+          checked={checked}
+          disabled={isReadOnly}
+          onCheckedChange={(next) => !isReadOnly && onChange?.(f.key, next, f.column)}
+          id={f.key}
+          data-testid={`field-${f.key}`} />
+        <Label
+          htmlFor={f.key}
+          className="text-sm text-foreground font-medium cursor-pointer"
+          data-testid="Label__a8d626">
+          {label}
+        </Label>
+      </div>
+    );
+  };
 
   const renderField = (f) => {
-    // Resolution order: per-window AD_Field label (most specific) → global locale by column → camelCase key
-    const label = t(f.column) ?? f.label ?? f.key;
+    // Resolution order: per-window labels dict (locale-pinned) → AD_Field label → camelCase key
+    const label = f.labels?.[locale] ?? f.labels?.en_US ?? t(f.column) ?? f.label ?? f.key;
     // Field is read-only if statically declared, dynamically set by evaluate-display, or readOnlyLogic evaluates to true
     const isReadOnly = formReadOnly
       || f.readOnly
@@ -733,282 +1387,142 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
     // Strip floating-point noise (e.g. 243.20999999999998 → 243.21) for read-only number fields.
     // toFixed(10) preserves up to 10 significant decimal places while eliminating IEEE 754 drift.
     const displayValue = formatReadOnlyDisplayValue(f, isReadOnly, rawDisplayValue);
-    // Shared read-only rendering for FK-style fields (dependent, selector, search).
-    const renderReadOnlyFk = () => (
-      <div key={f.key} data-testid={`field-${f.key}`} className="space-y-1.5">
-        <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
-          {label}
-        </Label>
-        <Input
-          id={f.key}
-          name={f.key}
-          value={resolveIdentifier(data, f.key) || data?.[f.key] || ''}
-          disabled
-        />
-      </div>
-    );
-    if (f.type === 'checkbox') {
-      // YESNO fields can arrive as boolean true, 'Y', 'true' (checked) or false/'N'/'false'/null/undefined (unchecked).
-      // Plain `!!value` is wrong because `!!'N'` === true.
-      const isCheckedYN = (v) => v === true || v === 'Y' || v === 'true';
-      const checked = isCheckedYN(data?.[f.key]);
+    // Custom field renderer: when a field declares `customRenderer` (a React component reference),
+    // delegate rendering entirely to that component. This is an escape hatch for fields that
+    // require specialized input UIs that cannot be expressed through the standard field types
+    // (e.g. a split prefix+suffix input for account codes).
+    // The component receives: value, onChange(newValue), record (full form data), readOnly.
+    if (f.customRenderer) {
+      const Renderer = f.customRenderer;
       return (
-        <div key={f.key} className="flex items-center gap-2 pt-6">
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={checked}
-            disabled={isReadOnly}
-            id={f.key}
-            data-testid={`field-${f.key}`}
-            onClick={() => !isReadOnly && onChange?.(f.key, !checked, f.column)}
-            className={[
-              'peer h-4 w-4 shrink-0 rounded-sm border border-primary shadow',
-              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-              'disabled:cursor-not-allowed disabled:opacity-50',
-              getCheckboxStateClass(checked),
-            ].join(' ')}
-          >
-            {checked && (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-          </button>
-          <Label htmlFor={f.key} className="text-sm text-foreground font-medium cursor-pointer">
-            {label}
+        <div key={f.key} className="space-y-1.5">
+          <Label
+            htmlFor={f.key}
+            className="text-sm text-foreground font-medium"
+            data-testid="Label__a8d626">
+            {label}{labelMarker(f, isReadOnly, optionalSuffix, ui)}
           </Label>
+          <Renderer
+            value={data?.[f.key] ?? ''}
+            onChange={(v) => onChange?.(f.key, v, f.column)}
+            record={data}
+            readOnly={isReadOnly}
+            data-testid="Renderer__a8d626" />
         </div>
       );
+    }
+    if (f.type === 'checkbox' && f.toggle) {
+      return renderToggleField(f, label, isReadOnly);
+    }
+    if (f.type === 'checkbox') {
+      return renderCheckboxField(f, label, isReadOnly);
     }
     if (f.type === 'dependent') {
-      if (isReadOnly) return renderReadOnlyFk();
-      const fieldSelectorUrl = buildDependentSelectorUrl(apiBaseUrl, entity, f);
-      const fieldOnChange = (val, lbl) => {
-        onChange?.(f.key, val, f.column);
-        if (lbl) onChange?.(f.key + '$_identifier', lbl);
-        else if (!val) onChange?.(f.key + '$_identifier', '');
-      };
-      return (
-        <DependentFkField key={f.key} f={f} label={label} data={data} onChange={fieldOnChange}
-                        selectorUrl={fieldSelectorUrl} selectorContext={effectiveSelectorContext} token={token}
-                        apiBaseUrl={apiBaseUrl} catalogs={catalogs}/>
-      );
+      return renderDependentField(f, label, isReadOnly);
     }
-
-    function renderSelectorField() {
-      if (isReadOnly) return renderReadOnlyFk();
-      return (
-          <div key={f.key} className="space-y-1.5">
-            <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
-              {label}{requiredAsterisk(f)}
-            </Label>
-            <SelectorInput
-                entityName={entity}
-                field={f}
-                value={data?.[f.key] ?? ''}
-                displayValue={resolveIdentifier(data, f.key)}
-                onChange={(val, label, auxData) => {
-                  onChange?.(f.key, val, f.column);
-                  if (label) onChange?.(f.key + '$_identifier', label);
-                  else if (!val) onChange?.(f.key + '$_identifier', '');
-                  if (auxData) {
-                    for (const [suffix, auxVal] of Object.entries(auxData)) {
-                      if (suffix === '_aux' && auxVal && typeof auxVal === 'object') {
-                        for (const [auxSuffix, auxSuffixVal] of Object.entries(auxVal)) {
-                          onChange?.(f.key + auxSuffix, auxSuffixVal);
-                        }
-                      } else {
-                        onChange?.(f.key + suffix, auxVal);
-                      }
-                    }
-                  }
-                }}
-                catalogs={catalogs}
-                resolvedLabel={label}
-                selectorUrl={(() => {
-                  if (!apiBaseUrl) return null;
-                  // Always compute from apiBaseUrl so the full server path is included.
-                  // Append query params from api.selectors entry if present (e.g. ?isSOTrx=Y).
-                  const entry = api?.selectors?.find(s => s.entity === entity && s.field === f.key);
-                  const base = `${apiBaseUrl}/${entity}/selectors/${f.column}`;
-                  return entry?.url?.includes('?') ? `${base}?${entry.url.split('?')[1]}` : base;
-                })()}
-                selectorContext={effectiveSelectorContext}
-                token={token}
-            />
-          </div>
-      );
-    }
-
     if (f.type === 'selector') {
-      return renderSelectorField();
-    }
-    if (f.type === 'search') {
-      if (isReadOnly) return renderReadOnlyFk();
-      // Use the URL from api.selectors when it carries explicit context params (e.g. ?isSOTrx=Y).
-      // Always compute the selector URL from apiBaseUrl so it contains the full server path
-      // (e.g. https://server/etendo/sws/neo/...). When the api.selectors entry carries
-      // context filter params (e.g. ?isCustomer=Y, ?isVendor=Y), append them to the
-      // computed base URL instead of using the entry URL as-is (which would be a relative
-      // path that breaks on servers where the app context differs from the API context).
-      const apiSelectorEntry = api?.selectors?.find(s => s.entity === entity && s.field === f.key);
-      const selectorUrl = buildSearchSelectorUrl(apiBaseUrl, entity, f, apiSelectorEntry);
-      const searchOnChange = (val, lbl, auxData) => {
-        onChange?.(f.key, val, f.column);
-        if (lbl) onChange?.(f.key + '$_identifier', lbl);
-        else if (!val) onChange?.(f.key + '$_identifier', '');
-        if (auxData) {
-          const isGross = auxData.isTaxIncluded !== false;
-          applyLookupAuxData(auxData, isGross, onChange, f);
-        }
-      };
-      // Popup fields open a full ProductSearchDrawer instead of inline dropdown
-      if (f.popup) {
+      // Currency selector on order header: use CurrencyRatePicker for searchable rate display
+      if (isCurrencyRateSelectorField(entity, apiBaseUrl, f)) {
+        const isRateReadOnly = formReadOnly || f.readOnly || displayLogic?.readOnly?.[f.key] === true || evalReadOnlyLogic(f, data);
         return (
-          <PopupSearchField key={f.key} label={label} f={f} data={data} onChange={(val, lbl) => {
-            onChange?.(f.key, val, f.column);
-            if (lbl) onChange?.(f.key + '$_identifier', lbl);
-          }} selectorUrl={selectorUrl} selectorContext={effectiveSelectorContext} token={token}/>
-        );
-      }
-      // Lookup fields open a full ProductSearchDrawer instead of inline dropdown
-      if (f.lookup) {
-        return (
-          <div key={f.key} className="space-y-1.5">
-            <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
-              {label}{requiredAsterisk(f)}
-            </Label>
-            <LookupFormField
-              field={f}
-              value={data?.[f.key] ?? ''}
-              displayValue={data?.[f.key + '$_identifier']}
-              selectorUrl={selectorUrl}
-              selectorContext={effectiveSelectorContext}
-              token={token}
-              resolvedLabel={label}
-              onChange={searchOnChange}
-            />
-          </div>
-        );
-      }
-      return (
-        <div key={f.key} className="space-y-1.5">
-          <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
-            {label}{requiredAsterisk(f)}
-          </Label>
-          <SearchInput
-            entityName={entity}
+          <CurrencyRatePicker
+            key={f.key}
             field={f}
             value={data?.[f.key] ?? ''}
-            displayValue={data?.[f.key + '$_identifier']}
-            onChange={searchOnChange}
-            catalogs={catalogs}
+            displayValue={resolveIdentifier(data, f.key)}
+            onChange={onChange}
+            formData={data}
             resolvedLabel={label}
-            selectorUrl={selectorUrl}
-            selectorContext={effectiveSelectorContext}
             token={token}
-          />
-        </div>
-      );
+            apiBaseUrl={apiBaseUrl}
+            entityPath={entity}
+            isReadOnly={isRateReadOnly}
+            data-testid="CurrencyRatePicker__a8d626" />
+        );
+      }
+      return renderSelectorField(f, label, isReadOnly);
+    }
+    if (f.type === 'search') {
+      return renderSearchField(f, label, isReadOnly);
+    }
+    if (f.type === 'select' && f.options?.length && f.searchSelect) {
+      return renderStaticCreatableSelect(f, label, isReadOnly);
     }
     if (isSelectFieldWithOptions(f)) {
-      return renderSelectField(f, data, label, isReadOnly, onChange, ui, tMenu);
+      return renderSelectField(f, data, label, isReadOnly, onChange, { ui, tMenu, optionalSuffix, locale });
     }
     if (f.type === 'textarea') {
-      return (
-        <div key={f.key} className="space-y-1.5 h-full flex flex-col">
-          <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
-            {label}{requiredAsteriskIfEditable(f, isReadOnly)}
-          </Label>
-          <textarea
-            id={f.key}
-            name={f.key}
-            data-testid={`field-${f.key}`}
-            rows={4}
-            value={getFieldValue(isReadOnly, displayValue, data, f)}
-            onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
-            onBlur={() => onFieldBlur?.(f.key)}
-            disabled={isReadOnly}
-            className={[
-              'flex w-full rounded-lg border border-[#D1D4DB] p-2 text-sm shadow-[0px_1px_2px_rgba(18,18,23,0.05)]',
-              'placeholder:text-muted-foreground resize-none flex-1 min-h-[96px]',
-              'focus:outline-none focus:ring-2 focus:ring-primary',
-              'disabled:bg-muted/50 disabled:cursor-not-allowed',
-              getReadOnlyBgClass(isReadOnly),
-            ].join(' ')}
-          />
-        </div>
-      );
+      return renderTextareaField(f, label, isReadOnly, displayValue);
     }
     if (f.type === 'date') {
-      return (
-        <div key={f.key} className="space-y-1.5">
-          <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
-            {label}{requiredAsteriskIfEditable(f, isReadOnly)}
-          </Label>
-          <DateField
-            id={f.key}
-            name={f.key}
-            data-testid={`field-${f.key}`}
-            value={data?.[f.key] ?? ''}
-            onChange={(iso) => onChange?.(f.key, iso, f.column)}
-            onBlur={() => onFieldBlur?.(f.key)}
-            disabled={isReadOnly || savingField === f.key}
-            required={f.required && !isReadOnly}
-          />
-        </div>
-      );
+      return renderDateField(f, label, isReadOnly);
     }
-    const inputType = getInputType(f);
-    return (
-      <div key={f.key} className="space-y-1.5">
-        <Label htmlFor={f.key} className="text-sm text-foreground font-medium">
-          {label}{requiredAsteriskIfEditable(f, isReadOnly)}
-        </Label>
-        <Input
-          id={f.key}
-          name={f.key}
-          data-testid={`field-${f.key}`}
-          type={inputType}
-          value={getFieldValue(isReadOnly, displayValue, data, f)}
-          onChange={(e) => onChange?.(f.key, e.target.value, f.column)}
-          onBlur={() => onFieldBlur?.(f.key)}
-          className={getInputStateClass(isReadOnly)}
-          required={f.required && !isReadOnly}
-          disabled={isReadOnly || savingField === f.key}
-        />
-      </div>
-    );
+    return renderInputField(f, label, isReadOnly, displayValue);
   };
 
   // ETP-3894: append an inline error message under any field whose key appears in
   // fieldErrors. Uses cloneElement so we don't have to thread the prop through every
   // branch in renderField — the wrapper <div key={f.key}> already exists for each.
   const renderFieldWithError = (f) => {
-    const node = renderField(f);
+    const SPAN_CLASS = { 2: 'col-span-2', 3: 'col-span-3', 4: 'col-span-4' };
+    const spanClass = f.span ? (SPAN_CLASS[f.span] ?? '') : '';
+
+    if (f.type === 'image') {
+      const label = t(f.column) ?? f.label ?? f.key;
+      const isReadOnly = formReadOnly || f.readOnly || displayLogic?.readOnly?.[f.key] === true || evalReadOnlyLogic(f, data);
+      const imageClass = [`${LABEL_GAP} row-span-2 flex flex-col`, spanClass].filter(Boolean).join(' ');
+      return (
+        <div key={f.key} className={imageClass}>
+          <Label
+            className="text-sm text-foreground font-medium"
+            data-testid="Label__a8d626">{label}</Label>
+          <ImageField
+            imageId={data?.[f.key] ?? ''}
+            onChange={(newId) => onChange?.(f.key, newId, f.column)}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            readOnly={isReadOnly}
+            fieldKey={f.key}
+            stretch
+            data-testid="ImageField__a8d626" />
+        </div>
+      );
+    }
+
+    let node = renderField(f);
     const err = fieldErrors?.[f.key];
-    if (!err || !React.isValidElement(node)) return node;
-    const existing = node.props.children;
-    return React.cloneElement(
-      node,
-      { className: `${node.props.className ?? ''}`.trim() },
-      existing,
-      React.createElement(
-        'p',
-        { key: '__err', className: 'text-xs text-red-500 mt-0.5', 'data-testid': `error-${f.key}` },
-        err
-      )
-    );
+
+    // Append the field help text (if any) inside the field wrapper, below the input.
+    // Done centrally here so every field branch gets help support without per-branch edits.
+    if (f.help && React.isValidElement(node)) {
+      const existing = node.props.children;
+      node = React.cloneElement(
+        node,
+        { className: `${node.props.className ?? ''}`.trim() },
+        existing,
+        <FieldHelp key="__help" field={f} ui={ui} data-testid="FieldHelp__a8d626" />,
+      );
+    }
+
+    if (err && React.isValidElement(node)) {
+      const existing = node.props.children;
+      node = React.cloneElement(
+        node,
+        { className: `${node.props.className ?? ''}`.trim() },
+        existing,
+        React.createElement(
+          'p',
+          { key: '__err', role: 'alert', className: 'text-xs text-red-500 mt-0.5', 'data-testid': `error-${f.key}` },
+          err
+        )
+      );
+    }
+
+    if (spanClass && React.isValidElement(node)) {
+      return React.cloneElement(node, { className: `${node.props.className ?? ''} ${spanClass}`.trim() });
+    }
+
+    return node;
   };
 
   if (imageField) {
@@ -1018,12 +1532,11 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
       || displayLogic?.readOnly?.[imageField.key] === true
       || evalReadOnlyLogic(imageField, data);
     return (
-      <div className="flex gap-6 items-start">
+      <div className="flex gap-6 items-stretch">
         <div className={`flex-1 min-w-0 ${gridClass}`} style={gridStyle}>
           {fieldsToRender.map(renderFieldWithError)}
         </div>
-        <div className="shrink-0 w-56">
-          <Label className="text-sm text-foreground font-medium block mb-1.5">{imgLabel}</Label>
+        <div className="shrink-0 w-64 flex flex-col">
           <ImageField
             imageId={data?.[imageField.key] ?? ''}
             onChange={(newId) => onChange?.(imageField.key, newId, imageField.column)}
@@ -1031,7 +1544,9 @@ export function EntityForm({ entity, fields = [], data, onChange, catalogs, layo
             apiBaseUrl={apiBaseUrl}
             readOnly={imgReadOnly}
             fieldKey={imageField.key}
-          />
+            label={imgLabel}
+            stretch
+            data-testid="ImageField__a8d626" />
         </div>
       </div>
     );

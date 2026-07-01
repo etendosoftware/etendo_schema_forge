@@ -169,14 +169,16 @@ export default function ArtifactViewerPage() {
       <aside className="flex w-[220px] shrink-0 flex-col border-r border-gray-200 bg-white">
         <div className="border-b border-gray-200 p-3">
           <div className="flex items-center gap-2 mb-2">
-            <FileJson className="h-4 w-4 text-gray-500" />
+            <FileJson className="h-4 w-4 text-gray-500" data-testid="FileJson__8fb485" />
             <h2 className="text-sm font-semibold text-gray-700">{ui("artifactsTitle")}</h2>
             <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
               {windows.length}
             </span>
           </div>
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+            <Search
+              className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400"
+              data-testid="Search__8fb485" />
             <input
               type="text"
               placeholder={ui("searchWindows")}
@@ -206,13 +208,14 @@ export default function ArtifactViewerPage() {
           )}
         </nav>
       </aside>
-
       {/* Main content */}
       <main className="flex flex-1 flex-col overflow-hidden">
         {!selectedWindow ? (
           <div className="flex flex-1 items-center justify-center text-gray-400">
             <div className="text-center">
-              <FolderOpen className="mx-auto mb-3 h-12 w-12 text-gray-300" />
+              <FolderOpen
+                className="mx-auto mb-3 h-12 w-12 text-gray-300"
+                data-testid="FolderOpen__8fb485" />
               <p className="text-sm">{ui("selectWindowFromList")}</p>
             </div>
           </div>
@@ -245,7 +248,7 @@ export default function ArtifactViewerPage() {
 
               {/* Version selector */}
               <div className="flex items-center gap-2">
-                <History className="h-3.5 w-3.5 text-gray-400" />
+                <History className="h-3.5 w-3.5 text-gray-400" data-testid="History__8fb485" />
                 <select
                   value={selectedRef || ''}
                   onChange={(e) => setSelectedRef(e.target.value || null)}
@@ -270,7 +273,9 @@ export default function ArtifactViewerPage() {
             <div className="flex-1 overflow-auto p-4">
               {loading && (
                 <div className="flex items-center justify-center py-16">
-                  <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                  <Loader2
+                    className="h-6 w-6 animate-spin text-gray-400"
+                    data-testid="Loader2__8fb485" />
                   <span className="ml-2 text-sm text-gray-500">{ui("loading")}</span>
                 </div>
               )}
@@ -281,7 +286,7 @@ export default function ArtifactViewerPage() {
                 </div>
               )}
 
-              {jsonData && !loading && !error && <JsonView data={jsonData} />}
+              {jsonData && !loading && !error && <JsonView data={jsonData} data-testid="JsonView__8fb485" />}
 
               {!jsonData && !loading && !error && (
                 <div className="flex items-center justify-center py-16 text-gray-400">

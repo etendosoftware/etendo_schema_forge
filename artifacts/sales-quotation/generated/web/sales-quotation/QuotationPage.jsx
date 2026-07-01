@@ -27,7 +27,9 @@ const statusField = 'documentStatus';
 // @sf-generated-end summary:quotation
 
 // @sf-generated-start extraBadges:quotation
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:quotation
 
 // @sf-generated-start processes:quotation
@@ -53,7 +55,7 @@ const draftMode = {
 // @sf-generated-end draftMode:quotation
 
 // @sf-generated-start requiredHeaderFields:quotation
-const requiredHeaderFields = ['documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'priceList', 'paymentTerms', 'grandTotalAmount', 'summedLineAmount'];
+const requiredHeaderFields = ['currency', 'priceList', 'documentNo', 'orderDate', 'businessPartner', 'partnerAddress', 'paymentTerms', 'grandTotalAmount', 'summedLineAmount'];
 // @sf-generated-end requiredHeaderFields:quotation
 
 // @sf-generated-start addLineFields:quotationLine
@@ -63,7 +65,7 @@ const addLineFields = {
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
     { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', required: true, label: 'Ordered Quantity', defaultValue: 1, min: 0 },
     { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'Net List Price', min: 0 },
-    { key: 'discount', column: 'Discount', type: 'number', label: 'Discount', defaultValue: 0, min: 0 },
+    { key: 'discount', column: 'Discount', type: 'number', label: 'Discount', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', required: true, label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineGrossAmount","grossUnitPrice","lineNetAmount"] },
   ],
   derived: [
@@ -113,6 +115,30 @@ export const api = {
   "selectors": [
     {
       "entity": "quotation",
+      "field": "currency",
+      "column": "C_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-quotation/quotation/selectors/currency"
+    },
+    {
+      "entity": "quotation",
+      "field": "priceList",
+      "column": "M_PriceList_ID",
+      "reference": "PriceList",
+      "inputMode": "selector",
+      "url": "/sws/neo/sales-quotation/quotation/selectors/priceList",
+      "context": {
+        "required": [
+          {
+            "param": "isSOTrx",
+            "source": "windowCategory"
+          }
+        ]
+      }
+    },
+    {
+      "entity": "quotation",
       "field": "businessPartner",
       "column": "C_BPartner_ID",
       "reference": "BusinessPartner",
@@ -132,22 +158,6 @@ export const api = {
             "param": "C_BPartner_ID",
             "source": "field",
             "field": "businessPartner"
-          }
-        ]
-      }
-    },
-    {
-      "entity": "quotation",
-      "field": "priceList",
-      "column": "M_PriceList_ID",
-      "reference": "PriceList",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-quotation/quotation/selectors/priceList",
-      "context": {
-        "required": [
-          {
-            "param": "isSOTrx",
-            "source": "windowCategory"
           }
         ]
       }
@@ -183,14 +193,6 @@ export const api = {
       "reference": "Reject_Reason",
       "inputMode": "selector",
       "url": "/sws/neo/sales-quotation/quotation/selectors/rejectReason"
-    },
-    {
-      "entity": "quotation",
-      "field": "currency",
-      "column": "C_Currency_ID",
-      "reference": "Currency",
-      "inputMode": "selector",
-      "url": "/sws/neo/sales-quotation/quotation/selectors/currency"
     },
     {
       "entity": "quotationLine",
@@ -344,6 +346,22 @@ export const api = {
     },
     {
       "entity": "quotation",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/sales-quotation/quotation/{id}/action/eTPRRemovePayment",
+      "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "quotation",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/sales-quotation/quotation/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "quotation",
       "field": "rMAddOrphanLine",
       "column": "RM_AddOrphanLine",
       "url": "/sws/neo/sales-quotation/quotation/{id}/action/rMAddOrphanLine",
@@ -427,6 +445,7 @@ const labelOverrides = api.labelOverrides;
 export default function QuotationPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="quotation"
         detailEntity="quotationLine"
@@ -462,8 +481,10 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument
+        selectorPriceCurrency="org"
         {...props}
       />
+      </>
     );
   }
 

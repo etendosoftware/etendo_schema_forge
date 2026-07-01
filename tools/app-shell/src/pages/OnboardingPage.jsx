@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,20 +11,29 @@ import {
 } from 'lucide-react';
 import {
   ONBOARDING_ERROR_CODES,
-  changePassword,
   confirmPasswordReset,
   fetchAccount,
   fetchEnvironments,
+  fetchOnboardingDraft,
   loginAccount,
   loginEnvironment,
+  loginWithSsoProvider,
   registerAccount,
   requestPasswordReset,
   runOnboardingStream,
+  saveOnboardingDraft,
 } from './onboarding/onboardingApi.js';
+import {
+  getConfiguredSsoProviders,
+  renderSsoProviderButton,
+} from './onboarding/onboardingSso.js';
 import { checkSalesInvoiceReadiness } from './onboarding/onboardingReadiness.js';
+import { getPasswordChecks, isStrongPassword, PASSWORD_RULES } from './onboarding/passwordPolicy.js';
 import { useLocaleSwitch, useUI } from '../i18n/index.js';
 import { buildAppReturnToHref, getSafeReturnTo } from '../lib/oauthReturnTo.js';
 import { track } from '../lib/observability.js';
+import { trackSessionStarted } from '../lib/observability/health-events.js';
+import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '../lib/observability/events.js';
 import {
   applyProgressMessage,
   buildEnvironmentSessionStorage,
@@ -63,12 +72,20 @@ const DEFAULT_ONBOARDING_FORM = {
   address: '',
   sector: 'technology',
 };
+const SSO_PROVIDERS = getConfiguredSsoProviders();
 
-function trackOnboarding(eventName, properties = {}) {
-  void track(eventName, {
-    ...ONBOARDING_EVENT_CONTEXT,
-    ...properties,
-  });
+function trackOnboarding(eventDefinition, properties = {}) {
+  const event = buildObservabilityEvent(eventDefinition, properties);
+
+  // Fire-and-forget telemetry: swallow rejections so a failed track() never
+  // surfaces as an unhandled promise rejection in the onboarding flow.
+  // Promise.resolve(...) tolerates a non-thenable return (e.g. a stubbed track()).
+  Promise.resolve(
+    track(event.name, {
+      ...ONBOARDING_EVENT_CONTEXT,
+      ...event.properties,
+    }),
+  ).catch(() => {});
 }
 
 function AuthBrand({ label }) {
@@ -89,7 +106,10 @@ function AuthBrand({ label }) {
 function AuthFeaturePill({ children }) {
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white/70 px-4 py-2 text-xs font-medium text-slate-600 shadow-sm backdrop-blur sm:text-sm">
-      <Check className="h-4 w-4 text-slate-500" strokeWidth={2.5} />
+      <Check
+        className="h-4 w-4 text-slate-500"
+        strokeWidth={2.5}
+        data-testid="Check__79cf84" />
       {children}
     </span>
   );
@@ -108,10 +128,44 @@ function AuthPreviewMockup() {
   );
 }
 
+function AuthSsoOptions({ providers, buttonRef, error, loading, label, loadingLabel }) {
+  if (!providers.length) {
+    return null;
+  }
+  return (
+    <div className="mb-5 space-y-3">
+      <div className={loading ? 'pointer-events-none opacity-60' : ''}>
+        <div ref={buttonRef} className="flex min-h-11 justify-center" />
+      </div>
+      <div className="mx-auto flex w-full max-w-[400px] items-center gap-3">
+        <div className="h-px flex-1 bg-slate-200" />
+        <span className="shrink-0 text-sm font-medium normal-case text-slate-400">
+          {label}
+        </span>
+        <div className="h-px flex-1 bg-slate-200" />
+      </div>
+      {loading && (
+        <div className="flex items-center justify-center gap-2 text-sm font-medium text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__79cf84" />
+          {loadingLabel}
+        </div>
+      )}
+      {error && (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OnboardingLanguageSelect({ label, locale, onChange, options }) {
   return (
     <div className="min-w-[132px]">
-      <Label htmlFor="onboarding-language" className="mb-2 block text-xs font-medium uppercase tracking-[0.08em] text-slate-500">
+      <Label
+        htmlFor="onboarding-language"
+        className="mb-2 block text-xs font-medium uppercase tracking-[0.08em] text-slate-500"
+        data-testid="Label__79cf84">
         {label}
       </Label>
       <select
@@ -133,12 +187,12 @@ const AUTH_FEATURE_KEYS = ['onboardingAuthFeatureNoCard', 'onboardingAuthFeature
 
 function EnterEnvironmentButtonContent({ isLoggingIn, label }) {
   if (isLoggingIn) {
-    return <Loader2 className="h-4 w-4 animate-spin" />;
+    return <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__79cf84" />;
   }
 
   return (
     <>
-      {label} <ChevronRight className="h-4 w-4 ml-1" />
+      {label} <ChevronRight className="h-4 w-4 ml-1" data-testid="ChevronRight__79cf84" />
     </>
   );
 }
@@ -149,7 +203,7 @@ function AuthShell({ brandLabel, switchPrompt, switchAction, switchTestId, onSwi
       <div className="flex min-h-screen w-full bg-white lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(420px,0.88fr)]">
         <section className="flex min-h-[720px] flex-col bg-white px-6 py-6 sm:px-8 lg:px-10 xl:px-12">
           <div className="flex flex-col gap-5 border-b border-slate-100 pb-6 sm:flex-row sm:items-start sm:justify-between lg:border-b-0 lg:pb-0">
-            <AuthBrand label={brandLabel} />
+            <AuthBrand label={brandLabel} data-testid="AuthBrand__79cf84" />
             <div className="flex flex-col items-end gap-4">
               {headerContent}
               <p className="text-xs text-slate-700 sm:text-sm">
@@ -175,7 +229,7 @@ function AuthShell({ brandLabel, switchPrompt, switchAction, switchTestId, onSwi
           <div className="relative flex h-full flex-col">
             <div className="max-w-xl">
               <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <Sparkles className="h-6 w-6 text-slate-500" />
+                <Sparkles className="h-6 w-6 text-slate-500" data-testid="Sparkles__79cf84" />
               </div>
               <h2 className="max-w-xl text-3xl font-semibold tracking-[-0.05em] text-slate-900 xl:text-[2.5rem] xl:leading-[1.08]">
                 {marketingTitle}
@@ -185,12 +239,12 @@ function AuthShell({ brandLabel, switchPrompt, switchAction, switchTestId, onSwi
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 {featureLabels.map((feature) => (
-                  <AuthFeaturePill key={feature}>{feature}</AuthFeaturePill>
+                  <AuthFeaturePill key={feature} data-testid="AuthFeaturePill__79cf84">{feature}</AuthFeaturePill>
                 ))}
               </div>
             </div>
 
-            <AuthPreviewMockup />
+            <AuthPreviewMockup data-testid="AuthPreviewMockup__79cf84" />
           </div>
         </aside>
       </div>
@@ -201,19 +255,24 @@ function AuthShell({ brandLabel, switchPrompt, switchAction, switchTestId, onSwi
 function AuthField({ id, label, required = false, icon: Icon, trailing, className = '', inputClassName = '', ...props }) {
   return (
     <div className={className}>
-      <Label htmlFor={id} className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+      <Label
+        htmlFor={id}
+        className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900"
+        data-testid="Label__79cf84">
         {label}
         {required && <span className="ml-1 text-rose-500">*</span>}
       </Label>
       <div className="relative">
         {Icon && (
-          <Icon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+          <Icon
+            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+            data-testid="Icon__79cf84" />
         )}
         <Input
           id={id}
           className={`h-12 rounded-2xl border border-slate-300 bg-white text-base text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] placeholder:text-slate-400 focus-visible:border-slate-400 focus-visible:ring-4 focus-visible:ring-slate-900/5 ${Icon ? 'pl-12' : 'pl-4'} ${trailing ? 'pr-14' : 'pr-4'} ${inputClassName}`}
           {...props}
-        />
+          data-testid="Input__79cf84" />
         {trailing && <div className="absolute inset-y-0 right-3 flex items-center">{trailing}</div>}
       </div>
     </div>
@@ -226,7 +285,7 @@ function SetupShell({ brandLabel, progressLabel, progressValue, headerContent, c
       <div className="flex min-h-screen w-full bg-white lg:grid lg:grid-cols-[minmax(0,1.12fr)_minmax(420px,0.88fr)]">
         <section className="flex min-h-screen flex-col bg-white px-6 py-6 sm:px-8 lg:px-10 xl:px-12">
           <div className="flex items-start justify-between gap-6">
-            <AuthBrand label={brandLabel} />
+            <AuthBrand label={brandLabel} data-testid="AuthBrand__79cf84" />
             <div className="flex w-full max-w-[22rem] flex-col items-end gap-3 pt-1">
               {headerContent}
               <div className="w-full">
@@ -265,7 +324,10 @@ function SetupShell({ brandLabel, progressLabel, progressValue, headerContent, c
 function SetupField({ id, label, required = false, trailingLabel, className = '', ...props }) {
   return (
     <div className={className}>
-      <Label htmlFor={id} className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+      <Label
+        htmlFor={id}
+        className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900"
+        data-testid="Label__79cf84">
         {label}
         {required && <span className="ml-1 text-rose-500">*</span>}
         {trailingLabel && <span className="ml-2 font-normal text-slate-500">{trailingLabel}</span>}
@@ -274,7 +336,7 @@ function SetupField({ id, label, required = false, trailingLabel, className = ''
         id={id}
         className="h-12 rounded-2xl border border-slate-300 bg-white px-4 text-base text-slate-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-visible:border-slate-400 focus-visible:ring-4 focus-visible:ring-slate-900/5"
         {...props}
-      />
+        data-testid="Input__79cf84" />
     </div>
   );
 }
@@ -282,7 +344,10 @@ function SetupField({ id, label, required = false, trailingLabel, className = ''
 function SetupSelect({ id, label, required = false, value, onChange, children, className = '' }) {
   return (
     <div className={className}>
-      <Label htmlFor={id} className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+      <Label
+        htmlFor={id}
+        className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900"
+        data-testid="Label__79cf84">
         {label}
         {required && <span className="ml-1 text-rose-500">*</span>}
       </Label>
@@ -309,7 +374,7 @@ function BusinessTypeCard({ icon: Icon, label, selected, onClick }) {
         <span className={`h-3 w-3 rounded-full ${selected ? 'bg-slate-900' : 'bg-transparent'}`} />
       </span>
       <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <Icon className="h-6 w-6 text-slate-500" />
+        <Icon className="h-6 w-6 text-slate-500" data-testid="Icon__79cf84" />
       </div>
       <p className="text-lg font-medium tracking-[-0.02em] text-slate-900 sm:text-xl">{label}</p>
     </button>
@@ -396,7 +461,7 @@ function PageHeader({ accountName, onLogout, isAuthenticated, logoutLabel, brand
               size="sm"
               onClick={onLogout}
               className="text-gray-500 hover:text-gray-700"
-            >
+              data-testid="Button__79cf84">
               {logoutLabel}
             </Button>
           </div>
@@ -421,9 +486,20 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
   // Login form state
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState(null);
+  // i18n key for a one-shot confirmation banner on the Sign In panel
+  // (e.g. shown right after a password change logged the user out).
+  const [loginNotice, setLoginNotice] = useState(null);
   const [loginLoading, setLoginLoading] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [ssoError, setSsoError] = useState(null);
+  const [ssoLoadingProvider, setSsoLoadingProvider] = useState(null);
+  const registerSsoButtonRef = useRef(null);
+  const loginSsoButtonRef = useRef(null);
+  // Highest progress value shown so far in the current run. The backend emits more steps than
+  // the UI tracks (e.g. accounting, fiscal, baseline) which fall to the generic branch; clamping
+  // to this max keeps the progress bar monotonic instead of jumping backwards mid-run.
+  const maxSetupProgressRef = useRef(0);
 
   // Password reset and change state
   const resetTokenFromUrl = new URLSearchParams(window.location.search).get('resetToken') || ''; // NOSONAR: reset links carry single-use server-side tokens.
@@ -440,15 +516,6 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
   const [resetSuccess, setResetSuccess] = useState(false);
   const [resetError, setResetError] = useState(null);
   const [showResetPassword, setShowResetPassword] = useState(false);
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const [changePasswordForm, setChangePasswordForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
-  const [changePasswordError, setChangePasswordError] = useState(null);
-  const [changePasswordMessage, setChangePasswordMessage] = useState(null);
 
   // Environments state
   const [environments, setEnvironments] = useState([]);
@@ -462,8 +529,44 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
   const [result, setResult] = useState(null);
   const [running, setRunning] = useState(false);
   const [formSubmitted, setFormSubmitted] = useState(false);
+  // Server-side draft of the create wizard so the user can resume after re-login.
+  const [draftNotice, setDraftNotice] = useState(false);
+  const draftReadyRef = useRef(false); // restore attempt finished — autosave may run
+  const lastSavedDraftRef = useRef(null); // serialized last persisted draft (dedupe)
   const ui = useUI();
   const { locale, setLocale } = useLocaleSwitch();
+
+  // Restore a previously saved wizard draft (step + form values) before
+  // showing the create view. Failures fall back to a fresh wizard.
+  const restoreOnboardingDraft = useCallback(async (token) => {
+    setCreateStep(1);
+    try {
+      const draft = await fetchOnboardingDraft(fetch, BASE_URL, token);
+      if (draft?.form && typeof draft.form === 'object') {
+        const step = draft.step === 2 ? 2 : 1;
+        setForm(prev => ({ ...prev, ...draft.form }));
+        setCreateStep(step);
+        setDraftNotice(true);
+        lastSavedDraftRef.current = JSON.stringify({ step, form: draft.form });
+      }
+    } catch (err) {
+      console.warn('Failed to load onboarding draft', err);
+    } finally {
+      draftReadyRef.current = true;
+    }
+  }, []);
+
+  // Live password-strength feedback for the registration form (UX only; the
+  // backend enforces the same policy). See ./onboarding/passwordPolicy.js.
+  const registerPasswordChecks = getPasswordChecks(registerForm.password);
+  const registerPasswordStrong = isStrongPassword(registerForm.password);
+  const passwordRuleLabels = {
+    minLength: 'onboardingPasswordReqMinLength',
+    uppercase: 'onboardingPasswordReqUppercase',
+    lowercase: 'onboardingPasswordReqLowercase',
+    number: 'onboardingPasswordReqNumber',
+    special: 'onboardingPasswordReqSpecial',
+  };
 
   // Fetch environments and route: 0 → create, 1+ → auto-enter first
   const routeByEnvironments = useCallback(async () => {
@@ -473,7 +576,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
       const envs = await fetchEnvironments(fetch, BASE_URL, token);
       setEnvironments(envs);
       if (envs.length === 0) {
-        setCreateStep(1);
+        await restoreOnboardingDraft(token);
         setView('create');
       } else {
         loginToEnvironment(envs[0]);
@@ -485,7 +588,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
       setLoadingEnvs(false);
     }
     setView('create');
-  }, []);
+  }, [restoreOnboardingDraft]);
 
   // Validate existing platform token on mount
   useEffect(() => {
@@ -493,9 +596,24 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
       setView('reset-password');
       return;
     }
+    // One-shot preference set before an intentional logout (e.g. after a
+    // password change) so we land on Sign In instead of the Create panel.
+    const initialView = localStorage.getItem('sf_onboarding_initial_view');
+    if (initialView) {
+      localStorage.removeItem('sf_onboarding_initial_view');
+    }
+    // One-shot notice set before the logout (e.g. password changed) to show
+    // a confirmation banner on the Sign In panel.
+    const notice = localStorage.getItem('sf_onboarding_notice');
+    if (notice) {
+      localStorage.removeItem('sf_onboarding_notice');
+      if (notice === 'password-changed') {
+        setLoginNotice('onboardingPasswordChangedNotice');
+      }
+    }
     const token = getPlatformToken();
     if (!token) {
-      setView('register');
+      setView(initialView === 'login' ? 'login' : 'register');
       return;
     }
     fetchAccount(fetch, BASE_URL, token)
@@ -505,6 +623,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
       })
       .catch(() => {
         localStorage.removeItem('sf_platform_token');
+        localStorage.removeItem('sf_platform_auth_method');
         setView('register');
       });
   }, []);
@@ -519,24 +638,55 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
     setForm(prev => (prev.fullName ? prev : { ...prev, fullName: accountName }));
   }, [accountName]);
 
-  // Save token + account name and route by environments
-  const handleAuthSuccess = (token, account, { route = true } = {}) => {
+  // Debounced autosave of the create wizard draft. Only runs after the restore
+  // attempt finished, never during/after the setup run, and skips pristine
+  // forms so fresh accounts don't get an empty draft stored.
+  useEffect(() => {
+    if (view !== 'create' || running || result || !draftReadyRef.current) return undefined;
+    const token = getPlatformToken();
+    if (!token) return undefined;
+    const draft = { step: createStep, form };
+    const serialized = JSON.stringify(draft);
+    if (serialized === lastSavedDraftRef.current) return undefined;
+    const hasUserContent = createStep > 1
+      || Boolean(form.clientName?.trim() || form.fiscalIdValue?.trim() || form.address?.trim());
+    if (!hasUserContent && lastSavedDraftRef.current === null) return undefined;
+    const timer = setTimeout(() => {
+      lastSavedDraftRef.current = serialized;
+      saveOnboardingDraft(fetch, BASE_URL, token, draft).catch(err => {
+        console.warn('Failed to save onboarding draft', err);
+        lastSavedDraftRef.current = null;
+      });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [view, createStep, form, running, result]);
+
+  // Save token + account name and route by environments.
+  // authMethod records how the platform session was obtained ('password' | 'sso')
+  // so the UI can hide password-only actions for SSO sessions.
+  const handleAuthSuccess = useCallback((token, account, { route = true, authMethod = 'password' } = {}) => {
     localStorage.setItem('sf_platform_token', token);
+    localStorage.setItem('sf_platform_auth_method', authMethod);
     setAccountName(account?.name || account?.email || null);
     setShowRegisterPassword(false);
     setShowLoginPassword(false);
+    setSsoError(null);
+    setSsoLoadingProvider(null);
     if (route) {
       routeByEnvironments();
     }
-  };
+  }, [routeByEnvironments]);
 
   const handleRegisterSuccess = (token, account) => {
     localStorage.setItem('sf_platform_token', token);
+    localStorage.setItem('sf_platform_auth_method', 'password');
     setAccountName(account?.name || account?.email || null);
     setShowRegisterPassword(false);
     setShowLoginPassword(false);
     setRegisterError(null);
     setLoginError(null);
+    setSsoError(null);
+    setSsoLoadingProvider(null);
     setResult(null);
     setFormSubmitted(false);
     setRunning(false);
@@ -546,16 +696,21 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
       ...DEFAULT_ONBOARDING_FORM,
       fullName: account?.name || account?.email || '',
     });
+    // Brand-new account: nothing to restore, but allow autosave from here on.
+    setDraftNotice(false);
+    lastSavedDraftRef.current = null;
+    draftReadyRef.current = true;
     setView('create');
   };
 
   /* c8 ignore start -- Logout is only reachable from the legacy list view, which current routing bypasses. */
   const handleLogout = () => {
-    trackOnboarding('onboarding_auth_logout', {
+    trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_LOGOUT, {
       action: 'logout',
       status: 'success',
     });
     localStorage.removeItem('sf_platform_token');
+    localStorage.removeItem('sf_platform_auth_method');
     setAccountName(null);
     setRegisterForm({ name: '', email: '', password: '' });
     setLoginForm({ email: '', password: '' });
@@ -566,14 +721,12 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
     setResetSuccess(false);
     setResetError(null);
     setShowResetPassword(false);
-    setShowChangePassword(false);
-    setChangePasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    setChangePasswordError(null);
-    setChangePasswordMessage(null);
     setForm(DEFAULT_ONBOARDING_FORM);
     setCreateStep(1);
     setRegisterError(null);
     setLoginError(null);
+    setSsoError(null);
+    setSsoLoadingProvider(null);
     setShowRegisterPassword(false);
     setShowLoginPassword(false);
     setSteps(initialSetupSteps());
@@ -581,10 +734,89 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
   };
   /* c8 ignore stop */
 
+  const handleSsoProviderLogin = useCallback(async (provider, payload) => {
+    trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_SUBMITTED, {
+      action: 'sso',
+      provider,
+      status: 'started',
+    });
+    setSsoError(null);
+    setRegisterError(null);
+    setLoginError(null);
+    setSsoLoadingProvider(provider);
+    try {
+      const data = await loginWithSsoProvider(fetch, BASE_URL, provider, payload);
+      if (data.token) {
+        trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_SUCCEEDED, {
+          action: 'sso',
+          provider,
+          status: 'success',
+        });
+        handleAuthSuccess(data.token, data.account, { authMethod: 'sso' });
+      } else {
+        trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_FAILED, {
+          action: 'sso',
+          provider,
+          status: 'failed',
+        });
+        setSsoError(ui('onboardingSsoFailed'));
+      }
+    } catch (err) {
+      trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_FAILED, {
+        action: 'sso',
+        provider,
+        status: 'failed',
+      });
+      setSsoError(err.userMessage || ui(err.code || 'onboardingSsoFailed'));
+    } finally {
+      setSsoLoadingProvider(null);
+    }
+  }, [handleAuthSuccess, ui]);
+
+  useEffect(() => {
+    let buttonRef = null;
+    if (view === 'register') {
+      buttonRef = registerSsoButtonRef;
+    }
+    if (view === 'login') {
+      buttonRef = loginSsoButtonRef;
+    }
+    if (!buttonRef?.current || !SSO_PROVIDERS.length) {
+      return undefined;
+    }
+    let cancelled = false;
+    const container = buttonRef.current;
+    container.replaceChildren();
+    Promise.all(SSO_PROVIDERS.map((provider) => {
+      const providerContainer = document.createElement('div');
+      container.appendChild(providerContainer);
+      return renderSsoProviderButton(provider, providerContainer, {
+        onCredential: (providerId, payload) => {
+          if (!cancelled) {
+            handleSsoProviderLogin(providerId, payload);
+          }
+        },
+        onError: (error) => {
+          if (!cancelled) {
+            setSsoError(error.userMessage || ui(error.code || 'onboardingSsoFailed'));
+          }
+        },
+      });
+    })).catch((error) => {
+      if (!cancelled) {
+        setSsoError(error.userMessage || ui(error.code || 'onboardingSsoFailed'));
+      }
+    });
+    return () => {
+      cancelled = true;
+      container.replaceChildren();
+    };
+  }, [handleSsoProviderLogin, ui, view]);
+
   // Register
   const handleRegister = async (e) => {
     e.preventDefault();
-    trackOnboarding('onboarding_auth_submitted', {
+    trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_SUBMITTED, {
       action: 'register',
       status: 'started',
     });
@@ -596,24 +828,26 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         language: locale || form.language,
       });
       if (data.token) {
-        trackOnboarding('onboarding_auth_succeeded', {
+        trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_SUCCEEDED, {
           action: 'register',
           status: 'success',
         });
         handleRegisterSuccess(data.token, data.account);
       } else {
-        trackOnboarding('onboarding_auth_failed', {
+        trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_FAILED, {
           action: 'register',
           status: 'failed',
         });
         setRegisterError(ui('onboardingRegisterFailed'));
       }
     } catch (err) {
-      trackOnboarding('onboarding_auth_failed', {
+      trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_FAILED, {
         action: 'register',
         status: 'failed',
       });
-      setRegisterError(err.userMessage || ui(err.code || 'onboardingConnectionError'));
+      setRegisterError(err.code === 'WEAK_PASSWORD'
+        ? ui('onboardingWeakPassword')
+        : (err.userMessage || ui(err.code || 'onboardingConnectionError')));
     } finally {
       setRegisterLoading(false);
     }
@@ -622,29 +856,30 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
   // Login
   const handleLogin = async (e) => {
     e.preventDefault();
-    trackOnboarding('onboarding_auth_submitted', {
+    trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_SUBMITTED, {
       action: 'login',
       status: 'started',
     });
     setLoginError(null);
+    setLoginNotice(null);
     setLoginLoading(true);
     try {
       const data = await loginAccount(fetch, BASE_URL, loginForm);
       if (data.token) {
-        trackOnboarding('onboarding_auth_succeeded', {
+        trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_SUCCEEDED, {
           action: 'login',
           status: 'success',
         });
         handleAuthSuccess(data.token, data.account);
       } else {
-        trackOnboarding('onboarding_auth_failed', {
+        trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_FAILED, {
           action: 'login',
           status: 'failed',
         });
         setLoginError(ui('onboardingInvalidCredentials'));
       }
     } catch (err) {
-      trackOnboarding('onboarding_auth_failed', {
+      trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_AUTH_FAILED, {
         action: 'login',
         status: 'failed',
       });
@@ -680,6 +915,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
     try {
       await confirmPasswordReset(fetch, BASE_URL, resetForm);
       localStorage.removeItem('sf_platform_token'); // NOSONAR: clears stale token after server invalidates reset sessions.
+      localStorage.removeItem('sf_platform_auth_method');
       setResetSuccess(true);
       window.history.replaceState({}, document.title, window.location.pathname); // NOSONAR: removes consumed reset token from the visible URL.
     } catch (err) {
@@ -689,32 +925,9 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
     }
   };
 
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
-    setChangePasswordError(null);
-    setChangePasswordMessage(null);
-    if (changePasswordForm.newPassword !== changePasswordForm.confirmPassword) {
-      setChangePasswordError(ui('onboardingCredentialsMustMatch'));
-      return;
-    }
-    setChangePasswordLoading(true);
-    try {
-      const data = await changePassword(fetch, BASE_URL, getPlatformToken(), changePasswordForm);
-      if (data.token) {
-        handleAuthSuccess(data.token, data.account, { route: false });
-      }
-      setChangePasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      setChangePasswordMessage(ui('onboardingCredentialChangeSuccess'));
-    } catch (err) {
-      setChangePasswordError(err.userMessage || ui(err.code || 'onboardingCredentialChangeFailed'));
-    } finally {
-      setChangePasswordLoading(false);
-    }
-  };
-
   const loginToEnvironment = async (env, { requireReadiness = false } = {}) => {
     const token = getPlatformToken();
-    trackOnboarding('onboarding_environment_enter_submitted', {
+    trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_ENVIRONMENT_ENTER_SUBMITTED, {
       action: 'enter_environment',
       status: 'started',
     });
@@ -738,7 +951,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         if (requireReadiness) {
           const readiness = await checkSalesInvoiceReadiness(fetch, BASE_URL, data.token);
           if (!readiness.ready) {
-            trackOnboarding('onboarding_environment_enter_failed', {
+            trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_ENVIRONMENT_ENTER_FAILED, {
               action: 'enter_environment',
               status: 'failed',
             });
@@ -750,23 +963,24 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             return;
           }
         }
-        trackOnboarding('onboarding_environment_enter_succeeded', {
+        trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_ENVIRONMENT_ENTER_SUCCEEDED, {
           action: 'enter_environment',
           status: 'success',
         });
+        await trackSessionStarted({ username: env.adminUserName || env.adminUser, clientId: env.clientId, clientName: env.clientName });
         window.location.href = buildAppReturnToHref(
           getSafeReturnTo(window.location.search),
           window.location.pathname
         );
         return;
       }
-      trackOnboarding('onboarding_environment_enter_failed', {
+      trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_ENVIRONMENT_ENTER_FAILED, {
         action: 'enter_environment',
         status: 'failed',
       });
       alert(ui('onboardingEnvironmentLoginFailed'));
     } catch (err) {
-      trackOnboarding('onboarding_environment_enter_failed', {
+      trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_ENVIRONMENT_ENTER_FAILED, {
         action: 'enter_environment',
         status: 'failed',
       });
@@ -782,7 +996,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
 
   const runOnboarding = useCallback(async () => {
     const token = getPlatformToken();
-    trackOnboarding('onboarding_run_started', {
+    trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_RUN_STARTED, {
       action: 'create_environment',
       status: 'started',
     });
@@ -790,6 +1004,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
     setResult(null);
     setFormSubmitted(true);
     setSteps(initialSetupSteps());
+    maxSetupProgressRef.current = 0;
 
     let succeeded = false;
     try {
@@ -801,13 +1016,13 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
           };
           setResult(resultObj);
           if (msg.success) {
-            trackOnboarding('onboarding_run_succeeded', {
+            trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_RUN_SUCCEEDED, {
               action: 'create_environment',
               status: 'success',
             });
             succeeded = true;
           } else {
-            trackOnboarding('onboarding_run_failed', {
+            trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_RUN_FAILED, {
               action: 'create_environment',
               status: 'failed',
             });
@@ -817,7 +1032,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         }
       });
     } catch (err) {
-      trackOnboarding('onboarding_run_failed', {
+      trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_RUN_FAILED, {
         action: 'create_environment',
         status: 'failed',
       });
@@ -876,27 +1091,11 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
       locale={locale}
       onChange={setOnboardingLocale}
       options={languageOptions}
-    />
+      data-testid="OnboardingLanguageSelect__79cf84" />
   ) : null;
   const setupHeaderContent = (
     <div className="flex flex-wrap items-end justify-end gap-3">
       {localeControl}
-      {accountName && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => {
-            setShowChangePassword(value => !value);
-            setChangePasswordError(null);
-            setChangePasswordMessage(null);
-          }}
-          className="h-10 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-        >
-          <Lock className="mr-2 h-4 w-4" />
-          {ui('onboardingChangePasswordAction')}
-        </Button>
-      )}
     </div>
   );
   const isStepOneValid = isProfileStepValid(form);
@@ -904,57 +1103,107 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
   const setupGreetingName = (form.fullName || accountName || ui('onboardingGreetingFallback')).trim().split(/\s+/)[0];
   const activeSetupStep = steps.find((step) => step.status === 'running')?.name;
   const readinessFailureText = (result?.readinessFailures ?? []).map((failure) => ui(failure.key)).join(' ');
-  const setupProgressState = result?.status === 'success'
-    ? {
+  let setupProgressState;
+  if (result?.status === 'success') {
+    setupProgressState = {
       progress: 100,
       title: ui('onboardingSuccessTitle'),
       description: ui('onboardingSuccessDescription'),
-      leading: <Check className="h-8 w-8 text-[#54b56a]" strokeWidth={3} />,
+      leading: <Check
+        className="h-8 w-8 text-[#54b56a]"
+        strokeWidth={3}
+        data-testid="Check__79cf84" />,
       statusLabel: ui('onboardingCompleted'),
       success: true,
-    }
-    : activeSetupStep === 'client'
-      ? {
-        progress: 50,
-        title: ui('onboardingPreparingTitle'),
-        description: ui('onboardingPreparingActivatingDescription'),
-        leading: <Sparkles className="h-8 w-8 text-slate-400" />,
-        statusLabel: ui('loading'),
-        success: false,
-      }
-      : activeSetupStep === 'sequences'
-        ? {
-          progress: 80,
-          title: ui('onboardingPreparingTitle'),
-          description: ui('onboardingPreparingSequencesDescription'),
-          leading: <Settings className="h-8 w-8 text-slate-400" />,
-          statusLabel: ui('loading'),
-          success: false,
-        }
-        : activeSetupStep === 'organization' || activeSetupStep === 'finalize'
-        ? {
-          progress: 80,
-          title: ui('onboardingPreparingTitle'),
-          description: ui('onboardingPreparingFinishingDescription'),
-          leading: <Check className="h-8 w-8 text-slate-400" strokeWidth={3} />,
-          statusLabel: ui('loading'),
-          success: false,
-        }
-        : {
-          progress: 20,
-          title: ui('onboardingPreparingTitle'),
-          description: ui('onboardingPreparingTaxesDescription'),
-          leading: form.countryCode === 'ES' ? '🇪🇸' : '🌍',
-          statusLabel: ui('loading'),
-          success: false,
-        };
+    };
+  } else if (activeSetupStep === 'client') {
+    setupProgressState = {
+      progress: 35,
+      title: ui('onboardingPreparingTitle'),
+      description: ui('onboardingPreparingActivatingDescription'),
+      leading: <Sparkles className="h-8 w-8 text-slate-400" data-testid="Sparkles__79cf84" />,
+      statusLabel: ui('loading'),
+      success: false,
+    };
+  } else if (activeSetupStep === 'organization') {
+    setupProgressState = {
+      progress: 50,
+      title: ui('onboardingPreparingTitle'),
+      description: ui('onboardingPreparingConfiguringDescription'),
+      leading: <Building2 className="h-8 w-8 text-slate-400" data-testid="Building2__79cf84" />,
+      statusLabel: ui('loading'),
+      success: false,
+    };
+  } else if (activeSetupStep === 'dataset') {
+    setupProgressState = {
+      progress: 65,
+      title: ui('onboardingPreparingTitle'),
+      description: ui('onboardingPreparingDataDescription'),
+      leading: <Building2 className="h-8 w-8 text-slate-400" data-testid="Building2__79cf84" />,
+      statusLabel: ui('loading'),
+      success: false,
+    };
+  } else if (activeSetupStep === 'sequences') {
+    setupProgressState = {
+      progress: 85,
+      title: ui('onboardingPreparingTitle'),
+      description: ui('onboardingPreparingSequencesDescription'),
+      leading: <Settings className="h-8 w-8 text-slate-400" data-testid="Settings__79cf84" />,
+      statusLabel: ui('loading'),
+      success: false,
+    };
+  } else if (activeSetupStep === 'finalize') {
+    setupProgressState = {
+      progress: 92,
+      title: ui('onboardingPreparingTitle'),
+      description: ui('onboardingPreparingFinishingDescription'),
+      leading: <Check
+        className="h-8 w-8 text-slate-400"
+        strokeWidth={3}
+        data-testid="Check__79cf84" />,
+      statusLabel: ui('loading'),
+      success: false,
+    };
+  } else if (running) {
+    // Untracked backend steps (accounting, periodControl, fiscal, baseline, ...) run between the
+    // tracked milestones. Show a generic "configuring" state; the clamp below holds the bar steady.
+    // A small floor (15) avoids an empty 0% ring at the very start, before the first tracked step
+    // (client, 35%) begins — the clamp only raises from here, so it never pisa a later milestone.
+    setupProgressState = {
+      progress: 15,
+      title: ui('onboardingPreparingTitle'),
+      description: ui('onboardingPreparingConfiguringDescription'),
+      leading: <Settings className="h-8 w-8 text-slate-400" data-testid="Settings__79cf84" />,
+      statusLabel: ui('loading'),
+      success: false,
+    };
+  } else {
+    setupProgressState = {
+      progress: 20,
+      title: ui('onboardingPreparingTitle'),
+      description: ui('onboardingPreparingTaxesDescription'),
+      leading: form.countryCode === 'ES' ? '🇪🇸' : '🌍',
+      statusLabel: ui('loading'),
+      success: false,
+    };
+  }
+
+  // Keep the progress bar monotonic: never display a value below the highest already shown in
+  // this run. Untracked backend steps (generic branch, progress 0) therefore hold the last
+  // milestone's value instead of dropping the bar backwards. Reset happens in runOnboarding.
+  if (!setupProgressState.success) {
+    setupProgressState.progress = Math.max(setupProgressState.progress, maxSetupProgressRef.current);
+    maxSetupProgressRef.current = setupProgressState.progress;
+  }
 
 
   // ── LOADING (initial token check) ──
   if (view === null) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+        <Loader2
+          className="h-6 w-6 animate-spin text-gray-400"
+          data-testid="Loader2__79cf84" />
       </div>
     );
   }
@@ -976,7 +1225,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={authFeatureLabels}
-      >
+        data-testid="AuthShell__79cf84">
         <div className="mb-10">
           <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]">
             {ui('onboardingResetPasswordTitle')}
@@ -985,13 +1234,12 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             {ui(resetSuccess ? 'onboardingResetPasswordSuccess' : 'onboardingResetPasswordSubtitle')}
           </p>
         </div>
-
         {resetSuccess ? (
           <Button
             type="button"
             onClick={() => setView('login')}
             className="h-12 w-full rounded-2xl bg-gray-900 text-base font-medium text-white hover:bg-gray-800"
-          >
+            data-testid="Button__79cf84">
             {ui('onboardingBackToLoginAction')}
           </Button>
         ) : (
@@ -1014,10 +1262,10 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
                   onClick={() => setShowResetPassword(value => !value)}
                   className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
                 >
-                  {showResetPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  {showResetPassword ? <EyeOff className="h-5 w-5" data-testid="EyeOff__79cf84" /> : <Eye className="h-5 w-5" data-testid="Eye__79cf84" />}
                 </button>
               )}
-            />
+              data-testid="AuthField__79cf84" />
             <AuthField
               id="reset-password-confirm"
               type={showResetPassword ? 'text' : 'password'}
@@ -1029,7 +1277,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               placeholder={ui('onboardingPasswordPlaceholder')}
               autoComplete="new-password"
               required
-            />
+              data-testid="AuthField__79cf84" />
             {resetError && (
               <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
                 {resetError}
@@ -1042,7 +1290,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               className="h-12 w-full rounded-2xl bg-gray-900 text-base font-medium text-white hover:bg-gray-800"
             >
               {resetLoading
-                ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />{ui('onboardingSavingPassword')}</>
+                ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" data-testid="Loader2__79cf84" />{ui('onboardingSavingPassword')}</>
                 : ui('onboardingSavePasswordAction')}
             </Button>
           </form>
@@ -1061,6 +1309,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         onSwitch={() => {
           setRegisterError(null);
           setLoginError(null);
+          setSsoError(null);
           setShowRegisterPassword(false);
           setShowLoginPassword(false);
           setView('login');
@@ -1070,7 +1319,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={authFeatureLabels}
-      >
+        data-testid="AuthShell__79cf84">
         <div className="mb-10">
           <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]">
             {ui('onboardingRegisterTitle')}
@@ -1079,7 +1328,14 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             {ui('onboardingRegisterSubtitle')}
           </p>
         </div>
-
+        <AuthSsoOptions
+          providers={SSO_PROVIDERS}
+          buttonRef={registerSsoButtonRef}
+          error={ssoError}
+          loading={Boolean(ssoLoadingProvider)}
+          label={ui('onboardingSsoDivider')}
+          loadingLabel={ui('onboardingSsoSigningIn')}
+          data-testid="AuthSsoOptions__79cf84" />
         <form onSubmit={handleRegister} className="space-y-5">
           <AuthField
             id="reg-name"
@@ -1092,7 +1348,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             placeholder={ui('onboardingNamePlaceholder')}
             autoComplete="name"
             required
-          />
+            data-testid="AuthField__79cf84" />
 
           <AuthField
             id="reg-email"
@@ -1105,7 +1361,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             placeholder={ui('onboardingEmailPlaceholder')}
             autoComplete="email"
             required
-          />
+            data-testid="AuthField__79cf84" />
 
           <AuthField
             id="reg-password"
@@ -1125,10 +1381,37 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
                 onClick={() => setShowRegisterPassword(value => !value)}
                 className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
               >
-                {showRegisterPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                {showRegisterPassword ? <EyeOff className="h-5 w-5" data-testid="EyeOff__79cf84" /> : <Eye className="h-5 w-5" data-testid="Eye__79cf84" />}
               </button>
             )}
-          />
+            data-testid="AuthField__79cf84" />
+
+          {registerForm.password && (
+            <ul
+              data-testid="register-password-requirements"
+              className="space-y-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+            >
+              <li className="mb-1 font-medium text-slate-600">
+                {ui('onboardingPasswordRequirementsTitle')}
+              </li>
+              {PASSWORD_RULES.map(rule => {
+                const met = registerPasswordChecks[rule];
+                return (
+                  <li
+                    key={rule}
+                    data-testid={`register-password-rule-${rule}`}
+                    data-met={met ? 'true' : 'false'}
+                    className={`flex items-center gap-2 ${met ? 'text-emerald-600' : 'text-slate-400'}`}
+                  >
+                    {met
+                      ? <Check className="h-4 w-4 shrink-0" data-testid="Check__79cf84" />
+                      : <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300" aria-hidden="true" />}
+                    <span>{ui(passwordRuleLabels[rule])}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
           {registerError && (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
@@ -1139,11 +1422,11 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
           <Button
             type="submit"
             data-testid="action-register-submit"
-            disabled={registerLoading}
+            disabled={registerLoading || !registerPasswordStrong}
             className="h-12 w-full rounded-2xl bg-gray-900 text-base font-medium text-white hover:bg-gray-800"
           >
             {registerLoading
-              ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />{ui('onboardingCreatingAccount')}</>
+              ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" data-testid="Loader2__79cf84" />{ui('onboardingCreatingAccount')}</>
               : ui('onboardingCreateAccountAction')}
           </Button>
         </form>
@@ -1168,7 +1451,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={authFeatureLabels}
-      >
+        data-testid="AuthShell__79cf84">
         <div className="mb-10">
           <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]">
             {ui('onboardingForgotPasswordTitle')}
@@ -1177,7 +1460,6 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             {ui(forgotSent ? 'onboardingResetEmailSent' : 'onboardingForgotPasswordSubtitle')}
           </p>
         </div>
-
         <form onSubmit={handleForgotPassword} className="space-y-5">
           <AuthField
             id="forgot-email"
@@ -1190,7 +1472,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             placeholder={ui('onboardingEmailPlaceholder')}
             autoComplete="email"
             required
-          />
+            data-testid="AuthField__79cf84" />
           {forgotError && (
             <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
               {forgotError}
@@ -1208,7 +1490,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             className="h-12 w-full rounded-2xl bg-gray-900 text-base font-medium text-white hover:bg-gray-800"
           >
             {forgotLoading
-              ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />{ui('onboardingSendingResetEmail')}</>
+              ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" data-testid="Loader2__79cf84" />{ui('onboardingSendingResetEmail')}</>
               : ui('onboardingSendResetEmailAction')}
           </Button>
         </form>
@@ -1226,6 +1508,8 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         onSwitch={() => {
           setRegisterError(null);
           setLoginError(null);
+          setLoginNotice(null);
+          setSsoError(null);
           setShowRegisterPassword(false);
           setShowLoginPassword(false);
           setView('register');
@@ -1235,7 +1519,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={authFeatureLabels}
-      >
+        data-testid="AuthShell__79cf84">
         <div className="mb-10">
           <h1 className="text-3xl font-semibold tracking-[-0.06em] text-slate-900 sm:text-[2.7rem] sm:leading-[1.04]">
             {ui('onboardingLoginTitle')}
@@ -1245,6 +1529,23 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
           </p>
         </div>
 
+        {loginNotice && (
+          <div
+            data-testid="login-notice"
+            className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
+          >
+            {ui(loginNotice)}
+          </div>
+        )}
+
+        <AuthSsoOptions
+          providers={SSO_PROVIDERS}
+          buttonRef={loginSsoButtonRef}
+          error={ssoError}
+          loading={Boolean(ssoLoadingProvider)}
+          label={ui('onboardingSsoDivider')}
+          loadingLabel={ui('onboardingSsoSigningIn')}
+          data-testid="AuthSsoOptions__79cf84" />
         <form onSubmit={handleLogin} className="space-y-5">
           <AuthField
             id="login-email"
@@ -1257,7 +1558,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             placeholder={ui('onboardingEmailPlaceholder')}
             autoComplete="email"
             required
-          />
+            data-testid="AuthField__79cf84" />
 
           <AuthField
             id="login-password"
@@ -1277,10 +1578,10 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
                 onClick={() => setShowLoginPassword(value => !value)}
                 className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
               >
-                {showLoginPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                {showLoginPassword ? <EyeOff className="h-5 w-5" data-testid="EyeOff__79cf84" /> : <Eye className="h-5 w-5" data-testid="Eye__79cf84" />}
               </button>
             )}
-          />
+            data-testid="AuthField__79cf84" />
 
           <div className="flex justify-end">
             <button
@@ -1311,7 +1612,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             className="h-12 w-full rounded-2xl bg-gray-900 text-base font-medium text-white hover:bg-gray-800"
           >
             {loginLoading
-              ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" />{ui('onboardingSigningIn')}</>
+              ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" data-testid="Loader2__79cf84" />{ui('onboardingSigningIn')}</>
               : ui('onboardingLoginAction')}
           </Button>
         </form>
@@ -1326,7 +1627,9 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
       if (loadingEnvs) {
         return (
           <div className="flex justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            <Loader2
+              className="h-6 w-6 animate-spin text-gray-400"
+              data-testid="Loader2__79cf84" />
           </div>
         );
       }
@@ -1335,15 +1638,15 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
         return (
           <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
             <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Building2 className="h-8 w-8 text-gray-300" />
+              <Building2 className="h-8 w-8 text-gray-300" data-testid="Building2__79cf84" />
             </div>
             <p className="text-lg font-medium text-gray-900 mb-1">{ui('onboardingNoEnvironments')}</p>
             <p className="text-gray-500 text-sm mb-6">{ui('onboardingCreateFirstEnvironment')}</p>
             <Button
               onClick={() => { setCreateStep(1); setResult(null); setView('create'); }}
               className="bg-amber-400 hover:bg-amber-500 text-white"
-            >
-              <Plus className="h-4 w-4 mr-1" /> {ui('onboardingCreateEnvironment')}
+              data-testid="Button__79cf84">
+              <Plus className="h-4 w-4 mr-1" data-testid="Plus__79cf84" /> {ui('onboardingCreateEnvironment')}
             </Button>
           </div>
         );
@@ -1361,7 +1664,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
-                    <Building2 className="h-5 w-5 text-amber-600" />
+                    <Building2 className="h-5 w-5 text-amber-600" data-testid="Building2__79cf84" />
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">{env.clientName}</p>
@@ -1381,7 +1684,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
                   <EnterEnvironmentButtonContent
                     isLoggingIn={isLoggingIn}
                     label={ui('onboardingEnterEnvironment')}
-                  />
+                    data-testid="EnterEnvironmentButtonContent__79cf84" />
                 </Button>
               </div>
             );
@@ -1398,8 +1701,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
           onLogout={handleLogout}
           logoutLabel={ui('logout')}
           brandLabel={ui('onboardingBrandName')}
-        />
-
+          data-testid="PageHeader__79cf84" />
         {/* Extra header actions row */}
         <div className="bg-white border-b border-gray-100">
           <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-between">
@@ -1413,20 +1715,21 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
                   onClick={routeByEnvironments}
                   disabled={loadingEnvs}
                   className="text-gray-500"
-                >
-                  <RefreshCw className={`h-4 w-4 ${loadingEnvs ? 'animate-spin' : ''}`} />
+                  data-testid="Button__79cf84">
+                  <RefreshCw
+                    className={`h-4 w-4 ${loadingEnvs ? 'animate-spin' : ''}`}
+                    data-testid="RefreshCw__79cf84" />
                 </Button>
                 <Button
                   onClick={() => { setCreateStep(1); setResult(null); setView('create'); }}
                   className="bg-amber-400 hover:bg-amber-500 text-white"
-                >
-                  <Plus className="h-4 w-4 mr-1" /> {ui('onboardingNewEnvironment')}
+                  data-testid="Button__79cf84">
+                  <Plus className="h-4 w-4 mr-1" data-testid="Plus__79cf84" /> {ui('onboardingNewEnvironment')}
                 </Button>
               </div>
             </div>
           </div>
         </div>
-
         <div className="max-w-2xl mx-auto p-6">
           <h1 className="text-2xl font-bold text-gray-900 mb-1">{ui('onboardingEnvironmentsTitle')}</h1>
           <p className="text-gray-500 text-sm mb-6">
@@ -1443,8 +1746,8 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
   // ── CREATE VIEW ──
   if (running || result?.status === 'success') {
     return (
-      <SetupProgressShell>
-        <SetupProgressCard {...setupProgressState} />
+      <SetupProgressShell data-testid="SetupProgressShell__79cf84">
+        <SetupProgressCard {...setupProgressState} data-testid="SetupProgressCard__79cf84" />
       </SetupProgressShell>
     );
   }
@@ -1455,77 +1758,14 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
       progressValue={createStep === 1 ? 50 : 90}
       headerContent={setupHeaderContent}
       brandLabel={ui('onboardingBrandName')}
-    >
-      {showChangePassword && (
-        <form
-          onSubmit={handleChangePassword}
-          className="mb-8 space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      data-testid="SetupShell__79cf84">
+      {draftNotice && (
+        <div
+          data-testid="draft-restored-notice"
+          className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700"
         >
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">{ui('onboardingChangePasswordTitle')}</h2>
-            <p className="mt-1 text-sm text-slate-500">{ui('onboardingChangePasswordSubtitle')}</p>
-          </div>
-          <SetupField
-            id="change-current-password"
-            type="password"
-            label={ui('onboardingCurrentPasswordLabel')}
-            required
-            value={changePasswordForm.currentPassword}
-            onChange={e => setChangePasswordForm(f => ({ ...f, currentPassword: e.target.value }))}
-            disabled={changePasswordLoading}
-            autoComplete="current-password"
-          />
-          <SetupField
-            id="change-new-password"
-            type="password"
-            label={ui('onboardingNewPasswordLabel')}
-            required
-            value={changePasswordForm.newPassword}
-            onChange={e => setChangePasswordForm(f => ({ ...f, newPassword: e.target.value }))}
-            disabled={changePasswordLoading}
-            autoComplete="new-password"
-          />
-          <SetupField
-            id="change-confirm-password"
-            type="password"
-            label={ui('onboardingConfirmPasswordLabel')}
-            required
-            value={changePasswordForm.confirmPassword}
-            onChange={e => setChangePasswordForm(f => ({ ...f, confirmPassword: e.target.value }))}
-            disabled={changePasswordLoading}
-            autoComplete="new-password"
-          />
-          {changePasswordError && (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
-              {changePasswordError}
-            </div>
-          )}
-          {changePasswordMessage && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-              {changePasswordMessage}
-            </div>
-          )}
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setShowChangePassword(false)}
-              disabled={changePasswordLoading}
-              className="h-10 rounded-xl"
-            >
-              {ui('cancel')}
-            </Button>
-            <Button
-              type="submit"
-              disabled={changePasswordLoading}
-              className="h-10 rounded-xl bg-gray-900 text-white hover:bg-gray-800"
-            >
-              {changePasswordLoading
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{ui('onboardingSavingPassword')}</>
-                : ui('onboardingSavePasswordAction')}
-            </Button>
-          </div>
-        </form>
+          {ui('onboardingDraftRestoredNotice')}
+        </div>
       )}
       {createStep === 1 ? (
         <div>
@@ -1546,7 +1786,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               value={form.fullName}
               onChange={e => updateField('fullName', e.target.value)}
               placeholder={ui('onboardingFullNamePlaceholder')}
-            />
+              data-testid="SetupField__79cf84" />
 
             <SetupSelect
               id="countryCode"
@@ -1554,14 +1794,16 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               required
               value={form.countryCode}
               onChange={e => updateField('countryCode', e.target.value)}
-            >
+              data-testid="SetupSelect__79cf84">
               {countryOptions.map((country) => (
                 <option key={country.value} value={country.value}>{country.label}</option>
               ))}
             </SetupSelect>
 
             <div>
-              <Label className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+              <Label
+                className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900"
+                data-testid="Label__79cf84">
                 {ui('onboardingBusinessTypeLabel')}
               </Label>
               <div className="grid gap-4 sm:grid-cols-3">
@@ -1572,7 +1814,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
                     label={option.label}
                     selected={form.businessType === option.value}
                     onClick={() => updateField('businessType', option.value)}
-                  />
+                    data-testid="BusinessTypeCard__79cf84" />
                 ))}
               </div>
             </div>
@@ -1582,7 +1824,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
             <Button
               type="button"
               onClick={() => {
-                trackOnboarding('onboarding_setup_step_completed', {
+                trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_SETUP_STEP_COMPLETED, {
                   action: 'continue',
                   status: 'success',
                   type: 'profile',
@@ -1591,8 +1833,8 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               }}
               disabled={!isStepOneValid}
               className="h-12 rounded-2xl bg-gray-900 px-6 text-base font-medium text-white hover:bg-gray-800"
-            >
-              {ui('onboardingContinueAction')} <ArrowRight className="ml-2 h-4 w-4" />
+              data-testid="Button__79cf84">
+              {ui('onboardingContinueAction')} <ArrowRight className="ml-2 h-4 w-4" data-testid="ArrowRight__79cf84" />
             </Button>
           </div>
         </div>
@@ -1615,10 +1857,13 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               value={form.clientName}
               onChange={e => updateField('clientName', e.target.value)}
               placeholder={ui('onboardingCompanyNamePlaceholder')}
-            />
+              data-testid="SetupField__79cf84" />
 
             <div>
-              <Label htmlFor="fiscalIdValue" className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900">
+              <Label
+                htmlFor="fiscalIdValue"
+                className="mb-2 block text-base font-medium tracking-[-0.02em] text-slate-900"
+                data-testid="Label__79cf84">
                 {ui('onboardingFiscalIdLabel')} <span className="ml-1 text-rose-500">*</span>
               </Label>
               <div className="flex overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] focus-within:ring-4 focus-within:ring-slate-900/5">
@@ -1643,14 +1888,14 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               value={form.address}
               onChange={e => updateField('address', e.target.value)}
               placeholder={ui('onboardingAddressPlaceholder')}
-            />
+              data-testid="SetupField__79cf84" />
 
             <SetupSelect
               id="sector"
               label={ui('onboardingSectorLabel')}
               value={form.sector}
               onChange={e => updateField('sector', e.target.value)}
-            >
+              data-testid="SetupSelect__79cf84">
               {sectorOptions.map((sector) => (
                 <option key={sector.value} value={sector.value}>{sector.label}</option>
               ))}
@@ -1668,7 +1913,7 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               type="button"
               onClick={() => {
                 if (running) return;
-                trackOnboarding('onboarding_setup_step_back', {
+                trackOnboarding(OBSERVABILITY_EVENTS.ONBOARDING_SETUP_STEP_BACK, {
                   action: 'back',
                   status: 'success',
                   type: 'company',
@@ -1686,11 +1931,11 @@ export default function OnboardingPage() { // NOSONAR: route component coordinat
               onClick={runOnboarding}
               disabled={running || !isStepTwoValid}
               className="h-12 rounded-2xl bg-gray-900 px-6 text-base font-medium text-white hover:bg-gray-800 disabled:bg-slate-200 disabled:text-slate-500"
-            >
+              data-testid="Button__79cf84">
               {running ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{ui('onboardingStarting')}</>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" data-testid="Loader2__79cf84" />{ui('onboardingStarting')}</>
               ) : (
-                <><ArrowRight className="mr-2 h-4 w-4" />{ui('onboardingStartAction')}</>
+                <><ArrowRight className="mr-2 h-4 w-4" data-testid="ArrowRight__79cf84" />{ui('onboardingStartAction')}</>
               )}
             </Button>
           </div>

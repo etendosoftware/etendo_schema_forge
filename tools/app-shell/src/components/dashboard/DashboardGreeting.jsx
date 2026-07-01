@@ -52,17 +52,20 @@ export function DashboardGreeting({ username = '', onAskCopilot }) {
           <h1 className="text-lg font-semibold leading-8 truncate">{ui('dashboardGreetingHeadline')}</h1>
         </div>
       </div>
-
       <div className="flex items-center gap-2 shrink-0">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        <DropdownMenu data-testid="DropdownMenu__5bd498">
+          <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__5bd498">
             <Button data-testid="dashboard-range-trigger" variant="outline" size="sm" className="h-10 gap-1.5 text-sm bg-white hover:bg-[#F5F7F9]">
-              <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+              <CalendarDays
+                className="h-3.5 w-3.5 text-muted-foreground"
+                data-testid="CalendarDays__5bd498" />
               <span>{currentRangeLabel}</span>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+              <ChevronDown
+                className="h-3.5 w-3.5 text-muted-foreground"
+                data-testid="ChevronDown__5bd498" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" data-testid="DropdownMenuContent__5bd498">
             {RANGE_KEYS.map((r) => (
               <DropdownMenuItem
                 key={r.value}
@@ -80,8 +83,8 @@ export function DashboardGreeting({ username = '', onAskCopilot }) {
           size="sm"
           className="h-10 gap-1.5 bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217]"
           onClick={onAskCopilot}
-        >
-          <Sparkles className="h-3.5 w-3.5" />
+          data-testid="Button__5bd498">
+          <Sparkles className="h-3.5 w-3.5" data-testid="Sparkles__5bd498" />
           <span className="hidden sm:inline">{ui('dashboardCopilotCta')}</span>
         </Button>
       </div>

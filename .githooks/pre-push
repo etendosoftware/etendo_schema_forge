@@ -1,5 +1,392 @@
 #!/usr/bin/env bash
 # .githooks/pre-push
-# Add pre-push validations here as needed.
+# Runs full validations (tests, domain boundaries, offline regen) locally before push.
+set -e
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+echo "==> Running pre-push checks..."
+
+cd "$REPO_DIR"
+
+# Path where run-sonar.sh writes a copy-pasteable handoff prompt when the
+# Quality Gate fails. Cleared up-front so a stale file is never shown.
+HANDOFF_FILE="$REPO_DIR/sonar-reports/sonar-handoff-prompt.md"
+rm -f "$HANDOFF_FILE"
+
+# Fail fast: Check for uncommitted or untracked changes
+if [ -n "$(git status --porcelain)" ]; then
+  echo "❌ ERROR: You have uncommitted or untracked changes in your working tree."
+  echo "   Please commit or stash them before pushing, or use 'git push --no-verify' to bypass."
+  echo "   Uncommitted files:"
+  git status --porcelain
+  exit 1
+fi
+
+# Resolve base branch dynamically at the start
+BASE_REF=""
+for branch in "origin/epic/ETP-3504" "origin/develop" "origin/main"; do
+  if git rev-parse --verify --quiet "$branch" >/dev/null; then
+    BASE_REF="$branch"
+    break
+  fi
+done
+
+# ----------------------------------------------------------------------------
+# Live progress helpers
+# ----------------------------------------------------------------------------
+# Detect interactive terminal: only animate when stdout is a TTY (skip in CI).
+if [ -t 1 ]; then IS_TTY=1; else IS_TTY=0; fi
+
+SPIN_FRAMES=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+
+# Per-step duration cache (used as ETA baseline across runs).
+DURATIONS_FILE="$REPO_DIR/tmp/pre-push/durations"
+LAST_DURATION=0
+
+# Look up the last recorded duration (seconds) for a step key, or 0.
+prev_duration() {
+  local key="$1" val=""
+  [ -f "$DURATIONS_FILE" ] && val="$(grep "^${key}=" "$DURATIONS_FILE" 2>/dev/null | tail -n1 | cut -d= -f2)"
+  [[ "$val" =~ ^[0-9]+$ ]] && echo "$val" || echo 0
+}
+
+# Persist the duration (seconds) for a step key.
+save_duration() {
+  local key="$1" dur="$2"
+  mkdir -p "$(dirname "$DURATIONS_FILE")"
+  if [ -f "$DURATIONS_FILE" ]; then
+    grep -v "^${key}=" "$DURATIONS_FILE" > "$DURATIONS_FILE.tmp" 2>/dev/null || true
+    mv "$DURATIONS_FILE.tmp" "$DURATIONS_FILE"
+  fi
+  echo "${key}=${dur}" >> "$DURATIONS_FILE"
+}
+
+# Animate a spinner + ETA + last log line while $1 (pid) is alive.
+monitor_progress() {
+  local pid="$1" key="$2" log="$3"
+  local start=$SECONDS i=0
+  local baseline; baseline="$(prev_duration "$key")"
+  local cols; cols="$(tput cols 2>/dev/null || echo 80)"
+
+  while kill -0 "$pid" 2>/dev/null; do
+    local elapsed=$(( SECONDS - start ))
+    local frame="${SPIN_FRAMES[$(( i % ${#SPIN_FRAMES[@]} ))]}"
+    i=$(( i + 1 ))
+
+    # Progress / ETA section.
+    local prog
+    if [ "$baseline" -gt 0 ]; then
+      local pct=$(( elapsed * 100 / baseline ))
+      [ "$pct" -gt 99 ] && pct=99
+      local remaining=$(( baseline - elapsed ))
+      [ "$remaining" -lt 0 ] && remaining=0
+      local filled=$(( pct / 10 )) bar="" c=0
+      while [ "$c" -lt 10 ]; do
+        if [ "$c" -lt "$filled" ]; then bar="${bar}█"; else bar="${bar}░"; fi
+        c=$(( c + 1 ))
+      done
+      prog="[${bar}] ${pct}% · ${elapsed}s elapsed · ~${remaining}s left"
+    else
+      prog="${elapsed}s elapsed (no baseline yet)"
+    fi
+
+    # Activity = last non-empty log line (strip CR and ANSI color codes).
+    local activity=""
+    if [ -s "$log" ]; then
+      activity="$(grep -v '^[[:space:]]*$' "$log" 2>/dev/null | tail -n1 | tr -d '\r' | sed $'s/\033\\[[0-9;]*m//g')"
+    fi
+
+    local line="   ${frame} ${prog}   ${activity}"
+    printf '\r\033[K%s' "${line:0:$(( cols - 1 ))}"
+    sleep 0.2
+  done
+  printf '\r\033[K'
+}
+
+# Run a command (string, eval'd) in a dir, streaming live progress.
+# Sets LAST_DURATION. Records duration on success. Returns the command's exit status.
+exec_with_progress() {
+  local key="$1" run_dir="$2" abs_log="$3" cmd="$4"
+  mkdir -p "$(dirname "$abs_log")"
+
+  local start=$SECONDS
+  set +e
+  ( cd "$run_dir" && eval "$cmd" ) > "$abs_log" 2>&1 &
+  local pid=$!
+  [ "$IS_TTY" = "1" ] && monitor_progress "$pid" "$key" "$abs_log"
+  wait "$pid"
+  local st=$?
+  set -e
+
+  LAST_DURATION=$(( SECONDS - start ))
+  [ $st -eq 0 ] && save_duration "$key" "$LAST_DURATION"
+  return $st
+}
+
+# Print the failure detail and abort. If the step produced a ready-to-use handoff
+# prompt (e.g. the Sonar gate), print it IN FULL so the developer sees what to fix.
+fail_with_log() {
+  local step_name="$1" exit_status="$2" abs_log="$3"
+  echo ""
+  if [ -f "$HANDOFF_FILE" ]; then
+    cat "$HANDOFF_FILE"
+  else
+    echo "========================================================================="
+    echo "❌ ERROR: Step '$step_name' failed with exit code $exit_status."
+    echo "👉 Log file: $abs_log"
+    echo "========================================================================="
+    echo "Showing last 25 lines of log:"
+    echo "-------------------------------------------------------------------------"
+    tail -n 25 "$abs_log"
+    echo "-------------------------------------------------------------------------"
+    echo ""
+  fi
+  exit 1
+}
+
+# Pipeline runner helper
+run_step() {
+  local step_num="$1"
+  local step_name="$2"
+  local run_dir="$3"
+  local log_file="$4"
+  local cmd="$5"
+  local abs_log="$REPO_DIR/$log_file"
+
+  echo "==> [$step_num/3] $step_name..."
+
+  # Capture the exit status without tripping `set -e`. Calling exec_with_progress
+  # bare would abort the whole script on a non-zero return (before we print the
+  # failure detail), making a blocked push show nothing useful in the console.
+  local exit_status=0
+  exec_with_progress "step-${step_num}" "$run_dir" "$abs_log" "$cmd" || exit_status=$?
+
+  if [ $exit_status -eq 0 ]; then
+    echo "==> [$step_num/3] $step_name... SUCCESS ✅ (${LAST_DURATION}s)"
+  else
+    echo "==> [$step_num/3] $step_name... FAILED ❌ (${LAST_DURATION}s)"
+    fail_with_log "$step_name" "$exit_status" "$abs_log"
+  fi
+}
+
+# 1. Run domain boundary check
+run_domain_boundary_check() {
+  local log_file="tmp/pre-push/domain-boundary-check.log"
+  local abs_log="$REPO_DIR/$log_file"
+  echo "==> [1/3] Running domain boundary check..."
+
+  mkdir -p "$(dirname "$abs_log")"
+
+  if [ -z "$BASE_REF" ]; then
+    echo "==> [1/3] Running domain boundary check... SKIPPED ⚠️ (No base ref found)"
+    return 0
+  fi
+
+  # Try running without bypass labels first.
+  # Capture status without `set -e` aborting — this call is EXPECTED to fail for
+  # cross-domain changes, after which we retry with bypass labels below.
+  local status_no_label=0
+  exec_with_progress "step-1" "$REPO_DIR" "$abs_log" "make domain-boundary-check BASE=\"$BASE_REF\"" || status_no_label=$?
+
+  if [ $status_no_label -eq 0 ]; then
+    echo "==> [1/3] Running domain boundary check... SUCCESS ✅ (Single-domain, ${LAST_DURATION}s)"
+    return 0
+  fi
+
+  # Try running with bypass labels
+  local status_with_labels=0
+  exec_with_progress "step-1" "$REPO_DIR" "$abs_log" "make domain-boundary-check BASE=\"$BASE_REF\" LABELS=\"cross-domain-approved,scope:vertical-slice,scope:platform-change,scope:generator-change\"" || status_with_labels=$?
+
+  if [ $status_with_labels -eq 0 ]; then
+    echo "==> [1/3] Running domain boundary check... SUCCESS ✅ (Cross-domain, ${LAST_DURATION}s)"
+    echo ""
+    echo "========================================================================="
+    echo "⚠️  WARNING: Cross-domain/mixed-scope changes detected."
+    echo "👉 REMINDER: You MUST add one of the following labels to your Pull Request"
+    echo "   on GitHub once created, otherwise the remote check will fail:"
+    echo "   - 'cross-domain-approved' (if you have a cross-domain plan file)"
+    echo "   - 'scope:vertical-slice' (if this is a vertical slice flow)"
+    echo "   - 'scope:platform-change' (if this is a platform/app-shell change)"
+    echo "   - 'scope:generator-change' (if this is a generator change)"
+    echo "========================================================================="
+    echo ""
+    return 0
+  else
+    echo "==> [1/3] Running domain boundary check... FAILED ❌ (${LAST_DURATION}s)"
+    echo ""
+    echo "========================================================================="
+    echo "❌ ERROR: Domain boundary check failed. Cross-domain changes detected but no plan/checklist matches."
+    echo "👉 Log file: $abs_log"
+    echo "========================================================================="
+    echo "Showing last 25 lines of log:"
+    echo "-------------------------------------------------------------------------"
+    tail -n 25 "$abs_log"
+    echo "-------------------------------------------------------------------------"
+    echo ""
+    exit 1
+  fi
+}
+
+# 0. Fetch the base branch and fail fast if this branch conflicts with it.
+# Runs BEFORE the expensive checks so a conflicting branch is rejected quickly.
+check_base_conflicts() {
+  echo "==> Checking for conflicts with base branch (fetch + merge-tree)..."
+
+  # Fetch the latest base branch (prefer epic/ETP-3504, then develop, then main).
+  local base_branch=""
+  for b in "epic/ETP-3504" "develop" "main"; do
+    if git fetch --quiet origin "$b" 2>/dev/null; then
+      base_branch="$b"
+      break
+    fi
+  done
+
+  if [ -z "$base_branch" ]; then
+    echo "    SKIPPED ⚠️ (could not fetch any base branch from origin — offline?)"
+    return 0
+  fi
+
+  local base_ref="origin/$base_branch"
+
+  # Tree-level merge check — no working-tree changes (git >= 2.38).
+  local out rc
+  set +e
+  out="$(git merge-tree --write-tree --name-only "$base_ref" HEAD 2>/dev/null)"
+  rc=$?
+  set -e
+
+  if [ "$rc" -eq 0 ]; then
+    echo "    SUCCESS ✅ (merges cleanly into $base_ref)"
+    return 0
+  elif [ "$rc" -eq 1 ]; then
+    # Conflicts. Output is: <tree-oid> on line 1, then conflicted file paths.
+    echo "    FAILED ❌ (conflicts with $base_ref)"
+    echo ""
+    echo "========================================================================="
+    echo "❌ ERROR: This branch has merge conflicts with $base_ref."
+    echo "========================================================================="
+    echo "Conflicting file(s):"
+    echo "$out" | tail -n +2 | sed 's/^/  - /'
+    echo ""
+    echo "👉 Update your branch and resolve the conflicts before pushing:"
+    echo "     git merge $base_ref        # or: git rebase $base_branch"
+    echo "   Then re-run the push (or bypass with 'git push --no-verify')."
+    echo "========================================================================="
+    exit 1
+  else
+    # rc > 1: merge-tree errored or unsupported — warn but don't hard-block.
+    echo "    SKIPPED ⚠️ (merge-tree unavailable or errored, rc=$rc)"
+    return 0
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Optional: Playwright E2E tests (opt-in — declining NEVER blocks the push)
+# ----------------------------------------------------------------------------
+# Runs only AFTER the mandatory checks have passed. Prompt answers:
+#     <empty> / n / N / <60s timeout> -> skip, push proceeds
+#     y / Y                            -> run headless with the default 5 workers
+#     1..10                            -> run headless with that many workers (capped at 10)
+# Prompted ONLY on an interactive terminal — a scripted/CI push skips silently
+# (pre-push stdin holds git's ref list, so input is read from /dev/tty).
+# If you opt IN and the tests fail, the push IS blocked (you asked to gate on them).
+run_optional_playwright() {
+  if [ "$IS_TTY" != "1" ] || [ ! -e /dev/tty ]; then
+    return 0
+  fi
+
+  echo ""
+  printf "❓ Run Playwright E2E tests now? [N / y / 1-10 workers] (default N, 60s timeout): "
+  local answer=""
+  read -r -t 60 answer < /dev/tty || answer=""
+  echo ""
+
+  case "$answer" in
+    ""|n|N|no|NO)
+      echo "==> Skipping Playwright E2E tests."
+      return 0
+      ;;
+  esac
+
+  local workers=5
+  if [ "$answer" = "y" ] || [ "$answer" = "Y" ]; then
+    workers=5
+  elif [[ "$answer" =~ ^[0-9]+$ ]]; then
+    workers="$answer"
+    if [ "$workers" -lt 1 ]; then
+      echo "==> Invalid worker count '$answer'; skipping Playwright E2E tests."
+      return 0
+    fi
+    if [ "$workers" -gt 10 ]; then
+      workers=10
+      echo "==> Capping workers at 10."
+    fi
+  else
+    echo "==> Unrecognized answer '$answer'; skipping Playwright E2E tests."
+    return 0
+  fi
+
+  # The mocked specs need the dev server on :3100. If it's down, skip gracefully
+  # (warn, don't block) — declining-to-be-able-to-run must not break the push.
+  if ! curl -sf -o /dev/null --max-time 5 http://localhost:3100 2>/dev/null; then
+    echo "⚠️  Dev server not reachable on http://localhost:3100 — skipping E2E."
+    echo "    Start it with 'make dev-mock' and re-push if you want to run them."
+    return 0
+  fi
+
+  echo "==> Running Playwright E2E tests headless with ${workers} worker(s)..."
+  set +e
+  ( cd "$REPO_DIR" && make test-e2e-headless WORKERS="$workers" )
+  local st=$?
+  set -e
+
+  if [ "$st" -eq 0 ]; then
+    echo "==> Playwright E2E tests... SUCCESS ✅"
+    return 0
+  fi
+
+  echo "==> Playwright E2E tests... FAILED ❌ (exit $st)"
+  echo "👉 You opted to run them, so the push is blocked. Re-push and decline (N),"
+  echo "   or bypass with 'git push --no-verify'."
+  exit 1
+}
+
+check_base_conflicts
+
+# 0. Run data-testid check (fast, runs before expensive checks)
+run_step "0" "Running data-testid check" "$REPO_DIR" "tmp/pre-push/data-testid-check.log" "npm run check:data-testid"
+
+# Run Step 1
+run_domain_boundary_check
+
+# 2. Run unit tests and SonarQube analysis
+# --fail-on-gate makes run-sonar.sh exit non-zero when the Quality Gate is in
+# ERROR, so this step (and the push) is blocked exactly when CI's gate would fail.
+# --compare-coverage additionally blocks when this branch's OVERALL coverage drops
+# below the base branch's — mirroring Jenkins' "Compare Coverage Results" stage,
+# which the new-code-only Quality Gate does not cover.
+if [ -n "$BASE_REF" ]; then
+  SONAR_CMD="./run-sonar.sh --base-ref \"$BASE_REF\" --coverage --fail-on-gate --compare-coverage"
+else
+  SONAR_CMD="./run-sonar.sh --all-issues --coverage --fail-on-gate --compare-coverage"
+fi
+run_step "2" "Running unit tests and SonarQube analysis" "$REPO_DIR" "tmp/pre-push/sonar-and-tests.log" "$SONAR_CMD"
+
+# 3. Run offline regeneration check
+if [ -d "etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata" ]; then
+  REGEN_CMD="make regen-check FROM_CACHE=1 REGEN_CHECK_PREV_XML_DIR=etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata"
+  run_step "3" "Running offline regeneration check" "$REPO_DIR" "tmp/pre-push/offline-regen-check.log" "$REGEN_CMD"
+else
+  echo "==> [3/3] Running offline regeneration check... SKIPPED ⚠️ (com.etendoerp.go sourcedata not found)"
+fi
+
+# Mandatory checks passed — offer the optional Playwright E2E run before the banner.
+run_optional_playwright
+
+echo ""
+echo "=========================================="
+echo "🎉 Pre-push checks passed successfully!"
+echo "=========================================="
 exit 0

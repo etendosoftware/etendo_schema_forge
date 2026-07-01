@@ -393,15 +393,22 @@
 }
 .fm-chip:hover:not(.active) { background: var(--fm-bg-subtle); }
 
-/* ── Export button with icon ────────────────────────────────────────────────── */
+/* ── Toolbar buttons (Export / Resolve Error) ───────────────────────────────── */
 .fm-export-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 14px; border-radius: 8px;
-  font: 500 13px/18px var(--fm-font-sans); color: var(--fm-fg-2);
+  padding: 8px 12px; border-radius: 8px;
+  font: 500 14px/20px var(--fm-font-sans); color: var(--fm-fg-2);
   background: var(--fm-bg-card); border: 1px solid var(--fm-border-1);
   cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  transition: background .1s, border-color .1s;
 }
-.fm-export-btn:hover { background: var(--fm-bg-subtle); }
+.fm-export-btn:hover { background: var(--fm-bg-subtle); border-color: var(--fm-border-2); }
+.fm-export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.fm-export-btn--primary {
+  background: var(--fm-gray-900); color: #fff;
+  border-color: var(--fm-gray-900); font-weight: 600;
+}
+.fm-export-btn--primary:hover:not(:disabled) { background: #FFD500; border-color: #FFD500; color: #121217; }
 
 /* ── System tabs (SII + TBAI combined view) ─────────────────────────────────── */
 .fm-system-tabs {

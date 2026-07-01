@@ -12,16 +12,21 @@ const mockFetchLocationAddress = vi.fn(() => Promise.resolve(null));
 const mockFetchImageDataUrl = vi.fn(() => Promise.resolve(null));
 const mockBuildLocationAddressLines = vi.fn(() => []);
 
-vi.mock('../../shared/pdfUtils.js', () => ({
-  COMMON_HANDLEBARS_HELPERS: '',
-  fetchJson: (...args) => mockFetchJson(...args),
-  fetchAll: (...args) => mockFetchAll(...args),
-  fetchOptionalJson: (...args) => mockFetchOptionalJson(...args),
-  fetchLocationAddress: (...args) => mockFetchLocationAddress(...args),
-  fetchImageDataUrl: (...args) => mockFetchImageDataUrl(...args),
-  buildLocationAddressLines: (...args) => mockBuildLocationAddressLines(...args),
-  renderPdf: (...args) => mockRenderPdf(...args),
-}));
+vi.mock('../../shared/pdfUtils.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    COMMON_HANDLEBARS_HELPERS: '',
+    COMMON_PDF_CSS: '',
+    fetchJson: (...args) => mockFetchJson(...args),
+    fetchAll: (...args) => mockFetchAll(...args),
+    fetchOptionalJson: (...args) => mockFetchOptionalJson(...args),
+    fetchLocationAddress: (...args) => mockFetchLocationAddress(...args),
+    fetchImageDataUrl: (...args) => mockFetchImageDataUrl(...args),
+    buildLocationAddressLines: (...args) => mockBuildLocationAddressLines(...args),
+    renderPdf: (...args) => mockRenderPdf(...args),
+  };
+});
 
 import { renderHook, waitFor } from '@testing-library/react';
 import { useShipmentPdf, getShipmentPdfLabels, generateShipmentPdf } from '../useShipmentPdf.js';

@@ -1,51 +1,58 @@
 {
-  "version": "0.4.0",
+  "version": "0.14.0",
   "generatedAt": "2026-04-29T18:11:17.025Z",
-  "updatedAt": "2026-05-20T13:15:04.027Z",
-  "contractChecksum": "f9eb3c800a7d890d",
+  "updatedAt": "2026-06-24T20:46:49.172Z",
+  "contractChecksum": "0f70170c24369632",
   "apiPrediction": {
     "specName": "return-to-vendor-shipment",
     "baseUrl": "/sws/neo/return-to-vendor-shipment",
     "crud": {
-      "header": {
+      "returnToVendorShipment": {
         "get": true,
         "getById": true,
         "post": true,
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/return-to-vendor-shipment/header",
-        "detailUrl": "/sws/neo/return-to-vendor-shipment/header/{id}",
-        "supportedFilters": []
+        "listUrl": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment",
+        "detailUrl": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}",
+        "supportedFilters": [
+          "documentNo",
+          "businessPartner",
+          "movementDate",
+          "documentStatus"
+        ]
       },
-      "lines": {
+      "returnToVendorShipmentLine": {
         "get": true,
         "getById": true,
         "post": true,
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/return-to-vendor-shipment/lines",
-        "detailUrl": "/sws/neo/return-to-vendor-shipment/lines/{id}",
-        "supportedFilters": []
+        "listUrl": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine",
+        "detailUrl": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/{id}",
+        "supportedFilters": [
+          "product"
+        ]
       }
     },
     "selectors": [
       {
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "field": "businessPartner",
         "column": "C_BPartner_ID",
         "reference": "BusinessPartner",
         "inputMode": "search",
-        "url": "/sws/neo/return-to-vendor-shipment/header/selectors/businessPartner"
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/selectors/businessPartner"
       },
       {
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "field": "partnerAddress",
         "column": "C_BPartner_Location_ID",
         "reference": "BusinessPartnerLocation",
         "inputMode": "dependent",
-        "url": "/sws/neo/return-to-vendor-shipment/header/selectors/partnerAddress",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/selectors/partnerAddress",
         "context": {
           "required": [
             {
@@ -57,162 +64,39 @@
         }
       },
       {
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "field": "warehouse",
         "column": "M_Warehouse_ID",
         "reference": "Warehouse",
-        "inputMode": "selector",
-        "url": "/sws/neo/return-to-vendor-shipment/header/selectors/warehouse"
-      },
-      {
-        "entity": "header",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
         "inputMode": "search",
-        "url": "/sws/neo/return-to-vendor-shipment/header/selectors/project",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/selectors/warehouse"
       },
       {
-        "entity": "header",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/return-to-vendor-shipment/header/selectors/costcenter"
-      },
-      {
-        "entity": "header",
-        "field": "stDimension",
-        "column": "User1_ID",
-        "reference": "User1",
-        "inputMode": "selector",
-        "url": "/sws/neo/return-to-vendor-shipment/header/selectors/stDimension"
-      },
-      {
-        "entity": "header",
-        "field": "ndDimension",
-        "column": "User2_ID",
-        "reference": "User2",
-        "inputMode": "selector",
-        "url": "/sws/neo/return-to-vendor-shipment/header/selectors/ndDimension"
-      },
-      {
-        "entity": "lines",
+        "entity": "returnToVendorShipmentLine",
         "field": "product",
         "column": "M_Product_ID",
         "reference": "Product",
         "inputMode": "search",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/product"
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/selectors/product"
       },
       {
-        "entity": "lines",
-        "field": "operativeUOM",
-        "column": "C_Aum",
-        "reference": "UOM",
-        "inputMode": "search",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/operativeUOM",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "M_Product_ID",
-              "source": "field",
-              "field": "product"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "lines",
+        "entity": "returnToVendorShipmentLine",
         "field": "uOM",
         "column": "C_UOM_ID",
         "reference": "UOM",
-        "inputMode": "selector",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/uOM"
-      },
-      {
-        "entity": "lines",
-        "field": "storageBin",
-        "column": "M_Locator_ID",
-        "reference": "Locator",
-        "inputMode": "selector",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/storageBin",
-        "context": {
-          "required": [
-            {
-              "param": "M_Warehouse_ID",
-              "source": "parentField",
-              "field": "warehouse"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "lines",
-        "field": "salesOrderLine",
-        "column": "C_OrderLine_ID",
-        "reference": "OrderLine",
         "inputMode": "search",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/salesOrderLine"
-      },
-      {
-        "entity": "lines",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "search",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/project"
-      },
-      {
-        "entity": "lines",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/costcenter"
-      },
-      {
-        "entity": "lines",
-        "field": "stDimension",
-        "column": "User1_ID",
-        "reference": "User1",
-        "inputMode": "selector",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/stDimension"
-      },
-      {
-        "entity": "lines",
-        "field": "ndDimension",
-        "column": "User2_ID",
-        "reference": "User2",
-        "inputMode": "selector",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/selectors/ndDimension"
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/selectors/uOM"
       }
     ],
     "actions": [
       {
         "name": "sendMaterials",
         "actionType": "createFrom",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "RM_Shipment_Pickedit",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/sendMaterials",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/sendMaterials",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -231,11 +115,11 @@
       {
         "name": "createLinesFrom",
         "actionType": "createFrom",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "CreateFrom",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/createLinesFrom",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/createLinesFrom",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -252,11 +136,11 @@
       {
         "name": "generateTo",
         "actionType": "createFrom",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "GenerateTo",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/generateTo",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/generateTo",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -275,11 +159,11 @@
       {
         "name": "documentAction",
         "actionType": "documentAction",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "DocAction",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/documentAction",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/documentAction",
         "parameters": [
           {
             "name": "docAction",
@@ -315,11 +199,11 @@
       {
         "name": "posted",
         "actionType": "documentAction",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "Posted",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/posted",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/posted",
         "parameters": [
           {
             "name": "docAction",
@@ -353,11 +237,11 @@
       {
         "name": "calculateFreight",
         "actionType": "utilityAction",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "Calculate_Freight",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/calculateFreight",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/calculateFreight",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -375,11 +259,11 @@
       {
         "name": "receiveMaterials",
         "actionType": "createFrom",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "RM_Receipt_PickEdit",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/receiveMaterials",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/receiveMaterials",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -398,11 +282,11 @@
       {
         "name": "updateLines",
         "actionType": "utilityAction",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "UpdateLines",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/updateLines",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/updateLines",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -420,11 +304,11 @@
       {
         "name": "invoicefromshipment",
         "actionType": "utilityAction",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "Invoicefromshipment",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/invoicefromshipment",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/invoicefromshipment",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -442,11 +326,11 @@
       {
         "name": "processGoodsJava",
         "actionType": "utilityAction",
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "column": "Process_Goods_Java",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/header/{id}/action/processGoodsJava",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/processGoodsJava",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -462,13 +346,53 @@
         "processType": "classic"
       },
       {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "returnToVendorShipment",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
         "name": "explode",
         "actionType": "utilityAction",
-        "entity": "lines",
+        "entity": "returnToVendorShipmentLine",
         "column": "Explode",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/{id}/action/explode",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/{id}/action/explode",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -486,11 +410,11 @@
       {
         "name": "managePrereservation",
         "actionType": "utilityAction",
-        "entity": "lines",
+        "entity": "returnToVendorShipmentLine",
         "column": "Manage_Prereservation",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/lines/{id}/action/managePrereservation",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine/{id}/action/managePrereservation",
         "parameters": [],
         "preconditions": [],
         "effects": [
@@ -521,14 +445,29 @@
     },
     "window": {
       "category": "purchases"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "sourceReceiptDocNo": "Albarán origen",
+        "MovementQty": "Cant. a devolver",
+        "QuantityOrder": "Cant. pedida"
+      },
+      "en_US": {
+        "sourceReceiptDocNo": "Source Receipt",
+        "MovementQty": "Return Qty",
+        "QuantityOrder": "Ordered Qty"
+      }
     }
   },
   "formState": {
     "entities": {
-      "header": {
+      "returnToVendorShipment": {
         "fields": {
-          "sendMaterials": {},
-          "orderReference": {},
+          "documentNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
           "businessPartner": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @HAS_M_INOUTLINES@='Y'"
@@ -542,11 +481,6 @@
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#Date@"
           },
-          "accountingDate": {
-            "required": true,
-            "readOnlyLogic": "@Posted@='Y'",
-            "defaultValue": "@#Date@"
-          },
           "warehouse": {
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
@@ -557,25 +491,23 @@
             "required": true,
             "defaultValue": "DR"
           },
-          "documentAction": {
+          "trackingNo": {},
+          "sourceReceiptDocNo": {
+            "readOnly": true
+          },
+          "etblkpAccountingstatus": {
+            "readOnly": true,
             "required": true,
-            "defaultValue": "CO"
+            "defaultValue": "N"
           },
-          "project": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "stDimension": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "ndDimension": {
-            "readOnlyLogic": "@Posted@='Y'"
+          "etblkpBulkposting": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
           }
         }
       },
-      "lines": {
+      "returnToVendorShipmentLine": {
         "fields": {
           "lineNo": {
             "readOnly": true,
@@ -587,20 +519,7 @@
             "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
-          "attributeSetValue": {
-            "readOnly": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "operativeQuantity": {
-            "readOnly": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
-          "operativeUOM": {
-            "readOnly": true,
-            "readOnlyLogic": "@Processed@='Y'"
-          },
           "movementQuantity": {
-            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
             "defaultValue": "0"
@@ -611,30 +530,16 @@
             "readOnlyLogic": "@UomManagement@='Y'"
           },
           "description": {},
-          "storageBin": {
+          "orderQuantity": {
             "readOnly": true,
-            "readOnlyLogic": "@Processed@='Y'",
-            "defaultValue": "@OnHandLocatorDefault@"
-          },
-          "salesOrderLine": {
-            "readOnly": true
-          },
-          "project": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "costcenter": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "stDimension": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "ndDimension": {
-            "readOnlyLogic": "@Posted@='Y'"
+            "readOnlyLogic": "@Processed@='Y'"
           }
         }
       }
     },
-    "requiredSessionVariables": [],
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
     "evaluationMode": "runtime"
   },
   "agentProfile": {
@@ -647,17 +552,19 @@
         "businessPartner",
         "partnerAddress",
         "movementDate",
-        "accountingDate",
-        "warehouse",
-        "documentAction"
+        "warehouse"
+      ],
+      "lineFields": [
+        "movementQuantity"
       ],
       "recommendedOrder": [
-        "createHeader"
+        "createHeader",
+        "createLines"
       ]
     },
     "selectorContexts": [
       {
-        "entity": "header",
+        "entity": "returnToVendorShipment",
         "field": "partnerAddress",
         "context": {
           "required": [
@@ -665,53 +572,6 @@
               "param": "C_BPartner_ID",
               "source": "field",
               "field": "businessPartner"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "header",
-        "field": "project",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "C_BPartner_ID",
-              "source": "field",
-              "field": "businessPartner"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "lines",
-        "field": "operativeUOM",
-        "context": {
-          "required": [
-            {
-              "param": "IsSOTrx",
-              "source": "windowCategory"
-            },
-            {
-              "param": "M_Product_ID",
-              "source": "field",
-              "field": "product"
-            }
-          ]
-        }
-      },
-      {
-        "entity": "lines",
-        "field": "storageBin",
-        "context": {
-          "required": [
-            {
-              "param": "M_Warehouse_ID",
-              "source": "parentField",
-              "field": "warehouse"
             }
           ]
         }
@@ -723,10 +583,12 @@
       "generateTo",
       "documentAction",
       "posted",
-      "receiveMaterials"
+      "receiveMaterials",
+      "etblkpBulkposting"
     ],
     "workflow": [
       "Create draft header with required fields",
+      "Add at least one valid line",
       "Validate form state",
       "Complete the document"
     ],
@@ -750,9 +612,14 @@
           "businessPartner",
           "partnerAddress",
           "movementDate",
-          "accountingDate",
-          "warehouse",
-          "documentAction"
+          "warehouse"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "movementQuantity"
         ]
       },
       {
@@ -765,5 +632,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "f97e56957ada6fbe"
+  "checksum": "ae8fd1d1a3362468"
 }

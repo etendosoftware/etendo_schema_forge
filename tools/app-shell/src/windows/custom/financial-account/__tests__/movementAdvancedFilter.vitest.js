@@ -20,7 +20,7 @@ const ROWS = [
     balance: 1000,
     date: '2026-05-10',
     trxType: 'BPD',
-    paymentStatus: 'RPR', // COMPLETED → financeAccountMovementsStatusCompleted
+    paymentStatus: 'RPR', // non-cleared → financeAccountMovementsStatusUnreconciled
   },
   {
     id: 'b',
@@ -32,7 +32,7 @@ const ROWS = [
     balance: 1250,
     date: '2026-06-20',
     trxType: 'BPW',
-    paymentStatus: 'RPAP', // DRAFT → financeAccountMovementsStatusDraft
+    paymentStatus: 'RPPC', // cleared → financeAccountMovementsStatusReconciled
   },
 ];
 
@@ -46,8 +46,8 @@ const one = (field, operator, value, rowOperator = 'and') => ({
 
 describe('movementStatusLabelKey', () => {
   it('maps a known payment status code to its label key', () => {
-    expect(movementStatusLabelKey('RPR')).toBe('financeAccountMovementsStatusCompleted');
-    expect(movementStatusLabelKey('RPAP')).toBe('financeAccountMovementsStatusDraft');
+    expect(movementStatusLabelKey('RPPC')).toBe('financeAccountMovementsStatusReconciled');
+    expect(movementStatusLabelKey('RPR')).toBe('financeAccountMovementsStatusUnreconciled');
   });
 
   it('returns null for an unknown code', () => {
@@ -208,14 +208,14 @@ describe('applyAdvancedFilter — unknown operator', () => {
 
 describe('applyAdvancedFilter — statusFamily derivation', () => {
   it('matches against the label key derived from paymentStatus', () => {
-    const completedKey = MOVEMENT_STATUS_CONFIG.RPR.labelKey;
-    const result = applyAdvancedFilter(ROWS, one('statusFamily', 'iEquals', completedKey));
+    const unreconciledKey = MOVEMENT_STATUS_CONFIG.RPR.labelKey;
+    const result = applyAdvancedFilter(ROWS, one('statusFamily', 'iEquals', unreconciledKey));
     expect(ids(result)).toEqual(['a']);
   });
 
-  it('matches a draft family via its label key', () => {
-    const draftKey = MOVEMENT_STATUS_CONFIG.RPAP.labelKey;
-    expect(ids(applyAdvancedFilter(ROWS, one('statusFamily', 'equals', draftKey)))).toEqual(['b']);
+  it('matches the reconciled family via its label key', () => {
+    const reconciledKey = MOVEMENT_STATUS_CONFIG.RPPC.labelKey;
+    expect(ids(applyAdvancedFilter(ROWS, one('statusFamily', 'equals', reconciledKey)))).toEqual(['b']);
   });
 });
 

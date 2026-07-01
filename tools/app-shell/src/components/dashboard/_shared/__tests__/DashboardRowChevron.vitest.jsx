@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 
 vi.mock('lucide-react', () => ({
-  ChevronRight: (props) => <svg data-testid="icon-ChevronRight" {...props} />,
+  ChevronRight: (props) => <svg {...props} data-testid="icon-ChevronRight" />,
 }));
 
 import { DashboardRowChevron } from '../DashboardRowChevron.jsx';

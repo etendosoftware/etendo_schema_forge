@@ -23,6 +23,6 @@ export function DateRangeFilter({ value, onChange }) {
       value={value}
       onChange={onChange}
       placeholder={ui('dateRangeAnyTime')}
-    />
+      data-testid="DateRangePopover__f6e6a4" />
   );
 }

@@ -36,6 +36,15 @@ const CUSTOM_ONLY_ARTIFACTS = new Set([
   'fiscal-config',
   'fiscal-monitor',
   'financial-account',
+  'not-posted-documents',
+]);
+
+// Backend-only artifacts: they run the contract + push-to-neo pipeline (so they have a
+// contract.json) to expose a NEO W spec for selectors / inline create, but they have NO
+// frontend window — no AD menu, no route, no registry entry, no generated/ output. The
+// registry checks (F3, F10) must not fire for these.
+const BACKEND_ONLY_ARTIFACTS = new Set([
+  'transaction-type',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -209,6 +218,9 @@ async function ruleF2(artifactDir, artifactName) {
  * The caller passes registryContent (raw text of registry.js), or null if unreadable.
  */
 async function ruleF3(artifactDir, artifactName, registryContent) {
+  if (BACKEND_ONLY_ARTIFACTS.has(artifactName)) {
+    return skipped('F3', artifactName, 'backend-only artifact (NEO spec, no frontend window) — F3 not applicable');
+  }
   if (registryContent === null) {
     return skipped('F3', artifactName, 'registry.js could not be read — F3 check skipped');
   }
@@ -716,6 +728,67 @@ async function ruleF16(artifactDir, artifactName) {
   return null;
 }
 
+/**
+ * F17: window.balanceFooter must reference real amount fields on the lines entity.
+ * Guards the double-entry balance footer wiring (ETP-4244).
+ */
+async function ruleF17(artifactDir, artifactName) {
+  const decisionsPath = join(artifactDir, 'decisions.json');
+  if (!(await fileExists(decisionsPath))) return null;
+  let decisions;
+  try {
+    decisions = JSON.parse(await readFile(decisionsPath, 'utf8'));
+  } catch {
+    return skipped('F17', artifactName, 'decisions.json could not be parsed — F17 check skipped');
+  }
+  const bf = decisions?.window?.balanceFooter;
+  if (!bf) return null;
+  if (!bf.debitField || !bf.creditField) {
+    return violation('F17', artifactName, 'BLOCK',
+      'window.balanceFooter requires both debitField and creditField',
+      'Set decisions.json window.balanceFooter to { debitField, creditField }.');
+  }
+  const contractPath = join(artifactDir, 'contract.json');
+  if (!(await fileExists(contractPath))) return skipped('F17', artifactName, 'contract.json not found — F17 check skipped');
+  let contract;
+  try {
+    contract = JSON.parse(await readFile(contractPath, 'utf8'));
+  } catch {
+    return skipped('F17', artifactName, 'contract.json could not be parsed — F17 check skipped');
+  }
+  const lineFields = collectFrontendLineFields(contract);
+  for (const field of [bf.debitField, bf.creditField]) {
+    if (!lineFields.has(field)) {
+      return violation('F17', artifactName, 'BLOCK',
+        `window.balanceFooter references line field '${field}' which does not exist on the lines entity`,
+        `Use line-entity field names that exist in the contract for window.balanceFooter (check frontendContract.entities.<lineEntity>.fields[].name).`);
+    }
+  }
+  return null;
+}
+
+/**
+ * Collect the field names declared on the line (non-header / detail) entity of
+ * the frontend contract. Real generated contracts populate
+ * frontendContract.entities.<entity>.fields[].name — contract.formState is
+ * never emitted, so balanceFooter validation must read from here.
+ */
+function collectFrontendLineFields(contract) {
+  const entities = contract.frontendContract?.entities ?? {};
+  const win = contract.frontendContract?.window ?? {};
+  const primaryEntity = win.primaryEntity;
+  const entityNames = Object.keys(entities);
+  const detailEntity = 'detailEntity' in win
+    ? win.detailEntity
+    : entityNames.find(name => name !== primaryEntity);
+  if (!detailEntity) return new Set();
+  const fields = new Set();
+  for (const field of entities[detailEntity]?.fields ?? []) {
+    if (field?.name) fields.add(field.name);
+  }
+  return fields;
+}
+
 // ---------------------------------------------------------------------------
 // Artifact discovery
 // ---------------------------------------------------------------------------
@@ -788,6 +861,7 @@ async function runWindowChecks(artifactDir, artifactName, registryContent, root,
     { rule: 'F14', run: () => ruleF14(artifactDir, artifactName) },
     { rule: 'F15', run: () => ruleF15(artifactDir, artifactName) },
     { rule: 'F16', run: () => ruleF16(artifactDir, artifactName) },
+    { rule: 'F17', run: () => ruleF17(artifactDir, artifactName) },
   ], skipSet);
 }
 

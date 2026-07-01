@@ -12,7 +12,7 @@ describe('FmModel349Page — exports', () => {
 });
 
 describe('FmModel349Page — composition', () => {
-  it('renders StatusPillMenu', () => assert.match(src, /StatusPillMenu/));
+  it('renders KpiWidget', () => assert.match(src, /KpiWidget/));
   it('has back navigation (onBack)', () => assert.match(src, /onBack/));
   it('renders operator table', () => assert.match(src, /operator|operador/i));
 });

@@ -1,8 +1,8 @@
 {
-  "version": "0.22.0",
+  "version": "0.28.0",
   "generatedAt": "2026-05-22T16:00:10.872Z",
-  "updatedAt": "2026-06-01T19:11:48.715Z",
-  "contractChecksum": "213abbe45c8319bd",
+  "updatedAt": "2026-06-24T20:46:46.891Z",
+  "contractChecksum": "ab49193b73a1aff1",
   "apiPrediction": {
     "specName": "amortization",
     "baseUrl": "/sws/neo/amortization",
@@ -148,13 +148,13 @@
         "processType": "classic"
       },
       {
-        "name": "posted",
+        "name": "etblkpBulkposting",
         "actionType": "documentAction",
         "entity": "header",
-        "column": "Posted",
+        "column": "EM_Etblkp_Bulkposting",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/amortization/header/{id}/action/posted",
+        "url": "/sws/neo/amortization/header/{id}/action/etblkpBulkposting",
         "parameters": [
           {
             "name": "docAction",
@@ -183,7 +183,9 @@
           "Document is already completed or closed",
           "Document has pending lines or missing required fields",
           "User lacks permission to execute the action"
-        ]
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -274,6 +276,21 @@
           "processed": {
             "required": true,
             "defaultValue": "N"
+          },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etblkpAccountingstatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etblkpBulkposting": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
           }
         }
       },
@@ -320,7 +337,9 @@
         }
       }
     },
-    "requiredSessionVariables": [],
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
     "evaluationMode": "runtime"
   },
   "agentProfile": {
@@ -345,7 +364,7 @@
     },
     "selectorContexts": [],
     "actions": [
-      "posted"
+      "etblkpBulkposting"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -385,12 +404,12 @@
       {
         "operation": "completeDocument",
         "description": "Validate form state and run the document lifecycle action when the draft is complete.",
-        "action": "posted"
+        "action": "etblkpBulkposting"
       }
     ],
     "warnings": [],
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "52ad731277edaf4d"
+  "checksum": "0f8630a068d50710"
 }

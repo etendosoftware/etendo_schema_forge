@@ -70,13 +70,17 @@ export default function ExplorerPage() {
           </div>
         </div>
 
-        {mode === 'manage' && <AddSpec onCreated={refreshAll} />}
+        {mode === 'manage' && <AddSpec onCreated={refreshAll} data-testid="AddSpec__58b8a2" />}
 
         <div className="flex-1 overflow-y-auto">
-          <SpecList key={specListKey} selected={selectedSpec} onSelect={handleSelectSpec} useAdmin={mode === 'manage'} />
+          <SpecList
+            key={specListKey}
+            selected={selectedSpec}
+            onSelect={handleSelectSpec}
+            useAdmin={mode === 'manage'}
+            data-testid="SpecList__58b8a2" />
         </div>
       </div>
-
       {/* Right: depends on mode */}
       {mode === 'test' ? (
         <>
@@ -86,7 +90,7 @@ export default function ExplorerPage() {
               specName={selectedSpec}
               selectedEntity={selectedEntity}
               onSelectEntity={setSelectedEntity}
-            />
+              data-testid="EntityPanel__58b8a2" />
           </div>
 
           {/* Right: Request + Response */}
@@ -96,18 +100,21 @@ export default function ExplorerPage() {
                 specName={selectedSpec}
                 entity={selectedEntity}
                 onResponse={setResponse}
-              />
+                data-testid="RequestBuilder__58b8a2" />
             </div>
             <div className="flex-1 overflow-auto p-4">
-              <ResponseViewer response={response} />
+              <ResponseViewer response={response} data-testid="ResponseViewer__58b8a2" />
             </div>
           </div>
         </>
       ) : (
         /* Manage mode: full-width spec manager */
-        <div className="flex-1 overflow-hidden">
-          <SpecManager spec={specDetail} onRefresh={refreshAll} />
-        </div>
+        (<div className="flex-1 overflow-hidden">
+          <SpecManager
+            spec={specDetail}
+            onRefresh={refreshAll}
+            data-testid="SpecManager__58b8a2" />
+        </div>)
       )}
     </div>
   );

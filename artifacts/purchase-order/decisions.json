@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Order",
+    "selectorPriceCurrency": "org",
     "notesField": "description",
     "relatedDocuments": true,
     "hideDeleteWhenComplete": true,
@@ -16,20 +17,20 @@
     "customComponents": {
       "topbarRight": "PurchaseOrderActions",
       "topbarExtra": "PurchaseOrderDraftChips",
-"bottomSection": "PurchaseOrderBottomPanel"
+      "bottomSection": "PurchaseOrderBottomPanel"
     },
     "linesLayout": "inlineEditable",
     "labelOverrides": {
       "es_ES": {
         "C_BPartner_ID": "Contacto",
         "DatePromised": "Fecha de entrega esperada",
-        "DeliveryStatusPurchase": "Estado de entrega",
+        "DeliveryStatusPurchase": "Estado de recepción",
         "InvoiceStatus": "Estado de facturación"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
         "DatePromised": "Expected Delivery Date",
-        "DeliveryStatusPurchase": "Delivery Status",
+        "DeliveryStatusPurchase": "Reception Status",
         "InvoiceStatus": "Invoicing Status"
       }
     },
@@ -78,10 +79,13 @@
           "gridOrder": 4
         },
         "currency": {
-          "form": false,
-          "reference": null,
-          "inputMode": null,
-          "section": "other"
+          "visibility": "editable",
+          "grid": false,
+          "form": true,
+          "section": "principal",
+          "order": 10,
+          "readOnlyLogic": "@Processed@='Y'",
+          "derivation": null
         },
         "orderDate": {
           "grid": true,
@@ -115,8 +119,7 @@
           }
         },
         "warehouse": {
-          "grid": false,
-          "form": false
+          "grid": false
         },
         "scheduledDeliveryDate": {
           "section": "principal",
@@ -135,7 +138,8 @@
         "priceList": {
           "grid": false,
           "section": "principal",
-          "form": true
+          "form": true,
+          "order": 11
         },
         "invoiceAddress": {
           "reference": "BusinessPartnerLocation",
@@ -306,6 +310,11 @@
         "etgoTotalDiscount": {
           "visibility": "editable",
           "form": false
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         }
       }
     },
@@ -416,7 +425,8 @@
           "order": 5,
           "gridOrder": 5,
           "readOnlyLogic": null,
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "taxableAmount": {
           "form": false,
@@ -460,7 +470,8 @@
           "displayLogic": null
         },
         "currency": {
-          "visibility": "readOnly",
+          "visibility": "editable",
+          "grid": false,
           "form": false,
           "reference": "Currency",
           "inputMode": null

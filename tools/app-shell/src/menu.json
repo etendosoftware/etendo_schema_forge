@@ -269,9 +269,9 @@
           "hidden": true
         },
         {
-          "name": "bank-reconciliation",
-          "label": "Bank Reconciliation",
-          "favname": "Bank Reconciliation",
+          "name": "match-rule",
+          "label": "Match Rule",
+          "favname": "Match Rule",
           "hidden": true
         },
         {
@@ -279,6 +279,18 @@
           "label": "Chart of Accounts",
           "favname": "Chart of Accounts",
           "windowId": "118"
+        },
+        {
+          "name": "general-ledger-configuration",
+          "label": "General Ledger Configuration",
+          "favname": "General Ledger Configuration",
+          "windowId": "125"
+        },
+        {
+          "name": "open-close-period-control",
+          "label": "Periods",
+          "favname": "Open/Close Period Control",
+          "windowId": "E66E701CCBA14B8BA480CBDE37C50D7A"
         },
         {
           "name": "assets",
@@ -291,6 +303,17 @@
           "label": "Amortization",
           "favname": "Amortization",
           "windowId": "800026"
+        },
+        {
+          "name": "not-posted-documents",
+          "label": "Not Posted Documents",
+          "favname": "Not Posted Documents"
+        },
+        {
+          "name": "simple-g-l-journal",
+          "label": "Manual Journals",
+          "favname": "Manual Journals",
+          "windowId": "B917E8A7B0864ACEA9D941E3B7494E53"
         },
         {
           "name": "recurring-invoice",
@@ -352,22 +375,16 @@
           "windowId": "141"
         },
         {
-          "name": "payment-method",
-          "label": "Payment Method",
-          "favname": "Payment Method",
-          "windowId": "3CAAC7D54593489384452416ACF356DD"
-        },
-        {
           "name": "tax",
           "label": "Tax",
           "favname": "Tax",
           "windowId": "137"
         },
         {
-          "name": "unit-of-measure",
-          "label": "Unit of Measure",
-          "favname": "Unit of Measure",
-          "windowId": "120"
+          "name": "tax-category",
+          "label": "Tax Category",
+          "favname": "Tax Category",
+          "windowId": "138"
         },
         {
           "name": "user",

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import { computeDocumentTotals } from '@/lib/documentTotals';
 import { ORDER_LINE_CONFIG } from '@/hooks/useLineGrossAmount';
@@ -10,6 +10,7 @@ import {
   fetchLocationAddress,
   fetchImageDataUrl,
   renderPdf,
+  usePdfGenerator,
 } from './pdfUtils.js';
 
 export { fetchJson, fetchAll, fetchOptionalJson, fetchLocationAddress, blobToDataUrl, fetchImageDataUrl } from './pdfUtils.js';
@@ -113,6 +114,8 @@ body { font-family: var(--font-sans); font-size: 13px; line-height: 18px; color:
 .inv-totals .row { display:flex; justify-content:space-between; font-size:13px; color:var(--fg-2); font-variant-numeric:tabular-nums; }
 .inv-totals .row.grand { margin-top:8px; padding-top:10px; border-top:1px solid var(--border-1); font-size:15px; font-weight:700; color:var(--fg-1); }
 .inv-totals .row.discount { color:var(--fg-3); font-size:12px; }
+.inv-totals .row.conversion-row { color:var(--fg-3); font-size:11px; font-weight:700; margin-top:4px; }
+.inv-totals .rate-note { color:var(--fg-4); font-size:10px; font-weight:700; margin-left:4px; }
 
 /* Observations */
 .inv-observ { border:1px solid var(--border-1); border-radius:var(--radius-lg); padding:14px 18px; display:grid; grid-template-columns:120px 1fr; gap:16px; margin-top:8px; }
@@ -216,6 +219,9 @@ export const DOCUMENT_TEMPLATE = `<!DOCTYPE html>
       <div class="row"><span>{{labels.subtotal}}</span><span>{{fmt netAmount}}</span></div>
       <div class="row"><span>{{labels.tax}}</span><span>{{fmt taxAmount}}</span></div>
       <div class="row grand"><span>{{labels.grandTotal}}</span><span>{{fmt grandTotal}}</span></div>
+      {{#if exchangeRate}}
+      <div class="row conversion-row"><span>{{orgCurrencyCode}}</span><span>{{fmt orgGrandTotal}} <span class="rate-note">({{fmtRate exchangeRate rateDecimals}})</span></span></div>
+      {{/if}}
     </div>
   </div>
 
@@ -278,7 +284,7 @@ export function buildCompanyFields(session, header, companyLogoDataUrl, partnerL
 // ---------------------------------------------------------------------------
 // Shared order data builder — used by both sales-order and purchase-order
 // ---------------------------------------------------------------------------
-export async function buildOrderData(spec, orderId, base, token) {
+export async function buildOrderData(spec, orderId, base, token, currencyData = null) {
   const [header, linesRaw, session] = await Promise.all([
     fetchJson(`${base}/${spec}/header/${orderId}`, token),
     fetchAll(`${base}/${spec}/lines?parentId=${orderId}`, token),
@@ -326,6 +332,14 @@ export async function buildOrderData(spec, orderId, base, token) {
     discountPerProduct: discountAmt > 0 ? discountAmt : null,
     etgoTotalDiscount:  etgoTotalDiscount > 0 ? etgoTotalDiscount : null,
     totalDiscountAmt:   totalDiscountAmt > 0 ? totalDiscountAmt : null,
+    exchangeRate: currencyData?.exchangeRate ?? null,
+    orgCurrencyCode: currencyData?.orgCurrencyCode ?? null,
+    // exchangeRate = org→doc multiplyRate (e.g. 1.20 = "1 EUR = 1.20 USD").
+    // Divide grandTotal (in doc currency) by it to get the org-currency equivalent.
+    orgGrandTotal: (currencyData?.exchangeRate && currencyData?.exchangeRate !== 1)
+      ? Number(grandTotal) / currencyData.exchangeRate
+      : null,
+    rateDecimals: session?.currencyStandardPrecision ?? 4,
   };
 }
 
@@ -384,49 +398,10 @@ export function computeDiscountBreakdown(linesRaw, etgoTotalDiscount, getGrossLi
 // labels are kept in a ref so they never re-trigger the effect on locale change
 // ---------------------------------------------------------------------------
 export function useDocumentPdf(recordId, apiBaseUrl, token, buildDataFn, labels) {
-  const [pdfUrl, setPdfUrl] = useState(null);
-  const [pdfBlob, setPdfBlob] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const prevUrlRef = useRef(null);
   const labelsRef = useRef(labels);
   labelsRef.current = labels;
-
-  useEffect(() => {
-    if (!recordId || !apiBaseUrl || !token) return;
-    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setPdfUrl(null);
-    setPdfBlob(null);
-
-    (async () => {
-      try {
-        const data = await buildDataFn(recordId, base, token);
-        const blob = await renderDocumentPdf({ ...data, labels: labelsRef.current });
-        if (cancelled) return;
-        const url = URL.createObjectURL(blob);
-        prevUrlRef.current = url;
-        setPdfUrl(url);
-        setPdfBlob(blob);
-      } catch (err) {
-        if (!cancelled) setError(err.message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      setPdfBlob(null);
-      if (prevUrlRef.current) {
-        URL.revokeObjectURL(prevUrlRef.current);
-        prevUrlRef.current = null;
-      }
-    };
-  }, [recordId, apiBaseUrl, token, buildDataFn]);
-
-  return { pdfUrl, pdfBlob, loading, error };
+  return usePdfGenerator(recordId, apiBaseUrl, token, (id, base, tok) =>
+    buildDataFn(id, base, tok).then((data) => renderDocumentPdf({ ...data, labels: labelsRef.current }))
+  );
 }
 

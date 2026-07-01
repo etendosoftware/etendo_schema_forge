@@ -126,6 +126,15 @@ function stripDeltaMeta(deltaRow) {
   return out;
 }
 
+function columnsToClear(deltaRow) {
+  const keys = [];
+  for (const [k, v] of Object.entries(deltaRow)) {
+    if (k === '_naturalKey') continue;
+    if (v === undefined || v === null || String(v) === '') keys.push(k);
+  }
+  return keys;
+}
+
 /**
  * Apply a per-table delta on top of an array of prev rows. The spec name is
  * required so we only touch rows that belong to it; rows from other specs
@@ -167,9 +176,11 @@ function applyUpsertsToOwned({ upserts, ownedByNK, pk }) {
   for (const upsert of upserts) {
     const nk = upsert._naturalKey;
     const deltaCols = stripDeltaMeta(upsert);
+    const clearCols = columnsToClear(upsert);
     const match = nk != null ? ownedByNK.get(nk) : null;
     if (match) {
       const merged = { ...match, ...deltaCols };
+      for (const col of clearCols) delete merged[col];
       merged[pk] = match[pk];
       consumedNKs.add(nk);
       resultOwned.push(merged);

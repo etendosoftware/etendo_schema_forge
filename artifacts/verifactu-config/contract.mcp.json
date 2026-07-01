@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.9.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-05-26T18:48:57.367Z",
-  "contractChecksum": "a066722139e468a9",
+  "updatedAt": "2026-06-25T19:58:32.797Z",
+  "contractChecksum": "85d0ee73a20ee2cd",
   "apiPrediction": {
     "specName": "verifactu-config",
     "baseUrl": "/sws/neo/verifactu-config",
@@ -41,28 +41,6 @@
           "Record is in an incompatible state"
         ],
         "processId": "D995FA46EEDB4DAF9F414E661FB13E43",
-        "processType": "obuiapp"
-      },
-      {
-        "name": "refreshData",
-        "actionType": "utilityAction",
-        "entity": "cabeceraDeConfiguraciónVerifactu",
-        "column": "Refresh_Data",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/verifactu-config/cabeceraDeConfiguraciónVerifactu/{id}/action/refreshData",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "E0D681117A1843C5B9D525701087D7DC",
         "processType": "obuiapp"
       }
     ],
@@ -154,11 +132,9 @@
         ]
       }
     ],
-    "warnings": [
-      "System lifecycle actions are present but are not exposed as editable agent actions"
-    ],
+    "warnings": [],
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "fce2d95505cbb2ce"
+  "checksum": "353e5d340c8d0664"
 }

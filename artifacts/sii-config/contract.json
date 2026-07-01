@@ -1,8 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-05-20T11:45:15.674Z",
-  "checksum": "56046e99f3e5f238",
+  "updatedAt": "2026-06-29T12:09:17.864Z",
+  "checksum": "b15c1d1763c3ce05",
   "frontendContract": {
     "window": {
       "id": "C1D3A2A017AC4B82B9FEE6F4D2A0C55A",
@@ -326,11 +326,17 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Issued"
+                "name": "Issued",
+                "labels": {
+                  "es_ES": "Emitidas"
+                }
               },
               {
                 "value": "R",
-                "name": "Received"
+                "name": "Received",
+                "labels": {
+                  "es_ES": "Recibidas"
+                }
               }
             ]
           },
@@ -360,51 +366,87 @@
             "enumValues": [
               {
                 "value": "1",
-                "name": "1 - January"
+                "name": "1 - January",
+                "labels": {
+                  "es_ES": "1 - Enero"
+                }
               },
               {
                 "value": "10",
-                "name": "10 - October"
+                "name": "10 - October",
+                "labels": {
+                  "es_ES": "10 - Octubre"
+                }
               },
               {
                 "value": "11",
-                "name": "11 - November"
+                "name": "11 - November",
+                "labels": {
+                  "es_ES": "11 - Noviembre"
+                }
               },
               {
                 "value": "12",
-                "name": "12 - December"
+                "name": "12 - December",
+                "labels": {
+                  "es_ES": "12 - Diciembre"
+                }
               },
               {
                 "value": "2",
-                "name": "2 - February"
+                "name": "2 - February",
+                "labels": {
+                  "es_ES": "2 - Febrero"
+                }
               },
               {
                 "value": "3",
-                "name": "3 - March"
+                "name": "3 - March",
+                "labels": {
+                  "es_ES": "3 - Marzo"
+                }
               },
               {
                 "value": "4",
-                "name": "4 - April"
+                "name": "4 - April",
+                "labels": {
+                  "es_ES": "4 - Abril"
+                }
               },
               {
                 "value": "5",
-                "name": "5 - May"
+                "name": "5 - May",
+                "labels": {
+                  "es_ES": "5 - Mayo"
+                }
               },
               {
                 "value": "6",
-                "name": "6 - June"
+                "name": "6 - June",
+                "labels": {
+                  "es_ES": "6 - Junio"
+                }
               },
               {
                 "value": "7",
-                "name": "7 - July"
+                "name": "7 - July",
+                "labels": {
+                  "es_ES": "7 - Julio"
+                }
               },
               {
                 "value": "8",
-                "name": "8 - August"
+                "name": "8 - August",
+                "labels": {
+                  "es_ES": "8 - Agosto"
+                }
               },
               {
                 "value": "9",
-                "name": "9 - September"
+                "name": "9 - September",
+                "labels": {
+                  "es_ES": "9 - Septiembre"
+                }
               }
             ]
           },
@@ -732,14 +774,6 @@
             "required": true
           },
           {
-            "name": "configuracinSII",
-            "apiKey": "configuracinSII",
-            "column": "Aeatsii_Config_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "nuevaConsultaFacturasASII",
             "apiKey": "nuevaConsultaFacturasASII",
             "column": "BTN_Consultar_Fact",
@@ -850,6 +884,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Config_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
           }
         ]
       },
@@ -891,14 +933,6 @@
             "required": true
           },
           {
-            "name": "logHash",
-            "apiKey": "logHash",
-            "column": "Aeatsii_Config_Log_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -935,6 +969,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Aeatsii_Config_Log_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -1869,12 +1911,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for logHash"
       },
       {
-        "id": "t-system-field-logHash-logHash",
+        "id": "t-system-field-logHash-id",
         "category": "system-field",
         "entity": "logHash",
-        "field": "logHash",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'logHash' should exist in backend but not frontend for logHash"
+        "description": "System field 'id' should exist in backend but not frontend for logHash"
       },
       {
         "id": "t-system-field-logHash-organization",
@@ -1925,14 +1967,6 @@
         "description": "System field 'client' should exist in backend but not frontend for siiConfiguration"
       },
       {
-        "id": "t-system-field-siiConfiguration-configuracinSII",
-        "category": "system-field",
-        "entity": "siiConfiguration",
-        "field": "configuracinSII",
-        "runner": "node",
-        "description": "System field 'configuracinSII' should exist in backend but not frontend for siiConfiguration"
-      },
-      {
         "id": "t-system-field-siiConfiguration-createdBy",
         "category": "system-field",
         "entity": "siiConfiguration",
@@ -1955,6 +1989,14 @@
         "field": "guipuzcoa",
         "runner": "node",
         "description": "System field 'guipuzcoa' should exist in backend but not frontend for siiConfiguration"
+      },
+      {
+        "id": "t-system-field-siiConfiguration-id",
+        "category": "system-field",
+        "entity": "siiConfiguration",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for siiConfiguration"
       },
       {
         "id": "t-system-field-siiConfiguration-informeltimaConexinSII",

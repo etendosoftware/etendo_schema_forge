@@ -157,3 +157,185 @@ describe('EntityCreationModal', () => {
     }
   });
 });
+
+// ── renderFieldInput — field type variants ─────────────────────────────────────
+
+describe('EntityCreationModal — renderFieldInput field types', () => {
+  it('renders a select field with its options', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        {
+          id: 'status',
+          labelKey: 'statusLabel',
+          type: 'select',
+          options: [
+            { id: 'active', label: 'Active' },
+            { id: 'inactive', label: 'Inactive' },
+          ],
+        },
+      ],
+      requiredFields: [],
+    };
+    render(<EntityCreationModal {...props} />);
+    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByText('Inactive')).toBeInTheDocument();
+  });
+
+  it('renders a select field without the empty option when required', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        {
+          id: 'status',
+          labelKey: 'statusLabel',
+          type: 'select',
+          required: true,
+          options: [{ id: 'active', label: 'Active' }],
+        },
+      ],
+      requiredFields: ['status'],
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    // No empty option "—" should be present when required
+    const selectEl = container.querySelector('select');
+    expect(selectEl).toBeTruthy();
+    const emptyOption = Array.from(selectEl.options).find(o => o.value === '');
+    expect(emptyOption).toBeUndefined();
+  });
+
+  it('renders a dynamicSelect field showing loading state', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        {
+          id: 'country',
+          labelKey: 'countryLabel',
+          type: 'dynamicSelect',
+          optionsKey: 'countries',
+        },
+      ],
+      opts: {
+        countries: { loading: true, options: [], error: null },
+      },
+      requiredFields: [],
+    };
+    render(<EntityCreationModal {...props} />);
+    // The mocked ui() returns key as-is; loading renders a disabled select with loadingOptions text
+    expect(screen.getByText('loadingOptions')).toBeInTheDocument();
+  });
+
+  it('renders a dynamicSelect field showing error state with retry button', () => {
+    const onRetry = vi.fn();
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        {
+          id: 'country',
+          labelKey: 'countryLabel',
+          type: 'dynamicSelect',
+          optionsKey: 'countries',
+        },
+      ],
+      opts: {
+        countries: { loading: false, options: [], error: 'err', onRetry },
+      },
+      requiredFields: [],
+    };
+    render(<EntityCreationModal {...props} />);
+    expect(screen.getByText('retryLoad')).toBeInTheDocument();
+  });
+
+  it('renders a dynamicSelect field with options', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        {
+          id: 'country',
+          labelKey: 'countryLabel',
+          type: 'dynamicSelect',
+          optionsKey: 'countries',
+        },
+      ],
+      opts: {
+        countries: {
+          loading: false,
+          options: [
+            { id: 'es', label: 'Spain' },
+            { id: 'fr', label: 'France' },
+          ],
+          error: null,
+        },
+      },
+      requiredFields: [],
+    };
+    render(<EntityCreationModal {...props} />);
+    expect(screen.getByText('Spain')).toBeInTheDocument();
+    expect(screen.getByText('France')).toBeInTheDocument();
+  });
+
+  it('renders a number input for number field type', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        { id: 'qty', labelKey: 'quantityLabel', type: 'number' },
+      ],
+      requiredFields: [],
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    const numInput = container.querySelector('input[type="number"]');
+    expect(numInput).toBeTruthy();
+  });
+
+  it('renders a tel input for tel field type', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        { id: 'phone', labelKey: 'phoneLabel', type: 'tel' },
+      ],
+      requiredFields: [],
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    const telInput = container.querySelector('input[type="tel"]');
+    expect(telInput).toBeTruthy();
+  });
+
+  // ETP-4321 regression guard: INPUT_CLS/SELECT_CLS must carry the important
+  // height token `!h-9` (FIELD_HEIGHT_IMPORTANT). The bug fix replaced
+  // `!${FIELD_HEIGHT}` (never seen by Tailwind's JIT scanner) with the literal
+  // FIELD_HEIGHT_IMPORTANT token, so the rendered class must contain `!h-9`.
+  it('text input className uses the !h-9 important height token (INPUT_CLS exercises FIELD_HEIGHT_IMPORTANT)', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        { id: 'note', labelKey: 'noteLabel', type: 'text' },
+      ],
+      requiredFields: [],
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    const textInput = container.querySelector('input[type="text"]');
+    expect(textInput).toBeTruthy();
+    expect(textInput.className).toContain('!h-9');
+  });
+
+  it('select field className uses the !h-9 important height token (SELECT_CLS + SELECT_STYLE)', () => {
+    const props = {
+      ...BASE_PROPS,
+      headerFields: [
+        {
+          id: 'status',
+          labelKey: 'statusLabel',
+          type: 'select',
+          options: [{ id: 'active', label: 'Active' }],
+        },
+      ],
+      requiredFields: [],
+    };
+    const { container } = render(<EntityCreationModal {...props} />);
+    const selectEl = container.querySelector('select');
+    expect(selectEl).toBeTruthy();
+    expect(selectEl.className).toContain('!h-9');
+    // SELECT_STYLE keeps fontSize only (height now comes from the token).
+    expect(selectEl.style.fontSize).toBe('14px');
+  });
+});

@@ -22,6 +22,16 @@ vi.mock('../PartnerAddressPicker.jsx', () => ({
 vi.mock('../SelectorInput.jsx', () => ({
   SelectorInput: () => <div data-testid="selector-input" />,
 }));
+vi.mock('../CreatableSearchSelect.jsx', () => ({
+  CreatableSearchSelect: ({ field, emptyOptionLabel, createLabel }) => (
+    <div
+      data-testid="creatable-search-select"
+      data-field={field?.key ?? ''}
+      data-empty-option={emptyOptionLabel ?? ''}
+      data-create-label={createLabel ?? ''}
+    />
+  ),
+}));
 vi.mock('../CreateContactContext.js', () => ({
   CreateContactContext: { Provider: ({ children }) => children, Consumer: ({ children }) => children(null) },
 }));
@@ -176,6 +186,76 @@ describe('EntityForm', () => {
       />
     );
     expect(screen.getByTestId('error-name')).toHaveTextContent('This field is required');
+  });
+
+  // ---------------------------------------------------------------------------
+  // searchSelect opt-in flag (ETP-4099): a `selector` FK field renders the
+  // searchable CreatableSearchSelect when `searchSelect: true`, otherwise the
+  // plain pick-only SelectorInput. allowCreate is plumbed but EntityForm never
+  // wires createLabel/onCreateRequest yet, so the create button stays OFF.
+  // ---------------------------------------------------------------------------
+  describe('searchSelect opt-in', () => {
+    const selectorField = (extra = {}) => ({
+      key: 'financialAccount',
+      label: 'Financial Account',
+      type: 'selector',
+      column: 'Fin_Financial_Account_ID',
+      reference: 'FinancialAccount',
+      ...extra,
+    });
+
+    it('renders the plain SelectorInput for a selector field WITHOUT searchSelect', () => {
+      render(
+        <EntityForm fields={[selectorField()]} data={{}} onChange={vi.fn()} />
+      );
+      expect(screen.getByTestId('selector-input')).toBeInTheDocument();
+      expect(screen.queryByTestId('creatable-search-select')).not.toBeInTheDocument();
+    });
+
+    it('renders CreatableSearchSelect for a selector field WITH searchSelect: true', () => {
+      render(
+        <EntityForm
+          fields={[selectorField({ searchSelect: true })]}
+          data={{}}
+          onChange={vi.fn()}
+        />
+      );
+      expect(screen.getByTestId('creatable-search-select')).toBeInTheDocument();
+      expect(screen.queryByTestId('selector-input')).not.toBeInTheDocument();
+    });
+
+    it('passes the resolved emptyOptionLabel through for a non-required searchSelect field', () => {
+      render(
+        <EntityForm
+          fields={[selectorField({
+            searchSelect: true,
+            emptyOptionLabelKey: 'matchRuleAllAccounts',
+            required: false,
+          })]}
+          data={{}}
+          onChange={vi.fn()}
+        />
+      );
+      // useUI mock returns the key as-is, so the resolved label equals the key.
+      expect(screen.getByTestId('creatable-search-select')).toHaveAttribute(
+        'data-empty-option',
+        'matchRuleAllAccounts'
+      );
+    });
+
+    it('passes NO createLabel even when allowCreate is set (create UI not wired)', () => {
+      render(
+        <EntityForm
+          fields={[selectorField({ searchSelect: true, allowCreate: true })]}
+          data={{}}
+          onChange={vi.fn()}
+        />
+      );
+      expect(screen.getByTestId('creatable-search-select')).toHaveAttribute(
+        'data-create-label',
+        ''
+      );
+    });
   });
 
   it('respects displayLogic to hide fields', () => {

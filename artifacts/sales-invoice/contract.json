@@ -1,8 +1,8 @@
 {
-  "version": "0.27.0",
+  "version": "0.41.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-06-03T17:59:10.541Z",
-  "checksum": "cf464df5696fea6d",
+  "updatedAt": "2026-06-29T19:54:37.986Z",
+  "checksum": "361ed75db4f720a4",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -25,7 +25,17 @@
           "labelKey": "reactivate",
           "visibleWhenStatus": "CO",
           "documentAction": "RE",
-          "successKey": "reactivated"
+          "successKey": "reactivated",
+          "preUnpost": true
+        },
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
         }
       ],
       "processOverrides": {},
@@ -50,14 +60,33 @@
         "es_ES": {
           "OutstandingAmt": "Pendiente de pago",
           "EM_Etgo_Due_Date": "Vencimiento",
-          "em_etgo_delivery_status": "Estado de entrega"
+          "em_etgo_delivery_status": "Estado de entrega",
+          "C_DocTypeTarget_ID": "Tipo de documento"
         },
         "en_US": {
           "OutstandingAmt": "Pending Payment",
           "EM_Etgo_Due_Date": "Due Date",
-          "em_etgo_delivery_status": "Delivery Status"
+          "em_etgo_delivery_status": "Delivery Status",
+          "C_DocTypeTarget_ID": "Document Type"
         }
       },
+      "subsetFilters": [
+        {
+          "label": "allTab"
+        },
+        {
+          "label": "invoicesTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"
+        },
+        {
+          "label": "creditNotesTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D"
+        },
+        {
+          "label": "returnsTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D"
+        }
+      ],
       "dateFilterKey": "invoiceDate",
       "noHeaderBorder": true,
       "lineEntityConfig": "invoice",
@@ -71,7 +100,15 @@
         }
       ],
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "header": {
@@ -170,7 +207,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | (@Processed@='Y' & (@DocStatus@!'VO'))",
               "evaluable": true,
-              "js": "record['posted'] === 'Y' || (record['processed'] === true && (record['documentStatus'] !== 'VO'))"
+              "js": "record['posted'] === true || (record['processed'] === true && (record['documentStatus'] !== 'VO'))"
             }
           },
           {
@@ -320,43 +357,73 @@
             "enumValues": [
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "CO",
-                "name": "Completed"
+                "name": "Completed",
+                "labels": {
+                  "es_ES": "Completado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TEMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR",
@@ -375,7 +442,7 @@
             "form": true,
             "sourceRequired": true,
             "section": "summary",
-            "gridOrder": 5
+            "gridOrder": 6
           },
           {
             "name": "summedLineAmount",
@@ -439,11 +506,11 @@
             "apiKey": "posted",
             "column": "Posted",
             "label": "Posted",
-            "type": "button",
-            "tsType": "string",
+            "type": "boolean",
+            "tsType": "boolean",
             "visibility": "readOnly",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": false,
             "sourceRequired": true,
             "derivation": {
@@ -451,6 +518,23 @@
               "source": "'N'"
             },
             "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "gridOrder": 5,
             "displayLogic": {
               "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
               "evaluable": false,
@@ -476,7 +560,7 @@
             },
             "defaultValue": "0",
             "section": "summary",
-            "gridOrder": 6,
+            "gridOrder": 7,
             "displayLogic": {
               "raw": "@Processed@='Y' & @Ispaid@='N'",
               "evaluable": true
@@ -691,19 +775,31 @@
             "enumValues": [
               {
                 "value": "R",
-                "name": "Corrective invoice"
+                "name": "Corrective invoice",
+                "labels": {
+                  "es_ES": "Factura rectificativa"
+                }
               },
               {
                 "value": "F1",
-                "name": "Invoice"
+                "name": "Invoice",
+                "labels": {
+                  "es_ES": "Factura"
+                }
               },
               {
                 "value": "F2",
-                "name": "Simplified invoice"
+                "name": "Simplified invoice",
+                "labels": {
+                  "es_ES": "Factura simplificada"
+                }
               },
               {
                 "value": "F4",
-                "name": "Simplified invoices summary"
+                "name": "Simplified invoices summary",
+                "labels": {
+                  "es_ES": "Asiento resumen facturas simplificadas"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'F1' ELSE null END FROM dual",
@@ -792,35 +888,59 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Accepted with errors"
+                "name": "Accepted with errors",
+                "labels": {
+                  "es_ES": "Aceptado con errores"
+                }
               },
               {
                 "value": "AN",
-                "name": "Annulled"
+                "name": "Annulled",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               },
               {
                 "value": "IN",
-                "name": "Incorrect"
+                "name": "Incorrect",
+                "labels": {
+                  "es_ES": "Incorrecto"
+                }
               },
               {
                 "value": "NR",
-                "name": "Not Registrable to SII"
+                "name": "Not Registrable to SII",
+                "labels": {
+                  "es_ES": "No Declarable en SII"
+                }
               },
               {
                 "value": "PE",
-                "name": "Pending to send to SII"
+                "name": "Pending to send to SII",
+                "labels": {
+                  "es_ES": "Pendiente de enviar a SII"
+                }
               },
               {
                 "value": "CO",
-                "name": "Right"
+                "name": "Right",
+                "labels": {
+                  "es_ES": "Correcto"
+                }
               },
               {
                 "value": "EE",
-                "name": "Sending error"
+                "name": "Sending error",
+                "labels": {
+                  "es_ES": "Error al enviar"
+                }
               },
               {
                 "value": "BA",
-                "name": "Unsubscribed"
+                "name": "Unsubscribed",
+                "labels": {
+                  "es_ES": "Baja"
+                }
               }
             ],
             "defaultValue": "@SQL=SELECT CASE WHEN ((SELECT c.insiisystem FROM aeatsii_config c WHERE c.ad_org_id = (SELECT ad_get_org_le_bu(@AD_Org_ID@,'LE') FROM dual))='Y') THEN 'PE' ELSE null END FROM dual",
@@ -959,7 +1079,7 @@
             "required": false,
             "grid": true,
             "form": false,
-            "gridOrder": 7
+            "gridOrder": 8
           },
           {
             "name": "eTGODeliveryStatus",
@@ -972,7 +1092,46 @@
             "required": false,
             "grid": true,
             "form": false,
-            "gridOrder": 8
+            "gridOrder": 9
+          },
+          {
+            "name": "transactionDocument",
+            "apiKey": "transactionDocument",
+            "column": "C_DocTypeTarget_ID",
+            "label": "Transaction Document",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "doctype.salesOrder"
+            },
+            "reference": "DocumentType",
+            "inputMode": "selector",
+            "section": "principal",
+            "seq": 15,
+            "validationRule": {
+              "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+              "contextParams": [
+                "AD_Client_ID"
+              ],
+              "cascadeParams": [
+                "IsSOTrx",
+                "AD_Org_ID"
+              ]
+            },
+            "callout": {
+              "className": "com.etendoerp.verifactu.ad_callouts.AddDefaultInfo"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "!!record.id"
+            }
           }
         ],
         "searchableFields": [
@@ -1093,6 +1252,13 @@
             "derivation": {
               "type": "computed",
               "source": "false"
+            }
+          },
+          {
+            "name": "transactionDocument",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "doctype.salesOrder"
             }
           }
         ],
@@ -1222,14 +1388,11 @@
             "required": false,
             "grid": true,
             "form": true,
-            "derivation": {
-              "type": "computed",
-              "source": "0"
-            },
             "defaultValue": "0",
             "section": "principal",
             "gridOrder": 5,
             "min": 0,
+            "max": 100,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -1255,7 +1418,7 @@
             "section": "principal",
             "gridOrder": 6,
             "validationRule": {
-              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID=@AD_CLIENT_ID@ AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
               "cascadeParams": [
                 "DateInvoiced",
@@ -1353,13 +1516,6 @@
             "derivation": {
               "type": "computed",
               "source": "1"
-            }
-          },
-          {
-            "name": "etgoDiscount",
-            "derivation": {
-              "type": "computed",
-              "source": "0"
             }
           },
           {
@@ -1559,19 +1715,6 @@
               "source": "0"
             },
             "defaultValue": "0"
-          },
-          {
-            "name": "finPaymentScheduleID",
-            "apiKey": "finPaymentScheduleID",
-            "column": "Fin_Payment_Schedule_ID",
-            "label": "Fin_Payment_Schedule_ID",
-            "type": "id",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true
           }
         ],
         "searchableFields": [],
@@ -1640,7 +1783,7 @@
             "readOnlyLogic": {
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
+              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
             }
           },
           {
@@ -1665,7 +1808,7 @@
             "readOnlyLogic": {
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
+              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
             }
           },
           {
@@ -1685,7 +1828,7 @@
             "readOnlyLogic": {
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
+              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
             }
           },
           {
@@ -1711,7 +1854,7 @@
             "readOnlyLogic": {
               "raw": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
               "evaluable": true,
-              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === 'Y'"
+              "js": "record['hASREVERSEDINVOICESO'] === 'Y' || record['hASREVERSEDINVOICEPO'] === 'Y' || record['posted'] === true"
             }
           }
         ],
@@ -1751,7 +1894,17 @@
           "labelKey": "reactivate",
           "visibleWhenStatus": "CO",
           "documentAction": "RE",
-          "successKey": "reactivated"
+          "successKey": "reactivated",
+          "preUnpost": true
+        },
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
         }
       ],
       "processOverrides": {},
@@ -1776,14 +1929,33 @@
         "es_ES": {
           "OutstandingAmt": "Pendiente de pago",
           "EM_Etgo_Due_Date": "Vencimiento",
-          "em_etgo_delivery_status": "Estado de entrega"
+          "em_etgo_delivery_status": "Estado de entrega",
+          "C_DocTypeTarget_ID": "Tipo de documento"
         },
         "en_US": {
           "OutstandingAmt": "Pending Payment",
           "EM_Etgo_Due_Date": "Due Date",
-          "em_etgo_delivery_status": "Delivery Status"
+          "em_etgo_delivery_status": "Delivery Status",
+          "C_DocTypeTarget_ID": "Document Type"
         }
       },
+      "subsetFilters": [
+        {
+          "label": "allTab"
+        },
+        {
+          "label": "invoicesTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D"
+        },
+        {
+          "label": "creditNotesTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D"
+        },
+        {
+          "label": "returnsTab",
+          "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D"
+        }
+      ],
       "dateFilterKey": "invoiceDate",
       "noHeaderBorder": true,
       "lineEntityConfig": "invoice",
@@ -1796,7 +1968,15 @@
           "placement": "tab"
         }
       ],
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "header": {
@@ -1810,14 +1990,6 @@
             "column": "AD_Org_ID",
             "type": "foreignKey",
             "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "cDocTypeTargetId",
-            "apiKey": "cDocTypeTargetId",
-            "column": "C_DocTypeTarget_ID",
-            "type": "foreignKey",
-            "visibility": "system",
             "required": true
           },
           {
@@ -1952,7 +2124,7 @@
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
+            "type": "boolean",
             "visibility": "readOnly",
             "required": true
           },
@@ -3075,6 +3247,46 @@
             "type": "integer",
             "visibility": "readOnly",
             "required": false
+          },
+          {
+            "name": "psd2GenerateBankPayment",
+            "apiKey": "psd2GenerateBankPayment",
+            "column": "EM_Psd2_Generate_Bank_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTPRRemovePayment",
+            "apiKey": "eTPRRemovePayment",
+            "column": "EM_Etpr_Remove_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "transactionDocument",
+            "apiKey": "transactionDocument",
+            "column": "C_DocTypeTarget_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
           }
         ],
         "javaQualifier": "salesInvoiceHeaderHandler"
@@ -3226,22 +3438,6 @@
             "column": "M_AttributeSetInstance_ID",
             "type": "productAttribute",
             "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "cOrderlineId",
-            "apiKey": "cOrderlineId",
-            "column": "C_OrderLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "mInoutlineId",
-            "apiKey": "mInoutlineId",
-            "column": "M_InOutLine_ID",
-            "type": "foreignKey",
-            "visibility": "system",
             "required": false
           },
           {
@@ -3547,6 +3743,22 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "goodsShipmentLine",
+            "apiKey": "goodsShipmentLine",
+            "column": "M_InOutLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "salesOrderLine",
+            "apiKey": "salesOrderLine",
+            "column": "C_OrderLine_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
           }
         ],
         "javaQualifier": "invoiceLineHandler"
@@ -3709,14 +3921,6 @@
             "required": true
           },
           {
-            "name": "finPaymentScheduleID",
-            "apiKey": "finPaymentScheduleID",
-            "column": "Fin_Payment_Schedule_ID",
-            "type": "id",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
             "name": "order",
             "apiKey": "order",
             "column": "C_Order_ID",
@@ -3769,6 +3973,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Fin_Payment_Schedule_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4207,6 +4419,27 @@
         "url": "/sws/neo/sales-invoice/header/selectors/aeatsiiCauseExemption"
       },
       {
+        "entity": "header",
+        "field": "transactionDocument",
+        "column": "C_DocTypeTarget_ID",
+        "reference": "DocumentType",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-invoice/header/selectors/transactionDocument",
+        "context": {
+          "required": [
+            {
+              "param": "IsSOTrx",
+              "source": "windowCategory"
+            },
+            {
+              "param": "AD_Org_ID",
+              "source": "field",
+              "field": "adOrgId"
+            }
+          ]
+        }
+      },
+      {
         "entity": "lines",
         "field": "product",
         "column": "M_Product_ID",
@@ -4277,12 +4510,6 @@
         "url": "/sws/neo/sales-invoice/header/{id}/action/aPRMAddpayment",
         "processId": "9BED7889E1034FE68BD85D5D16857320",
         "processType": "obuiapp"
-      },
-      {
-        "entity": "header",
-        "field": "posted",
-        "column": "Posted",
-        "url": "/sws/neo/sales-invoice/header/{id}/action/posted"
       },
       {
         "entity": "header",
@@ -4419,6 +4646,30 @@
         "processType": "obuiapp"
       },
       {
+        "entity": "header",
+        "field": "psd2GenerateBankPayment",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "url": "/sws/neo/sales-invoice/header/{id}/action/psd2GenerateBankPayment",
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "column": "EM_Etpr_Remove_Payment",
+        "url": "/sws/neo/sales-invoice/header/{id}/action/eTPRRemovePayment",
+        "processId": "745FCF75B6F14024B96CC14429D8E952",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/sales-invoice/header/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
         "entity": "lines",
         "field": "explode",
         "column": "Explode",
@@ -4479,12 +4730,14 @@
       "es_ES": {
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
-        "em_etgo_delivery_status": "Estado de entrega"
+        "em_etgo_delivery_status": "Estado de entrega",
+        "C_DocTypeTarget_ID": "Tipo de documento"
       },
       "en_US": {
         "OutstandingAmt": "Pending Payment",
         "EM_Etgo_Due_Date": "Due Date",
-        "em_etgo_delivery_status": "Delivery Status"
+        "em_etgo_delivery_status": "Delivery Status",
+        "C_DocTypeTarget_ID": "Document Type"
       }
     }
   },
@@ -4587,6 +4840,22 @@
         "description": "Action endpoint for 'documentAction' in header should exist"
       },
       {
+        "id": "t-action-endpoint-header-etblkpBulkposting",
+        "category": "action-endpoint",
+        "entity": "header",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Action endpoint for 'etblkpBulkposting' in header should exist"
+      },
+      {
+        "id": "t-action-endpoint-header-eTPRRemovePayment",
+        "category": "action-endpoint",
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "runner": "node",
+        "description": "Action endpoint for 'eTPRRemovePayment' in header should exist"
+      },
+      {
         "id": "t-action-endpoint-header-etvfacRectCreate",
         "category": "action-endpoint",
         "entity": "header",
@@ -4603,20 +4872,20 @@
         "description": "Action endpoint for 'generateTo' in header should exist"
       },
       {
-        "id": "t-action-endpoint-header-posted",
-        "category": "action-endpoint",
-        "entity": "header",
-        "field": "posted",
-        "runner": "node",
-        "description": "Action endpoint for 'posted' in header should exist"
-      },
-      {
         "id": "t-action-endpoint-header-processNow",
         "category": "action-endpoint",
         "entity": "header",
         "field": "processNow",
         "runner": "node",
         "description": "Action endpoint for 'processNow' in header should exist"
+      },
+      {
+        "id": "t-action-endpoint-header-psd2GenerateBankPayment",
+        "category": "action-endpoint",
+        "entity": "header",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "Action endpoint for 'psd2GenerateBankPayment' in header should exist"
       },
       {
         "id": "t-action-endpoint-header-tBAIQRcode",
@@ -5543,6 +5812,14 @@
         "description": "Field 'tbaiSequence' should be present in header"
       },
       {
+        "id": "t-field-presence-header-transactionDocument",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Field 'transactionDocument' should be present in header"
+      },
+      {
         "id": "t-field-presence-lines-description",
         "category": "field-presence",
         "entity": "lines",
@@ -5669,14 +5946,6 @@
         "field": "finPaymentmethodID",
         "runner": "node",
         "description": "Field 'finPaymentmethodID' should be present in paymentPlan"
-      },
-      {
-        "id": "t-field-presence-paymentPlan-finPaymentScheduleID",
-        "category": "field-presence",
-        "entity": "paymentPlan",
-        "field": "finPaymentScheduleID",
-        "runner": "node",
-        "description": "Field 'finPaymentScheduleID' should be present in paymentPlan"
       },
       {
         "id": "t-field-presence-paymentPlan-lastPaymentDate",
@@ -5972,7 +6241,7 @@
         "entity": "header",
         "field": "posted",
         "runner": "node",
-        "description": "Field 'posted' should have type 'string' in header"
+        "description": "Field 'posted' should have type 'boolean' in header"
       },
       {
         "id": "t-field-type-header-priceList",
@@ -6029,6 +6298,14 @@
         "field": "tbaiSequence",
         "runner": "node",
         "description": "Field 'tbaiSequence' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-transactionDocument",
+        "category": "field-type",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Field 'transactionDocument' should have type 'string' in header"
       },
       {
         "id": "t-field-type-lines-description",
@@ -6157,14 +6434,6 @@
         "field": "finPaymentmethodID",
         "runner": "node",
         "description": "Field 'finPaymentmethodID' should have type 'string' in paymentPlan"
-      },
-      {
-        "id": "t-field-type-paymentPlan-finPaymentScheduleID",
-        "category": "field-type",
-        "entity": "paymentPlan",
-        "field": "finPaymentScheduleID",
-        "runner": "node",
-        "description": "Field 'finPaymentScheduleID' should have type 'string' in paymentPlan"
       },
       {
         "id": "t-field-type-paymentPlan-lastPaymentDate",
@@ -6373,6 +6642,14 @@
         "field": "priceList",
         "runner": "node",
         "description": "Read-only logic for 'priceList' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-transactionDocument",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Read-only logic for 'transactionDocument' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-lines-etgoDiscount",
@@ -6597,6 +6874,14 @@
         "field": "priceList",
         "runner": "node",
         "description": "Read-only logic for 'priceList' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-transactionDocument",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Read-only logic for 'transactionDocument' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-lines-etgoDiscount",
@@ -6845,6 +7130,14 @@
         "field": "priceList",
         "runner": "node",
         "description": "Selector endpoint for 'priceList' in header should exist"
+      },
+      {
+        "id": "t-selector-endpoint-header-transactionDocument",
+        "category": "selector-endpoint",
+        "entity": "header",
+        "field": "transactionDocument",
+        "runner": "node",
+        "description": "Selector endpoint for 'transactionDocument' in header should exist"
       },
       {
         "id": "t-selector-endpoint-lines-product",
@@ -7239,14 +7532,6 @@
         "description": "System field 'cDocTypeId' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-cDocTypeTargetId",
-        "category": "system-field",
-        "entity": "header",
-        "field": "cDocTypeTargetId",
-        "runner": "node",
-        "description": "System field 'cDocTypeTargetId' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-charge",
         "category": "system-field",
         "entity": "header",
@@ -7359,12 +7644,36 @@
         "description": "System field 'dueAmount' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-etblkpAccountingstatus",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-etblkpBulkposting",
+        "category": "system-field",
+        "entity": "header",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "System field 'etblkpBulkposting' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-etcopagCopilotFeedback",
         "category": "system-field",
         "entity": "header",
         "field": "etcopagCopilotFeedback",
         "runner": "node",
         "description": "System field 'etcopagCopilotFeedback' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-eTPRRemovePayment",
+        "category": "system-field",
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "runner": "node",
+        "description": "System field 'eTPRRemovePayment' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-etsgIsF3",
@@ -7783,6 +8092,14 @@
         "description": "System field 'project' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-psd2GenerateBankPayment",
+        "category": "system-field",
+        "entity": "header",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "System field 'psd2GenerateBankPayment' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-salesCampaign",
         "category": "system-field",
         "entity": "header",
@@ -8079,14 +8396,6 @@
         "description": "System field 'cInvoiceId' should exist in backend but not frontend for lines"
       },
       {
-        "id": "t-system-field-lines-cOrderlineId",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "cOrderlineId",
-        "runner": "node",
-        "description": "System field 'cOrderlineId' should exist in backend but not frontend for lines"
-      },
-      {
         "id": "t-system-field-lines-costcenter",
         "category": "system-field",
         "entity": "lines",
@@ -8167,6 +8476,14 @@
         "description": "System field 'financialInvoiceLine' should exist in backend but not frontend for lines"
       },
       {
+        "id": "t-system-field-lines-goodsShipmentLine",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "goodsShipmentLine",
+        "runner": "node",
+        "description": "System field 'goodsShipmentLine' should exist in backend but not frontend for lines"
+      },
+      {
         "id": "t-system-field-lines-grossListPrice",
         "category": "system-field",
         "entity": "lines",
@@ -8213,14 +8530,6 @@
         "field": "matchLCCosts",
         "runner": "node",
         "description": "System field 'matchLCCosts' should exist in backend but not frontend for lines"
-      },
-      {
-        "id": "t-system-field-lines-mInoutlineId",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "mInoutlineId",
-        "runner": "node",
-        "description": "System field 'mInoutlineId' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-ndDimension",
@@ -8317,6 +8626,14 @@
         "field": "resourceAssignment",
         "runner": "node",
         "description": "System field 'resourceAssignment' should exist in backend but not frontend for lines"
+      },
+      {
+        "id": "t-system-field-lines-salesOrderLine",
+        "category": "system-field",
+        "entity": "lines",
+        "field": "salesOrderLine",
+        "runner": "node",
+        "description": "System field 'salesOrderLine' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-standardPrice",
@@ -8423,6 +8740,14 @@
         "description": "System field 'fINPaymentPriorityID' should exist in backend but not frontend for paymentPlan"
       },
       {
+        "id": "t-system-field-paymentPlan-id",
+        "category": "system-field",
+        "entity": "paymentPlan",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for paymentPlan"
+      },
+      {
         "id": "t-system-field-paymentPlan-invoice",
         "category": "system-field",
         "entity": "paymentPlan",
@@ -8508,25 +8833,25 @@
       }
     ],
     "summary": {
-      "total": 504,
+      "total": 513,
       "byCategory": {
-        "action-endpoint": 24,
+        "action-endpoint": 26,
         "crud-flags": 4,
         "default-value-type": 23,
         "displaylogic-evaluable": 21,
         "displaylogic-valid": 21,
         "field-presence": 61,
         "field-type": 61,
-        "readonlylogic-evaluable": 28,
-        "readonlylogic-valid": 28,
+        "readonlylogic-evaluable": 29,
+        "readonlylogic-valid": 29,
         "rule-declared": 8,
         "searchable-filters": 6,
-        "selector-endpoint": 15,
-        "system-field": 200,
+        "selector-endpoint": 16,
+        "system-field": 204,
         "visibility": 4
       },
       "byRunner": {
-        "node": 504,
+        "node": 513,
         "junit": 0
       }
     }

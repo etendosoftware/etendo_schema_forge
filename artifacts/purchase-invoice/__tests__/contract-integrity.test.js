@@ -44,9 +44,9 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.equal(orderReference.readOnlyLogic, undefined);
   });
 
-  it('keeps the generated HeaderForm order as Business Partner, POReference, Invoice Date', () => {
+  it('keeps the generated HeaderForm order as Business Partner, Transaction Document, Document No. first', () => {
     const keys = [...headerFormSrc.matchAll(/key: '([^']+)'/g)].map((match) => match[1]);
-    assert.deepEqual(keys.slice(0, 3), ['businessPartner', 'orderReference', 'invoiceDate']);
+    assert.deepEqual(keys.slice(0, 3), ['businessPartner', 'transactionDocument', 'orderReference']);
   });
 
   it('does not generate documentNo as a visible HeaderForm field', () => {

@@ -5,6 +5,7 @@ import { useLocaleSwitch } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { formatDashboardAmount, localeFromUi } from '@/lib/dashboardNumberFormat.js';
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
+import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 import { DashboardCard, DashboardEmptyState, DashboardRowChevron } from './_shared';
 
 const UUID_RE = /^[0-9A-F]{32}$/i;
@@ -21,7 +22,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
   const { open: openCopilot } = useCopilot();
 
   return (
-    <DashboardCard title={ui('recentSalesTitle')}>
+    <DashboardCard title={ui('recentSalesTitle')} data-testid="DashboardCard__4af5f2">
       {invoices.length === 0 ? (
         <DashboardEmptyState
           title={ui('recentSalesEmptyTitle')}
@@ -31,7 +32,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
             { key: 'copilot', icon: Sparkles, label: ui('createWithCopilot'), onClick: openCopilot, variant: 'secondary' },
             { key: 'new', icon: Plus, label: ui('newSale'), onClick: () => navigate('/sales-invoice/new'), variant: 'primary' },
           ]}
-        />
+          data-testid="DashboardEmptyState__4af5f2" />
       ) : (
       <div
         data-testid="recent-sales-list"
@@ -55,6 +56,11 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                   key={inv.id || i}
                   data-testid={`recent-sales-item-${inv.id || i}`}
                   to={target}
+                  onClick={() => trackDashboardKpi('dashboard_document_opened', {
+                    kpiId: DASHBOARD_KPI_IDS.dashboardToDocument,
+                    entityType: 'sales_invoice',
+                    source: 'dashboard_recent_sales',
+                  })}
                   className="hover:bg-[#F5F7F9] transition-colors"
                   style={{
                     display: 'flex',
@@ -186,7 +192,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '' }) {
                       </span>
                     </div>
                   </div>
-                  <DashboardRowChevron />
+                  <DashboardRowChevron data-testid="DashboardRowChevron__4af5f2" />
                 </Link>
               );
             })

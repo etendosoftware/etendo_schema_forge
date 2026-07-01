@@ -108,7 +108,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
       activeMockKey={mockOverride?.key ?? null}
       mockCertDays={mockCertDays}
       onSetCertDays={setMockCertDays}
-    />
+      data-testid="FiscalConfigDebugPanel__310303" />
   ) : null;
 
   // When mock is active, skip loading/error entirely and go straight to the effective profile
@@ -126,7 +126,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
             apiBaseUrl={apiBaseUrl}
             onComplete={refetch}
             onGoHome={() => navigate('/dashboard')}
-          />
+            data-testid="OnboardingWizard__310303" />
         </div>
       </>
     );
@@ -147,18 +147,22 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
             selectedOrg={selectedOrg}
             orgList={orgList}
             onSelect={org => selectOrg(org)}
-          />
+            data-testid="OrgDropdown__310303" />
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleCancel} disabled={saving}>
+          <Button
+            variant="outline"
+            onClick={handleCancel}
+            disabled={saving}
+            data-testid="Button__310303">
             {ui('fiscal.cancel')}
           </Button>
           <Button
             onClick={handleSave}
             disabled={saving || !orgId}
             className={savedOk ? 'bg-green-600 hover:bg-green-700 border-green-600' : ''}
-          >
-            <Save size={14} className="mr-1.5" />
+            data-testid="Button__310303">
+            <Save size={14} className="mr-1.5" data-testid="Save__310303" />
             {saveLabel}
           </Button>
         </div>
@@ -188,9 +192,9 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
 
         {showLoading && (
           <div className="flex-1 px-6 py-8 space-y-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-8 w-1/2" />
+            <Skeleton className="h-8 w-full" data-testid="Skeleton__310303" />
+            <Skeleton className="h-32 w-full" data-testid="Skeleton__310303" />
+            <Skeleton className="h-8 w-1/2" data-testid="Skeleton__310303" />
           </div>
         )}
 
@@ -198,7 +202,11 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
           <div className="flex-1 px-6 py-8">
             <div className="rounded-lg border border-destructive bg-destructive/10 p-4">
               <p className="text-sm text-destructive">{ui('fiscal.loadError', { error })}</p>
-              <Button variant="link" onClick={refetch} className="mt-2 h-auto p-0">
+              <Button
+                variant="link"
+                onClick={refetch}
+                className="mt-2 h-auto p-0"
+                data-testid="Button__310303">
                 {ui('fiscal.retry')}
               </Button>
             </div>
@@ -227,8 +235,11 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 onSave={() => {}}
                 variant={effectiveProfile}
                 hideSave
-              />
-              <CertExpiryBanner daysLeft={certDaysLeft} variant="prominent" />
+                data-testid="SiiSection__310303" />
+              <CertExpiryBanner
+                daysLeft={certDaysLeft}
+                variant="prominent"
+                data-testid="CertExpiryBanner__310303" />
             </div>
           </div>
         )}
@@ -240,7 +251,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
               tabs={[ui('fiscal.tab.sii'), ui('fiscal.tab.tbai')]}
               active={activeTab}
               onChange={setActiveTab}
-            />
+              data-testid="TabBar__310303" />
             <div className="flex-1 overflow-y-auto">
               <div className="px-6 py-6">
                 {activeTab === 0 && (
@@ -253,7 +264,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                     onSave={() => {}}
                     variant="sii"
                     hideSave
-                  />
+                    data-testid="SiiSection__310303" />
                 )}
                 {activeTab === 1 && (
                   <TbaiSection
@@ -265,9 +276,12 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                     onSave={() => {}}
                     hideSave
                     hideCert
-                  />
+                    data-testid="TbaiSection__310303" />
                 )}
-                <CertExpiryBanner daysLeft={certDaysLeft} variant="prominent" />
+                <CertExpiryBanner
+                  daysLeft={certDaysLeft}
+                  variant="prominent"
+                  data-testid="CertExpiryBanner__310303" />
                 {/* errors are shown in the org bar */}
               </div>
             </div>
@@ -286,8 +300,11 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 orgId={orgId}
                 onSave={() => {}}
                 hideSave
-              />
-              <CertExpiryBanner daysLeft={certDaysLeft} variant="prominent" />
+                data-testid="TbaiSection__310303" />
+              <CertExpiryBanner
+                daysLeft={certDaysLeft}
+                variant="prominent"
+                data-testid="CertExpiryBanner__310303" />
               {/* errors are shown in the org bar */}
             </div>
           </div>
@@ -305,8 +322,11 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 orgId={orgId}
                 onSave={() => {}}
                 hideSave
-              />
-              <CertExpiryBanner daysLeft={certDaysLeft} variant="prominent" />
+                data-testid="VerifactuSection__310303" />
+              <CertExpiryBanner
+                daysLeft={certDaysLeft}
+                variant="prominent"
+                data-testid="CertExpiryBanner__310303" />
               {/* errors are shown in the org bar */}
             </div>
           </div>

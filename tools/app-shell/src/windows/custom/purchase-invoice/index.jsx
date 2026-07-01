@@ -18,6 +18,26 @@ import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord }
 
 /* eslint-disable react/prop-types */
 
+const DOC_TYPE_LABELS = {
+  'AP Invoice': 'Factura',
+  'AP CreditMemo': 'Nota de Crédito',
+  'Return Material Purchase Invoice': 'Factura de Devolución',
+  'Reversed Purchase Invoice': 'Factura de Devolución',
+};
+
+// i18n-allowlist: ["all", "invoicesTab", "creditNotesTab"]
+const INVOICE_SUBSET_FILTERS = [
+  { label: 'all' },
+  { label: 'invoicesTab',    rowFilter: (r) => r['transactionDocument$_identifier'] === 'AP Invoice' },
+  { label: 'creditNotesTab', rowFilter: (r) => r['transactionDocument$_identifier'] === 'AP CreditMemo' },
+];
+
+function applyDocTypeLabels(record) {
+  const id = record['transactionDocument$_identifier'];
+  if (!id || !DOC_TYPE_LABELS[id]) return record;
+  return { ...record, 'transactionDocument$_identifier': DOC_TYPE_LABELS[id] };
+}
+
 const LIST_COLUMNS = [
   { key: 'orderReference', column: 'POReference', type: 'string', label: 'Document No.' },
   { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', label: 'Invoice Date' },
@@ -46,21 +66,26 @@ const LABEL_OVERRIDES = {
   es_ES: {
     POReference: 'Nº documento',
     OutstandingAmt: 'Pendiente de pago',
-    em_etgo_delivery_status: 'Estado de entrega',
+    em_etgo_delivery_status: 'Estado de recepción',
   },
   en_US: {
     POReference: 'Document No.',
     OutstandingAmt: 'Pending Payment',
-    em_etgo_delivery_status: 'Delivery Status',
+    em_etgo_delivery_status: 'Reception Status',
   },
 };
 
 function PurchaseInvoiceBulkAction(props) {
-  return <BulkDocumentAction {...props} labelKey="confirmBulk" />;
+  return (
+    <BulkDocumentAction
+      {...props}
+      labelKey="confirmBulk"
+      data-testid="BulkDocumentAction__c20e53" />
+  );
 }
 
 function PurchaseInvoiceTable(props) {
-  return <PurchaseInvoiceHeaderTable {...props} />;
+  return <PurchaseInvoiceHeaderTable {...props} data-testid="PurchaseInvoiceHeaderTable__c20e53" />;
 }
 
 /**
@@ -125,7 +150,8 @@ export default function PurchaseInvoiceWindow(props) {
           breadcrumb={breadcrumb}
           onAfterSave={true}
           refetchAfterSave={true}
-        />
+          transformRecord={applyDocTypeLabels}
+          data-testid="HeaderPage__c20e53" />
         {contactPortal}
       </CreateContactContext.Provider>
     );
@@ -164,6 +190,7 @@ export default function PurchaseInvoiceWindow(props) {
         entityLabel="Purchase Invoice"
         breadcrumb={breadcrumb}
         labelOverrides={LABEL_OVERRIDES}
+        subsetFilters={INVOICE_SUBSET_FILTERS}
         initialColumnFilters={initialColumnFilters}
         initialAdvancedFilter={initialAdvancedFilter}
         initialColumns={isInvoiceFilter ? OVERDUE_INITIAL_COLUMNS : null}
@@ -182,11 +209,11 @@ export default function PurchaseInvoiceWindow(props) {
             specName="purchase-invoice"
             onClose={onClose}
             onEdit={onEdit}
-          />
+            data-testid="InvoicePreview__c20e53" />
         )}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
-      />
+        data-testid="ListView__c20e53" />
       {deleteDialog}
       {cloneTargets && createPortal(
         <CloneOrderModal
@@ -198,7 +225,7 @@ export default function PurchaseInvoiceWindow(props) {
           processingKey="invoiceProcessing"
           onClose={() => setCloneTargets(null)}
           onCloned={() => setRefreshKey(k => k + 1)}
-        />,
+          data-testid="CloneOrderModal__c20e53" />,
         document.body,
       )}
     </>

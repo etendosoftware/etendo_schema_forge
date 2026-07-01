@@ -41,9 +41,9 @@ const ICON_MAP = {
 
 function useQuickActions(ui) {
   return useMemo(() => [
-    { label: ui('quickAccessSalesOrders'),  to: '/sales-order/new',   icon: TrendingUp, testId: 'quick-action-sales-order-new' },
-    { label: ui('quickAccessSalesInvoices'), to: '/sales-invoice/new', icon: FileText, testId: 'quick-action-sales-invoice-new' },
-    { label: ui('quickAccessContacts'),      to: '/contacts/new',      icon: Users, testId: 'quick-action-contacts-new' },
+    { label: ui('quickAccessSalesOrders'),  to: '/sales-order/new',   icon: TrendingUp, testId: 'quick-action-sales-order-new', analyticsAction: 'create_sales_order' },
+    { label: ui('quickAccessSalesInvoices'), to: '/sales-invoice/new', icon: FileText, testId: 'quick-action-sales-invoice-new', analyticsAction: 'create_sales_invoice' },
+    { label: ui('quickAccessContacts'),      to: '/contacts/new',      icon: Users, testId: 'quick-action-contacts-new', analyticsAction: 'create_contact' },
   ], [ui]);
 }
 
@@ -98,7 +98,7 @@ function DashboardContent({ apiBaseUrl }) {
 
   return (
     <div className="h-full flex flex-col">
-      {(loading || !isCurrencyReady) ? <DashboardSkeleton /> : (
+      {(loading || !isCurrencyReady) ? <DashboardSkeleton data-testid="DashboardSkeleton__3a4535" /> : (
         <div className="bg-white rounded-tl-2xl flex-1 flex flex-col overflow-hidden">
           {/* Fixed header — always visible */}
           <div
@@ -109,7 +109,10 @@ function DashboardContent({ apiBaseUrl }) {
               transition: 'border-color 0.2s ease, filter 0.2s ease',
             }}
           >
-            <DashboardGreeting username={username || ''} onAskCopilot={openCopilot} />
+            <DashboardGreeting
+              username={username || ''}
+              onAskCopilot={openCopilot}
+              data-testid="DashboardGreeting__3a4535" />
           </div>
 
           {/* Scrollable content */}
@@ -122,10 +125,10 @@ function DashboardContent({ apiBaseUrl }) {
           {/* Row 1: Pending tasks | Quick access | Top clients */}
           <div className="flex flex-col gap-4 lg:flex-row" style={dashboardRowStyle}>
             <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '672 1 0' }}>
-              <PendingTasksRail tasks={pendingTasks} />
+              <PendingTasksRail tasks={pendingTasks} data-testid="PendingTasksRail__3a4535" />
             </div>
             <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '213 1 0' }}>
-              <QuickActionsList actions={quickActions} />
+              <QuickActionsList actions={quickActions} data-testid="QuickActionsList__3a4535" />
             </div>
             <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '435 1 0' }}>
               <TopClientsList
@@ -133,20 +136,29 @@ function DashboardContent({ apiBaseUrl }) {
                 currencyLabel={dashboardCurrency}
                 token={token}
                 apiBaseUrl={apiBaseUrl}
-              />
+                data-testid="TopClientsList__3a4535" />
             </div>
           </div>
 
           {/* Row 2: Financial summary | Recent sales | Collections & payments */}
           <div className="flex flex-col gap-4 lg:flex-row" style={dashboardRowStyle}>
             <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '672 1 0' }}>
-              <FinancialSummaryCard kpis={resolvedKpis} currencyLabel={dashboardCurrency} />
+              <FinancialSummaryCard
+                kpis={resolvedKpis}
+                currencyLabel={dashboardCurrency}
+                data-testid="FinancialSummaryCard__3a4535" />
             </div>
             <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '443 1 0' }}>
-              <RecentSalesList invoices={recentInvoices} currencyLabel={dashboardCurrency} />
+              <RecentSalesList
+                invoices={recentInvoices}
+                currencyLabel={dashboardCurrency}
+                data-testid="RecentSalesList__3a4535" />
             </div>
             <div className="flex flex-col w-full h-[234px] min-w-0" style={{ flex: '213.33 1 0' }}>
-              <CollectionsPaymentsCard pendingAmounts={pendingAmounts} currencyLabel={dashboardCurrency} />
+              <CollectionsPaymentsCard
+                pendingAmounts={pendingAmounts}
+                currencyLabel={dashboardCurrency}
+                data-testid="CollectionsPaymentsCard__3a4535" />
             </div>
           </div>
 
@@ -158,14 +170,14 @@ function DashboardContent({ apiBaseUrl }) {
                 values={revenueTrend.values}
                 expenseValues={expenseTrend}
                 currencyLabel={dashboardCurrency}
-              />
+                data-testid="FinancialTrendChart__3a4535" />
             </div>
             <div className="flex flex-col w-full h-[328px] min-w-0" style={{ flex: '443.33 1 0' }}>
               <BestProductsList
                 sellers={bestSellers}
                 products={bestProducts}
                 currencyLabel={dashboardCurrency}
-              />
+                data-testid="BestProductsList__3a4535" />
             </div>
           </div>
         </div>
@@ -181,8 +193,8 @@ function DashboardContent({ apiBaseUrl }) {
 
 export default function DashboardPage({ apiBaseUrl = '' }) {
   return (
-    <DashboardDateRangeProvider>
-      <DashboardContent apiBaseUrl={apiBaseUrl} />
+    <DashboardDateRangeProvider data-testid="DashboardDateRangeProvider__3a4535">
+      <DashboardContent apiBaseUrl={apiBaseUrl} data-testid="DashboardContent__3a4535" />
     </DashboardDateRangeProvider>
   );
 }

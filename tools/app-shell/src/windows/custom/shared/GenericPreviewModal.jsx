@@ -95,7 +95,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
               title={`${ui('downloadPdf')} — ${fileName}`}
               aria-label={ui('downloadPdf')}
             >
-              <Download size={16} className="text-[#828FA3]" />
+              <Download size={16} className="text-[#828FA3]" data-testid="Download__152ff6" />
             </a>
             <button
               type="button"
@@ -104,7 +104,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
               title={`${ui('deleteDocument')} — ${fileName}`}
               aria-label={ui('deleteDocument')}
             >
-              <Trash2 size={16} className="text-[#828FA3]" />
+              <Trash2 size={16} className="text-[#828FA3]" data-testid="Trash2__152ff6" />
             </button>
           </div>
         )}
@@ -113,7 +113,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
             <img src={objectUrl} alt={fileName} className="max-w-full max-h-full object-contain bg-white shadow-md" />
           </div>
         ) : (
-          <PdfViewer url={objectUrl} />
+          <PdfViewer url={objectUrl} data-testid="PdfViewer__152ff6" />
         )}
       </div>
     );
@@ -124,7 +124,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
   if (attachment.isBusy) {
     return (
       <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
+        <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__152ff6" />
       </div>
     );
   }
@@ -142,7 +142,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
         }`}
       >
         <div className="w-16 h-20 bg-white rounded-lg border border-gray-200 flex items-center justify-center shadow-sm">
-          <Upload size={20} className="text-gray-400" />
+          <Upload size={20} className="text-gray-400" data-testid="Upload__152ff6" />
         </div>
         {isDragOver ? (
           <p className="text-sm font-medium text-gray-700">{ui('dropZoneDropHere')}</p>
@@ -251,7 +251,7 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
   const cfg = attachmentConfig ?? {};
   const shouldManagePanel = !!(cfg.storeCondition && cfg.documentId && cfg.specName);
   const resolvedLeftPanel = shouldManagePanel
-    ? <ManagedLeftPanel cfg={cfg} leftPanel={leftPanel} />
+    ? <ManagedLeftPanel cfg={cfg} leftPanel={leftPanel} data-testid="ManagedLeftPanel__152ff6" />
     : leftPanel;
 
   return (
@@ -285,7 +285,7 @@ const GenericPreviewModal = forwardRef(function GenericPreviewModal({
               className="absolute top-3 right-3 z-10 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               aria-label={ui('close')}
             >
-              <X size={16} />
+              <X size={16} data-testid="X__152ff6" />
             </button>
 
             {/* Header: title + subtitle + action buttons */}

@@ -2,6 +2,7 @@ export const SETUP_STEP_DEFINITIONS = [
   { name: 'setup', estimate: '1s' },
   { name: 'client', estimate: '2 min' },
   { name: 'organization', estimate: '1 min' },
+  { name: 'dataset', estimate: '1 min' },
   { name: 'sequences', estimate: '1s' },
   { name: 'finalize', estimate: '1s' },
 ];
@@ -40,6 +41,7 @@ export function buildOnboardingPayload(form) {
     currency: form.currency,
     language: form.language,
     countryCode: form.countryCode,
+    address: form.address,
   };
 }
 
@@ -51,6 +53,8 @@ export function buildEnvironmentSessionStorage(env, loginResponse) {
   const values = {
     sf_auth_token: loginResponse.token,
     sf_auth_user: env.adminUserName || env.adminUser || '',
+    sf_auth_client_id: env.clientId || '',
+    sf_auth_client_name: env.clientName || '',
   };
 
   if (loginResponse.roleList) {

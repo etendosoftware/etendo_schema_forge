@@ -13,7 +13,9 @@ export default function ProductSearchBar({ query, onChange, inputRef, onEnter })
 
   return (
     <div className="relative">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Search
+        className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"
+        data-testid="Search__d6f047" />
       <input
         ref={inputRef}
         type="text"
@@ -28,7 +30,7 @@ export default function ProductSearchBar({ query, onChange, inputRef, onEnter })
           onClick={() => onChange('')}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
         >
-          <X className="h-4 w-4" />
+          <X className="h-4 w-4" data-testid="X__d6f047" />
         </button>
       )}
     </div>

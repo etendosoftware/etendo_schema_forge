@@ -1,105 +1,143 @@
-import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Vitest render tests for CertModal (replaces source-reading tests)
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(resolve(__dirname, '..', 'CertModal.jsx'), 'utf8');
+const stableApiFetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
 
-// ---------------------------------------------------------------------------
-// Exports & imports
-// ---------------------------------------------------------------------------
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
+vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
+vi.mock('@/components/ui/button', () => ({
+  Button: ({ children, onClick, disabled, ...rest }) => (
+    <button onClick={onClick} disabled={disabled} {...rest}>{children}</button>
+  ),
+}));
+vi.mock('lucide-react', () => ({
+  FileText: () => null,
+  Upload: () => null,
+  Eye: () => null,
+  EyeOff: () => null,
+  Lock: () => null,
+  TriangleAlert: () => null,
+  Check: () => null,
+  Info: () => null,
+}));
+vi.mock('../FiscalStepItem.jsx', () => ({
+  default: ({ n, label }) => <span data-testid={`step-${n}`}>{label}</span>,
+}));
 
-describe('CertModal — exports and imports', () => {
-  it('exports a default function component named CertModal', () => {
-    expect(src).toMatch(/export default function CertModal/);
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import CertModal from '../CertModal.jsx';
+
+const baseProps = {
+  context: 'sii',
+  orgId: 'org-1',
+  apiBaseUrl: '/sws/neo/fiscal-config',
+  onClose: vi.fn(),
+  onUpload: vi.fn(),
+};
+
+describe('CertModal', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders modal title and subtitle', () => {
+    render(<CertModal {...baseProps} />);
+    expect(screen.getByText('fiscal.cert.modal.title')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.cert.subtitle.sii')).toBeInTheDocument();
   });
 
-  it('imports useApiFetch from @/auth/useApiFetch.js', () => {
-    expect(src).toMatch(/useApiFetch.*from.*@\/auth\/useApiFetch\.js/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// performUpload function
-// ---------------------------------------------------------------------------
-
-describe('CertModal — performUpload function', () => {
-  it('defines a performUpload function', () => {
-    expect(src).toMatch(/function performUpload/);
+  it('renders close button with aria-label', () => {
+    render(<CertModal {...baseProps} />);
+    expect(screen.getByLabelText('fiscal.cert.close')).toBeInTheDocument();
   });
 
-  it('POSTs to /certificate endpoint', () => {
-    expect(src).toMatch(/apiFetch\(`\/certificate`/);
-    expect(src).toMatch(/method:\s*['"]POST['"]/);
+  it('calls onClose when close button is clicked', () => {
+    const onClose = vi.fn();
+    render(<CertModal {...baseProps} onClose={onClose} />);
+    fireEvent.click(screen.getByLabelText('fiscal.cert.close'));
+    expect(onClose).toHaveBeenCalled();
   });
 
-  it('sends a FormData body', () => {
-    expect(src).toMatch(/new FormData\(\)/);
-    expect(src).toMatch(/formData\.append/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// State declarations
-// ---------------------------------------------------------------------------
-
-describe('CertModal — state variables', () => {
-  it('declares pendingNif / setPendingNif state', () => {
-    expect(src).toMatch(/pendingNif.*setPendingNif.*useState/);
+  it('calls onClose when backdrop is clicked', () => {
+    const onClose = vi.fn();
+    const { container } = render(<CertModal {...baseProps} onClose={onClose} />);
+    // The outermost div is the backdrop
+    const backdrop = container.firstChild;
+    fireEvent.click(backdrop);
+    expect(onClose).toHaveBeenCalled();
   });
 
-  it('declares certDetails / setCertDetails state', () => {
-    expect(src).toMatch(/certDetails.*setCertDetails.*useState/);
+  it('renders stepper with 3 steps', () => {
+    render(<CertModal {...baseProps} />);
+    expect(screen.getByTestId('step-1')).toBeInTheDocument();
+    expect(screen.getByTestId('step-2')).toBeInTheDocument();
+    expect(screen.getByTestId('step-3')).toBeInTheDocument();
   });
 
-  it('initialises step state to "pick"', () => {
-    expect(src).toMatch(/useState\(.*['"]pick['"]\)/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Error handling
-// ---------------------------------------------------------------------------
-
-describe('CertModal — error handling', () => {
-  it('reads data?.error?.message for error display', () => {
-    expect(src).toMatch(/data\?\.error\?\.message/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Step transitions
-// ---------------------------------------------------------------------------
-
-describe('CertModal — step transitions', () => {
-  it('calls setStep("pick") on upload failure', () => {
-    expect(src).toMatch(/setStep\(['"]pick['"]\)/);
+  it('shows dropzone text in pick step', () => {
+    render(<CertModal {...baseProps} />);
+    expect(screen.getByText('fiscal.cert.dropzone.drag')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.cert.dropzone.formats')).toBeInTheDocument();
   });
 
-  it('calls setStep("done") on upload success', () => {
-    expect(src).toMatch(/setStep\(['"]done['"]\)/);
+  it('shows password label and hint', () => {
+    render(<CertModal {...baseProps} />);
+    expect(screen.getByText('fiscal.cert.pwd.label')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.cert.pwd.hint')).toBeInTheDocument();
   });
 
-  it('calls setStep("confirmNif") for pending NIF flow', () => {
-    expect(src).toMatch(/setStep\(['"]confirmNif['"]\)/);
+  it('verify button is disabled when no file or password', () => {
+    render(<CertModal {...baseProps} />);
+    const verifyBtn = screen.getByText('fiscal.cert.btn.verify').closest('button');
+    expect(verifyBtn).toBeDisabled();
   });
 
-  it('does NOT simulate success with a bare setTimeout setStep("done") on the same line', () => {
-    expect(src).not.toMatch(/setTimeout.*setStep\(['"]done['"]\)/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// UI structure
-// ---------------------------------------------------------------------------
-
-describe('CertModal — UI structure', () => {
-  it('renders a password input with bullet placeholder', () => {
-    expect(src).toMatch(/placeholder=["']•+["']/);
+  it('shows password toggle button', () => {
+    render(<CertModal {...baseProps} />);
+    const toggleBtn = screen.getByLabelText('fiscal.cert.pwd.show');
+    expect(toggleBtn).toBeInTheDocument();
   });
 
-  it('renders a file input element', () => {
-    expect(src).toMatch(/type=["']file["']/);
+  it('renders done step when debugInitialState has step=done', () => {
+    render(
+      <CertModal
+        {...baseProps}
+        debugInitialState={{
+          step: 'done',
+          file: { name: 'cert.p12', size: 1024 },
+          certDetails: { subject: 'CN=Test', issuer: 'CN=CA', validFrom: '2025-01-01', validTo: '2026-01-01', algorithm: 'SHA256' },
+        }}
+      />
+    );
+    expect(screen.getByText('fiscal.cert.success.title')).toBeInTheDocument();
+    expect(screen.getByText('fiscal.cert.btn.use')).toBeInTheDocument();
+  });
+
+  it('renders confirmNif step when debugInitialState has step=confirmNif', () => {
+    render(
+      <CertModal
+        {...baseProps}
+        debugInitialState={{
+          step: 'confirmNif',
+          file: { name: 'cert.p12', size: 1024 },
+          pendingNif: 'B12345678',
+        }}
+      />
+    );
+    expect(screen.getByText('fiscal.cert.nif.warning.title')).toBeInTheDocument();
+    expect(screen.getByText('B12345678')).toBeInTheDocument();
+  });
+
+  it('renders verify step with progress', () => {
+    render(
+      <CertModal
+        {...baseProps}
+        debugInitialState={{ step: 'verify', file: { name: 'cert.p12', size: 1024 } }}
+      />
+    );
+    expect(screen.getByText('fiscal.cert.verifying.title')).toBeInTheDocument();
+  });
+
+  it('shows info warning box in pick step', () => {
+    render(<CertModal {...baseProps} />);
+    expect(screen.getByText('fiscal.cert.info.title')).toBeInTheDocument();
   });
 });

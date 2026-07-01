@@ -58,7 +58,9 @@ function InvoiceFilter({ q, setQ, advFilter, setAdvFilter, rows }) {
     <div className="relative inline-flex items-center gap-2">
       {expanded ? (
         <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-[#8A8AA3]" />
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-[15px] w-[15px] -translate-y-1/2 text-[#8A8AA3]"
+            data-testid="Search__bca0e2" />
           <input
             ref={inputRef}
             className="h-[34px] w-[230px] box-border rounded-lg border border-[#D1D4DB] bg-white pl-8 pr-8 text-[13px] leading-[18px] text-[#121217] placeholder:text-[#8A8AA3] focus:outline-none focus:border-[#121217] focus:ring-2 focus:ring-[#121217]/20"
@@ -73,7 +75,7 @@ function InvoiceFilter({ q, setQ, advFilter, setAdvFilter, rows }) {
             title="Cerrar búsqueda"
             className="absolute right-2 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded text-[#8A8AA3] hover:text-[#121217]"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" data-testid="X__bca0e2" />
           </button>
         </div>
       ) : (
@@ -83,23 +85,28 @@ function InvoiceFilter({ q, setQ, advFilter, setAdvFilter, rows }) {
           onClick={() => setSearchOpen(true)}
           className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-[#3F3F50] hover:bg-[#F5F7F9]"
         >
-          <Search className="h-4 w-4" />
+          <Search className="h-4 w-4" data-testid="Search__bca0e2" />
         </button>
       )}
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
+      <Popover open={open} onOpenChange={setOpen} data-testid="Popover__bca0e2">
+        <PopoverTrigger asChild data-testid="PopoverTrigger__bca0e2">
           <button
             type="button"
             title="Filtro por condiciones"
             className="relative inline-flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-[#3F3F50] hover:bg-[#F5F7F9]"
           >
-            <Filter className="h-4 w-4" />
+            <Filter className="h-4 w-4" data-testid="Filter__bca0e2" />
             {count ? (
               <span className="absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#121217] px-1 text-[10px] font-semibold leading-none text-white">{count}</span>
             ) : null}
           </button>
         </PopoverTrigger>
-        <PopoverContent align="start" sideOffset={6} collisionPadding={16} className="w-auto p-4">
+        <PopoverContent
+          align="start"
+          sideOffset={6}
+          collisionPadding={16}
+          className="w-auto p-4"
+          data-testid="PopoverContent__bca0e2">
           <AdvancedFilterBuilder
             columns={INVOICE_FILTER_COLUMNS}
             rows={rows}
@@ -107,7 +114,7 @@ function InvoiceFilter({ q, setQ, advFilter, setAdvFilter, rows }) {
             onApply={(next) => setAdvFilter(next)}
             onClear={() => setAdvFilter(null)}
             onClose={() => setOpen(false)}
-          />
+            data-testid="AdvancedFilterBuilder__bca0e2" />
         </PopoverContent>
       </Popover>
     </div>
@@ -133,10 +140,17 @@ function PaymentFields({
   const renderAccountField = () => {
     if (!showAccountField) return null;
     if (account) {
-      return <Field label={accountLabel}><ReadOnly>{account.label}</ReadOnly></Field>;
+      return <Field label={accountLabel} data-testid="Field__bca0e2"><ReadOnly data-testid="ReadOnly__bca0e2">{account.label}</ReadOnly></Field>;
     }
     return (
-      <Select label={accountLabel} required={requireAccount} value={accountId} onChange={setAccountId} options={accountOptions} placeholder="Seleccionar cuenta…" />
+      <Select
+        label={accountLabel}
+        required={requireAccount}
+        value={accountId}
+        onChange={setAccountId}
+        options={accountOptions}
+        placeholder="Seleccionar cuenta…"
+        data-testid="Select__bca0e2" />
     );
   };
 
@@ -144,19 +158,44 @@ function PaymentFields({
     <div className="flex flex-col gap-4 rounded-xl border border-[#E8EAEF] bg-white p-[18px]">
       <div className="flex items-center gap-3">
         <span className="flex items-center gap-2 text-sm font-semibold text-[#121217]">
-          <Wallet className="h-4 w-4" /> Datos del pago
+          <Wallet className="h-4 w-4" data-testid="Wallet__bca0e2" /> Datos del pago
         </span>
       </div>
       <div className="grid grid-cols-2 gap-x-[18px] gap-y-3.5 lg:grid-cols-3">
-        <Field label={doc === 'in' ? 'Recibido de' : 'Pagado a'}>
-          <LookupPicker value={tercero} onChange={setTercero} useLookup={bpartnerHook} placeholder="Buscar contacto…" />
+        <Field
+          label={doc === 'in' ? 'Recibido de' : 'Pagado a'}
+          data-testid="Field__bca0e2">
+          <LookupPicker
+            value={tercero}
+            onChange={setTercero}
+            useLookup={bpartnerHook}
+            placeholder="Buscar contacto…"
+            data-testid="LookupPicker__bca0e2" />
         </Field>
-        <Select label="Método de pago" value={metodo} onChange={setMetodo} options={methodOptions} />
+        <Select
+          label="Método de pago"
+          value={metodo}
+          onChange={setMetodo}
+          options={methodOptions}
+          data-testid="Select__bca0e2" />
         {renderAccountField()}
-        <AmountInput label="Importe del pago" value={fmtAmount(pago)} onChange={onPagoChange} />
-        <DateInput label="Fecha de pago" value={fechaPago} onChange={setFechaPago} />
-        <Field label="Nº de referencia">
-          <TextInput value={referencia} onChange={(e) => setReferencia(e.target.value)} placeholder="Opcional · nº de operación…" />
+        <AmountInput
+          label="Importe del pago"
+          value={Number(pago) ? fmtAmount(pago) : ''}
+          placeholder="0.00"
+          onChange={onPagoChange}
+          data-testid="AmountInput__bca0e2" />
+        <DateInput
+          label="Fecha de pago"
+          value={fechaPago}
+          onChange={setFechaPago}
+          data-testid="DateInput__bca0e2" />
+        <Field label="Nº de referencia" data-testid="Field__bca0e2">
+          <TextInput
+            value={referencia}
+            onChange={(e) => setReferencia(e.target.value)}
+            placeholder="Opcional · nº de operación…"
+            data-testid="TextInput__bca0e2" />
         </Field>
       </div>
     </div>
@@ -190,9 +229,15 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
   return (
     <div className="overflow-hidden rounded-xl border border-[#E8EAEF] bg-white">
       <div className="flex flex-wrap items-center gap-2.5 border-b border-[#E8EAEF] px-3.5 py-3">
-        <InvoiceFilter q={q} setQ={setQ} advFilter={advFilter} setAdvFilter={setAdvFilter} rows={filterRows ?? invoices} />
+        <InvoiceFilter
+          q={q}
+          setQ={setQ}
+          advFilter={advFilter}
+          setAdvFilter={setAdvFilter}
+          rows={filterRows ?? invoices}
+          data-testid="InvoiceFilter__bca0e2" />
         <span className="ml-auto flex items-center gap-2 whitespace-nowrap text-sm font-semibold text-[#121217]">
-          <FileText className="h-4 w-4" /> Facturas
+          <FileText className="h-4 w-4" data-testid="FileText__bca0e2" /> Facturas
           {Object.keys(sel).length ? (
             <span className="whitespace-nowrap rounded-full bg-[#121217] px-2 py-0.5 text-[11px] font-semibold text-white">{Object.keys(sel).length} sel.</span>
           ) : null}
@@ -223,7 +268,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
               const op = exp[r.id];
               const bg = on ? 'bg-[#F5F7F9]' : '';
               return (
-                <Fragment key={r.id}>
+                <Fragment key={r.id} data-testid="Fragment__bca0e2">
                   <tr>
                     <td className={`${TD} ${bg} w-11`}>
                       <button
@@ -231,7 +276,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                         onClick={() => toggle(r)}
                         className={`grid h-[18px] w-[18px] place-items-center rounded-[5px] border-[1.5px] ${on ? 'border-[#121217] bg-[#121217] text-white' : 'border-[#A9A9BC] bg-white text-transparent'}`}
                       >
-                        <Check className="h-3 w-3" />
+                        <Check className="h-3 w-3" data-testid="Check__bca0e2" />
                       </button>
                     </td>
                     <td className={`${TD} ${bg} whitespace-nowrap`}>
@@ -242,7 +287,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                     </td>
                     <td className={`${TD} ${bg} whitespace-nowrap`}>{r.metodo}</td>
                     <td className={`${TD} ${bg}`}>{r.bp}</td>
-                    <td className={`${TD} ${bg}`}><DueDot d={r.dias} date={r.venc} /></td>
+                    <td className={`${TD} ${bg}`}><DueDot d={r.dias} date={r.venc} data-testid="DueDot__bca0e2" /></td>
                     <td className={`${TD} ${bg} ${AMT}`}>{formatAmount(r.total, r.mon)}</td>
                     <td className={`${TD} ${bg} ${AMT}`}>{formatAmount(r.expected, r.mon)}</td>
                     <td className={`${TD} ${bg} ${AMT}`}>{formatAmount(r.pend, r.mon)}</td>
@@ -253,7 +298,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                         value={on ? fmtAmount(sel[r.id]) : ''}
                         placeholder="0.00"
                         onChange={(e) => setAmt(r.id, e.target.value)}
-                      />
+                        data-testid="MoneyInput__bca0e2" />
                     </td>
                     <td className={`${TD} ${bg} text-center`}>
                       <button
@@ -271,7 +316,7 @@ function InvoiceTable({ invoices, sel, toggle, setAmt, exp, setExp, wo, setWo, q
                         onClick={() => setExp((s) => ({ ...s, [r.id]: !s[r.id] }))}
                         className={`grid h-7 w-7 place-items-center rounded-md text-[#6C6C89] transition-transform hover:bg-[#EDEFF3] hover:text-[#121217] ${op ? 'rotate-90' : ''}`}
                       >
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4" data-testid="ChevronRight__bca0e2" />
                       </button>
                     </td>
                   </tr>
@@ -321,7 +366,7 @@ function Commissions({ gl, addGl, delGl, setGlField }) {
         onClick={addGl}
         className="flex w-full items-center gap-3 rounded-xl border border-dashed border-[#D1D4DB] bg-[#F5F7F9] px-4 py-3.5 text-left hover:border-[#A9A9BC]"
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#121217] text-white"><Plus className="h-[18px] w-[18px]" /></span>
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-[#121217] text-white"><Plus className="h-[18px] w-[18px]" data-testid="Plus__bca0e2" /></span>
         <span className="flex flex-col gap-px">
           <span className="text-sm font-semibold text-[#121217]">Añadir comisiones y conceptos (GL)</span>
           <span className="text-xs text-[#6C6C89]">Opcional · comisiones bancarias y otros conceptos contables</span>
@@ -333,7 +378,7 @@ function Commissions({ gl, addGl, delGl, setGlField }) {
     <div className="overflow-hidden rounded-xl border border-[#E8EAEF] bg-white">
       <div className="flex items-center gap-3 border-b border-[#E8EAEF] px-3.5 py-3">
         <span className="flex items-center gap-2 text-sm font-semibold text-[#121217]">
-          <Percent className="h-4 w-4" /> Comisiones y conceptos (GL)
+          <Percent className="h-4 w-4" data-testid="Percent__bca0e2" /> Comisiones y conceptos (GL)
           <span className="whitespace-nowrap rounded-full bg-[#121217] px-2 py-0.5 text-[11px] font-semibold text-white">
             {gl.length}
           </span>
@@ -347,20 +392,33 @@ function Commissions({ gl, addGl, delGl, setGlField }) {
       </div>
       {gl.map((g) => (
         <div key={g.id} className="grid items-center gap-2.5 border-b border-[#E8EAEF] px-3.5 py-3 last:border-b-0" style={GL_GRID}>
-          <LookupPicker value={g.item} onChange={(v) => setGlField(g.id, { item: v })} useLookup={useGLItemLookup} placeholder="Buscar concepto G/L…" />
+          <LookupPicker
+            value={g.item}
+            onChange={(v) => setGlField(g.id, { item: v })}
+            useLookup={useGLItemLookup}
+            placeholder="Buscar concepto G/L…"
+            data-testid="LookupPicker__bca0e2" />
           <div className="relative">
-            <MoneyInput className={GL_AMT} value={fmtAmount(g.receivedIn)} onChange={(e) => setGlField(g.id, { receivedIn: parseAmount(e.target.value) })} />
+            <MoneyInput
+              className={GL_AMT}
+              value={fmtAmount(g.receivedIn)}
+              onChange={(e) => setGlField(g.id, { receivedIn: parseAmount(e.target.value) })}
+              data-testid="MoneyInput__bca0e2" />
             <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[13px] text-[#8A8AA3]">€</span>
           </div>
           <div className="relative">
-            <MoneyInput className={GL_AMT} value={fmtAmount(g.paidOut)} onChange={(e) => setGlField(g.id, { paidOut: parseAmount(e.target.value) })} />
+            <MoneyInput
+              className={GL_AMT}
+              value={fmtAmount(g.paidOut)}
+              onChange={(e) => setGlField(g.id, { paidOut: parseAmount(e.target.value) })}
+              data-testid="MoneyInput__bca0e2" />
             <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[13px] text-[#8A8AA3]">€</span>
           </div>
-          <button type="button" onClick={() => delGl(g.id)} title="Eliminar" className="grid h-[34px] w-[34px] place-items-center rounded-lg border border-[#D1D4DB] bg-white text-[#8A8AA3] hover:border-[#FBB1C4] hover:bg-[#FEF0F4] hover:text-[#D50B3E]"><Trash2 className="h-[15px] w-[15px]" /></button>
+          <button type="button" onClick={() => delGl(g.id)} title="Eliminar" className="grid h-[34px] w-[34px] place-items-center rounded-lg border border-[#D1D4DB] bg-white text-[#8A8AA3] hover:border-[#FBB1C4] hover:bg-[#FEF0F4] hover:text-[#D50B3E]"><Trash2 className="h-[15px] w-[15px]" data-testid="Trash2__bca0e2" /></button>
         </div>
       ))}
       <button type="button" onClick={addGl} className="m-3.5 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#A9A9BC] px-3 py-2 text-[13px] font-semibold text-[#121217] hover:border-[#121217] hover:bg-[#F5F7F9]">
-        <Plus className="h-3.5 w-3.5" /> Añadir concepto
+        <Plus className="h-3.5 w-3.5" data-testid="Plus__bca0e2" /> Añadir concepto
       </button>
     </div>
   );
@@ -561,20 +619,40 @@ export function PaymentForm({
         accountId={accountId}
         setAccountId={setAccountId}
         requireAccount={requireAccount}
-      />
+        data-testid="PaymentFields__bca0e2" />
       <InvoiceTable
         invoices={invoiceRows}
         loading={invoicesLoading}
         emptyHint={invoiceEmptyHint}
-        sel={sel} toggle={toggle} setAmt={setAmt}
-        exp={exp} setExp={setExp} wo={wo} setWo={setWo}
-        q={q} setQ={setQ} advFilter={advFilter} setAdvFilter={setAdvFilter}
+        sel={sel}
+        toggle={toggle}
+        setAmt={setAmt}
+        exp={exp}
+        setExp={setExp}
+        wo={wo}
+        setWo={setWo}
+        q={q}
+        setQ={setQ}
+        advFilter={advFilter}
+        setAdvFilter={setAdvFilter}
         filterRows={filterRows}
-      />
+        data-testid="InvoiceTable__bca0e2" />
       {allowCommissions ? (
-        <Commissions gl={gl} addGl={addGl} delGl={delGl} setGlField={setGlField} />
+        <Commissions
+          gl={gl}
+          addGl={addGl}
+          delGl={delGl}
+          setGlField={setGlField}
+          data-testid="Commissions__bca0e2" />
       ) : null}
-      <TotalsBar totF={totF} totGL={totGL} total={total} pago={pago} diff={diff} cuadra={cuadra} />
+      <TotalsBar
+        totF={totF}
+        totGL={totGL}
+        total={total}
+        pago={pago}
+        diff={diff}
+        cuadra={cuadra}
+        data-testid="TotalsBar__bca0e2" />
       {overpaid ? (
         <Select
           label="Acción por sobrepago"
@@ -584,7 +662,7 @@ export function PaymentForm({
           options={overpayOptions}
           placeholder="¿Qué hacer con el excedente?"
           className="max-w-md"
-        />
+          data-testid="Select__bca0e2" />
       ) : null}
     </div>
   );

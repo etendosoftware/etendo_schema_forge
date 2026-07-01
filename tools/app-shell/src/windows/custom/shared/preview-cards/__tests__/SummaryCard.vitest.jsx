@@ -10,7 +10,8 @@ vi.mock('@/lib/dateOnly', () => ({
 }));
 
 vi.mock('@/lib/formatAmount.js', () => ({
-  formatAmount: (val) => Number(val || 0).toFixed(2),
+  // Include currency code in output so amount-display assertions can match on it
+  formatAmount: (val, code) => `${code ? code + ' ' : ''}${Number(val || 0).toFixed(2)}`,
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({
@@ -125,8 +126,8 @@ describe('SummaryCard', () => {
 
   it('renders the formatted grandTotal with currency code', () => {
     render(<SummaryCard {...fullProps} />);
-    // formatAmount mock returns "1500.00", currency is prepended by the component
-    expect(screen.getByText(/EUR.*1500\.00/)).toBeInTheDocument();
+    // formatAmount(1500, 'EUR') → "EUR 1500.00" via mock
+    expect(screen.getByText('EUR 1500.00')).toBeInTheDocument();
   });
 
   it('renders the formatted date', () => {
@@ -202,5 +203,64 @@ describe('SummaryCard', () => {
     // formatCalendarDate returns '—' for null; contact is also null → multiple dashes
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ── Dual-currency display (ETP-4027) ──────────────────────────────────────
+
+  describe('dual-currency display', () => {
+    const dualProps = {
+      ...fullProps,
+      currencyCode: 'USD',
+      grandTotal: 304.92,
+      orgCurrencyCode: 'EUR',
+      orgGrandTotal: 261.81,
+      exchangeRate: 1.1647,
+    };
+
+    it('shows orgGrandTotal formatted with orgCurrencyCode as primary amount when currencies differ', () => {
+      render(<SummaryCard {...dualProps} />);
+      // formatAmount(261.81, 'EUR') → "EUR 261.81" via updated mock
+      expect(screen.getByText('EUR 261.81')).toBeInTheDocument();
+    });
+
+    it('shows doc amount as secondary below the header when currencies differ', () => {
+      render(<SummaryCard {...dualProps} />);
+      // formatAmount(304.92, 'USD') → "USD 304.92" in secondary span
+      expect(screen.getByText('USD 304.92')).toBeInTheDocument();
+    });
+
+    it('shows exchange rate note (in parentheses) when currencies differ', () => {
+      render(<SummaryCard {...dualProps} />);
+      // rateNote is formatted to 4 decimal places — matches "(1.1647)" pattern
+      expect(screen.getByText(/\(1[.,]1647\)/)).toBeInTheDocument();
+    });
+
+    it('shows only doc amount — no secondary row — when orgCurrencyCode equals currencyCode', () => {
+      render(<SummaryCard {...fullProps} orgCurrencyCode="EUR" orgGrandTotal={1600} exchangeRate={1.1} />);
+      // fullProps has currencyCode='EUR' === orgCurrencyCode='EUR' → showOrgTotal=false
+      expect(screen.queryByText(/\(.*\)/)).not.toBeInTheDocument();
+      // Primary amount is doc amount: formatAmount(1500, 'EUR') → "EUR 1500.00"
+      expect(screen.getByText('EUR 1500.00')).toBeInTheDocument();
+    });
+
+    it('falls back to doc amount only when orgGrandTotal is null (no rate available)', () => {
+      render(<SummaryCard {...dualProps} orgGrandTotal={null} />);
+      // orgGrandTotal == null → showOrgTotal=false → primary = formatAmount(304.92, 'USD')
+      expect(screen.getByText('USD 304.92')).toBeInTheDocument();
+      // EUR amount must NOT be the primary
+      expect(screen.queryByText(/EUR 261/)).not.toBeInTheDocument();
+    });
+
+    it('does not show rate note when currencies differ but exchangeRate is falsy', () => {
+      render(<SummaryCard {...dualProps} exchangeRate={null} />);
+      // rateNote is only rendered when showOrgTotal && exchangeRate
+      expect(screen.queryByText(/\(.*\)/)).not.toBeInTheDocument();
+    });
+
+    it('shows currencyCode badge in header when dual-currency is active', () => {
+      render(<SummaryCard {...dualProps} />);
+      // CardHeader badge = currencyCode when showOrgTotal
+      expect(screen.getByText('USD')).toBeInTheDocument();
+    });
   });
 });

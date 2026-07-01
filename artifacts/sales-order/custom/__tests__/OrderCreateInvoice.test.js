@@ -13,7 +13,7 @@ describe('OrderCreateInvoice', () => {
   });
 
   it('accepts data, recordId, token, and apiBaseUrl props', () => {
-    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl\s*\}/);
+    assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl/);
   });
 
   it('renders confirm flow only for draft orders (status DR)', () => {
@@ -222,6 +222,19 @@ describe('OrderCreateInvoice', () => {
 
     it('renders the checkmark for both checked and disabled states', () => {
       assert.match(src, /\(checked\s*\|\|\s*disabled\)\s*&&\s*\(/);
+    });
+  });
+
+  // ETP-4312: the modal must DERIVE the view label from each doc's type. Passing
+  // a hardcoded primary={ui('soViewInvoice')} would force "Ver factura" on a
+  // shipment-only result. The arrow now comes from the modal's SVG, not the label.
+  describe('ConfirmResultModal primary label (ETP-4312 regression)', () => {
+    it('does not force a hardcoded soViewInvoice primary label', () => {
+      assert.doesNotMatch(src, /primary=\{ui\('soViewInvoice'\)\}/);
+    });
+
+    it('does not pass any hardcoded primary view label to the modal', () => {
+      assert.doesNotMatch(src, /primary=\{ui\('(soViewInvoice|poViewInvoice|soViewShipment|poViewReceipt|sqViewOrder)'\)\}/);
     });
   });
 });

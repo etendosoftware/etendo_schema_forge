@@ -59,7 +59,7 @@ function PriorityStars({ priority }) {
             'h-3 w-3',
             i < count ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/30'
           )}
-        />
+          data-testid="Star__22de88" />
       ))}
     </div>
   );
@@ -94,19 +94,21 @@ function DefaultCard({ card }) {
             <p className="text-xs text-muted-foreground mt-0.5 truncate">{card.subtitle}</p>
           )}
         </div>
-        {card.avatar && <AvatarCircle name={card.avatar} />}
+        {card.avatar && <AvatarCircle name={card.avatar} data-testid="AvatarCircle__22de88" />}
       </div>
-
       {card.badges && card.badges.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {card.badges.map((badge, i) => (
-            <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0">
+          {card.badges.map((badge) => (
+            <Badge
+              key={typeof badge === 'string' ? badge : badge.label}
+              variant="secondary"
+              className="text-[10px] px-1.5 py-0"
+              data-testid="Badge__22de88">
               {typeof badge === 'string' ? badge : badge.label}
             </Badge>
           ))}
         </div>
       )}
-
       {(card.value != null || card.priority) && (
         <div className="flex items-center justify-between gap-2 pt-1">
           {card.value != null && (
@@ -114,7 +116,7 @@ function DefaultCard({ card }) {
               {formatCurrency(card.value)}
             </span>
           )}
-          {card.priority && <PriorityStars priority={card.priority} />}
+          {card.priority && <PriorityStars priority={card.priority} data-testid="PriorityStars__22de88" />}
         </div>
       )}
     </div>
@@ -144,9 +146,9 @@ function KanbanCard({ card, onCardClick, renderCard, isDragging }) {
       )}
       role="listitem"
       aria-label={card.title}
-    >
-      <CardContent className="p-3">
-        {renderCard ? renderCard(card) : <DefaultCard card={card} />}
+      data-testid="Card__22de88">
+      <CardContent className="p-3" data-testid="CardContent__22de88">
+        {renderCard ? renderCard(card) : <DefaultCard card={card} data-testid="DefaultCard__22de88" />}
       </CardContent>
     </Card>
   );
@@ -218,9 +220,7 @@ function KanbanColumn({ column, cards, onDragEnd, onCardClick, renderCard, empty
           {cards.length}
         </span>
       </div>
-
-      <Separator />
-
+      <Separator data-testid="Separator__22de88" />
       {/* Scrollable card list */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[120px] max-h-[calc(100vh-220px)]">
         {cards.length === 0 ? (
@@ -234,7 +234,7 @@ function KanbanColumn({ column, cards, onDragEnd, onCardClick, renderCard, empty
               card={card}
               onCardClick={onCardClick}
               renderCard={renderCard}
-            />
+              data-testid="KanbanCard__22de88" />
           ))
         )}
       </div>
@@ -285,7 +285,7 @@ export function KanbanBoard({
             emptyMessage={emptyMessage}
             dragOverColumnId={dragOverColumnId}
             setDragOverColumnId={setDragOverColumnId}
-          />
+            data-testid="KanbanColumn__22de88" />
         );
       })}
     </div>

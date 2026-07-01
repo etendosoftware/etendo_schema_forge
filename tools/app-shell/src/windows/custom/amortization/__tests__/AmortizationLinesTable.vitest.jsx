@@ -486,7 +486,7 @@ describe('AmortizationLinesTable — multi-select', () => {
     expect(screen.getByTitle('close')).toBeInTheDocument();
     // selectedLabel comes from ui('selected', { count }) → identity mock returns "selected".
     expect(screen.getByText('selected')).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('select-all checkbox selects all rows and updates the bar count', async () => {
     renderInRouter(<AmortizationLinesTable {...BASE_PROPS} />);

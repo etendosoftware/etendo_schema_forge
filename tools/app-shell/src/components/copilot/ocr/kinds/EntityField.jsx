@@ -75,7 +75,10 @@ export default function EntityField({
   return (
     <div className="relative" ref={wrapRef}>
       <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 focus-within:border-gray-900">
-        <Search size={14} className="shrink-0 text-gray-400" />
+        <Search
+          size={14}
+          className="shrink-0 text-gray-400"
+          data-testid={"Search__" + field.id} />
         <input
           type="text"
           value={query}
@@ -84,7 +87,10 @@ export default function EntityField({
           placeholder={value?.label || ui(field.searchPlaceholder || 'ocrReviewVendorSearch')}
           className="flex-1 text-sm text-gray-900 placeholder-gray-500 outline-none"
         />
-        {loading && <Loader2 size={14} className="animate-spin text-gray-400" />}
+        {loading && <Loader2
+          size={14}
+          className="animate-spin text-gray-400"
+          data-testid={"Loader2__" + field.id} />}
       </div>
       {open && (CreateComponent || query.trim() || items.length > 0) && (
         <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
@@ -94,7 +100,7 @@ export default function EntityField({
               onMouseDown={(e) => { e.preventDefault(); setOpen(false); setShowCreate(true); }}
               className="flex w-full items-center gap-1.5 border-b border-gray-200 px-3 py-2 text-left text-sm font-medium text-gray-800 hover:bg-blue-50"
             >
-              <Plus size={14} />
+              <Plus size={14} data-testid={"Plus__" + field.id} />
               {ui(field.createLabel || 'ocrReviewVendorCreate')}
             </button>
           )}
@@ -127,7 +133,7 @@ export default function EntityField({
           token={token}
           onCancel={() => setShowCreate(false)}
           onSubmit={handleCreateSubmit}
-        />
+          data-testid={"CreateComponent__" + field.id} />
       ) : null}
     </div>
   );

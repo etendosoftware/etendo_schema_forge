@@ -15,24 +15,33 @@ export default function RelatedDocuments({ data }) {
 
   for (const ord of orders) {
     chips.push(
-      <DocChip key={`order-${ord.id}`} {...docChipProps({ type: 'order', doc: ord, ui, navigate })} />
+      <DocChip
+        key={`order-${ord.id}`}
+        {...docChipProps({ type: 'order', doc: ord, ui, navigate })}
+        data-testid="DocChip__361565" />
     );
   }
 
   for (const inv of invoices) {
     chips.push(
-      <DocChip key={`invoice-${inv.id}`} {...docChipProps({ type: 'invoice', doc: inv, ui, navigate })} />
+      <DocChip
+        key={`invoice-${inv.id}`}
+        {...docChipProps({ type: 'invoice', doc: inv, ui, navigate })}
+        data-testid="DocChip__361565" />
     );
   }
 
   for (const ret of returns) {
     chips.push(
-      <DocChip key={`return-${ret.id}`} {...docChipProps({ type: 'return-to-vendor', doc: ret, ui, navigate })} />
+      <DocChip
+        key={`return-${ret.id}`}
+        {...docChipProps({ type: 'return-to-vendor', doc: ret, ui, navigate })}
+        data-testid="DocChip__361565" />
     );
   }
 
   return (
-    <RelatedDocumentsShell loading={false}>
+    <RelatedDocumentsShell loading={false} data-testid="RelatedDocumentsShell__361565">
       {chips}
     </RelatedDocumentsShell>
   );

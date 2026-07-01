@@ -168,8 +168,6 @@ export default function ReturnWizard({
   const bpName = shipmentData?.['businessPartner$_identifier'] || shipmentData?.businessPartner$_identifier || '';
 
   const handleConfirm = async () => {
-    // NOTE: The createReturn action endpoint is pending backend implementation.
-    // Once available, it should create a return receipt + credit note in a single transaction.
     setLoading(true);
     try {
       const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };

@@ -67,9 +67,32 @@ vi.mock('../../shared/GenericPreviewModal.jsx', () => ({
   }),
 }));
 
-vi.mock('../../shared/PreviewActionButtons.jsx', () => ({
-  PreviewEmptyPanel: ({ icon, text }) => <div data-testid="preview-empty-panel">{icon} {text}</div>,
-}));
+vi.mock('../../shared/PreviewActionButtons.jsx', async () => {
+  const { useState, useCallback } = await import('react');
+  return {
+    PreviewEmptyPanel: ({ icon, text }) => <div data-testid="preview-empty-panel">{icon} {text}</div>,
+    usePreviewSendModal: () => {
+      const [showSendModal, setShowSendModal] = useState(false);
+      const [sendModalClosing, setSendModalClosing] = useState(false);
+      const openEmailModal = useCallback(() => setShowSendModal(true), []);
+      const closeEmailModal = useCallback(() => {
+        setSendModalClosing(true);
+        setTimeout(() => { setSendModalClosing(false); setShowSendModal(false); }, 280);
+      }, []);
+      return { showSendModal, sendModalClosing, openEmailModal, closeEmailModal };
+    },
+    makeStaticPreviewTabs: (ui) => [
+      { key: 'messages', label: ui('invoicePreviewMessages'), content: <div data-testid="preview-empty-panel">💬 {ui('invoicePreviewNoMessagesYet')}</div> },
+      { key: 'history', label: ui('invoicePreviewHistory'), content: <div data-testid="preview-empty-panel">🕐 {ui('invoicePreviewNoActivityRecorded')}</div> },
+    ],
+    ReceiptSendModal: ({ sendModal, pdfBlobUrl }) =>
+      sendModal.showSendModal ? (
+        <div data-testid="send-modal" data-pdf-url={pdfBlobUrl}>
+          <button data-testid="send-modal-close" onClick={sendModal.closeEmailModal}>Close</button>
+        </div>
+      ) : null,
+  };
+});
 
 vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
   default: ({ onClose, pdfBlobUrl }) => (
@@ -102,6 +125,16 @@ vi.mock('../../shared/preview-cards/SummaryCard.jsx', () => ({
   ),
   CardShell: ({ children }) => <div data-testid="card-shell">{children}</div>,
   PercentBar: ({ value }) => <div data-testid="percent-bar">{value}</div>,
+  MovementSummaryCard: ({ title, rows, statusRowLabel, statusLabel, statusBadgeClass, children }) => (
+    <div data-testid="movement-summary-card">
+      <span>{title}</span>
+      {(rows || []).map(({ label, value }) => (
+        <div key={label} data-testid="info-row">{label}: {value}</div>
+      ))}
+      <div data-testid="info-row">{statusRowLabel}: <span className={statusBadgeClass}>{statusLabel}</span></div>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('@/components/related-documents/constants.jsx', () => ({

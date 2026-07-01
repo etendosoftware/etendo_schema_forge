@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Order",
+    "selectorPriceCurrency": "org",
     "salesTheme": true,
     "notesField": "description",
     "relatedDocuments": true,
@@ -128,7 +129,8 @@
           "section": "principal"
         },
         "priceList": {
-          "section": "principal"
+          "section": "principal",
+          "order": 11
         },
         "paymentMethod": {
           "reference": "PaymentMethod",
@@ -138,8 +140,7 @@
           "section": "principal"
         },
         "warehouse": {
-          "inputMode": "search",
-          "form": false
+          "inputMode": "search"
         },
         "salesRepresentative": {
           "visibility": "system"
@@ -257,10 +258,13 @@
           "columnType": "percent"
         },
         "currency": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": false,
-          "form": false,
-          "section": "summary"
+          "form": true,
+          "section": "principal",
+          "order": 10,
+          "readOnlyLogic": "@Processed@='Y'",
+          "derivation": null
         },
         "deliveryLocation": {
           "visibility": "discarded"
@@ -271,6 +275,11 @@
         "etgoTotalDiscount": {
           "visibility": "editable",
           "form": false
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         }
       }
     },
@@ -374,7 +383,8 @@
           "section": "principal",
           "order": 5,
           "gridOrder": 5,
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "warehouseRule": {
           "visibility": "discarded"
@@ -464,6 +474,11 @@
         },
         "reservationStatus": {
           "visibility": "discarded"
+        },
+        "currency": {
+          "visibility": "editable",
+          "grid": false,
+          "form": false
         }
       }
     },

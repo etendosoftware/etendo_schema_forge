@@ -48,13 +48,15 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
   ) || '/purchase-invoice?filter=overdue';
 
   return (
-    <DashboardCard title={ui('collectionsPaymentsTitle')}>
+    <DashboardCard
+      title={ui('collectionsPaymentsTitle')}
+      data-testid="DashboardCard__6b3617">
       {hasNoData ? (
         <DashboardEmptyState
           title={ui('collectionsPaymentsEmptyTitle')}
           subtitle={ui('collectionsPaymentsEmptySubtitle')}
           textPadding="0px 20px"
-        />
+          data-testid="DashboardEmptyState__6b3617" />
       ) : (
       <div
         style={{
@@ -79,7 +81,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
             height: '60px',
             textDecoration: 'none',
           }}
-        >
+          data-testid="Link__6b3617">
           <div
             style={{
               display: 'flex',
@@ -107,7 +109,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
             >
               {ui('toCollectLabel')}
             </span>
-            <CountBadge count={toCollect.count} />
+            <CountBadge count={toCollect.count} data-testid="CountBadge__6b3617" />
           </div>
           <div
             style={{
@@ -195,7 +197,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
             height: '60px',
             textDecoration: 'none',
           }}
-        >
+          data-testid="Link__6b3617">
           <div
             style={{
               display: 'flex',
@@ -223,7 +225,7 @@ export function CollectionsPaymentsCard({ pendingAmounts = {}, currencyLabel = '
             >
               {ui('toPayLabel')}
             </span>
-            <CountBadge count={toPay.count} />
+            <CountBadge count={toPay.count} data-testid="CountBadge__6b3617" />
           </div>
           <div
             style={{

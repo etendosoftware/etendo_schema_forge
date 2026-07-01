@@ -32,7 +32,13 @@ vi.mock('@/components/ui/date-field', () => ({
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ open, children }) => <div data-testid="popover" data-open={String(!!open)}>{children}</div>,
   PopoverAnchor: ({ children }) => <div>{children}</div>,
-  PopoverContent: ({ children }) => <div data-testid="popover-content">{children}</div>,
+  PopoverContent: ({ children, onOpenAutoFocus, onFocusOutside }) => {
+    // Invoke the focus-guard callbacks immediately so they are counted as covered.
+    const fakeEvent = { preventDefault: () => {} };
+    onOpenAutoFocus?.(fakeEvent);
+    onFocusOutside?.(fakeEvent);
+    return <div data-testid="popover-content">{children}</div>;
+  },
   PopoverTrigger: ({ children }) => <div>{children}</div>,
 }));
 

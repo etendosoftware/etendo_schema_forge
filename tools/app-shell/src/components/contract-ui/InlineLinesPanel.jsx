@@ -19,7 +19,7 @@ import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import { SelectorInput } from './SelectorInput.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import ProductSearchDrawer from './ProductSearchDrawer.jsx';
+import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex } from '@/lib/linesColumnWidth.js';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
@@ -58,6 +58,7 @@ function isCellEditable(col) {
 function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
   const ui = useUI();
   const [open, setOpen] = useState(false);
+  const Drawer = resolveLookupDrawer(field.lookupDrawer);
   return (
     <>
       <button
@@ -66,12 +67,14 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
         onClick={() => setOpen(true)}
         className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-white px-2 text-sm text-left hover:border-primary/50 focus:ring-2 focus:ring-primary focus:outline-none transition-colors"
       >
-        <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <Search
+          className="h-3.5 w-3.5 text-muted-foreground shrink-0"
+          data-testid={"Search__" + field.id} />
         {displayLabel
           ? <span className="flex-1 truncate text-foreground">{displayLabel}</span>
           : <span className="flex-1 truncate text-muted-foreground">{field.label || ui('search')}</span>}
       </button>
-      <ProductSearchDrawer
+      <Drawer
         open={open}
         onClose={() => setOpen(false)}
         onSelect={(item) => {
@@ -87,8 +90,8 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
         selectorUrl={selectorUrl}
         selectorContext={selectorContext}
         token={token}
-        title={field.label || ''}
-      />
+        title={field.lookupTitle || field.label || ''}
+        data-testid={"ProductSearchDrawer__" + field.id} />
     </>
   );
 }
@@ -130,7 +133,8 @@ function ReadCell({ row, col, locale, t, ui }) {
     return col.render(row, {});
   }
   if (col.type === 'amount') {
-    return <span className="tabular-nums">{formatAmount(row[col.key], row['currency$_identifier'])}</span>;
+    // No currency symbol on line-level cells — the currency is shown at the header level.
+    return <span className="tabular-nums">{formatAmount(row[col.key])}</span>;
   }
   if (col.type === 'percent') {
     const val = Number(row[col.key]);
@@ -159,6 +163,47 @@ function isValueBelowMin(col, value) {
   if (col.min === undefined || value === '' || value == null) return false;
   const num = parseFloat(value);
   return !isNaN(num) && num < col.min;
+}
+
+function clampToMax(col, value) {
+  if (!NUMERIC_TYPES.has(col.type)) return value;
+  if (value === '' || value == null) {
+    // Empty numeric field: use defaultValue or min so the PATCH body never sends
+    // '' for a BigDecimal column (which can cause the backend to apply a wrong default).
+    if (col.defaultValue !== undefined) return String(col.defaultValue);
+    if (col.min !== undefined) return String(col.min);
+    return value;
+  }
+  if (col.max === undefined) return value;
+  const num = parseFloat(value);
+  return !isNaN(num) && num > col.max ? String(col.max) : value;
+}
+
+/**
+ * Renders the InlineSearchCombo for selector/search FK fields that are NOT lookup/popup.
+ * Extracted from EditCell to keep its cognitive complexity within the Sonar threshold (≤15).
+ * The `excludeId` is derived here from `col.excludeValueOf` so the derivation + render stay
+ * co-located and EditCell does not carry the extra decision point.
+ */
+function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit }) {
+  // Exclude the option whose id equals the current value of a sibling field on this
+  // row (e.g. newStorageBin can't be the same bin as storageBin).
+  const excludeId = col.excludeValueOf ? (row?.[col.excludeValueOf] ?? null) : null;
+  return (
+    <InlineSearchCombo
+      field={col}
+      value={value ?? ''}
+      displayLabel={displayLabel || ''}
+      options={[]}
+      onChange={(id, label) => onCommit(id, { identifier: label || '' })}
+      placeholder={col.label}
+      selectorUrl={selectorUrl}
+      selectorContext={selectorContext}
+      excludeId={excludeId}
+      token={token}
+      clearOnType={false}
+      data-testid="InlineSearchCombo__3b7ec2" />
+  );
 }
 
 /**
@@ -200,23 +245,10 @@ function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus
           selectorContext={selectorContext}
           token={token}
           onCommit={onCommit}
-        />
+          data-testid="LookupTrigger__3b7ec2" />
       );
     }
-    return (
-      <InlineSearchCombo
-        field={col}
-        value={value ?? ''}
-        displayLabel={displayLabel || ''}
-        options={[]}
-        onChange={(id, label) => onCommit(id, { identifier: label || '' })}
-        placeholder={col.label}
-        selectorUrl={selectorUrl}
-        selectorContext={selectorContext}
-        token={token}
-        clearOnType={false}
-      />
-    );
+    return renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, selectorContext, token, onCommit });
   }
 
   // Enum / list field — native <select> populated from the column's enumLabels
@@ -230,7 +262,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus
         value={value || undefined}
         onValueChange={(val) => onCommit(val === '__empty__' ? '' : val)}
         required={col.required}
-      >
+        data-testid="Select__3b7ec2">
         <SelectTrigger
           ref={inputRef}
           data-testid={`field-${col.key}`}
@@ -239,12 +271,12 @@ function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus
           }}
           className="w-full h-7 text-sm bg-white focus:ring-2 focus:ring-primary"
         >
-          <SelectValue />
+          <SelectValue data-testid="SelectValue__3b7ec2" />
         </SelectTrigger>
-        <SelectContent>
-          {!col.required && <SelectItem value="__empty__">&nbsp;</SelectItem>}
+        <SelectContent data-testid="SelectContent__3b7ec2">
+          {!col.required && <SelectItem value="__empty__" data-testid="SelectItem__3b7ec2">&nbsp;</SelectItem>}
           {options.map(([v, label]) => (
-            <SelectItem key={v} value={v}>{label}</SelectItem>
+            <SelectItem key={v} value={v} data-testid="SelectItem__3b7ec2">{label}</SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -298,7 +330,7 @@ function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus
  *  - Header strip + 40px rows.
  *  - Row hover reveals action icons (pencil + trash) on the right, replacing the last
  *    (amount) column.
- *  - Pencil toggles single-row edit mode. Autosave on blur. Trash deletes the row.
+ *  - Clicking any cell (or the pencil) activates single-row edit mode. Autosave on blur. Trash deletes the row.
  *
  * Save flow: every blurred field PATCHes the row diff via `onUpdateRow(row, fieldKey,
  * value, extras)`. The parent's "Guardar" button can call `flushPendingEdits()` through
@@ -326,15 +358,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // Optional: when provided, clicking anywhere on the row body fires this.
   // Pairs with `onEditRow` for modal-style flows.
   onRowClick,
+  labelOverrides,
 }, ref) {
   const ui = useUI();
-  const t = useLabel();
+  const t = useLabel(labelOverrides);
   // resolveColumnLabel + toLocaleDateString expect the locale STRING
   // (es_ES / en_US) — `useLocale()` would return the dictionary object due
   // to a backward-compat shim, hence `useLocaleSwitch` here.
   const { locale } = useLocaleSwitch();
 
   const [editingRowId, setEditingRowId] = useState(null);
+  const [focusColIdx, setFocusColIdx] = useState(null);
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const panelRef = useRef(null);
   const hasValidationErrorRef = useRef(false);
@@ -455,9 +489,10 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       toast.error(ui('fieldMinValueError'));
       return;
     }
+    const effectiveValue = clampToMax(col, value);
     pendingEditRef.current = { rowId: row.id, key: col.key };
     try {
-      await onUpdateRow?.(row, col.key, value, {
+      await onUpdateRow?.(row, col.key, effectiveValue, {
         column: col.column,
         // For selectors, the FK label travels alongside the id so DetailView can refresh
         // the local row identifier without a full re-fetch.
@@ -505,8 +540,18 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       onEditRow(row);
       return;
     }
+    setFocusColIdx(null);
     setEditingRowId(prev => (prev === row.id ? null : row.id));
   }, [isDocumentReadOnly, onEditRow]);
+
+  const handleCellClick = useCallback((row, idx, col) => {
+    if (isDocumentReadOnly) return;
+    if (onEditRow) { onEditRow(row); return; }
+    if (onRowClick) return;
+    if (editingRowId === row.id) return;
+    setFocusColIdx(isCellEditable(col) ? idx : null);
+    setEditingRowId(row.id);
+  }, [isDocumentReadOnly, onEditRow, onRowClick, editingRowId]);
 
   const handleDeleteClick = useCallback(async (row) => {
     if (isDocumentReadOnly) return;
@@ -551,7 +596,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             indeterminate={someSelected}
             onChange={() => toggleAll(!allSelected)}
             disabled={isDocumentReadOnly}
-          />
+            data-testid="Checkbox__3b7ec2" />
         </div>
         {visibleColumns.map((col, idx) => (
           <div
@@ -578,7 +623,6 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             to the root (which would clip the row border-b lines). */}
         <div style={{ width: 48, flexShrink: 0 }} aria-hidden="true" />
       </div>
-
       {/* Body rows */}
       {selectableRows.map((row) => {
         const isEditing = editingRowId === row.id;
@@ -619,9 +663,8 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 checked={isSelected}
                 onChange={() => toggleRow(row, !isSelected)}
                 disabled={isDocumentReadOnly}
-              />
+                data-testid="Checkbox__3b7ec2" />
             </div>
-
             {/* Cells */}
             {visibleColumns.map((col, idx) => {
               const isTrailing = col === trailingColumn;
@@ -644,12 +687,14 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 minWidth: 0,
               };
 
+              const cellClickable = !isEditing && !onRowClick && !isDocumentReadOnly;
               return (
                 <div
                   key={col.key}
-                  className="flex items-center"
+                  className={['flex items-center', cellClickable ? 'cursor-pointer' : ''].join(' ')}
                   style={baseStyle}
                   data-cell-key={col.key}
+                  onClick={cellClickable ? () => handleCellClick(row, idx, col) : undefined}
                 >
                   {editable ? (
                     <EditCell
@@ -663,7 +708,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                       row={row}
                       value={row[col.key]}
                       displayLabel={resolveIdentifier(row, col.key)}
-                      autoFocus={idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]))}
+                      autoFocus={
+                        focusColIdx !== null
+                          ? idx === focusColIdx
+                          : idx === 0 || (idx === 1 && !isCellEditable(visibleColumns[0]))
+                      }
                       entity={entity}
                       token={token}
                       apiBaseUrl={apiBaseUrl}
@@ -671,14 +720,19 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                       isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
                       onCommit={(val, extras) => commitField(row, col, val, extras)}
                       onCancel={() => setEditingRowId(null)}
-                    />
+                      data-testid="EditCell__3b7ec2" />
                   ) : (
-                    <ReadCell row={row} col={col} locale={locale} t={t} ui={ui} />
+                    <ReadCell
+                      row={row}
+                      col={col}
+                      locale={locale}
+                      t={t}
+                      ui={ui}
+                      data-testid="ReadCell__3b7ec2" />
                   )}
                 </div>
               );
             })}
-
             {/* Hover / edit action strip. When `reserveActionSlot` is true
                 (no amount column), the slot is rendered in every row so cells
                 don't reflow on hover — only the icons inside fade in. */}
@@ -700,7 +754,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                         isEditing ? 'text-foreground bg-muted' : 'text-muted-foreground hover:text-foreground',
                       ].join(' ')}
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="h-4 w-4" data-testid="Pencil__3b7ec2" />
                     </button>
                     <button
                       type="button"
@@ -710,7 +764,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                       disabled={isDeleting}
                       className="p-1 rounded-full text-destructive hover:bg-destructive/10 disabled:opacity-50"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" data-testid="Trash2__3b7ec2" />
                     </button>
                   </div>
                 )}

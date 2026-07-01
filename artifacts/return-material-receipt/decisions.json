@@ -7,53 +7,96 @@
     "notesField": "description",
     "dateFilterKey": "movementDate",
     "linesLayout": "inlineEditable",
+    "noHeaderBorder": true,
+    "hideDeleteWhenComplete": true,
     "customComponents": {
-      "bottomSection": "ReturnMaterialReceiptBottomPanel"
+      "bottomSection": "ReturnMaterialReceiptBottomPanel",
+      "topbarRight": "ConfirmWithCreditButton"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "sourceShipmentDocNo": "Albarán origen",
+        "movementQuantity": "Cant. a devolver",
+        "orderQuantity": "Cant. entregada original"
+      },
+      "en_US": {
+        "sourceShipmentDocNo": "Source Shipment",
+        "movementQuantity": "Return Qty",
+        "orderQuantity": "Original Delivered Qty"
+      }
+    },
+    "processOverrides": {
+      "Process Receipt": {
+        "exclude": true
+      }
     }
   },
   "entities": {
     "header": {
       "name": "returnMaterialReceipt",
+      "javaQualifier": "returnMaterialReceiptHeaderHandler",
+      "virtualFields": [
+        {
+          "name": "sourceShipmentDocNo",
+          "column": "sourceShipmentDocNo",
+          "label": "Source Shipment",
+          "type": "string",
+          "visibility": "readOnly",
+          "form": true,
+          "grid": true,
+          "gridOrder": 6,
+          "section": "principal",
+          "seq": 6
+        }
+      ],
       "fields": {
+        "movementDate": {
+          "grid": true,
+          "gridOrder": 1,
+          "searchable": true,
+          "inputMode": "date",
+          "readOnlyLogic": null,
+          "dot": false,
+          "section": "principal",
+          "seq": 3
+        },
         "documentNo": {
           "visibility": "readOnly",
           "grid": true,
+          "gridOrder": 2,
           "searchable": true,
           "inputMode": "text",
-          "section": "principal"
+          "section": "principal",
+          "seq": 2
         },
         "businessPartner": {
           "grid": true,
+          "gridOrder": 3,
           "searchable": true,
           "reference": "BusinessPartner",
           "inputMode": "search",
           "readOnlyLogic": null,
-          "section": "principal"
-        },
-        "movementDate": {
-          "grid": true,
-          "searchable": true,
-          "inputMode": "date",
-          "readOnlyLogic": null,
-          "section": "principal"
-        },
-        "warehouse": {
-          "grid": false,
-          "inputMode": "search",
-          "readOnlyLogic": null,
-          "section": "principal"
+          "section": "principal",
+          "seq": 1
         },
         "documentStatus": {
           "visibility": "readOnly",
           "grid": true,
+          "gridOrder": 4,
           "searchable": true,
           "form": false
         },
-        "salesOrder": {
-          "visibility": "readOnly",
-          "grid": false,
+        "warehouse": {
+          "grid": true,
+          "gridOrder": 5,
           "inputMode": "search",
-          "section": "principal"
+          "readOnlyLogic": null,
+          "section": "principal",
+          "seq": 4,
+          "defaultExpr": "@#M_Warehouse_ID@"
+        },
+        "salesOrder": {
+          "visibility": "discarded"
         },
         "partnerAddress": {
           "reference": "BusinessPartnerLocation",
@@ -63,15 +106,18 @@
             "filterKey": "C_BPartner_ID"
           },
           "readOnlyLogic": null,
-          "section": "other"
+          "section": "principal",
+          "seq": 5
         },
         "description": {
           "inputMode": "textarea",
+          "form": false,
           "section": "other"
         },
         "trackingNo": {
           "visibility": "editable",
           "inputMode": "text",
+          "form": false,
           "section": "other"
         },
         "accountingDate": {
@@ -213,7 +259,8 @@
           "visibility": "discarded"
         },
         "documentAction": {
-          "visibility": "discarded"
+          "visibility": "system",
+          "javaQualifier": "documentAction"
         },
         "processNow": {
           "visibility": "discarded"
@@ -255,14 +302,16 @@
     },
     "lines": {
       "name": "returnMaterialReceiptLine",
+      "javaQualifier": "returnMaterialReceiptLineHandler",
       "fields": {
         "lineNo": {
-          "grid": true,
+          "grid": false,
           "inputMode": "number",
           "section": "principal"
         },
         "product": {
           "grid": true,
+          "gridOrder": 1,
           "searchable": true,
           "inputMode": "search",
           "readOnlyLogic": null,
@@ -270,20 +319,22 @@
         },
         "movementQuantity": {
           "grid": true,
+          "gridOrder": 2,
           "inputMode": "number",
           "readOnlyLogic": null,
           "section": "principal"
         },
         "uOM": {
           "visibility": "readOnly",
-          "grid": true,
+          "grid": false,
           "inputMode": "search",
-          "section": "principal"
+          "section": "other"
         },
         "orderQuantity": {
           "visibility": "readOnly",
           "grid": true,
-          "section": "other"
+          "gridOrder": 3,
+          "section": "principal"
         },
         "salesOrderLine": {
           "visibility": "readOnly",

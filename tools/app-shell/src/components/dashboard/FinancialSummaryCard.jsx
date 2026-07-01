@@ -74,7 +74,6 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
           {ui('financialSummaryTitle')}
         </span>
       </div>
-
       {kpis.length === 0 ? (
         <div className="flex-1 flex items-center justify-center w-full">
           <div className="flex flex-col items-center" style={{ gap: '12px' }}>
@@ -93,7 +92,9 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: '#121217', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }} />
+                <Plus
+                  style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }}
+                  data-testid="Plus__81e75f" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#FFFFFF' }}>
                   {ui('newPurchase')}
                 </span>
@@ -104,7 +105,9 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: '#121217', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }} />
+                <Plus
+                  style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }}
+                  data-testid="Plus__81e75f" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#FFFFFF' }}>
                   {ui('newSale')}
                 </span>
@@ -142,7 +145,9 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
               borderRadius: '10px',
             }}
           >
-            <Check style={{ width: '12.5px', height: '12.5px', color: '#17663A' }} />
+            <Check
+              style={{ width: '12.5px', height: '12.5px', color: '#17663A' }}
+              data-testid="Check__81e75f" />
           </div>
           <span
             style={{
@@ -244,7 +249,9 @@ export function FinancialSummaryCard({ kpis = [], currencyLabel = '' }) {
                       ...badgeStyle,
                     }}
                   >
-                    <TrendIcon style={{ width: '16px', height: '16px', flexShrink: 0 }} />
+                    <TrendIcon
+                      style={{ width: '16px', height: '16px', flexShrink: 0 }}
+                      data-testid="TrendIcon__81e75f" />
                     <span
                       style={{
                         fontSize: '12px',

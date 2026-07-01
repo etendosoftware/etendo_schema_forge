@@ -70,12 +70,14 @@ describe('EntityForm — horizontal grid layout (ETP-4000)', () => {
     expect(grid.className).toMatch(/(^|\s)gap-x-5(\s|$)/);
   });
 
-  it('horizontal layout uses gap-y-5 (matches Figma vertical rhythm)', () => {
+  it('horizontal layout uses the ROW_GAP_Y density token gap-y-3 (ETP-4321 — 12px row rhythm)', () => {
     const { container } = render(
       <EntityForm fields={fields} data={{}} onChange={vi.fn()} layout="horizontal" />
     );
     const grid = getGridWrapper(container);
-    expect(grid.className).toMatch(/(^|\s)gap-y-5(\s|$)/);
+    expect(grid.className).toMatch(/(^|\s)gap-y-3(\s|$)/);
+    // Must NOT regress to the legacy 20px row gap.
+    expect(grid.className).not.toMatch(/(^|\s)gap-y-5(\s|$)/);
   });
 
   it('horizontal layout does NOT regress to md:grid-cols-3 / gap-x-6', () => {

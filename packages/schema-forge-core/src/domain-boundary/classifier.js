@@ -310,20 +310,26 @@ export function analyzeBoundary({
   const blockers = [];
   const warnings = [];
   const crossDomainApproved = hasLabel(labels, 'cross-domain-approved');
+  // A merge-block PR aggregates several already-reviewed feature branches into the epic.
+  // It is cross-domain by construction, so domain-boundary blockers are skipped by design —
+  // and, unlike cross-domain-approved, it does NOT require a plan (there is no single feature
+  // to plan; the constituent branches carry their own review).
+  const mergeBlock = hasLabel(labels, 'merge-block');
+  const approvedBypass = crossDomainApproved || mergeBlock;
   const hasPlan = hasCrossDomainPlan({ changedFiles: normalizedFiles, prBody, policy });
   const vertical = verticalForWindows([...windows], policy);
   const verticalRequested = hasLabel(labels, 'scope:vertical-slice');
   const platformRequested = hasLabel(labels, 'scope:platform-change');
   const generatorRequested = hasLabel(labels, 'scope:generator-change');
 
-  if (crossDomainApproved && !hasPlan) {
+  if (crossDomainApproved && !mergeBlock && !hasPlan) {
     blockers.push({
       code: 'CROSS_DOMAIN_PLAN_MISSING',
       message: 'cross-domain-approved requires docs/plans/<ticket>-cross-domain.md or a PR body plan with domains, tests, and rollback.',
     });
   }
 
-  if (!crossDomainApproved) {
+  if (!approvedBypass) {
     const generatorCascade = nonSupportScopes.includes('generator-change')
       && nonSupportScopes.every((scope) => scope === 'generator-change' || scope.startsWith('window:'))
       && !entries.some((entry) => entry.kind === 'window-custom');
@@ -417,6 +423,11 @@ export function analyzeBoundary({
         message: 'Root sensitive files are not neutral; keep them isolated or pair them only with one mechanically related domain.',
       });
     }
+  } else if (mergeBlock) {
+    warnings.push({
+      code: 'MERGE_BLOCK',
+      message: 'merge-block label present: aggregated cross-branch merge into the epic. Domain boundary checks are skipped by design; CODEOWNER review is still required by branch protection.',
+    });
   } else if (hasPlan) {
     warnings.push({
       code: 'CROSS_DOMAIN_APPROVED',

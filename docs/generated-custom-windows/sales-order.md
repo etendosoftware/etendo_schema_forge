@@ -32,6 +32,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 - Business partner dependency: `partnerAddress` is a dependent selector filtered by the chosen `businessPartner`, and the contract validation further restricts it to active shipping addresses. The current E2E flow explicitly checks that partner address stays disabled until a business partner is selected.
 - Contact dependency: `userContact` is configured as dependent on `businessPartner`, and the custom record page wires inline contact creation through `CreateContactModal`, so contact selection can be extended without leaving the order.
 - Header visibility changed in the merged code: `paymentTerms` is now exposed as a visible principal-section selector in `HeaderForm`, alongside `paymentMethod`, instead of remaining backend-only for the generated header surface.
+- `warehouse` is now visible in the header form (position 8 — end of row 2 in the 4-column layout, after `paymentTerms`). It renders as a search selector and becomes read-only when the document is processed (`readOnlyLogic: @Processed@='Y'`). Previously it was hidden via `form: false` in `decisions.json`.
 - User-touched field protection on the header form: when the user manually changes an FK field after a callout has already set it (typical case: `paymentTerms` set to "30 días" by the `businessPartner` callout, then changed to "Inmediato" by the user), follow-up callouts triggered by other fields cannot overwrite that value. This is implemented in `DetailView.jsx` via `userTouchedRef`, mirroring the touched-field guard already used by inline line callouts. The current callout's trigger field still wins (it represents the user's most recent action), and the protection set is reset whenever `recordId` changes so new records and freshly loaded records start clean.
 - Persisted payment-term changes: the `etgo_sf_field` row for `paymentTerms` was historically marked `IsReadOnly=Y`, which made `NeoFieldFilter.filterWriteRequest` strip the field from PATCH bodies and silently drop user changes. The row is now `IsReadOnly=N` (kept in sync via `push-to-neo` and the exported XML in `com.etendoerp.go`), so editing `paymentTerms` on an existing draft order and saving actually persists.
 - POST-create cascade no longer overwrites user-set FK values: `NeoCrudHandler.executePostCreate` snapshots the keys submitted in the request body before `injectMandatoryDefaults` runs, and passes them as `protectedFields` into the post-create callout cascade. The cascade can still refine missing/derived fields, but it no longer flips `paymentTerms` (or any other user-set field) back to the business-partner default during the initial save.
@@ -77,7 +78,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 1. Open `/sales-order` and confirm the list shows exactly Order Date (no red dot), Document No., Business Partner, Document Status, Total Gross Amount, Invoice Status, and Delivery Status in that order, and that the Delivery Status header reads "Delivery Status"/"Estado de entrega" rather than the default "Receipt Status"/"Estado del envío".
 2. Open `/sales-order?filter=pendingDelivery` and confirm the list starts in the pending-delivery quick filter rather than the full order set.
 3. Start a new order and verify business partner is required, partner address stays disabled until a business partner is selected, the order-line tab is already visible, and `Save`, `Save draft`, and `Cancel` are present before the first save. Verify inline contact creation is available from the detail page.
-4. Verify the header now exposes `Payment Method` and `Payment Terms` as visible fields on the generated header form.
+4. Verify the header now exposes `Payment Method`, `Payment Terms`, and `Warehouse` as visible fields on the generated header form. Confirm `Warehouse` appears at the end of the second row (4th column). On a draft order, confirm it is editable; on a confirmed order, confirm it is read-only.
 5. Add one or more lines and verify the line editor exposes product, ordered quantity, list price (`listPrice`), discount, tax, and line gross amount, then verify that changing quantity, price, or discount updates the line gross amount instantly without a server round-trip, and that header totals refresh after saving. Confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured sales taxes (filtered by `IsSOTrx=Y` and validity against the order date), not a free-text search that returns "Sin resultados".
 6. Open a draft order and verify confirm, send, and clone actions are available. Use the confirm flow once with no downstream documents and once with shipment and/or invoice creation selected. From the list view, select one or more orders, run `Clone`, close the result modal and confirm that the cloned drafts appear in the list without manually pressing `Refresh`.
 7. On a draft order with a business partner already chosen, change `Payment Terms` to a different value than the BP default and save. Reopen the record and confirm the chosen value persisted (regression: it used to revert to the BP default).
@@ -89,7 +90,7 @@ This window should let a user create, review, confirm, and manage sales orders f
 13. Re-run either menu item on the same selection without first completing the freshly created drafts. Verify each order now reports back as failed with the `Pedido {documentNo} ya tiene una factura/albarán en borrador` message and no duplicate draft is created. Then complete one of those drafts (so its status moves to `CO` while leaving pending qty/amount on the order) and trigger the menu item again — that order must succeed and produce a new draft, while orders still holding a `DR` document keep failing with the same "already has draft" message.
 14. On a draft order, open the confirm modal and check both `Create shipment` and `Create invoice`. From the browser console, override `window.fetch` to return a 500 for the `createDraftInvoice` request (or `createShipment` for the inverse case) and confirm. Verify the first request that succeeded actually created its document, the second one displays the localised error, and the modal stays open. Retry from the same modal without removing the override and verify (a) the already-completed step's card is green, locked, and shows "Already created" / "Ya creado" and (b) no duplicate shipment is created — the network tab must NOT show a second `documentAction=CO` (no `@AlreadyPosted@` 400) nor a second `createShipment` request. Restore the original `fetch` and confirm again: only the previously-failed step runs, and the result modal lists both documents (shipment from the first attempt + invoice from the retry, or vice-versa) with their document numbers. Verify the same flow with locale switched to Spanish to make sure `soAlreadyCreated` is translated.
 15. Open any existing sales order and watch the network tab for `GET /sws/neo/sales-order/paymentPlan?parentId=…`. The request must return 200 (even if the response data is empty) — never `404 Entity not found in spec: Payment Plan`. The Related Documents tab should still render normally regardless of whether the order has linked payments.
-16. Open the Send Email modal from the topbar and confirm: the `Para` field is pre-filled with the business partner's email when one is registered in `EM_Etgo_Email`; the field is empty (showing the "no email found" hint) when none is registered; and the modal title reads the translated document name in the active UI language.
+16. Open the Send Email modal from the topbar and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language.
 17. Open an existing draft order without touching any field and confirm the "Save" and "Save Draft" buttons are **disabled**. Change any header field and confirm they become enabled. Save and confirm they disable again. Revert the changed field to its original value without saving and confirm the buttons disable once more. Add a line: once the add-row is submitted, the buttons should disable again if no header changes remain pending. Confirm the "Confirm" button stays enabled throughout all these states.
 18. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
 
@@ -120,7 +121,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `artifacts/sales-order/generated/web/sales-order/LinesTable.jsx` — the `unitPrice` column (`PriceActual`) uses `type: 'amount'` so the net unit price renders as a formatted currency value rather than a raw number.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/SalesOrderHeaderHandler.java` extends `AbstractOrderHeaderHandler` and is the CDI bean registered as `salesOrderHeaderHandler`. Its inherited `afterHandle()` appends `hasLinkedDocuments` to every GET response record (single and batch), which `visibleWhenFieldFalse: 'hasLinkedDocuments'` in `decisions.json` uses to conditionally hide the `Reactivate Order` action on the detail view and the `OrderReactivateBulkAction` uses as a row-level filter on the list.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/AbstractOrderHeaderHandler.java` — shared base class for both order header handlers; contains all `afterHandle()` logic including the batch IN query that avoids N+1 on list responses.
-- `artifacts/sales-order/custom/OrderCreateInvoice.jsx` proves the Send Email modal is wired with `bPartnerId` and `apiBaseUrl` so the recipient email is resolved from the contacts spec at open time, and `documentType` is translated via `useMenuLabel()`. Backend delivery is handled by the `sales-order-send` transactional email contract in `com.etendoerp.go`, using the shared default document-send payload strategy.
+- `artifacts/sales-order/custom/OrderCreateInvoice.jsx` proves the Send Email modal is wired with `bPartnerId` and `apiBaseUrl` so the recipient email is resolved from the contacts spec at open time and proposed as an editable `To` chip (removable, with additional To/CC recipients supported per ETP-4226 — edits reach the backend only through the allowlisted `recipientEdits` command field), and `documentType` is translated via `useMenuLabel()`. Backend delivery is handled by the `sales-order-send` transactional email contract in `com.etendoerp.go`, using the shared default document-send payload strategy.
 - `tools/app-shell/src/hooks/__tests__/useEntity-dirty-state.test.js` verifies the `isDirtyHeader` computation (dirty when editing differs from selected, clean when they match, new-record initial state) and the `refreshHeaderTotals` selective merge (server-computed totals update while user-edited fields in `editing` are preserved using `userChangedKeysRef`).
 - `tools/app-shell/src/components/contract-ui/__tests__/DetailView.dirtyState.test.js` guards the `isDirty` composite expression, the `additionalDirtyState` extension prop, and the save-button disabled conditions (new record always active, existing record gated by `!isDirty`, Confirm button never gated by dirty state).
 - **ETP-3908 — Confirm modal total display fix**: `artifacts/sales-order/custom/OrderCreateInvoice.jsx` and `OrderConfirmModal.jsx` both now apply `etgoTotalDiscount` (a `discountFactor = 1 − pct/100`) to `grandTotalAmount` and `summedLineAmount` before rendering them in the confirmation modal. Previously both modals showed the backend's raw totals without the custom UI-level order discount, so orders with `etgoTotalDiscount > 0` displayed the wrong amount in the confirm dialog.
@@ -132,3 +133,101 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 
 - **ETP-4032 — ConfirmResultModal redesign**: `ConfirmResultModal` was fully redesigned with a `docs[]` array API (`{ type, num, amount?, route }`), type-tinted icons per document kind (facturaCompra/Venta/salida/entrada), and an optional `primary` CTA for single-doc results. `OrderCreateInvoice.jsx` migrated from the old `cards[]` shape to the new `docs[]` API.
 - **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.
+
+## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
+
+`com.etendoerp.go` now depends on the **PSD2** module, which adds the
+`EM_Psd2_Generate_Bank_Payment` ("Generate Bank Payment") column to the shared
+core table this window sits on (`C_Order` / `C_Invoice` / `FIN_Payment`). Because
+Schema Forge extracts from AD, that column surfaces in this window's contract as a
+**system field** — present in the backend contract but **not** rendered in the
+frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
+this note only records why the contract was regenerated when the PSD2 dependency
+was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## Dual-currency display — ETP-4027
+
+### Overview
+
+When a sales order is denominated in a currency different from the organization's functional currency (the "org currency"), the preview panel and `SummaryCard` show both amounts side-by-side in a Holded-style layout. When both currencies are the same this section is inactive and rendering is unchanged.
+
+### How it works
+
+1. `OrderPreview.jsx` calls `useDocumentCurrency` (shared hook at `tools/app-shell/src/windows/custom/shared/useDocumentCurrency.js`) with three inputs:
+   - `docCurrencyCode` — the ISO 4217 code of the order currency, taken from `order['currency$_identifier']` (e.g. `"USD"`).
+   - `orderDate` — the order's ISO date string, used to resolve the exchange rate for that day.
+   - `apiBaseUrl` / `token` — for authentication.
+
+2. The hook makes two sequential requests:
+   - `GET /sws/neo/session` — returns `{ currencyCode: "EUR", ... }` with the org's functional currency code.
+   - `GET /sws/neo/validate-exchange-rate?fromCurrency={docCurrency}&toCurrency={orgCurrency}&date={orderDate}` — returns `{ hasRate: true, rate: 1.09 }` or `{ hasRate: false }`.
+
+3. The hook returns `{ orgCurrencyCode, exchangeRate, isSameCurrency, loading, convertAmount }`. `convertAmount(amount)` applies Etendo's `multiplyrate` convention: `to_amount = from_amount × rate`. When currencies are the same, `convertAmount` returns the amount unchanged.
+
+4. `OrderPreview` pre-computes `orgGrandTotal = convertAmount(order.grandTotalAmount)` and passes `orgCurrencyCode`, `exchangeRate`, and `orgGrandTotal` through `OrderGeneralTab` into `SummaryCard`.
+
+5. `SummaryCard` renders the dual-currency block when `orgCurrencyCode` is set and differs from `currencyCode`:
+   - **Primary row** (card header): org-currency amount with the document currency shown as a badge, e.g. `261.81 €  [USD]`.
+   - **Secondary row** (below the header): exchange rate in parentheses followed by the document-currency amount, e.g. `(1.1647) $304.92`.
+
+### Exchange rate endpoint — `NeoExchangeRateService`
+
+`GET /sws/neo/validate-exchange-rate` is implemented in `NeoExchangeRateService.java` (com.etendoerp.go). It queries `C_Conversion_Rate` for the most recent active row whose `VALIDFROM ≤ date ≤ VALIDTO` (or open-ended). Parameters:
+
+| Parameter | Required | Format |
+|---|---|---|
+| `fromCurrency` | yes | ISO 4217 code (`"USD"`) or DB record ID |
+| `toCurrency` | yes | ISO 4217 code (`"EUR"`) or DB record ID |
+| `date` | yes | `YYYY-MM-DD` |
+
+The endpoint first tries the direct `FROM→TO` direction. If no row is found, it tries the inverse `TO→FROM` direction and returns `1/rate`. This means configuring only one direction in Etendo's currency conversion setup is sufficient — both `USD→EUR` and `EUR→USD` resolve from a single row. Scoping is client + org (org-level rows take priority over `AD_Org_ID = '0'` rows).
+
+**multiplyrate convention:** Etendo stores `multiplyrate` such that `to_amount = from_amount × multiplyrate`. The endpoint returns this value directly; the inverse fallback already applies the `1/rate` division before returning.
+
+**Same-currency short-circuit:** when `fromCurrencyId == toCurrencyId`, the endpoint skips the DB query and returns `{ hasRate: true, rate: 1.0 }` immediately.
+
+### Currency change handling (ETP-4027 functional model)
+
+The `currency` field on the header form is **always editable on draft orders**, including those with saved lines. The DB trigger `C_ORDER_CHK_RESTRINCTIONS_TRG` no longer blocks the change (the `C_Currency_ID` clause was removed in ETP-4027 Phase 0). The frontend enforces a rate-availability validation at the dropdown change moment, and the per-line conversion runs only on lines added AFTER a save.
+
+#### Real-time rate validation in the dropdown
+
+When the user picks a new currency in the dropdown, `handleChangeWithCallout` (`DetailView.jsx`) runs an async validation:
+
+1. Fetch the org base currency ID from `/sws/neo/sales-order/header/session` (field `currencyId`).
+2. If the new currency equals the org currency → skip validation (no rate needed to return to base).
+3. Otherwise fetch `validate-exchange-rate?fromCurrency=<orgId>&toCurrency=<newId>&date=<orderDate>` (uses `hook.selected?.orderDate ?? hook.editing?.orderDate`).
+4. If the response has no rate → call `hook.handleChange('currency', previousCurrency)` to revert the dropdown to the previous value and show a toast `noConversionRateError`.
+5. If the response has a rate → the change stays. The user can save when ready.
+
+The validation is best-effort: network or server failures revert the dropdown to be safe, preventing silent currency mismatches.
+
+#### Line conversion based on saved state
+
+A `useEffect` in `DetailView.jsx` keeps `activeCurrencyConversionRef` synchronized with the SAVED order currency:
+
+- It depends on `recordId`, `hook.selected?.currency`, and `hook.selected?.orderDate`. On every change it re-fetches `/session` and `/validate-exchange-rate` if the saved currency differs from the org currency.
+- When `docCurrency === orgCurrency` → ref is cleared (no conversion).
+- When they differ and a rate exists → ref holds `{baseCurrency: orgId, toCurrency: docId, rate}`.
+
+When the user adds a new line and selects a product, the conversion block inside `handleLineFieldChange` checks `activeCurrencyConversionRef.current`. If active, it mutates `result` in place:
+
+- Converts the price: `convertedPrice = pricelistPrice × rate`.
+- Overrides `result.currency` to the order header's currency (so the line's `C_CURRENCY_ID` matches the order header, not the pricelist's currency that `SL_Order_Product` returns).
+- Recomputes `lineNetAmount` / `lineGrossAmount` for internal consistency.
+
+This is **only** applied to lines added after the saved currency change. Conversion of pending unsaved lines on currency change is no longer supported (simplified model — analyst confirmed 2026-06-18).
+
+#### NeoFieldFilter (lines.currency writable)
+
+The line's `currency` field is configured in `artifacts/sales-order/decisions.json` with `visibility: editable, grid: false, form: false`. The `editable` visibility makes the field writable via the NEO PATCH (`ETGO_SF_FIELD.IsReadOnly = N`), so the frontend's override of `result.currency` is preserved on save. `grid: false, form: false` hides the field from the UI — the user never edits per-line currency directly; it's set automatically by the conversion logic to match the header.
+
+### Automated evidence
+
+- `tools/app-shell/src/windows/custom/shared/useDocumentCurrency.js` — the shared hook for the preview view (returns `orgCurrencyCode`, `exchangeRate`, `convertAmount`).
+- `tools/app-shell/src/windows/custom/shared/preview-cards/SummaryCard.jsx` — dual-currency rendering in the preview.
+- `tools/app-shell/src/windows/custom/shared/OrderPreview.jsx` — calls the hook, threads `orgGrandTotal` to `OrderGeneralTab` for the informational equivalent in org currency.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — sync effect for `activeCurrencyConversionRef`, dropdown rate validation in `handleChangeWithCallout`, in-place conversion block in `handleLineFieldChange`.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoExchangeRateService.java` — exchange rate endpoint with inverse fallback.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoSessionService.java` — `/session` endpoint returning both `currencyCode` and `currencyId` (added in ETP-4027).
+- `etendo_core_pg/src-db/database/model/triggers/C_ORDER_CHK_RESTRINCTIONS_TRG.xml` — trigger with `C_Currency_ID` clause removed (Phase 0 / ETP-4027).

@@ -85,7 +85,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | [developer-tools.md](developer-tools.md) | CLI tools used by the team: RTK (token optimization) and GWS (Google Workspace CLI) |
 | [claude-md-best-practices.md](claude-md-best-practices.md) | Best practices for writing effective CLAUDE.md files (research compilation) |
 | [self-documentation-policy.md](self-documentation-policy.md) | Self-documentation policy: triggers, checklists, and phase responsibilities for keeping docs in sync with code |
-| [feedback.md](feedback.md) | Known bug patterns and root-cause lessons: double-discount on line PATCH, callout price suppression for invoices, add-line row field key alignment, ETP-4007 discount display fixes (etgoDiscount field name, listPrice vs unitPrice, grossAmount vs lineNetAmount, taxAmount formula, missing PDF discount breakdown rows) |
+| [feedback.md](feedback.md) | Known bug patterns and root-cause lessons: double-discount on line PATCH, callout price suppression for invoices, add-line row field key alignment, ETP-4007 discount display fixes (etgoDiscount field name, listPrice vs unitPrice, grossAmount vs lineNetAmount, taxAmount formula, missing PDF discount breakdown rows), ETP-4277 empty numeric field saved as backend default (DataTable/InlineLinesPanel defaultValue substitution) |
 
 ## Operations
 
@@ -97,6 +97,8 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 | [ops/window-doc-freshness.md](ops/window-doc-freshness.md) | Window-specific doc freshness warning: diff-based CI review for `docs/generated-custom-windows/<window>.md` |
 | [ops/epic-rollup-report.md](ops/epic-rollup-report.md) | Develop-targeted epic rollout report: included feature PRs, prior review findings, and aggregated release-risk summary |
 | [ops/app-shell-observability.md](ops/app-shell-observability.md) | App Shell observability: providers, env vars, v1 events, privacy rules, and extension guide |
+| [ops/mixpanel-kpi-emission-spec.md](ops/mixpanel-kpi-emission-spec.md) | Mixpanel KPI emission spec: frontend/backend runtime config, emitted events, advanced KPI gaps, and validation evidence |
+| [ops/saas-kpis/README.md](ops/saas-kpis/README.md) | Etendo SaaS KPI instrumentation catalog grouped by dimension, with Mixpanel-ready contracts and backend/definition gaps |
 
 ## Proposals
 
@@ -127,6 +129,7 @@ Plans follow a lifecycle: active in `plans/`, completed in `plans/completed/YYYY
 | [plans/neo-report-endpoint.md](plans/neo-report-endpoint.md) | NEO Headless Report Endpoint — **Implemented** (NeoReportService, binary responses, OpenAPI docs) |
 | [plans/2026-03-05-vertical-slice-design.md](plans/2026-03-05-vertical-slice-design.md) | Vertical slice design |
 | [plans/2026-03-05-vertical-slice-plan.md](plans/2026-03-05-vertical-slice-plan.md) | Vertical slice execution plan |
+| [plans/ETP-4214-saas-kpi-instrumentation-plan.md](plans/ETP-4214-saas-kpi-instrumentation-plan.md) | Etendo SaaS KPI instrumentation execution plan and Jira task breakdown |
 | [plans/evaluations/architecture-review.md](plans/evaluations/architecture-review.md) | Architecture review |
 | [plans/evaluations/day-1-decisions.md](plans/evaluations/day-1-decisions.md) | Day 1 decisions |
 | [plans/evaluations/decisions-resolved.md](plans/evaluations/decisions-resolved.md) | Resolved design decisions |

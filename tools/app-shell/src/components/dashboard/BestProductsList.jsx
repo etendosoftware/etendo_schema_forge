@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { formatDashboardAmount, formatDashboardNumber, localeFromUi } from '@/lib/dashboardNumberFormat.js';
+import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 import { DashboardCard, DashboardEmptyState, DashboardRowChevron } from './_shared';
 
 function TrendPill({ pct }) {
@@ -21,9 +22,9 @@ function TrendPill({ pct }) {
           ? { backgroundColor: '#EEFBF4', color: '#17663A' }
           : { backgroundColor: '#FEF0F4', color: '#D50B3E' }}
     >
-      <Icon className="h-3 w-3" />
+      <Icon className="h-3 w-3" data-testid="Icon__4d53b7" />
       {isUp ? '+' : ''}{pct}%
-    </span>
+          </span>
   );
 }
 
@@ -66,7 +67,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
   const hasNegativeTrend = !hasPositiveTrend && rows.some((r) => (r.trendPct ?? 0) < 0);
 
   return (
-    <DashboardCard title={ui('bestProductsTitle')}>
+    <DashboardCard title={ui('bestProductsTitle')} data-testid="DashboardCard__4d53b7">
       {hasNoData ? (
         <DashboardEmptyState
           title={ui('bestProductsEmptyTitle')}
@@ -76,7 +77,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
             { key: 'copilot', icon: Sparkles, label: ui('createWithCopilot'), onClick: openCopilot, variant: 'secondary' },
             { key: 'new', icon: Plus, label: ui('newSale'), onClick: () => navigate('/sales-invoice/new'), variant: 'primary' },
           ]}
-        />
+          data-testid="DashboardEmptyState__4d53b7" />
       ) : (<>
       <div
         style={{
@@ -98,7 +99,9 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
           {hasPositiveTrend && (
             <div className="flex items-center gap-2 text-xs" style={{ color: '#1E874C' }}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: '#EEFBF4', borderRadius: '10px', flexShrink: 0 }}>
-                <Check style={{ width: '12.5px', height: '12.5px', color: '#17663A' }} />
+                <Check
+                  style={{ width: '12.5px', height: '12.5px', color: '#17663A' }}
+                  data-testid="Check__4d53b7" />
               </div>
               <span>{ui('bestProductsTrendPositive')}</span>
             </div>
@@ -106,14 +109,20 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
           {hasNegativeTrend && (
             <div className="flex items-center gap-2 text-xs" style={{ color: '#D50B3E' }}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: '#FEF0F4', borderRadius: '10px', flexShrink: 0 }}>
-                <TrendingDown style={{ width: '12.5px', height: '12.5px', color: '#D50B3E' }} />
+                <TrendingDown
+                  style={{ width: '12.5px', height: '12.5px', color: '#D50B3E' }}
+                  data-testid="TrendingDown__4d53b7" />
               </div>
               <span>{ui('bestProductsTrendNegative')}</span>
             </div>
           )}
         </div>
         
-        <ViewToggle viewMode={viewMode} onToggle={setViewMode} ui={ui} />
+        <ViewToggle
+          viewMode={viewMode}
+          onToggle={setViewMode}
+          ui={ui}
+          data-testid="ViewToggle__4d53b7" />
       </div>
 
       <div
@@ -142,7 +151,15 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
             return (
               <div
                 key={`${viewMode}-${row.name}-${i}`}
-                onClick={() => row.id && navigate(`/product/${row.id}`)}
+                onClick={() => {
+                  if (!row.id) return;
+                  trackDashboardKpi('dashboard_document_opened', {
+                    kpiId: DASHBOARD_KPI_IDS.dashboardToDocument,
+                    entityType: 'product',
+                    source: 'dashboard_best_products',
+                  });
+                  navigate(`/product/${row.id}`);
+                }}
                 style={{
                   display: 'flex',
                   flexDirection: 'row',
@@ -201,7 +218,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
                     flexGrow: 0,
                   }}
                 >
-                  <TrendPill pct={row.trendPct ?? null} />
+                  <TrendPill pct={row.trendPct ?? null} data-testid="TrendPill__4d53b7" />
                 </div>
                 <div
                   style={{
@@ -239,7 +256,7 @@ export function BestProductsList({ sellers = [], products = [], currencyLabel = 
                     </span>
                   </div>
                 </div>
-                <DashboardRowChevron />
+                <DashboardRowChevron data-testid="DashboardRowChevron__4d53b7" />
               </div>
             );
           })

@@ -17,15 +17,27 @@ export function DetailTabs({ value, onValueChange, movementsCount, reconciliatio
   const ui = useUI();
 
   return (
-    <Tabs value={value} onValueChange={onValueChange} className="flex-row">
-      <TabsList>
-        <TabsTrigger value="movements" icon={ArrowLeftRight} badge={movementsCount}>
+    <Tabs
+      value={value}
+      onValueChange={onValueChange}
+      className="flex-row"
+      data-testid="Tabs__a9be0b">
+      <TabsList data-testid="TabsList__a9be0b">
+        <TabsTrigger
+          value="movements"
+          icon={ArrowLeftRight}
+          badge={movementsCount}
+          data-testid="TabsTrigger__a9be0b">
           {ui('financeAccountDetailTabMovements')}
         </TabsTrigger>
-        <TabsTrigger value="reconciliation" icon={Scale} badge={reconciliationCount}>
+        <TabsTrigger
+          value="reconciliation"
+          icon={Scale}
+          badge={reconciliationCount}
+          data-testid="TabsTrigger__a9be0b">
           {ui('financeAccountDetailTabReconciliation')}
         </TabsTrigger>
-        <TabsTrigger value="statements" icon={FileText}>
+        <TabsTrigger value="statements" icon={FileText} data-testid="TabsTrigger__a9be0b">
           {ui('financeAccountDetailTabStatements')}
         </TabsTrigger>
       </TabsList>

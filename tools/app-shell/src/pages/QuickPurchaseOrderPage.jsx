@@ -296,7 +296,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
     return (
       <div className="h-full flex items-center justify-center" data-testid="quick-purchase-order-page">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
+          <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__835b99" />
           <span className="text-sm">{ui('qpoLoading')}</span>
         </div>
       </div>
@@ -307,7 +307,9 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
     return (
       <div className="h-full flex items-center justify-center" data-testid="quick-purchase-order-page">
         <div className="text-center space-y-2">
-          <ClipboardList className="h-10 w-10 text-muted-foreground/30 mx-auto" />
+          <ClipboardList
+            className="h-10 w-10 text-muted-foreground/30 mx-auto"
+            data-testid="ClipboardList__835b99" />
           <p className="text-sm font-medium text-destructive">{dataError}</p>
         </div>
       </div>
@@ -326,14 +328,14 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
               onSelect={setSupplier}
               suppliers={suppliers}
               inputRef={supplierSearchRef}
-            />
+              data-testid="SupplierSelector__835b99" />
             <div className="flex gap-2 items-center">
               <div className="flex-1 relative">
                 <ProductSearchBar
                   query={searchQuery}
                   onChange={setSearchQuery}
                   inputRef={productSearchRef}
-                />
+                  data-testid="ProductSearchBar__835b99" />
               </div>
               <div
                 title={lastScan ? `${ui('qpoScanDetected')}: ${lastScan}` : ui('qpoScanDetected')}
@@ -343,7 +345,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
                     : 'border-border bg-white text-muted-foreground/40'
                 }`}
               >
-                <ScanBarcode className="h-4 w-4" />
+                <ScanBarcode className="h-4 w-4" data-testid="ScanBarcode__835b99" />
               </div>
               <button
                 onClick={() => setShowPriority(prev => !prev)}
@@ -354,7 +356,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
                     : 'border-border bg-white text-muted-foreground hover:bg-muted/30'
                 }`}
               >
-                <TrendingUp className="h-4 w-4" />
+                <TrendingUp className="h-4 w-4" data-testid="TrendingUp__835b99" />
               </button>
             </div>
             <div className="flex-1 overflow-auto">
@@ -368,7 +370,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
                 showPriority={showPriority}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
-              />
+                data-testid="ProductGrid__835b99" />
             </div>
           </div>
 
@@ -386,7 +388,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
                 supplierId={supplier?.id}
                 onRepeatOrder={handleRepeatOrder}
                 previousOrders={previousOrders}
-              />
+                data-testid="CartPanel__835b99" />
               <SendOrderPanel
                 visible={showSend}
                 supplier={supplier}
@@ -397,7 +399,7 @@ export default function QuickPurchaseOrderPage({ apiBaseUrl }) {
                 onConfirm={handleConfirmSend}
                 onBack={() => setShowSend(false)}
                 methods={SEND_METHODS}
-              />
+                data-testid="SendOrderPanel__835b99" />
             </div>
           </div>
         </div>

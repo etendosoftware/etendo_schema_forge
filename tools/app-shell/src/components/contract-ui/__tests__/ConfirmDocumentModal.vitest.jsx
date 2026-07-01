@@ -162,7 +162,7 @@ describe('ConfirmDocumentModal', () => {
     });
     await vi.waitFor(() =>
       expect(BASE_PROPS.onConfirmed).toHaveBeenCalledWith({
-        invoice: { id: 'inv-1', documentNo: 'FAC-001' },
+        invoice: expect.objectContaining({ id: 'inv-1', documentNo: 'FAC-001' }),
       }),
     );
   });

@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.10.0",
   "generatedAt": "2026-05-04T17:02:25.021Z",
-  "updatedAt": "2026-05-26T18:48:56.881Z",
-  "contractChecksum": "261b0dfd2a329c54",
+  "updatedAt": "2026-06-16T14:53:08.146Z",
+  "contractChecksum": "7bc3e6ba97f8f868",
   "apiPrediction": {
     "specName": "monitor-verifactu",
     "baseUrl": "/sws/neo/monitor-verifactu",
@@ -98,28 +98,6 @@
       }
     ],
     "actions": [
-      {
-        "name": "refreshData",
-        "actionType": "utilityAction",
-        "entity": "cabeceraDeEmisor",
-        "column": "Refresh_Data",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/monitor-verifactu/cabeceraDeEmisor/{id}/action/refreshData",
-        "parameters": [],
-        "preconditions": [],
-        "effects": [
-          "May update related records"
-        ],
-        "dryRunSupported": false,
-        "edgeCases": [
-          "Required context is missing",
-          "User lacks permission",
-          "Record is in an incompatible state"
-        ],
-        "processId": "E0D681117A1843C5B9D525701087D7DC",
-        "processType": "obuiapp"
-      },
       {
         "name": "isReady",
         "actionType": "utilityAction",
@@ -260,9 +238,6 @@
             "required": true,
             "readOnlyLogic": "@IS_Ready@='Y'"
           },
-          "refreshData": {
-            "defaultValue": "N"
-          },
           "issuerNIF": {
             "readOnly": true
           },
@@ -369,5 +344,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "5efcd56c0e609c95"
+  "checksum": "b87e001f7c66a456"
 }

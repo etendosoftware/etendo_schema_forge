@@ -252,6 +252,144 @@ describe('useCallout', () => {
     vi.useFakeTimers();
   });
 
+  it('executeCallout with empty field value does not trigger fetch', () => {
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    act(() => {
+      result.current.executeCallout('field1', '', {});
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    // Field name is present but value is empty — callout still fires
+    // because useCallout only guards on empty field, not empty value
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('executeCallout with null value still fires (value can be null)', () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ updates: {}, combos: {}, messages: [] }),
+    });
+
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    act(() => {
+      result.current.executeCallout('field1', null, { id: '1' });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+    expect(body.value).toBeNull();
+  });
+
+  it('handles fetch network error (AbortError is silently ignored)', async () => {
+    vi.useRealTimers();
+
+    const abortError = new DOMException('Aborted', 'AbortError');
+    globalThis.fetch.mockRejectedValue(abortError);
+
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    act(() => {
+      result.current.executeCallout('field1', 'val', { id: '1' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.calloutLoading).toBe(false);
+    });
+
+    // AbortError is silently caught, no crash
+    expect(result.current.calloutResult).toBeNull();
+    vi.useFakeTimers();
+  });
+
+  it('handles generic fetch error without crashing', async () => {
+    vi.useRealTimers();
+
+    globalThis.fetch.mockRejectedValue(new Error('Network timeout'));
+
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    act(() => {
+      result.current.executeCallout('field1', 'val', { id: '1' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.calloutLoading).toBe(false);
+    });
+
+    expect(result.current.calloutResult).toBeNull();
+    vi.useFakeTimers();
+  });
+
+  it('does not call fetch when entity is missing', () => {
+    const { result } = renderHook(() =>
+      useCallout('', { token: 'tok', apiBaseUrl: 'http://localhost' })
+    );
+
+    act(() => {
+      result.current.executeCallout('field1', 'val', {});
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not call fetch when apiBaseUrl is missing', () => {
+    const { result } = renderHook(() =>
+      useCallout('header', { token: 'tok', apiBaseUrl: '' })
+    );
+
+    act(() => {
+      result.current.executeCallout('field1', 'val', {});
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('sets calloutResult when combos are returned (but no updates)', async () => {
+    vi.useRealTimers();
+
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        updates: {},
+        combos: { paymentTerm: [{ id: 'PT1', name: '30 days' }] },
+        messages: [],
+      }),
+    });
+
+    const { result } = renderHook(() => useCallout('header', opts));
+
+    act(() => {
+      result.current.executeCallout('bp', 'BP001', { id: '1' });
+    });
+
+    await waitFor(() => {
+      expect(result.current.calloutResult).toEqual({
+        updates: {},
+        combos: { paymentTerm: [{ id: 'PT1', name: '30 days' }] },
+        triggerField: 'bp',
+      });
+    });
+
+    vi.useFakeTimers();
+  });
+
   // ── Message sanitization (ETP-4005) ────────────────────────────────────────
   //
   // sanitizeCalloutMessage is internal to useCallout.js but its behaviour is

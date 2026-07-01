@@ -1,0 +1,429 @@
+{
+  "version": "0.15.0",
+  "generatedAt": "2026-06-16T16:34:09.049Z",
+  "updatedAt": "2026-06-24T20:46:49.776Z",
+  "contractChecksum": "202a685d07d22ea8",
+  "apiPrediction": {
+    "specName": "simple-g-l-journal",
+    "baseUrl": "/sws/neo/simple-g-l-journal",
+    "crud": {
+      "gLJournal": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/simple-g-l-journal/gLJournal",
+        "detailUrl": "/sws/neo/simple-g-l-journal/gLJournal/{id}",
+        "supportedFilters": [
+          "description"
+        ]
+      },
+      "gLJournalLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/simple-g-l-journal/gLJournalLine",
+        "detailUrl": "/sws/neo/simple-g-l-journal/gLJournalLine/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "gLJournal",
+        "field": "period",
+        "column": "C_Period_ID",
+        "reference": "Period",
+        "inputMode": "search",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/period"
+      },
+      {
+        "entity": "gLJournal",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/currency"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "accountingCombination",
+        "column": "C_ValidCombination_ID",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/accountingCombination"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "businessPartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/businessPartner"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/product"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/project"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "asset",
+        "column": "A_Asset_ID",
+        "reference": "Asset",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/asset"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/costCenter"
+      }
+    ],
+    "actions": [
+      {
+        "name": "documentAction",
+        "actionType": "documentAction",
+        "entity": "gLJournal",
+        "column": "DocAction",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/documentAction",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "5BE14AA10165490A9ADEFB7532F7FA94",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "gLJournal",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ]
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "gLJournal",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "aPRMAddPayment",
+        "actionType": "paymentAction",
+        "entity": "gLJournalLine",
+        "column": "EM_Aprm_Addpayment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/{id}/action/aPRMAddPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "DE1B382FDD2540199D223586F6E216D0",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    }
+  },
+  "formState": {
+    "entities": {
+      "gLJournal": {
+        "fields": {
+          "description": {
+            "required": true,
+            "defaultValue": "@DESCRIPTION0@"
+          },
+          "accountingDate": {
+            "required": true,
+            "readOnlyLogic": "@Posted@='Y'",
+            "defaultValue": "@SQL=SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateAcct@)) FROM DUAL"
+          },
+          "period": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL= SELECT C_Period_ID FROM C_Period WHERE C_Year_ID IN (SELECT C_Year_ID FROM C_Year WHERE C_Calendar_ID =(SELECT C_Calendar_ID FROM AD_ORG WHERE AD_Client_ID= @AD_Client_ID@ AND AD_ORG_ID=(SELECT AD_ORG_GETCALENDAROWNER( @AD_Org_ID@ ) from dual))) AND to_date( COALESCE(@DateAcct@,@#Date@) ) BETWEEN StartDate AND EndDate AND PeriodType='S' AND exists (select 1 from c_periodcontrol where c_periodcontrol.c_period_id = c_period.c_period_id AND periodstatus = 'O')"
+          },
+          "currency": {
+            "required": true,
+            "defaultValue": "@C_Currency_ID@"
+          },
+          "opening": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "multigeneralLedger": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "N"
+          },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          }
+        }
+      },
+      "gLJournalLine": {
+        "fields": {
+          "lineNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@"
+          },
+          "accountingCombination": {
+            "readOnlyLogic": "@Processed@='Y' | @Multi_Gl@='Y'"
+          },
+          "description": {
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@DESCRIPTION1@"
+          },
+          "foreignCurrencyDebit": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "foreignCurrencyCredit": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'"
+          },
+          "openItems": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "businessPartner": {
+            "readOnlyLogic": "@Posted@='Y' | @FIN_Payment_ID@ ! ''"
+          },
+          "product": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "project": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "asset": {
+            "readOnlyLogic": "@Posted@='Y'"
+          },
+          "costCenter": {
+            "readOnlyLogic": "@Posted@='Y'"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage simple g/l journal financial records.",
+    "whenToUse": [
+      "Use for simple g/l journal management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "description",
+        "accountingDate",
+        "period",
+        "currency",
+        "opening",
+        "multigeneralLedger"
+      ],
+      "lineFields": [
+        "foreignCurrencyDebit",
+        "foreignCurrencyCredit",
+        "openItems"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "documentAction",
+      "processNow",
+      "etblkpBulkposting"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Payment amount exceeds remaining balance",
+      "Payment method is not configured for the business partner",
+      "Invoice is already fully paid",
+      "Required field without default value must be provided",
+      "Validate the current form state before running lifecycle actions",
+      "Do not run destructive lifecycle actions without explicit user confirmation"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "description",
+          "accountingDate",
+          "period",
+          "currency",
+          "opening",
+          "multigeneralLedger"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "foreignCurrencyDebit",
+          "foreignCurrencyCredit",
+          "openItems"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "documentAction"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "f001a0c221f215e9"
+}

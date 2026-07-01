@@ -79,7 +79,7 @@ export default function LinesBottomSection({
                   apiBaseUrl={apiBaseUrl}
                   api={api}
                   layout="chips"
-                />
+                  data-testid="RelatedDocumentsComponent__751847" />
               </div>
             </div>
           )}
@@ -130,7 +130,7 @@ export default function LinesBottomSection({
                 token={token}
                 apiBaseUrl={apiBaseUrl}
                 api={api}
-              />
+                data-testid="NotesExtraComponent__751847" />
             </div>
           )}
         </div>
@@ -156,7 +156,7 @@ export default function LinesBottomSection({
                 readOnly={isReadOnly}
                 totalDiscountPct={resolveTotalDiscountPct(data, lines, totalDiscountPct, totalsField)}
                 onTotalDiscountChange={onTotalDiscountChange}
-              />
+                data-testid="DocumentTotalsPanel__751847" />
             </div>
           </>
         )}

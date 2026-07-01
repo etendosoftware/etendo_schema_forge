@@ -517,6 +517,33 @@ describe('--scope flag (parseCLIArgs)', () => {
     assert.equal(opts.scope, null);
     assert.equal(opts.staged, true);
   });
+
+  it('parses --strict flag', () => {
+    const opts = parseCLIArgs(['node', 'validate-pipeline.js', '--strict']);
+    assert.equal(opts.strict, true);
+  });
+
+  it('parses --format=json flag', () => {
+    const opts = parseCLIArgs(['node', 'validate-pipeline.js', '--format=json']);
+    assert.equal(opts.format, 'json');
+  });
+
+  it('parses --skip flag with multiple rules', () => {
+    const opts = parseCLIArgs(['node', 'validate-pipeline.js', '--skip=F1,F2,F3']);
+    assert.deepEqual(opts.skip, ['F1', 'F2', 'F3']);
+  });
+
+  it('parses --changed-since flag', () => {
+    const opts = parseCLIArgs(['node', 'validate-pipeline.js', '--changed-since=origin/main']);
+    assert.equal(opts.changedSince, 'origin/main');
+  });
+
+  it('defaults to text format', () => {
+    const opts = parseCLIArgs(['node', 'validate-pipeline.js']);
+    assert.equal(opts.format, 'text');
+    assert.equal(opts.strict, false);
+    assert.deepEqual(opts.skip, []);
+  });
 });
 
 describe('--scope flag (validatePipeline API)', () => {
@@ -574,6 +601,20 @@ describe('ETP-3959 quality gates', () => {
     const result = await runOnFixtures(['window-f15-bad-ref']);
     const f15 = result.violations.find(v => v.rule === 'F15');
     assert.ok(f15, 'F15 should fire for bad profile references');
+  });
+
+  it('F17: balanceFooter referencing a missing line field is blocked', async () => {
+    const result = await runOnFixtures(['window-f17-bad-ref']);
+    const f17 = result.violations.find(v => v.rule === 'F17');
+    assert.ok(f17, 'F17 should fire for a missing balanceFooter field');
+    assert.equal(f17.severity, 'BLOCK');
+    assert.match(f17.message, /balanceFooter/);
+  });
+
+  it('F17: valid balanceFooter passes', async () => {
+    const result = await runOnFixtures(['window-f17-ok']);
+    const f17 = result.violations.find(v => v.rule === 'F17');
+    assert.ok(!f17, 'F17 should not fire for a valid balanceFooter');
   });
 
   it('F15: minimumCreate fields are validated against header and line scope', async () => {

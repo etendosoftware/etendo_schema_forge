@@ -16,7 +16,7 @@ vi.mock('lucide-react', () => ({
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
-import SendDocumentModal from '../SendDocumentModal.jsx';
+import SendDocumentModal, { SendDocumentButton } from '../SendDocumentModal.jsx';
 
 const BASE = {
   documentType: 'Invoice',
@@ -55,10 +55,19 @@ describe('SendDocumentModal', () => {
     expect(document.querySelector('[style]')).toBeTruthy();
   });
 
-  it('Send button stays enabled when bpEmail is empty because backend resolves recipients', () => {
+  it('Send button is disabled when no To recipient is resolved, and enables once one is added', async () => {
+    // Editable recipients: an empty proposed To list means there is
+    // nothing to send to, so the send button gates until the operator adds one.
+    const user = userEvent.setup();
     render(<SendDocumentModal {...BASE} bpEmail="" />);
     const btn = getSendButton();
-    expect(btn).not.toBeDisabled();
+    expect(btn).toBeDisabled();
+
+    const toInput = screen.getByTestId('send-modal-to-input');
+    await user.type(toInput, 'added@example.com{Enter}');
+
+    expect(screen.getByTestId('send-modal-to-chip-added@example.com')).toBeInTheDocument();
+    expect(getSendButton()).not.toBeDisabled();
   });
 
   it('Send button is enabled when bpEmail is a valid email', () => {
@@ -124,16 +133,46 @@ describe('SendDocumentModal', () => {
     expect(screen.queryByText('sendModalNoEmail')).not.toBeInTheDocument();
   });
 
-  it('renders contract-driven email fields as read-only', async () => {
+  it('renders the To recipients as an editable chip editor, not a read-only field', async () => {
+    // Recipients are now editable by default (the read-only input is
+    // only the `sendPolicy.editableRecipients: false` opt-out branch).
     const user = userEvent.setup();
     render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
-    const input = screen.getByPlaceholderText('email@company.com');
-    expect(input).toHaveAttribute('readonly');
-    await user.type(input, 'changed@example.com');
-    expect(input).toHaveValue('user@domain.com');
+
+    // The proposed recipient is rendered as a removable chip.
+    expect(screen.getByTestId('send-modal-to-chip-user@domain.com')).toBeInTheDocument();
+
+    // The chip editor input is present and NOT read-only.
+    const toInput = screen.getByTestId('send-modal-to-input');
+    expect(toInput).not.toHaveAttribute('readonly');
+
+    // The legacy read-only single-line input must not be rendered.
+    expect(screen.queryByPlaceholderText('email@company.com')).not.toBeInTheDocument();
+
+    // Operator can append another address.
+    await user.type(toInput, 'second@example.com{Enter}');
+    expect(screen.getByTestId('send-modal-to-chip-second@example.com')).toBeInTheDocument();
   });
 
-  it('prefills the display recipient from contacts without allowing operator overrides', async () => {
+  it('renders a read-only single-line field when sendPolicy opts out of editable recipients', () => {
+    // Opt-out: `sendPolicy.editableRecipients: false` keeps legacy rendering.
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        sendPolicy={{ editableRecipients: false }}
+      />,
+    );
+    const input = screen.getByPlaceholderText('email@company.com');
+    expect(input).toHaveAttribute('readonly');
+    expect(input).toHaveValue('user@domain.com');
+    // The chip editor must not be rendered in the opt-out branch.
+    expect(screen.queryByTestId('send-modal-to-input')).not.toBeInTheDocument();
+  });
+
+  it('prefills the To recipient from contacts and lets the operator add and remove addresses', async () => {
+    // The fetched contact email seeds the To chip list, but it is now
+    // a fully editable proposal: the operator can add and remove addresses.
     const user = userEvent.setup();
     global.fetch.mockResolvedValue({
       ok: true,
@@ -151,17 +190,26 @@ describe('SendDocumentModal', () => {
         apiBaseUrl="http://localhost:8080/etendo/neo/sales-invoice"
       />,
     );
-    // Allow the contacts fetch to settle
+
+    // The fetched contact email is seeded as a chip.
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalled();
     });
     await waitFor(() => {
-      expect(screen.getByPlaceholderText('email@company.com')).toHaveValue('john@acme.com');
+      expect(screen.getByTestId('send-modal-to-chip-john@acme.com')).toBeInTheDocument();
     });
-    const input = screen.getByPlaceholderText('email@company.com');
-    await user.type(input, 'changed@example.com');
-    expect(input).toHaveValue('john@acme.com');
-    expect(screen.queryByText('John Doe <john@acme.com>')).not.toBeInTheDocument();
+
+    // Operator adds a second recipient.
+    const toInput = screen.getByTestId('send-modal-to-input');
+    await user.type(toInput, 'extra@example.com{Enter}');
+    expect(screen.getByTestId('send-modal-to-chip-extra@example.com')).toBeInTheDocument();
+
+    // Operator removes the proposed recipient.
+    await user.click(screen.getByTestId('send-modal-to-remove-john@acme.com'));
+    expect(screen.queryByTestId('send-modal-to-chip-john@acme.com')).not.toBeInTheDocument();
+    // The remaining recipient is still present, so send stays enabled.
+    expect(screen.getByTestId('send-modal-to-chip-extra@example.com')).toBeInTheDocument();
+    expect(getSendButton()).not.toBeDisabled();
   });
 
   it('sends a contract command without provider payload fields', async () => {
@@ -430,5 +478,245 @@ describe('SendDocumentModal', () => {
       expect(toast.error).toHaveBeenCalledWith('sendModalSendFailed:{"documentType":"Invoice"}');
     });
     expect(screen.getByRole('status')).toHaveTextContent('sendModalSendFailed');
+  });
+
+  // CC (carbon-copy) handling. CC is enabled by default
+  // (DEFAULT_SEND_POLICY.cc === true), so the "Add CC" affordance renders for
+  // the base props without an explicit sendPolicy.
+  it('reveals the CC editor when the operator clicks Add CC', async () => {
+    const user = userEvent.setup();
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+
+    // The CC editor is collapsed initially; only the Add CC button is shown.
+    expect(screen.queryByTestId('send-modal-cc-input')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('send-modal-add-cc'));
+
+    // Clicking Add CC expands the CC chip editor.
+    expect(screen.getByTestId('send-modal-cc-input')).toBeInTheDocument();
+  });
+
+  it('drops a CC address that is already present in To (cross-channel precedence)', async () => {
+    const user = userEvent.setup();
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+
+    // To is seeded with user@domain.com.
+    expect(screen.getByTestId('send-modal-to-chip-user@domain.com')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('send-modal-add-cc'));
+    const ccInput = screen.getByTestId('send-modal-cc-input');
+
+    // Adding an address already in To is filtered out of CC.
+    await user.type(ccInput, 'user@domain.com{Enter}');
+    expect(screen.queryByTestId('send-modal-cc-chip-user@domain.com')).not.toBeInTheDocument();
+
+    // A distinct address still commits to CC, proving the editor works.
+    await user.type(ccInput, 'cc@example.com{Enter}');
+    expect(screen.getByTestId('send-modal-cc-chip-cc@example.com')).toBeInTheDocument();
+  });
+
+  it('drops an address from CC when the same address is later added to To (To wins)', async () => {
+    const user = userEvent.setup();
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+
+    await user.click(screen.getByTestId('send-modal-add-cc'));
+    await user.type(screen.getByTestId('send-modal-cc-input'), 'dup@example.com{Enter}');
+    expect(screen.getByTestId('send-modal-cc-chip-dup@example.com')).toBeInTheDocument();
+
+    // Adding the same address to To drops it from CC.
+    await user.type(screen.getByTestId('send-modal-to-input'), 'dup@example.com{Enter}');
+    expect(screen.getByTestId('send-modal-to-chip-dup@example.com')).toBeInTheDocument();
+    expect(screen.queryByTestId('send-modal-cc-chip-dup@example.com')).not.toBeInTheDocument();
+  });
+
+  it('disables Send when a CC draft is an invalid email', async () => {
+    const user = userEvent.setup();
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+
+    // Send is enabled with a valid To and no CC invalidity.
+    expect(getSendButton()).not.toBeDisabled();
+
+    await user.click(screen.getByTestId('send-modal-add-cc'));
+    await user.type(screen.getByTestId('send-modal-cc-input'), 'not-an-email{Enter}');
+
+    // The invalid CC draft shows an inline alert and gates the send button.
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('sendModalInvalidEmail');
+    });
+    expect(getSendButton()).toBeDisabled();
+  });
+});
+
+// ETP-4226 coverage closure: error-message branches, download paths, the iframe
+// preview render path, and the standalone SendDocumentButton export.
+// NOTE: line 18 (the DUPLICATE branch inside resolveEmailSendErrorMessage) is
+// intentionally NOT covered — DUPLICATE is handled as success before the error
+// resolver runs, so it is unreachable from the send flow.
+describe('SendDocumentModal — error resolver branches', () => {
+  // Each test mocks the single send fetch (cachePreviewBeforeSend is false in
+  // BASE, so the preview cache fetch is skipped) and asserts the toast key.
+  async function sendWith(data) {
+    const user = userEvent.setup();
+    global.fetch.mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ response: { data } }),
+    });
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        apiBaseUrl="http://localhost:8080/etendo/neo/sales-invoice"
+      />,
+    );
+    await user.click(getSendButton());
+  }
+
+  it('uses the server message for VALIDATION_FAILED', async () => {
+    await sendWith({ status: 'VALIDATION_FAILED', message: 'Bad address' });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Bad address');
+    });
+  });
+
+  it('shows the no-recipient message for NO_RECIPIENT', async () => {
+    await sendWith({ status: 'NO_RECIPIENT' });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('sendModalNoRecipient:{"documentType":"Invoice"}');
+    });
+  });
+
+  it('shows the suppressed message for SUPPRESSED', async () => {
+    await sendWith({ status: 'SUPPRESSED' });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('sendModalSuppressed');
+    });
+  });
+
+  it('shows the unavailable message for KILL_SWITCHED', async () => {
+    await sendWith({ status: 'KILL_SWITCHED' });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('sendModalUnavailable');
+    });
+  });
+
+  it('falls back to the generic send-failed message for an unknown status', async () => {
+    await sendWith({ status: 'WAT' });
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('sendModalSendFailed:{"documentType":"Invoice"}');
+    });
+  });
+});
+
+describe('SendDocumentModal — download paths', () => {
+  it('downloads the existing blob URL directly without fetching', async () => {
+    const user = userEvent.setup();
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" />);
+
+    await user.click(screen.getByRole('button', { name: /downloadPdf/i }));
+
+    expect(clickSpy).toHaveBeenCalled();
+    // The blob branch returns before any download fetch fires.
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/reports/print-sales-invoice/render', expect.anything());
+  });
+
+  it('renders and downloads a PDF when no blob URL is available', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    URL.createObjectURL = vi.fn(() => 'blob:generated');
+    URL.revokeObjectURL = vi.fn();
+    // Route-aware mock: the iframe preview path also hits /render on mount, so a
+    // queued mock would be consumed before the click. Match by URL instead.
+    global.fetch.mockImplementation((url) => {
+      if (typeof url === 'string' && url.endsWith('/render')) {
+        return Promise.resolve({ ok: true, text: async () => '<html></html>' });
+      }
+      if (url === '/jsreport/api/report') {
+        return Promise.resolve({ ok: true, blob: async () => new Blob(['%PDF']) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" pdfBlobUrl={null} />);
+
+    await user.click(screen.getByRole('button', { name: /downloadPdf/i }));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/jsreport/api/report',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  it('toasts an error when the render fetch fails during download', async () => {
+    const user = userEvent.setup();
+    global.fetch.mockImplementation((url) => {
+      if (typeof url === 'string' && url.endsWith('/render')) {
+        return Promise.resolve({ ok: false });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+    });
+
+    render(<SendDocumentModal {...BASE} bpEmail="user@domain.com" pdfBlobUrl={null} />);
+
+    await user.click(screen.getByRole('button', { name: /downloadPdf/i }));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to render');
+    });
+  });
+});
+
+describe('SendDocumentModal — iframe preview render path', () => {
+  it('fetches the report render when the iframe mounts without a blob URL', async () => {
+    global.fetch.mockResolvedValue({ ok: true, text: async () => '<p>x</p>' });
+
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        pdfBlobUrl={null}
+        pdfBlobLoading={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/reports/print-sales-invoice/render',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
+
+  it('records a preview error when the report render fetch fails', async () => {
+    global.fetch.mockResolvedValue({ ok: false, status: 500, text: async () => '' });
+
+    render(
+      <SendDocumentModal
+        {...BASE}
+        bpEmail="user@domain.com"
+        pdfBlobUrl={null}
+        pdfBlobLoading={false}
+      />,
+    );
+
+    // The catch sets pdfError; the not-configured card surfaces it.
+    await waitFor(() => {
+      expect(screen.getByText('sendModalPdfNotConfigured')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('SendDocumentButton', () => {
+  it('invokes onClick when the send-email action is clicked', async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(<SendDocumentButton onClick={onClick} />);
+    await user.click(screen.getByTestId('action-send-email'));
+    expect(onClick).toHaveBeenCalled();
   });
 });

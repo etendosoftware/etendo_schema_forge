@@ -844,5 +844,99 @@
     ],
     "author": "pipeline",
     "date": "2026-05-22"
+  },
+  {
+    "from": "0.13.0",
+    "to": "0.14.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"etblkpAccountingstatus\" added to entity \"goodsReceipt\" in backend",
+      "Field \"etblkpBulkposting\" added to entity \"goodsReceipt\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-23"
+  },
+  {
+    "from": "0.14.0",
+    "to": "0.15.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"posted\" added to entity \"goodsReceipt\" in frontend",
+      "Field \"processed\" added to entity \"goodsReceipt\" in frontend",
+      "Field \"posted\" property \"visibility\" changed from \"system\" to \"readOnly\" in backend (patch)",
+      "Field \"processed\" property \"visibility\" changed from \"system\" to \"readOnly\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-23"
+  },
+  {
+    "from": "0.15.0",
+    "to": "0.16.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"posted\" property \"grid\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"posted\" property \"badge\" changed from \"undefined\" to \"true\" in frontend (additive)",
+      "Field \"posted\" property \"badgeLabels\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"posted\" property \"badgeVariants\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-23"
+  },
+  {
+    "from": "0.16.0",
+    "to": "0.17.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"accountingDate\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"posted\" property \"type\" changed from \"button\" to \"boolean\" in frontend (breaking)",
+      "Field \"posted\" property \"tsType\" changed from \"string\" to \"boolean\" in frontend (breaking)",
+      "Field \"posted\" property \"explicitType\" changed from \"undefined\" to \"true\" in frontend (additive)",
+      "Field \"project\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"asset\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"stDimension\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"ndDimension\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"project\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"asset\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"stDimension\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"ndDimension\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"posted\" property \"type\" changed from \"button\" to \"boolean\" in backend (breaking)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-23"
+  },
+  {
+    "from": "0.17.0",
+    "to": "0.18.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"etblkpAccountingstatus\" removed from entity \"goodsReceipt\" in backend",
+      "Field \"etblkpBulkposting\" removed from entity \"goodsReceipt\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-24"
+  },
+  {
+    "from": "0.18.0",
+    "to": "0.19.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"etblkpAccountingstatus\" added to entity \"goodsReceipt\" in backend",
+      "Field \"etblkpBulkposting\" added to entity \"goodsReceipt\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-24"
+  },
+  {
+    "from": "0.19.0",
+    "to": "0.20.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-29"
   }
 ]

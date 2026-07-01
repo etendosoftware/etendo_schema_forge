@@ -22,7 +22,7 @@ describe('AccountLogoAvatar', () => {
   });
 
   it('renders a CreditCard icon for card accounts', () => {
-    const { container } = render(<AccountLogoAvatar account={{ type: 'T' }} />);
+    const { container } = render(<AccountLogoAvatar account={{ type: 'CA' }} />);
     expect(container.querySelector('svg')).toBeInTheDocument();
   });
 

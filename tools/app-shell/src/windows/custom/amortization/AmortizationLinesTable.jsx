@@ -32,11 +32,11 @@ const VISIBLE_DIMENSION_FIELDS = DIMENSION_FIELDS.filter(f => !f.hidden);
 // ── DimensionGrid ────────────────────────────────────────────────────
 // Renders DIMENSION_FIELDS directly via SelectorInput so we can control
 // the placeholder (empty resolvedLabel → "Seleccionar..." / "Select...").
-function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, labelOverrides }) {
+function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token, catalogs, readOnly, isCompleted, labelOverrides }) {
   const t = useLabel(labelOverrides);
   return (
     <div
-      className="[&_button[role=combobox]]:!bg-white [&_button[role=combobox]:hover]:!bg-[#F5F7F9] [&_input]:!bg-white [&_input:disabled]:!opacity-100"
+      className={`[&_button[role=combobox]]:!bg-white [&_button[role=combobox]:hover]:!bg-[#F5F7F9] [&_input]:!bg-white${isCompleted ? '' : ' [&_input:disabled]:!opacity-100'}`}
       style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}
     >
       {fields.filter(f => !f.hidden).map(f => {
@@ -69,7 +69,7 @@ function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl, token,
                 resolvedLabel=""
                 selectorUrl={selectorUrl}
                 token={token}
-              />
+                data-testid="SelectorInput__fecdcf" />
             )}
           </div>
         );
@@ -112,7 +112,7 @@ function DimSummary({ line, onClick, labelOverrides }) {
         onClick={onClick}
         className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-dashed border-[#D1D4DB] text-xs font-medium text-muted-foreground hover:text-foreground hover:border-[#828FA3] transition-colors"
       >
-        <Plus className="h-3 w-3" />
+        <Plus className="h-3 w-3" data-testid="Plus__fecdcf" />
         {ui('amortizationDimensionsEmpty')}
       </button>
     );
@@ -124,7 +124,11 @@ function DimSummary({ line, onClick, labelOverrides }) {
 
   return (
     <button onClick={onClick} className="inline-flex items-center gap-1.5 bg-transparent border-0 p-0 cursor-pointer max-w-full">
-      {shown.map(b => <DimBadge key={b.label} label={b.label} value={b.value} />)}
+      {shown.map(b => <DimBadge
+        key={b.label}
+        label={b.label}
+        value={b.value}
+        data-testid="DimBadge__fecdcf" />)}
       {extra > 0 && (
         <span className="px-2 py-1 rounded-lg bg-[#F5F7F9] text-sm leading-5 font-medium text-[#3F3F50]">+{extra}</span>
       )}
@@ -382,10 +386,16 @@ export default function AmortizationLinesTable({
             <th className="h-10 w-10 px-2 align-middle" />
             <th className="h-10 w-10 px-2 align-middle">
               <div className="flex items-center justify-center">
-                <Checkbox checked={allSelected} indeterminate={someSelected} onChange={toggleAll} disabled={isReadOnly} aria-label={ui('selectAll')} />
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  onChange={toggleAll}
+                  disabled={isReadOnly}
+                  aria-label={ui('selectAll')}
+                  data-testid="Checkbox__fecdcf" />
               </div>
             </th>
-            <th className="h-10 px-3 text-left align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
+            <th className="h-10 w-64 px-3 text-left align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
               {t('A_Asset_ID')}
             </th>
             <th className="h-10 w-36 px-3 text-right align-middle text-xs leading-4 font-semibold text-text-primary tracking-normal">
@@ -405,7 +415,9 @@ export default function AmortizationLinesTable({
           {loading ? (
             <tr>
               <td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin inline mr-1.5" />
+                <Loader2
+                  className="h-4 w-4 animate-spin inline mr-1.5"
+                  data-testid="Loader2__fecdcf" />
               </td>
             </tr>
           ) : (
@@ -434,7 +446,9 @@ export default function AmortizationLinesTable({
                           aria-label={ui(isExpanded ? 'collapse' : 'expand')}
                           aria-expanded={isExpanded}
                         >
-                          <ChevronDown className={`h-5 w-5 text-[#828FA3] transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`} />
+                          <ChevronDown
+                            className={`h-5 w-5 text-[#828FA3] transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`}
+                            data-testid="ChevronDown__fecdcf" />
                         </button>
                       </td>
 
@@ -446,7 +460,7 @@ export default function AmortizationLinesTable({
                             onChange={() => !isReadOnly && toggleRow(line.id)}
                             disabled={isReadOnly}
                             aria-label={ui('selectRow')}
-                          />
+                            data-testid="Checkbox__fecdcf" />
                         </div>
                       </td>
 
@@ -468,7 +482,7 @@ export default function AmortizationLinesTable({
                             selectorUrl={`${apiBaseUrl}/lines/selectors/A_Asset_ID`}
                             token={token}
                             compact
-                          />
+                            data-testid="SelectorInput__fecdcf" />
                         </td>
                       ) : (
                         <td className="px-3 text-sm font-medium text-foreground align-middle truncate max-w-0">
@@ -514,7 +528,11 @@ export default function AmortizationLinesTable({
 
                       {/* dimension summary */}
                       <td className="px-3 align-middle" onClick={e => e.stopPropagation()}>
-                        <DimSummary line={line} onClick={() => setExpandedId(isExpanded ? null : line.id)} labelOverrides={api?.labelOverrides} />
+                        <DimSummary
+                          line={line}
+                          onClick={() => setExpandedId(isExpanded ? null : line.id)}
+                          labelOverrides={api?.labelOverrides}
+                          data-testid="DimSummary__fecdcf" />
                       </td>
 
                       {/* quick actions — always pencil + trash on hover */}
@@ -525,20 +543,19 @@ export default function AmortizationLinesTable({
                               onClick={() => setEditingLineId(isEditing ? null : line.id)}
                               className={`h-8 w-8 p-0 flex items-center justify-center rounded-full transition-colors ${isEditing ? 'text-primary hover:bg-primary/10' : 'text-[#828FA3] hover:text-foreground hover:bg-muted/60'}`}
                             >
-                              <Pencil className="h-4 w-4" />
+                              <Pencil className="h-4 w-4" data-testid="Pencil__fecdcf" />
                             </button>
                             <button
                               onClick={() => deleteLine(line.id)}
                               disabled={deleting === line.id}
                               className="h-8 w-8 p-0 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50"
                             >
-                              {deleting === line.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              {deleting === line.id ? <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__fecdcf" /> : <Trash2 className="h-4 w-4" data-testid="Trash2__fecdcf" />}
                             </button>
                           </div>
                         )}
                       </td>
                     </tr>
-
                     {/* ── dimension expand ── */}
                     {isExpanded && (
                       <tr className="border-b border-border/30">
@@ -552,11 +569,17 @@ export default function AmortizationLinesTable({
                             </div>
                           )}
                           <DimensionGrid
-                            fields={DIMENSION_FIELDS} data={lineData}
+                            fields={DIMENSION_FIELDS}
+                            data={lineData}
                             onChange={(k, v) => handleChange(line.id, k, v)}
                             onFieldSave={(k, v) => saveField(line.id, line, k, v)}
-                            apiBaseUrl={apiBaseUrl} token={token} catalogs={catalogs} readOnly={isReadOnly}
-                            labelOverrides={api?.labelOverrides} />
+                            apiBaseUrl={apiBaseUrl}
+                            token={token}
+                            catalogs={catalogs}
+                            readOnly={isReadOnly}
+                            isCompleted={processed}
+                            labelOverrides={api?.labelOverrides}
+                            data-testid="DimensionGrid__fecdcf" />
                         </td>
                       </tr>
                     )}
@@ -581,7 +604,7 @@ export default function AmortizationLinesTable({
                       catalogs={catalogs}
                       selectorUrl={`${apiBaseUrl}/lines/selectors/A_Asset_ID`}
                       token={token}
-                    />
+                      data-testid="SelectorInput__fecdcf" />
                   </td>
                   <td className="py-1 px-2 align-middle">
                     <input
@@ -607,7 +630,7 @@ export default function AmortizationLinesTable({
                   </td>
                   <td className="px-3 text-sm text-muted-foreground align-middle">—</td>
                   <td className="px-2 text-center text-muted-foreground align-middle">
-                    {saving === 'new' ? <Loader2 className="h-4 w-4 animate-spin inline" /> : '—'}
+                    {saving === 'new' ? <Loader2 className="h-4 w-4 animate-spin inline" data-testid="Loader2__fecdcf" /> : '—'}
                   </td>
                 </tr>
               )}
@@ -615,12 +638,10 @@ export default function AmortizationLinesTable({
           )}
         </tbody>
       </table>
-
       {/* ── inline-add hint (shown while the draft row is open) ── */}
       {addingLine && (
         <p className="text-xs text-muted-foreground mt-1 text-center">{ui('inlineAddHint')}</p>
       )}
-
       {/* ── Add line button (always visible; wrapper measured for the selection bar) ── */}
       <div ref={addLineWrapperRef}>
         {!isReadOnly && (
@@ -632,11 +653,10 @@ export default function AmortizationLinesTable({
               }}
               disabled={saving === 'new'}
               label={ui('addLine')}
-            />
+              data-testid="AddLineButton__fecdcf" />
           </div>
         )}
       </div>
-
       {/* ── Total footer — always computed from visible lines for immediate accuracy ── */}
       {lines.length > 0 && (
         <div className="mt-2 pt-2 border-t border-border/50 flex justify-end pr-2">
@@ -645,7 +665,6 @@ export default function AmortizationLinesTable({
           </span>
         </div>
       )}
-
       {/* ── shared floating selection bar (same as Sales Order) ── */}
       <LinesSelectionBar
         visible={selectionBarVisible}
@@ -659,7 +678,7 @@ export default function AmortizationLinesTable({
         closeTitle={ui('close')}
         onDelete={bulkDelete}
         onClose={() => setSelectedRows(new Set())}
-      />
+        data-testid="LinesSelectionBar__fecdcf" />
     </div>
   );
 }

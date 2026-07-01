@@ -88,17 +88,20 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
           <div className="flex flex-col gap-1">
             <span className="text-sm font-semibold text-[#121217]">VERI*FACTU</span>
             {isLocked && (
-              <Badge variant="default">{ui('fiscal.verifactu.locked.badge')}</Badge>
+              <Badge variant="default" data-testid="Badge__e30816">{ui('fiscal.verifactu.locked.badge')}</Badge>
             )}
           </div>
         }
-      >
+        data-testid="SectionRow__e30816">
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-4 items-end">
             <div className="space-y-1">
-              <Label>{ui('fiscal.verifactu.field.tax')}</Label>
+              <Label data-testid="Label__e30816">{ui('fiscal.verifactu.field.tax')}</Label>
               {isLocked ? (
-                <Input value={getVerifactuTaxTypeLabel(form.tAXType)} disabled />
+                <Input
+                  value={getVerifactuTaxTypeLabel(form.tAXType)}
+                  disabled
+                  data-testid="Input__e30816" />
               ) : (
                 <select
                   value={form.tAXType}
@@ -117,19 +120,18 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
                 checked={isEtendoTrue(form.defaultQR)}
                 onCheckedChange={v => set('defaultQR', v ? 'Y' : 'N')}
                 disabled={isLocked}
-              />
+                data-testid="Switch__e30816" />
               <span className="text-sm text-[#121217]">{ui('fiscal.verifactu.field.qr')}</span>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1">
-              <Label>{ui('fiscal.verifactu.field.enrollDate')}</Label>
-              <Input value={record?.inVfactuSystem ?? ''} disabled />
+              <Label data-testid="Label__e30816">{ui('fiscal.verifactu.field.enrollDate')}</Label>
+              <Input value={record?.inVfactuSystem ?? ''} disabled data-testid="Input__e30816" />
             </div>
           </div>
         </div>
       </SectionRow>
-
       {/* Certificado digital */}
       <SectionRow
         leftContent={
@@ -138,10 +140,13 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
             <span className="text-xs text-[#121217] leading-tight">{ui('fiscal.cert.section.hint')}</span>
           </div>
         }
-      >
-        <CertSection context="verifactu" orgId={orgId} apiBaseUrl={apiBaseUrl} />
+        data-testid="SectionRow__e30816">
+        <CertSection
+          context="verifactu"
+          orgId={orgId}
+          apiBaseUrl={apiBaseUrl}
+          data-testid="CertSection__e30816" />
       </SectionRow>
-
       <SectionSaveButton
         error={error}
         hideSave={hideSave}
@@ -150,7 +155,7 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
         saving={saving}
         savingKey="fiscal.verifactu.saving"
         ui={ui}
-      />
+        data-testid="SectionSaveButton__e30816" />
     </div>
   );
 });

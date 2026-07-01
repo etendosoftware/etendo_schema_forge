@@ -3,6 +3,26 @@
   "window": {
     "category": "purchases",
     "name": "Goods Receipt",
+    "menuActions": [
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
+      }
+    ],
     "sendDocument": {
       "allowEmail": true
     },
@@ -22,7 +42,15 @@
       "topbarExtra": "GoodsReceiptDraftChips"
     },
     "hideDeleteWhenComplete": true,
-    "hidePrint": true
+    "hidePrint": true,
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ]
   },
   "entities": {
     "header": {
@@ -30,7 +58,9 @@
       "javaQualifier": "goodsReceiptHeaderHandler",
       "fields": {
         "processed": {
-          "visibility": "system"
+          "visibility": "readOnly",
+          "form": false,
+          "grid": false
         },
         "documentNo": {
           "visibility": "readOnly",
@@ -141,6 +171,27 @@
         "processGoodsJava": {
           "visibility": "discarded",
           "displayLogic": null
+        },
+        "posted": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "en_US": "Posted",
+              "es_ES": "Contabilizado"
+            },
+            "false": {
+              "en_US": "Not posted",
+              "es_ES": "Sin contabilizar"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         }
       }
     },

@@ -69,30 +69,47 @@ export default function PaymentDetailsPanelCustom({ parentId, token, apiBaseUrl 
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow className="border-b border-border/40">
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('documentNo')}</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('paymentDate')}</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('paymentMethod')}</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('financialAccount')}</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide text-right">{ui('receivedAmount')}</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('status')}</TableHead>
-          <TableHead className="text-xs font-medium text-muted-foreground/70 tracking-wide">{ui('payment')}</TableHead>
+    <Table data-testid="Table__f18cf9">
+      <TableHeader data-testid="TableHeader__f18cf9">
+        <TableRow className="border-b border-border/40" data-testid="TableRow__f18cf9">
+          <TableHead
+            className="text-xs font-medium text-muted-foreground/70 tracking-wide"
+            data-testid="TableHead__f18cf9">{ui('documentNo')}</TableHead>
+          <TableHead
+            className="text-xs font-medium text-muted-foreground/70 tracking-wide"
+            data-testid="TableHead__f18cf9">{ui('paymentDate')}</TableHead>
+          <TableHead
+            className="text-xs font-medium text-muted-foreground/70 tracking-wide"
+            data-testid="TableHead__f18cf9">{ui('paymentMethod')}</TableHead>
+          <TableHead
+            className="text-xs font-medium text-muted-foreground/70 tracking-wide"
+            data-testid="TableHead__f18cf9">{ui('financialAccount')}</TableHead>
+          <TableHead
+            className="text-xs font-medium text-muted-foreground/70 tracking-wide text-right"
+            data-testid="TableHead__f18cf9">{ui('receivedAmount')}</TableHead>
+          <TableHead
+            className="text-xs font-medium text-muted-foreground/70 tracking-wide"
+            data-testid="TableHead__f18cf9">{ui('status')}</TableHead>
+          <TableHead
+            className="text-xs font-medium text-muted-foreground/70 tracking-wide"
+            data-testid="TableHead__f18cf9">{ui('payment')}</TableHead>
         </TableRow>
       </TableHeader>
-      <TableBody>
+      <TableBody data-testid="TableBody__f18cf9">
         {rows.map((row, i) => (
-          <TableRow key={row.id ?? i} className="cursor-default">
-            <TableCell className="font-medium text-foreground">{row.documentNo || '—'}</TableCell>
-            <TableCell className="text-muted-foreground">{row.paymentDate || '—'}</TableCell>
-            <TableCell className="text-muted-foreground">{row['paymentMethod$_identifier'] || '—'}</TableCell>
-            <TableCell className="text-muted-foreground">{row['account$_identifier'] || '—'}</TableCell>
-            <TableCell className="text-right tabular-nums">{formatAmount(row.amount)}</TableCell>
-            <TableCell className="text-muted-foreground">
+          <TableRow
+            key={row.id ?? i}
+            className="cursor-default"
+            data-testid="TableRow__f18cf9">
+            <TableCell className="font-medium text-foreground" data-testid="TableCell__f18cf9">{row.documentNo || '—'}</TableCell>
+            <TableCell className="text-muted-foreground" data-testid="TableCell__f18cf9">{row.paymentDate || '—'}</TableCell>
+            <TableCell className="text-muted-foreground" data-testid="TableCell__f18cf9">{row['paymentMethod$_identifier'] || '—'}</TableCell>
+            <TableCell className="text-muted-foreground" data-testid="TableCell__f18cf9">{row['account$_identifier'] || '—'}</TableCell>
+            <TableCell className="text-right tabular-nums" data-testid="TableCell__f18cf9">{formatAmount(row.amount)}</TableCell>
+            <TableCell className="text-muted-foreground" data-testid="TableCell__f18cf9">
               {PAYMENT_STATUS[row.status] ?? row.status ?? '—'}
             </TableCell>
-            <TableCell className="text-muted-foreground">{row['finPaymentID$_identifier'] || '—'}</TableCell>
+            <TableCell className="text-muted-foreground" data-testid="TableCell__f18cf9">{row['finPaymentID$_identifier'] || '—'}</TableCell>
           </TableRow>
         ))}
       </TableBody>

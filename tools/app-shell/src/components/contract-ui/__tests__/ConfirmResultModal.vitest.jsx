@@ -5,7 +5,7 @@ vi.mock('@/i18n', () => ({
   },
 }));
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConfirmResultModal } from '../ConfirmResultModal.jsx';
 
@@ -28,9 +28,9 @@ function renderModal(overrides = {}) {
 describe('ConfirmResultModal', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('renders the title', () => {
+  it('renders the title', async () => {
     renderModal();
-    expect(screen.getByText('Operation complete')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Operation complete')).toBeInTheDocument());
   });
 
   it('renders the type label for each doc', () => {
@@ -93,8 +93,20 @@ describe('ConfirmResultModal', () => {
     expect(screen.queryByText('View')).not.toBeInTheDocument();
   });
 
-  it('does not show primary button when primary is not provided', () => {
-    renderModal({ docs: [DOCS[0]] });
+  it('derives the primary button label from the single doc type when primary is not provided', () => {
+    const navigate = vi.fn();
+    const onClose  = vi.fn();
+    // DOCS[0] is an 'entrada' (goods receipt) → label derived from its type, not a hardcoded invoice label.
+    renderModal({ docs: [DOCS[0]], navigate, onClose });
+    const btn = screen.getByText('poViewReceipt');
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onClose).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith('/goods-receipt/1');
+  });
+
+  it('does not show primary button when there is no single doc', () => {
+    renderModal({ docs: [] });
     expect(screen.queryByRole('button', { name: /view/i })).not.toBeInTheDocument();
   });
 
@@ -150,5 +162,55 @@ describe('ConfirmResultModal', () => {
     renderModal({ docs: [{ type: 'entrada', num: 'GR-Z', amount: 1234.5, route: '/r' }], currency: '' });
     const card = screen.getByText('GR-Z').closest('[role="button"]');
     expect(card.querySelector('span[style*="color"]')).toBeTruthy();
+  });
+
+  // ── ETP-4312: single-source arrow on the derived primary button ──────────────
+  describe('single arrow invariant (ETP-4312)', () => {
+    const ARROW_PATH = 'M5 12h14M12 5l7 7-7 7';
+
+    it('primary button has exactly one arrow SVG and no "→" glyph in its text', () => {
+      // 'entrada' → derived label 'poViewReceipt' (mock returns the key verbatim).
+      renderModal({ docs: [{ type: 'entrada', num: 'GR-1', route: '/r' }] });
+      const btn = screen.getByText('poViewReceipt').closest('button');
+      const svgs = btn.querySelectorAll('svg');
+      expect(svgs).toHaveLength(1);
+      const paths = svgs[0].querySelectorAll('path');
+      expect(paths).toHaveLength(1);
+      expect(paths[0].getAttribute('d')).toBe(ARROW_PATH);
+      // The arrow comes from the SVG only — the label text must not include "→".
+      expect(btn.textContent).not.toContain('→');
+    });
+
+    // Each doc type derives its own view label. Mock i18n returns the key verbatim.
+    const TYPE_TO_KEY = [
+      ['facturaCompra', 'poViewInvoice'],
+      ['facturaVenta', 'soViewInvoice'],
+      ['salida', 'soViewShipment'],
+      ['entrada', 'poViewReceipt'],
+    ];
+
+    for (const [type, expectedKey] of TYPE_TO_KEY) {
+      it(`derives primary label '${expectedKey}' for doc type '${type}'`, () => {
+        renderModal({ docs: [{ type, num: 'X-1', route: '/r' }] });
+        expect(screen.getByText(expectedKey)).toBeInTheDocument();
+      });
+    }
+
+    it('explicit primary prop overrides the derived label', () => {
+      // 'salida' would derive 'soViewShipment'; the explicit primary must win.
+      renderModal({ docs: [{ type: 'salida', num: 'SH-1', route: '/r' }], primary: 'X' });
+      expect(screen.getByText('X')).toBeInTheDocument();
+      expect(screen.queryByText('soViewShipment')).not.toBeInTheDocument();
+    });
+
+    it('renders no primary button for an unknown doc type and does not crash', () => {
+      renderModal({ docs: [{ type: 'zzz', num: 'UNK-1', route: '/r' }] });
+      // Unknown type → no viewKey → no derived primary label, but the card still renders.
+      expect(screen.getByText('UNK-1')).toBeInTheDocument();
+      expect(screen.queryByText('poViewReceipt')).not.toBeInTheDocument();
+      expect(screen.queryByText('soViewInvoice')).not.toBeInTheDocument();
+      // Only the close button is present in the footer (no primary button).
+      expect(screen.getByText('soClose')).toBeInTheDocument();
+    });
   });
 });

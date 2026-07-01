@@ -100,7 +100,7 @@ Records are typically created from the **Assets** window via the **Create Amorti
   - `processed` header field: `grid: true`, `filterOnly: true`, `columnType: "status"`, `filterable: false` — feeds the status dropdown without showing as a column.
   - Accounting entity excluded; accounting dimensions discarded.
 - `tools/app-shell/src/lib/statusBadge.js` — `getStatusTone` maps `'y'`/`'yes'` → `'success'`; `statusLabel` MAP includes `Y: 'statusProcessed'` and `N: 'statusDraft'` so `DocumentStatusPill` resolves tones and labels for `processed` field values.
-- `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx` — custom lines component. Renders Asset | Amortization % | Amount | Accounting dimensions columns. Per-row and select-all checkboxes for multi-select (disabled, not hidden, in read-only state); shared `LinesSelectionBar` for bulk delete. Circular icon button toggles a white-background expand panel with Organisation (read-only) + 7 dimension selectors (auto-save on `onChange`). Pencil activates inline editing for 3 core fields (blur-saves; calls `onRefresh` after each save to keep header in sync). Add-line auto-saves the header first when `isNew` (mirrors Sales Order `openAddLine` pattern: saves → navigates to real recordId → useEffect opens inline form on re-mount). New lines include `currency` from header. Footer computed from `lines.reduce()` for immediate accuracy. Test coverage: `__tests__/AmortizationLinesTable.vitest.jsx` (27 tests).
+- `tools/app-shell/src/windows/custom/amortization/AmortizationLinesTable.jsx` — custom lines component. Renders Asset (`w-64`, 256 px) | Amortization % | Amount | Accounting dimensions columns. The Asset column has an explicit `w-64` so it stays proportional on wide viewports instead of absorbing all remaining table space. Per-row and select-all checkboxes for multi-select (disabled, not hidden, in read-only state); shared `LinesSelectionBar` for bulk delete. Circular icon button toggles a white-background expand panel with Organisation (read-only) + 7 dimension selectors (auto-save on `onChange`). Pencil activates inline editing for 3 core fields (blur-saves; calls `onRefresh` after each save to keep header in sync). Add-line auto-saves the header first when `isNew` (mirrors Sales Order `openAddLine` pattern: saves → navigates to real recordId → useEffect opens inline form on re-mount). New lines include `currency` from header. Footer computed from `lines.reduce()` for immediate accuracy. Test coverage: `__tests__/AmortizationLinesTable.vitest.jsx` (27 tests).
 - `artifacts/amortization/custom/AmortizationConfirmModal.jsx` — confirmation modal. Fetches lines to calculate current total independently. Calls `POST /action/Processed` on confirm. On success calls `onClose(true)` which triggers `window.location.reload()`. Blocks confirmation when any line has a zero/negative amount (`amortizationErrorLineAmountInvalid`) or a missing percentage (`amortizationErrorLinePercentageMissing`). Both i18n keys are in `packages/app-shell-core/src/locales/`. Headers include `Accept-Language: getStoredLocale()` so backend process errors (e.g. closed accounting period) are returned in the user's UI language.
 
 ## ETP-4103 changes
@@ -133,6 +133,7 @@ Changes landed in `feature/ETP-4103`. Covers visual polish, sidebar simplificati
 - **Inline editing** (pencil icon): clicking the pencil on a row makes the 3 core fields (Asset, %, Amount) editable inline within the same row. Save happens on blur — no confirm button needed. Same pattern as Sales Order.
 - **Expandable dimensions panel**: expanding a row reveals a white-background panel (no section title, no filled-count counter) with a read-only Organisation field and 7 dimension selectors: Cost Center, Contact/Business Partner, 1st Dimension, 2nd Dimension, Sales Region, Activity, Sales Campaign. Project is hidden (`displayLogic: @ACCT_DIMENSION_DISPLAY@`). Selectors have a hover background (`#F5F7F9`) on pointer-over.
 - Dimension selectors auto-save on `onChange` — immediate PUT per field, no Save button required.
+- When the document is **processed** (`processed='Y'`), dimension selectors are rendered as disabled `<input>` elements with `opacity-50` and `cursor-not-allowed` — visually greyed out to signal that no editing is possible. In draft mode, read-only inputs retain full opacity (`!opacity-100`) to stay visually neutral. This is controlled via the `isCompleted` prop on `DimensionGrid`, passed as `processed` from the parent component.
 - **Accounting dimensions column summary**: badges in "Label: Value" format (`#F5F7F9` background, 8px radius, `#3F3F50` label text). Organisation always leads when filled. Up to 2 badges shown; remaining are collapsed into a `+N` badge. Empty rows show a dashed "+ Añadir dimensiones" button.
 - **Add line — inline draft row** (Sales Order pattern): clicking "+ Añadir línea" inserts an inline editable row aligned to the table columns. Field placeholders are the column labels (e.g. "Activo", "Amortization %", "Amortization Amount"). Enter saves and keeps the row open for rapid entry; Esc cancels; clicking outside saves (or cancels if empty). The "+ Añadir línea" button stays visible while the draft row is open. The hint "Enter o clic fuera para guardar · Esc para cancelar" (`inlineAddHint`) appears below the table while the draft row is active.
 - After any line mutation (create, delete, bulk delete), the component calls `onRefresh()` to trigger `hook.fetchChildren()` in the parent DetailView — this keeps the **Confirmar** button state in sync without a page reload (`hook.children.length > 0` enables the button).
@@ -158,8 +159,36 @@ Changes landed in `feature/ETP-4173`. Covers AD_Message error token resolution a
 - Backend (`NeoAuthenticator.java`): after JWT validation, reads the `Accept-Language` header, validates it matches the Etendo language code format (`xx_YY`), looks up an active `AD_Language` record, and calls `OBContext.setLanguage()`. This makes `OBMessageUtils.parseTranslation()` resolve AD_Message tokens in the user's language for the duration of the request.
 - Backend (`NeoProcessService.java`): all three result-translation methods (`translatePInstanceResult`, `translateClassicResult`, `translateObuiappResult`) now wrap error messages with `OBMessageUtils.parseTranslation()`, which resolves Etendo AD_Message key tokens (`@KeyName@`) to their translated text. Previously, tokens like `@PeriodNotAvailable@` were forwarded as-is and shown raw in the UI.
 
+## ETP-4190 changes (feature/ETP-4190)
+
+### Dimension fields — visual disabled state when processed
+
+- `DimensionGrid` in `AmortizationLinesTable.jsx` now accepts an `isCompleted` prop.
+- When `isCompleted={true}` (document `processed='Y'`), the `[&_input:disabled]:!opacity-100` override is removed from the wrapper so Tailwind's default `disabled:opacity-50` + `cursor-not-allowed` applies — dimension inputs are visually greyed out.
+- When `isCompleted={false}` (draft), the override stays active so read-only inputs look neutral (same as before).
+
+### Asset column width
+
+- The `<th>` for the Asset column now carries `w-64` (256 px). Previously it had no explicit width and absorbed all available table space, making it disproportionately wide on large screens.
+
 ## Iteration backlog (out of current scope)
 
 - Callout linking `amortizationPercentage` ↔ `amortizationAmount` so that editing one updates the other based on the asset's value.
 - Read-only **Accounting** tab showing the resulting Fact_Acct entries.
 - Bi-directional integration with the asset's amortization plan so that lines auto-populate from the plan.
+
+## ETP-4230 — Defaults fixes: line asset, header name + accountingDate
+
+### Line `asset` no longer inherits the header id (bug fix)
+
+- Root cause: `A_Amortizationline` has two `isparent='Y'` columns in AD — `A_Amortization_ID` (the real header FK) and `A_Asset_ID`. The NEO defaults link-to-parent logic injected the `parentId` (header id) into **every** parent-link column, so `neo_defaults` for `lines` returned the header id as the `asset` value.
+- Fix (generic, in `NeoDefaultsService`): the `parentId` is now applied only to the parent-link column whose referenced entity matches the parent tab's table (`A_Amortization`). `A_Asset_ID` references `A_Asset`, so it no longer receives the header id and falls through to normal resolution (→ `null` when the header has no asset). Benefits any child entity with multiple `isparent` FKs.
+
+### Header defaults — `name` and `accountingDate`
+
+- `accountingDate`: `decisions.json` header field now has `defaultExpr: "@#Date@"` → `neo_defaults` returns the current system date. Editable; an explicit value on create still wins.
+- `name`: computed dynamically by a new `AmortizationHeaderHandler` (`@Named("amortizationHeaderHandler")`, wired via `entities.header.javaQualifier` in `decisions.json`). On the `DEFAULTS` endpoint it reads the `assetId` query param, loads the asset, and returns `"Amortización - {asset name} - {amortizationStartDate}"`. Falls back to `"Amortización"` when no `assetId` is present, the asset is not found, or any lookup error occurs — never blocks the defaults call. It only fills `name` when not already set, so an explicit value on create wins.
+
+### Deferred to a follow-up
+
+- Direct FK from the header (`A_Amortization`) to the asset (Issue 3 of ETP-4230) — requires a new AD column; tracked separately.

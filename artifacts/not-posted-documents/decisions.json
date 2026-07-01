@@ -1,0 +1,16 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "finance",
+    "name": "Not Posted Documents",
+    "layoutType": "custom",
+    "hidePrint": true,
+    "hideDeleteWhenComplete": false
+  },
+  "entities": {
+    "header": {
+      "javaQualifier": "not-posted-documents",
+      "fields": {}
+    }
+  }
+}

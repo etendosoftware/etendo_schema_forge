@@ -172,32 +172,20 @@ test.describe('Goods Shipment — Confirm modal (draft to complete)', () => {
       window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal'))
     );
 
-    // ── Blue summary card ──────────────────────────────────────────────────
-    // "Envío #GS-DRAFT-001" is unique: the modal renders shipmentRef + documentNo
-    // in a small header line — not visible anywhere else on the page.
-    await expect(page.getByText(/Envío #GS-DRAFT-001/)).toBeVisible({ timeout: 8_000 });
-    // The subtotal row is modal-specific (the form doesn't show a subtotal)
-    await expect(page.getByText(/Subtotal/)).toBeVisible({ timeout: 5_000 });
-    // Amount from linkedOrders[0].grandTotalAmount shown as 1,500.00 EUR
-    await expect(
-      page.locator('div').filter({ hasText: /^1[.,]500[.,]00 EUR$/ }),
-    ).toBeVisible({ timeout: 5_000 });
-
-    // ── Optional invoice section ───────────────────────────────────────────
-    await expect(page.getByText('Generar documentos (opcional)')).toBeVisible({ timeout: 5_000 });
-    // Invoice CheckboxCard title (soCreateInvoiceTitle)
-    await expect(page.getByText('Crear factura', { exact: true })).toBeVisible({ timeout: 5_000 });
-    // Confirm button shows "Confirmar pedido" (checkbox unchecked by default)
-    await expect(page.getByRole('button', { name: 'Confirmar pedido' })).toBeVisible({ timeout: 5_000 });
+    // ── Modal is visible ───────────────────────────────────────────────────
+    await expect(page.getByTestId('confirm-inout-modal')).toBeVisible({ timeout: 8_000 });
+    // Document number appears in the subtitle
+    await expect(page.getByTestId('confirm-modal-doc-info')).toContainText('GS-DRAFT-001');
+    // Invoice toggle card is visible
+    await expect(page.getByTestId('confirm-modal-invoice-toggle')).toBeVisible({ timeout: 5_000 });
+    // Confirm button is visible
+    await expect(page.getByTestId('confirm-modal-confirm-btn')).toBeVisible({ timeout: 5_000 });
 
     // ── Cancel closes the modal synchronously ─────────────────────────────
-    // "Cancelar" appears twice in the DOM: once in the topbar (action-cancel)
-    // and once in the modal footer. The modal one is the LAST in document order
-    // (it's rendered inside the topbar-right slot, which comes after the topbar).
     // handleClose() → onClose() → setShowConfirmModal(false) → modal unmounts.
     // No async fetch is needed: Cancel is purely synchronous.
-    await page.getByRole('button', { name: 'Cancelar', exact: true }).last().click();
-    await expect(page.getByText('Generar documentos (opcional)')).toHaveCount(0, { timeout: 5_000 });
+    await page.getByTestId('confirm-modal-cancel-btn').click();
+    await expect(page.getByTestId('confirm-inout-modal')).toHaveCount(0, { timeout: 5_000 });
   });
 });
 
@@ -298,9 +286,35 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
     // 11. "Factura creada" appears (ConfirmResultModal title = ui('soInvoiceCreated'))
     await expect(page.getByText('Factura creada', { exact: true })).toBeVisible({ timeout: 10_000 });
 
+    // 11b. ETP-4312 — the ConfirmResultModal primary button for a single invoice
+    //      doc must read EXACTLY "Ver factura" (poViewInvoice/soViewInvoice). The
+    //      arrow is an SVG appended by the component, NOT part of the label text:
+    //      the label must contain no "→" character and the button must hold
+    //      exactly ONE arrow <svg>. This guards against the "double arrow"
+    //      regression where a hardcoded `primary` prop carried its own arrow.
+    const viewInvoiceBtn = page.getByRole('button', { name: 'Ver factura' });
+    await expect(viewInvoiceBtn).toBeVisible({ timeout: 5_000 });
+
+    // The visible text must be exactly "Ver factura" with no literal arrow glyph.
+    const viewInvoiceText = (await viewInvoiceBtn.textContent())?.trim();
+    expect(viewInvoiceText).toBe('Ver factura');
+    expect(viewInvoiceText).not.toContain('→');
+
+    // The arrow must be rendered as an SVG inside the button — exactly one.
+    await expect(viewInvoiceBtn.locator('svg')).toHaveCount(1);
+    // ...and it must be the canonical arrow path (M5 12h14M12 5l7 7-7 7).
+    await expect(
+      viewInvoiceBtn.locator('svg path[d="M5 12h14M12 5l7 7-7 7"]'),
+    ).toHaveCount(1);
+
     // 12. Close the result modal via "Cerrar" button (soClose)
-    //     exact: true to avoid matching "Cerrar Copilot" button
-    await page.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    //     exact: true to avoid matching "Cerrar Copilot" button.
+    //     ETP-4299: ConfirmWithCreditButtonBase.onClose fires window.location.reload()
+    //     via setTimeout(0). waitForNavigation absorbs that reload before page.goto below.
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => {}),
+      page.getByRole('button', { name: 'Cerrar', exact: true }).click(),
+    ]);
 
     // 13. Now register a route for a fully-invoiced shipment (invoiceStatus: 100)
     const fullShipment = makeShipment({

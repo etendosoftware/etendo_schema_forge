@@ -26,7 +26,9 @@ const statusField = 'documentStatus';
 // @sf-generated-end summary:header
 
 // @sf-generated-start extraBadges:header
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:header
 
 // @sf-generated-start processes:header
@@ -45,7 +47,7 @@ const draftMode = {
 // @sf-generated-end draftMode:header
 
 // @sf-generated-start requiredHeaderFields:header
-const requiredHeaderFields = ['businessPartner', 'documentNo', 'orderDate', 'partnerAddress', 'scheduledDeliveryDate', 'paymentTerms', 'priceList', 'grandTotalAmount', 'summedLineAmount'];
+const requiredHeaderFields = ['businessPartner', 'documentNo', 'orderDate', 'partnerAddress', 'scheduledDeliveryDate', 'warehouse', 'paymentTerms', 'priceList', 'grandTotalAmount', 'summedLineAmount', 'currency'];
 // @sf-generated-end requiredHeaderFields:header
 
 // @sf-generated-start addLineFields:lines
@@ -55,7 +57,7 @@ const addLineFields = {
     { key: 'description', column: 'Description', type: 'textarea', label: 'Description' },
     { key: 'orderedQuantity', column: 'QtyOrdered', type: 'number', required: true, label: 'Ordered Quantity', defaultValue: 1, min: 0 },
     { key: 'listPrice', column: 'PriceList', type: 'number', required: true, label: 'Net List Price', min: 0 },
-    { key: 'discount', column: 'Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0 },
+    { key: 'discount', column: 'Discount', type: 'number', label: 'Discount %', defaultValue: 0, min: 0, max: 100 },
     { key: 'tax', column: 'C_Tax_ID', type: 'selector', required: true, label: 'Tax', reference: 'Tax', inputMode: 'selector', forceCalloutFields: ["lineGrossAmount","grossUnitPrice","lineNetAmount"] },
   ],
   derived: [
@@ -232,6 +234,8 @@ export const api = {
       "entity": "header",
       "field": "currency",
       "column": "C_Currency_ID",
+      "reference": "Currency",
+      "inputMode": "selector",
       "url": "/sws/neo/purchase-order/header/selectors/currency"
     },
     {
@@ -650,6 +654,22 @@ export const api = {
       "processType": "obuiapp"
     },
     {
+      "entity": "header",
+      "field": "psd2GenerateBankPayment",
+      "column": "EM_Psd2_Generate_Bank_Payment",
+      "url": "/sws/neo/purchase-order/header/{id}/action/psd2GenerateBankPayment",
+      "processId": "0661406A983B4D8EA611F8596F114D52",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "header",
+      "field": "eTPRRemovePayment",
+      "column": "EM_Etpr_Remove_Payment",
+      "url": "/sws/neo/purchase-order/header/{id}/action/eTPRRemovePayment",
+      "processId": "D2923463223C4F1EADE335D22B9D8FE8",
+      "processType": "obuiapp"
+    },
+    {
       "entity": "lines",
       "field": "managePrereservation",
       "column": "Manage_Prereservation",
@@ -702,13 +722,13 @@ export const api = {
     "es_ES": {
       "C_BPartner_ID": "Contacto",
       "DatePromised": "Fecha de entrega esperada",
-      "DeliveryStatusPurchase": "Estado de entrega",
+      "DeliveryStatusPurchase": "Estado de recepción",
       "InvoiceStatus": "Estado de facturación"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
       "DatePromised": "Expected Delivery Date",
-      "DeliveryStatusPurchase": "Delivery Status",
+      "DeliveryStatusPurchase": "Reception Status",
       "InvoiceStatus": "Invoicing Status"
     }
   }
@@ -720,6 +740,7 @@ const labelOverrides = api.labelOverrides;
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         detailEntity="lines"
@@ -752,8 +773,10 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
         sendDocument
+        selectorPriceCurrency="org"
         {...props}
       />
+      </>
     );
   }
 

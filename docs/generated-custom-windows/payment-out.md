@@ -62,3 +62,14 @@ Use this window to register and complete outgoing payments to vendors or other p
 - Payment fields, child entities, selector endpoints, action endpoints, callouts, display logic, and read-only/computed behavior are contract-backed in `artifacts/payment-out/contract.json` and shaped by `artifacts/payment-out/decisions.json`.
 - No payment-out-specific browser or node test was found that proves end-to-end outgoing-payment lifecycle behavior, multi-currency recalculation, credit usage, posting effects, or exposure of the contract-defined secondary surfaces.
 - The generated `FinPaymentPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `FIN_Payment` AD table.- **ETP-3995 — Related Documents tab i18n**: The generated page file now uses `labelKey: 'relatedDocuments'` in the `customTabs` prop instead of a hardcoded `label: 'Related Documents'` string, so the tab title renders via the active UI language (e.g. "Documentos relacionados" in Spanish) regardless of the browser locale.
+
+## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
+
+`com.etendoerp.go` now depends on the **PSD2** module, which places a real
+"Generate Bank Payment" action (`EM_Psd2_Generate_Bank_Payment`) on the payment
+header. Unlike the orphan-column case in the other PSD2-touched windows, here the
+PSD2 module ships an actual `AD_Field`, so it surfaces in the contract as an
+**editable header field** (`psd2GenerateBankPayment`) with its own action endpoint
+`/sws/neo/payment-out/header/{id}/action/psd2GenerateBankPayment` and display
+logic. Contract regenerated when the PSD2 dependency was added. Full rationale:
+[`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).

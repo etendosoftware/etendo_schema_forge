@@ -32,9 +32,13 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
     <>
       {/* FmListPage stays mounted at all times so useFiscalAutoCompute keeps polling */}
       <div style={inDetail ? { display: 'none' } : undefined}>
-        <FmListPage onSelect={handleSelect} token={token} apiBaseUrl={apiBaseUrl} onComputeUpdate={handleComputeUpdate} />
+        <FmListPage
+          onSelect={handleSelect}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          onComputeUpdate={handleComputeUpdate}
+          data-testid="FmListPage__ca1112" />
       </div>
-
       {view.type === '303' && (
         <FmModel303Page
           decl={view.decl}
@@ -44,9 +48,8 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onStatusChange={(id, newStatus) => {
             setView(v => v.type === '303' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
           }}
-        />
+          data-testid="FmModel303Page__ca1112" />
       )}
-
       {view.type === '349' && (
         <FmModel349Page
           decl={view.decl}
@@ -56,10 +59,9 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onStatusChange={(id, newStatus) => {
             setView(v => v.type === '349' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
           }}
-        />
+          data-testid="FmModel349Page__ca1112" />
       )}
-
-      {debugMode && <FmDebugPanel view={view} setView={setView} />}
+      {debugMode && <FmDebugPanel view={view} setView={setView} data-testid="FmDebugPanel__ca1112" />}
     </>
   );
 }

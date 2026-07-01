@@ -37,16 +37,22 @@ function formatDate(value) {
  */
 function UploadingRow({ name, size, formatBytes }) {
   return (
-    <TableRow className="h-10">
-      <TableCell className="w-10 px-2 py-0" />
-      <TableCell className="px-3 py-0 font-medium">
+    <TableRow className="h-10" data-testid="TableRow__e868a0">
+      <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0" />
+      <TableCell className="px-3 py-0 font-medium" data-testid="TableCell__e868a0">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          <Loader2
+            className="h-4 w-4 animate-spin"
+            aria-hidden="true"
+            data-testid="Loader2__e868a0" />
           <span>{name}</span>
         </div>
       </TableCell>
-      <TableCell className="px-3 py-0">{formatBytes(size)}</TableCell>
-      <TableCell colSpan={4} className="px-3 py-0 text-muted-foreground italic" />
+      <TableCell className="px-3 py-0" data-testid="TableCell__e868a0">{formatBytes(size)}</TableCell>
+      <TableCell
+        colSpan={4}
+        className="px-3 py-0 text-muted-foreground italic"
+        data-testid="TableCell__e868a0" />
     </TableRow>
   );
 }
@@ -101,21 +107,21 @@ export default function AttachmentsTable({
 
   return (
     <Table data-testid="attachments-table">
-      <TableHeader>
-        <TableRow className="h-10">
-          <TableHead className={`${headCell} w-10 px-2`}>
+      <TableHeader data-testid="TableHeader__e868a0">
+        <TableRow className="h-10" data-testid="TableRow__e868a0">
+          <TableHead className={`${headCell} w-10 px-2`} data-testid="TableHead__e868a0">
             <Checkbox
               checked={allSelected}
               indeterminate={someSelected}
               onChange={toggleAll}
-            />
+              data-testid="Checkbox__e868a0" />
           </TableHead>
-          <TableHead className={headCell}>{ui('attachmentsFileName')}</TableHead>
-          <TableHead className={headCell}>{ui('attachmentsSize')}</TableHead>
-          <TableHead className={headCell}>{ui('attachmentsUploadedAt')}</TableHead>
-          <TableHead className={headCell}>{ui('attachmentsUpdatedAt')}</TableHead>
-          <TableHead className={headCell}>{ui('attachmentsUploadedBy')}</TableHead>
-          <TableHead className={headCell}>
+          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsFileName')}</TableHead>
+          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsSize')}</TableHead>
+          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUploadedAt')}</TableHead>
+          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUpdatedAt')}</TableHead>
+          <TableHead className={headCell} data-testid="TableHead__e868a0">{ui('attachmentsUploadedBy')}</TableHead>
+          <TableHead className={headCell} data-testid="TableHead__e868a0">
             {(onDownloadAll || onDeleteAll) && (
               <div className="flex justify-end items-center gap-3">
                 {onDownloadAll && (
@@ -125,7 +131,7 @@ export default function AttachmentsTable({
                     onClick={onDownloadAll}
                     className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
                   >
-                    <Download className="h-3.5 w-3.5" />
+                    <Download className="h-3.5 w-3.5" data-testid="Download__e868a0" />
                     {ui('attachmentsDownloadAll')}
                   </button>
                 )}
@@ -136,7 +142,7 @@ export default function AttachmentsTable({
                     onClick={onDeleteAll}
                     className="flex items-center gap-1.5 text-xs font-medium text-[#D50B3E] hover:text-[#b00834] transition-colors whitespace-nowrap"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__e868a0" />
                     {ui('attachmentsDeleteAll')}
                   </button>
                 )}
@@ -145,35 +151,35 @@ export default function AttachmentsTable({
           </TableHead>
         </TableRow>
       </TableHeader>
-      <TableBody>
+      <TableBody data-testid="TableBody__e868a0">
         {uploadingEntries.map(([id, info]) => (
           <UploadingRow
             key={id}
             name={info.name}
             size={info.size}
             formatBytes={formatBytes}
-          />
+            data-testid="UploadingRow__e868a0" />
         ))}
 
         {loading && !hasItems && !hasUploads && (
           [0, 1, 2].map((i) => (
-            <TableRow key={`skeleton-${i}`} className="h-10">
-              <TableCell className="w-10 px-2 py-0"><Skeleton className="h-4 w-4" /></TableCell>
-              <TableCell className="px-3 py-0"><Skeleton className="h-4 w-32" /></TableCell>
-              <TableCell className="px-3 py-0"><Skeleton className="h-4 w-16" /></TableCell>
-              <TableCell className="px-3 py-0"><Skeleton className="h-4 w-28" /></TableCell>
-              <TableCell className="px-3 py-0"><Skeleton className="h-4 w-28" /></TableCell>
-              <TableCell className="px-3 py-0"><Skeleton className="h-4 w-24" /></TableCell>
-              <TableCell className="px-3 py-0"><Skeleton className="ml-auto h-4 w-16" /></TableCell>
+            <TableRow key={`skeleton-${i}`} className="h-10" data-testid="TableRow__e868a0">
+              <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-4" data-testid="Skeleton__e868a0" /></TableCell>
+              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-32" data-testid="Skeleton__e868a0" /></TableCell>
+              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-16" data-testid="Skeleton__e868a0" /></TableCell>
+              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-28" data-testid="Skeleton__e868a0" /></TableCell>
+              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-28" data-testid="Skeleton__e868a0" /></TableCell>
+              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="h-4 w-24" data-testid="Skeleton__e868a0" /></TableCell>
+              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0"><Skeleton className="ml-auto h-4 w-16" data-testid="Skeleton__e868a0" /></TableCell>
             </TableRow>
           ))
         )}
 
         {!loading && !hasItems && !hasUploads && (
-          <TableRow>
-            <TableCell colSpan={COLUMNS} className="py-10">
+          <TableRow data-testid="TableRow__e868a0">
+            <TableCell colSpan={COLUMNS} className="py-10" data-testid="TableCell__e868a0">
               <div data-testid="attachments-empty-state" className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
-                <FileX className="h-8 w-8" aria-hidden="true" />
+                <FileX className="h-8 w-8" aria-hidden="true" data-testid="FileX__e868a0" />
                 <span className="text-sm">{ui('attachmentsNoFiles')}</span>
               </div>
             </TableCell>
@@ -188,20 +194,20 @@ export default function AttachmentsTable({
           const updatedAt = item.updatedAt ?? item.modifiedAt ?? item.updateDate ?? null;
           return (
             <TableRow key={item.id} data-testid={`attachment-row-${item.id}`} className="group h-10">
-              <TableCell className="w-10 px-2 py-0">
+              <TableCell className="w-10 px-2 py-0" data-testid="TableCell__e868a0">
                 <Checkbox
                   checked={selectedIds.has(item.id)}
                   onChange={() => toggleOne(item.id)}
-                />
+                  data-testid="Checkbox__e868a0" />
               </TableCell>
               <TableCell data-testid={`attachment-name-${item.id}`} className={`${dataCell} font-medium`}>
                 {item.name || item.fileName || item.id}
               </TableCell>
-              <TableCell className={dataCell}>{formatBytes(item.size ?? item.fileSize)}</TableCell>
-              <TableCell className={dataCell}>{formatDate(item.uploadedAt || item.createdAt || item.creationDate)}</TableCell>
-              <TableCell className={dataCell}>{formatDate(updatedAt)}</TableCell>
-              <TableCell className={dataCell}>{uploadedByName || ui('attachmentsUnknownUser')}</TableCell>
-              <TableCell className="px-3 py-0">
+              <TableCell className={dataCell} data-testid="TableCell__e868a0">{formatBytes(item.size ?? item.fileSize)}</TableCell>
+              <TableCell className={dataCell} data-testid="TableCell__e868a0">{formatDate(item.uploadedAt || item.createdAt || item.creationDate)}</TableCell>
+              <TableCell className={dataCell} data-testid="TableCell__e868a0">{formatDate(updatedAt)}</TableCell>
+              <TableCell className={dataCell} data-testid="TableCell__e868a0">{uploadedByName || ui('attachmentsUnknownUser')}</TableCell>
+              <TableCell className="px-3 py-0" data-testid="TableCell__e868a0">
                 <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     type="button"
@@ -211,7 +217,7 @@ export default function AttachmentsTable({
                     aria-label={ui('attachmentsDownload')}
                     title={ui('attachmentsDownload')}
                   >
-                    <Download className="h-4 w-4" aria-hidden="true" />
+                    <Download className="h-4 w-4" aria-hidden="true" data-testid="Download__e868a0" />
                   </button>
                   <button
                     type="button"
@@ -221,7 +227,7 @@ export default function AttachmentsTable({
                     aria-label={ui('delete')}
                     title={ui('delete')}
                   >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    <Trash2 className="h-4 w-4" aria-hidden="true" data-testid="Trash2__e868a0" />
                   </button>
                 </div>
               </TableCell>

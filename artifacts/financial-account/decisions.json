@@ -5,5 +5,137 @@
     "name": "Financial Account Detail",
     "layoutType": "custom"
   },
-  "entities": {}
+  "entities": {
+    "account": {
+      "javaQualifier": "financialAccountHeaderHandler",
+      "fields": {
+        "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "required": true },
+        "type": { "visibility": "editable", "grid": true, "gridOrder": 2 },
+        "currency": { "visibility": "editable", "grid": false, "required": true },
+        "currentBalance": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "description": { "visibility": "editable", "grid": false },
+        "iBAN": { "visibility": "editable", "grid": false },
+        "swiftCode": { "visibility": "editable", "grid": false },
+        "bankCode": { "visibility": "editable", "grid": false },
+        "branchCode": { "visibility": "editable", "grid": false },
+        "partialAccountNo": { "visibility": "editable", "grid": false },
+        "accountNo": { "visibility": "editable", "grid": false },
+        "businessPartner": { "visibility": "system" },
+        "matchingAlgorithm": { "visibility": "system" },
+        "initialBalance": { "visibility": "system" },
+        "creditLimit": { "visibility": "discarded" },
+        "locationAddress": { "visibility": "discarded" },
+        "default": { "visibility": "discarded" },
+        "genericAccountNo": { "visibility": "discarded" },
+        "iNENo": { "visibility": "discarded" },
+        "country": { "visibility": "system" },
+        "bankFormat": { "visibility": "discarded" },
+        "typewriteoff": { "visibility": "discarded" },
+        "writeofflimit": { "visibility": "discarded" },
+        "bankDigitcontrol": { "visibility": "discarded" },
+        "accountDigitcontrol": { "visibility": "discarded" },
+        "routingNo": { "visibility": "discarded" },
+        "lastreconciliation": { "visibility": "system" },
+        "lastreconbalance": { "visibility": "system" },
+        "aprmIsfundstransEnabled": { "visibility": "discarded" },
+        "aprmGlitemDiff": { "visibility": "discarded" },
+        "eTGODateTolerance": { "visibility": "editable" },
+        "eTGOAmountTolerance": { "visibility": "editable" }
+      }
+    },
+    "transaction": {
+      "fields": {
+        "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
+        "businessPartner": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "description": { "visibility": "readOnly", "grid": true, "gridOrder": 4 },
+        "status": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
+        "transactionType": { "visibility": "readOnly", "grid": true, "gridOrder": 6 },
+        "gLItem": { "visibility": "readOnly", "grid": true, "gridOrder": 7 },
+        "depositAmount": { "visibility": "readOnly", "grid": false },
+        "paymentAmount": { "visibility": "readOnly", "grid": false },
+        "posted": {
+          "visibility": "readOnly",
+          "type": "boolean",
+          "form": false,
+          "grid": true,
+          "badge": true,
+          "badgeLabels": {
+            "true":  { "en_US": "Posted",     "es_ES": "Contabilizado"   },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          }
+        },
+        "finPaymentID": { "visibility": "system" },
+        "currency": { "visibility": "system" },
+        "organization": { "visibility": "readOnly", "grid": false },
+        "project": { "visibility": "readOnly", "grid": false },
+        "costCenter": { "visibility": "readOnly", "grid": false },
+        "activity": { "visibility": "readOnly", "grid": false },
+        "salesCampaign": { "visibility": "readOnly", "grid": false },
+        "salesRegion": { "visibility": "readOnly", "grid": false },
+        "stDimension": { "visibility": "readOnly", "grid": false },
+        "ndDimension": { "visibility": "readOnly", "grid": false },
+        "product": { "visibility": "discarded" },
+        "lineNo": { "visibility": "system" },
+        "reconciliation": { "visibility": "system" },
+        "dateAcct": { "visibility": "system" },
+        "processed": { "visibility": "system" },
+        "processNow": { "visibility": "discarded" },
+        "createdByAlgorithm": { "visibility": "discarded" },
+        "aprmFinaccTransOrigin": { "visibility": "discarded" },
+        "aprmProcessed": { "visibility": "discarded" },
+        "foreignCurrency": { "visibility": "discarded" },
+        "foreignAmount": { "visibility": "discarded" },
+        "foreignConversionRate": { "visibility": "discarded" }
+      }
+    },
+    "importedBankStatements": {
+      "fields": {
+        "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "name": { "visibility": "editable", "grid": true, "gridOrder": 2 },
+        "fileName": { "visibility": "readOnly", "grid": true, "gridOrder": 3 },
+        "notes": { "visibility": "editable", "grid": true, "gridOrder": 4 },
+        "importdate": { "visibility": "readOnly", "grid": true, "gridOrder": 5 },
+        "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 6 },
+        "posted": { "visibility": "system" },
+        "documentType": { "visibility": "system" },
+        "fINReconciliationID": { "visibility": "system" },
+        "aPRMProcessBankStatementForce": { "visibility": "discarded" },
+        "aPRMProcessBankStatement": { "visibility": "system" }
+      }
+    },
+    "bankStatementLines": {
+      "fields": {
+        "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
+        "description": { "visibility": "editable", "grid": true, "gridOrder": 2 },
+        "bpartnername": { "visibility": "editable", "grid": true, "gridOrder": 3 },
+        "businessPartner": { "visibility": "editable", "grid": true, "gridOrder": 4 },
+        "gLItem": { "visibility": "editable", "grid": true, "gridOrder": 5 },
+        "referenceNo": { "visibility": "editable", "grid": true, "gridOrder": 6 },
+        "dramount": { "visibility": "editable", "grid": true, "gridOrder": 7 },
+        "cramount": { "visibility": "editable", "grid": true, "gridOrder": 8 },
+        "lineNo": { "visibility": "system" },
+        "financialAccountTransaction": { "visibility": "system" },
+        "matchingtype": { "visibility": "system" },
+        "matchedDocument": { "visibility": "system" },
+        "bankStatement": { "visibility": "system" },
+        "c43Description": { "visibility": "discarded" },
+        "pSD2TransactionIdentifier": { "visibility": "discarded" },
+        "pSD2BalanceAfterTransaction": { "visibility": "discarded" }
+      }
+    },
+    "accountingHistory": { "exclude": true },
+    "exchangeRates": { "exclude": true },
+    "accountingConfiguration": { "exclude": true },
+    "paymentMethod": { "exclude": true },
+    "reconciliations": { "exclude": true },
+    "clearedItems": { "exclude": true },
+    "accounting": { "exclude": true },
+    "bankConnections": { "exclude": true }
+  },
+  "version": 2
 }

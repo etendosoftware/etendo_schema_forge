@@ -6,16 +6,16 @@ export function getStatusTone(status) {
   const s = String(status ?? '').toLowerCase();
   if (
     s === 'co' || s === 'ca' || s === 'etgo_ci' || s === 'pa' || s === 'rppc' || s === 'ppm' ||
-    s === 'pwnc' || s === 'rdnc' ||
+    s === 'pwnc' || s === 'rdnc' || s === 'o' ||
     s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' ||
     s === 'paid' || s === 'true' || s === 'processed' || s === 'y' || s === 'yes'
   ) return 'success';
   if (
-    s === 'ip' || s === 'ue' || s === 'rpae' || s === 'rpap' || s === 'rpr' ||
+    s === 'ip' || s === 'ue' || s === 'rpae' || s === 'rpap' || s === 'rpr' || s === 'm' ||
     s === 'in process' || s === 'under evaluation'
   ) return 'warning';
   if (
-    s === 'vo' || s === 'cj' || s === 'rpvoid' || s === 'rpvd' ||
+    s === 'vo' || s === 'cj' || s === 'rpvoid' || s === 'rpvd' || s === 'p' ||
     s === 'voided' || s === 'cancelled' || s === 'void' || s === 'rejected'
   ) return 'destructive';
   return 'neutral';
@@ -93,7 +93,33 @@ export function getStatusGridPillClass(status) {
   return 'bg-gray-100 text-gray-600 border border-gray-300';
 }
 
-export function statusLabel(status, dictionary, translate) {
+/**
+ * Resolves a column-declared enumLabels entry as an i18n key.
+ * Returns the localized string when the declared value resolves via genericLabels or translate;
+ * returns null when it does not resolve (literal label — must fall through to the MAP path).
+ * Keeping this logic here avoids +2 decision points inside statusLabel.
+ */
+function resolveEnumLabel(status, dictionary, translate, enumLabels) {
+  if (!enumLabels) return null;
+  const declared = enumLabels[status];
+  if (declared == null) return null;
+  // Resolve the declared value as an i18n key. If it does NOT resolve (it is a
+  // literal AD label, not a key), return null so the caller falls through to the
+  // dictionary/MAP logic. Only i18n-key enumLabels (e.g. statusProcessed/statusDraft)
+  // short-circuit here.
+  if (dictionary?.genericLabels?.[declared]) return dictionary.genericLabels[declared];
+  if (translate) {
+    const translated = translate(declared);
+    if (translated && translated !== declared) return translated;
+  }
+  return null;
+}
+
+export function statusLabel(status, dictionary, translate, enumLabels) {
+  // 0. Column-declared enumLabels win (i18n-key values only — literals fall through).
+  const fromEnum = resolveEnumLabel(status, dictionary, translate, enumLabels);
+  if (fromEnum != null) return fromEnum;
+
   // 1. DB-sourced translation from AD_Ref_List_Trl (via extract-labels.js)
   if (dictionary?.statuses?.[status]?.label) return dictionary.statuses[status].label;
 

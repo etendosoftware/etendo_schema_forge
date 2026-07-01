@@ -55,7 +55,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
   useEffect(() => {
     function handler() {
       if (status === 'DR') setShowSendToEval(true);
-      else if (status === 'UE') setShowConfirm(true);
+      else if (status === 'CO' || status === 'UE') setShowConfirm(true);
     }
     window.addEventListener('sales-quotation:open-confirm-modal', handler);
     return () => window.removeEventListener('sales-quotation:open-confirm-modal', handler);

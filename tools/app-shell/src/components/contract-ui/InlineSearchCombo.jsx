@@ -143,7 +143,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative w-full">
       <input
         data-testid={`inline-add-field-${field.key}`}
         ref={inputRef}
@@ -195,7 +195,7 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
         }}
         aria-label={`Toggle ${placeholder} options`}
       >
-        <ChevronDown className="h-4 w-4" />
+        <ChevronDown className="h-4 w-4" data-testid={"ChevronDown__" + field.id} />
       </button>
       {open && filtered.length > 0 && dropdownStyle && createPortal(
         <div

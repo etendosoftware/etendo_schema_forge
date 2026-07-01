@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-05-20T11:45:15.301Z",
-  "checksum": "9f67b1a0e223cab2",
+  "updatedAt": "2026-06-29T12:09:16.248Z",
+  "checksum": "abd729593e86f1be",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -13,12 +13,21 @@
       "customTabsAfterBottom": true,
       "hidePrint": true,
       "hideMoreMenu": true,
-      "contentBg": "bg-slate-50",
+      "contentBg": "bg-white",
+      "hideLink": true,
       "breadcrumb": "Inventory / Product",
       "secondaryTabs": {},
       "detailEntity": null,
-      "headerExtra": {
-        "customForm": "ProductPriceBar"
+      "headerExtra": {},
+      "labelOverrides": {
+        "en_US": {
+          "M_Product_Category_ID": "Category",
+          "ProductType": "Type"
+        },
+        "es_ES": {
+          "M_Product_Category_ID": "Categoría",
+          "ProductType": "Tipo"
+        }
       },
       "primaryTabs": [
         {
@@ -31,8 +40,27 @@
           "panel": "ProductAdditionalInfoPanel"
         }
       ],
+      "noHeaderBorder": true,
+      "toolbarBorderBottom": true,
+      "compactSidebarPadding": true,
+      "whiteFormBackground": true,
+      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]",
+      "formCardPadding": "px-2",
+      "tabsBarPaddingX": "px-2",
+      "primaryTabsVariant": "pill",
+      "toolbarPaddingX": "px-2",
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2",
       "attachments": true,
-      "layoutType": "gallery"
+      "customPanelTabs": [
+        {
+          "key": "pricing",
+          "labelKey": "price",
+          "component": "ProductPriceBar"
+        }
+      ],
+      "layoutType": "gallery",
+      "autoSaveOnBlur": true
     },
     "entities": {
       "product": {
@@ -83,7 +111,8 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 7
+            "seq": 7,
+            "explicitType": true
           },
           {
             "name": "uOM",
@@ -98,9 +127,10 @@
             "form": true,
             "sourceRequired": true,
             "reference": "UOM",
-            "inputMode": "selector",
+            "inputMode": "search",
+            "clearable": false,
             "section": "principal",
-            "seq": 6
+            "seq": 5
           },
           {
             "name": "productCategory",
@@ -122,7 +152,7 @@
             "inputMode": "selector",
             "defaultValue": "@SQL=SELECT MAX(M_PRODUCT_CATEGORY_ID) FROM M_PRODUCT_CATEGORY WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@ AND ISSUMMARY='N'",
             "section": "principal",
-            "seq": 5,
+            "seq": 4,
             "validationRule": {
               "code": "Issummary='N'",
               "contextParams": [],
@@ -195,7 +225,9 @@
             "grid": false,
             "form": true,
             "section": "principal",
-            "seq": 3
+            "seq": 6,
+            "span": 3,
+            "explicitType": true
           },
           {
             "name": "productType",
@@ -216,24 +248,36 @@
             "enumValues": [
               {
                 "value": "E",
-                "name": "Expense type"
+                "name": "Expense type",
+                "labels": {
+                  "es_ES": "Gasto"
+                }
               },
               {
                 "value": "I",
-                "name": "Item"
+                "name": "Item",
+                "labels": {
+                  "es_ES": "Artículo"
+                }
               },
               {
                 "value": "R",
-                "name": "Resource"
+                "name": "Resource",
+                "labels": {
+                  "es_ES": "Recurso"
+                }
               },
               {
                 "value": "S",
-                "name": "Service"
+                "name": "Service",
+                "labels": {
+                  "es_ES": "Servicio"
+                }
               }
             ],
             "defaultValue": "I",
             "section": "principal",
-            "seq": 4,
+            "seq": 3,
             "enumVariants": {
               "I": "blue",
               "S": "purple",
@@ -432,7 +476,8 @@
               "source": "Y"
             }
           }
-        ]
+        ],
+        "formCols": 3
       },
       "price": {
         "tableName": "M_ProductPrice",
@@ -704,11 +749,17 @@
             "enumValues": [
               {
                 "value": "AVA",
-                "name": "Average"
+                "name": "Average",
+                "labels": {
+                  "es_ES": "Promedio"
+                }
               },
               {
                 "value": "STA",
-                "name": "Standard"
+                "name": "Standard",
+                "labels": {
+                  "es_ES": "Estándar"
+                }
               }
             ]
           },
@@ -1006,43 +1057,73 @@
             "enumValues": [
               {
                 "value": "V+",
-                "name": "Vendor Receipts"
+                "name": "Vendor Receipts",
+                "labels": {
+                  "es_ES": "Albarán proveedor"
+                }
               },
               {
                 "value": "I+",
-                "name": "Inventory In"
+                "name": "Inventory In",
+                "labels": {
+                  "es_ES": "Entrada inventario"
+                }
               },
               {
                 "value": "M-",
-                "name": "Movement From"
+                "name": "Movement From",
+                "labels": {
+                  "es_ES": "Mover desde"
+                }
               },
               {
                 "value": "M+",
-                "name": "Movement To"
+                "name": "Movement To",
+                "labels": {
+                  "es_ES": "Mover a"
+                }
               },
               {
                 "value": "I-",
-                "name": "Inventory Out"
+                "name": "Inventory Out",
+                "labels": {
+                  "es_ES": "Salida inventario"
+                }
               },
               {
                 "value": "P-",
-                "name": "Production -"
+                "name": "Production -",
+                "labels": {
+                  "es_ES": "Producción -"
+                }
               },
               {
                 "value": "P+",
-                "name": "Production +"
+                "name": "Production +",
+                "labels": {
+                  "es_ES": "Producción +"
+                }
               },
               {
                 "value": "C-",
-                "name": "Customer Shipment"
+                "name": "Customer Shipment",
+                "labels": {
+                  "es_ES": "Albarán cliente"
+                }
               },
               {
                 "value": "D-",
-                "name": "Internal Consumption -"
+                "name": "Internal Consumption -",
+                "labels": {
+                  "es_ES": "Consumo Interno -"
+                }
               },
               {
                 "value": "D+",
-                "name": "Internal Consumption +"
+                "name": "Internal Consumption +",
+                "labels": {
+                  "es_ES": "Consumo Interno +"
+                }
               }
             ]
           },
@@ -1208,11 +1289,17 @@
             "enumValues": [
               {
                 "value": "PURCHASE",
-                "name": "Purchase Price List"
+                "name": "Purchase Price List",
+                "labels": {
+                  "es_ES": "Tarifa de ventas"
+                }
               },
               {
                 "value": "SALES",
-                "name": "Sales Price List"
+                "name": "Sales Price List",
+                "labels": {
+                  "es_ES": "Tarifa de ventas"
+                }
               }
             ],
             "defaultValue": "SALES",
@@ -1582,15 +1669,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
             "defaultValue": "S"
@@ -1614,15 +1710,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
             "defaultValue": "S"
@@ -1646,15 +1751,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Primary"
+                "name": "Primary",
+                "labels": {
+                  "es_ES": "Primaria"
+                }
               },
               {
                 "value": "S",
-                "name": "Secondary"
+                "name": "Secondary",
+                "labels": {
+                  "es_ES": "Secundaria"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Applicable"
+                "name": "Not Applicable",
+                "labels": {
+                  "es_ES": "No Aplicable"
+                }
               }
             ],
             "defaultValue": "S"
@@ -1697,12 +1811,21 @@
       "customTabsAfterBottom": true,
       "hidePrint": true,
       "hideMoreMenu": true,
-      "contentBg": "bg-slate-50",
+      "contentBg": "bg-white",
+      "hideLink": true,
       "breadcrumb": "Inventory / Product",
       "secondaryTabs": {},
       "detailEntity": null,
-      "headerExtra": {
-        "customForm": "ProductPriceBar"
+      "headerExtra": {},
+      "labelOverrides": {
+        "en_US": {
+          "M_Product_Category_ID": "Category",
+          "ProductType": "Type"
+        },
+        "es_ES": {
+          "M_Product_Category_ID": "Categoría",
+          "ProductType": "Tipo"
+        }
       },
       "primaryTabs": [
         {
@@ -1715,8 +1838,27 @@
           "panel": "ProductAdditionalInfoPanel"
         }
       ],
+      "noHeaderBorder": true,
+      "toolbarBorderBottom": true,
+      "compactSidebarPadding": true,
+      "whiteFormBackground": true,
+      "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]",
+      "formCardPadding": "px-2",
+      "tabsBarPaddingX": "px-2",
+      "primaryTabsVariant": "pill",
+      "toolbarPaddingX": "px-2",
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2",
       "attachments": true,
-      "layoutType": "gallery"
+      "customPanelTabs": [
+        {
+          "key": "pricing",
+          "labelKey": "price",
+          "component": "ProductPriceBar"
+        }
+      ],
+      "layoutType": "gallery",
+      "autoSaveOnBlur": true
     },
     "entities": {
       "product": {
@@ -2884,14 +3026,6 @@
             "required": true
           },
           {
-            "name": "mServicepriceruleVersionID",
-            "apiKey": "mServicepriceruleVersionID",
-            "column": "M_Servicepricerule_Version_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -2936,6 +3070,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Servicepricerule_Version_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4012,6 +4154,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "etgoValuation",
+            "apiKey": "etgoValuation",
+            "column": "EM_Etgo_Valuation",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
           }
         ],
         "javaQualifier": "productStockWarehouseHandler"
@@ -4070,14 +4220,6 @@
             "required": false
           },
           {
-            "name": "mServicepriceruleVersionID",
-            "apiKey": "mServicepriceruleVersionID",
-            "column": "M_Servicepricerule_Version_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -4122,6 +4264,14 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_Servicepricerule_Version_ID",
+            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -4733,7 +4883,7 @@
         "field": "uOM",
         "column": "C_UOM_ID",
         "reference": "UOM",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/product/product/selectors/uOM"
       },
       {
@@ -5002,6 +5152,16 @@
     },
     "window": {
       "category": "inventory"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "M_Product_Category_ID": "Category",
+        "ProductType": "Type"
+      },
+      "es_ES": {
+        "M_Product_Category_ID": "Categoría",
+        "ProductType": "Tipo"
+      }
     }
   },
   "testManifest": {
@@ -8063,12 +8223,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for categoryPriceRuleVersion"
       },
       {
-        "id": "t-system-field-categoryPriceRuleVersion-mServicepriceruleVersionID",
+        "id": "t-system-field-categoryPriceRuleVersion-id",
         "category": "system-field",
         "entity": "categoryPriceRuleVersion",
-        "field": "mServicepriceruleVersionID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'mServicepriceruleVersionID' should exist in backend but not frontend for categoryPriceRuleVersion"
+        "description": "System field 'id' should exist in backend but not frontend for categoryPriceRuleVersion"
       },
       {
         "id": "t-system-field-categoryPriceRuleVersion-organization",
@@ -8367,12 +8527,12 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for priceRuleVersion"
       },
       {
-        "id": "t-system-field-priceRuleVersion-mServicepriceruleVersionID",
+        "id": "t-system-field-priceRuleVersion-id",
         "category": "system-field",
         "entity": "priceRuleVersion",
-        "field": "mServicepriceruleVersionID",
+        "field": "id",
         "runner": "node",
-        "description": "System field 'mServicepriceruleVersionID' should exist in backend but not frontend for priceRuleVersion"
+        "description": "System field 'id' should exist in backend but not frontend for priceRuleVersion"
       },
       {
         "id": "t-system-field-priceRuleVersion-organization",
@@ -9351,6 +9511,14 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for stock"
       },
       {
+        "id": "t-system-field-stock-etgoValuation",
+        "category": "system-field",
+        "entity": "stock",
+        "field": "etgoValuation",
+        "runner": "node",
+        "description": "System field 'etgoValuation' should exist in backend but not frontend for stock"
+      },
+      {
         "id": "t-system-field-stock-id",
         "category": "system-field",
         "entity": "stock",
@@ -9821,7 +9989,7 @@
       }
     ],
     "summary": {
-      "total": 622,
+      "total": 623,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 11,
@@ -9835,11 +10003,11 @@
         "rule-declared": 141,
         "searchable-filters": 5,
         "selector-endpoint": 23,
-        "system-field": 232,
+        "system-field": 233,
         "visibility": 11
       },
       "byRunner": {
-        "node": 622,
+        "node": 623,
         "junit": 0
       }
     }

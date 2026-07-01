@@ -29,9 +29,17 @@ describe('custom-icons — exports (ETP-3660)', () => {
     assert.match(src, /export function SearchIcon/);
   });
 
-  it('has exactly four exported functions (no accidental extras)', () => {
+  it('exports TrashIcon as a named export', () => {
+    assert.match(src, /export function TrashIcon/);
+  });
+
+  it('exports PricingIcon as a named export', () => {
+    assert.match(src, /export function PricingIcon/);
+  });
+
+  it('has exactly seven exported functions (no accidental extras)', () => {
     const exportedFunctions = src.match(/export function \w+/g) ?? [];
-    assert.equal(exportedFunctions.length, 4);
+    assert.equal(exportedFunctions.length, 7);
   });
 });
 

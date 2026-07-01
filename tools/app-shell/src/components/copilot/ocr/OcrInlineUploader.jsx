@@ -152,7 +152,9 @@ export default function OcrInlineUploader({
       {file ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-white p-3">
           <div className="flex items-center gap-2 text-xs">
-            <Upload className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+            <Upload
+              className="h-3.5 w-3.5 shrink-0 text-gray-500"
+              data-testid="Upload__5fab8d" />
             <span className="truncate font-medium text-foreground">{file.name}</span>
             <span className="shrink-0 text-muted-foreground">
               ({(file.size / 1024).toFixed(1)} KB)
@@ -164,17 +166,19 @@ export default function OcrInlineUploader({
               className="ml-auto text-muted-foreground hover:text-foreground disabled:opacity-50"
               aria-label={ui('cancel')}
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" data-testid="X__5fab8d" />
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-hidden rounded-md bg-gray-50">
             {previewUrl && (
-              <Suspense fallback={(
-                <div className="flex h-full items-center justify-center text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-              )}>
-                <LazyPdfViewer url={previewUrl} />
+              <Suspense
+                fallback={(
+                  <div className="flex h-full items-center justify-center text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__5fab8d" />
+                  </div>
+                )}
+                data-testid="Suspense__5fab8d">
+                <LazyPdfViewer url={previewUrl} data-testid="LazyPdfViewer__5fab8d" />
               </Suspense>
             )}
           </div>
@@ -199,7 +203,7 @@ export default function OcrInlineUploader({
           }`}
         >
           <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-gray-300 bg-white">
-            <Upload className="h-5 w-5 text-gray-600" />
+            <Upload className="h-5 w-5 text-gray-600" data-testid="Upload__5fab8d" />
           </div>
           <div className="text-sm font-medium text-foreground">
             {ui('ocrSidePanelDropTitle')}
@@ -209,34 +213,33 @@ export default function OcrInlineUploader({
           </div>
         </button>
       )}
-
       {status === 'uploading' && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__5fab8d" />
           {ui('ocrUploading')}
         </div>
       )}
       {(status === 'extracting' || applying) && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__5fab8d" />
           {ui('ocrExtracting')}
         </div>
       )}
       {status === 'error' && (
         <div className="flex items-start gap-2 text-xs text-red-600">
-          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{error || ui('ocrFailed')}</span>
         </div>
       )}
       {pickError && (
         <div className="flex items-start gap-2 text-xs text-red-600">
-          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__5fab8d" />
           <span>{pickError}</span>
         </div>
       )}
       {result && status === 'done' && !applying && (
         <div className="flex items-center gap-2 text-xs text-emerald-600">
-          <CheckCircle2 className="h-3 w-3" />
+          <CheckCircle2 className="h-3 w-3" data-testid="CheckCircle2__5fab8d" />
           {ui('ocrDone')}
           {result.linesCreated > 0 && ` · ${ui('ocrLinesCreated', { count: result.linesCreated })}`}
           {result.linesFailed > 0 && (
@@ -247,7 +250,6 @@ export default function OcrInlineUploader({
           )}
         </div>
       )}
-
       <input
         ref={inputRef}
         type="file"

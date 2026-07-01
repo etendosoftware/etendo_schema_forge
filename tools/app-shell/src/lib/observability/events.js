@@ -1,0 +1,525 @@
+import { sanitizeEventProperties } from './payload.js';
+
+const OBSERVABILITY_CHANNEL_VALUES = Object.freeze({
+  MIXPANEL: 'mixpanel',
+  TIMING: 'timing',
+  NPS: 'nps',
+  BACKEND: 'backend',
+  RUM: 'rum',
+  SENTRY: 'sentry',
+  SQL: 'sql',
+});
+
+const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
+  ACTION: 'action',
+  ACCURACY: 'accuracy',
+  ATTEMPT: 'attempt',
+  CATEGORY: 'category',
+  COUNT: 'count',
+  DURATION_MS: 'durationMs',
+  ENTITY: 'entity',
+  OPERATION: 'operation',
+  POSITION: 'position',
+  PROVIDER: 'provider',
+  SCORE: 'score',
+  SOURCE: 'source',
+  SPEC_NAME: 'specName',
+  STATUS: 'status',
+  STEP: 'step',
+  SUPPORT_REQUESTED: 'supportRequested',
+  TYPE: 'type',
+  VALUE: 'value',
+});
+
+function defineEvent(name, { channels = [], properties = [] } = {}) {
+  return Object.freeze({
+    name,
+    channels: Object.freeze([...channels]),
+    properties: Object.freeze([...properties]),
+  });
+}
+
+function buildEventMap(events) {
+  return new Map(events.map(event => [event.name, event]));
+}
+
+function pickEventProperties(event, properties = {}) {
+  const sanitized = {};
+
+  for (const key of event.properties) {
+    const value = properties[key];
+    if (value != null) {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
+
+export const OBSERVABILITY_CHANNELS = OBSERVABILITY_CHANNEL_VALUES;
+export const OBSERVABILITY_PROPERTY_KEYS = OBSERVABILITY_PROPERTY_VALUES;
+
+export const OBSERVABILITY_EVENTS = Object.freeze({
+  APP_STARTED: defineEvent('app_started', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+  }),
+  WINDOW_OPENED: defineEvent('window_opened', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+    ],
+  }),
+  RECORD_CREATED: defineEvent('record_created', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.OPERATION,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  RECORD_UPDATED: defineEvent('record_updated', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.OPERATION,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  RECORD_DELETED: defineEvent('record_deleted', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.OPERATION,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  DOCUMENT_COMPLETED: defineEvent('document_completed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.OPERATION,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  QUICK_ACTION_USED: defineEvent('quick_action_used', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.OPERATION,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  SEARCH_PERFORMED: defineEvent('search_performed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ATTEMPT,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  SEARCH_RESULT_SELECTED: defineEvent('search_result_selected', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.POSITION,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  TIME_TO_CREATE: defineEvent('time_to_create', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.OPERATION,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.STEP,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  ONBOARDING_STEP_COMPLETED: defineEvent('onboarding_step_completed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.STEP,
+      OBSERVABILITY_PROPERTY_KEYS.SUPPORT_REQUESTED,
+    ],
+  }),
+  ONBOARDING_FINISHED: defineEvent('onboarding_finished', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.STEP,
+    ],
+  }),
+  ONBOARDING_BANK_CONFIGURED: defineEvent('onboarding_bank_configured', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.SQL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.STEP,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  TIME_TO_FIRST_INVOICE: defineEvent('time_to_first_invoice', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.STEP,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  PENDING_TASKS_INTERACTED: defineEvent('pending_tasks_interacted', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.POSITION,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  CONTACT_AUTOCOMPLETE_ATTEMPTED: defineEvent('contact_autocomplete_attempted', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ATTEMPT,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+    ],
+  }),
+  CONTACT_AUTOCOMPLETE_SUCCEEDED: defineEvent('contact_autocomplete_succeeded', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ATTEMPT,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  OCR_INVOICE_UPLOADED: defineEvent('ocr_invoice_uploaded', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ATTEMPT,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  OCR_EXTRACTION_SCORED: defineEvent('ocr_extraction_scored', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCURACY,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.SCORE,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  EMAIL_INVOICE_INGESTED: defineEvent('email_invoice_ingested', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.BACKEND],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ATTEMPT,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  COPILOT_SESSION_STARTED: defineEvent('copilot_session_started', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  COPILOT_TASK_RESOLVED: defineEvent('copilot_task_resolved', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  COPILOT_CORRECTION_NEEDED: defineEvent('copilot_correction_needed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ATTEMPT,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  COPILOT_NPS: defineEvent('copilot_nps', {
+    channels: [OBSERVABILITY_CHANNELS.NPS],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.SCORE,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  INVOICE_EMAILED: defineEvent('invoice_emailed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ATTEMPT,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  QUOTE_CREATED: defineEvent('quote_created', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL, OBSERVABILITY_CHANNELS.TIMING],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  BACKEND_ACCOUNTING_ENTRY_GENERATED: defineEvent('backend_accounting_entry_generated', {
+    channels: [OBSERVABILITY_CHANNELS.BACKEND],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  BACKEND_OCR_FIELD_ACCURACY: defineEvent('backend_ocr_field_accuracy', {
+    channels: [OBSERVABILITY_CHANNELS.BACKEND],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACCURACY,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  BACKEND_BANK_MATCH_ATTEMPTED: defineEvent('backend_bank_match_attempted', {
+    channels: [OBSERVABILITY_CHANNELS.BACKEND],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ATTEMPT,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  BACKEND_ASSET_CREATED: defineEvent('backend_asset_created', {
+    channels: [OBSERVABILITY_CHANNELS.BACKEND],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.ENTITY,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.SPEC_NAME,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  BACKEND_EMAIL_INVOICE_INGESTED: defineEvent('backend_email_invoice_ingested', {
+    channels: [OBSERVABILITY_CHANNELS.BACKEND],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ATTEMPT,
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  BACKEND_MONTHLY_CLOSE_STARTED: defineEvent('backend_monthly_close_started', {
+    channels: [OBSERVABILITY_CHANNELS.BACKEND],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.STEP,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  BACKEND_MONTHLY_CLOSE_COMPLETED: defineEvent('backend_monthly_close_completed', {
+    channels: [OBSERVABILITY_CHANNELS.BACKEND],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.COUNT,
+      OBSERVABILITY_PROPERTY_KEYS.DURATION_MS,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
+      OBSERVABILITY_PROPERTY_KEYS.STEP,
+      OBSERVABILITY_PROPERTY_KEYS.VALUE,
+    ],
+  }),
+  ONBOARDING_AUTH_LOGOUT: defineEvent('onboarding_auth_logout', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_AUTH_SUBMITTED: defineEvent('onboarding_auth_submitted', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_AUTH_SUCCEEDED: defineEvent('onboarding_auth_succeeded', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_AUTH_FAILED: defineEvent('onboarding_auth_failed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.PROVIDER,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_ENVIRONMENT_ENTER_SUBMITTED: defineEvent('onboarding_environment_enter_submitted', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_ENVIRONMENT_ENTER_SUCCEEDED: defineEvent('onboarding_environment_enter_succeeded', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_ENVIRONMENT_ENTER_FAILED: defineEvent('onboarding_environment_enter_failed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_RUN_STARTED: defineEvent('onboarding_run_started', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_RUN_SUCCEEDED: defineEvent('onboarding_run_succeeded', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_RUN_FAILED: defineEvent('onboarding_run_failed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+    ],
+  }),
+  ONBOARDING_SETUP_STEP_COMPLETED: defineEvent('onboarding_setup_step_completed', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  ONBOARDING_SETUP_STEP_BACK: defineEvent('onboarding_setup_step_back', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.ACTION,
+      OBSERVABILITY_PROPERTY_KEYS.STATUS,
+      OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+});
+
+export const OBSERVABILITY_EVENT_LIST = Object.freeze(Object.values(OBSERVABILITY_EVENTS));
+
+const EVENT_MAP = buildEventMap(OBSERVABILITY_EVENT_LIST);
+
+function isEventDefinition(value) {
+  return (
+    value &&
+    typeof value === 'object' &&
+    typeof value.name === 'string' &&
+    Array.isArray(value.channels) &&
+    Array.isArray(value.properties)
+  );
+}
+
+export function getObservabilityEvent(nameOrEvent) {
+  if (!nameOrEvent) return undefined;
+
+  if (isEventDefinition(nameOrEvent)) {
+    return EVENT_MAP.get(nameOrEvent.name);
+  }
+
+  if (typeof nameOrEvent === 'string') {
+    return EVENT_MAP.get(nameOrEvent);
+  }
+
+  return undefined;
+}
+
+export function buildObservabilityEvent(nameOrEvent, properties = {}) {
+  const event = getObservabilityEvent(nameOrEvent);
+  const name = event?.name ?? (typeof nameOrEvent === 'string' ? nameOrEvent : undefined);
+
+  if (!name) {
+    return { name: undefined, properties: {} };
+  }
+
+  if (!event) {
+    return { name, properties: sanitizeEventProperties(properties) };
+  }
+
+  return {
+    name,
+    properties: sanitizeEventProperties(pickEventProperties(event, properties)),
+  };
+}

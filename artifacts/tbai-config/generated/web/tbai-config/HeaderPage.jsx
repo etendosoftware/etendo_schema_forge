@@ -17,7 +17,9 @@ const statusField = null;
 // @sf-generated-end summary:header
 
 // @sf-generated-start extraBadges:header
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:header
 
 // @sf-generated-start processes:header
@@ -76,6 +78,7 @@ export const api = {
 export default function HeaderPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="header"
         Form={HeaderForm}
@@ -92,6 +95,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />
+      </>
     );
   }
 

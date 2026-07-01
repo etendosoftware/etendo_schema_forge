@@ -104,7 +104,7 @@ function Stepper({ step, ui }) {
           done={step > n}
           active={step === n}
           isFirst={i === 0}
-        />
+          data-testid="FiscalStepItem__e9ef3f" />
       ))}
     </div>
   );
@@ -120,7 +120,11 @@ function PageHead({ selectedOrg, orgList, onSelectOrg, onGoToManual, actions, ui
         <span className="text-sm font-medium" style={{ color: '#121217' }}>
           {ui('fiscal.onboarding.org.label')}
         </span>
-        <OrgDropdown selectedOrg={selectedOrg} orgList={orgList} onSelect={onSelectOrg} />
+        <OrgDropdown
+          selectedOrg={selectedOrg}
+          orgList={orgList}
+          onSelect={onSelectOrg}
+          data-testid="OrgDropdown__e9ef3f" />
       </div>
       {actions ?? (onGoToManual && (
         <button
@@ -250,20 +254,38 @@ function ScreenLayout({ toolbar, subBar, children, actions, padContent = true })
   );
 }
 
+// ── Shared helpers ───────────────────────────────────────────────────────────
+
+function renderPageHead({ selectedOrg, orgList, onSelectOrg, ui, onGoToManual }) {
+  return (
+    <PageHead
+      selectedOrg={selectedOrg}
+      orgList={orgList}
+      onSelectOrg={onSelectOrg}
+      {...(onGoToManual ? { onGoToManual } : {})}
+      ui={ui}
+      data-testid="PageHead__e9ef3f" />
+  );
+}
+
 // ── Step screens ──────────────────────────────────────────────────────────────
 
 function SkippedScreen({ orgName, selectedOrg, orgList, onSelectOrg, ui, onGoHome, onComplete, goTo }) {
+  const pageHeadEl = renderPageHead({ selectedOrg, orgList, onSelectOrg, ui });
   return (
     <ScreenLayout
-      toolbar={<PageHead selectedOrg={selectedOrg} orgList={orgList} onSelectOrg={onSelectOrg} ui={ui} />}
+      toolbar={pageHeadEl}
       actions={
         <>
-          <Button variant="outline" onClick={() => goTo('territory')}>{ui('fiscal.onboarding.back.wizard')}</Button>
+          <Button
+            variant="outline"
+            onClick={() => goTo('territory')}
+            data-testid="Button__e9ef3f">{ui('fiscal.onboarding.back.wizard')}</Button>
           <span className="flex-1" />
-          <Button onClick={onGoHome ?? onComplete}>{ui('fiscal.onboarding.goHome')}</Button>
+          <Button onClick={onGoHome ?? onComplete} data-testid="Button__e9ef3f">{ui('fiscal.onboarding.goHome')}</Button>
         </>
       }
-    >
+      data-testid="ScreenLayout__e9ef3f">
       <div className="flex flex-col items-center text-center py-8">
         <span className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-2xl mb-4">⏭</span>
         <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>{ui('fiscal.onboarding.skipped.title')}</h2>
@@ -295,19 +317,20 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
   const sys = SYSTEMS[system];
   const terr = TERRITORIES[selectedTerritory ?? ''];
   const certContext = getCertificateContext(system);
+  const pageHeadEl = renderPageHead({ selectedOrg, orgList, onSelectOrg, ui });
 
   return (
     <>
       <ScreenLayout
-        toolbar={<PageHead selectedOrg={selectedOrg} orgList={orgList} onSelectOrg={onSelectOrg} ui={ui} />}
+        toolbar={pageHeadEl}
         actions={
           <>
-            <Button variant="outline" onClick={onComplete}>{ui('fiscal.onboarding.viewConfig')}</Button>
+            <Button variant="outline" onClick={onComplete} data-testid="Button__e9ef3f">{ui('fiscal.onboarding.viewConfig')}</Button>
             <span className="flex-1" />
-            <Button onClick={onGoHome ?? onComplete}>{ui('fiscal.onboarding.goHome')}</Button>
+            <Button onClick={onGoHome ?? onComplete} data-testid="Button__e9ef3f">{ui('fiscal.onboarding.goHome')}</Button>
           </>
         }
-      >
+        data-testid="ScreenLayout__e9ef3f">
         <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>{ui('fiscal.onboarding.applied.title')}</h2>
         <p className="text-sm text-muted-foreground mb-6">
           {ui('fiscal.onboarding.applied.subtitle', { system: sys?.name })}
@@ -322,20 +345,44 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
             </div>
           </div>
           <div className="divide-y divide-border px-5 py-2">
-            {terr && <Row k={ui('fiscal.onboarding.applied.row.territory')} v={terr.name} />}
-            <Row k={ui('fiscal.onboarding.applied.row.system')} v={sys?.name} />
-            <Row k={ui('fiscal.onboarding.applied.row.tax')} v={terr ? terr.systemLong : sys?.long} />
+            {terr && <Row
+              k={ui('fiscal.onboarding.applied.row.territory')}
+              v={terr.name}
+              data-testid="Row__e9ef3f" />}
+            <Row
+              k={ui('fiscal.onboarding.applied.row.system')}
+              v={sys?.name}
+              data-testid="Row__e9ef3f" />
+            <Row
+              k={ui('fiscal.onboarding.applied.row.tax')}
+              v={terr ? terr.systemLong : sys?.long}
+              data-testid="Row__e9ef3f" />
             {terr?.askNational && (
-              <Row k={ui('fiscal.onboarding.applied.row.national')} v={alsoNational ? ui('fiscal.onboarding.applied.national.active') : ui('fiscal.onboarding.applied.national.na')} />
+              <Row
+                k={ui('fiscal.onboarding.applied.row.national')}
+                v={alsoNational ? ui('fiscal.onboarding.applied.national.active') : ui('fiscal.onboarding.applied.national.na')}
+                data-testid="Row__e9ef3f" />
             )}
             {terr?.askVolume && volume && (
-              <Row k={ui('fiscal.onboarding.applied.row.volume')} v={volume === 'high' ? ui('fiscal.onboarding.applied.volume.high') : ui('fiscal.onboarding.applied.volume.low')} />
+              <Row
+                k={ui('fiscal.onboarding.applied.row.volume')}
+                v={volume === 'high' ? ui('fiscal.onboarding.applied.volume.high') : ui('fiscal.onboarding.applied.volume.low')}
+                data-testid="Row__e9ef3f" />
             )}
             {volume === 'low' && lowChoice && (
-              <Row k={ui('fiscal.onboarding.applied.row.chosen')} v={lowChoice === 'sii' ? ui('fiscal.onboarding.applied.chosen.sii') : ui('fiscal.onboarding.applied.chosen.verifactu')} />
+              <Row
+                k={ui('fiscal.onboarding.applied.row.chosen')}
+                v={lowChoice === 'sii' ? ui('fiscal.onboarding.applied.chosen.sii') : ui('fiscal.onboarding.applied.chosen.verifactu')}
+                data-testid="Row__e9ef3f" />
             )}
-            <Row k={ui('fiscal.onboarding.applied.row.env')} v={<span className="text-amber-700">{ui('fiscal.onboarding.applied.env.sandbox')}</span>} />
-            <Row k={ui('fiscal.onboarding.applied.row.activated')} v={new Date().toLocaleString(locale.replace('_', '-'), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} />
+            <Row
+              k={ui('fiscal.onboarding.applied.row.env')}
+              v={<span className="text-amber-700">{ui('fiscal.onboarding.applied.env.sandbox')}</span>}
+              data-testid="Row__e9ef3f" />
+            <Row
+              k={ui('fiscal.onboarding.applied.row.activated')}
+              v={new Date().toLocaleString(locale.replace('_', '-'), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              data-testid="Row__e9ef3f" />
           </div>
         </div>
 
@@ -344,7 +391,7 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
           <div className="flex flex-col gap-2">
             {certContext && (
               <NextItem
-                icon={<FileText size={15} strokeWidth={1.75} />}
+                icon={<FileText size={15} strokeWidth={1.75} data-testid="FileText__e9ef3f" />}
                 title={cert ? ui('fiscal.onboarding.cert.loaded.title') : ui('fiscal.onboarding.cert.upload.title')}
                 desc={cert
                   ? ui('fiscal.onboarding.cert.loaded.desc', { name: cert.name, validTo: cert.validTo })
@@ -352,12 +399,11 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
                 badge={cert ? null : ui('fiscal.onboarding.cert.pending')}
                 done={!!cert}
                 onClick={() => setCertModalOpen(true)}
-              />
+                data-testid="NextItem__e9ef3f" />
             )}
           </div>
         </div>
       </ScreenLayout>
-
       {certModalOpen && certContext && (
         <CertModal
           context={certContext}
@@ -365,7 +411,7 @@ function AppliedScreen({ orgId, orgName, selectedOrg, orgList, onSelectOrg, syst
           apiBaseUrl={apiBaseUrl}
           onClose={() => setCertModalOpen(false)}
           onUpload={(c) => { setCert(c); setCertModalOpen(false); }}
-        />
+          data-testid="CertModal__e9ef3f" />
       )}
     </>
   );
@@ -398,22 +444,28 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
       tabs={[ui('fiscal.tab.sii'), ui('fiscal.tab.tbai')]}
       active={activeTab}
       onChange={setActiveTab}
-    />
+      data-testid="TabBar__e9ef3f" />
   ) : null;
 
   const headerActions = (
     <div className="flex items-center gap-2">
-      <Button variant="outline" onClick={onBack}>{ui('fiscal.cancel')}</Button>
-      <Button onClick={handleSaveDetail}>{ui('fiscal.save')}</Button>
+      <Button variant="outline" onClick={onBack} data-testid="Button__e9ef3f">{ui('fiscal.cancel')}</Button>
+      <Button onClick={handleSaveDetail} data-testid="Button__e9ef3f">{ui('fiscal.save')}</Button>
     </div>
   );
 
   return (
     <ScreenLayout
-      toolbar={<PageHead selectedOrg={selectedOrg} orgList={orgList} onSelectOrg={onSelectOrg} actions={headerActions} ui={ui} />}
+      toolbar={<PageHead
+        selectedOrg={selectedOrg}
+        orgList={orgList}
+        onSelectOrg={onSelectOrg}
+        actions={headerActions}
+        ui={ui}
+        data-testid="PageHead__e9ef3f" />}
       subBar={tabBar}
       padContent={false}
-    >
+      data-testid="ScreenLayout__e9ef3f">
       <div className="px-5">
         {/* SII section — always mounted when SII or SII+TBAI so ref stays valid */}
         {(system === 'SII' || isSiiTbai) && createdRecords.sii && (
@@ -426,7 +478,7 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
               onSave={() => {}}
               variant={selectedTerritory === 'navarra' ? 'sii-navarra' : 'sii'}
               hideSave
-            />
+              data-testid="SiiSection__e9ef3f" />
           </div>
         )}
 
@@ -441,7 +493,7 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
               onSave={() => {}}
               hideSave
               hideCert={isSiiTbai}
-            />
+              data-testid="TbaiSection__e9ef3f" />
           </div>
         )}
 
@@ -453,7 +505,7 @@ function DetailScreen({ system, selectedTerritory, createdRecords, orgId, orgNam
             orgId={orgId}
             onSave={() => {}}
             hideSave
-          />
+            data-testid="VerifactuSection__e9ef3f" />
         )}
 
         {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
@@ -475,25 +527,36 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
     { label: ui('fiscal.onboarding.confirm.row.system'), value: systemValue, onEdit: () => goTo(prevStep) },
   ].filter(Boolean);
 
+  const pageHeadEl = renderPageHead({ selectedOrg, orgList, onSelectOrg, ui, onGoToManual });
+
   return (
     <ScreenLayout
-      toolbar={<PageHead selectedOrg={selectedOrg} orgList={orgList} onSelectOrg={onSelectOrg} onGoToManual={onGoToManual} ui={ui} />}
+      toolbar={pageHeadEl}
       actions={
         <>
-          <Button variant="outline" onClick={() => goTo(prevStep)} disabled={saving} className="flex items-center gap-1.5">
-            <ArrowLeft size={15} /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
+          <Button
+            variant="outline"
+            onClick={() => goTo(prevStep)}
+            disabled={saving}
+            className="flex items-center gap-1.5"
+            data-testid="Button__e9ef3f">
+            <ArrowLeft size={15} data-testid="ArrowLeft__e9ef3f" /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
           </Button>
           <p className="text-xs flex-1" style={{ color: '#555B6D' }}>{ui('fiscal.skip.hint')}</p>
           <button type="button" onClick={() => goTo('skipped')} className="text-sm" style={{ color: '#121217' }}>
             {ui('fiscal.onboarding.skip')}
           </button>
-          <Button onClick={onCreateRecords} disabled={saving} className="flex items-center gap-1.5">
-            <Check size={15} />
+          <Button
+            onClick={onCreateRecords}
+            disabled={saving}
+            className="flex items-center gap-1.5"
+            data-testid="Button__e9ef3f">
+            <Check size={15} data-testid="Check__e9ef3f" />
             {saving ? ui('fiscal.onboarding.confirm.creating') : ui('fiscal.onboarding.confirm.btn')}
           </Button>
         </>
       }
-    >
+      data-testid="ScreenLayout__e9ef3f">
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
           <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>{ui('fiscal.onboarding.confirm.title')}</h2>
@@ -501,15 +564,18 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
             {ui('fiscal.onboarding.confirm.subtitle.pre')}<strong>{ui('fiscal.onboarding.confirm.subtitle.bold')}</strong>
           </p>
         </div>
-        <Stepper step={3} ui={ui} />
+        <Stepper step={3} ui={ui} data-testid="Stepper__e9ef3f" />
       </div>
-
       <div className="grid grid-cols-3 gap-4 mb-5">
         {cards.map(({ label, value, onEdit }) => (
-          <InfoCard key={label} label={label} value={value} onEdit={onEdit} />
+          <InfoCard
+            key={label}
+            label={label}
+            value={value}
+            onEdit={onEdit}
+            data-testid="InfoCard__e9ef3f" />
         ))}
       </div>
-
       <div className="rounded-xl p-4 flex gap-3 text-sm" style={{ background: '#F0FAFF', color: '#0075AD' }}>
         <span
           className="flex-shrink-0 flex items-center justify-center text-white font-bold"
@@ -520,7 +586,6 @@ function ConfirmScreen({ resolvedSystem, selectedTerritory, alsoNational, volume
           {ui('fiscal.onboarding.confirm.next.body')}
         </p>
       </div>
-
       {error && <p className="mt-4 text-sm text-destructive">{error}</p>}
     </ScreenLayout>
   );
@@ -589,7 +654,7 @@ function SelectableCard({ selected, onPick, children }) {
 
 function ObligationCard({ label, paragraphs, note, info, selected, onPick }) {
   return (
-    <SelectableCard selected={selected} onPick={onPick}>
+    <SelectableCard selected={selected} onPick={onPick} data-testid="SelectableCard__e9ef3f">
       <span className="text-sm font-semibold pr-5" style={{ color: '#121217' }}>{label}</span>
       <div className="flex flex-col gap-2">
         {paragraphs.map((p) => (
@@ -612,12 +677,16 @@ function ObligationCard({ label, paragraphs, note, info, selected, onPick }) {
 
 function BulletOptionCard({ label, bullets, selected, onPick }) {
   return (
-    <SelectableCard selected={selected} onPick={onPick}>
+    <SelectableCard selected={selected} onPick={onPick} data-testid="SelectableCard__e9ef3f">
       <span className="text-sm font-semibold pr-5" style={{ color: '#121217' }}>{label}</span>
       <ul className="flex flex-col gap-1.5">
         {bullets.map((b) => (
           <li key={b} className="flex gap-2 text-sm leading-5" style={{ color: '#555B6D' }}>
-            <Check size={14} strokeWidth={2.5} className="flex-shrink-0 mt-0.5 text-green-500" />
+            <Check
+              size={14}
+              strokeWidth={2.5}
+              className="flex-shrink-0 mt-0.5 text-green-500"
+              data-testid="Check__e9ef3f" />
             <span>{b}</span>
           </li>
         ))}
@@ -628,7 +697,7 @@ function BulletOptionCard({ label, bullets, selected, onPick }) {
 
 function OptionCard({ label, desc, selected, onPick }) {
   return (
-    <SelectableCard selected={selected} onPick={onPick}>
+    <SelectableCard selected={selected} onPick={onPick} data-testid="SelectableCard__e9ef3f">
       <span className="text-sm font-semibold pr-5" style={{ color: '#121217' }}>{label}</span>
       {desc && <span className="text-sm leading-5" style={{ color: '#555B6D' }}>{desc}</span>}
     </SelectableCard>
@@ -646,7 +715,7 @@ function InfoCard({ label, value, onEdit }) {
           onClick={onEdit}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
         >
-          <Pencil size={13} strokeWidth={1.75} />
+          <Pencil size={13} strokeWidth={1.75} data-testid="Pencil__e9ef3f" />
         </button>
       )}
     </div>
@@ -700,31 +769,35 @@ function ManualTerrCard({ territory, selected, onPick }) {
 
 function ManualScreen({ selectedTerritory, manualSystem, orgName, selectedOrg, orgList, onSelectOrg, ui, TERRITORIES, SYSTEMS, goTo, onSelectTerritory, onSetManualSystem }) {
   const manualAllowedSystems = getAllowedSystemsForTerritory(selectedTerritory);
+  const pageHeadEl = renderPageHead({ selectedOrg, orgList, onSelectOrg, ui });
 
   return (
     <ScreenLayout
-      toolbar={<PageHead selectedOrg={selectedOrg} orgList={orgList} onSelectOrg={onSelectOrg} ui={ui} />}
+      toolbar={pageHeadEl}
       actions={
         <>
-          <Button variant="outline" onClick={() => goTo('territory')} className="flex items-center gap-1.5">
-            <ArrowLeft size={15} />{ui('fiscal.onboarding.back').replace('←', '').trim()}
+          <Button
+            variant="outline"
+            onClick={() => goTo('territory')}
+            className="flex items-center gap-1.5"
+            data-testid="Button__e9ef3f">
+            <ArrowLeft size={15} data-testid="ArrowLeft__e9ef3f" />{ui('fiscal.onboarding.back').replace('←', '').trim()}
           </Button>
           <span className="flex-1" />
           <Button
             onClick={() => goTo('confirm')}
             disabled={!selectedTerritory || !manualSystem}
             className="flex items-center gap-1.5"
-          >
-            {ui('fiscal.onboarding.continue').replace('›', '').trim()} <ArrowRight size={15} />
+            data-testid="Button__e9ef3f">
+            {ui('fiscal.onboarding.continue').replace('›', '').trim()} <ArrowRight size={15} data-testid="ArrowRight__e9ef3f" />
           </Button>
         </>
       }
-    >
+      data-testid="ScreenLayout__e9ef3f">
       <h2 className="font-semibold leading-8 mb-1" style={{ color: '#121217', fontSize: 18 }}>{ui('fiscal.onboarding.manual.title')}</h2>
       <p className="leading-4 mb-6" style={{ color: '#282833', fontSize: 12 }}>
         {ui('fiscal.onboarding.manual.subtitle')}
       </p>
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {/* Territorio */}
         <div className="grid" style={{ gridTemplateColumns: '148px 1fr', gap: 20 }}>
@@ -738,7 +811,7 @@ function ManualScreen({ selectedTerritory, manualSystem, orgName, selectedOrg, o
                 territory={territory}
                 selected={selectedTerritory === territory.id}
                 onPick={(territoryId) => onSelectTerritory(territoryId, { clearManualSystem: true })}
-              />
+                data-testid="ManualTerrCard__e9ef3f" />
             ))}
           </div>
         </div>
@@ -805,27 +878,36 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
     (t.askVolume && volume === 'high') ||
     (t.askVolume && volume === 'low' && lowChoice !== null)
   );
+  const pageHeadEl = renderPageHead({ selectedOrg, orgList, onSelectOrg, ui, onGoToManual });
 
   if (!t) return null;
 
   return (
     <ScreenLayout
-      toolbar={<PageHead selectedOrg={selectedOrg} orgList={orgList} onSelectOrg={onSelectOrg} onGoToManual={onGoToManual} ui={ui} />}
+      toolbar={pageHeadEl}
       actions={
         <>
-          <Button variant="outline" onClick={() => goTo('territory')} className="flex items-center gap-1.5">
-            <ArrowLeft size={15} /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
+          <Button
+            variant="outline"
+            onClick={() => goTo('territory')}
+            className="flex items-center gap-1.5"
+            data-testid="Button__e9ef3f">
+            <ArrowLeft size={15} data-testid="ArrowLeft__e9ef3f" /> {ui('fiscal.onboarding.back').replace('←', '').trim()}
           </Button>
           <p className="text-xs flex-1" style={{ color: '#555B6D' }}>{ui('fiscal.skip.hint')}</p>
           <button type="button" onClick={() => goTo('skipped')} className="text-sm" style={{ color: '#121217' }}>
             {ui('fiscal.onboarding.skip')}
           </button>
-          <Button onClick={() => goTo('confirm')} disabled={!canContinueSubQ} className="flex items-center gap-1.5">
-            {ui('fiscal.onboarding.continue').replace('›', '').trim()} <ArrowRight size={15} />
+          <Button
+            onClick={() => goTo('confirm')}
+            disabled={!canContinueSubQ}
+            className="flex items-center gap-1.5"
+            data-testid="Button__e9ef3f">
+            {ui('fiscal.onboarding.continue').replace('›', '').trim()} <ArrowRight size={15} data-testid="ArrowRight__e9ef3f" />
           </Button>
         </>
       }
-    >
+      data-testid="ScreenLayout__e9ef3f">
       {t.askNational && (
         <>
           <div className="flex items-start justify-between gap-4 mb-5">
@@ -833,7 +915,7 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
               <h2 className="font-semibold mb-1" style={{ fontSize: 18, color: '#121217' }}>{ui('fiscal.onboarding.subq.also.title')}</h2>
               <p style={{ fontSize: 12, color: '#282833' }}>{ui('fiscal.onboarding.subq.also.subtitle')}</p>
             </div>
-            <Stepper step={2} ui={ui} />
+            <Stepper step={2} ui={ui} data-testid="Stepper__e9ef3f" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <NationalOptionCard
@@ -842,14 +924,14 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
               extra={ui('fiscal.onboarding.subq.tbai.extra')}
               selected={alsoNational === false}
               onPick={() => onSetAlsoNational(false)}
-            />
+              data-testid="NationalOptionCard__e9ef3f" />
             <NationalOptionCard
               label={ui('fiscal.onboarding.subq.sii.label')}
               desc={ui('fiscal.onboarding.subq.sii.desc')}
               extra={ui('fiscal.onboarding.subq.sii.extra')}
               selected={alsoNational === true}
               onPick={() => onSetAlsoNational(true)}
-            />
+              data-testid="NationalOptionCard__e9ef3f" />
           </div>
 
           {/* Info box — when does SII apply */}
@@ -879,7 +961,6 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
           </div>
         </>
       )}
-
       {t.askVolume && (
         <>
           {/* Section 1: Obligation — title+stepper top row, cards full-width 2 cols below */}
@@ -892,7 +973,7 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
                 {ui('fiscal.onboarding.subq.obligation.subtitle')}
               </p>
             </div>
-            <Stepper step={2} ui={ui} />
+            <Stepper step={2} ui={ui} data-testid="Stepper__e9ef3f" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <ObligationCard
@@ -903,14 +984,14 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
               ]}
               selected={volume === 'low'}
               onPick={() => onSetVolume('low')}
-            />
+              data-testid="ObligationCard__e9ef3f" />
             <ObligationCard
               label={ui('fiscal.onboarding.subq.obligation.yes.label')}
               paragraphs={[ui('fiscal.onboarding.subq.obligation.yes.desc')]}
               info={ui('fiscal.onboarding.subq.obligation.yes.info')}
               selected={volume === 'high'}
               onPick={() => { onSetVolume('high'); onSetLowChoice(null); }}
-            />
+              data-testid="ObligationCard__e9ef3f" />
           </div>
 
           {volume === 'low' && (
@@ -936,7 +1017,7 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
                   ]}
                   selected={lowChoice === 'verifactu'}
                   onPick={() => onSetLowChoice('verifactu')}
-                />
+                  data-testid="BulletOptionCard__e9ef3f" />
                 <BulletOptionCard
                   label={ui('fiscal.onboarding.subq.sii.vol.label')}
                   bullets={[
@@ -946,7 +1027,7 @@ function SubquestionScreen({ t, orgName, selectedOrg, orgList, onSelectOrg, onGo
                   ]}
                   selected={lowChoice === 'sii'}
                   onPick={() => onSetLowChoice('sii')}
-                />
+                  data-testid="BulletOptionCard__e9ef3f" />
               </div>
 
               <div className="mt-4 rounded-xl px-4 py-3 flex gap-2.5 text-sm" style={{ background: '#F0FAFF', color: '#0075AD' }}>
@@ -976,7 +1057,7 @@ function TerritoryScreen({ selectedTerritory, selectedOrg, orgList, onSelectOrg,
           onSelectOrg={onSelectOrg}
           onGoToManual={onGoToManual}
           ui={ui}
-        />
+          data-testid="PageHead__e9ef3f" />
       }
       actions={
         <>
@@ -995,12 +1076,12 @@ function TerritoryScreen({ selectedTerritory, selectedOrg, orgList, onSelectOrg,
               else goTo('confirm');
             }}
             disabled={!selectedTerritory}
-          >
+            data-testid="Button__e9ef3f">
             {ui('fiscal.onboarding.continue')}
           </Button>
         </>
       }
-    >
+      data-testid="ScreenLayout__e9ef3f">
       {/* Wizard header — 80px, padding 8px 20px, align-items: center per Figma */}
       <div
         className="flex items-center justify-between"
@@ -1014,9 +1095,8 @@ function TerritoryScreen({ selectedTerritory, selectedOrg, orgList, onSelectOrg,
             {ui('fiscal.onboarding.territory.subtitle')}
           </p>
         </div>
-        <Stepper step={1} ui={ui} />
+        <Stepper step={1} ui={ui} data-testid="Stepper__e9ef3f" />
       </div>
-
       {/* Territory groups — flex-col gap:20px per Figma spec; separators are sibling flex children */}
       <div style={{ display: 'flex', flexDirection: 'column', padding: '12px 0px', gap: 20 }}>
         {TERRITORY_GROUPS.flatMap(({ regime, label, desc, items }, idx) => [
@@ -1035,7 +1115,7 @@ function TerritoryScreen({ selectedTerritory, selectedOrg, orgList, onSelectOrg,
                   territory={TERRITORIES[id]}
                   selected={selectedTerritory === id}
                   onPick={onPick}
-                />
+                  data-testid="TerrCard__e9ef3f" />
               ))}
             </div>
           </div>,
@@ -1147,45 +1227,97 @@ export default function OnboardingWizard({ apiBaseUrl, onComplete, onGoHome }) {
   const onGoToManual = () => { setManualSystem(null); goTo('manual'); };
   const shared = { orgName, selectedOrg, orgList, onSelectOrg: handleSelectOrg, ui, TERRITORIES, SYSTEMS, goTo, onGoToManual };
 
-  if (step === 'skipped') return <SkippedScreen {...shared} onGoHome={onGoHome} onComplete={onComplete} />;
+  if (step === 'skipped') return (
+    <SkippedScreen
+      {...shared}
+      onGoHome={onGoHome}
+      onComplete={onComplete}
+      data-testid="SkippedScreen__e9ef3f" />
+  );
 
   if (step === 'applied') return (
-    <AppliedScreen {...shared} orgId={orgId} system={system} selectedTerritory={selectedTerritory}
-      alsoNational={alsoNational} volume={volume} lowChoice={lowChoice}
-      apiBaseUrl={apiBaseUrl} apiFetch={apiFetch} locale={locale}
-      onComplete={onComplete} onGoHome={onGoHome} />
+    <AppliedScreen
+      {...shared}
+      orgId={orgId}
+      system={system}
+      selectedTerritory={selectedTerritory}
+      alsoNational={alsoNational}
+      volume={volume}
+      lowChoice={lowChoice}
+      apiBaseUrl={apiBaseUrl}
+      apiFetch={apiFetch}
+      locale={locale}
+      onComplete={onComplete}
+      onGoHome={onGoHome}
+      data-testid="AppliedScreen__e9ef3f" />
   );
 
   if (step === 'detail') return (
-    <DetailScreen {...shared} orgId={orgId} system={system} selectedTerritory={selectedTerritory}
-      createdRecords={createdRecords} apiBaseUrl={apiBaseUrl} error={error}
-      siiRef={siiRef} tbaiRef={tbaiRef} verifactuRef={verifactuRef}
-      onBack={() => goTo('confirm')} onApplied={() => goTo('applied')} onComplete={onComplete} />
+    <DetailScreen
+      {...shared}
+      orgId={orgId}
+      system={system}
+      selectedTerritory={selectedTerritory}
+      createdRecords={createdRecords}
+      apiBaseUrl={apiBaseUrl}
+      error={error}
+      siiRef={siiRef}
+      tbaiRef={tbaiRef}
+      verifactuRef={verifactuRef}
+      onBack={() => goTo('confirm')}
+      onApplied={() => goTo('applied')}
+      onComplete={onComplete}
+      data-testid="DetailScreen__e9ef3f" />
   );
 
   if (step === 'confirm') return (
-    <ConfirmScreen {...shared} resolvedSystem={resolvedSystem} selectedTerritory={selectedTerritory}
-      alsoNational={alsoNational} volume={volume} lowChoice={lowChoice} manualSystem={manualSystem}
-      saving={saving} error={error} TERRITORY_GROUPS={TERRITORY_GROUPS}
-      onCreateRecords={createRecords} />
+    <ConfirmScreen
+      {...shared}
+      resolvedSystem={resolvedSystem}
+      selectedTerritory={selectedTerritory}
+      alsoNational={alsoNational}
+      volume={volume}
+      lowChoice={lowChoice}
+      manualSystem={manualSystem}
+      saving={saving}
+      error={error}
+      TERRITORY_GROUPS={TERRITORY_GROUPS}
+      onCreateRecords={createRecords}
+      data-testid="ConfirmScreen__e9ef3f" />
   );
 
   if (step === 'manual') return (
-    <ManualScreen {...shared} selectedTerritory={selectedTerritory} manualSystem={manualSystem}
+    <ManualScreen
+      {...shared}
+      selectedTerritory={selectedTerritory}
+      manualSystem={manualSystem}
       TERRITORY_GROUPS={TERRITORY_GROUPS}
-      onSelectTerritory={handleTerritorySelection} onSetManualSystem={setManualSystem} />
+      onSelectTerritory={handleTerritorySelection}
+      onSetManualSystem={setManualSystem}
+      data-testid="ManualScreen__e9ef3f" />
   );
 
   if (step === 'subquestion') return (
-    <SubquestionScreen {...shared} t={t} alsoNational={alsoNational} volume={volume} lowChoice={lowChoice}
-      onSetAlsoNational={setAlsoNational} onSetVolume={setVolume} onSetLowChoice={setLowChoice} />
+    <SubquestionScreen
+      {...shared}
+      t={t}
+      alsoNational={alsoNational}
+      volume={volume}
+      lowChoice={lowChoice}
+      onSetAlsoNational={setAlsoNational}
+      onSetVolume={setVolume}
+      onSetLowChoice={setLowChoice}
+      data-testid="SubquestionScreen__e9ef3f" />
   );
 
   return (
-    <TerritoryScreen {...shared} selectedTerritory={selectedTerritory} TERRITORY_GROUPS={TERRITORY_GROUPS}
+    <TerritoryScreen
+      {...shared}
+      selectedTerritory={selectedTerritory}
+      TERRITORY_GROUPS={TERRITORY_GROUPS}
       onPick={handleTerritorySelection}
       onGoToManual={() => { setManualSystem(null); goTo('manual'); }}
-    />
+      data-testid="TerritoryScreen__e9ef3f" />
   );
 }
 
@@ -1207,7 +1339,7 @@ function NextItem({ icon, title, desc, badge, done, onClick }) {
         ${done ? 'bg-green-50 border-green-200' : 'bg-background border-border'}`}>
       <span className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm
         ${done ? 'bg-green-100 text-green-700' : 'bg-muted text-foreground/60'}`}>
-        {done ? <Check size={15} strokeWidth={2.5} /> : icon}
+        {done ? <Check size={15} strokeWidth={2.5} data-testid="Check__e9ef3f" /> : icon}
       </span>
       <span className="flex-1">
         <span className="flex items-center gap-2">
@@ -1218,7 +1350,11 @@ function NextItem({ icon, title, desc, badge, done, onClick }) {
         </span>
         <span className="block text-xs text-muted-foreground mt-0.5">{desc}</span>
       </span>
-      <ChevronRight size={14} strokeWidth={1.75} className="text-muted-foreground" />
+      <ChevronRight
+        size={14}
+        strokeWidth={1.75}
+        className="text-muted-foreground"
+        data-testid="ChevronRight__e9ef3f" />
     </button>
   );
 }

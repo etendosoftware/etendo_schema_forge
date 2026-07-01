@@ -42,7 +42,6 @@ export function AssistantSelector({
       <div className="rounded-lg border border-border/60 bg-muted/40 p-3 text-sm text-foreground">
         {welcomeMessage || ui('copilotWelcome')}
       </div>
-
       {/* Filter row */}
       <div className="mt-4 flex items-center gap-2">
         <Input
@@ -50,23 +49,24 @@ export function AssistantSelector({
           onChange={(e) => onFilterChange?.(e.target.value)}
           placeholder={ui('copilotFilterProfiles')}
           className="flex-1"
-        />
+          data-testid="Input__8ea2ef" />
         <Button
           variant={featuredOnly ? 'default' : 'outline'}
           size="icon"
           className="h-9 w-9 shrink-0"
           onClick={() => setFeaturedOnly((prev) => !prev)}
           aria-label={ui('copilotFeaturedOnly')}
-        >
-          <Star className={cn('h-4 w-4', featuredOnly && 'fill-current')} />
+          data-testid="Button__8ea2ef">
+          <Star
+            className={cn('h-4 w-4', featuredOnly && 'fill-current')}
+            data-testid="Star__8ea2ef" />
         </Button>
       </div>
-
       {/* Assistant grid */}
       <div className="mt-4 flex-1 overflow-y-auto">
         {isLoading && (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="h-4 w-4 animate-spin" />
+            <LoaderCircle className="h-4 w-4 animate-spin" data-testid="LoaderCircle__8ea2ef" />
             <span>{ui('copilotLoadingAssistants')}</span>
           </div>
         )}
@@ -81,7 +81,9 @@ export function AssistantSelector({
               >
                 <div className="flex items-center gap-2 font-medium">
                   {assistant.featured === 'Y' && (
-                    <Star className="h-3.5 w-3.5 shrink-0 text-yellow-400 fill-yellow-400" />
+                    <Star
+                      className="h-3.5 w-3.5 shrink-0 text-yellow-400 fill-yellow-400"
+                      data-testid="Star__8ea2ef" />
                   )}
                   <span>{assistant.name}</span>
                 </div>

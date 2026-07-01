@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { SelectorChip } from './SelectorChip.jsx';
+import { FIELD_HEIGHT } from '@/components/ui/formDensity';
 
 /**
  * CreatableSearchSelect — generic search-style selector with an inline "Create X" action.
@@ -48,6 +50,11 @@ import { SelectorChip } from './SelectorChip.jsx';
  *                                      The caller opens a creation modal; once saved it
  *                                      must call `onCreated(id, name)` so the component
  *                                      can auto-select the new item and refresh its list.
+ * @param {string}   [emptyOptionLabel] - Label for an explicit empty/null choice pinned at
+ *                                      the top of the dropdown (e.g. "All accounts"). When set,
+ *                                      selecting it clears the value to null — mirroring the
+ *                                      `emptyOptionLabelKey` behaviour of the plain SelectorInput.
+ *                                      Only rendered when the field is not required.
  *
  * ## Usage example (address picker wired to LocationEditorModal)
  * ```jsx
@@ -80,10 +87,12 @@ export function CreatableSearchSelect({
   token,
   createLabel,
   onCreateRequest,
+  emptyOptionLabel,
+  staticOptions,
 }) {
   const ui = useUI();
   const [query, setQuery] = useState(displayValue || '');
-  const [options, setOptions] = useState([]);
+  const [options, setOptions] = useState(staticOptions ?? []);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -96,6 +105,13 @@ export function CreatableSearchSelect({
   // Prevents re-fetching on focus if the current parent value's options are already loaded
   const loadedForRef = useRef(null);
   const inputRef = useRef(null);
+  // Anchor for the portaled options panel — its bounding rect drives the panel's
+  // fixed position so the panel never affects the modal's scroll height.
+  const rootRef = useRef(null);
+  const dropdownRef = useRef(null);
+  // Computed fixed-position style for the portaled panel; null until first measured.
+  const [dropdownStyle, setDropdownStyle] = useState(null);
+  const [openUp, setOpenUp] = useState(false);
 
   // Stable refs so useEffect closures can read current values without adding them to deps
   const valueRef = useRef(value);
@@ -117,6 +133,7 @@ export function CreatableSearchSelect({
 
   // Fetch options whenever the parent value changes or after a forced refresh (refreshKey)
   useEffect(() => {
+    if (staticOptions) return;
     if (parentKey && !parentValue) {
       setOptions([]);
       loadedForRef.current = null;
@@ -197,6 +214,17 @@ export function CreatableSearchSelect({
     onChange('', '');
   };
 
+  // Explicit empty/null choice (e.g. "All accounts"): clears the value and shows
+  // the empty-option label as the chip, mirroring SelectorInput's "__empty__" item.
+  const showEmptyOption = !!emptyOptionLabel && !field.required;
+  const handleSelectEmpty = () => {
+    isEditingRef.current = false;
+    setEditingIntent(false);
+    setQuery('');
+    setOpen(false);
+    onChange('', '', null);
+  };
+
   // Chip mode: show the Figma chip when a value is selected and the user is
   // not actively editing. Clicking the chip body flips editingIntent so the
   // input becomes typeable again.
@@ -212,6 +240,11 @@ export function CreatableSearchSelect({
   const handleCreate = () => {
     isEditingRef.current = false;
     setOpen(false);
+    // The create button uses onMouseDown + preventDefault (so it fires before blur),
+    // which keeps focus on this input — leaving the dropdown able to reopen behind the
+    // create modal. Explicitly drop focus so the selector fully closes.
+    setEditingIntent(false);
+    inputRef.current?.blur();
     if (!onCreateRequest) return;
     onCreateRequest(query, (newId, newName) => {
       if (!newId) return;
@@ -224,9 +257,65 @@ export function CreatableSearchSelect({
     });
   };
 
-  const placeholder = `${ui('searchLabelPrefix')} ${resolvedLabel}...`;
+  // When an empty-option label is configured and nothing is selected, surface it
+  // as the placeholder (e.g. "All accounts") instead of the generic search prompt —
+  // matching SelectorInput's trigger, where the empty label reads on the closed control.
+  const placeholder = (showEmptyOption && !hasSelection)
+    ? emptyOptionLabel
+    : `${ui('searchLabelPrefix')} ${resolvedLabel}...`;
 
-  const showDropdown = open && !isDisabled && (createLabel || loading || filteredOptions.length > 0 || query.trim());
+  const showDropdown = open && !isDisabled && (showEmptyOption || createLabel || loading || filteredOptions.length > 0 || query.trim());
+
+  // Measure the trigger and compute a viewport-anchored (fixed) position for the
+  // panel. Mirrors InlineSearchCombo: open downward by default, flip upward when
+  // there is more room above than below. Because the panel is portaled to
+  // document.body with position:fixed, it never contributes to the modal's
+  // scrollable height — fixing the "modal scrolls when the panel opens" bug.
+  const updateDropdownDirection = useCallback(() => {
+    if (!rootRef.current || typeof window === 'undefined') return;
+    const rect = rootRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const shouldOpenUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+    setOpenUp(shouldOpenUp);
+    const maxHeight = Math.max(120, (shouldOpenUp ? spaceAbove : spaceBelow) - 12);
+    // pointerEvents:'auto' is required because the panel is portaled to
+    // document.body, which Radix Dialog (modal) marks pointer-events:none while
+    // open. Without it the options render but every click passes through to the
+    // form behind them — the panel looks active but nothing is selectable.
+    setDropdownStyle(shouldOpenUp
+      ? {
+          position: 'fixed',
+          left: rect.left,
+          width: rect.width,
+          bottom: window.innerHeight - rect.top + 4,
+          maxHeight,
+          zIndex: 1000,
+          pointerEvents: 'auto',
+        }
+      : {
+          position: 'fixed',
+          left: rect.left,
+          width: rect.width,
+          top: rect.bottom + 4,
+          maxHeight,
+          zIndex: 1000,
+          pointerEvents: 'auto',
+        });
+  }, []);
+
+  // Recompute on open and keep the panel glued to the trigger on scroll/resize.
+  useEffect(() => {
+    if (!showDropdown) return;
+    updateDropdownDirection();
+    const onReflow = () => updateDropdownDirection();
+    window.addEventListener('resize', onReflow);
+    window.addEventListener('scroll', onReflow, true);
+    return () => {
+      window.removeEventListener('resize', onReflow);
+      window.removeEventListener('scroll', onReflow, true);
+    };
+  }, [showDropdown, updateDropdownDirection]);
 
   return (
     /*
@@ -234,7 +323,11 @@ export function CreatableSearchSelect({
       structure as SearchInput so the chip + chevron-right pattern is consistent
       across all FK pickers (Contacto, Tarifa, Dirección, etc.).
     */
-    <div className={`relative flex h-10 w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${isDisabled ? ' opacity-50 cursor-not-allowed' : ''}`}>
+    <div
+      ref={rootRef}
+      className={`relative flex ${FIELD_HEIGHT} w-full items-center rounded-lg border border-[#D1D4DB] bg-transparent shadow-[0px_1px_2px_rgba(18,18,23,0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${isDisabled ? ' opacity-50 cursor-not-allowed' : ''}`}
+      onClick={showChip && !isDisabled ? handleChipClick : undefined}
+    >
       {showChip ? (
         <SelectorChip
           label={displayValue || query}
@@ -242,7 +335,7 @@ export function CreatableSearchSelect({
           onClear={handleClear}
           clearAriaLabel={ui('clear')}
           testId={`field-${field.key}-chip`}
-        />
+          data-testid={"SelectorChip__" + field.id} />
       ) : (
         <input
           ref={inputRef}
@@ -280,13 +373,49 @@ export function CreatableSearchSelect({
         />
       )}
       {loading ? (
-        <Loader2 className="h-4 w-4 text-[#828FA3] animate-spin shrink-0 ml-auto" />
+        <Loader2
+          className="h-4 w-4 text-[#828FA3] animate-spin shrink-0 ml-auto"
+          data-testid={"Loader2__" + field.id} />
       ) : (
-        <ChevronDown className="h-4 w-4 text-[#828FA3] pointer-events-none shrink-0 ml-auto" />
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (showChip) { handleChipClick(); return; }
+            if (open) {
+              setOpen(false);
+            } else {
+              setOpen(true);
+              inputRef.current?.focus();
+            }
+          }}
+          className="shrink-0 ml-auto flex items-center"
+        >
+          <ChevronDown
+            className="h-4 w-4 text-[#828FA3]"
+            data-testid={"ChevronDown__" + field.id} />
+        </button>
       )}
+      {showDropdown && dropdownStyle && createPortal(
+        <div
+          ref={dropdownRef}
+          data-testid={`options-${field.key}`}
+          className="bg-white border rounded-md shadow-lg overflow-auto"
+          style={dropdownStyle}
+          data-open-up={openUp ? 'true' : 'false'}
+        >
+          {/* Empty/null choice (e.g. "All accounts") — pinned at the top, hidden while filtering */}
+          {showEmptyOption && !query.trim() && (
+            <button
+              type="button"
+              data-testid={`option-${field.key}-__empty__`}
+              className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 border-b border-border/40 cursor-pointer"
+              onMouseDown={(e) => { e.preventDefault(); handleSelectEmpty(); }}
+            >
+              {emptyOptionLabel}
+            </button>
+          )}
 
-      {showDropdown && (
-        <div data-testid={`options-${field.key}`} className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg max-h-48 overflow-auto">
           {/* Create action — always pinned at the top */}
           {createLabel && onCreateRequest && (
             <button
@@ -310,7 +439,7 @@ export function CreatableSearchSelect({
               type="button"
               data-testid={`option-${field.key}-${opt.id}`}
               className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer"
-              onMouseDown={() => handleSelect(opt)}
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
             >
               {opt.name}
             </button>
@@ -321,7 +450,8 @@ export function CreatableSearchSelect({
               {ui('noResultsFor')} &ldquo;{query}&rdquo;
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

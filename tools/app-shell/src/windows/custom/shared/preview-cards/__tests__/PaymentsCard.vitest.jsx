@@ -1,3 +1,7 @@
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useMenuLabel: () => (key) => key,
@@ -29,8 +33,8 @@ describe('PaymentsCard', () => {
   });
 
   it('shows no-payments message when payments empty and no outstanding', () => {
-    render(<PaymentsCard payments={[]} totalOutstanding={0} />);
-    expect(screen.getByText('previewCardNoPaymentsRecorded')).toBeInTheDocument();
+    render(<PaymentsCard payments={[]} totalOutstanding={0} specName="purchase-invoice" />);
+    expect(screen.getByText('noPagoYet')).toBeInTheDocument();
   });
 
   it('shows add-payment button when canAddPayment=true', () => {
@@ -50,36 +54,35 @@ describe('PaymentsCard', () => {
     expect(screen.queryByText('previewCardAddPayment')).toBeNull();
   });
 
-  it('renders payment rows with accountName label', () => {
-    const payments = [{ id: '1', amount: 200, paymentDate: '2026-01-01', accountName: 'Main Account' }];
-    render(<PaymentsCard payments={payments} currencyCode="EUR" />);
-    expect(screen.getByText('Main Account')).toBeInTheDocument();
-    expect(screen.getByText('EUR 200')).toBeInTheDocument();
+  it('renders payment rows with documentNo', () => {
+    const payments = [{ id: '1', amount: 200, paymentDate: '2026-01-01', documentNo: 'INV-200' }];
+    render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+    expect(screen.getByText('INV-200')).toBeInTheDocument();
     expect(screen.getByText('1 Jan 2026')).toBeInTheDocument();
   });
 
-  it('renders payment rows using documentNo fallback when accountName absent', () => {
-    const payments = [{ id: '2', amount: 50, paymentDate: '2026-02-01', documentNo: '12345' }];
-    render(<PaymentsCard payments={payments} currencyCode="USD" />);
-    expect(screen.getByText('#12345')).toBeInTheDocument();
+  it('renders payment rows using id fallback when documentNo absent', () => {
+    const payments = [{ id: 'pay-42', amount: 50, paymentDate: '2026-02-01' }];
+    render(<PaymentsCard payments={payments} currencyCode="USD" specName="purchase-invoice" />);
+    expect(screen.getByText('pay-42')).toBeInTheDocument();
   });
 
-  it('renders "—" when neither accountName nor documentNo present', () => {
-    const payments = [{ id: '3', amount: 10, paymentDate: '2026-03-01' }];
-    render(<PaymentsCard payments={payments} />);
-    expect(screen.getByText('—')).toBeInTheDocument();
+  it('formats amounts > 999 with thousand dots', () => {
+    const payments = [{ id: '1', amount: 1500, paymentDate: '2026-01-01', documentNo: 'INV-1500' }];
+    render(<PaymentsCard payments={payments} currencyCode="EUR" specName="purchase-invoice" />);
+    expect(screen.getByText(/1\.500,00/)).toBeInTheDocument();
   });
 
   it('shows outstanding row when totalOutstanding > 0', () => {
-    const payments = [{ id: '1', amount: 100, paymentDate: '2026-01-01', accountName: 'Acct' }];
-    render(<PaymentsCard payments={payments} currencyCode="EUR" totalOutstanding={50} />);
+    const payments = [{ id: '1', amount: 100, paymentDate: '2026-01-01', documentNo: 'INV-1' }];
+    render(<PaymentsCard payments={payments} currencyCode="EUR" totalOutstanding={50} specName="purchase-invoice" />);
     expect(screen.getByText('invoicePendingPayment')).toBeInTheDocument();
-    expect(screen.getByText('EUR 50')).toBeInTheDocument();
+    expect(screen.getByText('50,00 EUR')).toBeInTheDocument();
   });
 
   it('does not show outstanding row when totalOutstanding is 0', () => {
-    const payments = [{ id: '1', amount: 100, paymentDate: '2026-01-01', accountName: 'Acct' }];
-    render(<PaymentsCard payments={payments} currencyCode="EUR" totalOutstanding={0} />);
+    const payments = [{ id: '1', amount: 100, paymentDate: '2026-01-01', documentNo: 'INV-1' }];
+    render(<PaymentsCard payments={payments} currencyCode="EUR" totalOutstanding={0} specName="purchase-invoice" />);
     expect(screen.queryByText('invoicePendingPayment')).toBeNull();
   });
 });

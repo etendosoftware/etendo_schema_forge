@@ -25,6 +25,7 @@ describe('onboardingState', () => {
       'setup',
       'client',
       'organization',
+      'dataset',
       'sequences',
       'finalize',
     ]);
@@ -79,6 +80,7 @@ describe('onboardingState', () => {
       currency: 'EUR',
       language: 'es_ES',
       countryCode: 'ES',
+      address: 'QA Street',
     });
   });
 

@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.15.1",
   "generatedAt": "2026-04-29T19:05:48.778Z",
-  "updatedAt": "2026-05-26T18:48:56.819Z",
-  "contractChecksum": "c9c20297c85666a0",
+  "updatedAt": "2026-06-25T19:58:28.564Z",
+  "contractChecksum": "e31470929f91fada",
   "apiPrediction": {
     "specName": "goods-movements",
     "baseUrl": "/sws/neo/goods-movements",
@@ -169,6 +169,46 @@
           "Document has pending lines or missing required fields",
           "User lacks permission to execute the action"
         ]
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "movement",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-movements/movement/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -186,6 +226,20 @@
     },
     "window": {
       "category": "inventory"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "Processed": "Status",
+        "M_Locator_ID": "Source Warehouse",
+        "M_LocatorTo_ID": "Destination Warehouse",
+        "MovementQty": "Quantity"
+      },
+      "es_ES": {
+        "Processed": "Estado",
+        "M_Locator_ID": "Almacén origen",
+        "M_LocatorTo_ID": "Almacén destino",
+        "MovementQty": "Cantidad"
+      }
     }
   },
   "formState": {
@@ -194,6 +248,7 @@
         "fields": {
           "name": {
             "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "@#Date@"
           },
           "movementDate": {
@@ -202,10 +257,8 @@
             "defaultValue": "@#Date@"
           },
           "description": {},
-          "processNow": {},
           "documentNo": {
             "readOnly": true,
-            "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
           "processed": {
@@ -276,7 +329,8 @@
     "selectorContexts": [],
     "actions": [
       "processNow",
-      "posted"
+      "posted",
+      "etblkpBulkposting"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -325,5 +379,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "16134e81b4871879"
+  "checksum": "50695d76e23dde0c"
 }

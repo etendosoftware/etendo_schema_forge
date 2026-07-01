@@ -26,6 +26,10 @@ vi.mock('@/lib/statusBadge.js', () => ({
   statusLabel: (status) => status || 'Unknown',
 }));
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 vi.mock('@/windows/custom/shared/InvoicePaymentModal.jsx', () => ({
   default: (props) => (
     <div
@@ -33,6 +37,17 @@ vi.mock('@/windows/custom/shared/InvoicePaymentModal.jsx', () => ({
       data-has-token={Object.prototype.hasOwnProperty.call(props, 'token') ? 'true' : 'false'}
     >
       Payment Modal
+    </div>
+  ),
+}));
+
+vi.mock('@/windows/custom/shared/NewPaymentEntryModal.jsx', () => ({
+  default: (props) => (
+    <div
+      data-testid="new-payment-entry-modal"
+      data-has-token={Object.prototype.hasOwnProperty.call(props, 'token') ? 'true' : 'false'}
+    >
+      New Payment Entry Modal
     </div>
   ),
 }));
@@ -114,23 +129,27 @@ vi.mock('@/components/ui/button.jsx', () => ({
   ),
 }));
 
-vi.mock('lucide-react', () => ({
-  X: () => <span data-testid="icon-x" />,
-  Upload: () => <span />,
-  Edit2: () => <span />,
-  FileText: () => <span />,
-  Image: () => <span />,
-  Plus: () => <span />,
-  Check: () => <span />,
-  Trash2: () => <span />,
-  Loader2: () => <span />,
-  AlertCircle: () => <span />,
-  Mail: () => <span />,
-  Download: () => <span />,
-  Ban: () => <span />,
-  Wallet: () => <span />,
-  MoreVertical: () => <span />,
-}));
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    X: () => <span data-testid="icon-x" />,
+    Upload: () => <span />,
+    Edit2: () => <span />,
+    FileText: () => <span />,
+    Image: () => <span />,
+    Plus: () => <span />,
+    Check: () => <span />,
+    Trash2: () => <span />,
+    Loader2: () => <span />,
+    AlertCircle: () => <span />,
+    Mail: () => <span />,
+    Download: () => <span />,
+    Ban: () => <span />,
+    Wallet: () => <span />,
+    MoreVertical: () => <span />,
+  };
+});
 
 // --- Import under test ----------------------------------------------------
 
@@ -240,7 +259,7 @@ describe('InvoicePreviewModal', () => {
   it('opens the payment modal without passing a token prop', () => {
     renderPreview();
     fireEvent.click(screen.getAllByText('invoicePreviewAddPayment')[0]);
-    expect(screen.getByTestId('payment-modal')).toHaveAttribute('data-has-token', 'false');
+    expect(screen.getByTestId('new-payment-entry-modal')).toHaveAttribute('data-has-token', 'false');
   });
 
   it('shows Send to SIF in the preview actions when the fiscal profile enables it', () => {

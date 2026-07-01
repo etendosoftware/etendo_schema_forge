@@ -56,6 +56,6 @@ export default function WindowLoader({ windowMap, apiBaseUrl }) {
       window={windowMap[windowName]}
       windowName={windowName}
       recordId={recordId}
-    />
+      data-testid="Component__f59d7c" />
   );
 }

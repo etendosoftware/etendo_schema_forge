@@ -25,13 +25,13 @@ function TypeBadge({ row, t }) {
   if (isCust && isVend) {
     return (
       <span className="inline-flex items-center gap-1">
-        <Tag variant="purple" label={t('Customer')} />
-        <Tag variant="blue" label={t('Vendor')} />
+        <Tag variant="purple" label={t('Customer')} data-testid="Tag__5c74a8" />
+        <Tag variant="blue" label={t('Vendor')} data-testid="Tag__5c74a8" />
       </span>
     );
   }
-  if (isCust) return <Tag variant="purple" label={t('Customer')} />;
-  if (isVend) return <Tag variant="blue" label={t('Vendor')} />;
+  if (isCust) return <Tag variant="purple" label={t('Customer')} data-testid="Tag__5c74a8" />;
+  if (isVend) return <Tag variant="blue" label={t('Vendor')} data-testid="Tag__5c74a8" />;
   return '—';
 }
 
@@ -103,24 +103,36 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
       {
         key: 'name', column: 'Name', type: 'string', label: t('commercialName'),
         render: (row) => (isEditing(row) && !isPersonRow(row))
-          ? <EditableCell value={editingRow.values.name ?? ''} onChange={(v) => handleEditChange('name', v)} onKeyDown={handleKeyDown} />
+          ? <EditableCell
+          value={editingRow.values.name ?? ''}
+          onChange={(v) => handleEditChange('name', v)}
+          onKeyDown={handleKeyDown}
+          data-testid="EditableCell__5c74a8" />
           : (row.name ?? '—'),
       },
       {
         key: 'etgoFirstname', column: 'EM_Etgo_Firstname', type: 'string', label: t('firstNameColumn'),
         render: (row) => (isEditing(row) && isPersonRow(row))
-          ? <EditableCell value={editingRow.values.etgoFirstname ?? ''} onChange={(v) => handleEditChange('etgoFirstname', v)} onKeyDown={handleKeyDown} />
+          ? <EditableCell
+          value={editingRow.values.etgoFirstname ?? ''}
+          onChange={(v) => handleEditChange('etgoFirstname', v)}
+          onKeyDown={handleKeyDown}
+          data-testid="EditableCell__5c74a8" />
           : (row.etgoFirstname ?? '—'),
       },
       {
         key: 'etgoLastname', column: 'EM_Etgo_Lastname', type: 'string', label: t('lastNameColumn'),
         render: (row) => (isEditing(row) && isPersonRow(row))
-          ? <EditableCell value={editingRow.values.etgoLastname ?? ''} onChange={(v) => handleEditChange('etgoLastname', v)} onKeyDown={handleKeyDown} />
+          ? <EditableCell
+          value={editingRow.values.etgoLastname ?? ''}
+          onChange={(v) => handleEditChange('etgoLastname', v)}
+          onKeyDown={handleKeyDown}
+          data-testid="EditableCell__5c74a8" />
           : (row.etgoLastname ?? '—'),
       },
       {
         key: '__type', type: 'string', label: t('typeColumn'), sortable: false, filterable: false,
-        render: (row) => <TypeBadge row={row} t={t} />,
+        render: (row) => <TypeBadge row={row} t={t} data-testid="TypeBadge__5c74a8" />,
       },
       {
         key: 'eTGOLocation', column: 'EM_Etgo_Location', type: 'string', label: t('locationColumn'),
@@ -129,19 +141,31 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
       {
         key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', label: t('webColumn'),
         render: (row) => isEditing(row)
-          ? <EditableCell value={editingRow.values.etgoWeb ?? ''} onChange={(v) => handleEditChange('etgoWeb', v)} onKeyDown={handleKeyDown} />
+          ? <EditableCell
+          value={editingRow.values.etgoWeb ?? ''}
+          onChange={(v) => handleEditChange('etgoWeb', v)}
+          onKeyDown={handleKeyDown}
+          data-testid="EditableCell__5c74a8" />
           : (row.etgoWeb ?? '—'),
       },
       {
         key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'string', label: t('emailColumn'),
         render: (row) => isEditing(row)
-          ? <EditableCell value={editingRow.values.etgoEmail ?? ''} onChange={(v) => handleEditChange('etgoEmail', v)} onKeyDown={handleKeyDown} />
+          ? <EditableCell
+          value={editingRow.values.etgoEmail ?? ''}
+          onChange={(v) => handleEditChange('etgoEmail', v)}
+          onKeyDown={handleKeyDown}
+          data-testid="EditableCell__5c74a8" />
           : (row.etgoEmail ?? '—'),
       },
       {
         key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string', label: t('phoneColumn'),
         render: (row) => isEditing(row)
-          ? <EditableCell value={editingRow.values.etgoPhone ?? ''} onChange={(v) => handleEditChange('etgoPhone', v)} onKeyDown={handleKeyDown} />
+          ? <EditableCell
+          value={editingRow.values.etgoPhone ?? ''}
+          onChange={(v) => handleEditChange('etgoPhone', v)}
+          onKeyDown={handleKeyDown}
+          data-testid="EditableCell__5c74a8" />
           : (row.etgoPhone ?? '—'),
       },
       // Hidden virtual column — appears in conditional filter panel as "Tipo" with
@@ -218,19 +242,29 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
         onSaveRow={handleSave}
         onCancelEdit={handleCancelEdit}
         {...rest}
-      />
-
-      <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => { if (!open) cancelDelete(); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{ui('deleteConfirmTitle')}</DialogTitle>
-            <DialogDescription>{ui('deleteConfirmMessage')}</DialogDescription>
+        data-testid="DataTable__5c74a8" />
+      <Dialog
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => { if (!open) cancelDelete(); }}
+        data-testid="Dialog__5c74a8">
+        <DialogContent className="max-w-sm" data-testid="DialogContent__5c74a8">
+          <DialogHeader data-testid="DialogHeader__5c74a8">
+            <DialogTitle data-testid="DialogTitle__5c74a8">{ui('deleteConfirmTitle')}</DialogTitle>
+            <DialogDescription data-testid="DialogDescription__5c74a8">{ui('deleteConfirmMessage')}</DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={cancelDelete}>
+          <DialogFooter data-testid="DialogFooter__5c74a8">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cancelDelete}
+              data-testid="Button__5c74a8">
               {ui('cancel')}
             </Button>
-            <Button variant="destructive" size="sm" onClick={confirmDelete}>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={confirmDelete}
+              data-testid="Button__5c74a8">
               {ui('delete')}
             </Button>
           </DialogFooter>

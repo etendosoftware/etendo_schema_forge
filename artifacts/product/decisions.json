@@ -8,13 +8,37 @@
     "sidebarLayout": true,
     "hidePrint": true,
     "hideMoreMenu": true,
-    "contentBg": "bg-slate-50",
+    "hideLink": true,
+    "contentBg": "bg-white",
+    "listbarPaddingX": "px-2",
+    "tablePaddingX": "px-2",
+    "formCardPadding": "px-2",
+    "compactSidebarPadding": true,
+    "tabsBarPaddingX": "px-2",
+    "primaryTabsVariant": "pill",
+    "toolbarPaddingX": "px-2",
+    "toolbarBorderBottom": true,
+    "autoSaveOnBlur": true,
+    "noHeaderBorder": true,
+    "whiteFormBackground": true,
+    "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]",
     "attachments": true,
     "customTabsAfterBottom": true,
     "detailEntity": null,
-    "headerExtra": {
-      "customForm": "ProductPriceBar"
+    "customPanelTabs": [
+      { "key": "pricing", "labelKey": "price", "component": "ProductPriceBar" }
+    ],
+    "labelOverrides": {
+      "en_US": {
+        "M_Product_Category_ID": "Category",
+        "ProductType": "Type"
+      },
+      "es_ES": {
+        "M_Product_Category_ID": "Categoría",
+        "ProductType": "Tipo"
+      }
     },
+    "headerExtra": {},
     "primaryTabs": [
       { "key": "general", "label": "General" },
       { "key": "additionalInfo", "label": "Additional Info", "panel": "ProductAdditionalInfoPanel" }
@@ -24,6 +48,7 @@
   "entities": {
     "intrastat": { "exclude": true },
     "product": {
+      "formCols": 3,
       "fields": {
         "searchKey": {
           "grid": true,
@@ -40,7 +65,8 @@
         "description": {
           "type": "textarea",
           "section": "principal",
-          "seq": 3
+          "seq": 6,
+          "span": 3
         },
         "productType": {
           "grid": true,
@@ -49,7 +75,7 @@
           "inputMode": "selector",
           "section": "principal",
           "displayLogic": null,
-          "seq": 4,
+          "seq": 3,
           "enumVariants": {
             "I": "blue",
             "S": "purple",
@@ -62,15 +88,18 @@
           "searchable": true,
           "reference": "ProductCategory",
           "section": "principal",
-          "seq": 5
+          "seq": 4
         },
         "uOM": {
           "grid": true,
           "section": "principal",
-          "seq": 6
+          "seq": 5,
+          "inputMode": "search",
+          "clearable": false
         },
         "image": {
           "type": "image",
+          "inline": false,
           "section": "principal",
           "seq": 7
         },

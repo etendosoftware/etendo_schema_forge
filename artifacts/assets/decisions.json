@@ -17,7 +17,9 @@
     "toolbarPaddingX": "px-2",
     "toolbarButtonSize": "default",
     "sidebarAboveTabsOnly": true,
+    "tabsSeparator": true,
     "sidebarClassName": "w-[30%] shrink-0 border-l border-[#E8EAEF] p-2",
+    "formScrollPaddingX": "px-2",
     "hideListFilters": false,
     "hideLink": true,
     "hideEyeCount": true,
@@ -82,6 +84,7 @@
   },
   "entities": {
     "assets": {
+      "javaQualifier": "assetsHandler",
       "fields": {
         "searchKey": {
           "searchable": true,
@@ -97,7 +100,8 @@
           "searchable": true,
           "inputMode": "selector",
           "reference": "AssetGroup",
-          "form": false
+          "form": false,
+          "businessCritical": true
         },
         "documentNo": {
           "visibility": "discarded",
@@ -121,27 +125,33 @@
         },
         "depreciationType": {
           "form": false,
-          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
+          "businessCritical": true
         },
         "calculateType": {
           "form": false,
-          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
+          "businessCritical": true
         },
         "annualDepreciation": {
           "form": false,
-          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType !== 'TI'"
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType !== 'TI'",
+          "businessCritical": true
         },
         "amortize": {
           "form": false,
-          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'",
+          "businessCritical": true
         },
         "usableLifeYears": {
           "form": false,
-          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize === 'YE'"
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize === 'YE'",
+          "businessCritical": true
         },
         "usableLifeMonths": {
           "form": false,
-          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize !== 'YE'"
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI' && record.amortize !== 'YE'",
+          "businessCritical": true
         },
         "everyMonthIs30Days": {
           "visibility": "editable",
@@ -152,6 +162,7 @@
         "purchaseDate": {
           "grid": true,
           "form": false,
+          "dot": false,
           "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
         },
         "cancellationDate": {
@@ -162,7 +173,8 @@
           "grid": true,
           "form": false,
           "dot": false,
-          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
+          "businessCritical": true
         },
         "depreciationEndDate": {
           "form": false,
@@ -172,22 +184,26 @@
           "grid": true,
           "summable": true,
           "form": false,
-          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
+          "businessCritical": true
         },
         "residualAssetValue": {
           "form": false,
-          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
+          "businessCritical": true
         },
         "depreciationAmt": {
           "grid": true,
           "gridOrder": 6,
           "summable": true,
           "form": false,
-          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
+          "businessCritical": true
         },
         "previouslyDepreciatedAmt": {
           "form": false,
-          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'",
+          "businessCritical": true
         },
         "depreciatedValue": {
           "grid": true,

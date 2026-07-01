@@ -166,8 +166,11 @@ Adds actions to the triple-dot menu in the detail view. Visibility can be gated 
 | `documentAction` | string | If set, invokes the standard DocAction endpoint with this value (`"RE"`, `"CO"`, `"VO"`, …) via the shared `useDocumentAction` hook. After success, the record is refreshed and `successMessage` (or a generic label) is shown inline. Errors from the backend are surfaced inline as well. |
 | `successMessage` | string | Text shown in the success banner after a `documentAction` resolves. |
 | `columnName` | string | Fires `hook.handleProcess(columnName)`. Use for AD process buttons that aren't DocAction-based. |
+| `component` | string | Imports a custom component from `windows/custom/{window}/` and opens it as a detail-menu modal. The component receives `currentRecord`, `token`, `apiBaseUrl`, `onClose`, and `onSaved`. |
 
-Handler precedence: `documentAction` > `columnName` > empty placeholder `onClick`. Declare `documentAction` for any DocAction-style action (Reactivate, Void, Close, etc.) — the generator wires the full fetch + error flow automatically.
+Handler precedence: `documentAction` > `columnName` > `action` > `component` > empty placeholder `onClick`. Declare `documentAction` for any DocAction-style action (Reactivate, Void, Close, etc.) — the generator wires the full fetch + error flow automatically.
+
+**The ⋮ button auto-hides when empty.** `DetailView` only renders the "more" button when, for the current record state, there is at least one visible `menuActions` entry **or** a `customComponents.moreMenuContent` is set. If every action is gated out (e.g. all `visibleWhenStatus: "CO"` while the document is in Draft), the button is not shown at all — it never renders as an empty, clickable dropdown.
 
 **Real examples:** `goods-shipment` (cancel), `payment-in` (reverse via `columnName`), `sales-invoice` (duplicate, cancel), `sales-order` (reactivate via `documentAction: "RE"`).
 
@@ -196,6 +199,32 @@ Switches the entire page to a different layout type.
 See `docs/window-templates.md` for full `templateConfig` reference.
 
 **Real examples:** `product` (gallery), many kanban/calendar windows.
+
+---
+
+### 6b. `window.agentPrompt` / field `agentPrompt` — AI agent guidance
+
+Not a UI feature — guidance text returned to AI agents that consume the NEO Headless MCP server. Declared at two levels and surfaced in different MCP tools:
+
+```json
+"window": {
+  "agentPrompt": "Always confirm with the user before completing a purchase order."
+},
+"entities": {
+  "header": {
+    "fields": {
+      "warehouse": { "agentPrompt": "Pick the warehouse closest to the customer." }
+    }
+  }
+}
+```
+
+| Level | decisions key | Persisted to | Returned by |
+|-------|---------------|--------------|-------------|
+| Spec | `window.agentPrompt` | `ETGO_SF_SPEC.AGENT_PROMPT` | `neo_discover` (per spec) |
+| Field | `entities.{e}.fields.{f}.agentPrompt` | `ETGO_SF_FIELD.AGENT_PROMPT` | `neo_schema` (per field) |
+
+`push-to-neo` reads these straight from `decisions.json` (like `defaultExpr`) and writes the DB columns; the value is also mirrored into `contract.mcp.json → agentProfile.agentPrompt` for inspection. Omitted from the MCP response when empty. See `docs/decisions-reference.md`.
 
 ---
 
@@ -486,6 +515,34 @@ Default: `"classic"`. Validator F12 enforces the enum (`"classic"` | `"inlineEdi
 - `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` — owns rendering of the table block (header strip + rows + hover-action strip).
 
 **Real example:** `sales-quotation` (pilot — the first window to ship the new layout).
+
+---
+
+### 15. `window.balanceFooter` — debit/credit balance footer
+
+**What it does:** replaces the product/discount/tax totals panel with a `BalanceFooterPanel` for double-entry windows. It shows **Σ debit**, **Σ credit**, the **difference**, and a **balanced ✓ / unbalanced ✗** badge, and **disables the Save button** (with a tooltip) only when the entry is **unbalanced** (`Σ debit ≠ Σ credit`). An empty/zero entry is balanced and savable as a draft; the badge stays hidden until the lines carry amounts.
+
+**When to use:** manual journals and any double-entry document where lines carry separate debit and credit amount columns that must balance before saving.
+
+**`decisions.json`:**
+```json
+{
+  "window": {
+    "balanceFooter": { "debitField": "amtSourceDr", "creditField": "amtSourceCr" }
+  }
+}
+```
+
+Both `debitField` and `creditField` must be amount-typed fields on the **lines** entity. Validator **F17** enforces their existence.
+
+**How it threads through the pipeline:**
+- `cli/src/resolve-curated.js` — added to `WINDOW_TRUTHY_PROPS` (auto-passes through).
+- `cli/src/generate-contract.js` — copied into `frontendContract.window.balanceFooter`.
+- `cli/src/generate-frontend.js` — emits `balanceFooter={...}` on `<DetailView>` when present.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — renders `BalanceFooterPanel` instead of `DocumentTotalsPanel` and gates the Save buttons via `blockSaveForBalance`.
+- `tools/app-shell/src/lib/balanceTotals.js` / `BalanceFooterPanel.jsx` — pure aggregation + rendering.
+
+**Real example:** `simple-g-l-journal` (Manual Journals — the first window to ship the balance footer).
 
 ---
 

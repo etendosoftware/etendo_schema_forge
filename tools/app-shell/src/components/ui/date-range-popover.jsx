@@ -107,7 +107,7 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
               )}
             >
               <span className="flex-1">{preset.label}</span>
-              {active ? <Check className="mr-3 h-4 w-4 shrink-0" /> : null}
+              {active ? <Check className="mr-3 h-4 w-4 shrink-0" data-testid="Check__482ed1" /> : null}
             </button>
           );
         })}
@@ -120,10 +120,9 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
           )}
         >
           <span className="flex-1">{ui('dateRangeCustom')}</span>
-          {customMode ? <Check className="mr-3 h-4 w-4 shrink-0" /> : null}
+          {customMode ? <Check className="mr-3 h-4 w-4 shrink-0" data-testid="Check__482ed1" /> : null}
         </button>
       </div>
-
       {/* Calendars + footer */}
       <div className="flex flex-col">
         <div className="flex border-b border-[#E8EAEF]">
@@ -134,7 +133,7 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
             onSelect={(d) => { setFromDate(d || null); setCustomMode(true); }}
             modifiers={inRangeModifier ? { inRange: inRangeModifier } : undefined}
             modifiersClassNames={{ inRange: 'bg-[#F5F7F9] [&>button]:rounded-none' }}
-          />
+            data-testid="CalendarWithPicker__482ed1" />
           <div className="border-l border-[#E8EAEF]" />
           <CalendarWithPicker
             month={rightMonth}
@@ -143,7 +142,7 @@ export function DateRangePopoverContent({ value, onChange, onClose }) {
             onSelect={(d) => { setToDate(d || null); setCustomMode(true); }}
             modifiers={inRangeModifier ? { inRange: inRangeModifier } : undefined}
             modifiersClassNames={{ inRange: 'bg-[#F5F7F9] [&>button]:rounded-none' }}
-          />
+            data-testid="CalendarWithPicker__482ed1" />
         </div>
         <div className="flex h-16 items-center justify-between gap-2 px-5 py-3">
           <span className="text-sm font-medium text-[#3F3F50]">{rangeSummary}</span>
@@ -192,23 +191,27 @@ export function DateRangePopover({ value, onChange, placeholder }) {
   const triggerLabel = computeTriggerLabel(value, placeholder, ui, bcpLocale);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen} data-testid="Popover__482ed1">
+      <PopoverTrigger asChild data-testid="PopoverTrigger__482ed1">
         <button
           type="button"
-          className="inline-flex h-10 items-center justify-between gap-1 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm font-medium leading-6 text-[#121217] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9]"
+          className="inline-flex h-9 items-center justify-between gap-1.5 rounded-lg border border-border bg-white px-3 text-sm font-normal leading-6 text-muted-foreground transition-colors hover:bg-[#F5F7F9]"
         >
-          <CalendarDays className="h-4 w-4 shrink-0 text-[#828FA3]" />
+          <CalendarDays
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+            data-testid="CalendarDays__482ed1" />
           <span className="mx-1 truncate text-left">{triggerLabel}</span>
-          <ChevronDown className="h-5 w-5 shrink-0 text-[#828FA3]" />
+          <ChevronDown
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+            data-testid="ChevronDown__482ed1" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-0">
+      <PopoverContent align="start" className="w-auto p-0" data-testid="PopoverContent__482ed1">
         <DateRangePopoverContent
           value={value}
           onChange={onChange}
           onClose={() => setOpen(false)}
-        />
+          data-testid="DateRangePopoverContent__482ed1" />
       </PopoverContent>
     </Popover>
   );
@@ -331,18 +334,26 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
           className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium capitalize text-[#121217] hover:bg-[rgba(18,18,23,0.05)]"
         >
           <span>{headerLabel}</span>
-          <ChevronDown className="h-3.5 w-3.5 text-[#6B7280]" aria-hidden="true" />
+          <ChevronDown
+            className="h-3.5 w-3.5 text-[#6B7280]"
+            aria-hidden="true"
+            data-testid="ChevronDown__482ed1" />
         </button>
         <div className="flex items-center gap-2">
-          <FilterNavBtn onClick={navPrev}>
-            <ChevronLeft className="h-4 w-4 text-[#828FA3]" aria-hidden="true" />
+          <FilterNavBtn onClick={navPrev} data-testid="FilterNavBtn__482ed1">
+            <ChevronLeft
+              className="h-4 w-4 text-[#828FA3]"
+              aria-hidden="true"
+              data-testid="ChevronLeft__482ed1" />
           </FilterNavBtn>
-          <FilterNavBtn onClick={navNext}>
-            <ChevronRight className="h-4 w-4 text-[#828FA3]" aria-hidden="true" />
+          <FilterNavBtn onClick={navNext} data-testid="FilterNavBtn__482ed1">
+            <ChevronRight
+              className="h-4 w-4 text-[#828FA3]"
+              aria-hidden="true"
+              data-testid="ChevronRight__482ed1" />
           </FilterNavBtn>
         </div>
       </div>
-
       <div className="min-h-[244px]">
         {view === 'calendar' ? (
           <Calendar
@@ -361,7 +372,7 @@ function CalendarWithPicker({ month, onMonthChange, selected, onSelect, modifier
               week: 'flex justify-center',
               weekdays: 'flex justify-center py-2',
             }}
-          />
+            data-testid="Calendar__482ed1" />
         ) : (
           <div className="space-y-2 px-2 pt-1">
             <div className="flex h-10 gap-1 rounded-xl bg-[#F5F7F9] p-1">

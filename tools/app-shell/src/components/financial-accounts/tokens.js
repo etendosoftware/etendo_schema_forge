@@ -44,7 +44,7 @@ export const RADII = {
 export const ACCOUNT_TYPE = {
   BANK: 'B',
   CASH: 'C',
-  CARD: 'T',
+  CARD: 'CA',
 };
 
 export const ACCOUNT_TYPE_ORDER = [ACCOUNT_TYPE.BANK, ACCOUNT_TYPE.CASH, ACCOUNT_TYPE.CARD];
@@ -58,12 +58,14 @@ export const MOVEMENT_STATUS_FAMILY = {
   CLEARED: 'cleared',
   IN_TRANSIT: 'inTransit',
   EXECUTED: 'executed',
+  UNRECONCILED: 'unreconciled',
 };
 
 export const MOVEMENT_STATUS_TONE = {
-  pending:   { bg: '#FFF7E0', text: '#7A5A00', border: '#FAAF00' },
-  voided:    { bg: '#F5F7F9', text: '#6C6C89', border: '#D1D4DB' },
-  cleared:   { bg: '#EEFBF4', text: '#17663A', border: '#26A95F' },
-  inTransit: { bg: '#FFF1D6', text: '#8C5A00', border: '#E68A00' },
-  executed:  { bg: '#EFEAFE', text: '#3D2D8E', border: '#7047EB' },
+  pending:      { bg: '#FFF7E0', text: '#7A5A00', border: '#FAAF00' },
+  voided:       { bg: '#F5F7F9', text: '#6C6C89', border: '#D1D4DB' },
+  cleared:      { bg: '#EEFBF4', text: '#17663A', border: '#26A95F' },
+  inTransit:    { bg: '#FFF1D6', text: '#8C5A00', border: '#E68A00' },
+  executed:     { bg: '#EFEAFE', text: '#3D2D8E', border: '#7047EB' },
+  unreconciled: { bg: '#F5F7F9', text: '#6C6C89', border: '#D1D4DB' },
 };

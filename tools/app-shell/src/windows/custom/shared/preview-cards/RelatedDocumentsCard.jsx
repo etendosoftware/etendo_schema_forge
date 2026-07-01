@@ -79,7 +79,7 @@ function DocRow({ type, doc, ui, navigate }) {
         )}
       </div>
       {statusCode && (
-        <StatusTag status={statusCode} label={statusLabel} />
+        <StatusTag status={statusCode} label={statusLabel} data-testid="StatusTag__685328" />
       )}
     </button>
   );
@@ -140,19 +140,25 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
       title={ui('previewCardRelatedDocuments')}
       onRefresh={handleRefresh}
       isRefreshing={isRefreshing || loading}
-    >
+      data-testid="SectionCard__685328">
       {loading && (
         <>
-          <SkeletonRow />
-          <SkeletonRow />
-          <SkeletonRow />
+          <SkeletonRow data-testid="SkeletonRow__685328" />
+          <SkeletonRow data-testid="SkeletonRow__685328" />
+          <SkeletonRow data-testid="SkeletonRow__685328" />
         </>
       )}
       {!loading && items.length === 0 && (
         <p className="text-xs text-muted-foreground/50 py-2">{ui('noRelatedDocuments')}</p>
       )}
       {!loading && items.length > 0 && items.map(({ type, doc }) => (
-        <DocRow key={`${type}-${doc.id}`} type={type} doc={doc} ui={ui} navigate={navigate} />
+        <DocRow
+          key={`${type}-${doc.id}`}
+          type={type}
+          doc={doc}
+          ui={ui}
+          navigate={navigate}
+          data-testid="DocRow__685328" />
       ))}
     </SectionCard>
   );

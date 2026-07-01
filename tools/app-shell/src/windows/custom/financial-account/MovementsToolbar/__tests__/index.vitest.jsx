@@ -69,7 +69,11 @@ describe('MovementsToolbar', () => {
 
   it('renders the back button, filter triggers, search and new-movement button', () => {
     render(
-      <MovementsToolbar filters={defaultFilters} onFiltersChange={() => () => {}} />,
+      <MovementsToolbar
+        filters={defaultFilters}
+        onFiltersChange={() => () => {}}
+        onAdvancedFilterChange={() => {}}
+      />,
     );
 
     expect(screen.getByTestId('movements-toolbar-back')).toBeInTheDocument();
@@ -77,10 +81,11 @@ describe('MovementsToolbar', () => {
     expect(screen.getByTestId('type-filter')).toBeInTheDocument();
     expect(screen.getByTestId('movements-advanced-filter')).toBeInTheDocument();
     expect(screen.getByTestId('movements-search-input')).toBeInTheDocument();
-    expect(screen.getByTestId('new-movement-button')).toBeInTheDocument();
+    // Manual movement creation is feature-flagged off in this release.
+    expect(screen.queryByTestId('new-movement-button')).not.toBeInTheDocument();
   });
 
-  it('renders search input and new-movement button using i18n keys', () => {
+  it('renders the search input using i18n keys', () => {
     render(
       <MovementsToolbar filters={defaultFilters} onFiltersChange={() => () => {}} />,
     );
@@ -88,10 +93,6 @@ describe('MovementsToolbar', () => {
     const searchInput = screen.getByTestId('movements-search-input');
     expect(searchInput).toBeInTheDocument();
     expect(searchInput).toHaveAttribute('placeholder', 'financeAccountMovementsSearch');
-
-    expect(
-      screen.getByRole('button', { name: 'financeAccountMovementsNew' }),
-    ).toBeInTheDocument();
   });
 
   it('navigates back when back button is clicked', async () => {
@@ -125,20 +126,23 @@ describe('MovementsToolbar', () => {
     expect(lastCall[0]).toBe('c');
   });
 
-  it('invokes onNewMovement when the new-movement button is clicked', async () => {
+  it('renders the Transfer funds button (in the former New-movement slot) and fires onTransfer', async () => {
     const user = userEvent.setup();
-    const onNewMovement = vi.fn();
+    const onTransfer = vi.fn();
     render(
       <MovementsToolbar
         filters={defaultFilters}
         onFiltersChange={() => () => {}}
-        onNewMovement={onNewMovement}
+        onTransfer={onTransfer}
       />,
     );
 
-    await user.click(screen.getByTestId('new-movement-button'));
-
-    expect(onNewMovement).toHaveBeenCalledTimes(1);
+    // The feature-flagged "New movement" button is gone; its slot now holds Transfer funds.
+    expect(screen.queryByTestId('new-movement-button')).not.toBeInTheDocument();
+    const btn = screen.getByTestId('transfer-funds-button');
+    expect(btn).toBeInTheDocument();
+    await user.click(btn);
+    expect(onTransfer).toHaveBeenCalledTimes(1);
   });
 
   it('passes the active filter values to child filter components', () => {
@@ -180,6 +184,7 @@ describe('MovementsToolbar', () => {
       <MovementsToolbar
         filters={defaultFilters}
         onFiltersChange={() => () => {}}
+        onAdvancedFilterChange={() => {}}
         advancedFilter={advancedFilter}
       />,
     );
@@ -193,6 +198,7 @@ describe('MovementsToolbar', () => {
       <MovementsToolbar
         filters={defaultFilters}
         onFiltersChange={() => () => {}}
+        onAdvancedFilterChange={() => {}}
         advancedFilter={{ rowOperator: 'and', conditions: [] }}
       />,
     );
@@ -206,6 +212,7 @@ describe('MovementsToolbar', () => {
       <MovementsToolbar
         filters={defaultFilters}
         onFiltersChange={() => () => {}}
+        onAdvancedFilterChange={() => {}}
         advancedFilter={null}
       />,
     );

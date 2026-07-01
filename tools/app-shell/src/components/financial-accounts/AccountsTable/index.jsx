@@ -3,6 +3,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useUI } from '@/i18n';
 import { AccountsTableHeader } from './AccountsTableHeader.jsx';
 import { AccountRow } from './AccountRow.jsx';
+import { ACCOUNT_COLUMNS, ACCOUNT_CELL_RENDERERS } from './accountColumns.jsx';
+
+// Total column count = contract data columns + Pending + menu, used for the
+// empty/error colSpan so it always matches the (possibly reconfigured) header.
+const TOTAL_COL_COUNT = ACCOUNT_COLUMNS.length + 2;
 
 const SKELETON_ROW_KEYS = [
   'skeleton-row-1',
@@ -15,31 +20,19 @@ const SKELETON_ROW_KEYS = [
 function LoadingRows() {
   return (
     <>
-      {SKELETON_ROW_KEYS.map((key) => (
-        <TableRow key={key} className="h-16">
-          <TableCell className="w-[336px] p-0">
-            <div className="flex items-center">
-              <div className="w-[44px]" />
-              <Skeleton className="h-8 w-8 rounded-full" />
-              <div className="flex flex-1 flex-col gap-1 px-3">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-24" />
-              </div>
-            </div>
+      {SKELETON_ROW_KEYS.map((rowKey) => (
+        <TableRow key={rowKey} className="h-16" data-testid="TableRow__db8970">
+          {ACCOUNT_COLUMNS.map((col) => {
+            const renderer = ACCOUNT_CELL_RENDERERS[col.name];
+            const cellKey = `${rowKey}-${col.name}`;
+            return renderer
+              ? renderer.renderSkeleton(cellKey)
+              : <TableCell key={cellKey} data-testid="TableCell__db8970"><Skeleton className="h-4 w-full" data-testid="Skeleton__db8970" /></TableCell>;
+          })}
+          <TableCell className="w-[280px]" data-testid="TableCell__db8970">
+            <Skeleton className="h-5 w-24 rounded-full" data-testid="Skeleton__db8970" />
           </TableCell>
-          <TableCell className="w-[340px]">
-            <div className="flex flex-col gap-1">
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-3 w-40" />
-            </div>
-          </TableCell>
-          <TableCell className="w-[200px] text-right">
-            <Skeleton className="ml-auto h-4 w-24" />
-          </TableCell>
-          <TableCell className="w-[280px]">
-            <Skeleton className="h-5 w-24 rounded-full" />
-          </TableCell>
-          <TableCell className="min-w-[90px]" />
+          <TableCell className="min-w-[90px]" data-testid="TableCell__db8970" />
         </TableRow>
       ))}
     </>
@@ -48,8 +41,11 @@ function LoadingRows() {
 
 function EmptyState({ message }) {
   return (
-    <TableRow>
-      <TableCell colSpan={5} className="py-12 text-center text-sm text-[#6c6c89]">
+    <TableRow data-testid="TableRow__db8970">
+      <TableCell
+        colSpan={TOTAL_COL_COUNT}
+        className="py-12 text-center text-sm text-[#6c6c89]"
+        data-testid="TableCell__db8970">
         {message}
       </TableCell>
     </TableRow>
@@ -58,8 +54,11 @@ function EmptyState({ message }) {
 
 function ErrorState({ message, onRetry, retryLabel }) {
   return (
-    <TableRow>
-      <TableCell colSpan={5} className="py-12 text-center">
+    <TableRow data-testid="TableRow__db8970">
+      <TableCell
+        colSpan={TOTAL_COL_COUNT}
+        className="py-12 text-center"
+        data-testid="TableCell__db8970">
         <p className="text-sm text-[#d50b3e]">{message}</p>
         {onRetry ? (
           <button
@@ -83,6 +82,8 @@ export function AccountsTable({
   onReconcile,
   onEdit,
   onArchive,
+  onPsd2Action,
+  onTransfer,
   onRetry,
 }) {
   const ui = useUI();
@@ -90,7 +91,7 @@ export function AccountsTable({
 
   const renderBody = () => {
     if (loading) {
-      return <LoadingRows />;
+      return <LoadingRows data-testid="LoadingRows__db8970" />;
     }
     if (error) {
       return (
@@ -98,11 +99,11 @@ export function AccountsTable({
           message={ui('financeAccountsLoadError')}
           onRetry={onRetry}
           retryLabel={ui('financeAccountsRetry')}
-        />
+          data-testid="ErrorState__db8970" />
       );
     }
     if (rowCount === 0) {
-      return <EmptyState message={ui('financeAccountsEmpty')} />;
+      return <EmptyState message={ui('financeAccountsEmpty')} data-testid="EmptyState__db8970" />;
     }
     return accounts.map((account) => (
       <AccountRow
@@ -112,15 +113,19 @@ export function AccountsTable({
         onReconcile={onReconcile}
         onEdit={onEdit}
         onArchive={onArchive}
-      />
+        onPsd2Action={onPsd2Action}
+        onTransfer={onTransfer}
+        data-testid="AccountRow__db8970" />
     ));
   };
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-white [&>div]:overflow-visible">
-      <Table>
-        <AccountsTableHeader />
-        <TableBody className="[&_tr:last-child]:border-b [&_tr:last-child]:border-[#E8EAEF]">
+      <Table data-testid="Table__db8970">
+        <AccountsTableHeader data-testid="AccountsTableHeader__db8970" />
+        <TableBody
+          className="[&_tr:last-child]:border-b [&_tr:last-child]:border-[#E8EAEF]"
+          data-testid="TableBody__db8970">
           {renderBody()}
         </TableBody>
       </Table>

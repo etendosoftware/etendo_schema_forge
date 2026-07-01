@@ -4,10 +4,9 @@ import { EntityForm } from '@/components/contract-ui';
 const fields = [
   { key: 'searchKey', column: 'Value', type: 'text', label: 'Search Key', required: true, section: 'principal' },
   { key: 'name', column: 'Name', type: 'text', label: 'Name', required: true, section: 'principal' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal', span: 2, rows: 1 },
   { key: 'default', column: 'IsDefault', type: 'checkbox', label: 'Default', required: true, section: 'principal' },
   { key: 'summaryLevel', column: 'Issummary', type: 'checkbox', label: 'Summary Level', required: true, section: 'principal' },
-  { key: 'image', column: 'AD_Image_ID', type: 'image', label: 'Image', section: 'other' },
 ];
 // @sf-generated-end fields:productCategory
 

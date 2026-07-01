@@ -6,7 +6,7 @@ import InvoiceLinesTable from '../shared/InvoiceLinesTable.jsx';
 // InlineLinesPanel so hover row actions (pencil, trash) and the inline edit flow
 // work. The add-line path keeps using DataTable for its proven InlineAddRow.
 const SalesInvoiceLinesTable = forwardRef(function SalesInvoiceLinesTable(props, ref) {
-  return <InvoiceLinesTable ref={ref} {...props} />;
+  return <InvoiceLinesTable ref={ref} {...props} data-testid="InvoiceLinesTable__794381" />;
 });
 
 export default SalesInvoiceLinesTable;

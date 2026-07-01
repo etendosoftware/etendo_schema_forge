@@ -56,7 +56,8 @@ const SUMMARY = {
 
 /**
  * Movements mock: mix of trxType BPD/BPW and varied paymentStatus codes so
- * the Type and Status filter assertions are meaningful. Labels reflect the
+ * the Type filter assertion is meaningful (status is now filtered via the
+ * generic "Filtro por condicionales"). Labels reflect the
  * 5 user-facing status families introduced in ETP-4121.
  *   - tx-1: BPD / RPPC   (Cobro / Conciliado)
  *   - tx-2: BPW / RPAP   (Pago / Borrador)
@@ -241,31 +242,12 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
     await expect(page.getByTestId('movement-row-tx-4')).toHaveCount(0);
   });
 
-  test('Status filter narrows the table to a single payment status', async ({ page }) => {
-    await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();
-    await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
-
-    // Open the Status filter (trigger shows "Todos los estados").
-    await page.getByRole('button', { name: 'Todos los estados' }).click();
-
-    // Type into the search to verify the search box works inside the popover.
-    // "concil" should narrow the visible options to "Conciliado" — the family
-    // label shared by every code that maps to MOVEMENT_STATUS_FAMILY.CLEARED.
-    // In the mocked fixture only RPPC carries that family, so the option is
-    // unique and the resulting filter narrows the table to tx-1 and tx-5.
-    // Placeholder is "Buscar estado..." (es_ES).
-    await page.getByPlaceholder(/buscar estado|search status/i).fill('concil');
-
-    // Pick the only remaining option.
-    await page.getByRole('button', { name: 'Conciliado' }).click();
-
-    // RPPC rows remain: tx-1 and tx-5.
-    await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
-    await expect(page.getByTestId('movement-row-tx-5')).toBeVisible();
-    await expect(page.getByTestId('movement-row-tx-2')).toHaveCount(0);
-    await expect(page.getByTestId('movement-row-tx-3')).toHaveCount(0);
-    await expect(page.getByTestId('movement-row-tx-4')).toHaveCount(0);
-  });
+  // NOTE: the standalone "Todos los estados" status dropdown was removed in
+  // ETP-4098 (commit 76581994) and folded into the generic "Filtro por
+  // condicionales" (AdvancedFilterBuilder), which exposes status as the
+  // `statusFamily` enum column. Status filtering is therefore covered by the
+  // AdvancedFilterBuilder's own test surface, not by a per-window e2e against a
+  // toolbar control that no longer exists.
 
   test('search input filters by document number / contact / description', async ({ page }) => {
     await page.getByTestId(`account-row-${ACCOUNT_ID}`).click();

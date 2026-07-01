@@ -94,14 +94,16 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'custom', grow: true }, 1), '1 0 120px');
     });
 
-    it('selector at idx=0 is elastic regardless of grow flag', () => {
-      assert.equal(columnFlex({ type: 'selector', grow: false }, 0), '1 1 192px');
+    it('selector at idx=0 grows by default; grow:false overrides it', () => {
+      assert.equal(columnFlex({ type: 'selector' }, 0), '1 1 192px');
       assert.equal(columnFlex({ type: 'selector', grow: true }, 0), '1 1 192px');
+      assert.equal(columnFlex({ type: 'selector', grow: false }, 0), '0 0 192px');
     });
 
-    it('search at idx=1 is fixed regardless of grow flag', () => {
+    it('search at idx=1 is fixed by default; grow:true overrides it', () => {
+      assert.equal(columnFlex({ type: 'search' }, 1), '0 0 192px');
       assert.equal(columnFlex({ type: 'search', grow: false }, 1), '0 0 192px');
-      assert.equal(columnFlex({ type: 'search', grow: true }, 1), '0 0 192px');
+      assert.equal(columnFlex({ type: 'search', grow: true }, 1), '1 1 192px');
     });
   });
 

@@ -1,12 +1,26 @@
-import { Scale } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useNavigate } from 'react-router-dom';
+import { ReconciliationSplitPanel } from '@/components/contract-ui/ReconciliationSplitPanel.jsx';
 
-export function ReconciliationTab() {
-  const ui = useUI();
+/**
+ * Reconciliation tab of the financial-account detail view.
+ *
+ * Hosts the manual bank reconciliation split panel (T6). The panel reads the
+ * pending statement lines and candidate operations for the account and composes
+ * Etendo's reconciliation flow on the backend.
+ *
+ * @param {{ account: object|null, onReconcileSuccess?: () => void }} props
+ */
+export function ReconciliationTab({ account, onReconcileSuccess }) {
+  const navigate = useNavigate();
+
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 py-24 text-center">
-      <Scale className="h-10 w-10 text-[#D1D4DB]" />
-      <p className="text-sm text-[#6c6c89]">{ui('financeAccountDetailTabComingInT6')}</p>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <ReconciliationSplitPanel
+        accountId={account?.id}
+        currency={account?.currency}
+        onBack={() => navigate(-1)}
+        onReconcileSuccess={onReconcileSuccess}
+        data-testid="ReconciliationSplitPanel__46a213" />
     </div>
   );
 }

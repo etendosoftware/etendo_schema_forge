@@ -12,8 +12,25 @@ if (import.meta.env.VITE_APP_TITLE) {
 }
 
 createRoot(document.getElementById('root')).render(
-  <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light">
-    <App />
-    <Toaster position="bottom-right" richColors />
+  <ThemeProvider
+    attribute="class"
+    defaultTheme="light"
+    forcedTheme="light"
+    data-testid="ThemeProvider__bc6e1f">
+    <App data-testid="App__bc6e1f" />
+    <Toaster
+      position="bottom-right"
+      richColors
+      data-testid="Toaster__bc6e1f"
+      containerAriaLabel="Notifications"
+      toastOptions={{
+        classNames: {
+          error: 'toast-error',
+          success: 'toast-success',
+          warning: 'toast-warning',
+          info: 'toast-info',
+        },
+      }}
+    />
   </ThemeProvider>
 );

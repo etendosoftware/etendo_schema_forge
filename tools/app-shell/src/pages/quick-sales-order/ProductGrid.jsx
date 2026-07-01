@@ -67,6 +67,150 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
     positionsRef.current = newPositions;
   }, [sorted, viewMode]);
 
+  let productDisplay;
+  if (sorted.length === 0) {
+    productDisplay = (
+      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+        {ui('qsoNoResults')}
+      </div>
+    );
+  } else if (viewMode === 'list') {
+    productDisplay = (
+      /* List mode: compact rows */
+      (<div className="flex flex-col rounded-lg border border-border bg-white overflow-hidden">
+        {sorted.map((product, idx) => {
+          const isTop = showPriority && topSellerIds?.has(product.productId || product.id);
+          return (
+            <button
+              key={product.id}
+              data-product-id={product.id}
+              type="button"
+              onClick={() => onAddProduct(product)}
+              className={`group flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/40 ${
+                idx > 0 ? 'border-t border-border' : ''
+              } ${isTop ? 'bg-amber-50/50' : ''}`}
+            >
+              {/* Small avatar */}
+              <div
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-white"
+                style={{ backgroundColor: getAvatarColor(product.name) }}
+              >
+                {product.name.charAt(0)}
+              </div>
+              {/* Name + searchKey */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium truncate">{product.name}</span>
+                  {isTop && (
+                    <Badge
+                      className="bg-amber-500 hover:bg-amber-500 text-white text-[9px] px-1 py-0 gap-0.5 shrink-0"
+                      data-testid="Badge__ff9d59">
+                      <TrendingUp className="h-2 w-2" data-testid="TrendingUp__ff9d59" />
+                      {ui('qsoTopSeller')}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground truncate">{product.searchKey}</p>
+              </div>
+              {/* Price */}
+              <span className="text-sm font-bold text-foreground shrink-0">
+                {product.price.toFixed(2)} &euro;
+              </span>
+              {/* Stock badge */}
+              {product.stock != null && (
+                <Badge
+                  variant={product.stock > 0 ? 'secondary' : 'destructive'}
+                  className="text-[10px] px-1.5 py-0 shrink-0"
+                  data-testid="Badge__ff9d59">
+                  {product.stock > 0
+                    ? `${product.stock} ${ui('qsoInStock')}`
+                    : ui('qsoOutOfStock')
+                  }
+                </Badge>
+              )}
+              {/* Add icon on hover */}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
+                  <Plus className="h-3.5 w-3.5" data-testid="Plus__ff9d59" />
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>)
+    );
+  } else {
+    productDisplay = (
+      /* Grid mode: card grid */
+      (<div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+        {sorted.map(product => {
+          const isTop = showPriority && topSellerIds?.has(product.productId || product.id);
+          return (
+            <button
+              key={product.id}
+              data-product-id={product.id}
+              type="button"
+              onClick={() => onAddProduct(product)}
+              className={`group relative flex flex-col items-start gap-2 rounded-lg border bg-white p-3 text-left hover:shadow-sm transition-[border-color,box-shadow,ring] ${
+                isTop
+                  ? 'border-amber-300 ring-1 ring-amber-200/50'
+                  : 'border-border hover:border-primary/40'
+              }`}
+            >
+              {/* Top seller badge */}
+              {isTop && (
+                <div className="absolute top-2 left-2 z-10">
+                  <Badge
+                    className="bg-amber-500 hover:bg-amber-500 text-white text-[10px] px-1.5 py-0 gap-0.5"
+                    data-testid="Badge__ff9d59">
+                    <TrendingUp className="h-2.5 w-2.5" data-testid="TrendingUp__ff9d59" />
+                    {ui('qsoTopSeller')}
+                  </Badge>
+                </div>
+              )}
+              {/* Avatar */}
+              <div className={`flex w-full items-center gap-2.5 ${isTop ? 'mt-4' : ''}`}>
+                <div
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white"
+                  style={{ backgroundColor: getAvatarColor(product.name) }}
+                >
+                  {product.name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate leading-tight">{product.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{product.searchKey}</p>
+                </div>
+              </div>
+              {/* Price + stock */}
+              <div className="flex w-full items-center justify-between">
+                <span className="text-base font-bold text-foreground">
+                  {product.price.toFixed(2)} &euro;
+                </span>
+                {product.stock != null && (
+                  <Badge
+                    variant={product.stock > 0 ? 'secondary' : 'destructive'}
+                    className="text-[10px] px-1.5 py-0"
+                    data-testid="Badge__ff9d59">
+                    {product.stock > 0
+                      ? `${product.stock} ${ui('qsoInStock')}`
+                      : ui('qsoOutOfStock')
+                    }
+                  </Badge>
+                )}
+              </div>
+              {/* Hover add icon */}
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
+                  <Plus className="h-3.5 w-3.5" data-testid="Plus__ff9d59" />
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>)
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {/* Category filters + view toggle */}
@@ -98,7 +242,7 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <LayoutGrid className="h-3.5 w-3.5" />
+              <LayoutGrid className="h-3.5 w-3.5" data-testid="LayoutGrid__ff9d59" />
             </button>
             <button
               type="button"
@@ -110,152 +254,13 @@ export default function ProductGrid({ products, categories: categoriesProp, cate
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              <List className="h-3.5 w-3.5" />
+              <List className="h-3.5 w-3.5" data-testid="List__ff9d59" />
             </button>
           </div>
         )}
       </div>
-
       {/* Product display */}
-      {sorted.length === 0 ? (
-        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-          {ui('qsoNoResults')}
-        </div>
-      ) : viewMode === 'list' ? (
-        /* List mode: compact rows */
-        <div className="flex flex-col rounded-lg border border-border bg-white overflow-hidden">
-          {sorted.map((product, idx) => {
-            const isTop = showPriority && topSellerIds?.has(product.productId || product.id);
-            return (
-              <button
-                key={product.id}
-                data-product-id={product.id}
-                type="button"
-                onClick={() => onAddProduct(product)}
-                className={`group flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/40 ${
-                  idx > 0 ? 'border-t border-border' : ''
-                } ${isTop ? 'bg-amber-50/50' : ''}`}
-              >
-                {/* Small avatar */}
-                <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-white"
-                  style={{ backgroundColor: getAvatarColor(product.name) }}
-                >
-                  {product.name.charAt(0)}
-                </div>
-
-                {/* Name + searchKey */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium truncate">{product.name}</span>
-                    {isTop && (
-                      <Badge className="bg-amber-500 hover:bg-amber-500 text-white text-[9px] px-1 py-0 gap-0.5 shrink-0">
-                        <TrendingUp className="h-2 w-2" />
-                        {ui('qsoTopSeller')}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground truncate">{product.searchKey}</p>
-                </div>
-
-                {/* Price */}
-                <span className="text-sm font-bold text-foreground shrink-0">
-                  {product.price.toFixed(2)} &euro;
-                </span>
-
-                {/* Stock badge */}
-                {product.stock != null && (
-                  <Badge
-                    variant={product.stock > 0 ? 'secondary' : 'destructive'}
-                    className="text-[10px] px-1.5 py-0 shrink-0"
-                  >
-                    {product.stock > 0
-                      ? `${product.stock} ${ui('qsoInStock')}`
-                      : ui('qsoOutOfStock')
-                    }
-                  </Badge>
-                )}
-
-                {/* Add icon on hover */}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
-                    <Plus className="h-3.5 w-3.5" />
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        /* Grid mode: card grid */
-        <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-          {sorted.map(product => {
-            const isTop = showPriority && topSellerIds?.has(product.productId || product.id);
-            return (
-              <button
-                key={product.id}
-                data-product-id={product.id}
-                type="button"
-                onClick={() => onAddProduct(product)}
-                className={`group relative flex flex-col items-start gap-2 rounded-lg border bg-white p-3 text-left hover:shadow-sm transition-[border-color,box-shadow,ring] ${
-                  isTop
-                    ? 'border-amber-300 ring-1 ring-amber-200/50'
-                    : 'border-border hover:border-primary/40'
-                }`}
-              >
-                {/* Top seller badge */}
-                {isTop && (
-                  <div className="absolute top-2 left-2 z-10">
-                    <Badge className="bg-amber-500 hover:bg-amber-500 text-white text-[10px] px-1.5 py-0 gap-0.5">
-                      <TrendingUp className="h-2.5 w-2.5" />
-                      {ui('qsoTopSeller')}
-                    </Badge>
-                  </div>
-                )}
-
-                {/* Avatar */}
-                <div className={`flex w-full items-center gap-2.5 ${isTop ? 'mt-4' : ''}`}>
-                  <div
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold text-white"
-                    style={{ backgroundColor: getAvatarColor(product.name) }}
-                  >
-                    {product.name.charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate leading-tight">{product.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{product.searchKey}</p>
-                  </div>
-                </div>
-
-                {/* Price + stock */}
-                <div className="flex w-full items-center justify-between">
-                  <span className="text-base font-bold text-foreground">
-                    {product.price.toFixed(2)} &euro;
-                  </span>
-                  {product.stock != null && (
-                    <Badge
-                      variant={product.stock > 0 ? 'secondary' : 'destructive'}
-                      className="text-[10px] px-1.5 py-0"
-                    >
-                      {product.stock > 0
-                        ? `${product.stock} ${ui('qsoInStock')}`
-                        : ui('qsoOutOfStock')
-                      }
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Hover add icon */}
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
-                    <Plus className="h-3.5 w-3.5" />
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {productDisplay}
     </div>
   );
 }

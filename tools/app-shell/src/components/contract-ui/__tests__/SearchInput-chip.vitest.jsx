@@ -148,8 +148,8 @@ describe('SearchInput chip mode (ETP-4000)', () => {
     const { container } = render(<Harness initialData={{}} />);
     const chevron = container.querySelector('svg.lucide-chevron-down');
     expect(chevron).not.toBeNull();
-    // Regression: chevron must keep ml-auto so chip vs input share the same right anchor.
-    expect(chevron.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+    // Regression: chevron button must keep ml-auto so chip vs input share the same right anchor.
+    expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
     // It must not render the loader at the same time.
     expect(container.querySelector('svg.lucide-loader')).toBeNull();
   });
@@ -160,6 +160,6 @@ describe('SearchInput chip mode (ETP-4000)', () => {
     );
     const chevron = container.querySelector('svg.lucide-chevron-down');
     expect(chevron).not.toBeNull();
-    expect(chevron.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+    expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
   });
 });

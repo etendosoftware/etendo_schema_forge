@@ -30,7 +30,8 @@ function AppLayoutInner({ menuGroups, embedded }) {
           onToggle={toggle}
           onHelpClick={supportState.isOpen ? supportActions.close : supportActions.open}
           unreadCount={supportState.unreadCount}
-        />
+          data-testid="SideMenu__488148" />
+
       )}
       <div
         className="flex h-screen flex-col transition-[margin-left] duration-200 ease-in-out bg-page-bg"
@@ -40,6 +41,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
           <TopBar
             onBack={meta?.onBack}
             title={meta?.title}
+            titleExtra={meta?.titleExtra}
             breadcrumb={meta?.breadcrumb}
             recordCount={meta?.recordCount}
             menuAction={meta?.menuAction}
@@ -48,7 +50,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
             onPageHelp={meta?.onPageHelp}
             onAIClick={meta?.onAIClick}
             rightExtras={meta?.rightExtras}
-          />
+            data-testid="TopBar__488148" />
         )}
         {(() => {
           // Key strategy: preserve state when navigating /:window/new → /:window/:id
@@ -62,14 +64,14 @@ function AppLayoutInner({ menuGroups, embedded }) {
               className="relative flex-1 min-h-0 flex flex-col page-transition pr-3 pb-3"
             >
               <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl border border-border/30 overflow-hidden">
-                <Outlet />
+                <Outlet data-testid="Outlet__488148" />
               </div>
             </div>
           );
         })()}
       </div>
-      {!embedded && <CommandPalette />}
-      {!embedded && <CopilotWidget hideTrigger />}
+      {!embedded && <CommandPalette data-testid="CommandPalette__488148" />}
+      {!embedded && <CopilotWidget hideTrigger data-testid="CopilotWidget__488148" />}
       {!embedded && <SupportChatWidget />}
     </>
   );
@@ -80,13 +82,16 @@ export default function AppLayout({ menuGroups }) {
   const embedded = searchParams.get('embedded') === '1';
 
   return (
-    <CurrentWindowProvider>
-      <CopilotProvider>
+    <CurrentWindowProvider data-testid="CurrentWindowProvider__488148">
+      <CopilotProvider data-testid="CopilotProvider__488148">
         <SupportChatProvider>
-          <FavoritesProvider>
-            <SidebarProvider>
-              <PageMetaProvider>
-                <AppLayoutInner menuGroups={menuGroups} embedded={embedded} />
+          <FavoritesProvider data-testid="FavoritesProvider__488148">
+            <SidebarProvider data-testid="SidebarProvider__488148">
+              <PageMetaProvider data-testid="PageMetaProvider__488148">
+                <AppLayoutInner
+                  menuGroups={menuGroups}
+                  embedded={embedded}
+                  data-testid="AppLayoutInner__488148" />
               </PageMetaProvider>
             </SidebarProvider>
           </FavoritesProvider>

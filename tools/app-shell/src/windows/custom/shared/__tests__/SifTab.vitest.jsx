@@ -31,7 +31,7 @@ vi.mock('@/components/ui/label', () => ({
 }));
 
 vi.mock('@/components/ui/input', () => ({
-  Input: (props) => <input data-testid={`input-${props.id}`} {...props} />,
+  Input: (props) => <input {...props} data-testid={`input-${props.id}`} />,
 }));
 
 vi.mock('@/components/ui/date-field', () => ({

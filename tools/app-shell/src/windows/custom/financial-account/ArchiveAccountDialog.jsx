@@ -42,14 +42,21 @@ export function ArchiveAccountDialog({ open, onClose, onArchived, account }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (!value) onClose?.(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => { if (!value) onClose?.(); }}
+      data-testid="Dialog__fb3927">
       <DialogContent className="max-w-md" data-testid="archive-account-dialog">
-        <DialogHeader>
-          <DialogTitle>{ui('financeAccountsArchiveConfirmTitle')}</DialogTitle>
-          <DialogDescription>{ui('financeAccountsArchiveConfirmBody')}</DialogDescription>
+        <DialogHeader data-testid="DialogHeader__fb3927">
+          <DialogTitle data-testid="DialogTitle__fb3927">{ui('financeAccountsArchiveConfirmTitle')}</DialogTitle>
+          <DialogDescription data-testid="DialogDescription__fb3927">{ui('financeAccountsArchiveConfirmBody')}</DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={submitting}>
+        <DialogFooter data-testid="DialogFooter__fb3927">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={submitting}
+            data-testid="Button__fb3927">
             {ui('financeAccountsArchiveCancel')}
           </Button>
           <Button

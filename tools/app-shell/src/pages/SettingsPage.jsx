@@ -13,7 +13,6 @@ export default function SettingsPage() {
       <p className="text-sm text-muted-foreground mb-8">
         {ui('settingsDescription')}
       </p>
-
       {/* Current context card */}
       <div className="rounded-lg border bg-card p-5 mb-6">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
@@ -34,7 +33,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-
       {/* Role & Org display (read-only — context switching removed in ETP-3690) */}
       <div className="rounded-lg border bg-card p-5">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">
@@ -42,12 +40,12 @@ export default function SettingsPage() {
         </h2>
         <div className="space-y-3 text-sm">
           <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-muted-foreground" />
+            <Shield className="h-4 w-4 text-muted-foreground" data-testid="Shield__b7d1d4" />
             <span className="text-muted-foreground">{ui('role')}:</span>
             <span className="font-medium">{selectedRole?.name || selectedRole?.id || '\u2014'}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <Building2 className="h-4 w-4 text-muted-foreground" data-testid="Building2__b7d1d4" />
             <span className="text-muted-foreground">{ui('organization')}:</span>
             <span className="font-medium">{selectedOrg?.name || selectedOrg?.id || '\u2014'}</span>
           </div>

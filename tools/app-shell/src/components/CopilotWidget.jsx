@@ -193,7 +193,7 @@ export function CopilotWidget({ hideTrigger = false }) {
           isLoading={state.isLoadingAssistants}
           welcomeMessage={welcomeMessage}
           error={state.error}
-        />
+          data-testid="AssistantSelector__bbc4ba" />
       );
     }
 
@@ -202,10 +202,10 @@ export function CopilotWidget({ hideTrigger = false }) {
       return (
         <div className="flex flex-1 min-h-0">
           <div className="w-64 shrink-0 border-r border-border overflow-y-auto">
-            <ConversationSidebar {...sidebarProps} />
+            <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />
           </div>
           <div className="flex flex-1 flex-col min-w-0">
-            <ChatView {...chatProps} />
+            <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />
           </div>
         </div>
       );
@@ -213,10 +213,10 @@ export function CopilotWidget({ hideTrigger = false }) {
 
     // Compact: toggle between sidebar view and chat view
     if (showSidebar) {
-      return <ConversationSidebar {...sidebarProps} />;
+      return <ConversationSidebar {...sidebarProps} data-testid="ConversationSidebar__bbc4ba" />;
     }
 
-    return <ChatView {...chatProps} />;
+    return <ChatView {...chatProps} data-testid="ChatView__bbc4ba" />;
   }
 
   return (
@@ -234,9 +234,13 @@ export function CopilotWidget({ hideTrigger = false }) {
         )}
         style={maximized ? undefined : { '--copilot-shift': dockShift }}
       >
-        <Card className="flex h-full flex-col overflow-hidden border-border/50 shadow-2xl">
+        <Card
+          className="flex h-full flex-col overflow-hidden border-border/50 shadow-2xl"
+          data-testid="Card__bbc4ba">
           {/* Header */}
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4">
+          <CardHeader
+            className="flex flex-row items-center justify-between space-y-0 p-4"
+            data-testid="CardHeader__bbc4ba">
             <div className="flex min-w-0 items-center gap-2">
               {state.selectedAssistant ? (
                 <Button
@@ -245,13 +249,15 @@ export function CopilotWidget({ hideTrigger = false }) {
                   className="h-7 w-7"
                   onClick={handleBackToSelection}
                   aria-label={ui('copilotBackToProfiles')}
-                >
-                  <ArrowLeft className="h-4 w-4" />
+                  data-testid="Button__bbc4ba">
+                  <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__bbc4ba" />
                 </Button>
               ) : (
-                <Sparkles className="h-4 w-4 shrink-0 text-primary animate-pulse" />
+                <Sparkles
+                  className="h-4 w-4 shrink-0 text-primary animate-pulse"
+                  data-testid="Sparkles__bbc4ba" />
               )}
-              <CardTitle className="truncate text-base">
+              <CardTitle className="truncate text-base" data-testid="CardTitle__bbc4ba">
                 {state.selectedAssistant ? state.selectedAssistant.name : ui('copilot')}
               </CardTitle>
             </div>
@@ -263,8 +269,8 @@ export function CopilotWidget({ hideTrigger = false }) {
                   className="h-7 w-7"
                   onClick={toggleSidebar}
                   aria-label={ui('copilotConversations')}
-                >
-                  <History className="h-4 w-4" />
+                  data-testid="Button__bbc4ba">
+                  <History className="h-4 w-4" data-testid="History__bbc4ba" />
                 </Button>
               )}
               <Button
@@ -273,11 +279,11 @@ export function CopilotWidget({ hideTrigger = false }) {
                 className="h-7 w-7"
                 onClick={toggleMaximize}
                 aria-label={maximized ? ui('copilotMinimize') : ui('copilotMaximize')}
-              >
+                data-testid="Button__bbc4ba">
                 {maximized ? (
-                  <Minimize2 className="h-4 w-4" />
+                  <Minimize2 className="h-4 w-4" data-testid="Minimize2__bbc4ba" />
                 ) : (
-                  <Maximize2 className="h-4 w-4" />
+                  <Maximize2 className="h-4 w-4" data-testid="Maximize2__bbc4ba" />
                 )}
               </Button>
               <Button
@@ -286,21 +292,22 @@ export function CopilotWidget({ hideTrigger = false }) {
                 className="h-7 w-7"
                 onClick={closePanel}
                 aria-label={ui('closeCopilot')}
-              >
-                <X className="h-4 w-4" />
+                data-testid="Button__bbc4ba">
+                <X className="h-4 w-4" data-testid="X__bbc4ba" />
               </Button>
             </div>
           </CardHeader>
 
-          <Separator />
+          <Separator data-testid="Separator__bbc4ba" />
 
           {/* Body */}
-          <CardContent className="flex flex-1 min-h-0 flex-col p-0">
+          <CardContent
+            className="flex flex-1 min-h-0 flex-col p-0"
+            data-testid="CardContent__bbc4ba">
             {renderBody()}
           </CardContent>
         </Card>
       </div>
-
       {/* FAB button */}
       {!hideTrigger && <Button
         onClick={toggle}
@@ -311,13 +318,15 @@ export function CopilotWidget({ hideTrigger = false }) {
         )}
         style={{ '--copilot-shift': dockShift }}
         aria-label={open ? ui('closeCopilot') : ui('openCopilot')}
-      >
+        data-testid="Button__bbc4ba">
         {open ? (
-          <X className="h-5 w-5" />
+          <X className="h-5 w-5" data-testid="X__bbc4ba" />
         ) : (
           <span className="relative">
-            <Bot className="h-5 w-5" />
-            <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-yellow-300 animate-spin [animation-duration:3s]" />
+            <Bot className="h-5 w-5" data-testid="Bot__bbc4ba" />
+            <Sparkles
+              className="absolute -top-1 -right-1 h-3 w-3 text-yellow-300 animate-spin [animation-duration:3s]"
+              data-testid="Sparkles__bbc4ba" />
           </span>
         )}
       </Button>}

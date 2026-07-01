@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Pencil, Copy, Mail, MoreVertical, Trash2, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
+import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 
@@ -73,6 +74,9 @@ export default function RowQuickActions({
   const moreRef = useRef(null);
   const menuRef = useRef(null);
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
+  // ETP-4298 — declarative NEO action endpoint (e.g. post/unpost). `apiBaseUrl`
+  // is already scoped to the spec; entity segment mirrors useDocumentAction.
+  const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
 
   // visibleWhen lookup for a given action key. Falls back to `true` when no expression set.
   const passesVisibleWhen = useCallback((key) => {
@@ -141,7 +145,7 @@ export default function RowQuickActions({
   const stop = (e) => { e.stopPropagation(); };
 
   const resolvedMenuActions = typeof menuActions === 'function'
-    ? menuActions({ row, status: statusField ? row?.[statusField] : undefined })
+    ? menuActions({ row, data: row, status: statusField ? row?.[statusField] : undefined })
     : menuActions;
   const visibleMenuActions = (Array.isArray(resolvedMenuActions) ? resolvedMenuActions : [])
     .filter(a => a && a.visible !== false)
@@ -170,6 +174,11 @@ export default function RowQuickActions({
         onMenuActionExecuted?.(action, result);
         return;
       }
+      if (action.neoAction) {
+        const result = await neoAction.execute(row?.id, action.neoAction);
+        onMenuActionExecuted?.(action, result);
+        return;
+      }
       if (action.onClick) {
         const result = await action.onClick({ row, windowName, apiBaseUrl, token });
         onMenuActionExecuted?.(action, result);
@@ -189,7 +198,7 @@ export default function RowQuickActions({
         return next;
       });
     }
-  }, [docAction, row, windowName, apiBaseUrl, token, onMenuActionExecuted, inFlight]);
+  }, [docAction, neoAction, row, windowName, apiBaseUrl, token, onMenuActionExecuted, inFlight]);
 
   return (
     <div
@@ -208,10 +217,9 @@ export default function RowQuickActions({
           title={ui('quickAction.edit')}
           data-testid="row-quick-action-edit"
         >
-          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" /> : <Pencil className="h-5 w-5" />}
+          {inFlight.edit ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Pencil className="h-5 w-5" data-testid="Pencil__ec6673" />}
         </button>
       )}
-
       {/* Clone — only when host wires onClone (no generic default exists). */}
       {onClone && passesVisibleWhen('duplicate') && (
         <button
@@ -223,10 +231,9 @@ export default function RowQuickActions({
           title={ui('quickAction.clone')}
           data-testid="row-quick-action-clone"
         >
-          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" /> : <Copy className="h-5 w-5" />}
+          {inFlight.duplicate ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Copy className="h-5 w-5" data-testid="Copy__ec6673" />}
         </button>
       )}
-
       {/* Email — gated by sendDocument.enabled (default true for eligible
           documental windows) with the legacy `documentPreview` truthy as
           fallback for callers that haven't migrated. */}
@@ -240,10 +247,9 @@ export default function RowQuickActions({
           title={ui('quickAction.email')}
           data-testid="row-quick-action-email"
         >
-          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mail className="h-5 w-5" />}
+          {inFlight.email ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Mail className="h-5 w-5" data-testid="Mail__ec6673" />}
         </button>
       )}
-
       {/* More — popover with menuActions[] */}
       {visibleMenuActions.length > 0 && (
         <div className="relative" ref={moreRef}>
@@ -255,7 +261,7 @@ export default function RowQuickActions({
             title={ui('quickAction.more')}
             data-testid="row-quick-action-more"
           >
-            <MoreVertical className="h-5 w-5" />
+            <MoreVertical className="h-5 w-5" data-testid="MoreVertical__ec6673" />
           </button>
           {showMenu && menuPos && createPortal(
             <>
@@ -285,6 +291,7 @@ export default function RowQuickActions({
                   <button
                     key={action.key || i}
                     type="button"
+                    data-testid={`menu-action-${action.key ?? i}`}
                     disabled={pending || docAction.loading}
                     onClick={(e) => { stop(e); handleMenuActionClick(action); }}
                     className={[
@@ -294,12 +301,14 @@ export default function RowQuickActions({
                     ].filter(Boolean).join(' ')}
                   >
                     {pending ? (
-                      <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin" />
+                      <Loader2
+                        className="h-4 w-4 flex-shrink-0 animate-spin"
+                        data-testid="Loader2__ec6673" />
                     ) : ActionIcon && (
                       <ActionIcon
                         className="h-4 w-4 flex-shrink-0"
                         style={{ color: action.destructive ? undefined : '#828FA3' }}
-                      />
+                        data-testid="ActionIcon__ec6673" />
                     )}
                     <span>{label}</span>
                   </button>
@@ -311,7 +320,6 @@ export default function RowQuickActions({
           )}
         </div>
       )}
-
       {/* Delete */}
       {showDelete && passesVisibleWhen('delete') && (
         <button
@@ -323,7 +331,7 @@ export default function RowQuickActions({
           title={ui('quickAction.delete')}
           data-testid="row-quick-action-delete"
         >
-          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+          {inFlight.delete ? <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__ec6673" /> : <Trash2 className="h-5 w-5" data-testid="Trash2__ec6673" />}
         </button>
       )}
     </div>

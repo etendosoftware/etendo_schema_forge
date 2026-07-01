@@ -4,7 +4,7 @@
     "category": "contact",
     "name": "Contacts",
     "entityLabel": "Contact",
-    "sidebarLayout": true,
+    "sidebarLayout": false,
     "breadcrumb": "Contact",
     "detailEntity": null,
     "summaryFields": [],
@@ -196,6 +196,14 @@
           "section": "principal",
           "order": 6
         },
+        "oBTIKVIESStatus": {
+          "visibility": "readOnly",
+          "section": "principal",
+          "form": true,
+          "grid": false,
+          "order": 7,
+          "displayLogic": "record.oBTIKTaxIDKey === '2'"
+        },
         "oBTIKTaxIDKey": {
           "visibility": "editable",
           "order": 5
@@ -371,20 +379,29 @@
           "visibility": "editable",
           "grid": true,
           "searchable": true,
-          "labels": { "en_US": "Location / Address", "es_ES": "Dirección" },
+          "labels": {
+            "en_US": "Location / Address",
+            "es_ES": "Dirección"
+          },
           "section": "principal"
         },
         "shipToAddress": {
           "visibility": "editable",
           "grid": true,
           "section": "principal",
-          "labels": { "en_US": "Shipping Address", "es_ES": "Dir.envíos" }
+          "labels": {
+            "en_US": "Shipping Address",
+            "es_ES": "Dir.envíos"
+          }
         },
         "invoiceToAddress": {
           "visibility": "editable",
           "grid": true,
           "section": "principal",
-          "labels": { "en_US": "Invoicing Address", "es_ES": "Dir.factura" }
+          "labels": {
+            "en_US": "Invoicing Address",
+            "es_ES": "Dir.factura"
+          }
         },
         "phone": {
           "visibility": "editable",
@@ -422,7 +439,8 @@
           "visibility": "editable",
           "grid": true,
           "searchable": true,
-          "section": "principal"
+          "section": "principal",
+          "columnWidth": 320
         },
         "phone": {
           "visibility": "editable",
@@ -462,6 +480,9 @@
           "visibility": "editable",
           "form": false,
           "section": "other"
+        },
+        "psd2ApiKey": {
+          "visibility": "discarded"
         }
       }
     },
@@ -506,17 +527,21 @@
         "bankFormat": {
           "visibility": "editable",
           "grid": true,
-          "section": "principal"
+          "section": "principal",
+          "labels": { "en_US": "Format", "es_ES": "Formato" },
+          "columnWidth": 320
         },
         "accountNo": {
           "visibility": "editable",
           "grid": true,
-          "section": "principal"
+          "section": "principal",
+          "columnWidth": 360
         },
         "iBAN": {
           "visibility": "editable",
           "grid": true,
-          "section": "principal"
+          "section": "principal",
+          "columnWidth": 400
         },
         "swiftCode": {
           "visibility": "editable",
@@ -532,23 +557,41 @@
     },
     "customer": {
       "fields": {
-        "etgoEmail": { "visibility": "discarded" },
-        "etgoPhone": { "visibility": "discarded" },
-        "etgoWeb":   { "visibility": "discarded" }
+        "etgoEmail": {
+          "visibility": "discarded"
+        },
+        "etgoPhone": {
+          "visibility": "discarded"
+        },
+        "etgoWeb": {
+          "visibility": "discarded"
+        }
       }
     },
     "vendorCreditor": {
       "fields": {
-        "etgoEmail": { "visibility": "discarded" },
-        "etgoPhone": { "visibility": "discarded" },
-        "etgoWeb":   { "visibility": "discarded" }
+        "etgoEmail": {
+          "visibility": "discarded"
+        },
+        "etgoPhone": {
+          "visibility": "discarded"
+        },
+        "etgoWeb": {
+          "visibility": "discarded"
+        }
       }
     },
     "employee": {
       "fields": {
-        "etgoEmail": { "visibility": "discarded" },
-        "etgoPhone": { "visibility": "discarded" },
-        "etgoWeb":   { "visibility": "discarded" }
+        "etgoEmail": {
+          "visibility": "discarded"
+        },
+        "etgoPhone": {
+          "visibility": "discarded"
+        },
+        "etgoWeb": {
+          "visibility": "discarded"
+        }
       }
     }
   },

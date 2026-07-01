@@ -60,7 +60,7 @@ export function TabsTrigger({ value, children, icon: Icon, badge, className }) {
         className,
       )}
     >
-      {Icon ? <Icon className="h-6 w-6 shrink-0" /> : null}
+      {Icon ? <Icon className="h-6 w-6 shrink-0" data-testid="Icon__fa4214" /> : null}
       <span className="px-1">{children}</span>
       {badge != null ? (
         <span className="flex items-center rounded-full bg-[#F5F7F9] px-2 py-1 text-xs font-normal leading-4 text-[#3F3F50]">

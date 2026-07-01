@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const localStorageMock = (() => {
   let store = {};
@@ -57,11 +57,21 @@ vi.mock('../onboarding/onboardingApi.js', () => ({
   confirmPasswordReset: vi.fn(),
   fetchAccount: vi.fn(),
   fetchEnvironments: vi.fn().mockResolvedValue([]),
+  fetchOnboardingDraft: vi.fn().mockResolvedValue(null),
+  saveOnboardingDraft: vi.fn().mockResolvedValue({}),
   loginAccount: vi.fn(),
   loginEnvironment: vi.fn(),
+  loginWithSsoProvider: vi.fn(),
   registerAccount: vi.fn(),
   requestPasswordReset: vi.fn(),
   runOnboardingStream: vi.fn(),
+}));
+
+// One provider is returned so the module-level SSO_PROVIDERS list (evaluated at
+// import time) is non-empty and the SSO credential callback can be exercised.
+vi.mock('../onboarding/onboardingSso.js', () => ({
+  getConfiguredSsoProviders: vi.fn(() => [{ id: 'google', clientId: 'test-client-id' }]),
+  renderSsoProviderButton: vi.fn(() => Promise.resolve()),
 }));
 
 // Mock onboarding readiness
@@ -78,6 +88,7 @@ vi.mock('../onboarding/onboardingState.js', () => ({
     { name: 'setup', status: 'pending' },
     { name: 'client', status: 'pending' },
     { name: 'organization', status: 'pending' },
+    { name: 'dataset', status: 'pending' },
     { name: 'finalize', status: 'pending' },
   ],
   isCompanyStepValid: () => true,
@@ -101,16 +112,19 @@ vi.mock('@/components/ui/label', () => ({
 
 import OnboardingPage from '../OnboardingPage.jsx';
 import {
-  changePassword,
   confirmPasswordReset,
   fetchAccount,
   fetchEnvironments,
+  fetchOnboardingDraft,
   loginAccount,
   loginEnvironment,
+  loginWithSsoProvider,
   registerAccount,
   requestPasswordReset,
   runOnboardingStream,
+  saveOnboardingDraft,
 } from '../onboarding/onboardingApi.js';
+import { renderSsoProviderButton } from '../onboarding/onboardingSso.js';
 import { checkSalesInvoiceReadiness } from '../onboarding/onboardingReadiness.js';
 import { track } from '../../lib/observability.js';
 
@@ -123,11 +137,15 @@ describe('OnboardingPage', () => {
     fetchAccount.mockReset();
     fetchEnvironments.mockReset();
     fetchEnvironments.mockResolvedValue([]);
+    fetchOnboardingDraft.mockReset();
+    fetchOnboardingDraft.mockResolvedValue(null);
+    saveOnboardingDraft.mockReset();
+    saveOnboardingDraft.mockResolvedValue({});
     requestPasswordReset.mockReset();
     confirmPasswordReset.mockReset();
-    changePassword.mockReset();
     loginAccount.mockReset();
     loginEnvironment.mockReset();
+    loginWithSsoProvider.mockReset();
     registerAccount.mockReset();
     runOnboardingStream.mockReset();
     checkSalesInvoiceReadiness.mockReset();
@@ -158,6 +176,34 @@ describe('OnboardingPage', () => {
     render(<OnboardingPage />);
     expect(screen.getByText('onboardingRegisterTitle')).toBeInTheDocument();
     expect(screen.getByText('onboardingRegisterSubtitle')).toBeInTheDocument();
+  });
+
+  it('lands on the login view (consuming the one-shot flag) instead of register', () => {
+    localStorage.removeItem('sf_platform_token');
+    localStorage.setItem('sf_onboarding_initial_view', 'login');
+    render(<OnboardingPage />);
+    expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
+    // Flag is consumed so a later visit returns to the default register view.
+    expect(localStorage.getItem('sf_onboarding_initial_view')).toBeNull();
+  });
+
+  it('shows the password-changed notice on the login view and consumes the one-shot flag', () => {
+    localStorage.removeItem('sf_platform_token');
+    localStorage.setItem('sf_onboarding_initial_view', 'login');
+    localStorage.setItem('sf_onboarding_notice', 'password-changed');
+    render(<OnboardingPage />);
+    expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
+    expect(screen.getByTestId('login-notice')).toHaveTextContent('onboardingPasswordChangedNotice');
+    // Flag is consumed so a later visit does not show the notice again.
+    expect(localStorage.getItem('sf_onboarding_notice')).toBeNull();
+  });
+
+  it('does not render the login notice when the notice flag is absent', () => {
+    localStorage.removeItem('sf_platform_token');
+    localStorage.setItem('sf_onboarding_initial_view', 'login');
+    render(<OnboardingPage />);
+    expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
+    expect(screen.queryByTestId('login-notice')).not.toBeInTheDocument();
   });
 
   it('renders register form fields', () => {
@@ -482,6 +528,68 @@ describe('OnboardingPage', () => {
     expect(serializedCalls).not.toContain('login-platform-token');
   });
 
+  it('stores the password auth method after a successful password login', async () => {
+    loginAccount.mockResolvedValue({
+      token: 'login-platform-token',
+      account: { name: 'Ada Lovelace', email: 'ada@example.com' },
+    });
+
+    localStorage.removeItem('sf_platform_token');
+    render(<OnboardingPage />);
+
+    fireEvent.click(screen.getByTestId('action-switch-to-login'));
+    fireEvent.submit(screen.getByTestId('action-login-submit').closest('form'));
+
+    await waitFor(() => {
+      expect(localStorage.setItem).toHaveBeenCalledWith('sf_platform_auth_method', 'password');
+    });
+    expect(localStorage.getItem('sf_platform_auth_method')).toBe('password');
+  });
+
+  it('stores the password auth method after a successful registration', async () => {
+    registerAccount.mockResolvedValue({
+      token: 'platform-token',
+      account: { name: 'Ada Lovelace', email: 'ada@example.com' },
+    });
+
+    localStorage.removeItem('sf_platform_token');
+    render(<OnboardingPage />);
+
+    fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
+
+    await waitFor(() => {
+      expect(localStorage.setItem).toHaveBeenCalledWith('sf_platform_auth_method', 'password');
+    });
+    expect(localStorage.getItem('sf_platform_auth_method')).toBe('password');
+  });
+
+  it('stores the sso auth method after a successful SSO credential login', async () => {
+    loginWithSsoProvider.mockResolvedValue({
+      token: 'sso-platform-token',
+      account: { name: 'Ada Lovelace', email: 'ada@example.com' },
+    });
+
+    localStorage.removeItem('sf_platform_token');
+    render(<OnboardingPage />);
+
+    await waitFor(() => {
+      expect(renderSsoProviderButton).toHaveBeenCalled();
+    });
+    const [, , callbacks] = renderSsoProviderButton.mock.calls[0];
+
+    await act(async () => {
+      callbacks.onCredential('google', { credential: 'sso-jwt' });
+    });
+
+    await waitFor(() => {
+      expect(loginWithSsoProvider).toHaveBeenCalledWith(
+        expect.any(Function), '', 'google', { credential: 'sso-jwt' },
+      );
+      expect(localStorage.setItem).toHaveBeenCalledWith('sf_platform_auth_method', 'sso');
+    });
+    expect(localStorage.getItem('sf_platform_auth_method')).toBe('sso');
+  });
+
   it('tracks login exceptions', async () => {
     loginAccount.mockRejectedValue({ userMessage: 'Readable login failure' });
 
@@ -562,60 +670,6 @@ describe('OnboardingPage', () => {
     fireEvent.submit(screen.getByTestId('action-reset-password-submit').closest('form'));
 
     expect(await screen.findByText('Invalid or expired reset link')).toBeInTheDocument();
-  });
-
-  it('changes the account password and stores the rotated platform token', async () => {
-    localStorage.setItem('sf_platform_token', 'platform-token');
-    fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
-    fetchEnvironments.mockResolvedValue([]);
-    changePassword.mockResolvedValue({ token: 'rotated-platform-token' });
-
-    render(<OnboardingPage />);
-
-    fireEvent.click(await screen.findByText('onboardingChangePasswordAction'));
-    fireEvent.change(screen.getByLabelText(/onboardingCurrentPasswordLabel/), {
-      target: { value: 'old-secret' },
-    });
-    fireEvent.change(screen.getByLabelText(/onboardingNewPasswordLabel/), {
-      target: { value: 'new-secret' },
-    });
-    fireEvent.change(screen.getByLabelText(/onboardingConfirmPasswordLabel/), {
-      target: { value: 'new-secret' },
-    });
-    fireEvent.submit(screen.getByText('onboardingSavePasswordAction').closest('form'));
-
-    await waitFor(() => {
-      expect(changePassword).toHaveBeenCalledWith(expect.any(Function), '', 'platform-token', {
-        currentPassword: 'old-secret',
-        newPassword: 'new-secret',
-        confirmPassword: 'new-secret',
-      });
-    });
-    expect(localStorage.setItem).toHaveBeenCalledWith('sf_platform_token', 'rotated-platform-token');
-    expect(screen.getByText('onboardingCredentialChangeSuccess')).toBeInTheDocument();
-  });
-
-  it('renders current-password failures from change password', async () => {
-    localStorage.setItem('sf_platform_token', 'platform-token');
-    fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
-    fetchEnvironments.mockResolvedValue([]);
-    changePassword.mockRejectedValue({ userMessage: 'Wrong current password' });
-
-    render(<OnboardingPage />);
-
-    fireEvent.click(await screen.findByText('onboardingChangePasswordAction'));
-    fireEvent.change(screen.getByLabelText(/onboardingCurrentPasswordLabel/), {
-      target: { value: 'bad-secret' },
-    });
-    fireEvent.change(screen.getByLabelText(/onboardingNewPasswordLabel/), {
-      target: { value: 'new-secret' },
-    });
-    fireEvent.change(screen.getByLabelText(/onboardingConfirmPasswordLabel/), {
-      target: { value: 'new-secret' },
-    });
-    fireEvent.submit(screen.getByText('onboardingSavePasswordAction').closest('form'));
-
-    expect(await screen.findByText('Wrong current password')).toBeInTheDocument();
   });
 
   it('tracks setup back navigation from company step', async () => {
@@ -703,6 +757,60 @@ describe('OnboardingPage', () => {
       });
     });
     expect(screen.getByText('onboardingPreparingTitle')).toBeInTheDocument();
+  });
+
+  it('shows the company-data description while the dataset step runs', async () => {
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+    fetchEnvironments.mockResolvedValue([]);
+    runOnboardingStream.mockImplementation(async (_fetch, _baseUrl, _token, _form, onMessage) => {
+      onMessage({ type: 'progress', step: 'dataset', status: 'running' });
+      return new Promise(() => {});
+    });
+
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByText('onboardingContinueAction'));
+    fireEvent.click(screen.getByText('onboardingStartAction'));
+
+    await waitFor(() => {
+      expect(screen.getByText('onboardingPreparingDataDescription')).toBeInTheDocument();
+    });
+  });
+
+  it('keeps the progress bar monotonic when an untracked step runs after a tracked one', async () => {
+    localStorage.setItem('sf_platform_token', 'platform-token');
+    fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+    fetchEnvironments.mockResolvedValue([]);
+    let emit;
+    runOnboardingStream.mockImplementation(async (_fetch, _baseUrl, _token, _form, onMessage) => {
+      emit = onMessage;
+      onMessage({ type: 'progress', step: 'client', status: 'running' });
+      return new Promise(() => {});
+    });
+
+    render(<OnboardingPage />);
+
+    fireEvent.click(await screen.findByText('onboardingContinueAction'));
+    fireEvent.click(screen.getByText('onboardingStartAction'));
+
+    // Tracked step: client → 35%.
+    await waitFor(() => {
+      expect(screen.getByText('onboardingPreparingActivatingDescription')).toBeInTheDocument();
+      expect(screen.getByText('35%')).toBeInTheDocument();
+    });
+
+    // Client finishes; an untracked backend step (accounting) starts running.
+    act(() => {
+      emit({ type: 'progress', step: 'client', status: 'done' });
+      emit({ type: 'progress', step: 'accounting', status: 'running' });
+    });
+
+    // Generic "configuring" description shows, but the bar holds at 35% (monotonic, never drops).
+    await waitFor(() => {
+      expect(screen.getByText('onboardingPreparingConfiguringDescription')).toBeInTheDocument();
+      expect(screen.getByText('35%')).toBeInTheDocument();
+    });
   });
 
   it('tracks onboarding run failures', async () => {
@@ -914,5 +1022,464 @@ describe('OnboardingPage', () => {
       });
     });
     expect(screen.getByText(/onboardingReadinessFailed/)).toBeInTheDocument();
+  });
+
+  describe('draft recovery', () => {
+    it('restores a saved draft on step 2 and shows the restored notice', async () => {
+      localStorage.setItem('sf_platform_token', 'platform-token');
+      fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+      fetchEnvironments.mockResolvedValue([]);
+      fetchOnboardingDraft.mockResolvedValue({
+        step: 2,
+        form: { clientName: 'Acme SL', fiscalIdValue: 'B123', fullName: 'Ana' },
+      });
+
+      render(<OnboardingPage />);
+
+      // Step 2 (company step) is rendered directly with the draft values merged in.
+      const companyInput = await screen.findByLabelText(/onboardingCompanyNameLabel/);
+      expect(companyInput).toHaveValue('Acme SL');
+      expect(screen.getByLabelText(/onboardingFiscalIdLabel/)).toHaveValue('B123');
+      expect(screen.getByTestId('draft-restored-notice')).toHaveTextContent(
+        'onboardingDraftRestoredNotice',
+      );
+      expect(fetchOnboardingDraft).toHaveBeenCalledWith(
+        expect.any(Function), '', 'platform-token',
+      );
+    });
+
+    it('starts a fresh wizard on step 1 without notice when no draft exists', async () => {
+      localStorage.setItem('sf_platform_token', 'platform-token');
+      fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+      fetchEnvironments.mockResolvedValue([]);
+      fetchOnboardingDraft.mockResolvedValue(null);
+
+      render(<OnboardingPage />);
+
+      // Step 1 (profile step) is the entry point.
+      expect(await screen.findByLabelText(/onboardingFullNameLabel/)).toBeInTheDocument();
+      expect(screen.getByText('onboardingContinueAction')).toBeInTheDocument();
+      expect(screen.queryByTestId('draft-restored-notice')).not.toBeInTheDocument();
+    });
+
+    it('falls back to a fresh wizard when the draft fetch fails', async () => {
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      localStorage.setItem('sf_platform_token', 'platform-token');
+      fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+      fetchEnvironments.mockResolvedValue([]);
+      fetchOnboardingDraft.mockRejectedValue(new Error('draft endpoint down'));
+
+      render(<OnboardingPage />);
+
+      expect(await screen.findByLabelText(/onboardingFullNameLabel/)).toBeInTheDocument();
+      expect(screen.queryByTestId('draft-restored-notice')).not.toBeInTheDocument();
+      expect(consoleWarn).toHaveBeenCalledWith(
+        'Failed to load onboarding draft', expect.any(Error),
+      );
+    });
+
+    it('autosaves the draft after the debounce once the wizard has user content', async () => {
+      const realSetTimeout = globalThis.setTimeout;
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+        if (delay === 1500) {
+          queueMicrotask(callback);
+          return 1;
+        }
+        return realSetTimeout(callback, delay, ...args);
+      });
+      localStorage.setItem('sf_platform_token', 'platform-token');
+      fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+      fetchEnvironments.mockResolvedValue([]);
+      fetchOnboardingDraft.mockResolvedValue(null);
+
+      render(<OnboardingPage />);
+
+      // Step 1 alone is pristine — moving to step 2 makes the draft saveable.
+      fireEvent.click(await screen.findByText('onboardingContinueAction'));
+
+      await waitFor(() => {
+        expect(saveOnboardingDraft).toHaveBeenCalledWith(
+          expect.any(Function), '', 'platform-token',
+          expect.objectContaining({ step: 2 }),
+        );
+      });
+
+      fireEvent.change(screen.getByLabelText(/onboardingCompanyNameLabel/), {
+        target: { value: 'Acme SL' },
+      });
+
+      await waitFor(() => {
+        expect(saveOnboardingDraft).toHaveBeenCalledWith(
+          expect.any(Function), '', 'platform-token',
+          expect.objectContaining({
+            step: 2,
+            form: expect.objectContaining({ clientName: 'Acme SL' }),
+          }),
+        );
+      });
+    });
+
+    it('warns and resets the saved-draft ref when an autosave fails, then retries', async () => {
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const realSetTimeout = globalThis.setTimeout;
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+        if (delay === 1500) {
+          queueMicrotask(callback);
+          return 1;
+        }
+        return realSetTimeout(callback, delay, ...args);
+      });
+      localStorage.setItem('sf_platform_token', 'platform-token');
+      fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+      fetchEnvironments.mockResolvedValue([]);
+      fetchOnboardingDraft.mockResolvedValue(null);
+      saveOnboardingDraft.mockRejectedValueOnce(new Error('draft save down'));
+
+      render(<OnboardingPage />);
+
+      // Moving to step 2 triggers the first (failing) autosave.
+      fireEvent.click(await screen.findByText('onboardingContinueAction'));
+
+      await waitFor(() => {
+        expect(consoleWarn).toHaveBeenCalledWith(
+          'Failed to save onboarding draft', expect.any(Error),
+        );
+      });
+      expect(saveOnboardingDraft).toHaveBeenCalledTimes(1);
+
+      // The failure reset lastSavedDraftRef, so the next form change retries
+      // instead of being suppressed as already saved.
+      fireEvent.change(screen.getByLabelText(/onboardingCompanyNameLabel/), {
+        target: { value: 'Acme SL' },
+      });
+
+      await waitFor(() => {
+        expect(saveOnboardingDraft).toHaveBeenCalledTimes(2);
+      });
+      expect(saveOnboardingDraft).toHaveBeenLastCalledWith(
+        expect.any(Function), '', 'platform-token',
+        expect.objectContaining({
+          step: 2,
+          form: expect.objectContaining({ clientName: 'Acme SL' }),
+        }),
+      );
+    });
+
+    it('does not autosave a pristine step-1 form', async () => {
+      const realSetTimeout = globalThis.setTimeout;
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+        if (delay === 1500) {
+          queueMicrotask(callback);
+          return 1;
+        }
+        return realSetTimeout(callback, delay, ...args);
+      });
+      localStorage.setItem('sf_platform_token', 'platform-token');
+      fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+      fetchEnvironments.mockResolvedValue([]);
+      fetchOnboardingDraft.mockResolvedValue(null);
+
+      render(<OnboardingPage />);
+
+      // fullName/country/businessType are not draft-relevant content on step 1.
+      fireEvent.change(await screen.findByLabelText(/onboardingFullNameLabel/), {
+        target: { value: 'Ana' },
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(saveOnboardingDraft).not.toHaveBeenCalled();
+    });
+
+    it('does not fetch the draft nor show the notice after registering a new account', async () => {
+      registerAccount.mockResolvedValue({
+        token: 'platform-token',
+        account: { name: 'Ada Lovelace', email: 'ada@example.com' },
+      });
+
+      localStorage.removeItem('sf_platform_token');
+      render(<OnboardingPage />);
+
+      fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
+
+      // Lands on the create wizard (step 1) without any restore round-trip.
+      expect(await screen.findByText('onboardingContinueAction')).toBeInTheDocument();
+      expect(fetchOnboardingDraft).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('draft-restored-notice')).not.toBeInTheDocument();
+    });
+
+    it('does not autosave when the platform token has been cleared', async () => {
+      const realSetTimeout = globalThis.setTimeout;
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+        if (delay === 1500) {
+          queueMicrotask(callback);
+          return 1;
+        }
+        return realSetTimeout(callback, delay, ...args);
+      });
+      localStorage.setItem('sf_platform_token', 'platform-token');
+      fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+      fetchEnvironments.mockResolvedValue([]);
+      fetchOnboardingDraft.mockResolvedValue(null);
+
+      render(<OnboardingPage />);
+
+      // Drop the token before triggering the autosave effect again.
+      await screen.findByLabelText(/onboardingFullNameLabel/);
+      localStorage.removeItem('sf_platform_token');
+
+      // A form change re-runs the effect, which now bails on the missing token.
+      fireEvent.change(screen.getByLabelText(/onboardingFullNameLabel/), {
+        target: { value: 'Ana' },
+      });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(saveOnboardingDraft).not.toHaveBeenCalled();
+    });
+
+    it('does not re-save a restored draft that has not changed', async () => {
+      const realSetTimeout = globalThis.setTimeout;
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+        if (delay === 1500) {
+          queueMicrotask(callback);
+          return 1;
+        }
+        return realSetTimeout(callback, delay, ...args);
+      });
+      localStorage.setItem('sf_platform_token', 'platform-token');
+      fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+      fetchEnvironments.mockResolvedValue([]);
+      // A complete restored form (fullName matches the account so the backfill
+      // effect is a no-op) leaves the live draft identical to the persisted one.
+      fetchOnboardingDraft.mockResolvedValue({
+        step: 2,
+        form: {
+          fullName: 'Ada Lovelace',
+          businessType: 'company',
+          clientName: 'Acme SL',
+          currency: 'EUR',
+          language: 'es_ES',
+          countryCode: 'ES',
+          fiscalIdType: 'NIF',
+          fiscalIdValue: '',
+          address: '',
+          sector: 'technology',
+        },
+      });
+
+      render(<OnboardingPage />);
+
+      // Restored on step 2 with the company name already filled.
+      await waitFor(() => {
+        expect(screen.getByLabelText(/onboardingCompanyNameLabel/)).toHaveValue('Acme SL');
+      });
+
+      // The autosave effect runs but the serialized draft equals the persisted
+      // one, so the dedupe guard short-circuits and nothing is saved.
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(saveOnboardingDraft).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('uncovered branches', () => {
+    it('shows the SSO failure message when the credential login returns no token', async () => {
+      loginWithSsoProvider.mockResolvedValue({});
+      localStorage.removeItem('sf_platform_token');
+      render(<OnboardingPage />);
+
+      await waitFor(() => expect(renderSsoProviderButton).toHaveBeenCalled());
+      const [, , callbacks] = renderSsoProviderButton.mock.calls[0];
+
+      await act(async () => {
+        callbacks.onCredential('google', { credential: 'sso-jwt' });
+      });
+
+      expect(await screen.findByText('onboardingSsoFailed')).toBeInTheDocument();
+    });
+
+    it('shows the SSO failure message from the rejection user message', async () => {
+      loginWithSsoProvider.mockRejectedValue({ userMessage: 'SSO exploded' });
+      localStorage.removeItem('sf_platform_token');
+      render(<OnboardingPage />);
+
+      await waitFor(() => expect(renderSsoProviderButton).toHaveBeenCalled());
+      const [, , callbacks] = renderSsoProviderButton.mock.calls[0];
+
+      await act(async () => {
+        callbacks.onCredential('google', { credential: 'sso-jwt' });
+      });
+
+      expect(await screen.findByText('SSO exploded')).toBeInTheDocument();
+    });
+
+    it('surfaces SSO provider button errors via the onError callback', async () => {
+      localStorage.removeItem('sf_platform_token');
+      render(<OnboardingPage />);
+
+      await waitFor(() => expect(renderSsoProviderButton).toHaveBeenCalled());
+      const [, , callbacks] = renderSsoProviderButton.mock.calls[0];
+
+      await act(async () => {
+        callbacks.onError({ userMessage: 'SSO button broke' });
+      });
+
+      expect(await screen.findByText('SSO button broke')).toBeInTheDocument();
+    });
+
+    it('renders a forgot-password failure message', async () => {
+      requestPasswordReset.mockRejectedValue({ userMessage: 'Reset request failed' });
+      localStorage.removeItem('sf_platform_token');
+      render(<OnboardingPage />);
+
+      fireEvent.click(screen.getByTestId('action-switch-to-login'));
+      fireEvent.click(screen.getByText('onboardingForgotPasswordAction'));
+      fireEvent.submit(screen.getByTestId('action-forgot-password-submit').closest('form'));
+
+      expect(await screen.findByText('Reset request failed')).toBeInTheDocument();
+    });
+
+    it('returns to the login view from the forgot-password view', () => {
+      localStorage.removeItem('sf_platform_token');
+      render(<OnboardingPage />);
+
+      fireEvent.click(screen.getByTestId('action-switch-to-login'));
+      fireEvent.click(screen.getByText('onboardingForgotPasswordAction'));
+      fireEvent.change(screen.getByLabelText(/onboardingEmailLabel/), {
+        target: { value: 'reset@example.com' },
+      });
+      fireEvent.click(screen.getByTestId('action-forgot-back-to-login'));
+
+      expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
+    });
+
+    it('blocks a reset submit when the two passwords do not match', async () => {
+      window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
+      render(<OnboardingPage />);
+
+      fireEvent.change(screen.getByLabelText(/onboardingNewPasswordLabel/), {
+        target: { value: 'first-secret' },
+      });
+      fireEvent.change(screen.getByLabelText(/onboardingConfirmPasswordLabel/), {
+        target: { value: 'second-secret' },
+      });
+      fireEvent.submit(screen.getByTestId('action-reset-password-submit').closest('form'));
+
+      expect(await screen.findByText('onboardingCredentialsMustMatch')).toBeInTheDocument();
+      expect(confirmPasswordReset).not.toHaveBeenCalled();
+    });
+
+    it('toggles reset password visibility and returns to login from the reset view', () => {
+      window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
+      render(<OnboardingPage />);
+
+      const newPassword = screen.getByLabelText(/onboardingNewPasswordLabel/);
+      expect(newPassword).toHaveAttribute('type', 'password');
+      fireEvent.click(screen.getByLabelText('onboardingShowPassword'));
+      expect(newPassword).toHaveAttribute('type', 'text');
+
+      fireEvent.click(screen.getByTestId('action-reset-back-to-login'));
+      expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
+    });
+
+    it('returns to login from the reset success screen', async () => {
+      confirmPasswordReset.mockResolvedValue({ success: true });
+      window.history.replaceState(null, '', '/onboarding?resetToken=reset-token');
+      render(<OnboardingPage />);
+
+      fireEvent.change(screen.getByLabelText(/onboardingNewPasswordLabel/), {
+        target: { value: 'new-secret' },
+      });
+      fireEvent.change(screen.getByLabelText(/onboardingConfirmPasswordLabel/), {
+        target: { value: 'new-secret' },
+      });
+      fireEvent.submit(screen.getByTestId('action-reset-password-submit').closest('form'));
+
+      // After success the form is replaced by the standalone success button.
+      await screen.findByText('onboardingResetPasswordSuccess');
+      const buttons = screen.getAllByText('onboardingBackToLoginAction');
+      fireEvent.click(buttons[buttons.length - 1]);
+      expect(screen.getByText('onboardingLoginTitle')).toBeInTheDocument();
+    });
+
+    it('updates the register password field on input', () => {
+      localStorage.removeItem('sf_platform_token');
+      render(<OnboardingPage />);
+
+      const password = screen.getByLabelText(/onboardingPasswordLabel/);
+      fireEvent.change(password, { target: { value: 'typed-secret' } });
+      expect(password).toHaveValue('typed-secret');
+    });
+
+    it('surfaces SSO provider rendering failures via the Promise.all catch', async () => {
+      renderSsoProviderButton.mockRejectedValueOnce({ userMessage: 'SSO render failed' });
+      localStorage.removeItem('sf_platform_token');
+      render(<OnboardingPage />);
+
+      expect(await screen.findByText('SSO render failed')).toBeInTheDocument();
+    });
+
+    it('renders the finalize setup progress state', async () => {
+      localStorage.setItem('sf_platform_token', 'platform-token');
+      fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
+      fetchEnvironments.mockResolvedValue([]);
+      let emit;
+      runOnboardingStream.mockImplementation(async (_fetch, _baseUrl, _token, _form, onMessage) => {
+        emit = onMessage;
+        return new Promise(() => {});
+      });
+
+      render(<OnboardingPage />);
+
+      fireEvent.click(await screen.findByText('onboardingContinueAction'));
+      fireEvent.click(screen.getByText('onboardingStartAction'));
+
+      // 'finalize' exists in the mocked initialSetupSteps, so applyProgressMessage
+      // can flip it to running and drive the organization/finalize progress branch.
+      await act(async () => {
+        emit({ type: 'progress', step: 'finalize', status: 'running' });
+      });
+      expect(screen.getByText('onboardingPreparingFinishingDescription')).toBeInTheDocument();
+    });
+  });
+
+  describe('password strength feedback', () => {
+    const typePassword = (container, value) => {
+      const input = container.querySelector('#reg-password');
+      fireEvent.change(input, { target: { value } });
+      return input;
+    };
+
+    it('disables the create account button while the password is empty', () => {
+      localStorage.removeItem('sf_platform_token');
+      render(<OnboardingPage />);
+      expect(screen.getByTestId('action-register-submit')).toBeDisabled();
+      // No requirements list until the user starts typing.
+      expect(screen.queryByTestId('register-password-requirements')).not.toBeInTheDocument();
+    });
+
+    it('shows the checklist and keeps submit disabled for a weak password', () => {
+      localStorage.removeItem('sf_platform_token');
+      const { container } = render(<OnboardingPage />);
+      typePassword(container, '123');
+      expect(screen.getByTestId('register-password-requirements')).toBeInTheDocument();
+      expect(screen.getByTestId('register-password-rule-minLength')).toHaveAttribute('data-met', 'false');
+      expect(screen.getByTestId('register-password-rule-special')).toHaveAttribute('data-met', 'false');
+      expect(screen.getByTestId('action-register-submit')).toBeDisabled();
+    });
+
+    it('marks every rule met and enables submit for a strong password', () => {
+      localStorage.removeItem('sf_platform_token');
+      const { container } = render(<OnboardingPage />);
+      typePassword(container, 'Str0ng!Pass');
+      ['minLength', 'uppercase', 'lowercase', 'number', 'special'].forEach(rule => {
+        expect(screen.getByTestId(`register-password-rule-${rule}`)).toHaveAttribute('data-met', 'true');
+      });
+      expect(screen.getByTestId('action-register-submit')).not.toBeDisabled();
+    });
   });
 });

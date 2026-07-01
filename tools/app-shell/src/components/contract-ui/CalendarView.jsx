@@ -147,8 +147,8 @@ export function CalendarView({
           size="icon"
           onClick={() => changeMonth(-1)}
           aria-label="Previous month"
-        >
-          <ChevronLeft className="h-5 w-5" />
+          data-testid="Button__936aad">
+          <ChevronLeft className="h-5 w-5" data-testid="ChevronLeft__936aad" />
         </Button>
 
         <h2 className="text-lg font-semibold">
@@ -160,11 +160,10 @@ export function CalendarView({
           size="icon"
           onClick={() => changeMonth(1)}
           aria-label="Next month"
-        >
-          <ChevronRight className="h-5 w-5" />
+          data-testid="Button__936aad">
+          <ChevronRight className="h-5 w-5" data-testid="ChevronRight__936aad" />
         </Button>
       </div>
-
       {/* Day-of-week header */}
       <div className="grid grid-cols-7 mb-1">
         {DAY_LABELS.map((d) => (
@@ -176,7 +175,6 @@ export function CalendarView({
           </div>
         ))}
       </div>
-
       {/* Calendar grid */}
       <div className="grid grid-cols-7 border-t border-l">
         {grid.flat().map((date) => {
@@ -208,7 +206,6 @@ export function CalendarView({
               >
                 {date.getDate()}
               </span>
-
               {/* Event pills */}
               <div className="mt-0.5 flex flex-col gap-0.5 w-full overflow-hidden">
                 {visible.map((evt) => (
@@ -241,7 +238,7 @@ export function CalendarView({
                   <Badge
                     variant="secondary"
                     className="text-[10px] px-1 py-0 h-4 w-fit"
-                  >
+                    data-testid="Badge__936aad">
                     + {overflow} more
                   </Badge>
                 )}

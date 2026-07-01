@@ -57,7 +57,7 @@ export function DistinctValuesList({
             className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-muted/50 transition-colors"
           >
             <span className="w-4 shrink-0">
-              {!activeCode && <Check className="h-3.5 w-3.5" />}
+              {!activeCode && <Check className="h-3.5 w-3.5" data-testid="Check__55c679" />}
             </span>
             <span className="flex-1 truncate">{allLabel}</span>
           </button>
@@ -70,14 +70,14 @@ export function DistinctValuesList({
             className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-muted/50 transition-colors"
           >
             <span className="w-4 shrink-0">
-              {activeCode === code && <Check className="h-3.5 w-3.5" />}
+              {activeCode === code && <Check className="h-3.5 w-3.5" data-testid="Check__55c679" />}
             </span>
             <span className="flex-1 truncate">{labelFor(code)}</span>
           </button>
         ))}
         {distinct.loading && codes.length === 0 && (
           <div className="flex items-center justify-center py-4 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__55c679" />
           </div>
         )}
         {!distinct.loading && codes.length === 0 && (
@@ -88,7 +88,9 @@ export function DistinctValuesList({
         {distinct.hasMore && (
           <div ref={sentinelRef} className="flex items-center justify-center py-2">
             {distinct.loadingMore && (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <Loader2
+                className="h-4 w-4 animate-spin text-muted-foreground"
+                data-testid="Loader2__55c679" />
             )}
           </div>
         )}

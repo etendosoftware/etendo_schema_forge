@@ -41,7 +41,7 @@ function EditablePrice({ price, originalPrice, uom, onChange }) {
           className="w-16 rounded border border-primary/40 bg-primary/5 px-1.5 py-0.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
           autoFocus
         />
-        <span className="text-muted-foreground">&euro; / {uom}</span>
+        <span className="text-muted-foreground">{ui('priceUnit')} {uom}</span>
       </div>
     );
   }
@@ -56,8 +56,10 @@ function EditablePrice({ price, originalPrice, uom, onChange }) {
         <span className="line-through text-muted-foreground/50">{originalPrice.toFixed(2)}</span>
       )}
       <span className={changed ? 'text-primary font-medium' : ''}>{price.toFixed(2)}</span>
-      <span>&euro; / {uom}</span>
-      <Pencil className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <span>{ui('priceUnit')} {uom}</span>
+      <Pencil
+        className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 transition-opacity"
+        data-testid="Pencil__5911c8" />
     </button>
   );
 }
@@ -76,6 +78,83 @@ export default function CartPanel({
 
   const itemCount = lines.reduce((acc, l) => acc + l.qty, 0);
 
+  let tabContent;
+  if (activeTab === 'history') {
+    tabContent = (
+      <PreviousOrdersTab
+        supplierId={supplierId}
+        onRepeatOrder={onRepeatOrder}
+        orders={previousOrders}
+        data-testid="PreviousOrdersTab__5911c8" />
+    );
+  } else if (lines.length === 0) {
+    tabContent = (
+      <div className="flex flex-col items-center justify-center h-full py-12 px-4 text-center">
+        <ShoppingCart
+          className="h-10 w-10 text-muted-foreground/30 mb-3"
+          data-testid="ShoppingCart__5911c8" />
+        <p className="text-sm font-medium text-muted-foreground">{ui('qpoEmptyCart')}</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">{ui('qpoEmptyCartHint')}</p>
+      </div>
+    );
+  } else {
+    tabContent = (
+      <div>
+        {/* Clear cart button */}
+        <div className="flex justify-end px-4 pt-2">
+          <button
+            onClick={() => dispatch({ type: 'CLEAR_CART' })}
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+          >
+            {ui('qpoClearCart')}
+          </button>
+        </div>
+        <div className="divide-y divide-border">
+          {lines.map(line => (
+            <div key={line.id} className="flex items-center gap-2 px-4 py-2.5">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{line.product.name}</p>
+                <EditablePrice
+                  price={line.unitPrice}
+                  originalPrice={line.product.price}
+                  uom={line.product.uom}
+                  onChange={(price) => dispatch({ type: 'UPDATE_PRICE', id: line.id, price })}
+                  data-testid="EditablePrice__5911c8" />
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => dispatch({ type: 'UPDATE_QTY', id: line.id, qty: line.qty - 1 })}
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  <Minus className="h-3 w-3" data-testid="Minus__5911c8" />
+                </button>
+                <span className="min-w-8 text-center text-sm font-medium tabular-nums">{line.qty.toLocaleString()}</span>
+                <button
+                  onClick={() => dispatch({ type: 'UPDATE_QTY', id: line.id, qty: line.qty + 1 })}
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  <Plus className="h-3 w-3" data-testid="Plus__5911c8" />
+                </button>
+              </div>
+
+              <span className="min-w-16 text-right text-sm font-semibold shrink-0 tabular-nums">
+                {(line.qty * line.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} &euro;
+              </span>
+
+              <button
+                onClick={() => dispatch({ type: 'REMOVE_ITEM', id: line.id })}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+              >
+                <Trash2 className="h-3.5 w-3.5" data-testid="Trash2__5911c8" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col rounded-lg border border-border bg-white">
       {/* Tabs */}
@@ -88,7 +167,7 @@ export default function CartPanel({
               : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
-          <ShoppingCart className="h-4 w-4" />
+          <ShoppingCart className="h-4 w-4" data-testid="ShoppingCart__5911c8" />
           {ui('qpoCart')}
           {lines.length > 0 && (
             <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-medium text-white">
@@ -104,78 +183,14 @@ export default function CartPanel({
               : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
-          <ClipboardList className="h-4 w-4" />
+          <ClipboardList className="h-4 w-4" data-testid="ClipboardList__5911c8" />
           {ui('qpoPreviousOrders')}
         </button>
       </div>
-
       {/* Tab content */}
       <div className="flex-1 overflow-auto">
-        {activeTab === 'history' ? (
-          <PreviousOrdersTab supplierId={supplierId} onRepeatOrder={onRepeatOrder} orders={previousOrders} />
-        ) : lines.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full py-12 px-4 text-center">
-            <ShoppingCart className="h-10 w-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">{ui('qpoEmptyCart')}</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">{ui('qpoEmptyCartHint')}</p>
-          </div>
-        ) : (
-          <div>
-            {/* Clear cart button */}
-            <div className="flex justify-end px-4 pt-2">
-              <button
-                onClick={() => dispatch({ type: 'CLEAR_CART' })}
-                className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-              >
-                {ui('qpoClearCart')}
-              </button>
-            </div>
-            <div className="divide-y divide-border">
-              {lines.map(line => (
-                <div key={line.id} className="flex items-center gap-2 px-4 py-2.5">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{line.product.name}</p>
-                    <EditablePrice
-                      price={line.unitPrice}
-                      originalPrice={line.product.price}
-                      uom={line.product.uom}
-                      onChange={(price) => dispatch({ type: 'UPDATE_PRICE', id: line.id, price })}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => dispatch({ type: 'UPDATE_QTY', id: line.id, qty: line.qty - 1 })}
-                      className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted transition-colors"
-                    >
-                      <Minus className="h-3 w-3" />
-                    </button>
-                    <span className="min-w-8 text-center text-sm font-medium tabular-nums">{line.qty.toLocaleString()}</span>
-                    <button
-                      onClick={() => dispatch({ type: 'UPDATE_QTY', id: line.id, qty: line.qty + 1 })}
-                      className="flex h-7 w-7 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted transition-colors"
-                    >
-                      <Plus className="h-3 w-3" />
-                    </button>
-                  </div>
-
-                  <span className="min-w-16 text-right text-sm font-semibold shrink-0 tabular-nums">
-                    {(line.qty * line.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} &euro;
-                  </span>
-
-                  <button
-                    onClick={() => dispatch({ type: 'REMOVE_ITEM', id: line.id })}
-                    className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {tabContent}
       </div>
-
       {/* Summary + Actions (only on cart tab with items) */}
       {activeTab === 'cart' && lines.length > 0 && (
         <div className="border-t border-border">
@@ -195,13 +210,27 @@ export default function CartPanel({
           </div>
 
           <div className="flex gap-2 px-4 pb-4">
-            <Button variant="outline" size="sm" className="flex-1" onClick={onCancel}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={onCancel}
+              data-testid="Button__5911c8">
               {ui('qpoCancel')}
             </Button>
-            <Button variant="outline" size="sm" className="flex-1" onClick={onCreateOrder}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={onCreateOrder}
+              data-testid="Button__5911c8">
               {ui('qpoCreateOrder')}
             </Button>
-            <Button size="sm" className="flex-1" onClick={onSendOrder}>
+            <Button
+              size="sm"
+              className="flex-1"
+              onClick={onSendOrder}
+              data-testid="Button__5911c8">
               {ui('qpoSendOrder')}
             </Button>
           </div>

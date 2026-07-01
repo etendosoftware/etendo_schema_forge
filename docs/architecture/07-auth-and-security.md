@@ -39,6 +39,7 @@ User  -->  OnboardingPage.jsx  -->  POST /sws/go/onboarding  (new environment)
 - `src/auth/AuthContext.jsx` -- React context providing `token`, `username`, `isAuthenticated`, `logout()`
 - `src/pages/OnboardingPage.jsx` -- Onboarding and environment login UI
 - `src/pages/onboarding/onboardingApi.js` -- API helpers for platform login, environment login, and onboarding stream
+- `src/pages/onboarding/onboardingSso.js` -- Provider-agnostic SSO frontend adapter; Google Identity Services is the first provider implementation
 - `com.etendoerp.go.onboarding.OnboardingSequenceGeneratorService` -- backend service that runs sequence generation during onboarding with explicit client admin context
 
 ### Base URL Detection
@@ -75,13 +76,24 @@ On mount, `AuthContext` reads the Etendo auth token from localStorage to restore
 `OnboardingPage.jsx` currently handles four public auth/onboarding states before the protected app loads:
 
 1. **Register** -- create the platform account.
-2. **Login** -- sign in with an existing platform account.
+2. **Login** -- sign in with an existing platform account using local credentials or a configured SSO provider.
 3. **Pre-create setup** -- a two-step onboarding wizard collects the user profile and initial company data before environment creation starts.
 4. **Creation progress modal** -- while `/sws/go/onboarding` runs, the UI switches to a centered modal-style progress state (20% / 50% / 80% / 100%) over a blurred application background until the new environment is ready.
 
 After a successful platform login or registration, `routeByEnvironments()` decides whether to:
 - open the setup wizard when the account has no environments yet, or
 - auto-login to the first available environment and redirect to `/dashboard`.
+
+### Provider-Agnostic SSO
+
+The app-shell keeps SSO provider-specific behavior outside the account flow:
+
+- `loginWithSsoProvider(fetchImpl, baseUrl, provider, payload)` posts to `POST /sws/go/sso/{provider}`.
+- Provider payloads are allowlisted per implementation. The Google Identity Services callback implementation sends only `credential`; browser code must not send account authority fields such as `email`, `name`, or `subject`.
+- `onboardingSso.js` resolves configured providers and renders provider-specific buttons. Google uses Google Identity Services with FedCM enabled for the button flow.
+- SSO success stores the same `sf_platform_token` used by local login and then routes through the existing environment-selection/onboarding logic.
+
+Google requires a public Web OAuth client id in `VITE_GOOGLE_CLIENT_ID`. This is a client identifier, not a secret. Google client secrets, provider API keys, signing secrets, and backend SSO policy configuration must never be exposed in the frontend bundle.
 
 ### API Call Authentication
 
@@ -233,7 +245,7 @@ If the SPA and API are on different origins, overly permissive CORS headers (`Ac
 - **Mitigation**: Set `Access-Control-Allow-Origin` to the exact SPA origin. Never use `*` with credentials.
 
 **Secrets in Frontend Bundle**
-No API keys, database credentials, internal URLs, or service tokens should appear in the JavaScript bundle. The only acceptable environment variable is `VITE_API_BASE` (a relative path) and `VITE_MOCK` (a boolean flag).
+No API keys, database credentials, internal URLs, service tokens, Google client secrets, or provider signing secrets should appear in the JavaScript bundle. Acceptable frontend variables are `VITE_API_BASE` (a relative path), `VITE_MOCK` (a boolean flag), and public provider client identifiers such as `VITE_GOOGLE_CLIENT_ID`.
 - **Mitigation**: Audit the build output (`dist/`) for sensitive strings. Vite only exposes variables prefixed with `VITE_`.
 
 **Token in localStorage**
@@ -302,11 +314,12 @@ Recommended CSP headers for the SPA:
 ```
 Content-Security-Policy:
   default-src 'self';
-  script-src 'self';
+  script-src 'self' https://accounts.google.com;
   style-src 'self' 'unsafe-inline';
   img-src 'self' data:;
   font-src 'self';
-  connect-src 'self' https://api.example.com;
+  connect-src 'self' https://api.example.com https://accounts.google.com;
+  frame-src https://accounts.google.com;
   frame-ancestors 'none';
   base-uri 'self';
   form-action 'self';
@@ -316,6 +329,7 @@ Notes:
 - `'unsafe-inline'` for styles is required by TailwindCSS and Radix UI (inline style attributes)
 - `frame-ancestors 'none'` prevents clickjacking
 - `connect-src` must include the API origin if different from the SPA origin
+- Google SSO requires `script-src`, `connect-src`, and `frame-src` entries for `https://accounts.google.com` so Google Identity Services and FedCM can render the button flow
 
 ## Dependency Security
 

@@ -44,7 +44,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
             aria-label={ui('ocrReviewCancel')}
             className="text-gray-400 hover:text-gray-600"
           >
-            <X size={18} />
+            <X size={18} data-testid="X__cdff87" />
           </button>
         </div>
 
@@ -81,7 +81,7 @@ export default function OcrLinesReviewModal({ columns = [], lines = [], token, a
                           onChange={(value) => update(idx, column.kind === 'entity'
                             ? { tax_id: value?.id || null, [column.extractFrom]: value?.label || row[column.extractFrom] }
                             : { [column.extractFrom]: value })}
-                        />
+                          data-testid="KindRenderer__cdff87" />
                       </td>
                     ))}
                   </tr>

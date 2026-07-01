@@ -97,7 +97,9 @@ export default function LinesSelectionBar({
                 justifyContent: 'center',
               }}
             >
-              <Trash2 style={{ width: trashIcon, height: trashIcon, color: '#F3164E' }} />
+              <Trash2
+                style={{ width: trashIcon, height: trashIcon, color: '#F3164E' }}
+                data-testid="Trash2__220f68" />
             </button>
             <button
               type="button"
@@ -114,7 +116,9 @@ export default function LinesSelectionBar({
                 border: 'none',
               }}
             >
-              <X style={{ width: closeIcon, height: closeIcon, color: '#828FA3' }} />
+              <X
+                style={{ width: closeIcon, height: closeIcon, color: '#828FA3' }}
+                data-testid="X__220f68" />
             </button>
           </div>
         </div>

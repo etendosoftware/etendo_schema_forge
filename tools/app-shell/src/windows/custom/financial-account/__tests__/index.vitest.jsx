@@ -1,7 +1,30 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { forwardRef, useImperativeHandle } from 'react';
+
+// useSearchParams and useParams are used by FinancialAccountWindow and its children.
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => vi.fn(),
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  useParams: () => ({ recordId: 'test-account' }),
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+}));
+
+// useAutoMatch is called by FinancialAccountWindow when the automatch modal is open.
+vi.mock('@/hooks/useReconciliation', () => ({
+  useAutoMatch: () => ({ groups: [], kpis: {}, loading: false, error: null, reload: vi.fn() }),
+  useApplySuggestions: () => ({ apply: vi.fn(), loading: false, error: null }),
+  usePendingStatementLines: () => ({ lines: [], total: 0, counts: {}, loading: false, reload: vi.fn() }),
+  useCandidateOperations: () => ({ candidates: [], loading: false }),
+  useReconcileGroup: () => ({ reconcile: vi.fn(), loading: false }),
+}));
+
+// Generic CSV export hook — stubbed so we assert the params without HTTP/auth.
+const exportCsvMock = vi.fn(() => Promise.resolve());
+vi.mock('@/hooks/useCsvExport', () => ({
+  useCsvExport: () => exportCsvMock,
 }));
 
 const setMetaMock = vi.fn();
@@ -18,13 +41,6 @@ vi.mock('sonner', () => {
   toast.error = (...args) => toastErrorFn(...args);
   return { toast };
 });
-
-// downloadMovementsCsv touches the DOM/URL APIs — stub it so we only need to
-// assert it was invoked with the expected payload.
-const downloadCsvMock = vi.fn();
-vi.mock('../movementsCsvExport', () => ({
-  downloadMovementsCsv: (...args) => downloadCsvMock(...args),
-}));
 
 // Stub the hook layer so the test runs without HTTP
 const useFinancialAccountMock = vi.fn();
@@ -53,8 +69,16 @@ vi.mock('../MovementsTab.jsx', () => ({
 vi.mock('../ReconciliationTab.jsx', () => ({
   ReconciliationTab: () => <div data-testid="tab-reconciliation" />,
 }));
+// Exposes the same ref API the real tab does, driven per-test by mockStatementsApi.
+let mockStatementsApi = { selected: [], filtered: [] };
 vi.mock('../ImportedStatementsTab.jsx', () => ({
-  ImportedStatementsTab: () => <div data-testid="tab-statements" />,
+  ImportedStatementsTab: forwardRef(function ImportedStatementsTabMock(_props, ref) {
+    useImperativeHandle(ref, () => ({
+      getSelectedStatementIds: () => mockStatementsApi.selected,
+      getFilteredStatements: () => mockStatementsApi.filtered,
+    }));
+    return <div data-testid="tab-statements" />;
+  }),
 }));
 
 import FinancialAccountWindow from '../index.jsx';
@@ -71,7 +95,8 @@ describe('FinancialAccountWindow', () => {
     toastFn.mockClear();
     toastSuccessFn.mockClear();
     toastErrorFn.mockClear();
-    downloadCsvMock.mockClear();
+    exportCsvMock.mockClear();
+    mockStatementsApi = { selected: [], filtered: [] };
     useFinancialAccountMock.mockReset();
     useAccountMovementsMock.mockReset();
     useBankStatementsMock.mockReset();
@@ -120,16 +145,15 @@ describe('FinancialAccountWindow', () => {
     expect(screen.getByTestId('tab-statements')).toBeInTheDocument();
   });
 
-  it('shows the "not on movements tab" toast when exporting from another tab', () => {
+  it('replaces Export with a clickable-looking Automatch button on the reconciliation tab', () => {
     setHooks();
     render(<FinancialAccountWindow recordId="acc-1" />);
 
-    // Switch away from the movements tab first.
     fireEvent.click(screen.getByText('financeAccountDetailTabReconciliation'));
-    fireEvent.click(screen.getByText('financeAccountDetailExport'));
 
-    expect(toastFn).toHaveBeenCalledWith('financeAccountDetailExportToast');
-    expect(downloadCsvMock).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('financial-account-export')).not.toBeInTheDocument();
+    expect(screen.getByTestId('financial-account-automatch')).toBeEnabled();
+    expect(exportCsvMock).not.toHaveBeenCalled();
   });
 
   it('shows an error toast when exporting an empty movements list', () => {
@@ -139,10 +163,10 @@ describe('FinancialAccountWindow', () => {
     fireEvent.click(screen.getByText('financeAccountDetailExport'));
 
     expect(toastErrorFn).toHaveBeenCalledWith('financeAccountDetailExportEmpty');
-    expect(downloadCsvMock).not.toHaveBeenCalled();
+    expect(exportCsvMock).not.toHaveBeenCalled();
   });
 
-  it('downloads CSV and toasts success when exporting non-empty movements', () => {
+  it('exports movements through the generic backend CSV flow with filtered ids', async () => {
     setHooks({
       account: { id: 'acc-1', name: 'BBVA' },
       movements: [{ id: 'm1' }, { id: 'm2' }],
@@ -151,11 +175,63 @@ describe('FinancialAccountWindow', () => {
 
     fireEvent.click(screen.getByText('financeAccountDetailExport'));
 
-    expect(downloadCsvMock).toHaveBeenCalledTimes(1);
-    const [rows, filename] = downloadCsvMock.mock.calls[0];
-    expect(rows).toEqual([{ id: 'm1' }, { id: 'm2' }]);
-    expect(filename).toBe('BBVA_movements');
+    await waitFor(() => expect(exportCsvMock).toHaveBeenCalledTimes(1));
+    const opts = exportCsvMock.mock.calls[0][0];
+    expect(opts.path).toBe('/sws/neo/financial-account-transactions');
+    expect(opts.params.FIN_Financial_Account_ID).toBe('acc-1');
+    expect(opts.params.ids).toBe('m1,m2');
+    expect(opts.params.columns).toContain('transactionTypeLabel:Transaction Type');
+    expect(opts.params.columns).toContain('depositAmount:Deposit Amount');
+    expect(opts.filename).toBe('BBVA_movements');
     expect(toastSuccessFn).toHaveBeenCalledWith('financeAccountDetailExportDone');
+  });
+
+  it('exports the filtered statement HEADERS when no statement is selected', async () => {
+    setHooks({ account: { id: 'acc-1', name: 'BBVA' }, statements: [{ id: 's1' }, { id: 's2' }] });
+    mockStatementsApi = { selected: [], filtered: [{ id: 's1' }, { id: 's2' }] };
+    render(<FinancialAccountWindow recordId="acc-1" />);
+
+    fireEvent.click(screen.getByText('financeAccountDetailTabStatements'));
+    fireEvent.click(screen.getByText('financeAccountDetailExport'));
+
+    await waitFor(() => expect(exportCsvMock).toHaveBeenCalledTimes(1));
+    const opts = exportCsvMock.mock.calls[0][0];
+    expect(opts.path).toBe('/sws/neo/bank-statements');
+    expect(opts.params.FIN_Financial_Account_ID).toBe('acc-1');
+    expect(opts.params.ids).toBe('s1,s2');
+    expect(opts.params.action).toBeUndefined();
+    expect(opts.params.columns).toContain('documentNo:Document No.');
+    expect(opts.filename).toBe('BBVA_statements');
+    expect(toastSuccessFn).toHaveBeenCalledWith('financeAccountDetailExportDone');
+  });
+
+  it('exports the LINES of the selected statement(s) when there is a selection', async () => {
+    setHooks({ account: { id: 'acc-1', name: 'BBVA' }, statements: [{ id: 's1' }, { id: 's2' }] });
+    mockStatementsApi = { selected: ['s1', 's2'], filtered: [{ id: 's1' }, { id: 's2' }] };
+    render(<FinancialAccountWindow recordId="acc-1" />);
+
+    fireEvent.click(screen.getByText('financeAccountDetailTabStatements'));
+    fireEvent.click(screen.getByText('financeAccountDetailExport'));
+
+    await waitFor(() => expect(exportCsvMock).toHaveBeenCalledTimes(1));
+    const opts = exportCsvMock.mock.calls[0][0];
+    expect(opts.params.action).toBe('lines');
+    expect(opts.params.statementIds).toBe('s1,s2');
+    expect(opts.params.columns).toContain('lineNo:Line No.');
+    expect(opts.filename).toBe('BBVA_lines');
+    expect(toastSuccessFn).toHaveBeenCalledWith('financeAccountDetailExportDone');
+  });
+
+  it('shows the empty toast when exporting headers with no filtered statements', async () => {
+    setHooks({ account: { id: 'acc-1', name: 'BBVA' }, statements: [] });
+    mockStatementsApi = { selected: [], filtered: [] };
+    render(<FinancialAccountWindow recordId="acc-1" />);
+
+    fireEvent.click(screen.getByText('financeAccountDetailTabStatements'));
+    fireEvent.click(screen.getByText('financeAccountDetailExport'));
+
+    await waitFor(() => expect(toastErrorFn).toHaveBeenCalledWith('financeAccountDetailExportEmpty'));
+    expect(exportCsvMock).not.toHaveBeenCalled();
   });
 
   it('calls useSetPageMeta with the account name in the breadcrumb', () => {

@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.12.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-05-20T18:17:18.976Z",
-  "checksum": "d40abae2a9c58614",
+  "updatedAt": "2026-06-29T12:09:17.534Z",
+  "checksum": "96b47a5663c08af8",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -47,7 +47,8 @@
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "selectorPriceCurrency": "org"
     },
     "entities": {
       "header": {
@@ -260,7 +261,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
             "reference": "Warehouse",
             "inputMode": "search",
@@ -289,71 +290,122 @@
             "enumValues": [
               {
                 "value": "AE",
-                "name": "Automatic Evaluation"
+                "name": "Automatic Evaluation",
+                "labels": {
+                  "es_ES": "Evaluación Automática"
+                }
               },
               {
                 "value": "CO",
-                "name": "Booked"
+                "name": "Booked",
+                "labels": {
+                  "es_ES": "Registrado"
+                }
               },
               {
                 "value": "CL",
-                "name": "Closed"
+                "name": "Closed",
+                "labels": {
+                  "es_ES": "Cerrado"
+                }
               },
               {
                 "value": "ETGO_CI",
-                "name": "Closed - Invoice Created"
+                "name": "Closed - Invoice Created",
+                "labels": {
+                  "es_ES": "Closed - Invoice Created"
+                }
               },
               {
                 "value": "CA",
-                "name": "Closed - Order Created"
+                "name": "Closed - Order Created",
+                "labels": {
+                  "es_ES": "Cerrado - Pedido creado"
+                }
               },
               {
                 "value": "CJ",
-                "name": "Closed - Rejected"
+                "name": "Closed - Rejected",
+                "labels": {
+                  "es_ES": "Cerrado - Rechazado"
+                }
               },
               {
                 "value": "DR",
-                "name": "Draft"
+                "name": "Draft",
+                "labels": {
+                  "es_ES": "Borrador"
+                }
               },
               {
                 "value": "ME",
-                "name": "Manual Evaluation"
+                "name": "Manual Evaluation",
+                "labels": {
+                  "es_ES": "Evaluación Manual"
+                }
               },
               {
                 "value": "NA",
-                "name": "Not Accepted"
+                "name": "Not Accepted",
+                "labels": {
+                  "es_ES": "No aprobado"
+                }
               },
               {
                 "value": "NC",
-                "name": "Not Confirmed"
+                "name": "Not Confirmed",
+                "labels": {
+                  "es_ES": "No Confirmado"
+                }
               },
               {
                 "value": "WP",
-                "name": "Not Paid"
+                "name": "Not Paid",
+                "labels": {
+                  "es_ES": "Pendiente de Pago"
+                }
               },
               {
                 "value": "RE",
-                "name": "Re-Opened"
+                "name": "Re-Opened",
+                "labels": {
+                  "es_ES": "Reabierto"
+                }
               },
               {
                 "value": "TMP",
-                "name": "Temporal"
+                "name": "Temporal",
+                "labels": {
+                  "es_ES": "Temporal"
+                }
               },
               {
                 "value": "UE",
-                "name": "Under Evaluation"
+                "name": "Under Evaluation",
+                "labels": {
+                  "es_ES": "Bajo evaluación"
+                }
               },
               {
                 "value": "IP",
-                "name": "Under Way"
+                "name": "Under Way",
+                "labels": {
+                  "es_ES": "En curso"
+                }
               },
               {
                 "value": "??",
-                "name": "Unknown"
+                "name": "Unknown",
+                "labels": {
+                  "es_ES": "Desconocido"
+                }
               },
               {
                 "value": "VO",
-                "name": "Voided"
+                "name": "Voided",
+                "labels": {
+                  "es_ES": "Anulado"
+                }
               }
             ],
             "defaultValue": "DR",
@@ -395,19 +447,20 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.cCurrencyId"
-            },
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
-            "section": "summary"
+            "section": "principal",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
           },
           {
             "name": "description",
@@ -482,6 +535,18 @@
               "type": "computed",
               "source": "false"
             }
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "label": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false
           }
         ],
         "searchableFields": [
@@ -510,13 +575,6 @@
             "derivation": {
               "type": "computed",
               "source": "DR"
-            }
-          },
-          {
-            "name": "currency",
-            "derivation": {
-              "type": "fromConfig",
-              "source": "context.cCurrencyId"
             }
           },
           {
@@ -674,6 +732,7 @@
             "section": "principal",
             "gridOrder": 5,
             "min": 0,
+            "max": 100,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_Amt"
             },
@@ -705,7 +764,7 @@
             "section": "principal",
             "gridOrder": 6,
             "validationRule": {
-              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID=@AD_CLIENT_ID@ AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
               "cascadeParams": [
                 "DateInvoiced",
@@ -796,6 +855,26 @@
               "evaluable": true,
               "js": "record['processed'] === true || record['gROSSPRICE'] === 'N'"
             }
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "label": "Currency",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.cCurrencyId"
+            },
+            "reference": "Currency",
+            "inputMode": "selector",
+            "defaultValue": "@C_Currency_ID@"
           }
         ],
         "searchableFields": [
@@ -828,6 +907,13 @@
             "derivation": {
               "type": "computed",
               "source": "0"
+            }
+          },
+          {
+            "name": "currency",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.cCurrencyId"
             }
           }
         ],
@@ -878,7 +964,8 @@
       },
       "dateFilterKey": "orderDate",
       "noHeaderBorder": true,
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "selectorPriceCurrency": "org"
     },
     "entities": {
       "header": {
@@ -1043,7 +1130,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1693,6 +1780,30 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "psd2GenerateBankPayment",
+            "apiKey": "psd2GenerateBankPayment",
+            "column": "EM_Psd2_Generate_Bank_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "eTPRRemovePayment",
+            "apiKey": "eTPRRemovePayment",
+            "column": "EM_Etpr_Remove_Payment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
           }
         ],
         "javaQualifier": "salesOrderHeaderHandler"
@@ -2179,7 +2290,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -2514,6 +2625,14 @@
             }
           ]
         }
+      },
+      {
+        "entity": "lines",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/sales-order/lines/selectors/currency"
       }
     ],
     "actions": [
@@ -2649,6 +2768,22 @@
         "column": "RM_Pickfromreceipt",
         "url": "/sws/neo/sales-order/header/{id}/action/rMPickfromreceipt",
         "processId": "A2C19D0EF6594D14A64BC62E99A89CC3",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
+        "field": "psd2GenerateBankPayment",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "url": "/sws/neo/sales-order/header/{id}/action/psd2GenerateBankPayment",
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "column": "EM_Etpr_Remove_Payment",
+        "url": "/sws/neo/sales-order/header/{id}/action/eTPRRemovePayment",
+        "processId": "D2923463223C4F1EADE335D22B9D8FE8",
         "processType": "obuiapp"
       },
       {
@@ -2788,6 +2923,14 @@
         "description": "Action endpoint for 'documentAction' in header should exist"
       },
       {
+        "id": "t-action-endpoint-header-eTPRRemovePayment",
+        "category": "action-endpoint",
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "runner": "node",
+        "description": "Action endpoint for 'eTPRRemovePayment' in header should exist"
+      },
+      {
         "id": "t-action-endpoint-header-generateTemplate",
         "category": "action-endpoint",
         "entity": "header",
@@ -2810,6 +2953,14 @@
         "field": "processNow",
         "runner": "node",
         "description": "Action endpoint for 'processNow' in header should exist"
+      },
+      {
+        "id": "t-action-endpoint-header-psd2GenerateBankPayment",
+        "category": "action-endpoint",
+        "entity": "header",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "Action endpoint for 'psd2GenerateBankPayment' in header should exist"
       },
       {
         "id": "t-action-endpoint-header-rMAddOrphanLine",
@@ -2928,6 +3079,14 @@
         "field": "orderDate",
         "runner": "node",
         "description": "Default value for 'orderDate' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-lines-currency",
+        "category": "default-value-type",
+        "entity": "lines",
+        "field": "currency",
+        "runner": "node",
+        "description": "Default value for 'currency' in lines should be a string"
       },
       {
         "id": "t-default-value-type-lines-discount",
@@ -3058,6 +3217,14 @@
         "description": "Field 'documentStatus' should be present in header"
       },
       {
+        "id": "t-field-presence-header-eTGOCurrencyRate",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-etgoTotalDiscount",
         "category": "field-presence",
         "entity": "header",
@@ -3144,6 +3311,14 @@
         "field": "warehouse",
         "runner": "node",
         "description": "Field 'warehouse' should be present in header"
+      },
+      {
+        "id": "t-field-presence-lines-currency",
+        "category": "field-presence",
+        "entity": "lines",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should be present in lines"
       },
       {
         "id": "t-field-presence-lines-description",
@@ -3266,6 +3441,14 @@
         "description": "Field 'documentStatus' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-eTGOCurrencyRate",
+        "category": "field-type",
+        "entity": "header",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-etgoTotalDiscount",
         "category": "field-type",
         "entity": "header",
@@ -3354,6 +3537,14 @@
         "description": "Field 'warehouse' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-lines-currency",
+        "category": "field-type",
+        "entity": "lines",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should have type 'string' in lines"
+      },
+      {
         "id": "t-field-type-lines-description",
         "category": "field-type",
         "entity": "lines",
@@ -3432,6 +3623,14 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Read-only logic for 'businessPartner' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-currency",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-documentNo",
@@ -3552,6 +3751,14 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Read-only logic for 'businessPartner' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-currency",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-documentNo",
@@ -5540,6 +5747,14 @@
         "description": "Selector endpoint for 'warehouse' in header should exist"
       },
       {
+        "id": "t-selector-endpoint-lines-currency",
+        "category": "selector-endpoint",
+        "entity": "lines",
+        "field": "currency",
+        "runner": "node",
+        "description": "Selector endpoint for 'currency' in lines should exist"
+      },
+      {
         "id": "t-selector-endpoint-lines-product",
         "category": "selector-endpoint",
         "entity": "lines",
@@ -5836,6 +6051,14 @@
         "description": "System field 'dropShipPartner' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-eTPRRemovePayment",
+        "category": "system-field",
+        "entity": "header",
+        "field": "eTPRRemovePayment",
+        "runner": "node",
+        "description": "System field 'eTPRRemovePayment' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-etvfacReversedInvoice",
         "category": "system-field",
         "entity": "header",
@@ -6026,6 +6249,14 @@
         "field": "project",
         "runner": "node",
         "description": "System field 'project' should exist in backend but not frontend for header"
+      },
+      {
+        "id": "t-system-field-header-psd2GenerateBankPayment",
+        "category": "system-field",
+        "entity": "header",
+        "field": "psd2GenerateBankPayment",
+        "runner": "node",
+        "description": "System field 'psd2GenerateBankPayment' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-quotation",
@@ -6346,14 +6577,6 @@
         "field": "cReturnReasonID",
         "runner": "node",
         "description": "System field 'cReturnReasonID' should exist in backend but not frontend for lines"
-      },
-      {
-        "id": "t-system-field-lines-currency",
-        "category": "system-field",
-        "entity": "lines",
-        "field": "currency",
-        "runner": "node",
-        "description": "System field 'currency' should exist in backend but not frontend for lines"
       },
       {
         "id": "t-system-field-lines-dateDelivered",
@@ -6763,25 +6986,25 @@
       }
     ],
     "summary": {
-      "total": 538,
+      "total": 549,
       "byCategory": {
-        "action-endpoint": 21,
+        "action-endpoint": 23,
         "crud-flags": 2,
-        "default-value-type": 8,
+        "default-value-type": 9,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 26,
-        "field-type": 26,
-        "readonlylogic-evaluable": 15,
-        "readonlylogic-valid": 15,
+        "field-presence": 28,
+        "field-type": 28,
+        "readonlylogic-evaluable": 16,
+        "readonlylogic-valid": 16,
         "rule-declared": 254,
         "searchable-filters": 5,
-        "selector-endpoint": 9,
-        "system-field": 149,
+        "selector-endpoint": 10,
+        "system-field": 150,
         "visibility": 2
       },
       "byRunner": {
-        "node": 538,
+        "node": 549,
         "junit": 0
       }
     }

@@ -44,12 +44,13 @@ export const purchaseInvoiceList = {
 };
 
 /**
- * Expected grid column labels per locale, in order, for both invoice grids.
- * Sales and purchase share the same final list because labelOverrides + the
- * customs are aligned. If a locale's session is active, the grid renders
- * using that set.
+ * Expected grid column labels per locale, in order. The first seven columns are
+ * shared by both invoice grids; the last column is the logistics-status column
+ * and differs per window: sales invoices ship to the customer ("Delivery Status"
+ * / "Estado de entrega"), while purchase invoices receive goods from the vendor
+ * ("Reception Status" / "Estado de recepción", ETP-4303).
  */
-export const INVOICE_GRID_COLUMNS = {
+const SHARED_INVOICE_COLUMNS = {
   es_ES: [
     'Fecha de la factura',
     'Nº documento',
@@ -58,7 +59,6 @@ export const INVOICE_GRID_COLUMNS = {
     'Estado doc.',
     'Imp.total',
     'Pendiente de pago',
-    'Estado de entrega',
   ],
   en_US: [
     'Invoice Date',
@@ -68,9 +68,23 @@ export const INVOICE_GRID_COLUMNS = {
     'Document Status',
     'Total Gross Amount',
     'Pending Payment',
-    'Delivery Status',
   ],
 };
+
+/** Last grid column (logistics status), per window and locale. */
+export const INVOICE_DELIVERY_STATUS_LABEL = {
+  'sales-invoice': { es_ES: 'Estado de entrega', en_US: 'Delivery Status' },
+  'purchase-invoice': { es_ES: 'Estado de recepción', en_US: 'Reception Status' },
+};
+
+/** Full expected column list (in order) for a given window + locale. */
+export function invoiceGridColumns(window, locale) {
+  return [...SHARED_INVOICE_COLUMNS[locale], INVOICE_DELIVERY_STATUS_LABEL[window][locale]];
+}
+
+// Shared subset, used only for locale detection (the seven common columns are
+// enough to tell es_ES from en_US regardless of the per-window last column).
+export const INVOICE_GRID_COLUMNS = SHARED_INVOICE_COLUMNS;
 
 // --- Purchase Order: List View ---
 export const purchaseOrderList = {

@@ -21,7 +21,7 @@ vi.mock('../MovementsToolbar/index.jsx', () => ({
         (= movementStatusLabelKey(paymentStatus)), NOT raw paymentStatus.
       */}
       <button
-        data-testid="set-status-completed"
+        data-testid="set-status-reconciled"
         onClick={() =>
           onAdvancedFilterChange({
             rowOperator: 'and',
@@ -29,7 +29,7 @@ vi.mock('../MovementsToolbar/index.jsx', () => ({
               {
                 field: 'statusFamily',
                 operator: 'iEquals',
-                value: 'financeAccountMovementsStatusCompleted',
+                value: 'financeAccountMovementsStatusReconciled',
               },
             ],
           })
@@ -111,9 +111,9 @@ function daysAgo(n) {
 }
 
 const M = [
-  { id: 'a', date: daysAgo(1),  amount:  100, paymentStatus: 'RPR',  trxType: 'BPD', documentNo: 'DOC-001', contact: 'ACME',   description: 'compra' },
+  { id: 'a', date: daysAgo(1),  amount:  100, paymentStatus: 'RPPC', trxType: 'BPD', documentNo: 'DOC-001', contact: 'ACME',   description: 'compra' },
   { id: 'b', date: daysAgo(2),  amount: -200, paymentStatus: 'RPAP', trxType: 'BPW', documentNo: 'DOC-002', contact: 'Globex', description: 'pago' },
-  { id: 'c', date: daysAgo(5),  amount:  300, paymentStatus: 'RPR',  trxType: 'BPD', documentNo: 'DOC-003', contact: 'Initech', description: 'venta' },
+  { id: 'c', date: daysAgo(5),  amount:  300, paymentStatus: 'RPPC', trxType: 'BPD', documentNo: 'DOC-003', contact: 'Initech', description: 'venta' },
   { id: 'd', date: daysAgo(40), amount:  -50, paymentStatus: 'RPR',  trxType: 'BPW', documentNo: 'DOC-OLD', contact: 'OldCo', description: 'antiguo' },
 ];
 
@@ -156,9 +156,9 @@ describe('MovementsTab — quick + advanced filter behavior', () => {
   it('filters by status family via the advanced filter (derived statusFamily)', () => {
     renderTab();
     act(() => {
-      screen.getByTestId('set-status-completed').click();
+      screen.getByTestId('set-status-reconciled').click();
     });
-    // Rows a (RPR) and c (RPR) map to the "Completed" family; b (RPAP) is Draft.
+    // Rows a (RPPC) and c (RPPC) map to "Conciliado"; b (RPAP) is "Sin conciliar".
     expect(rowIds().sort()).toEqual(['a', 'c']);
   });
 

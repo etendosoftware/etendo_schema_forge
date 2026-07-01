@@ -182,20 +182,20 @@ describe('formatPercent', () => {
     expect(formatPercent(undefined)).toBe('—');
   });
 
-  it('formats an integer rate as "21 %"', () => {
-    expect(formatPercent(21)).toBe('21 %');
+  it('formats an integer rate as "21,00" (no % sign, always 2 decimal places)', () => {
+    expect(formatPercent(21)).toBe('21,00');
   });
 
-  it('formats a decimal rate with comma separator', () => {
-    expect(formatPercent(1.75)).toBe('1,75 %');
+  it('formats a decimal rate with comma separator (no % sign)', () => {
+    expect(formatPercent(1.75)).toBe('1,75');
   });
 
-  it('formats zero', () => {
-    expect(formatPercent(0)).toBe('0 %');
+  it('formats zero as "0,00"', () => {
+    expect(formatPercent(0)).toBe('0,00');
   });
 
-  it('formats 10% without decimal', () => {
-    expect(formatPercent(10)).toBe('10 %');
+  it('formats 10 as "10,00" (always 2 decimal places)', () => {
+    expect(formatPercent(10)).toBe('10,00');
   });
 });
 

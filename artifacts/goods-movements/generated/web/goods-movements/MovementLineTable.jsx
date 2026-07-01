@@ -3,12 +3,11 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:movementLine
 const columns = [
-  { key: 'lineNo', column: 'Line', type: 'number', label: 'Line No.', required: true },
-  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true, lookup: true },
-  { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true },
+  { key: 'product', column: 'M_Product_ID', type: 'selector', label: 'Product', required: true, lookup: true, lookupDrawer: 'goods-movements-product' },
   { key: 'uOM', column: 'C_UOM_ID', type: 'selector', label: 'UOM', required: true },
   { key: 'storageBin', column: 'M_Locator_ID', type: 'selector', label: 'Storage Bin', required: true },
-  { key: 'newStorageBin', column: 'M_LocatorTo_ID', type: 'selector', label: 'New Storage Bin', required: true },
+  { key: 'newStorageBin', column: 'M_LocatorTo_ID', type: 'selector', label: 'New Storage Bin', required: true, excludeValueOf: 'storageBin' },
+  { key: 'movementQuantity', column: 'MovementQty', type: 'number', label: 'Movement Quantity', required: true, minWidth: 160 },
 ];
 // @sf-generated-end columns:movementLine
 

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useLocale } from '@/i18n';
 import { statusLabel } from '@/lib/statusBadge.js';
 import { StatusTag } from '@/components/ui/status-tag';
+import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 function CloneIcon({ size = 18 }) {
   return (
@@ -53,7 +54,12 @@ function Spinner() {
 }
 
 function DocStatusTag({ status, dictionary }) {
-  return <StatusTag status={status} label={statusLabel(status, dictionary)} />;
+  return (
+    <StatusTag
+      status={status}
+      label={statusLabel(status, dictionary)}
+      data-testid="StatusTag__66b049" />
+  );
 }
 
 /**
@@ -120,6 +126,7 @@ export default function CloneOrderModal({
           return;
         }
         newIds.push(json?.response?.data?.id);
+        trackDocumentCreated();
       }
 
       const result = n > 1 ? newIds : newIds[0];
@@ -160,11 +167,11 @@ export default function CloneOrderModal({
 
         {phase === 'done' ? (
           /* ── STATE 2: Done ── */
-          <>
+          (<>
             <div style={{ ...modalHeader, background: '#f0fdf4' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ ...iconBox, background: '#dcfce7', color: '#16a34a' }}>
-                  <CheckIcon size={18} />
+                  <CheckIcon size={18} data-testid="CheckIcon__66b049" />
                 </div>
                 <div>
                   <div style={titleStyle}>{doneTitle}</div>
@@ -173,7 +180,6 @@ export default function CloneOrderModal({
               </div>
               <button type="button" onClick={onClose} style={closeBtn}>×</button>
             </div>
-
             <div style={{ overflowY: 'auto', maxHeight: 360 }}>
               {clonedRecords.map((rec) => (
                 <div
@@ -195,21 +201,21 @@ export default function CloneOrderModal({
                   <span style={{ fontSize: 13, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {rec['businessPartner$_identifier'] || ''}
                   </span>
-                  <DocStatusTag status="DR" dictionary={dictionary} />
+                  <DocStatusTag status="DR" dictionary={dictionary} data-testid="DocStatusTag__66b049" />
                   <span style={{ color: '#9CA3AF', opacity: hoveredId === rec.id ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
-                    <ArrowRightIcon />
+                    <ArrowRightIcon data-testid="ArrowRightIcon__66b049" />
                   </span>
                 </div>
               ))}
             </div>
-          </>
+          </>)
         ) : (
           /* ── STATE 1: Confirm ── */
-          <>
+          (<>
             <div style={{ ...modalHeader, background: '#eff6ff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ ...iconBox, background: '#dbeafe', color: '#185FA5' }}>
-                  <CloneIcon size={18} />
+                  <CloneIcon size={18} data-testid="CloneIcon__66b049" />
                 </div>
                 <div>
                   <div style={titleStyle}>{confirmTitle}</div>
@@ -218,7 +224,6 @@ export default function CloneOrderModal({
               </div>
               <button type="button" onClick={onClose} style={closeBtn} disabled={phase === 'cloning'}>×</button>
             </div>
-
             {/* Document list */}
             <div style={{ overflowY: 'auto', maxHeight: 240, borderBottom: '1px solid #F3F4F6' }}>
               {items.map((item) => (
@@ -229,15 +234,17 @@ export default function CloneOrderModal({
                   <span style={{ fontSize: 13, color: '#111827', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {item['businessPartner$_identifier'] || ''}
                   </span>
-                  {item.documentStatus && <DocStatusTag status={item.documentStatus} dictionary={dictionary} />}
+                  {item.documentStatus && <DocStatusTag
+                    status={item.documentStatus}
+                    dictionary={dictionary}
+                    data-testid="DocStatusTag__66b049" />}
                 </div>
               ))}
             </div>
-
             <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               {/* Info banner */}
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
-                <span style={{ color: '#185FA5', flexShrink: 0, marginTop: 1 }}><InfoIcon /></span>
+                <span style={{ color: '#185FA5', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
                 <span style={{ fontSize: 12, color: '#1e40af', lineHeight: 1.5 }}>{ui('cloneInfoBanner')}</span>
               </div>
 
@@ -251,12 +258,12 @@ export default function CloneOrderModal({
                 disabled={phase === 'cloning'}
                 style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 8, opacity: phase === 'cloning' ? 0.6 : 1, cursor: phase === 'cloning' ? 'not-allowed' : 'pointer' }}
               >
-                {phase === 'cloning' ? <Spinner /> : <CloneIcon size={15} />}
+                {phase === 'cloning' ? <Spinner data-testid="Spinner__66b049" /> : <CloneIcon size={15} data-testid="CloneIcon__66b049" />}
                 {phase === 'cloning' ? ui(processingKey) : confirmTitle}
               </button>
 
             </div>
-          </>
+          </>)
         )}
       </div>
     </div>

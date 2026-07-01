@@ -10,7 +10,26 @@
     "relatedDocuments": true,
     "notesField": "description",
     "noHeaderBorder": true,
-    "menuActions": [],
+    "menuActions": [
+      {
+        "key": "reactivate",
+        "label": "Reactivate",
+        "labelKey": "reactivate",
+        "visibleWhenStatus": "CO",
+        "documentAction": "RE",
+        "successKey": "reactivated",
+        "preUnpost": true
+      },
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      }
+    ],
     "customComponents": {
       "headerTable": "InvoiceHeaderTable",
       "bottomSection": "PurchaseInvoiceBottomPanel"
@@ -23,6 +42,19 @@
       "label": "Confirm"
     },
     "dateFilterKey": "invoiceDate",
+    "subsetFilters": [
+      {
+        "label": "allTab"
+      },
+      {
+        "label": "invoicesTab",
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22API%22%7D%5D"
+      },
+      {
+        "label": "creditNotesTab",
+        "filter": "criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22APC%22%7D%5D"
+      }
+    ],
     "lineEntityConfig": "invoice",
     "linesLayout": "inlineEditable",
     "extraTabs": [
@@ -36,16 +68,18 @@
     ],
     "labelOverrides": {
       "es_ES": {
-        "POReference": "N\u00ba documento",
+        "POReference": "Nº documento",
         "OutstandingAmt": "Pendiente de pago",
         "EM_Etgo_Due_Date": "Vencimiento",
-        "em_etgo_delivery_status": "Estado de entrega"
+        "em_etgo_delivery_status": "Estado de recepción",
+        "C_DocTypeTarget_ID": "Tipo de documento"
       },
       "en_US": {
         "POReference": "Document No.",
         "OutstandingAmt": "Pending Payment",
         "EM_Etgo_Due_Date": "Due Date",
-        "em_etgo_delivery_status": "Delivery Status"
+        "em_etgo_delivery_status": "Reception Status",
+        "C_DocTypeTarget_ID": "Document Type"
       }
     },
     "secondaryTabs": {
@@ -63,7 +97,15 @@
           "toCurrency": "currency"
         }
       }
-    }
+    },
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ]
   },
   "entities": {
     "header": {
@@ -80,10 +122,12 @@
         },
         "transactionDocument": {
           "visibility": "editable",
-          "section": "other",
-          "form": false,
+          "section": "principal",
+          "form": true,
+          "seq": 15,
           "reference": "DocumentType",
           "inputMode": "selector",
+          "readOnlyLogicJs": "!!record.id",
           "readOnlyLogic": null
         },
         "invoiceDate": {
@@ -234,7 +278,7 @@
           "visibility": "readOnly",
           "form": false,
           "grid": true,
-          "gridOrder": 5
+          "gridOrder": 6
         },
         "summedLineAmount": {
           "visibility": "readOnly",
@@ -263,22 +307,21 @@
         },
         "outstandingAmount": {
           "visibility": "readOnly",
-          "form": false,
           "grid": true,
-          "gridOrder": 6,
-          "displayLogic": null
+          "gridOrder": 7,
+          "form": false
         },
         "eTGODueDate": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 7,
+          "gridOrder": 8,
           "form": false,
           "searchable": true
         },
         "eTGODeliveryStatus": {
           "visibility": "readOnly",
           "grid": true,
-          "gridOrder": 8,
+          "gridOrder": 9,
           "form": false
         },
         "dueAmount": {
@@ -316,7 +359,26 @@
           "displayLogic": null
         },
         "posted": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "gridOrder": 5,
+          "badge": true,
+          "badgeLabels": {
+            "true": {
+              "en_US": "Posted",
+              "es_ES": "Contabilizado"
+            },
+            "false": {
+              "en_US": "Not posted",
+              "es_ES": "Sin contabilizar"
+            }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "type": "boolean"
         },
         "trxOrganization": {
           "visibility": "discarded"
@@ -436,6 +498,11 @@
         "cdigoCSV": {
           "visibility": "readOnly",
           "form": false
+        },
+        "processed": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": false
         }
       }
     },
@@ -525,7 +592,8 @@
           "section": "principal",
           "derivation": null,
           "readOnlyLogic": "@Processed@='Y'",
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "lineNetAmount": {
           "visibility": "system",
@@ -763,7 +831,8 @@
           "grid": true,
           "readOnlyLogic": null
         }
-      }
+      },
+      "exclude": true
     },
     "lineTax": {
       "exclude": true
@@ -1009,7 +1078,7 @@
       "type": "readOnlyLogic",
       "entity": "invoice",
       "decision": "Keep",
-      "description": "Most header fields become read-only when document is processed (Processed=Y). Covers: documentNo, invoiceDate, businessPartner, partnerAddress, currency, paymentTerms, paymentMethod, priceList, transactionDocument.",
+      "description": "Most header fields become read-only when document is processed (Processed=Y). Covers: documentNo, invoiceDate, businessPartner, partnerAddress, currency, paymentTerms, paymentMethod, priceList. Note: transactionDocument uses readOnlyLogicJs (locks after first save via d=>!!d.id).",
       "impactIfOmitted": "Users could edit fields on confirmed invoices, breaking data integrity."
     },
     "READONLY_Processed_Lines": {

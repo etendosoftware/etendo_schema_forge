@@ -27,6 +27,10 @@ const INVOICE_HEADER = {
   documentNo: 'INV-MOCK-001',
   documentStatus: 'DR',
   'documentStatus$_identifier': 'Borrador',
+  // Document type is a required header field; the add-lines / import buttons
+  // stay hidden until it is set. Field renamed to transactionDocument in ETP-4299.
+  transactionDocument: 'doctype-mock-001',
+  'transactionDocument$_identifier': 'AR Invoice',
   businessPartner: BP_ID,
   'businessPartner$_identifier': 'Test Client',
   partnerAddress: 'addr-mock-001',
@@ -116,9 +120,12 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     // Expand the shipment to load its lines
     await shipmentRow.click();
 
-    // Wait for lines to load inside the modal and be auto-selected
+    // Wait for lines to load inside the modal
     const lineRow = page.getByText(/Cerveza/i).first();
     await expect(lineRow).toBeVisible({ timeout: 5_000 });
+
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
+    await page.getByRole('checkbox').last().click();
 
     // Click the import button
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
@@ -172,6 +179,9 @@ test.describe('Sales Invoice — import from shipment no-reload', () => {
     await expect(page.getByText(/SHIP-MOCK-001/i).first()).toBeVisible({ timeout: 5_000 });
     await page.getByText(/SHIP-MOCK-001/i).first().click();
     await expect(page.getByText(/Cerveza/i).first()).toBeVisible({ timeout: 5_000 });
+
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
+    await page.getByRole('checkbox').last().click();
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });
@@ -276,6 +286,9 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
     await expect(page.getByText(/SHIP-MOCK-001/i).first()).toBeVisible({ timeout: 5_000 });
     await page.getByText(/SHIP-MOCK-001/i).first().click();
     await expect(page.getByText(/Cerveza/i).first()).toBeVisible({ timeout: 5_000 });
+
+    // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
+    await page.getByRole('checkbox').last().click();
 
     const importSelectedBtn = page.getByRole('button', { name: /Import.*selected|Importar.*seleccionadas/i });
     await expect(importSelectedBtn).toBeEnabled({ timeout: 3_000 });

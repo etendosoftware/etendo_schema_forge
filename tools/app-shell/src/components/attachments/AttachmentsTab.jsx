@@ -104,8 +104,11 @@ export default function AttachmentsTab({
 
   return (
     <div className="space-y-2" data-testid="attachments-tab-panel">
-      <UploadDropzone onFiles={handleUpload} config={effectiveConfig} disabled={!recordId} />
-
+      <UploadDropzone
+        onFiles={handleUpload}
+        config={effectiveConfig}
+        disabled={!recordId}
+        data-testid="UploadDropzone__281340" />
       <AttachmentsTable
         items={items}
         loading={loading}
@@ -115,8 +118,7 @@ export default function AttachmentsTab({
         onDownloadAll={items.length > 0 ? downloadAll : undefined}
         onDeleteAll={items.length > 0 ? () => setConfirmDeleteAll(true) : undefined}
         formatBytes={formatBytes}
-      />
-
+        data-testid="AttachmentsTable__281340" />
       <ConfirmDeleteDialog
         open={!!deletingAttachment}
         onClose={() => setDeletingAttachment(null)}
@@ -125,8 +127,7 @@ export default function AttachmentsTab({
             remove(deletingAttachment.id);
           }
         }}
-      />
-
+        data-testid="ConfirmDeleteDialog__281340" />
       <ConfirmDeleteDialog
         open={!!pendingUploadFile}
         message={ui('attachmentsConfirmReplace')}
@@ -138,15 +139,14 @@ export default function AttachmentsTab({
             upload(pendingUploadFile);
           }
         }}
-      />
-
+        data-testid="ConfirmDeleteDialog__281340" />
       <ConfirmDeleteDialog
         open={confirmDeleteAll}
         title={ui('attachmentsRemoveAllTitle')}
         message={ui('attachmentsRemoveAllMessage')}
         onClose={() => setConfirmDeleteAll(false)}
         onConfirm={removeAll}
-      />
+        data-testid="ConfirmDeleteDialog__281340" />
     </div>
   );
 }

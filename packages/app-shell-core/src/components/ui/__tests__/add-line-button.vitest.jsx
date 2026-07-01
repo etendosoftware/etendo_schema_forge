@@ -1,12 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// Mock i18n
+// Mock i18n (kept for safety; the component no longer renders i18n strings itself)
 vi.mock('../../../i18n/index.js', () => ({
   useUI: () => (key) => key,
 }));
 
-// Mock Radix dropdown — render a simplified version that works in jsdom
+// Mock Radix dropdown — render a simplified version that works in jsdom.
 vi.mock('../dropdown-menu.jsx', async () => {
   const React = await import('react');
   return {
@@ -43,7 +43,7 @@ describe('AddLineButton', () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
     render(<AddLineButton onClick={onClick} label="Add line" />);
-    await user.click(screen.getByText('Add line'));
+    await user.click(screen.getByTestId('action-add-line'));
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
@@ -51,62 +51,102 @@ describe('AddLineButton', () => {
     const user = userEvent.setup();
     const onClick = vi.fn();
     render(<AddLineButton onClick={onClick} label="Add line" disabled={true} />);
-    await user.click(screen.getByText('Add line'));
+    await user.click(screen.getByTestId('action-add-line'));
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('renders chevron button with aria-label', () => {
-    render(<AddLineButton onClick={vi.fn()} label="Add line" />);
-    expect(screen.getByLabelText('More actions')).toBeInTheDocument();
+  // --- State 1: 0 additional actions ---
+  describe('with 0 additional actions', () => {
+    it('renders only the primary button (no chevron) when menuActions is undefined', () => {
+      render(<AddLineButton onClick={vi.fn()} label="Add line" />);
+      expect(screen.getByTestId('action-add-line')).toBeInTheDocument();
+      expect(screen.queryByTestId('action-add-line-more')).not.toBeInTheDocument();
+    });
+
+    it('renders only the primary button when menuActions is empty', () => {
+      render(<AddLineButton onClick={vi.fn()} label="Add line" menuActions={[]} />);
+      expect(screen.getByTestId('action-add-line')).toBeInTheDocument();
+      expect(screen.queryByTestId('action-add-line-more')).not.toBeInTheDocument();
+    });
+
+    it('does not render the "no additional actions" placeholder', () => {
+      render(<AddLineButton onClick={vi.fn()} label="Add line" menuActions={[]} />);
+      expect(screen.queryByText('noAdditionalActions')).not.toBeInTheDocument();
+    });
+
+    it('treats hideChevron as the 0-action case even with actions provided', () => {
+      const menuActions = [
+        { key: 'a', label: 'Action A', onClick: vi.fn() },
+        { key: 'b', label: 'Action B', onClick: vi.fn() },
+      ];
+      render(
+        <AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} hideChevron />
+      );
+      expect(screen.getByTestId('action-add-line')).toBeInTheDocument();
+      expect(screen.queryByTestId('action-add-line-more')).not.toBeInTheDocument();
+    });
   });
 
-  it('renders menu actions in the dropdown when provided', () => {
-    const menuActions = [
-      { key: 'delete-all', label: 'Delete All', onClick: vi.fn() },
-      { key: 'import', label: 'Import Lines', onClick: vi.fn() },
-    ];
-    render(
-      <AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} />
-    );
-    expect(screen.getByText('Delete All')).toBeInTheDocument();
-    expect(screen.getByText('Import Lines')).toBeInTheDocument();
+  // --- State 2: exactly 1 additional action (still uses the chevron dropdown) ---
+  describe('with exactly 1 additional action', () => {
+    it('renders the chevron and a one-item dropdown (no single-pill button)', () => {
+      const menuActions = [{ key: 'import', label: 'Import Lines', onClick: vi.fn() }];
+      render(<AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} />);
+      expect(screen.getByTestId('action-add-line-more')).toBeInTheDocument();
+      expect(screen.getByLabelText('More actions')).toBeInTheDocument();
+      expect(screen.getByText('Import Lines')).toBeInTheDocument();
+      expect(screen.queryByTestId('action-add-line-single')).not.toBeInTheDocument();
+    });
+
+    it('fires the action onClick when its dropdown item is clicked', async () => {
+      const user = userEvent.setup();
+      const actionClick = vi.fn();
+      const menuActions = [{ key: 'do', label: 'Do Something', onClick: actionClick }];
+      render(<AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} />);
+      await user.click(screen.getByText('Do Something'));
+      expect(actionClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('respects a disabled single action in the dropdown', () => {
+      const menuActions = [{ key: 'nope', label: 'Cannot Click', onClick: vi.fn(), disabled: true }];
+      render(<AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} />);
+      expect(screen.getByText('Cannot Click').closest('button')).toBeDisabled();
+    });
   });
 
-  it('renders fallback message when menuActions is empty', () => {
-    render(
-      <AddLineButton onClick={vi.fn()} label="Add line" menuActions={[]} />
-    );
-    // The UI key for no actions
-    expect(screen.getByText('noAdditionalActions')).toBeInTheDocument();
-  });
+  // --- State 3: 2+ additional actions ---
+  describe('with 2 or more additional actions', () => {
+    it('renders the chevron and lists all actions in the dropdown', () => {
+      const menuActions = [
+        { key: 'delete-all', label: 'Delete All', onClick: vi.fn() },
+        { key: 'import', label: 'Import Lines', onClick: vi.fn() },
+      ];
+      render(<AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} />);
+      expect(screen.getByTestId('action-add-line-more')).toBeInTheDocument();
+      expect(screen.getByLabelText('More actions')).toBeInTheDocument();
+      expect(screen.getByText('Delete All')).toBeInTheDocument();
+      expect(screen.getByText('Import Lines')).toBeInTheDocument();
+    });
 
-  it('renders fallback message when menuActions is not provided', () => {
-    render(
-      <AddLineButton onClick={vi.fn()} label="Add line" />
-    );
-    expect(screen.getByText('noAdditionalActions')).toBeInTheDocument();
-  });
+    it('calls a menu action onClick when its item is clicked', async () => {
+      const user = userEvent.setup();
+      const actionClick = vi.fn();
+      const menuActions = [
+        { key: 'a1', label: 'Do Something', onClick: actionClick },
+        { key: 'a2', label: 'Other', onClick: vi.fn() },
+      ];
+      render(<AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} />);
+      await user.click(screen.getByText('Do Something'));
+      expect(actionClick).toHaveBeenCalledTimes(1);
+    });
 
-  it('calls menu action onClick when a menu item is clicked', async () => {
-    const user = userEvent.setup();
-    const actionClick = vi.fn();
-    const menuActions = [
-      { key: 'action1', label: 'Do Something', onClick: actionClick },
-    ];
-    render(
-      <AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} />
-    );
-    await user.click(screen.getByText('Do Something'));
-    expect(actionClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders a disabled menu action as disabled', () => {
-    const menuActions = [
-      { key: 'nope', label: 'Cannot Click', onClick: vi.fn(), disabled: true },
-    ];
-    render(
-      <AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} />
-    );
-    expect(screen.getByText('Cannot Click').closest('button')).toBeDisabled();
+    it('renders a disabled menu action as disabled', () => {
+      const menuActions = [
+        { key: 'nope', label: 'Cannot Click', onClick: vi.fn(), disabled: true },
+        { key: 'ok', label: 'Can Click', onClick: vi.fn() },
+      ];
+      render(<AddLineButton onClick={vi.fn()} label="Add line" menuActions={menuActions} />);
+      expect(screen.getByText('Cannot Click').closest('button')).toBeDisabled();
+    });
   });
 });

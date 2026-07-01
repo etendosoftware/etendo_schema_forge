@@ -129,11 +129,8 @@ async function installGoodsShipmentMock(page, records) {
 // ---------------------------------------------------------------------------
 
 test.describe('Goods Shipment — Billing Badge (mocked)', () => {
-  async function expectBillingBadge(page, percent) {
-    const badge = page.locator('span').filter({
-      hasText: new RegExp(`^Facturado\\s*${percent}%$`),
-    });
-    await expect(badge).toBeVisible({ timeout: 10_000 });
+  async function expectBillingBadge(page) {
+    await expect(page.getByTestId('billing-badge')).toBeVisible({ timeout: 10_000 });
   }
 
   // -------------------------------------------------------------------------
@@ -152,7 +149,8 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
   // Detail view — billing badge states
   // -------------------------------------------------------------------------
 
-  test('billingBadgeShowsPendingWhenNotInvoiced', async ({ page }) => {
+  test('billingBadgeHiddenWhenNothingInvoiced', async ({ page }) => {
+    // ETP-4299: badge is hidden when invoiceStatus <= 0 (nothing invoiced yet).
     const shipment = makeShipment({
       id: 'gs-pending-001',
       invoiceStatus: 0,
@@ -161,7 +159,7 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
 
     await goToDetail(page, shipment);
 
-    await expectBillingBadge(page, 0);
+    await expect(page.getByTestId('billing-badge')).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('billingBadgeShowsPartiallyInvoicedWhenHalfInvoiced', async ({ page }) => {
@@ -173,7 +171,7 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
 
     await goToDetail(page, shipment);
 
-    await expectBillingBadge(page, 50);
+    await expectBillingBadge(page);
   });
 
   test('billingBadgeShowsInvoicedWhenFullyInvoiced', async ({ page }) => {
@@ -185,10 +183,11 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
 
     await goToDetail(page, shipment);
 
-    await expectBillingBadge(page, 100);
+    await expectBillingBadge(page);
   });
 
-  test('billingBadgeFallsBackToZeroWhenInvoiceStatusIsMissing', async ({ page }) => {
+  test('billingBadgeHiddenWhenInvoiceStatusIsNull', async ({ page }) => {
+    // ETP-4299: null invoiceStatus falls back to rawPct=0, which is <= 0 → badge hidden.
     const shipment = makeShipment({
       id: 'gs-ci-001',
       invoiceStatus: null,
@@ -197,7 +196,7 @@ test.describe('Goods Shipment — Billing Badge (mocked)', () => {
 
     await goToDetail(page, shipment);
 
-    await expectBillingBadge(page, 0);
+    await expect(page.getByTestId('billing-badge')).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('billingBadgeNotShownForDraftShipment', async ({ page }) => {

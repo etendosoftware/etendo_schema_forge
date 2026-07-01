@@ -5,6 +5,7 @@ import { useLocaleSwitch } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { formatDashboardAmount, localeFromUi } from '@/lib/dashboardNumberFormat.js';
 import { resolveDashboardNavigation } from '@/lib/dashboardNavigation.js';
+import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 
 async function resolveClientRoute({ client, token, apiBaseUrl }) {
   const directRoute = resolveDashboardNavigation(client?.navigation);
@@ -42,6 +43,11 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
   const { open: openCopilot } = useCopilot();
 
   const handleClick = async (client) => {
+    trackDashboardKpi('dashboard_document_opened', {
+      kpiId: DASHBOARD_KPI_IDS.dashboardToDocument,
+      entityType: 'business_partner',
+      source: 'dashboard_top_clients',
+    });
     const route = await resolveClientRoute({ client, token, apiBaseUrl });
     navigate(route);
   };
@@ -57,7 +63,6 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
           {ui('topClientsTitle')}
         </span>
       </div>
-
       {/* Info: padding 8px 0, gap 8px, overflow-y scroll */}
       {clients.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
@@ -77,7 +82,9 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: '#FFFFFF', border: '1px solid #D1D4DB', boxShadow: '0px 1px 2px rgba(18,18,23,0.05)', borderRadius: '8px', gap: '4px', cursor: 'pointer' }}
               >
-                <Sparkles style={{ width: '20px', height: '20px', color: '#828FA3' }} />
+                <Sparkles
+                  style={{ width: '20px', height: '20px', color: '#828FA3' }}
+                  data-testid="Sparkles__2d735a" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#121217' }}>
                   {ui('createWithCopilot')}
                 </span>
@@ -88,7 +95,9 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: '#121217', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }} />
+                <Plus
+                  style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }}
+                  data-testid="Plus__2d735a" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#FFFFFF' }}>
                   {ui('newClient')}
                 </span>
@@ -122,7 +131,9 @@ export function TopClientsList({ clients = [], currencyLabel = '', token = '', a
 
               {/* Trailing: chevron 24x24, padding 0 4px 0 0 */}
               <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', padding: '0 4px 0 0', width: '28px', height: '24px', flexShrink: 0 }}>
-                <ChevronRight style={{ width: '16px', height: '16px', color: '#828FA3' }} />
+                <ChevronRight
+                  style={{ width: '16px', height: '16px', color: '#828FA3' }}
+                  data-testid="ChevronRight__2d735a" />
               </div>
             </button>
           ))

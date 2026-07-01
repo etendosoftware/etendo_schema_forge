@@ -153,14 +153,15 @@ export default function SifDataTabs({ data, recordId, apiBaseUrl }) {
           )}
         </div>
       </div>
-
       <div className="flex-1 min-w-0">
         {effectiveTab === 'sii' && showSii && (
           <div className="flex flex-col gap-1.5">
             <div className="mb-0.5">
-              <SiiStatusBadge estado={data?.aeatsiiEstado} ui={ui} />
+              <SiiStatusBadge estado={data?.aeatsiiEstado} ui={ui} data-testid="SiiStatusBadge__6cf222" />
             </div>
-            <FieldRow label={ui('sifDataTabs.field.operationDate')}>
+            <FieldRow
+              label={ui('sifDataTabs.field.operationDate')}
+              data-testid="FieldRow__6cf222">
               <input
                 type="date"
                 className={inputCls}
@@ -171,7 +172,9 @@ export default function SifDataTabs({ data, recordId, apiBaseUrl }) {
                 disabled={dateReadOnly || savingField === 'etsgDateOperation'}
               />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.invoiceType')}>
+            <FieldRow
+              label={ui('sifDataTabs.field.invoiceType')}
+              data-testid="FieldRow__6cf222">
               <select
                 className={inputCls}
                 style={{ borderWidth: '0.5px' }}
@@ -186,10 +189,14 @@ export default function SifDataTabs({ data, recordId, apiBaseUrl }) {
                 ))}
               </select>
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.masterDescription')}>
-              <ReadValue value={siiDescriptionMasterIdentifier} />
+            <FieldRow
+              label={ui('sifDataTabs.field.masterDescription')}
+              data-testid="FieldRow__6cf222">
+              <ReadValue value={siiDescriptionMasterIdentifier} data-testid="ReadValue__6cf222" />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.siiDescription')}>
+            <FieldRow
+              label={ui('sifDataTabs.field.siiDescription')}
+              data-testid="FieldRow__6cf222">
               <input
                 type="text"
                 className={inputCls}
@@ -200,10 +207,16 @@ export default function SifDataTabs({ data, recordId, apiBaseUrl }) {
                 disabled={siiFieldReadOnly || savingField === 'aeatsiiDescripcionSii'}
               />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.exemptionCause')}>
-              <ReadValue value={data?.['aeatsiiCauseExemption$_identifier']} />
+            <FieldRow
+              label={ui('sifDataTabs.field.exemptionCause')}
+              data-testid="FieldRow__6cf222">
+              <ReadValue
+                value={data?.['aeatsiiCauseExemption$_identifier']}
+                data-testid="ReadValue__6cf222" />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.authorization')}>
+            <FieldRow
+              label={ui('sifDataTabs.field.authorization')}
+              data-testid="FieldRow__6cf222">
               <input
                 type="checkbox"
                 checked={Boolean(getVal('aeatsiiIsauthorization'))}
@@ -212,11 +225,11 @@ export default function SifDataTabs({ data, recordId, apiBaseUrl }) {
                 className={`mt-0.5 ${siiFieldReadOnly ? 'cursor-default' : 'cursor-pointer'}`}
               />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.siiYear')}>
-              <ReadValue value={data?.aeatsiiEjercicio} />
+            <FieldRow label={ui('sifDataTabs.field.siiYear')} data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.aeatsiiEjercicio} data-testid="ReadValue__6cf222" />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.siiPeriod')}>
-              <ReadValue value={data?.aeatsiiPeriodo} />
+            <FieldRow label={ui('sifDataTabs.field.siiPeriod')} data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.aeatsiiPeriodo} data-testid="ReadValue__6cf222" />
             </FieldRow>
           </div>
         )}
@@ -224,16 +237,22 @@ export default function SifDataTabs({ data, recordId, apiBaseUrl }) {
         {effectiveTab === 'tbai' && showTbai && (
           <div className="flex flex-col gap-1.5">
             <div className="mb-0.5">
-              <TbaiBadge issent={data?.tbaiIssent} ui={ui} />
+              <TbaiBadge issent={data?.tbaiIssent} ui={ui} data-testid="TbaiBadge__6cf222" />
             </div>
-            <FieldRow label={ui('sifDataTabs.field.chainSequence')}>
-              <ReadValue value={data?.tbaiSequence} />
+            <FieldRow
+              label={ui('sifDataTabs.field.chainSequence')}
+              data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.tbaiSequence} data-testid="ReadValue__6cf222" />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.invoiceSeries')}>
-              <ReadValue value={data?.tbaiInvoicenum} />
+            <FieldRow
+              label={ui('sifDataTabs.field.invoiceSeries')}
+              data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.tbaiInvoicenum} data-testid="ReadValue__6cf222" />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.invoiceSequence')}>
-              <ReadValue value={data?.tbaiInvoiceseq} />
+            <FieldRow
+              label={ui('sifDataTabs.field.invoiceSequence')}
+              data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.tbaiInvoiceseq} data-testid="ReadValue__6cf222" />
             </FieldRow>
           </div>
         )}
@@ -245,22 +264,26 @@ export default function SifDataTabs({ data, recordId, apiBaseUrl }) {
                 status={data?.etvfacInvoiceStatus}
                 sent={data?.etvfacSentToVerifac}
                 ui={ui}
-              />
+                data-testid="VerifactuBadge__6cf222" />
             </div>
-            <FieldRow label={ui('sifDataTabs.field.rfGenerationDate')}>
-              <ReadValue value={data?.etvfacDateIssue} />
+            <FieldRow
+              label={ui('sifDataTabs.field.rfGenerationDate')}
+              data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.etvfacDateIssue} data-testid="ReadValue__6cf222" />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.csv')}>
-              <ReadValue value={data?.cdigoCSV} />
+            <FieldRow label={ui('sifDataTabs.field.csv')} data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.cdigoCSV} data-testid="ReadValue__6cf222" />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.hash')}>
-              <ReadValue value={data?.etvfacHash} />
+            <FieldRow label={ui('sifDataTabs.field.hash')} data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.etvfacHash} data-testid="ReadValue__6cf222" />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.qrUrl')}>
-              <ReadValue value={data?.etvfacQRURL} />
+            <FieldRow label={ui('sifDataTabs.field.qrUrl')} data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.etvfacQRURL} data-testid="ReadValue__6cf222" />
             </FieldRow>
-            <FieldRow label={ui('sifDataTabs.field.issueDetail')}>
-              <ReadValue value={data?.etvfacIssueDescription} />
+            <FieldRow
+              label={ui('sifDataTabs.field.issueDetail')}
+              data-testid="FieldRow__6cf222">
+              <ReadValue value={data?.etvfacIssueDescription} data-testid="ReadValue__6cf222" />
             </FieldRow>
           </div>
         )}

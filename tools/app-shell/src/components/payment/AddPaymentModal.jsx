@@ -46,13 +46,18 @@ export function AddPaymentModal({
   const label = doc === 'in' ? 'Cobro' : 'Pago';
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8EAEF] bg-white p-0 [&>button]:hidden">
+    <Dialog
+      open={open}
+      onOpenChange={(v) => { if (!v) onClose(); }}
+      data-testid="Dialog__bfa23e">
+      <DialogContent
+        className="flex w-[1280px] max-w-[96vw] max-h-[90vh] flex-col gap-0 overflow-hidden rounded-2xl border border-[#E8EAEF] bg-white p-0 [&>button]:hidden"
+        data-testid="DialogContent__bfa23e">
         {/* Header */}
         <div className="shrink-0 px-6 pt-5">
           <div className="flex items-start justify-between">
             <div>
-              <DialogTitle asChild>
+              <DialogTitle asChild data-testid="DialogTitle__bfa23e">
                 <h2 className="m-0 flex items-center gap-2.5 text-lg font-bold leading-6 tracking-[-0.01em] text-[#121217]">
                   Agregar pago
                   <span
@@ -66,14 +71,14 @@ export function AddPaymentModal({
                   </span>
                 </h2>
               </DialogTitle>
-              <DialogDescription asChild>
+              <DialogDescription asChild data-testid="DialogDescription__bfa23e">
                 <p className="mt-0.5 text-[13px] leading-[18px] text-[#6C6C89]">
                   {subtitle || 'Registra un pago contra una transacción existente'}
                 </p>
               </DialogDescription>
             </div>
             <button type="button" onClick={onClose} className="grid h-[30px] w-[30px] place-items-center rounded-md text-[#6C6C89] hover:bg-[#F5F7F9] hover:text-[#121217]">
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" data-testid="X__bfa23e" />
             </button>
           </div>
         </div>
@@ -89,13 +94,13 @@ export function AddPaymentModal({
             showAccountField
             requireAccount={!account}
             onChange={setSnapshot}
-          />
+            data-testid="PaymentForm__bfa23e" />
         </div>
 
         {/* Footer */}
         <div className="flex shrink-0 items-center gap-2.5 border-t border-[#E8EAEF] px-6 py-4">
           <span className="mr-auto inline-flex items-center gap-1.5 text-xs leading-4 text-[#6C6C89]">
-            <Info className="h-[13px] w-[13px]" /> El pago se vincula a la transacción ya creada
+            <Info className="h-[13px] w-[13px]" data-testid="Info__bfa23e" /> El pago se vincula a la transacción ya creada
           </span>
           <button type="button" className={BTN_GHOST} onClick={onClose}>Cancelar</button>
           <button

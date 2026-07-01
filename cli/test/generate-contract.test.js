@@ -164,6 +164,59 @@ describe('generateFrontendContract — behavioral metadata', () => {
     assert.equal(pl.readOnlyLogic.js, 'record.processed === true');
   });
 
+  it('non-evaluable readOnlyLogic is flagged with reason and null js', () => {
+    // @#User_Level@ matches the @#\w+@ session-preference pattern in
+    // classifyEvaluability, so the expression cannot be evaluated client-side.
+    const nonEvaluableSchema = {
+      version: '0.1.0',
+      window: { id: '510', name: 'Non Evaluable', primaryEntity: 'order', category: 'test' },
+      entities: [{
+        name: 'order',
+        table: 'C_Order',
+        level: 'header',
+        fields: [
+          { name: 'priceList', column: 'M_PriceList_ID', type: 'foreignKey', visibility: 'editable',
+            required: true, searchable: false, grid: false, form: true,
+            readOnlyLogic: "@#User_Level@='S'" },
+        ],
+      }],
+    };
+    const fc = generateFrontendContract(nonEvaluableSchema);
+    const pl = fc.entities.order.fields.find(f => f.name === 'priceList');
+    assert.ok(pl.readOnlyLogic, 'readOnlyLogic metadata should be present');
+    assert.equal(pl.readOnlyLogic.evaluable, false, 'should be flagged non-evaluable');
+    assert.equal(pl.readOnlyLogic.reason, 'session-preference', 'reason should be set');
+    assert.equal(pl.readOnlyLogic.js, null, 'js should be nulled for non-evaluable logic');
+  });
+
+  it('readOnlyLogic.js uses matching rule.translated when the expression is evaluable', () => {
+    // The expression is evaluable (a plain field reference), so applyReadOnlyLogic
+    // keeps the matchingRule.translated value instead of recomputing the JS.
+    const translatedSchema = {
+      version: '0.1.0',
+      window: { id: '520', name: 'Translated RO', primaryEntity: 'order', category: 'test' },
+      entities: [{
+        name: 'order',
+        table: 'C_Order',
+        level: 'header',
+        fields: [
+          { name: 'priceList', column: 'M_PriceList_ID', type: 'foreignKey', visibility: 'editable',
+            required: true, searchable: false, grid: false, form: true,
+            readOnlyLogic: '@Processed@=Y' },
+        ],
+      }],
+    };
+    const translatedRules = [
+      { name: '@Processed@=Y', type: 'readOnlyLogic', className: '@Processed@=Y',
+        translated: 'record.customProcessedFlag === true' },
+    ];
+    const fc = generateFrontendContract(translatedSchema, translatedRules);
+    const pl = fc.entities.order.fields.find(f => f.name === 'priceList');
+    assert.equal(pl.readOnlyLogic.evaluable, true, 'expression should be evaluable');
+    assert.equal(pl.readOnlyLogic.js, 'record.customProcessedFlag === true',
+      'js should come from the matching rule translated value');
+  });
+
   it('callout without matching rule has only className, no effects', () => {
     const fc = generateFrontendContract(behavioralSchema, []);
     const bp = fc.entities.order.fields.find(f => f.name === 'businessPartner');
@@ -652,6 +705,40 @@ describe('generateTestManifest — edge cases', () => {
   });
 });
 
+describe('generateContract — agentProfile.agentPrompt (ETP-4252)', () => {
+  it('surfaces window.agentPrompt in agentProfile', () => {
+    const schema = {
+      ...minimalSchema,
+      window: { ...minimalSchema.window, agentPrompt: 'Confirm before completing.' },
+    };
+    const contract = generateContract(schema);
+    assert.equal(contract.agentProfile.agentPrompt, 'Confirm before completing.');
+  });
+
+  it('omits agentProfile.agentPrompt when the window declares none', () => {
+    const contract = generateContract(minimalSchema);
+    assert.equal(contract.agentProfile.agentPrompt, undefined);
+  });
+
+  it('omits agentProfile.agentPrompt when the value is whitespace-only', () => {
+    const schema = {
+      ...minimalSchema,
+      window: { ...minimalSchema.window, agentPrompt: '   ' },
+    };
+    const contract = generateContract(schema);
+    assert.equal(contract.agentProfile.agentPrompt, undefined);
+  });
+
+  it('trims surrounding whitespace from agentProfile.agentPrompt', () => {
+    const schema = {
+      ...minimalSchema,
+      window: { ...minimalSchema.window, agentPrompt: '  Confirm first.  ' },
+    };
+    const contract = generateContract(schema);
+    assert.equal(contract.agentProfile.agentPrompt, 'Confirm first.');
+  });
+});
+
 describe('generateContract — orchestrator', () => {
   it('returns version from schema', () => {
     const contract = generateContract(minimalSchema, sampleRules, sampleProcesses);
@@ -848,6 +935,27 @@ describe('generateApiPrediction', () => {
     assert.equal(prediction.crud.order.put, true);
     assert.equal(prediction.crud.order.patch, true);
     assert.equal(prediction.crud.order.delete, true);
+  });
+
+  it('surfaces handlesDefaults:false on crud when an entity opts out', () => {
+    const optOutSchema = {
+      version: '0.1.0',
+      window: { id: '900', name: 'GL Journal', primaryEntity: 'journal', category: 'finance' },
+      entities: [
+        { name: 'journal', table: 'GL_Journal', level: 'header', fields: [
+          { name: 'description', column: 'Description', type: 'string', visibility: 'editable', required: false, grid: false, form: true },
+        ] },
+        { name: 'journalLine', table: 'GL_JournalLine', level: 'line', handlesDefaults: false, fields: [
+          { name: 'account', column: 'Account_ID', type: 'foreignKey', reference: 'Account', inputMode: 'selector', visibility: 'editable', required: true, grid: true, form: true },
+        ] },
+      ],
+    };
+    const fc = generateFrontendContract(optOutSchema);
+    const bc = generateBackendContract(optOutSchema);
+    const prediction = generateApiPrediction(optOutSchema, fc, bc);
+    assert.equal(prediction.crud.journalLine.handlesDefaults, false);
+    // The opted-in entity does not carry the flag.
+    assert.equal(prediction.crud.journal.handlesDefaults, undefined);
   });
 
   it('CRUD URLs follow correct pattern', () => {
@@ -1132,6 +1240,61 @@ describe('generateFrontendContract — UI hints', () => {
     assert.equal(plain.precision, undefined);
     assert.equal(plain.isTranslated, undefined);
   });
+
+  it('maps the full set of grid/display UI hints onto the contract field', () => {
+    // Covers applyFieldUIHints + applyBasicFieldUIHints branches that the other
+    // tests do not assert (gridOrder, cellType, summable, seq, statusBar, badge,
+    // badge*, enumVariants, labels, display, grow, noTrailing, filterOnly,
+    // filterable:false, dot:false, min). Note the exact mapping rules:
+    //   summable/grow/statusBar/badge/noTrailing/filterOnly -> boolean true
+    //   filterable === false -> filterable: false ; dot === false -> dot: false
+    //   gridOrder/seq use != null ; min uses !== undefined
+    const richHintsSchema = {
+      version: '0.1.0',
+      window: { id: '610', name: 'Rich Hints', primaryEntity: 'order', category: 'test' },
+      entities: [{
+        name: 'order',
+        table: 'C_Order',
+        level: 'header',
+        fields: [
+          { name: 'amount', column: 'Amount', type: 'amount', visibility: 'editable',
+            required: false, searchable: false, grid: true, form: true,
+            gridOrder: 0, seq: 0, min: 0,
+            cellType: 'currency', summable: true, precision: 4,
+            statusBar: true, badge: true,
+            badgeLabels: { CO: 'Completed' }, badgeColors: { CO: 'green' },
+            badgeVariants: { CO: 'solid' }, enumVariants: { A: 'primary' },
+            labels: { en: 'Amount' }, display: 'inline', grow: true,
+            noTrailing: true, filterOnly: true, filterable: false, dot: false },
+        ],
+      }],
+    };
+    const fc = generateFrontendContract(richHintsSchema);
+    const amount = fc.entities.order.fields.find(f => f.name === 'amount');
+    // != null / !== undefined branches with falsy-but-present values
+    assert.equal(amount.gridOrder, 0);
+    assert.equal(amount.seq, 0);
+    assert.equal(amount.min, 0);
+    // straight passthroughs
+    assert.equal(amount.cellType, 'currency');
+    assert.equal(amount.precision, 4);
+    assert.equal(amount.display, 'inline');
+    assert.deepStrictEqual(amount.badgeLabels, { CO: 'Completed' });
+    assert.deepStrictEqual(amount.badgeColors, { CO: 'green' });
+    assert.deepStrictEqual(amount.badgeVariants, { CO: 'solid' });
+    assert.deepStrictEqual(amount.enumVariants, { A: 'primary' });
+    assert.deepStrictEqual(amount.labels, { en: 'Amount' });
+    // truthy hints normalized to boolean true
+    assert.equal(amount.summable, true);
+    assert.equal(amount.statusBar, true);
+    assert.equal(amount.badge, true);
+    assert.equal(amount.grow, true);
+    assert.equal(amount.noTrailing, true);
+    assert.equal(amount.filterOnly, true);
+    // explicit-false branches
+    assert.equal(amount.filterable, false);
+    assert.equal(amount.dot, false);
+  });
 });
 
 // ─── F3 refactor — drawer + display passthroughs ─────────────────────────────
@@ -1335,6 +1498,82 @@ describe('generateApiPrediction — selector context metadata (ETP-3955)', () =>
     const catSelector = prediction.selectors.find(s => s.field === 'category');
     // No dependsOn, no validationRule cascade params, not a priceList -> no context
     assert.equal(catSelector.context, undefined, 'simple FK without context should have no context metadata');
+  });
+
+  it('non-sales/purchases category puts the isSOTrx trx param into optional, not required', () => {
+    // assignTrxParamByCategory else branch: when windowCategory is neither
+    // 'sales' nor 'purchases', the isSOTrx param must land in context.optional.
+    const neutralSchema = {
+      version: '0.1.0',
+      window: { id: '910', name: 'Neutral Category', primaryEntity: 'doc', category: 'inventory' },
+      entities: [{
+        name: 'doc',
+        table: 'C_Doc',
+        level: 'header',
+        fields: [
+          { name: 'priceList', column: 'M_PriceList_ID', type: 'foreignKey',
+            reference: 'PriceList', inputMode: 'selector',
+            validationRule: { cascadeParams: ['isSOTrx'] },
+            visibility: 'editable', required: true, searchable: false, grid: false, form: true },
+        ],
+      }],
+    };
+    const fc = generateFrontendContract(neutralSchema);
+    const bc = generateBackendContract(neutralSchema);
+    const prediction = generateApiPrediction(neutralSchema, fc, bc);
+    const plSelector = prediction.selectors.find(s => s.field === 'priceList');
+    assert.ok(plSelector.context, 'priceList should have context metadata');
+    assert.ok(plSelector.context.optional, 'context should expose optional entries');
+    const optTrx = plSelector.context.optional.find(r => r.param === 'isSOTrx');
+    assert.ok(optTrx, 'isSOTrx should be in optional for a neutral category');
+    assert.equal(optTrx.source, 'windowCategory');
+    // and it must NOT be required for a neutral category
+    const reqTrx = (plSelector.context.required ?? []).find(r => r.param === 'isSOTrx');
+    assert.equal(reqTrx, undefined, 'isSOTrx must not be required for a neutral category');
+  });
+
+  it('canonical date param (dateParams[0]) is added to required exactly once', () => {
+    // addCanonicalDateParam: with cascadeParams containing several date params,
+    // only the first one (DateInvoiced) becomes the canonical required entry.
+    const dateCascadeSchema = {
+      version: '0.1.0',
+      window: { id: '920', name: 'Date Cascade', primaryEntity: 'header', category: 'test' },
+      entities: [
+        {
+          name: 'header',
+          table: 'C_Header',
+          level: 'header',
+          fields: [
+            { name: 'invoiceDate', column: 'DateInvoiced', type: 'date',
+              visibility: 'editable', required: true, searchable: false, grid: true, form: true },
+            { name: 'orderDate', column: 'DateOrdered', type: 'date',
+              visibility: 'editable', required: true, searchable: false, grid: true, form: true },
+          ],
+        },
+        {
+          name: 'line',
+          table: 'C_Line',
+          level: 'line',
+          fields: [
+            { name: 'tax', column: 'C_Tax_ID', type: 'foreignKey',
+              reference: 'Tax', inputMode: 'selector',
+              validationRule: { cascadeParams: ['DateInvoiced', 'DateOrdered'] },
+              visibility: 'editable', required: true, searchable: false, grid: true, form: true },
+          ],
+        },
+      ],
+    };
+    const fc = generateFrontendContract(dateCascadeSchema);
+    const bc = generateBackendContract(dateCascadeSchema);
+    const prediction = generateApiPrediction(dateCascadeSchema, fc, bc);
+    const taxSelector = prediction.selectors.find(s => s.field === 'tax' && s.entity === 'line');
+    assert.ok(taxSelector.context, 'tax should have context metadata');
+    const canonical = taxSelector.context.required.filter(r => r.param === 'DateInvoiced');
+    assert.equal(canonical.length, 1, 'canonical date param must appear exactly once');
+    assert.equal(canonical[0].format, 'DD-MM-YYYY', 'canonical date entry should carry date format');
+    // the non-canonical date param must not be added as its own required entry
+    const nonCanonical = taxSelector.context.required.filter(r => r.param === 'DateOrdered');
+    assert.equal(nonCanonical.length, 0, 'only the first date param is canonical');
   });
 });
 
@@ -1801,5 +2040,230 @@ describe('generateContract — agentProfile (ETP-3958)', () => {
     for (const action of profile.actions) {
       assert.ok(actionNames.has(action), `action ${action} should exist in apiPrediction`);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateFrontendContract — gridReadOnly passthrough
+// ---------------------------------------------------------------------------
+
+describe('generateFrontendContract — gridReadOnly', () => {
+  const schemaWithGridReadOnly = {
+    version: '0.1.0',
+    window: { id: '901', name: 'Return To Vendor', primaryEntity: 'shipment', category: 'purchasing' },
+    entities: [{
+      name: 'shipment',
+      table: 'M_InOut',
+      level: 'header',
+      fields: [
+        { name: 'quantity', column: 'Qty', type: 'number', visibility: 'editable',
+          required: true, searchable: false, grid: true, form: true,
+          gridReadOnly: true },
+        { name: 'product', column: 'M_Product_ID', type: 'foreignKey', visibility: 'editable',
+          required: true, searchable: false, grid: true, form: true },
+        { name: 'adClientId', column: 'AD_Client_ID', type: 'id', visibility: 'system',
+          required: true, searchable: false, grid: false, form: false },
+      ],
+    }],
+  };
+
+  it('includes gridReadOnly: true on the field when set in schema', () => {
+    const fc = generateFrontendContract(schemaWithGridReadOnly);
+    const qty = fc.entities.shipment.fields.find(f => f.name === 'quantity');
+    assert.equal(qty.gridReadOnly, true);
+  });
+
+  it('does NOT add gridReadOnly to a field that lacks it', () => {
+    const fc = generateFrontendContract(schemaWithGridReadOnly);
+    const product = fc.entities.shipment.fields.find(f => f.name === 'product');
+    assert.equal(product.gridReadOnly, undefined);
+  });
+});
+
+// ─── businessCritical per-field flag (ETP-4233) ──────────────────────────────
+
+const schemaWithBusinessCritical = {
+  version: '0.1.0',
+  window: { id: '900', name: 'Sales Order', primaryEntity: 'order', category: 'sales' },
+  entities: [{
+    name: 'order',
+    table: 'C_Order',
+    level: 'header',
+    fields: [
+      { name: 'documentNo', column: 'DocumentNo', type: 'string', visibility: 'readOnly',
+        required: true, searchable: true, grid: true, form: true, businessCritical: true },
+      { name: 'description', column: 'Description', type: 'string', visibility: 'editable',
+        required: false, searchable: false, grid: true, form: true },
+    ],
+  }],
+};
+
+describe('generateFrontendContract — businessCritical (ETP-4233)', () => {
+  it('field with businessCritical:true includes businessCritical in frontendContract', () => {
+    const fc = generateFrontendContract(schemaWithBusinessCritical);
+    const docNo = fc.entities.order.fields.find(f => f.name === 'documentNo');
+    assert.equal(docNo.businessCritical, true);
+  });
+
+  it('field without businessCritical does NOT have the key in frontendContract', () => {
+    const fc = generateFrontendContract(schemaWithBusinessCritical);
+    const desc = fc.entities.order.fields.find(f => f.name === 'description');
+    assert.equal(desc.businessCritical, undefined,
+      'businessCritical must be absent when not set — truthy-only contract');
+  });
+});
+
+describe('generateBackendContract — businessCritical (ETP-4233)', () => {
+  it('field with businessCritical:true includes businessCritical in backendContract', () => {
+    const bc = generateBackendContract(schemaWithBusinessCritical);
+    const docNo = bc.entities.order.fields.find(f => f.name === 'documentNo');
+    assert.equal(docNo.businessCritical, true);
+  });
+
+  it('field without businessCritical does NOT have the key in backendContract', () => {
+    const bc = generateBackendContract(schemaWithBusinessCritical);
+    const desc = bc.entities.order.fields.find(f => f.name === 'description');
+    assert.equal(desc.businessCritical, undefined,
+      'absent businessCritical must not appear in backendContract');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateFrontendContract — balanceFooter passthrough
+// ---------------------------------------------------------------------------
+
+describe('generateFrontendContract — balanceFooter', () => {
+  const schemaBase = {
+    version: '0.1.0',
+    window: { id: '820', name: 'G/L Journal', primaryEntity: 'journal', category: 'accounting' },
+    entities: [{
+      name: 'journal',
+      table: 'GL_Journal',
+      level: 'header',
+      fields: [
+        { name: 'documentNo', column: 'DocumentNo', type: 'string', visibility: 'editable',
+          required: true, searchable: false, grid: true, form: true },
+      ],
+    }],
+  };
+
+  it('copies balanceFooter to frontendContract.window when declared', () => {
+    const schema = {
+      ...schemaBase,
+      window: { ...schemaBase.window, balanceFooter: { debitField: 'amtSourceDr', creditField: 'amtSourceCr' } },
+    };
+    const fc = generateFrontendContract(schema);
+    assert.deepEqual(fc.window.balanceFooter, { debitField: 'amtSourceDr', creditField: 'amtSourceCr' });
+  });
+
+  it('does NOT add balanceFooter to frontendContract.window when absent', () => {
+    const fc = generateFrontendContract(schemaBase);
+    assert.equal(fc.window.balanceFooter, undefined);
+  });
+});
+
+describe('generateFrontendContract — skipDefault', () => {
+  const schema = {
+    version: '0.1.0',
+    window: { id: '900', name: 'GL Journal', primaryEntity: 'journal', category: 'finance' },
+    entities: [
+      { name: 'journal', table: 'GL_Journal', level: 'header', fields: [
+        { name: 'description', column: 'Description', type: 'string', visibility: 'editable', required: false, grid: false, form: true },
+      ] },
+      { name: 'journalLine', table: 'GL_JournalLine', level: 'line', fields: [
+        { name: 'account', column: 'Account_ID', type: 'foreignKey', reference: 'Account', inputMode: 'selector', visibility: 'editable', required: true, grid: true, form: true },
+        { name: 'note', column: 'Note', type: 'string', visibility: 'editable', required: false, grid: true, form: true, skipDefault: true },
+      ] },
+    ],
+  };
+
+  it('emits skipDefault on a field that declares it', () => {
+    const fc = generateFrontendContract(schema);
+    const note = fc.entities.journalLine.fields.find(f => f.name === 'note');
+    assert.equal(note.skipDefault, true);
+  });
+
+  it('omits skipDefault when the field does not declare it', () => {
+    const fc = generateFrontendContract(schema);
+    const account = fc.entities.journalLine.fields.find(f => f.name === 'account');
+    assert.equal(account.skipDefault, undefined);
+  });
+});
+
+describe('generateFrontendContract — handlesDefaults', () => {
+  const make = (handlesDefaults) => ({
+    version: '0.1.0',
+    window: { id: '900', name: 'GL Journal', primaryEntity: 'journal', category: 'finance' },
+    entities: [
+      { name: 'journal', table: 'GL_Journal', level: 'header', fields: [
+        { name: 'description', column: 'Description', type: 'string', visibility: 'editable', required: false, grid: false, form: true },
+      ] },
+      { name: 'journalLine', table: 'GL_JournalLine', level: 'line',
+        ...(handlesDefaults === undefined ? {} : { handlesDefaults }),
+        fields: [
+          { name: 'account', column: 'Account_ID', type: 'foreignKey', reference: 'Account', inputMode: 'selector', visibility: 'editable', required: true, grid: true, form: true },
+        ] },
+    ],
+  });
+
+  it('emits handlesDefaults:false when the entity opts out', () => {
+    const fc = generateFrontendContract(make(false));
+    assert.equal(fc.entities.journalLine.handlesDefaults, false);
+  });
+
+  it('omits handlesDefaults when the entity does not set it (default on)', () => {
+    const fc = generateFrontendContract(make(undefined));
+    assert.equal(fc.entities.journalLine.handlesDefaults, undefined);
+  });
+
+  it('omits handlesDefaults when explicitly true', () => {
+    const fc = generateFrontendContract(make(true));
+    assert.equal(fc.entities.journalLine.handlesDefaults, undefined);
+  });
+});
+
+// ─── ETP-4277 — max constraint in contract fields ─────────────────────────────
+describe('generateFrontendContract — max field constraint (ETP-4277)', () => {
+  function makeSchemaWithDiscount(discountExtra = {}) {
+    return {
+      version: '0.1.0',
+      window: { id: '999', name: 'Sales Order', primaryEntity: 'order', category: 'sales' },
+      entities: [{
+        name: 'order',
+        table: 'C_Order',
+        level: 'header',
+        fields: [
+          { name: 'discount', column: 'Discount', type: 'number', visibility: 'editable',
+            required: false, searchable: false, grid: true, form: true, ...discountExtra },
+          { name: 'quantity', column: 'QtyOrdered', type: 'number', visibility: 'editable',
+            required: false, searchable: false, grid: true, form: true },
+        ],
+      }],
+    };
+  }
+
+  it('copies max from curated field to contract field output', () => {
+    const fc = generateFrontendContract(makeSchemaWithDiscount({ max: 100 }));
+    const discount = fc.entities.order.fields.find(f => f.name === 'discount');
+    assert.equal(discount.max, 100);
+  });
+
+  it('does not set max on contract field when curated field has no max', () => {
+    const fc = generateFrontendContract(makeSchemaWithDiscount());
+    const discount = fc.entities.order.fields.find(f => f.name === 'discount');
+    assert.equal(discount.max, undefined);
+  });
+
+  it('does not set max on a sibling field that has no max declared', () => {
+    const fc = generateFrontendContract(makeSchemaWithDiscount({ max: 100 }));
+    const quantity = fc.entities.order.fields.find(f => f.name === 'quantity');
+    assert.equal(quantity.max, undefined);
+  });
+
+  it('copies both min and max when both are present on the curated field', () => {
+    const fc = generateFrontendContract(makeSchemaWithDiscount({ min: 0, max: 100 }));
+    const discount = fc.entities.order.fields.find(f => f.name === 'discount');
+    assert.equal(discount.min, 0);
+    assert.equal(discount.max, 100);
   });
 });

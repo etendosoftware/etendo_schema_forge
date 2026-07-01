@@ -17,6 +17,23 @@ export async function clearServiceWorkerStateAndReload() {
 
 
 /**
+ * True when focus is in an editable control (text input, textarea, select, or
+ * a contentEditable region). Used to avoid reloading the page out from under a
+ * user who is mid-typing — a reload would discard their input and steal focus.
+ */
+function isUserEditing() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  return (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    el.isContentEditable === true
+  );
+}
+
+/**
  * Hook to manage service worker updates.
  *
  * Registration is handled by vite-plugin-pwa via injectRegister:'auto', which
@@ -34,21 +51,57 @@ export function useServiceWorker({ onUpdateAvailable } = {}) {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
 
+    // Whether a SW already controlled this page when the hook mounted. On the
+    // very first visit the page loads uncontrolled and the freshly-installed SW
+    // claims it (clientsClaim) — that first 'controllerchange' carries no newer
+    // assets, so reloading would only destroy in-progress input for nothing.
+    const hadControllerAtMount = !!navigator.serviceWorker.controller;
+
     // When autoUpdate + skipWaiting + clientsClaim are active, a new SW
-    // activates and claims clients immediately. The 'controllerchange' event
-    // fires on every client when this happens — reload to pick up new assets.
+    // activates and claims clients immediately, firing 'controllerchange' on
+    // every client. We reload to pick up new assets — but never on top of a
+    // user who is mid-typing (see isUserEditing / pendingReload below).
     let reloading = false;
-    function handleControllerChange() {
+    let pendingReload = false;
+
+    function doReload() {
       if (reloading) return;
       reloading = true;
       onUpdateRef.current?.();
       window.location.reload();
     }
 
+    function handleControllerChange() {
+      // Guard 1: first-install claim — nothing newer to load, skip the reload.
+      if (!hadControllerAtMount) return;
+      // Guard 2: a genuine update arrived. If the user is editing, defer the
+      // reload so we don't wipe their input or steal focus. The new SW already
+      // controls the page, so fresh assets are served on their next navigation
+      // regardless; we flush the deferred reload once focus leaves the field.
+      if (isUserEditing()) {
+        pendingReload = true;
+        return;
+      }
+      doReload();
+    }
+
+    // Flush a deferred reload once the user stops editing. focusout fires before
+    // focus settles on the next element, so re-check on the next tick: if focus
+    // moved to another editable control we keep waiting, otherwise we reload.
+    function handleFocusOut() {
+      if (!pendingReload) return;
+      setTimeout(() => {
+        if (pendingReload && !isUserEditing()) {
+          doReload();
+        }
+      }, 0);
+    }
+
     navigator.serviceWorker.addEventListener(
       'controllerchange',
       handleControllerChange,
     );
+    document.addEventListener('focusout', handleFocusOut);
 
     // Poll for updates when the tab regains focus
     function handleVisibilityChange() {
@@ -66,6 +119,7 @@ export function useServiceWorker({ onUpdateAvailable } = {}) {
         'controllerchange',
         handleControllerChange,
       );
+      document.removeEventListener('focusout', handleFocusOut);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);

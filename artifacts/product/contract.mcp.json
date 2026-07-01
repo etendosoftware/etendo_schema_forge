@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-05-26T18:48:56.982Z",
-  "contractChecksum": "9f67b1a0e223cab2",
+  "updatedAt": "2026-06-11T11:56:34.940Z",
+  "contractChecksum": "abd729593e86f1be",
   "apiPrediction": {
     "specName": "product",
     "baseUrl": "/sws/neo/product",
@@ -141,7 +141,7 @@
         "field": "uOM",
         "column": "C_UOM_ID",
         "reference": "UOM",
-        "inputMode": "selector",
+        "inputMode": "search",
         "url": "/sws/neo/product/product/selectors/uOM"
       },
       {
@@ -555,6 +555,16 @@
     },
     "window": {
       "category": "inventory"
+    },
+    "labelOverrides": {
+      "en_US": {
+        "M_Product_Category_ID": "Category",
+        "ProductType": "Type"
+      },
+      "es_ES": {
+        "M_Product_Category_ID": "Categoría",
+        "ProductType": "Tipo"
+      }
     }
   },
   "formState": {
@@ -990,5 +1000,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "a748f61535821b55"
+  "checksum": "9562aacc2480ec2b"
 }

@@ -5,6 +5,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 const columns = [
   { key: 'searchKey', column: 'Value', type: 'string', label: 'Search Key', required: true },
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true },
+  { key: 'locationAddress', column: 'C_Location_ID', type: 'selector', label: 'Location / Address', required: true },
 ];
 // @sf-generated-end columns:warehouse
 

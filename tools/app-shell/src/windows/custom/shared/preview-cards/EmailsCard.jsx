@@ -34,7 +34,7 @@ export default function EmailsCard({ onSend }) {
           {ui('previewCardSendEmail')}
         </button>
       }
-    >
+      data-testid="SectionCard__d50c04">
       <p className="text-xs text-gray-400 py-2 text-center">{ui('previewCardNoEmailHistory')}</p>
     </SectionCard>
   );

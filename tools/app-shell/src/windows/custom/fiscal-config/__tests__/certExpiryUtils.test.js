@@ -10,7 +10,7 @@ const src = readFileSync(join(__dirname, '..', 'certExpiryUtils.js'), 'utf8');
 
 function addDays(n) {
   const now = new Date();
-  const target = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + n));
+  const target = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + n));
   return target.toISOString().slice(0, 10);
 }
 

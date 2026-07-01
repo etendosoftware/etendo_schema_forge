@@ -28,7 +28,10 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
       <>
         <div className="flex items-center justify-between rounded-xl border border-border bg-muted/10 px-4 py-3 gap-4">
           <div className="flex items-center gap-2.5">
-            <FileText size={16} className="text-muted-foreground flex-shrink-0" />
+            <FileText
+              size={16}
+              className="text-muted-foreground flex-shrink-0"
+              data-testid="FileText__e7cbc5" />
             <div>
               <div className="text-sm font-medium">{cert.name}</div>
               <div className="text-xs text-muted-foreground">
@@ -36,7 +39,11 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
               </div>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOpen(true)}
+            data-testid="Button__e7cbc5">
             {ui('fiscal.cert.replace')}
           </Button>
         </div>
@@ -47,7 +54,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
             apiBaseUrl={apiBaseUrl}
             onClose={() => setOpen(false)}
             onUpload={(c) => { setCert(c); setOpen(false); }}
-          />
+            data-testid="CertModal__e7cbc5" />
         )}
       </>
     );
@@ -66,7 +73,11 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
             : 'border-[#D1D4DB] hover:border-foreground/40 hover:bg-muted/20'}`}
       >
         <div className="mx-auto mb-2 w-9 h-9 rounded-xl border border-[#E8EAEF] bg-white flex items-center justify-center shadow-[0_1px_2px_rgba(18,18,23,0.05)]">
-          <Upload size={16} strokeWidth={1.75} className="text-[#8A94A6]" />
+          <Upload
+            size={16}
+            strokeWidth={1.75}
+            className="text-[#8A94A6]"
+            data-testid="Upload__e7cbc5" />
         </div>
         <p className="text-sm font-medium text-[#121217]">{ui('fiscal.cert.dropzone.drag')}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{ui('fiscal.cert.dropzone.formats')}</p>
@@ -78,7 +89,7 @@ export default function CertSection({ context, orgId, apiBaseUrl }) {
           apiBaseUrl={apiBaseUrl}
           onClose={() => setOpen(false)}
           onUpload={(c) => { setCert(c); setOpen(false); }}
-        />
+          data-testid="CertModal__e7cbc5" />
       )}
     </>
   );

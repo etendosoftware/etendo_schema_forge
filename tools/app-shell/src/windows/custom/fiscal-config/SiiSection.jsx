@@ -71,54 +71,61 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
   return (
     <div>
       {/* Estado */}
-      <SectionRow label={ui('fiscal.sii.legend.status')} noBorderTop>
+      <SectionRow
+        label={ui('fiscal.sii.legend.status')}
+        noBorderTop
+        data-testid="SectionRow__fcb159">
         <div className="space-y-4">
           <div className="flex flex-wrap gap-4">
             <div className="space-y-1 w-[376px]">
-              <Label>{ui('fiscal.sii.field.enrollDate')}</Label>
-              <DateField value={form.fechaAcogidaSII} onChange={(iso) => set('fechaAcogidaSII', iso)} />
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.enrollDate')}</Label>
+              <DateField
+                value={form.fechaAcogidaSII}
+                onChange={(iso) => set('fechaAcogidaSII', iso)}
+                data-testid="DateField__fcb159" />
             </div>
             <div className="space-y-1 w-[376px]">
-              <Label>{ui('fiscal.sii.field.monitorDate')}</Label>
-              <DateField value={form.monitordate} onChange={(iso) => set('monitordate', iso)} />
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.monitorDate')}</Label>
+              <DateField
+                value={form.monitordate}
+                onChange={(iso) => set('monitordate', iso)}
+                data-testid="DateField__fcb159" />
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Switch
               checked={isEtendoTrue(form.acogidaAlSII)}
               onCheckedChange={v => set('acogidaAlSII', v ? 'Y' : 'N')}
-            />
+              data-testid="Switch__fcb159" />
             <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.enrolled')}</span>
           </div>
         </div>
       </SectionRow>
-
       {/* Entorno */}
-      <SectionRow label={ui('fiscal.sii.legend.env')}>
+      <SectionRow label={ui('fiscal.sii.legend.env')} data-testid="SectionRow__fcb159">
         <div className="flex flex-wrap gap-4">
           <div className="flex items-center gap-2 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.entornoDeProduccin)}
               onCheckedChange={v => set('entornoDeProduccin', v ? 'Y' : 'N')}
-            />
+              data-testid="Switch__fcb159" />
             <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.production')}</span>
           </div>
           <div className="flex items-center gap-2 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.adjuntarArchivosXML)}
               onCheckedChange={v => set('adjuntarArchivosXML', v ? 'Y' : 'N')}
-            />
+              data-testid="Switch__fcb159" />
             <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.attachXml')}</span>
           </div>
         </div>
       </SectionRow>
-
       {/* Envíos */}
-      <SectionRow label={ui('fiscal.sii.legend.sends')}>
+      <SectionRow label={ui('fiscal.sii.legend.sends')} data-testid="SectionRow__fcb159">
         <div className="space-y-4">
           <div className="flex flex-wrap gap-4">
             <div className="space-y-1 w-[376px]">
-              <Label>{ui('fiscal.sii.field.deadline')}</Label>
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.deadline')}</Label>
               <div className="flex items-center">
                 <input
                   type="number"
@@ -144,72 +151,83 @@ const SiiSection = forwardRef(function SiiSection({ record, apiBaseUrl, orgId, o
               </div>
             </div>
             <div className="space-y-1 w-[376px]">
-              <Label>{ui('fiscal.sii.field.cadenceSale')}</Label>
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.cadenceSale')}</Label>
               <Input
                 type="number"
                 min={0}
                 value={form.cadenciaEnvoFacturasVentaASII}
                 onChange={e => set('cadenciaEnvoFacturasVentaASII', e.target.value)}
                 className="bg-white"
-              />
+                data-testid="Input__fcb159" />
             </div>
             <div className="space-y-1 w-[376px]">
-              <Label>{ui('fiscal.sii.field.cadencePurchase')}</Label>
+              <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.cadencePurchase')}</Label>
               <Input
                 type="number"
                 min={0}
                 value={form.cadenciaEnvoFacturasCompraASII}
                 onChange={e => set('cadenciaEnvoFacturasCompraASII', e.target.value)}
                 className="bg-white"
-              />
+                data-testid="Input__fcb159" />
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Switch
               checked={isEtendoTrue(form.postedInvoices)}
               onCheckedChange={v => set('postedInvoices', v ? 'Y' : 'N')}
-            />
+              data-testid="Switch__fcb159" />
             <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.postedOnly')}</span>
           </div>
         </div>
       </SectionRow>
-
       {/* Régimen especial */}
-      <SectionRow label={ui('fiscal.sii.legend.special')}>
+      <SectionRow label={ui('fiscal.sii.legend.special')} data-testid="SectionRow__fcb159">
         <div className="flex flex-wrap gap-4 items-start">
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.recc)}
               onCheckedChange={v => set('recc', v ? 'Y' : 'N')}
-            />
+              data-testid="Switch__fcb159" />
             <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.recc')}</span>
           </div>
           <div className="flex items-center gap-2 pt-1 w-[376px]">
             <Switch
               checked={isEtendoTrue(form.redeme)}
               onCheckedChange={v => set('redeme', v ? 'Y' : 'N')}
-            />
+              data-testid="Switch__fcb159" />
             <span className="text-sm text-[#121217]">{ui('fiscal.sii.field.redeme')}</span>
           </div>
           <div className="space-y-1 w-[376px]">
-            <Label>{ui('fiscal.sii.field.authno')}</Label>
-            <Input value={form.authorizationno} onChange={e => set('authorizationno', e.target.value)} className="bg-white" />
+            <Label data-testid="Label__fcb159">{ui('fiscal.sii.field.authno')}</Label>
+            <Input
+              value={form.authorizationno}
+              onChange={e => set('authorizationno', e.target.value)}
+              className="bg-white"
+              data-testid="Input__fcb159" />
           </div>
         </div>
       </SectionRow>
-
       {/* Certificado digital — only shown when hideCert is false */}
       {!hideCert && (
         <SectionRow
           label={ui('fiscal.cert.section.legend')}
           boldLabel
           labelExtra={<span className="text-xs text-[#121217] leading-tight">{ui('fiscal.cert.section.hint')}</span>}
-        >
-          <CertSection context="sii" orgId={orgId} apiBaseUrl={apiBaseUrl} />
+          data-testid="SectionRow__fcb159">
+          <CertSection
+            context="sii"
+            orgId={orgId}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="CertSection__fcb159" />
         </SectionRow>
       )}
-
-      <SectionSaveButton error={error} hideSave={hideSave} save={save} saving={saving} ui={ui} />
+      <SectionSaveButton
+        error={error}
+        hideSave={hideSave}
+        save={save}
+        saving={saving}
+        ui={ui}
+        data-testid="SectionSaveButton__fcb159" />
     </div>
   );
 });

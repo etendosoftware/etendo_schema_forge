@@ -45,6 +45,13 @@ const LABEL_OVERRIDES = {
 // Mirrors InvoiceHeaderTable columns (key + column + type only) so that
 // buildAdvancedFilterCriteria can resolve filter modes on the first render,
 // before DataTable fires onColumnsReady.
+const SUBSET_FILTERS = [
+  { label: 'allTab' },
+  { label: 'invoicesTab',    filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI%22%7D%5D' },
+  { label: 'creditNotesTab', filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARC%22%7D%5D' },
+  { label: 'returnsTab',     filter: 'criteria=%5B%7B%22fieldName%22%3A%22transactionDocument%24documentCategory%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3A%22ARI_RM%22%7D%5D' },
+];
+
 const OVERDUE_INITIAL_COLUMNS = [
   { key: 'invoiceDate', column: 'DateInvoiced', type: 'date' },
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
@@ -56,11 +63,16 @@ const OVERDUE_INITIAL_COLUMNS = [
 ];
 
 function SalesInvoiceBulkAction(props) {
-  return <BulkDocumentAction {...props} labelKey="confirmBulk" />;
+  return (
+    <BulkDocumentAction
+      {...props}
+      labelKey="confirmBulk"
+      data-testid="BulkDocumentAction__c01c21" />
+  );
 }
 
 function SalesInvoiceTable(props) {
-  return <InvoiceHeaderTable {...props} />;
+  return <InvoiceHeaderTable {...props} data-testid="InvoiceHeaderTable__c01c21" />;
 }
 
 /**
@@ -123,7 +135,7 @@ export default function SalesInvoiceWindow(props) {
           onAfterSave={true}
           refetchAfterSave={true}
           breadcrumb={breadcrumb}
-        />
+          data-testid="HeaderPage__c01c21" />
         {contactPortal}
       </CreateContactContext.Provider>
     );
@@ -162,6 +174,7 @@ export default function SalesInvoiceWindow(props) {
         entityLabel="Sales Invoice"
         breadcrumb={breadcrumb}
         labelOverrides={LABEL_OVERRIDES}
+        subsetFilters={SUBSET_FILTERS}
         initialColumnFilters={initialColumnFilters}
         initialAdvancedFilter={initialAdvancedFilter}
         initialColumns={isInvoiceFilter ? OVERDUE_INITIAL_COLUMNS : null}
@@ -180,11 +193,11 @@ export default function SalesInvoiceWindow(props) {
             onClose={onClose}
             onEdit={onEdit}
             onInvoiceUpdated={() => setRefreshKey(k => k + 1)}
-          />
+            data-testid="InvoicePreview__c01c21" />
         )}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
-      />
+        data-testid="ListView__c01c21" />
       {deleteDialog}
       {emailRow && createPortal(
         <SendDocumentModal
@@ -199,7 +212,7 @@ export default function SalesInvoiceWindow(props) {
           pdfBlobUrl={emailPdfUrl}
           pdfBlobLoading={emailPdfLoading}
           onClose={() => setEmailRow(null)}
-        />,
+          data-testid="SendDocumentModal__c01c21" />,
         document.body,
       )}
       {cloneTargets && createPortal(
@@ -212,7 +225,7 @@ export default function SalesInvoiceWindow(props) {
           processingKey="invoiceProcessing"
           onClose={() => setCloneTargets(null)}
           onCloned={() => setRefreshKey(k => k + 1)}
-        />,
+          data-testid="CloneOrderModal__c01c21" />,
         document.body,
       )}
     </>

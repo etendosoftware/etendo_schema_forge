@@ -33,7 +33,7 @@ describe('AccountTypeFilter', () => {
     expect(screen.getByTestId('account-type-filter-option-all')).toBeInTheDocument();
     expect(screen.getByTestId('account-type-filter-option-b')).toBeInTheDocument();
     expect(screen.getByTestId('account-type-filter-option-c')).toBeInTheDocument();
-    expect(screen.getByTestId('account-type-filter-option-t')).toBeInTheDocument();
+    expect(screen.getByTestId('account-type-filter-option-ca')).toBeInTheDocument();
     expect(screen.getByTestId('account-type-filter-option-inactive')).toBeInTheDocument();
   });
 

@@ -2,9 +2,9 @@ import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
-import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
 import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import { AttachmentsTab } from '@/components/attachments';
+import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
 import catalogs from './mockCatalogs';
 import ProductGallery from '@/windows/custom/product/ProductGallery';
 import ProductSidebar from '@/windows/custom/product/ProductSidebar';
@@ -21,7 +21,9 @@ const statusField = null;
 // @sf-generated-end summary:product
 
 // @sf-generated-start extraBadges:product
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:product
 
 // @sf-generated-start processes:product
@@ -178,7 +180,7 @@ export const api = {
       "field": "uOM",
       "column": "C_UOM_ID",
       "reference": "UOM",
-      "inputMode": "selector",
+      "inputMode": "search",
       "url": "/sws/neo/product/product/selectors/uOM"
     },
     {
@@ -447,13 +449,26 @@ export const api = {
   },
   "window": {
     "category": "inventory"
+  },
+  "labelOverrides": {
+    "en_US": {
+      "M_Product_Category_ID": "Category",
+      "ProductType": "Type"
+    },
+    "es_ES": {
+      "M_Product_Category_ID": "Categoría",
+      "ProductType": "Tipo"
+    }
   }
 };
 
+
+const labelOverrides = api.labelOverrides;
 // @sf-generated-start component:ProductPage
 export default function ProductPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="product"
         Form={ProductForm}
@@ -467,7 +482,6 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        formFooter={ProductPriceBar}
         primaryTabs={[
           { key: 'general', label: 'General' },
           { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
@@ -475,9 +489,20 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         customTabsAfterBottom
         hidePrint
         hideMoreMenu
-        contentBg="bg-slate-50"
-        customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
+        noHeaderBorder
+        toolbarBorderBottom
+        compactSidebarPadding
+        whiteFormBackground
+        autoSaveOnBlur
+        sidebarClassName="w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]"
+        tabsBarPaddingX="px-2"
+        primaryTabsVariant="pill"
+        toolbarPaddingX="px-2"
+        contentBg="bg-white"
+        formCardPadding="px-2"
+        customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab' }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
+        labelOverrides={labelOverrides}
         {...props}
         sidebarContent={(data) => (
           <ProductSidebar
@@ -488,6 +513,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           />
         )}
       />
+      </>
     );
   }
 
@@ -500,8 +526,12 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       galleryRenderer={(gProps) => <ProductGallery {...gProps} />}
+      listbarPaddingX="px-2"
+      tablePaddingX="px-2"
       hidePrint
       hideMoreMenu
+      hideLink
+      labelOverrides={labelOverrides}
       rowQuickActions={{}}
       {...props}
     />

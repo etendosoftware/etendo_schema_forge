@@ -33,20 +33,25 @@ const LABEL_STYLE = { padding: '0 4px' };
 
 export default function DocumentStatusPill({ status, label, enumLabels, tone: toneProp }) {
   const dictionary = useLocale();
-  if (!status) return null;
+  if (status == null) return null;
 
   const tone = toneProp ?? getStatusTone(status);
   const Icon = TONE_ICON[tone];
-  const text = label ?? enumLabels?.[status] ?? statusLabel(status, dictionary);
+  const text = label ?? statusLabel(status, dictionary, null, enumLabels);
   const palette = TONE_STYLES[tone] ?? TONE_STYLES.neutral;
 
   return (
     <span
       data-testid="document-status-pill"
+      data-status={status}
       data-tone={tone}
       style={{ ...PILL_STYLE, background: palette.background, color: palette.color }}
     >
-      {Icon ? <Icon size={16} color={TONE_ICON_COLOR[tone]} aria-hidden="true" /> : null}
+      {Icon ? <Icon
+        size={16}
+        color={TONE_ICON_COLOR[tone]}
+        aria-hidden="true"
+        data-testid="Icon__1e4f01" /> : null}
       <span style={LABEL_STYLE}>{text}</span>
     </span>
   );

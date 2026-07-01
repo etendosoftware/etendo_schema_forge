@@ -37,6 +37,7 @@ export function SelectorInput({
   token,
   compact = false,
   triggerClassName,
+  optionTranslator,
 }) {
   const ui = useUI();
   const catalogOptions = selectorUrl ? [] : getCatalogOptions(catalogs, entityName, field);
@@ -117,12 +118,16 @@ export function SelectorInput({
   // empty values is mandatory for required fields too (where the '__empty__'
   // SelectItem is not rendered, so Radix would otherwise show nothing).
   const selectValue = value ? value : undefined;
+  // Optional FK fields can label their empty/null choice (e.g. "All accounts")
+  // instead of a blank entry. When set, the empty value also reads as that label
+  // on the trigger rather than the "Select X..." placeholder.
+  const emptyLabel = field.emptyOptionLabelKey ? (ui(field.emptyOptionLabelKey) ?? field.emptyOptionLabelKey) : null;
   // Compact mode (inline tables) mirrors the placeholder style of plain text/
   // number inputs in the same row: just the field label in muted color, no
   // verbose "Select X..." prefix.
   const placeholderText = compact
-    ? (resolvedLabel ?? field.label ?? field.key)
-    : buildSelectPlaceholder(ui, resolvedLabel ?? field.label ?? field.key);
+    ? (emptyLabel ?? resolvedLabel ?? field.label ?? field.key)
+    : (emptyLabel ?? buildSelectPlaceholder(ui, resolvedLabel ?? field.label ?? field.key));
 
   return (
     <Select
@@ -136,32 +141,36 @@ export function SelectorInput({
         onChange(val, opt?.name, opt);
       }}
       required={field.required}
-    >
+      data-testid={"Select__" + field.id}>
       <SelectTrigger
         id={field.key}
         data-testid={`field-${field.key}`}
         className={triggerClassName ?? defaultTriggerClass}
       >
-        <SelectValue placeholder={placeholderText} />
-        {fetching && <Loader2 className="h-4 w-4 text-muted-foreground animate-spin ml-auto mr-1" />}
+        <SelectValue placeholder={placeholderText} data-testid={"SelectValue__" + field.id} />
+        {fetching && <Loader2
+          className="h-4 w-4 text-muted-foreground animate-spin ml-auto mr-1"
+          data-testid={"Loader2__" + field.id} />}
       </SelectTrigger>
-      <SelectContent ref={contentCallbackRef}>
-        {!field.required && <SelectItem value="__empty__">&nbsp;</SelectItem>}
+      <SelectContent ref={contentCallbackRef} data-testid={"SelectContent__" + field.id}>
+        {!field.required && <SelectItem value="__empty__" data-testid={"SelectItem__" + field.id}>{emptyLabel || ' '}</SelectItem>}
         {!hasValue && value && displayValue && (
           <SelectItem
             key={`__current__${value}`}
             value={value}
             style={{ display: 'none', height: 0, padding: 0, overflow: 'hidden' }}
             aria-hidden="true"
-          >
+            data-testid={"SelectItem__" + field.id}>
             {displayValue}
           </SelectItem>
         )}
-        {baseOptions.map(opt => (
-          <SelectItem key={opt.id} value={opt.id} data-testid={`option-${field.key}-${opt.id}`}>
-            {opt.name}
-          </SelectItem>
-        ))}
+        {baseOptions
+          .filter(opt => !optionTranslator || optionTranslator(opt.name) !== null)
+          .map(opt => (
+            <SelectItem key={opt.id} value={opt.id} data-testid={`option-${field.key}-${opt.id}`}>
+              {optionTranslator ? optionTranslator(opt.name) : opt.name}
+            </SelectItem>
+          ))}
         {hasMore && selectorUrl && (
           <div className="py-1 text-center text-xs text-muted-foreground select-none pointer-events-none">{ui('loading')}</div>
         )}

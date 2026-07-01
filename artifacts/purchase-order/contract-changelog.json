@@ -1301,7 +1301,6 @@
     "to": "0.20.0",
     "level": "additive",
     "reasons": [
-      "Field \"tax\" property \"inputMode\" changed from \"selector\" to \"search\" in frontend (additive)",
       "Field \"orderedQuantity\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)",
       "Field \"listPrice\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)",
       "Field \"discount\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)"
@@ -1314,12 +1313,151 @@
     "to": "0.20.0",
     "level": "additive",
     "reasons": [
-      "Field \"tax\" property \"inputMode\" changed from \"search\" to \"selector\" in frontend (additive)",
       "Field \"orderedQuantity\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)",
       "Field \"listPrice\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)",
       "Field \"discount\" property \"min\" changed from \"undefined\" to \"0\" in frontend (additive)"
     ],
     "author": "pipeline",
     "date": "2026-05-19"
+  },
+  {
+    "from": "0.20.0",
+    "to": "0.21.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"currency\" property \"visibility\" changed from \"readOnly\" to \"editable\" in frontend (patch)",
+      "Field \"currency\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)",
+      "Field \"currency\" property \"derivation\" changed from \"[object Object]\" to \"undefined\" in frontend (additive)",
+      "Field \"currency\" property \"section\" changed from \"other\" to \"principal\" in frontend (additive)",
+      "Field \"currency\" property \"reference\" changed from \"undefined\" to \"Currency\" in frontend (additive)",
+      "Field \"currency\" property \"inputMode\" changed from \"undefined\" to \"selector\" in frontend (additive)",
+      "Field \"currency\" property \"readOnlyLogic\" changed from \"undefined\" to \"[object Object]\" in frontend (additive)",
+      "Field \"currency\" property \"visibility\" changed from \"readOnly\" to \"editable\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-11"
+  },
+  {
+    "from": "0.21.0",
+    "to": "0.22.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTPRRemovePayment\" added to entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-24"
+  },
+  {
+    "from": "0.22.0",
+    "to": "0.23.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"eTPRRemovePayment\" removed from entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-18"
+  },
+  {
+    "from": "0.22.1",
+    "to": "0.23.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTGOCurrencyRate\" added to entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-19"
+  },
+  {
+    "from": "0.23.0",
+    "to": "0.24.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTGOCurrencyRate\" added to entity \"header\" in frontend",
+      "Field \"eTGOCurrencyRate\" property \"visibility\" changed from \"discarded\" to \"editable\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-19"
+  },
+  {
+    "from": "0.24.0",
+    "to": "0.25.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTPRRemovePayment\" added to entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-25"
+  },
+  {
+    "from": "0.25.0",
+    "to": "0.26.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"tax\" property \"validationRule\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-25"
+  },
+  {
+    "from": "0.26.0",
+    "to": "0.26.1",
+    "level": "patch",
+    "reasons": [
+      "Field \"warehouse\" property \"form\" changed from \"false\" to \"true\" in frontend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-26"
+  },
+  {
+    "from": "0.26.1",
+    "to": "0.27.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"cOrderlinetaxID\" removed from entity \"lineTax\" in backend",
+      "Field \"id\" added to entity \"lineTax\" in backend",
+      "Field \"finPaymentDetailVID\" removed from entity \"paymentDetails\" in backend",
+      "Field \"id\" added to entity \"paymentDetails\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-26"
+  },
+  {
+    "from": "0.27.0",
+    "to": "0.28.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"discount\" property \"max\" changed from \"undefined\" to \"100\" in frontend (additive)",
+      "Field \"tax\" property \"validationRule\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"cOrderlinetaxID\" removed from entity \"lineTax\" in backend",
+      "Field \"id\" added to entity \"lineTax\" in backend",
+      "Field \"finPaymentDetailVID\" removed from entity \"paymentDetails\" in backend",
+      "Field \"id\" added to entity \"paymentDetails\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-26"
+  },
+  {
+    "from": "0.28.0",
+    "to": "0.29.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"tax\" property \"validationRule\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-26"
+  },
+  {
+    "from": "0.29.0",
+    "to": "0.30.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryMethod\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"priority\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryTerms\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"status\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-06-29"
   }
 ]

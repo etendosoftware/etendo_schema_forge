@@ -85,12 +85,18 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl }) 
     const chipType = doc.type === 'order' ? 'order' : 'invoice';
     const keyPrefix = doc.type === 'order' ? 'order' : 'invoice';
     chips.push(
-      <DocChip key={`${keyPrefix}-${doc.id}`} {...docChipProps({ type: chipType, doc, ui, navigate })} />
+      <DocChip
+        key={`${keyPrefix}-${doc.id}`}
+        {...docChipProps({ type: chipType, doc, ui, navigate })}
+        data-testid="DocChip__99828b" />
     );
   }
 
   return (
-    <RelatedDocumentsShell loading={loading} onRefresh={() => setRefreshKey(k => k + 1)}>
+    <RelatedDocumentsShell
+      loading={loading}
+      onRefresh={() => setRefreshKey(k => k + 1)}
+      data-testid="RelatedDocumentsShell__99828b">
       {chips}
     </RelatedDocumentsShell>
   );

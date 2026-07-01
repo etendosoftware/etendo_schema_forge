@@ -161,6 +161,10 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
     );
   };
 
+  const renderTooltipBox = (tx, ty, idx, expense) => (
+    <TooltipBox tx={tx} ty={ty} idx={idx} expense={expense} data-testid="TooltipBox__14828e" />
+  );
+
   const resolveTooltipTy = (anchorY, upperY, boxH) => {
     let ty = anchorY - boxH - 16;
     if (ty < 0) ty = upperY + 16;
@@ -181,7 +185,6 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
     const upperY  = Math.min(incY, expY);
     const ty = resolveTooltipTy(anchorY, upperY, boxH);
     const tx = Math.min(Math.max(x - boxW / 2, PAD_X), chartW - PAD_RIGHT - boxW);
-
     return (
       <g pointerEvents="none">
         <line x1={x} y1={0} x2={x} y2={baseY} stroke="#6C6C89" strokeWidth="1" />
@@ -189,7 +192,7 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
         {hasExpenses && expPts[idx] && (
           <circle cx={expPts[idx].x} cy={expPts[idx].y} r="6" fill="#FFFFFF" stroke="#121217" strokeWidth="1.5" />
         )}
-        <TooltipBox tx={tx} ty={ty} idx={idx} expense={expense} />
+        {renderTooltipBox(tx, ty, idx, expense)}
       </g>
     );
   })();
@@ -205,11 +208,10 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
     // y = tipY = top of the taller bar (smallest y = highest on screen)
     const ty = Math.max(0, Math.min(y - boxH - 8, baseY - boxH));
     const tx = Math.min(Math.max(x - boxW / 2, PAD_X), chartW - PAD_RIGHT - boxW);
-
     return (
       <g pointerEvents="none">
         <line x1={x} y1={0} x2={x} y2={baseY} stroke="#6C6C89" strokeWidth="1" />
-        <TooltipBox tx={tx} ty={ty} idx={idx} expense={expense} />
+        {renderTooltipBox(tx, ty, idx, expense)}
       </g>
     );
   })();
@@ -246,7 +248,6 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
           {ui('financialTrendTitle')}
         </span>
       </div>
-
       {/* Content */}
       {hasNoData ? (
         <div className="flex-1 flex items-center justify-center w-full">
@@ -266,7 +267,9 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: '#121217', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }} />
+                <Plus
+                  style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }}
+                  data-testid="Plus__14828e" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#FFFFFF' }}>
                   {ui('newPurchase')}
                 </span>
@@ -277,7 +280,9 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
                 className="flex items-center justify-center"
                 style={{ padding: '4px 8px', height: '32px', background: '#121217', borderRadius: '8px', gap: '4px', cursor: 'pointer', border: 'none' }}
               >
-                <Plus style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }} />
+                <Plus
+                  style={{ width: '20px', height: '20px', color: 'rgba(255,255,255,0.9)' }}
+                  data-testid="Plus__14828e" />
                 <span style={{ fontSize: '14px', fontWeight: 500, lineHeight: '24px', color: '#FFFFFF' }}>
                   {ui('newSale')}
                 </span>
@@ -293,7 +298,9 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
             {/* Status badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: '#EEFBF4', borderRadius: '10px', flexShrink: 0 }}>
-                <Check style={{ width: '12.5px', height: '12.5px', color: '#17663A' }} />
+                <Check
+                  style={{ width: '12.5px', height: '12.5px', color: '#17663A' }}
+                  data-testid="Check__14828e" />
               </div>
               <span style={{ fontSize: '12px', lineHeight: '16px', color: '#17663A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {statusLine}
@@ -329,7 +336,9 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
                   borderRadius: '8px', border: 'none', cursor: 'pointer',
                 }}
               >
-                <Icon style={{ width: '18px', height: '18px', color: '#828FA3' }} />
+                <Icon
+                  style={{ width: '18px', height: '18px', color: '#828FA3' }}
+                  data-testid="Icon__14828e" />
               </button>
             ))}
           </div>

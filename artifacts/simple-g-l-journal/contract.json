@@ -1,0 +1,3859 @@
+{
+  "version": "0.15.0",
+  "generatedAt": "2026-06-16T16:34:09.049Z",
+  "updatedAt": "2026-06-24T20:46:49.776Z",
+  "checksum": "202a685d07d22ea8",
+  "frontendContract": {
+    "window": {
+      "id": "B917E8A7B0864ACEA9D941E3B7494E53",
+      "name": "Simple G/L Journal",
+      "primaryEntity": "gLJournal",
+      "category": "finance",
+      "breadcrumb": "Finance / Manual Journals",
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
+        }
+      ],
+      "layoutType": "default",
+      "balanceFooter": {
+        "debitField": "foreignCurrencyDebit",
+        "creditField": "foreignCurrencyCredit"
+      },
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
+    },
+    "entities": {
+      "gLJournal": {
+        "tableName": "GL_Journal",
+        "tabId": "5A6F0ED7230C462BA4010653BA3F816A",
+        "tabName": "Header",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.description0"
+            },
+            "defaultValue": "@DESCRIPTION0@",
+            "seq": 30,
+            "readOnlyLogic": {
+              "js": "record['processed'] === true",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "label": "Accounting Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateAcct@)) FROM DUAL"
+            },
+            "defaultValue": "@SQL=SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateAcct@)) FROM DUAL",
+            "seq": 10,
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_Period"
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "period",
+            "apiKey": "period",
+            "column": "C_Period_ID",
+            "label": "Period",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "lookup",
+              "source": " SELECT C_Period_ID FROM C_Period WHERE C_Year_ID IN (SELECT C_Year_ID FROM C_Year WHERE C_Calendar_ID =(SELECT C_Calendar_ID FROM AD_ORG WHERE AD_Client_ID= @AD_Client_ID@ AND AD_ORG_ID=(SELECT AD_ORG_GETCALENDAROWNER( @AD_Org_ID@ ) from dual))) AND to_date( COALESCE(@DateAcct@,@#Date@) ) BETWEEN StartDate AND EndDate AND PeriodType='S' AND exists (select 1 from c_periodcontrol where c_periodcontrol.c_period_id = c_period.c_period_id AND periodstatus = 'O')"
+            },
+            "reference": "Period",
+            "inputMode": "search",
+            "defaultValue": "@SQL= SELECT C_Period_ID FROM C_Period WHERE C_Year_ID IN (SELECT C_Year_ID FROM C_Year WHERE C_Calendar_ID =(SELECT C_Calendar_ID FROM AD_ORG WHERE AD_Client_ID= @AD_Client_ID@ AND AD_ORG_ID=(SELECT AD_ORG_GETCALENDAROWNER( @AD_Org_ID@ ) from dual))) AND to_date( COALESCE(@DateAcct@,@#Date@) ) BETWEEN StartDate AND EndDate AND PeriodType='S' AND exists (select 1 from c_periodcontrol where c_periodcontrol.c_period_id = c_period.c_period_id AND periodstatus = 'O')",
+            "seq": 20,
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_Period"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "label": "Currency",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.cCurrencyId"
+            },
+            "reference": "Currency",
+            "inputMode": "selector",
+            "defaultValue": "@C_Currency_ID@",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_Period"
+            },
+            "readOnlyLogic": {
+              "js": "record['processed'] === true",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "opening",
+            "apiKey": "opening",
+            "column": "IsOpening",
+            "label": "Opening",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "readOnlyLogic": {
+              "js": "record['processed'] === true",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "multigeneralLedger",
+            "apiKey": "multigeneralLedger",
+            "column": "Multi_Gl",
+            "label": "Multi-General Ledger",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_MultiAcctSchema"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          }
+        ],
+        "searchableFields": [
+          "description"
+        ],
+        "computedFields": [
+          {
+            "name": "description",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.description0"
+            }
+          },
+          {
+            "name": "accountingDate",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateAcct@)) FROM DUAL"
+            }
+          },
+          {
+            "name": "period",
+            "derivation": {
+              "type": "lookup",
+              "source": " SELECT C_Period_ID FROM C_Period WHERE C_Year_ID IN (SELECT C_Year_ID FROM C_Year WHERE C_Calendar_ID =(SELECT C_Calendar_ID FROM AD_ORG WHERE AD_Client_ID= @AD_Client_ID@ AND AD_ORG_ID=(SELECT AD_ORG_GETCALENDAROWNER( @AD_Org_ID@ ) from dual))) AND to_date( COALESCE(@DateAcct@,@#Date@) ) BETWEEN StartDate AND EndDate AND PeriodType='S' AND exists (select 1 from c_periodcontrol where c_periodcontrol.c_period_id = c_period.c_period_id AND periodstatus = 'O')"
+            }
+          },
+          {
+            "name": "currency",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.cCurrencyId"
+            }
+          },
+          {
+            "name": "opening",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "multigeneralLedger",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            }
+          }
+        ],
+        "javaQualifier": "glJournalHeaderHandler",
+        "draftMode": {
+          "enabled": true,
+          "processField": "documentAction",
+          "processValue": "CO",
+          "label": "complete",
+          "disableWhenEmpty": true
+        }
+      },
+      "gLJournalLine": {
+        "tableName": "GL_JournalLine",
+        "tabId": "7797C73348324DCBB7F17666F31C87A5",
+        "tabName": "Lines",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "lineNo",
+            "apiKey": "lineNo",
+            "column": "Line",
+            "label": "LineNo",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@"
+            },
+            "defaultValue": "@SQL=SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "accountingCombination",
+            "apiKey": "accountingCombination",
+            "column": "C_ValidCombination_ID",
+            "label": "Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "lookup": true,
+            "displayLogic": {
+              "raw": "@Multi_Gl@='N'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' | @Multi_Gl@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true || record['multigeneralLedger'] === true"
+            }
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.description1"
+            },
+            "defaultValue": "@DESCRIPTION1@",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "foreignCurrencyDebit",
+            "apiKey": "foreignCurrencyDebit",
+            "column": "AmtSourceDr",
+            "label": "Debit",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "labels": {
+              "en_US": "Debit",
+              "es_ES": "Débito"
+            },
+            "clearsField": "foreignCurrencyCredit",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_JournalLineAmt"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "foreignCurrencyCredit",
+            "apiKey": "foreignCurrencyCredit",
+            "column": "AmtSourceCr",
+            "label": "Credit",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "labels": {
+              "en_US": "Credit",
+              "es_ES": "Crédito"
+            },
+            "clearsField": "foreignCurrencyDebit",
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_JournalLineAmt"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "openItems",
+            "apiKey": "openItems",
+            "column": "Open_Items",
+            "label": "Open Items",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N"
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_Bpartner_ID",
+            "label": "Business Partner",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "BPartner",
+            "inputMode": "search",
+            "displayLogic": {
+              "raw": "@Open_Items@='Y'",
+              "evaluable": true,
+              "js": "record['openItems'] === true"
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y' | @FIN_Payment_ID@ ! ''",
+              "evaluable": false,
+              "reason": "untranslatable-token",
+              "js": null
+            }
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "label": "Product",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Product",
+            "inputMode": "selector",
+            "displayLogic": {
+              "raw": "@Open_Items@='Y'",
+              "evaluable": true,
+              "js": "record['openItems'] === true"
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "label": "Project",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Project",
+            "inputMode": "search",
+            "displayLogic": {
+              "raw": "@Open_Items@='Y'",
+              "evaluable": true,
+              "js": "record['openItems'] === true"
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "label": "Asset",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Asset",
+            "inputMode": "selector",
+            "displayLogic": {
+              "raw": "@Open_Items@='Y'",
+              "evaluable": true,
+              "js": "record['openItems'] === true"
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          },
+          {
+            "name": "costCenter",
+            "apiKey": "costCenter",
+            "column": "C_Costcenter_ID",
+            "label": "Cost Center",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "Costcenter",
+            "inputMode": "selector",
+            "displayLogic": {
+              "raw": "@Open_Items@='Y'",
+              "evaluable": true,
+              "js": "record['openItems'] === true"
+            },
+            "readOnlyLogic": {
+              "raw": "@Posted@='Y'",
+              "evaluable": true,
+              "js": "record['posted'] === true"
+            }
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [
+          {
+            "name": "lineNo",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE(MAX(Line),0)+10 AS DefaultValue FROM GL_JournalLine WHERE GL_Journal_ID=@GL_Journal_ID@"
+            }
+          },
+          {
+            "name": "description",
+            "derivation": {
+              "type": "fromConfig",
+              "source": "context.description1"
+            }
+          },
+          {
+            "name": "openItems",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "B917E8A7B0864ACEA9D941E3B7494E53",
+      "name": "Simple G/L Journal",
+      "primaryEntity": "gLJournal",
+      "category": "finance",
+      "breadcrumb": "Finance / Manual Journals",
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
+        }
+      ],
+      "balanceFooter": {
+        "debitField": "foreignCurrencyDebit",
+        "creditField": "foreignCurrencyCredit"
+      },
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
+    },
+    "entities": {
+      "gLJournal": {
+        "tableName": "GL_Journal",
+        "tabId": "5A6F0ED7230C462BA4010653BA3F816A",
+        "tabName": "Header",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "type": "string",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "documentType",
+            "apiKey": "documentType",
+            "column": "C_DocType_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "documentDate",
+            "apiKey": "documentDate",
+            "column": "DateDoc",
+            "type": "date",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "accountingDate",
+            "apiKey": "accountingDate",
+            "column": "DateAcct",
+            "type": "date",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "period",
+            "apiKey": "period",
+            "column": "C_Period_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "currencyRateType",
+            "apiKey": "currencyRateType",
+            "column": "CurrencyRateType",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "rate",
+            "apiKey": "rate",
+            "column": "CurrencyRate",
+            "type": "string",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "opening",
+            "apiKey": "opening",
+            "column": "IsOpening",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "multigeneralLedger",
+            "apiKey": "multigeneralLedger",
+            "column": "Multi_Gl",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "totalDebitAmount",
+            "apiKey": "totalDebitAmount",
+            "column": "TotalDr",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "controlAmount",
+            "apiKey": "controlAmount",
+            "column": "ControlAmt",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "totalCreditAmount",
+            "apiKey": "totalCreditAmount",
+            "column": "TotalCr",
+            "type": "amount",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "documentAction",
+            "apiKey": "documentAction",
+            "column": "DocAction",
+            "type": "button",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "type": "boolean",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "documentStatus",
+            "apiKey": "documentStatus",
+            "column": "DocStatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "print",
+            "apiKey": "print",
+            "column": "IsPrinted",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "gLCategory",
+            "apiKey": "gLCategory",
+            "column": "GL_Category_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "approved",
+            "apiKey": "approved",
+            "column": "IsApproved",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_Bpartner_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "costCenter",
+            "apiKey": "costCenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesCampaign",
+            "apiKey": "salesCampaign",
+            "column": "C_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "postingType",
+            "apiKey": "postingType",
+            "column": "PostingType",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "GL_Journal_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "journalBatch",
+            "apiKey": "journalBatch",
+            "column": "GL_JournalBatch_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
+            "type": "button",
+            "visibility": "discarded",
+            "required": true
+          }
+        ],
+        "javaQualifier": "glJournalHeaderHandler"
+      },
+      "gLJournalLine": {
+        "tableName": "GL_JournalLine",
+        "tabId": "7797C73348324DCBB7F17666F31C87A5",
+        "tabName": "Lines",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "lineNo",
+            "apiKey": "lineNo",
+            "column": "Line",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": true
+          },
+          {
+            "name": "gLItems",
+            "apiKey": "gLItems",
+            "column": "Account_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "accountingCombination",
+            "apiKey": "accountingCombination",
+            "column": "C_ValidCombination_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "currency",
+            "apiKey": "currency",
+            "column": "C_Currency_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "foreignCurrencyDebit",
+            "apiKey": "foreignCurrencyDebit",
+            "column": "AmtSourceDr",
+            "type": "amount",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "foreignCurrencyCredit",
+            "apiKey": "foreignCurrencyCredit",
+            "column": "AmtSourceCr",
+            "type": "amount",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "generated",
+            "apiKey": "generated",
+            "column": "IsGenerated",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "debit",
+            "apiKey": "debit",
+            "column": "AmtAcctDr",
+            "type": "amount",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "credit",
+            "apiKey": "credit",
+            "column": "AmtAcctCr",
+            "type": "amount",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "currencyRateType",
+            "apiKey": "currencyRateType",
+            "column": "CurrencyRateType",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "rate",
+            "apiKey": "rate",
+            "column": "CurrencyRate",
+            "type": "decimal",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "openItems",
+            "apiKey": "openItems",
+            "column": "Open_Items",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "financialAccount",
+            "apiKey": "financialAccount",
+            "column": "FIN_Financial_Account_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "paymentMethod",
+            "apiKey": "paymentMethod",
+            "column": "FIN_Paymentmethod_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "gLItem",
+            "apiKey": "gLItem",
+            "column": "C_Glitem_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "paymentDate",
+            "apiKey": "paymentDate",
+            "column": "Paymentdate",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "relatedPayment",
+            "apiKey": "relatedPayment",
+            "column": "FIN_Payment_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "uOM",
+            "apiKey": "uOM",
+            "column": "C_UOM_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "quantity",
+            "apiKey": "quantity",
+            "column": "Qty",
+            "type": "quantity",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "payment",
+            "apiKey": "payment",
+            "column": "C_Debt_Payment_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "withholding",
+            "apiKey": "withholding",
+            "column": "C_Withholding_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "tax",
+            "apiKey": "tax",
+            "column": "C_Tax_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "aPRMAddPayment",
+            "apiKey": "aPRMAddPayment",
+            "column": "EM_Aprm_Addpayment",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "businessPartner",
+            "apiKey": "businessPartner",
+            "column": "C_Bpartner_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "product",
+            "apiKey": "product",
+            "column": "M_Product_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "project",
+            "apiKey": "project",
+            "column": "C_Project_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "activity",
+            "apiKey": "activity",
+            "column": "C_Activity_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesCampaign",
+            "apiKey": "salesCampaign",
+            "column": "C_Campaign_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesRegion",
+            "apiKey": "salesRegion",
+            "column": "C_Salesregion_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "stDimension",
+            "apiKey": "stDimension",
+            "column": "User1_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "ndDimension",
+            "apiKey": "ndDimension",
+            "column": "User2_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "asset",
+            "apiKey": "asset",
+            "column": "A_Asset_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "costCenter",
+            "apiKey": "costCenter",
+            "column": "C_Costcenter_ID",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "journalEntry",
+            "apiKey": "journalEntry",
+            "column": "GL_Journal_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "GL_JournalLine_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/gLJournal",
+        "entity": "gLJournal",
+        "supportedFilters": [
+          "description"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/gLJournal/:id",
+        "entity": "gLJournal",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/gLJournal",
+        "entity": "gLJournal",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/gLJournal/:id",
+        "entity": "gLJournal",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/gLJournal/:id",
+        "entity": "gLJournal",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/gLJournalLine",
+        "entity": "gLJournalLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/gLJournalLine/:id",
+        "entity": "gLJournalLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/gLJournalLine",
+        "entity": "gLJournalLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/gLJournalLine/:id",
+        "entity": "gLJournalLine",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/gLJournalLine/:id",
+        "entity": "gLJournalLine",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "simple-g-l-journal",
+    "baseUrl": "/sws/neo/simple-g-l-journal",
+    "crud": {
+      "gLJournal": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/simple-g-l-journal/gLJournal",
+        "detailUrl": "/sws/neo/simple-g-l-journal/gLJournal/{id}",
+        "supportedFilters": [
+          "description"
+        ]
+      },
+      "gLJournalLine": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/simple-g-l-journal/gLJournalLine",
+        "detailUrl": "/sws/neo/simple-g-l-journal/gLJournalLine/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "gLJournal",
+        "field": "period",
+        "column": "C_Period_ID",
+        "reference": "Period",
+        "inputMode": "search",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/period"
+      },
+      {
+        "entity": "gLJournal",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/selectors/currency"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "accountingCombination",
+        "column": "C_ValidCombination_ID",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/accountingCombination"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "businessPartner",
+        "column": "C_Bpartner_ID",
+        "reference": "BPartner",
+        "inputMode": "search",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/businessPartner"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "product",
+        "column": "M_Product_ID",
+        "reference": "Product",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/product"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "project",
+        "column": "C_Project_ID",
+        "reference": "Project",
+        "inputMode": "search",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/project"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "asset",
+        "column": "A_Asset_ID",
+        "reference": "Asset",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/asset"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "costCenter",
+        "column": "C_Costcenter_ID",
+        "reference": "Costcenter",
+        "inputMode": "selector",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/selectors/costCenter"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "gLJournal",
+        "field": "documentAction",
+        "column": "DocAction",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/documentAction",
+        "processId": "5BE14AA10165490A9ADEFB7532F7FA94",
+        "processType": "classic"
+      },
+      {
+        "entity": "gLJournal",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/processNow"
+      },
+      {
+        "entity": "gLJournal",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/simple-g-l-journal/gLJournal/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "gLJournalLine",
+        "field": "aPRMAddPayment",
+        "column": "EM_Aprm_Addpayment",
+        "url": "/sws/neo/simple-g-l-journal/gLJournalLine/{id}/action/aPRMAddPayment",
+        "processId": "DE1B382FDD2540199D223586F6E216D0",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-action-endpoint-gLJournal-documentAction",
+        "category": "action-endpoint",
+        "entity": "gLJournal",
+        "field": "documentAction",
+        "runner": "node",
+        "description": "Action endpoint for 'documentAction' in gLJournal should exist"
+      },
+      {
+        "id": "t-action-endpoint-gLJournal-etblkpBulkposting",
+        "category": "action-endpoint",
+        "entity": "gLJournal",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "Action endpoint for 'etblkpBulkposting' in gLJournal should exist"
+      },
+      {
+        "id": "t-action-endpoint-gLJournal-processNow",
+        "category": "action-endpoint",
+        "entity": "gLJournal",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in gLJournal should exist"
+      },
+      {
+        "id": "t-action-endpoint-gLJournalLine-aPRMAddPayment",
+        "category": "action-endpoint",
+        "entity": "gLJournalLine",
+        "field": "aPRMAddPayment",
+        "runner": "node",
+        "description": "Action endpoint for 'aPRMAddPayment' in gLJournalLine should exist"
+      },
+      {
+        "id": "t-crud-flags-gLJournal",
+        "category": "crud-flags",
+        "entity": "gLJournal",
+        "runner": "node",
+        "description": "CRUD flags for 'gLJournal' should all be booleans"
+      },
+      {
+        "id": "t-crud-flags-gLJournalLine",
+        "category": "crud-flags",
+        "entity": "gLJournalLine",
+        "runner": "node",
+        "description": "CRUD flags for 'gLJournalLine' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-gLJournal-accountingDate",
+        "category": "default-value-type",
+        "entity": "gLJournal",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Default value for 'accountingDate' in gLJournal should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournal-currency",
+        "category": "default-value-type",
+        "entity": "gLJournal",
+        "field": "currency",
+        "runner": "node",
+        "description": "Default value for 'currency' in gLJournal should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournal-description",
+        "category": "default-value-type",
+        "entity": "gLJournal",
+        "field": "description",
+        "runner": "node",
+        "description": "Default value for 'description' in gLJournal should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournal-multigeneralLedger",
+        "category": "default-value-type",
+        "entity": "gLJournal",
+        "field": "multigeneralLedger",
+        "runner": "node",
+        "description": "Default value for 'multigeneralLedger' in gLJournal should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournal-opening",
+        "category": "default-value-type",
+        "entity": "gLJournal",
+        "field": "opening",
+        "runner": "node",
+        "description": "Default value for 'opening' in gLJournal should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournal-period",
+        "category": "default-value-type",
+        "entity": "gLJournal",
+        "field": "period",
+        "runner": "node",
+        "description": "Default value for 'period' in gLJournal should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournal-posted",
+        "category": "default-value-type",
+        "entity": "gLJournal",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in gLJournal should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournalLine-description",
+        "category": "default-value-type",
+        "entity": "gLJournalLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Default value for 'description' in gLJournalLine should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournalLine-lineNo",
+        "category": "default-value-type",
+        "entity": "gLJournalLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Default value for 'lineNo' in gLJournalLine should be a string"
+      },
+      {
+        "id": "t-default-value-type-gLJournalLine-openItems",
+        "category": "default-value-type",
+        "entity": "gLJournalLine",
+        "field": "openItems",
+        "runner": "node",
+        "description": "Default value for 'openItems' in gLJournalLine should be a string"
+      },
+      {
+        "id": "t-displaylogic-evaluable-gLJournal-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "gLJournal",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in gLJournal should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-gLJournalLine-accountingCombination",
+        "category": "displaylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "accountingCombination",
+        "runner": "node",
+        "description": "Display logic for 'accountingCombination' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-gLJournalLine-asset",
+        "category": "displaylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "asset",
+        "runner": "node",
+        "description": "Display logic for 'asset' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-gLJournalLine-businessPartner",
+        "category": "displaylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Display logic for 'businessPartner' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-gLJournalLine-costCenter",
+        "category": "displaylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Display logic for 'costCenter' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-gLJournalLine-product",
+        "category": "displaylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Display logic for 'product' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-gLJournalLine-project",
+        "category": "displaylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-gLJournal-posted",
+        "category": "displaylogic-valid",
+        "entity": "gLJournal",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in gLJournal should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-gLJournalLine-accountingCombination",
+        "category": "displaylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "accountingCombination",
+        "runner": "node",
+        "description": "Display logic for 'accountingCombination' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-gLJournalLine-asset",
+        "category": "displaylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "asset",
+        "runner": "node",
+        "description": "Display logic for 'asset' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-gLJournalLine-businessPartner",
+        "category": "displaylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Display logic for 'businessPartner' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-gLJournalLine-costCenter",
+        "category": "displaylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Display logic for 'costCenter' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-gLJournalLine-product",
+        "category": "displaylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Display logic for 'product' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-gLJournalLine-project",
+        "category": "displaylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Display logic for 'project' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-field-presence-gLJournal-accountingDate",
+        "category": "field-presence",
+        "entity": "gLJournal",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should be present in gLJournal"
+      },
+      {
+        "id": "t-field-presence-gLJournal-currency",
+        "category": "field-presence",
+        "entity": "gLJournal",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should be present in gLJournal"
+      },
+      {
+        "id": "t-field-presence-gLJournal-description",
+        "category": "field-presence",
+        "entity": "gLJournal",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in gLJournal"
+      },
+      {
+        "id": "t-field-presence-gLJournal-multigeneralLedger",
+        "category": "field-presence",
+        "entity": "gLJournal",
+        "field": "multigeneralLedger",
+        "runner": "node",
+        "description": "Field 'multigeneralLedger' should be present in gLJournal"
+      },
+      {
+        "id": "t-field-presence-gLJournal-opening",
+        "category": "field-presence",
+        "entity": "gLJournal",
+        "field": "opening",
+        "runner": "node",
+        "description": "Field 'opening' should be present in gLJournal"
+      },
+      {
+        "id": "t-field-presence-gLJournal-period",
+        "category": "field-presence",
+        "entity": "gLJournal",
+        "field": "period",
+        "runner": "node",
+        "description": "Field 'period' should be present in gLJournal"
+      },
+      {
+        "id": "t-field-presence-gLJournal-posted",
+        "category": "field-presence",
+        "entity": "gLJournal",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in gLJournal"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-accountingCombination",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "accountingCombination",
+        "runner": "node",
+        "description": "Field 'accountingCombination' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-asset",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "asset",
+        "runner": "node",
+        "description": "Field 'asset' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-businessPartner",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-costCenter",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Field 'costCenter' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-description",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-foreignCurrencyCredit",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "foreignCurrencyCredit",
+        "runner": "node",
+        "description": "Field 'foreignCurrencyCredit' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-foreignCurrencyDebit",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "foreignCurrencyDebit",
+        "runner": "node",
+        "description": "Field 'foreignCurrencyDebit' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-lineNo",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-openItems",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "openItems",
+        "runner": "node",
+        "description": "Field 'openItems' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-product",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-presence-gLJournalLine-project",
+        "category": "field-presence",
+        "entity": "gLJournalLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should be present in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournal-accountingDate",
+        "category": "field-type",
+        "entity": "gLJournal",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Field 'accountingDate' should have type 'string' in gLJournal"
+      },
+      {
+        "id": "t-field-type-gLJournal-currency",
+        "category": "field-type",
+        "entity": "gLJournal",
+        "field": "currency",
+        "runner": "node",
+        "description": "Field 'currency' should have type 'string' in gLJournal"
+      },
+      {
+        "id": "t-field-type-gLJournal-description",
+        "category": "field-type",
+        "entity": "gLJournal",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in gLJournal"
+      },
+      {
+        "id": "t-field-type-gLJournal-multigeneralLedger",
+        "category": "field-type",
+        "entity": "gLJournal",
+        "field": "multigeneralLedger",
+        "runner": "node",
+        "description": "Field 'multigeneralLedger' should have type 'boolean' in gLJournal"
+      },
+      {
+        "id": "t-field-type-gLJournal-opening",
+        "category": "field-type",
+        "entity": "gLJournal",
+        "field": "opening",
+        "runner": "node",
+        "description": "Field 'opening' should have type 'boolean' in gLJournal"
+      },
+      {
+        "id": "t-field-type-gLJournal-period",
+        "category": "field-type",
+        "entity": "gLJournal",
+        "field": "period",
+        "runner": "node",
+        "description": "Field 'period' should have type 'string' in gLJournal"
+      },
+      {
+        "id": "t-field-type-gLJournal-posted",
+        "category": "field-type",
+        "entity": "gLJournal",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in gLJournal"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-accountingCombination",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "accountingCombination",
+        "runner": "node",
+        "description": "Field 'accountingCombination' should have type 'string' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-asset",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "asset",
+        "runner": "node",
+        "description": "Field 'asset' should have type 'string' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-businessPartner",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Field 'businessPartner' should have type 'string' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-costCenter",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Field 'costCenter' should have type 'string' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-description",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-foreignCurrencyCredit",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "foreignCurrencyCredit",
+        "runner": "node",
+        "description": "Field 'foreignCurrencyCredit' should have type 'number' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-foreignCurrencyDebit",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "foreignCurrencyDebit",
+        "runner": "node",
+        "description": "Field 'foreignCurrencyDebit' should have type 'number' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-lineNo",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Field 'lineNo' should have type 'number' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-openItems",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "openItems",
+        "runner": "node",
+        "description": "Field 'openItems' should have type 'boolean' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-product",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Field 'product' should have type 'string' in gLJournalLine"
+      },
+      {
+        "id": "t-field-type-gLJournalLine-project",
+        "category": "field-type",
+        "entity": "gLJournalLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Field 'project' should have type 'string' in gLJournalLine"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournal-accountingDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournal",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingDate' in gLJournal should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournal-currency",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournal",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in gLJournal should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournal-description",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournal",
+        "field": "description",
+        "runner": "node",
+        "description": "Read-only logic for 'description' in gLJournal should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournal-multigeneralLedger",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournal",
+        "field": "multigeneralLedger",
+        "runner": "node",
+        "description": "Read-only logic for 'multigeneralLedger' in gLJournal should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournal-opening",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournal",
+        "field": "opening",
+        "runner": "node",
+        "description": "Read-only logic for 'opening' in gLJournal should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournal-period",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournal",
+        "field": "period",
+        "runner": "node",
+        "description": "Read-only logic for 'period' in gLJournal should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-accountingCombination",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "accountingCombination",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingCombination' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-asset",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "asset",
+        "runner": "node",
+        "description": "Read-only logic for 'asset' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-businessPartner",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Read-only logic for 'businessPartner' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-costCenter",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costCenter' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-description",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Read-only logic for 'description' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-foreignCurrencyCredit",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "foreignCurrencyCredit",
+        "runner": "node",
+        "description": "Read-only logic for 'foreignCurrencyCredit' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-foreignCurrencyDebit",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "foreignCurrencyDebit",
+        "runner": "node",
+        "description": "Read-only logic for 'foreignCurrencyDebit' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-lineNo",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Read-only logic for 'lineNo' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-product",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Read-only logic for 'product' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-gLJournalLine-project",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournalLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in gLJournalLine should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournal-accountingDate",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournal",
+        "field": "accountingDate",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingDate' in gLJournal should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournal-currency",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournal",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in gLJournal should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournal-description",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournal",
+        "field": "description",
+        "runner": "node",
+        "description": "Read-only logic for 'description' in gLJournal should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournal-multigeneralLedger",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournal",
+        "field": "multigeneralLedger",
+        "runner": "node",
+        "description": "Read-only logic for 'multigeneralLedger' in gLJournal should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournal-opening",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournal",
+        "field": "opening",
+        "runner": "node",
+        "description": "Read-only logic for 'opening' in gLJournal should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournal-period",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournal",
+        "field": "period",
+        "runner": "node",
+        "description": "Read-only logic for 'period' in gLJournal should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-accountingCombination",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "accountingCombination",
+        "runner": "node",
+        "description": "Read-only logic for 'accountingCombination' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-asset",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "asset",
+        "runner": "node",
+        "description": "Read-only logic for 'asset' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-businessPartner",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Read-only logic for 'businessPartner' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-costCenter",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Read-only logic for 'costCenter' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-description",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "description",
+        "runner": "node",
+        "description": "Read-only logic for 'description' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-foreignCurrencyCredit",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "foreignCurrencyCredit",
+        "runner": "node",
+        "description": "Read-only logic for 'foreignCurrencyCredit' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-foreignCurrencyDebit",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "foreignCurrencyDebit",
+        "runner": "node",
+        "description": "Read-only logic for 'foreignCurrencyDebit' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-lineNo",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "lineNo",
+        "runner": "node",
+        "description": "Read-only logic for 'lineNo' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-product",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Read-only logic for 'product' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournalLine-project",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournalLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Read-only logic for 'project' in gLJournalLine should be valid JS"
+      },
+      {
+        "id": "t-rule-declared-Accounting-Schema-currency",
+        "category": "rule-declared",
+        "rule": "Accounting Schema currency",
+        "runner": "node",
+        "description": "Rule 'Accounting Schema currency' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-Org-show-batch-s-child-organizations",
+        "category": "rule-declared",
+        "rule": "AD_Org show batch's child organizations",
+        "runner": "node",
+        "description": "Rule 'AD_Org show batch's child organizations' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-AD-Org-show-GL-Header-child-organizations",
+        "category": "rule-declared",
+        "rule": "AD_Org show GL_Header child organizations",
+        "runner": "node",
+        "description": "Rule 'AD_Org show GL_Header child organizations' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Add-Payment-From-Journal",
+        "category": "rule-declared",
+        "rule": "Add Payment From Journal",
+        "runner": "node",
+        "description": "Rule 'Add Payment From Journal' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Add-Payment-From-Journal-Line",
+        "category": "rule-declared",
+        "rule": "Add Payment From Journal Line",
+        "runner": "node",
+        "description": "Rule 'Add Payment From Journal Line' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-AcctSchema-Schemas-matching-parent-organizations",
+        "category": "rule-declared",
+        "rule": "C_AcctSchema - Schemas matching parent organizations",
+        "runner": "node",
+        "description": "Rule 'C_AcctSchema - Schemas matching parent organizations' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Conversion-Rate-Document-AD-Client-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Conversion_Rate_Document-AD_Client_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Conversion_Rate_Document-AD_Client_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Conversion-Rate-Document-AD-Org-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Conversion_Rate_Document-AD_Org_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Conversion_Rate_Document-AD_Org_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Conversion-Rate-Document-C-Conversion-Rate-Document-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Conversion_Rate_Document-C_Conversion_Rate_Document_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Conversion_Rate_Document-C_Conversion_Rate_Document_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Conversion-Rate-Document-C-Currency-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Conversion_Rate_Document-C_Currency_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Conversion_Rate_Document-C_Currency_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Conversion-Rate-Document-C-Currency-Id-To-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Conversion_Rate_Document-C_Currency_Id_To-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Conversion_Rate_Document-C_Currency_Id_To-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Conversion-Rate-Document-GL-Journal-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Conversion_Rate_Document-GL_Journal_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Conversion_Rate_Document-GL_Journal_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Conversion-Rate-Document-Isactive-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Conversion_Rate_Document-Isactive-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Conversion_Rate_Document-Isactive-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-Conversion-Rate-Document-Rate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "C_Conversion_Rate_Document-Rate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'C_Conversion_Rate_Document-Rate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-C-DocType-Journals",
+        "category": "rule-declared",
+        "rule": "C_DocType Journals",
+        "runner": "node",
+        "description": "Rule 'C_DocType Journals' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Document-currency",
+        "category": "rule-declared",
+        "rule": "Document currency",
+        "runner": "node",
+        "description": "Rule 'Document currency' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-FIN-PaymentMethodInFinancialAccountOrBPartnerAcc",
+        "category": "rule-declared",
+        "rule": "FIN_PaymentMethodInFinancialAccountOrBPartnerAcc",
+        "runner": "node",
+        "description": "Rule 'FIN_PaymentMethodInFinancialAccountOrBPartnerAcc' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Financial-Account-Currency",
+        "category": "rule-declared",
+        "rule": "Financial Account Currency",
+        "runner": "node",
+        "description": "Rule 'Financial Account Currency' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Category-for-Manual-Journals",
+        "category": "rule-declared",
+        "rule": "GL_Category for Manual Journals",
+        "runner": "node",
+        "description": "Rule 'GL_Category for Manual Journals' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-A-Asset-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-A_Asset_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-A_Asset_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-AD-Client-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-AD_Client_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-AD_Client_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-AD-Org-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-AD_Org_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-AD_Org_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-C-AcctSchema-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-C_AcctSchema_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-C_AcctSchema_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-C-Bpartner-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-C_Bpartner_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-C_Bpartner_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-C-Campaign-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-C_Campaign_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-C_Campaign_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-C-Costcenter-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-C_Costcenter_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-C_Costcenter_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-C-Period-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-C_Period_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-C_Period_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-C-Project-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-C_Project_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-C_Project_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-ControlAmt-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-ControlAmt-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-ControlAmt-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-CurrencyRate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-CurrencyRate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-CurrencyRate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-CurrencyRateType-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-CurrencyRateType-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-CurrencyRateType-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-DateAcct-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-DateAcct-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-DateAcct-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-DateDoc-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-DateDoc-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-DateDoc-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-GL-Category-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-GL_Category_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-GL_Category_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-GL-Items",
+        "category": "rule-declared",
+        "rule": "GL Journal GL Items",
+        "runner": "node",
+        "description": "Rule 'GL Journal GL Items' (validation) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-M-Product-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-M_Product_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-M_Product_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-Multi-Gl-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-Multi_Gl-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-Multi_Gl-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-PostingType-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-PostingType-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-PostingType-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-User1-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-User1_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-User1_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-Journal-User2-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_Journal-User2_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_Journal-User2_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-A-Asset-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-A_Asset_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-A_Asset_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-Account-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-Account_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-Account_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-AD-Org-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-AD_Org_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-AD_Org_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-AmtSourceCr-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-AmtSourceCr-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-AmtSourceCr-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-AmtSourceDr-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-AmtSourceDr-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-AmtSourceDr-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Activity-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Activity_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Activity_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Bpartner-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Bpartner_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Bpartner_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Campaign-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Campaign_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Campaign_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Costcenter-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Costcenter_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Costcenter_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Currency-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Currency_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Currency_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Debt-Payment-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Debt_Payment_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Debt_Payment_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Glitem-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Glitem_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Glitem_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Project-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Project_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Project_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Salesregion-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Salesregion_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Salesregion_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Tax-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Tax_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Tax_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-UOM-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_UOM_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_UOM_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-ValidCombination-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_ValidCombination_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_ValidCombination_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-C-Withholding-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-C_Withholding_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-C_Withholding_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-Description-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-Description-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-Description-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-FIN-Financial-Account-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-FIN_Financial_Account_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-FIN_Financial_Account_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-FIN-Paymentmethod-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-FIN_Paymentmethod_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-FIN_Paymentmethod_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-Line-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-Line-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-Line-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-M-Product-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-M_Product_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-M_Product_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-Paymentdate-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-Paymentdate-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-Paymentdate-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-Qty-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-Qty-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-Qty-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-User1-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-User1_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-User1_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-GL-JournalLine-User2-ID-readOnlyLogic",
+        "category": "rule-declared",
+        "rule": "GL_JournalLine-User2_ID-readOnlyLogic",
+        "runner": "node",
+        "description": "Rule 'GL_JournalLine-User2_ID-readOnlyLogic' (readOnlyLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Post",
+        "category": "rule-declared",
+        "rule": "Post",
+        "runner": "node",
+        "description": "Rule 'Post' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Posted",
+        "category": "rule-declared",
+        "rule": "Posted",
+        "runner": "node",
+        "description": "Rule 'Posted' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-Processing",
+        "category": "rule-declared",
+        "rule": "Processing",
+        "runner": "node",
+        "description": "Rule 'Processing' (process) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-CalculateExchangeRate-Foreign-Amount",
+        "category": "rule-declared",
+        "rule": "SE_CalculateExchangeRate_Foreign_Amount",
+        "runner": "node",
+        "description": "Rule 'SE_CalculateExchangeRate_Foreign_Amount' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SE-CalculateExchangeRate-Rate",
+        "category": "rule-declared",
+        "rule": "SE_CalculateExchangeRate_Rate",
+        "runner": "node",
+        "description": "Rule 'SE_CalculateExchangeRate_Rate' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-A-Asset-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-A_Asset_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-A_Asset_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-C-AcctSchema-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-C_AcctSchema_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-C_AcctSchema_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-C-Bpartner-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-C_Bpartner_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-C_Bpartner_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-C-Campaign-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-C_Campaign_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-C_Campaign_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-C-Costcenter-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-C_Costcenter_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-C_Costcenter_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-C-Project-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-C_Project_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-C_Project_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-CurrencyRate-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-CurrencyRate-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-CurrencyRate-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-CurrencyRateType-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-CurrencyRateType-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-CurrencyRateType-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-DocAction-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-DocAction-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-DocAction-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-EM-Etblkp-Bulkposting-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-EM_Etblkp_Bulkposting-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-EM_Etblkp_Bulkposting-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-M-Product-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-M_Product_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-M_Product_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-Posted-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-Posted-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-Posted-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-User1-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-User1_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-User1_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Header-User2-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Header-User2_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Header-User2_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-A-Asset-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-A_Asset_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-A_Asset_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-Account-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-Account_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-Account_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-AmtAcctCr-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-AmtAcctCr-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-AmtAcctCr-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-AmtAcctDr-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-AmtAcctDr-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-AmtAcctDr-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Activity-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_Activity_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_Activity_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Bpartner-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_Bpartner_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_Bpartner_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Campaign-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_Campaign_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_Campaign_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Costcenter-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_Costcenter_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_Costcenter_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Glitem-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_Glitem_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_Glitem_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Project-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_Project_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_Project_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Salesregion-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_Salesregion_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_Salesregion_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Tax-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_Tax_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_Tax_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-ValidCombination-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_ValidCombination_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_ValidCombination_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-C-Withholding-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-C_Withholding_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-C_Withholding_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-CurrencyRate-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-CurrencyRate-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-CurrencyRate-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-CurrencyRateType-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-CurrencyRateType-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-CurrencyRateType-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-EM-Aprm-Addpayment-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-EM_Aprm_Addpayment-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-EM_Aprm_Addpayment-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-FIN-Financial-Account-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-FIN_Financial_Account_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-FIN_Financial_Account_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-FIN-Payment-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-FIN_Payment_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-FIN_Payment_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-FIN-Paymentmethod-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-FIN_Paymentmethod_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-FIN_Paymentmethod_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-M-Product-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-M_Product_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-M_Product_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-Paymentdate-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-Paymentdate-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-Paymentdate-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-User1-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-User1_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-User1_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-simple-g-l-journal-Lines-User2-ID-displayLogic",
+        "category": "rule-declared",
+        "rule": "simple-g-l-journal-Lines-User2_ID-displayLogic",
+        "runner": "node",
+        "description": "Rule 'simple-g-l-journal-Lines-User2_ID-displayLogic' (displayLogic) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Journal-MultiAcctSchema-Account-ID",
+        "category": "rule-declared",
+        "rule": "SL_Journal_MultiAcctSchema_Account_ID",
+        "runner": "node",
+        "description": "Rule 'SL_Journal_MultiAcctSchema_Account_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Journal-MultiAcctSchema-Multi-Gl",
+        "category": "rule-declared",
+        "rule": "SL_Journal_MultiAcctSchema_Multi_Gl",
+        "runner": "node",
+        "description": "Rule 'SL_Journal_MultiAcctSchema_Multi_Gl' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Journal-Period-AD-Org-ID",
+        "category": "rule-declared",
+        "rule": "SL_Journal_Period_AD_Org_ID",
+        "runner": "node",
+        "description": "Rule 'SL_Journal_Period_AD_Org_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Journal-Period-C-AcctSchema-ID",
+        "category": "rule-declared",
+        "rule": "SL_Journal_Period_C_AcctSchema_ID",
+        "runner": "node",
+        "description": "Rule 'SL_Journal_Period_C_AcctSchema_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Journal-Period-C-Currency-ID",
+        "category": "rule-declared",
+        "rule": "SL_Journal_Period_C_Currency_ID",
+        "runner": "node",
+        "description": "Rule 'SL_Journal_Period_C_Currency_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Journal-Period-C-Period-ID",
+        "category": "rule-declared",
+        "rule": "SL_Journal_Period_C_Period_ID",
+        "runner": "node",
+        "description": "Rule 'SL_Journal_Period_C_Period_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Journal-Period-DateAcct",
+        "category": "rule-declared",
+        "rule": "SL_Journal_Period_DateAcct",
+        "runner": "node",
+        "description": "Rule 'SL_Journal_Period_DateAcct' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-Journal-Period-DateDoc",
+        "category": "rule-declared",
+        "rule": "SL_Journal_Period_DateDoc",
+        "runner": "node",
+        "description": "Rule 'SL_Journal_Period_DateDoc' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-JournalLineAmt-AmtSourceCr",
+        "category": "rule-declared",
+        "rule": "SL_JournalLineAmt_AmtSourceCr",
+        "runner": "node",
+        "description": "Rule 'SL_JournalLineAmt_AmtSourceCr' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-JournalLineAmt-AmtSourceDr",
+        "category": "rule-declared",
+        "rule": "SL_JournalLineAmt_AmtSourceDr",
+        "runner": "node",
+        "description": "Rule 'SL_JournalLineAmt_AmtSourceDr' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-JournalLineAmt-C-Currency-ID",
+        "category": "rule-declared",
+        "rule": "SL_JournalLineAmt_C_Currency_ID",
+        "runner": "node",
+        "description": "Rule 'SL_JournalLineAmt_C_Currency_ID' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-JournalLineAmt-CurrencyRate",
+        "category": "rule-declared",
+        "rule": "SL_JournalLineAmt_CurrencyRate",
+        "runner": "node",
+        "description": "Rule 'SL_JournalLineAmt_CurrencyRate' (callout) should be declared"
+      },
+      {
+        "id": "t-rule-declared-SL-JournalLineAmt-CurrencyRateType",
+        "category": "rule-declared",
+        "rule": "SL_JournalLineAmt_CurrencyRateType",
+        "runner": "node",
+        "description": "Rule 'SL_JournalLineAmt_CurrencyRateType' (callout) should be declared"
+      },
+      {
+        "id": "t-searchable-filters-gLJournal-description",
+        "category": "searchable-filters",
+        "entity": "gLJournal",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be a supported filter for gLJournal"
+      },
+      {
+        "id": "t-selector-endpoint-gLJournal-currency",
+        "category": "selector-endpoint",
+        "entity": "gLJournal",
+        "field": "currency",
+        "runner": "node",
+        "description": "Selector endpoint for 'currency' in gLJournal should exist"
+      },
+      {
+        "id": "t-selector-endpoint-gLJournal-period",
+        "category": "selector-endpoint",
+        "entity": "gLJournal",
+        "field": "period",
+        "runner": "node",
+        "description": "Selector endpoint for 'period' in gLJournal should exist"
+      },
+      {
+        "id": "t-selector-endpoint-gLJournalLine-accountingCombination",
+        "category": "selector-endpoint",
+        "entity": "gLJournalLine",
+        "field": "accountingCombination",
+        "runner": "node",
+        "description": "Selector endpoint for 'accountingCombination' in gLJournalLine should exist"
+      },
+      {
+        "id": "t-selector-endpoint-gLJournalLine-asset",
+        "category": "selector-endpoint",
+        "entity": "gLJournalLine",
+        "field": "asset",
+        "runner": "node",
+        "description": "Selector endpoint for 'asset' in gLJournalLine should exist"
+      },
+      {
+        "id": "t-selector-endpoint-gLJournalLine-businessPartner",
+        "category": "selector-endpoint",
+        "entity": "gLJournalLine",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "Selector endpoint for 'businessPartner' in gLJournalLine should exist"
+      },
+      {
+        "id": "t-selector-endpoint-gLJournalLine-costCenter",
+        "category": "selector-endpoint",
+        "entity": "gLJournalLine",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "Selector endpoint for 'costCenter' in gLJournalLine should exist"
+      },
+      {
+        "id": "t-selector-endpoint-gLJournalLine-product",
+        "category": "selector-endpoint",
+        "entity": "gLJournalLine",
+        "field": "product",
+        "runner": "node",
+        "description": "Selector endpoint for 'product' in gLJournalLine should exist"
+      },
+      {
+        "id": "t-selector-endpoint-gLJournalLine-project",
+        "category": "selector-endpoint",
+        "entity": "gLJournalLine",
+        "field": "project",
+        "runner": "node",
+        "description": "Selector endpoint for 'project' in gLJournalLine should exist"
+      },
+      {
+        "id": "t-system-field-gLJournal-accountingSchema",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-active",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-approved",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "approved",
+        "runner": "node",
+        "description": "System field 'approved' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-asset",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "asset",
+        "runner": "node",
+        "description": "System field 'asset' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-businessPartner",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "businessPartner",
+        "runner": "node",
+        "description": "System field 'businessPartner' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-client",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-controlAmount",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "controlAmount",
+        "runner": "node",
+        "description": "System field 'controlAmount' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-costCenter",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "costCenter",
+        "runner": "node",
+        "description": "System field 'costCenter' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-createdBy",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-creationDate",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-currencyRateType",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "currencyRateType",
+        "runner": "node",
+        "description": "System field 'currencyRateType' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-documentAction",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "documentAction",
+        "runner": "node",
+        "description": "System field 'documentAction' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-documentDate",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "documentDate",
+        "runner": "node",
+        "description": "System field 'documentDate' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-documentNo",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "System field 'documentNo' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-documentStatus",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "documentStatus",
+        "runner": "node",
+        "description": "System field 'documentStatus' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-documentType",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "documentType",
+        "runner": "node",
+        "description": "System field 'documentType' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-etblkpAccountingstatus",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-etblkpBulkposting",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "etblkpBulkposting",
+        "runner": "node",
+        "description": "System field 'etblkpBulkposting' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-gLCategory",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "gLCategory",
+        "runner": "node",
+        "description": "System field 'gLCategory' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-id",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-journalBatch",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "journalBatch",
+        "runner": "node",
+        "description": "System field 'journalBatch' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-ndDimension",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "System field 'ndDimension' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-organization",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-postingType",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "postingType",
+        "runner": "node",
+        "description": "System field 'postingType' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-print",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "print",
+        "runner": "node",
+        "description": "System field 'print' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-processed",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "processed",
+        "runner": "node",
+        "description": "System field 'processed' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-processNow",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-product",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "product",
+        "runner": "node",
+        "description": "System field 'product' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-project",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "project",
+        "runner": "node",
+        "description": "System field 'project' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-rate",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "rate",
+        "runner": "node",
+        "description": "System field 'rate' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-salesCampaign",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "salesCampaign",
+        "runner": "node",
+        "description": "System field 'salesCampaign' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-stDimension",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "System field 'stDimension' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-totalCreditAmount",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "totalCreditAmount",
+        "runner": "node",
+        "description": "System field 'totalCreditAmount' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-totalDebitAmount",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "totalDebitAmount",
+        "runner": "node",
+        "description": "System field 'totalDebitAmount' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-updated",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournal-updatedBy",
+        "category": "system-field",
+        "entity": "gLJournal",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for gLJournal"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-active",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-activity",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "activity",
+        "runner": "node",
+        "description": "System field 'activity' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-aPRMAddPayment",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "aPRMAddPayment",
+        "runner": "node",
+        "description": "System field 'aPRMAddPayment' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-client",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-createdBy",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-creationDate",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-credit",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "credit",
+        "runner": "node",
+        "description": "System field 'credit' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-currency",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "currency",
+        "runner": "node",
+        "description": "System field 'currency' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-currencyRateType",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "currencyRateType",
+        "runner": "node",
+        "description": "System field 'currencyRateType' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-debit",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "debit",
+        "runner": "node",
+        "description": "System field 'debit' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-financialAccount",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "financialAccount",
+        "runner": "node",
+        "description": "System field 'financialAccount' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-generated",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "generated",
+        "runner": "node",
+        "description": "System field 'generated' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-gLItem",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "gLItem",
+        "runner": "node",
+        "description": "System field 'gLItem' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-gLItems",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "gLItems",
+        "runner": "node",
+        "description": "System field 'gLItems' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-id",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-journalEntry",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "journalEntry",
+        "runner": "node",
+        "description": "System field 'journalEntry' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-ndDimension",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "ndDimension",
+        "runner": "node",
+        "description": "System field 'ndDimension' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-organization",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-payment",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "payment",
+        "runner": "node",
+        "description": "System field 'payment' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-paymentDate",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "paymentDate",
+        "runner": "node",
+        "description": "System field 'paymentDate' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-paymentMethod",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "paymentMethod",
+        "runner": "node",
+        "description": "System field 'paymentMethod' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-quantity",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "quantity",
+        "runner": "node",
+        "description": "System field 'quantity' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-rate",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "rate",
+        "runner": "node",
+        "description": "System field 'rate' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-relatedPayment",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "relatedPayment",
+        "runner": "node",
+        "description": "System field 'relatedPayment' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-salesCampaign",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "salesCampaign",
+        "runner": "node",
+        "description": "System field 'salesCampaign' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-salesRegion",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "salesRegion",
+        "runner": "node",
+        "description": "System field 'salesRegion' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-stDimension",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "stDimension",
+        "runner": "node",
+        "description": "System field 'stDimension' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-tax",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "tax",
+        "runner": "node",
+        "description": "System field 'tax' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-uOM",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "uOM",
+        "runner": "node",
+        "description": "System field 'uOM' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-updated",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-updatedBy",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-system-field-gLJournalLine-withholding",
+        "category": "system-field",
+        "entity": "gLJournalLine",
+        "field": "withholding",
+        "runner": "node",
+        "description": "System field 'withholding' should exist in backend but not frontend for gLJournalLine"
+      },
+      {
+        "id": "t-visibility-gLJournal",
+        "category": "visibility",
+        "entity": "gLJournal",
+        "runner": "node",
+        "description": "Entity 'gLJournal' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-visibility-gLJournalLine",
+        "category": "visibility",
+        "entity": "gLJournalLine",
+        "runner": "node",
+        "description": "Entity 'gLJournalLine' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 300,
+      "byCategory": {
+        "action-endpoint": 4,
+        "crud-flags": 2,
+        "default-value-type": 10,
+        "displaylogic-evaluable": 7,
+        "displaylogic-valid": 7,
+        "field-presence": 18,
+        "field-type": 18,
+        "readonlylogic-evaluable": 16,
+        "readonlylogic-valid": 16,
+        "rule-declared": 123,
+        "searchable-filters": 1,
+        "selector-endpoint": 8,
+        "system-field": 68,
+        "visibility": 2
+      },
+      "byRunner": {
+        "node": 300,
+        "junit": 0
+      }
+    }
+  }
+}

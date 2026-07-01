@@ -7,28 +7,30 @@ vi.mock('@/i18n', () => ({
 import { MovementStatusBadge } from '../MovementStatusBadge.jsx';
 
 describe('MovementStatusBadge', () => {
-  it('renders the consolidated label for a known status (RPR → Completed)', () => {
-    render(<MovementStatusBadge status="RPR" />);
-    expect(screen.getByText('financeAccountMovementsStatusCompleted')).toBeInTheDocument();
+  it('renders "Reconciled" for the cleared status (RPPC)', () => {
+    render(<MovementStatusBadge status="RPPC" />);
+    expect(screen.getByText('financeAccountMovementsStatusReconciled')).toBeInTheDocument();
   });
 
-  it('renders the consolidated label for a pending status (RPAP → Draft)', () => {
-    render(<MovementStatusBadge status="RPAP" />);
-    expect(screen.getByText('financeAccountMovementsStatusDraft')).toBeInTheDocument();
+  it('renders "Unreconciled" for every non-cleared status (e.g. RPR, RPAP)', () => {
+    const { rerender } = render(<MovementStatusBadge status="RPR" />);
+    expect(screen.getByText('financeAccountMovementsStatusUnreconciled')).toBeInTheDocument();
+    rerender(<MovementStatusBadge status="RPAP" />);
+    expect(screen.getByText('financeAccountMovementsStatusUnreconciled')).toBeInTheDocument();
   });
 
-  it('applies inline background/text colors based on the status family', () => {
-    const { container } = render(<MovementStatusBadge status="RPR" />);
+  it('applies the cleared (green) tone for the reconciled status', () => {
+    const { container } = render(<MovementStatusBadge status="RPPC" />);
     const span = container.firstChild;
-    // executed family: bg #EFEAFE, text #3D2D8E
-    expect(span.style.backgroundColor).toMatch(/239,\s*234,\s*254|#EFEAFE/i);
+    // cleared family: bg #EEFBF4
+    expect(span.style.backgroundColor).toMatch(/238,\s*251,\s*244|#EEFBF4/i);
   });
 
-  it('uses the pending tone for RPAE', () => {
+  it('uses the neutral unreconciled tone for non-cleared statuses (RPAE)', () => {
     const { container } = render(<MovementStatusBadge status="RPAE" />);
     const span = container.firstChild;
-    // pending family: bg #FFF7E0
-    expect(span.style.backgroundColor).toMatch(/255,\s*247,\s*224|#FFF7E0/i);
+    // unreconciled family: bg #F5F7F9
+    expect(span.style.backgroundColor).toMatch(/245,\s*247,\s*249|#F5F7F9/i);
   });
 
   it('returns null for an unknown status code', () => {

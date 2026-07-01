@@ -11,53 +11,8 @@ import {
 } from '@/components/ui/dialog';
 import { useCreateMovement } from '@/hooks/useCreateMovement';
 import { useBPartnerLookup, useGLItemLookup } from '@/hooks/useMovementLookups';
-
-/**
- * Picker with text input + dropdown list. Caller passes a `lookupHook` that
- * accepts the query string and returns `{ results, loading }`. Selection is
- * reported via `onSelect(item)` and `onClear()`.
- */
-function LookupPicker({ value, onSelect, onClear, placeholder, useLookup, dataTestId }) {
-  const [query, setQuery] = useState(value?.name ?? '');
-  const [open, setOpen] = useState(false);
-  const { results, loading } = useLookup(query);
-
-  useEffect(() => {
-    setQuery(value?.name ?? '');
-  }, [value]);
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={query}
-        placeholder={placeholder}
-        data-testid={dataTestId}
-        onChange={(e) => { setQuery(e.target.value); setOpen(true); if (value) onClear(); }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
-        className="h-10 w-full rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1"
-      />
-      {open && (results.length > 0 || loading) ? (
-        <div className="absolute left-0 right-0 top-11 z-50 max-h-56 overflow-auto rounded-lg border border-[#D1D4DB] bg-white shadow-lg">
-          {loading && results.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-[#6c6c89]">…</div>
-          ) : null}
-          {results.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); onSelect(r); setOpen(false); }}
-              className="block w-full px-3 py-2 text-left text-sm text-[#121217] hover:bg-[#F5F7F9]"
-            >
-              {r.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
+import { LookupPicker } from './LookupPicker';
+import { FieldRow, inputClass, selectClass } from './formFields';
 
 /**
  * Modal form to create a single manual movement on the active account.
@@ -126,15 +81,20 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{ui('financeAccountMovementsNewTitle')}</DialogTitle>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => { if (!v) onClose(); }}
+      data-testid="Dialog__cc1c8b">
+      <DialogContent className="max-w-xl" data-testid="DialogContent__cc1c8b">
+        <DialogHeader data-testid="DialogHeader__cc1c8b">
+          <DialogTitle data-testid="DialogTitle__cc1c8b">{ui('financeAccountMovementsNewTitle')}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Tipo */}
-          <FieldRow label={ui('financeAccountMovementsNewType')}>
+          <FieldRow
+            label={ui('financeAccountMovementsNewType')}
+            data-testid="FieldRow__cc1c8b">
             <select
               value={form.trxType}
               onChange={(e) => setForm({ ...form, trxType: e.target.value })}
@@ -148,7 +108,9 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
 
           {/* Fechas */}
           <div className="grid grid-cols-2 gap-4">
-            <FieldRow label={ui('financeAccountMovementsNewTrxDate')}>
+            <FieldRow
+              label={ui('financeAccountMovementsNewTrxDate')}
+              data-testid="FieldRow__cc1c8b">
               <input
                 type="date"
                 value={form.transactionDate}
@@ -156,7 +118,9 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
                 className={inputClass}
               />
             </FieldRow>
-            <FieldRow label={ui('financeAccountMovementsNewAcctDate')}>
+            <FieldRow
+              label={ui('financeAccountMovementsNewAcctDate')}
+              data-testid="FieldRow__cc1c8b">
               <input
                 type="date"
                 value={form.accountingDate}
@@ -167,7 +131,9 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
           </div>
 
           {/* BP + GL Item */}
-          <FieldRow label={ui('financeAccountMovementsNewBpartner')}>
+          <FieldRow
+            label={ui('financeAccountMovementsNewBpartner')}
+            data-testid="FieldRow__cc1c8b">
             <LookupPicker
               value={bpartner}
               onSelect={setBpartner}
@@ -175,10 +141,12 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
               placeholder={ui('financeAccountMovementsNewBpartnerPlaceholder')}
               useLookup={useBPartnerLookup}
               dataTestId="new-movement-bpartner"
-            />
+              data-testid="LookupPicker__cc1c8b" />
           </FieldRow>
           {glItemVisible(form.trxType) ? (
-            <FieldRow label={ui('financeAccountMovementsNewGlItem')}>
+            <FieldRow
+              label={ui('financeAccountMovementsNewGlItem')}
+              data-testid="FieldRow__cc1c8b">
               <LookupPicker
                 value={glItem}
                 onSelect={setGlItem}
@@ -186,12 +154,14 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
                 placeholder={ui('financeAccountMovementsNewGlItemPlaceholder')}
                 useLookup={useGLItemLookup}
                 dataTestId="new-movement-glitem"
-              />
+                data-testid="LookupPicker__cc1c8b" />
             </FieldRow>
           ) : null}
 
           {/* Descripción */}
-          <FieldRow label={ui('financeAccountMovementsNewDescription')}>
+          <FieldRow
+            label={ui('financeAccountMovementsNewDescription')}
+            data-testid="FieldRow__cc1c8b">
             <input
               type="text"
               value={form.description}
@@ -201,7 +171,9 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
           </FieldRow>
 
           {/* Moneda (read-only, viene de la cuenta) */}
-          <FieldRow label={ui('financeAccountMovementsNewCurrency')}>
+          <FieldRow
+            label={ui('financeAccountMovementsNewCurrency')}
+            data-testid="FieldRow__cc1c8b">
             <input
               type="text"
               readOnly
@@ -212,7 +184,9 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
 
           {/* Importes — Classic exposes both columns and toggles readonly by trxType. */}
           <div className="grid grid-cols-2 gap-4">
-            <FieldRow label={ui('financeAccountMovementsNewDepositAmount')}>
+            <FieldRow
+              label={ui('financeAccountMovementsNewDepositAmount')}
+              data-testid="FieldRow__cc1c8b">
               <input
                 type="number"
                 step="0.01"
@@ -226,7 +200,9 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
                   : `${inputClass} cursor-not-allowed bg-[#F5F7F9] text-[#6c6c89]`}
               />
             </FieldRow>
-            <FieldRow label={ui('financeAccountMovementsNewPaymentAmount')}>
+            <FieldRow
+              label={ui('financeAccountMovementsNewPaymentAmount')}
+              data-testid="FieldRow__cc1c8b">
               <input
                 type="number"
                 step="0.01"
@@ -242,8 +218,8 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
             </FieldRow>
           </div>
 
-          <DialogFooter>
-            <DialogClose asChild>
+          <DialogFooter data-testid="DialogFooter__cc1c8b">
+            <DialogClose asChild data-testid="DialogClose__cc1c8b">
               <button
                 type="button"
                 className="inline-flex h-10 items-center rounded-lg border border-[#D1D4DB] bg-white px-4 text-sm font-medium text-[#121217] hover:bg-[#F5F7F9]"
@@ -269,19 +245,6 @@ export function NewMovementDialog({ open, accountId, accountCurrency, onClose, o
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
-
-function FieldRow({ label, children }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-[#3F3F50]">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const inputClass =
-  'h-10 rounded-lg border border-[#D1D4DB] bg-white px-3 text-sm text-[#121217] placeholder:text-[#8a8aa3] shadow-[0_1px_2px_rgba(18,18,23,0.05)] focus:outline-none focus:ring-2 focus:ring-[#121217] focus:ring-offset-1';
-const selectClass = inputClass;
 
 function initialForm(_accountCurrency, today) {
   return {

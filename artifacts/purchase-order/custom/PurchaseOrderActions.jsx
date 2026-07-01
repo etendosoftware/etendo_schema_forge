@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI, useMenuLabel } from '@/i18n';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
+import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
 
@@ -31,7 +32,7 @@ function Spinner() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl, onProcess }) {
+export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl, onProcess, onRefresh }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -106,10 +107,9 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
             confirmedDocs?.receipt?.id && { type: 'entrada', num: confirmedDocs.receipt.documentNo, amount: confirmedDocs.receipt.amount, route: `/goods-receipt/${confirmedDocs.receipt.id}` },
             confirmedDocs?.invoice?.id && { type: 'facturaCompra', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/purchase-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
-          primary={ui('soViewInvoice')}
           currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
-          onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); }}
+          onClose={() => { setConfirmedDocs(null); setConfirmedTitle(null); onRefresh?.(); }}
         />,
         document.body,
       )
@@ -308,6 +308,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('soNoLinesError') : rawMsg);
         }
         setOrderConfirmed(true);
+        trackTransactionPosted();
         window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
       } catch (e) {
         setError(e.message || ui('poErrorOccurred'));
@@ -329,7 +330,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('poOrderConfirmedReceiptError') + ' ' + (e?.response?.message || e?.message || `Error (${res.status})`));
+          throw new Error(ui('poOrderConfirmedReceiptError') + ' ' + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -339,6 +340,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           amount:     docObj?.grandTotalAmount ?? null,
         };
         setReceiptResult(currentReceipt);
+        trackDocumentCreated('goods-receipt');
       } catch (e) {
         errors.push(e.message || ui('poErrorOccurred'));
       }
@@ -352,7 +354,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('poOrderConfirmedInvoiceError') + ' ' + (e?.response?.message || e?.message || `Error (${res.status})`));
+          throw new Error(ui('poOrderConfirmedInvoiceError') + ' ' + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
@@ -362,6 +364,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           amount:     docObj?.grandTotalAmount ?? null,
         };
         setInvoiceResult(currentInvoice);
+        trackDocumentCreated('purchase-invoice');
       } catch (e) {
         errors.push(e.message || ui('poErrorOccurred'));
       }
@@ -581,11 +584,12 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
         result.receipt = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null };
+        trackDocumentCreated('goods-receipt');
       }
 
       if (createInvoice) {
@@ -593,11 +597,12 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(e?.response?.message || `Error (${res.status})`);
+          throw new Error(e?.error?.message || e?.response?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
         const docObj = Array.isArray(doc) ? doc[0] : doc;
         result.invoice = { id: docObj?.id ?? null, documentNo: docObj?.documentNo ?? '', amount: docObj?.grandTotalAmount ?? null };
+        trackDocumentCreated('purchase-invoice');
       }
 
       window.dispatchEvent(new CustomEvent('purchase-order:document-created'));

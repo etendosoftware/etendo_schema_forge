@@ -7,6 +7,7 @@ import {
   buildBackendFilter,
   resolveFilterMode,
   buildAdvancedFilterCriteria,
+  getFilteredKey,
 } from '../gridQuery.js';
 
 // ---------------------------------------------------------------------------
@@ -708,5 +709,599 @@ describe('buildAdvancedFilterCriteria — buildCriteria hook (ETP-3660)', () => 
       { fieldName: 'customer', operator: 'equals', value: true },
       { fieldName: 'documentNo', operator: 'iContains', value: 'ORD' },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: parseDateString — yyyy/mm/dd branch (lines 68-73)
+// ---------------------------------------------------------------------------
+
+describe('parseUserFilter — parseDateString yyyy/mm/dd (slash/dot) branch', () => {
+  const col = { key: 'orderDate', type: 'date', filterMode: 'date' };
+
+  it('parses yyyy/mm/dd format', () => {
+    const result = parseUserFilter(col, '2026/04/14');
+    assert.deepEqual(result, { mode: 'date', op: '=', value: '2026-04-14', originalValue: '2026/04/14' });
+  });
+
+  it('parses yyyy.mm.dd format', () => {
+    const result = parseUserFilter(col, '2026.04.14');
+    assert.deepEqual(result, { mode: 'date', op: '=', value: '2026-04-14', originalValue: '2026.04.14' });
+  });
+
+  it('pads single-digit month and day in yyyy/mm/dd', () => {
+    const result = parseUserFilter(col, '2026/1/5');
+    assert.deepEqual(result, { mode: 'date', op: '=', value: '2026-01-05', originalValue: '2026/1/5' });
+  });
+
+  it('returns null for three-part date where no part > 999 (e.g. 12/04/99)', () => {
+    assert.equal(parseUserFilter(col, '12/04/99'), null);
+  });
+
+  it('returns null for three-part date with NaN parts', () => {
+    assert.equal(parseUserFilter(col, 'ab/cd/ef'), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: parseEnumLabelFilter — direct code match (line 227-228)
+// ---------------------------------------------------------------------------
+
+describe('parseUserFilter — enumLabel direct code match', () => {
+  const col = {
+    key: 'documentStatus',
+    type: 'status',
+    filterMode: 'enumLabel',
+    enumLabels: { DR: 'Draft', CO: 'Completed', IP: 'In Process' },
+  };
+
+  it('returns direct code match when input is an exact raw key', () => {
+    const result = parseUserFilter(col, 'DR');
+    assert.deepEqual(result, { mode: 'enumLabel', value: ['DR'], originalValue: 'DR' });
+  });
+
+  it('returns direct code match for CO', () => {
+    const result = parseUserFilter(col, 'CO');
+    assert.deepEqual(result, { mode: 'enumLabel', value: ['CO'], originalValue: 'CO' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — isNull / isNotNull (lines 461-462, 504-506)
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — isNull / isNotNull', () => {
+  const columns = [
+    { key: 'name', type: 'string' },
+    { key: 'businessPartner', type: 'selector' },
+  ];
+
+  it('generates isNull criterion', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'isNull', value: null }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'name', operator: 'isNull' }]);
+  });
+
+  it('generates notNull criterion for isNotNull', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'isNotNull', value: null }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'name', operator: 'notNull' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — between (lines 467-478)
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — between operator', () => {
+  const columns = [
+    { key: 'grandTotal', type: 'amount' },
+    { key: 'orderDate', type: 'date' },
+    { key: 'name', type: 'string' },
+  ];
+
+  it('produces greaterOrEqual + lessOrEqual for numeric between', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'grandTotal', operator: 'between', value: ['100', '500'] }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'grandTotal', operator: 'greaterOrEqual', value: 100 },
+      { fieldName: 'grandTotal', operator: 'lessOrEqual', value: 500 },
+    ]);
+  });
+
+  it('produces greaterOrEqual + lessOrEqual for date between (no numeric coercion)', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'orderDate', operator: 'between', value: ['2026-01-01', '2026-12-31'] }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'orderDate', operator: 'greaterOrEqual', value: '2026-01-01' },
+      { fieldName: 'orderDate', operator: 'lessOrEqual', value: '2026-12-31' },
+    ]);
+  });
+
+  it('returns null for between with non-array value', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'grandTotal', operator: 'between', value: '100' }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('returns null for between with empty from', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'grandTotal', operator: 'between', value: ['', '500'] }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('returns null for between with null from', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'grandTotal', operator: 'between', value: [null, '500'] }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('returns null for between with null to', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'grandTotal', operator: 'between', value: ['100', null] }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('returns null for between with empty to', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'grandTotal', operator: 'between', value: ['100', ''] }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('returns null when numeric coercion fails on from', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'grandTotal', operator: 'between', value: ['abc', '500'] }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('returns null when numeric coercion fails on to', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'grandTotal', operator: 'between', value: ['100', 'xyz'] }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('handles between with number values directly', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'grandTotal', operator: 'between', value: [10, 50] }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'grandTotal', operator: 'greaterOrEqual', value: 10 },
+      { fieldName: 'grandTotal', operator: 'lessOrEqual', value: 50 },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — inSet (lines 481-483, 508-520)
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — inSet operator', () => {
+  const columns = [{ key: 'name', type: 'string' }];
+
+  it('produces inSet criterion for array with multiple values', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'inSet', value: ['a', 'b', 'c'] }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'name', operator: 'inSet', value: 'a,b,c' }]);
+  });
+
+  it('produces equals criterion for array with single value', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'inSet', value: ['only'] }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'name', operator: 'equals', value: 'only' }]);
+  });
+
+  it('returns null for inSet with empty array', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'inSet', value: [] }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('handles inSet with string value (comma-separated)', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'inSet', value: 'a, b, c' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'name', operator: 'inSet', value: 'a,b,c' }]);
+  });
+
+  it('handles inSet with single string value (no comma)', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'inSet', value: 'solo' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'name', operator: 'equals', value: 'solo' }]);
+  });
+
+  it('filters out null and empty values from inSet array', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'inSet', value: [null, '', 'valid'] }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'name', operator: 'equals', value: 'valid' }]);
+  });
+
+  it('returns null for inSet array with only null/empty values', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'inSet', value: [null, '', undefined] }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — multi-value array OR (lines 487-488, 522-535)
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — multi-value array OR composition', () => {
+  const columns = [{ key: 'name', type: 'string' }];
+
+  it('wraps multiple values in AdvancedCriteria OR', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'equals', value: ['x', 'y'] }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.equal(result.length, 1);
+    assert.equal(result[0]._constructor, 'AdvancedCriteria');
+    assert.equal(result[0].operator, 'or');
+    assert.equal(result[0].criteria.length, 2);
+    assert.deepEqual(result[0].criteria[0], { fieldName: 'name', operator: 'equals', value: 'x' });
+    assert.deepEqual(result[0].criteria[1], { fieldName: 'name', operator: 'equals', value: 'y' });
+  });
+
+  it('produces single criterion for array with one value (no OR wrap)', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'equals', value: ['only'] }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'name', operator: 'equals', value: 'only' }]);
+  });
+
+  it('returns null for array with only empty/null values', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'equals', value: ['', null] }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — numeric mode in buildRowCriteria (lines 492-498)
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — numeric mode (buildRowCriteria)', () => {
+  const columns = [{ key: 'qty', type: 'number' }];
+
+  it('coerces string value to number for numeric column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'qty', operator: 'greaterThan', value: '42.5' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'qty', operator: 'greaterThan', value: 42.5 }]);
+  });
+
+  it('handles actual number value for numeric column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'qty', operator: 'equals', value: 100 }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'qty', operator: 'equals', value: 100 }]);
+  });
+
+  it('returns null for non-numeric string value in numeric column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'qty', operator: 'equals', value: 'abc' }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('coerces comma-formatted string to number', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'qty', operator: 'equals', value: '1,234' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'qty', operator: 'equals', value: 1234 }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — booleanLabel mode (line 497-499)
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — booleanLabel mode (buildRowCriteria)', () => {
+  const columns = [{ key: 'active', type: 'boolean' }];
+
+  it('maps string "true" to boolean true', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'active', operator: 'equals', value: 'true' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'active', operator: 'equals', value: true }]);
+  });
+
+  it('maps boolean true to true', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'active', operator: 'equals', value: true }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'active', operator: 'equals', value: true }]);
+  });
+
+  it('maps false to false', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'active', operator: 'equals', value: false }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'active', operator: 'equals', value: false }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — empty/null/undefined value (line 490)
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — empty/null/undefined value edge cases', () => {
+  const columns = [{ key: 'name', type: 'string' }];
+
+  it('returns null for empty string value', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'iContains', value: '' }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('returns null for null value with non-null operator', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'equals', value: null }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('returns null for undefined value', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: 'iContains', value: undefined }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('returns null when operator is missing', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'name', operator: null, value: 'x' }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — identifier column textual vs discrete ops
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — identifier column ops', () => {
+  const columns = [{ key: 'businessPartner', type: 'selector' }];
+
+  it('uses $_identifier for iContains on selector column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'businessPartner', operator: 'iContains', value: 'acme' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'businessPartner$_identifier', operator: 'iContains', value: 'acme' },
+    ]);
+  });
+
+  it('uses $_identifier for iNotContains on selector column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'businessPartner', operator: 'iNotContains', value: 'acme' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'businessPartner$_identifier', operator: 'iNotContains', value: 'acme' },
+    ]);
+  });
+
+  it('uses $_identifier for iEquals on selector column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'businessPartner', operator: 'iEquals', value: 'Acme Corp' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'businessPartner$_identifier', operator: 'iEquals', value: 'Acme Corp' },
+    ]);
+  });
+
+  it('uses $_identifier for iNotEqual on selector column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'businessPartner', operator: 'iNotEqual', value: 'Acme' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'businessPartner$_identifier', operator: 'iNotEqual', value: 'Acme' },
+    ]);
+  });
+
+  it('uses raw key for equals (discrete op) on selector column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'businessPartner', operator: 'equals', value: 'uuid-1' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'businessPartner', operator: 'equals', value: 'uuid-1' },
+    ]);
+  });
+
+  it('uses raw key for notEqual (discrete op) on selector column', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'businessPartner', operator: 'notEqual', value: 'uuid-1' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [
+      { fieldName: 'businessPartner', operator: 'notEqual', value: 'uuid-1' },
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — buildCriteria returning null
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — buildCriteria hook coverage', () => {
+  it('skips condition when buildCriteria returns null', () => {
+    const col = { key: 'virtual', type: 'string', buildCriteria: () => null };
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'virtual', operator: 'equals', value: 'test' }],
+    };
+    assert.equal(buildAdvancedFilterCriteria(filter, [col]), null);
+  });
+
+  it('uses buildCriteria result instead of default logic', () => {
+    const col = {
+      key: 'custom',
+      type: 'string',
+      buildCriteria: (row) => [{ fieldName: 'overridden', operator: 'equals', value: row.value }],
+    };
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'custom', operator: 'iContains', value: 'anything' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, [col]);
+    assert.deepEqual(result, [{ fieldName: 'overridden', operator: 'equals', value: 'anything' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — OR with single criterion
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — OR single criterion', () => {
+  const columns = [{ key: 'name', type: 'string' }];
+
+  it('does not wrap OR when only one criterion exists', () => {
+    const filter = {
+      rowOperator: 'or',
+      conditions: [{ field: 'name', operator: 'iContains', value: 'single' }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [{ fieldName: 'name', operator: 'iContains', value: 'single' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: buildAdvancedFilterCriteria — invalid columns parameter
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — invalid columns', () => {
+  it('returns null when columns is null', () => {
+    const filter = { conditions: [{ field: 'x', operator: 'equals', value: 'y' }] };
+    assert.equal(buildAdvancedFilterCriteria(filter, null), null);
+  });
+
+  it('returns null when columns is not an array', () => {
+    const filter = { conditions: [{ field: 'x', operator: 'equals', value: 'y' }] };
+    assert.equal(buildAdvancedFilterCriteria(filter, 'not-array'), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coverage: getFilteredKey (lines 543-548)
+// ---------------------------------------------------------------------------
+
+describe('getFilteredKey', () => {
+  it('returns backendFilterKey when provided', () => {
+    const col = { key: 'bp', backendFilterKey: 'bp$name' };
+    assert.equal(getFilteredKey(col, 'identifier', 'iContains'), 'bp$name');
+  });
+
+  it('returns $_identifier for identifier mode with iContains', () => {
+    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iContains'), 'bp$_identifier');
+  });
+
+  it('returns $_identifier for identifier mode with iNotContains', () => {
+    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iNotContains'), 'bp$_identifier');
+  });
+
+  it('returns $_identifier for identifier mode with iEquals', () => {
+    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iEquals'), 'bp$_identifier');
+  });
+
+  it('returns $_identifier for identifier mode with iNotEqual', () => {
+    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'iNotEqual'), 'bp$_identifier');
+  });
+
+  it('returns raw key for identifier mode with discrete op equals', () => {
+    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'equals'), 'bp');
+  });
+
+  it('returns raw key for identifier mode with discrete op notEqual', () => {
+    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'notEqual'), 'bp');
+  });
+
+  it('returns raw key for identifier mode with inSet op', () => {
+    assert.equal(getFilteredKey({ key: 'bp' }, 'identifier', 'inSet'), 'bp');
+  });
+
+  it('returns raw key for non-identifier modes', () => {
+    assert.equal(getFilteredKey({ key: 'name' }, 'text', 'iContains'), 'name');
+    assert.equal(getFilteredKey({ key: 'n' }, 'numeric', 'equals'), 'n');
+    assert.equal(getFilteredKey({ key: 'd' }, 'date', 'greaterThan'), 'd');
   });
 });

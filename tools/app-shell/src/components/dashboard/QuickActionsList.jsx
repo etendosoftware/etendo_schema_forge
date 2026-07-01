@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { TrendingUp } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { DASHBOARD_KPI_IDS, trackDashboardKpi } from '@/lib/dashboardKpiTelemetry.js';
 
 export function QuickActionsList({ actions = [] }) {
   const ui = useUI();
@@ -23,6 +24,11 @@ export function QuickActionsList({ actions = [] }) {
             <Link
               key={action.to}
               to={action.to}
+              onClick={() => trackDashboardKpi('quick_action_used', {
+                kpiId: DASHBOARD_KPI_IDS.quickActions,
+                action: action.analyticsAction,
+                source: 'dashboard_quick_actions',
+              })}
               data-testid={action.testId}
               style={{
                 display: 'flex',
@@ -38,7 +44,9 @@ export function QuickActionsList({ actions = [] }) {
               }}
               className="hover:brightness-95 transition-all"
             >
-              <Icon style={{ width: '16px', height: '16px', flexShrink: 0, color: '#828FA3' }} />
+              <Icon
+                style={{ width: '16px', height: '16px', flexShrink: 0, color: '#828FA3' }}
+                data-testid="Icon__961429" />
               <span style={{
                 fontFamily: 'Inter, sans-serif',
                 fontWeight: 400,

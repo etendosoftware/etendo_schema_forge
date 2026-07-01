@@ -121,7 +121,7 @@ export default function DocumentTotalsPanel({
               // Single compact row — checkbox + label + % input + amount — so the
               // expanded panel keeps the same height as the collapsed "+ Añadir
               // descuento total" link area, no layout shift on toggle.
-              <div className="flex items-center gap-2 py-2 px-2">
+              (<div className="flex items-center gap-2 py-2 px-2">
                 <div className="flex items-center gap-1.5 select-none">
                   <Checkbox
                     checked
@@ -130,7 +130,7 @@ export default function DocumentTotalsPanel({
                       setInputPct(0);
                       onTotalDiscountChange?.(0);
                     }}
-                  />
+                    data-testid="Checkbox__2bc3fb" />
                   <span className="whitespace-nowrap">{ui('totalDiscount')}</span>
                 </div>
                 <input
@@ -153,7 +153,7 @@ export default function DocumentTotalsPanel({
                 <span className="tabular-nums text-muted-foreground ml-auto whitespace-nowrap">
                   {totalDiscountAmt > 0 ? `-${fmt(totalDiscountAmt)}` : fmt(0)}
                 </span>
-              </div>
+              </div>)
             )
           )}
 

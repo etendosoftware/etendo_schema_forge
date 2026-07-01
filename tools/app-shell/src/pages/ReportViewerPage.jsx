@@ -30,7 +30,7 @@ function ReportCard({ report, onRun }) {
       className="flex items-start gap-4 p-4 rounded-xl border border-border/50 bg-white hover:border-primary/30 hover:shadow-md transition-all text-left w-full"
     >
       <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-        <FileText className="h-5 w-5 text-primary" />
+        <FileText className="h-5 w-5 text-primary" data-testid="FileText__3c998a" />
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold text-foreground">{reportTitle}</h3>
@@ -126,7 +126,7 @@ function SelectorPopup({ open, onClose, onSelect, selector, title, extraParams =
       <div className="bg-white rounded-xl shadow-2xl w-96 max-h-[480px] flex flex-col" onMouseDown={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
           <span className="text-sm font-semibold">{title}</span>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" data-testid="X__3c998a" /></button>
         </div>
         <div className="px-4 py-2 border-b border-border/20">
           <input
@@ -353,7 +353,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
               className="shrink-0 h-full px-2 text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center justify-center"
               aria-label={`Clear ${label || 'product'}`}
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5" data-testid="X__3c998a" />
             </button>
           )}
         </div>
@@ -372,7 +372,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
           title={label || 'Product'}
           keepOpenOnSelect={multi}
           selectedIds={selectedItems.map(s => s.id)}
-        />
+          data-testid="ProductSearchDrawer__3c998a" />
       </div>
     );
   }
@@ -406,7 +406,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
             className="absolute right-1 top-1.5 h-5 w-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center justify-center"
             aria-label={`Toggle ${label || 'selector'} options`}
           >
-            <ChevronDown className="h-3.5 w-3.5" />
+            <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__3c998a" />
           </button>
         )}
         {multi && selected.length > 0 && (
@@ -417,7 +417,7 @@ function SearchInput({ selector, value, displayValue, onChange, multi, minLength
             className="absolute right-7 top-1.5 h-5 w-5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-muted/60 flex items-center justify-center"
             aria-label={`Clear ${label || 'selector'}`}
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" data-testid="X__3c998a" />
           </button>
         )}
       </div>
@@ -501,7 +501,7 @@ function PopupMultiSelector({ selector, label, onChange }) {
             ))}
             {hiddenCount > 0 && (
               <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-medium">
-                +{hiddenCount} more
+                {ui('andNMore', { n: hiddenCount })}
               </span>
             )}
             <button
@@ -562,7 +562,7 @@ function PopupMultiSelector({ selector, label, onChange }) {
               )}
             </div>
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/30 bg-muted/20">
-              <span className="text-xs text-muted-foreground">{pending.length} selected</span>
+              <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}</span>
               <div className="flex gap-2">
                 <button onClick={() => setOpen(false)} className="h-8 px-3 text-xs rounded-md border border-border hover:bg-muted/50">{ui('cancel')}</button>
                 <button onClick={confirm} className="h-8 px-3 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90">OK</button>
@@ -733,7 +733,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
               selector={p.selector}
               label={label}
               onChange={(id, name) => { handleChange(p.name, id); handleChange('_display_' + p.name, name); }}
-            />
+              data-testid="PopupMultiSelector__3c998a" />
           </div>
         );
       }
@@ -764,7 +764,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
                   type="button"
                   onClick={() => { handleChange(p.name, ''); handleChange('_display_' + p.name, ''); setDisplayValues(prev => ({ ...prev, [p.name]: '' })); }}
                   className="h-9 w-7 flex items-center justify-center text-muted-foreground hover:text-destructive shrink-0"
-                ><X className="h-3.5 w-3.5" /></button>
+                ><X className="h-3.5 w-3.5" data-testid="X__3c998a" /></button>
               )}
             </div>
             {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
@@ -794,7 +794,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
             selectedOrgId={selectedOrgId}
             roleOrgIds={roleOrgIds}
             selectedWarehouseId={params.M_Warehouse_ID || ''}
-          />
+            data-testid="SearchInput__3c998a" />
           {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
         </div>
       );
@@ -853,7 +853,7 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
             value={params[p.name] || ''}
             onChange={(iso) => handleChange(p.name, iso)}
             className={errorBorder}
-          />
+            data-testid="DateField__3c998a" />
           {hasError && <p className="text-[10px] text-destructive mt-1">{ui('required')}</p>}
         </div>
       );
@@ -904,13 +904,11 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
             setDisplayValues(prev => ({ ...prev, [popup.name]: item.name }));
             setPopup(null);
           }}
-        />
+          data-testid="SelectorPopup__3c998a" />
       )}
-
       <div className="px-4 pt-4 pb-3 border-b border-border/30 shrink-0">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{ui('reportBuilder')}</p>
       </div>
-
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-4 space-y-6">
           {SIDEBAR_SECTIONS.map(({ key, labelKey }) => {
@@ -925,7 +923,6 @@ function ReportSidebar({ report, params, onChange, onSubmit, onReset, loading, r
           })}
         </div>
       </div>
-
       <div className="px-4 pb-5 pt-3 border-t border-border/30 space-y-2 shrink-0">
         <button
           onClick={handleSubmit}
@@ -1006,7 +1003,7 @@ function DrillDownViewer({ report, token, baseParams, bpId, targetReportId, extr
       <div className="flex-1 bg-white rounded-lg border border-border/30 overflow-hidden relative">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" /><span>{ui('loadingDetails')}</span>
+            <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /><span>{ui('loadingDetails')}</span>
           </div>
         )}
         {error && (
@@ -1205,7 +1202,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               token={token}
               selectedOrgId={selectedOrgId}
               roleOrgIds={roleOrgIds}
-            />
+              data-testid="ReportSidebar__3c998a" />
           </div>
 
           {/* Right panel */}
@@ -1213,7 +1210,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
             {/* Format actions bar */}
             <div className="flex items-center justify-between px-5 py-2 bg-white border-b border-border/30 shrink-0">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {loading && <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__3c998a" />}
                 {recordCount != null && !loading && <span>{ui('recordsFound').replace('{count}', recordCount)}</span>}
               </div>
               <div className="flex items-center gap-1">
@@ -1222,14 +1219,14 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
                   return (
                     <button key={fmt.id} onClick={() => renderReport(fmt.id)} disabled={loading}
                       className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium border border-border bg-white text-foreground hover:bg-muted/50 disabled:opacity-40">
-                      <Icon className="h-3.5 w-3.5" />{ui(fmt.labelKey)}
+                      <Icon className="h-3.5 w-3.5" data-testid="Icon__3c998a" />{ui(fmt.labelKey)}
                     </button>
                   );
                 })}
                 <div className="w-px h-6 bg-border/50 mx-1" />
                 <button onClick={handlePrint} disabled={loading}
                   className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-                  <Printer className="h-3.5 w-3.5" />{ui('print')}
+                  <Printer className="h-3.5 w-3.5" data-testid="Printer__3c998a" />{ui('print')}
                 </button>
               </div>
             </div>
@@ -1239,7 +1236,7 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
             <div className="bg-white rounded-lg shadow-sm h-full overflow-hidden relative border border-border/30">
               {loading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 gap-2 text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" /><span>{ui('renderingReport')}</span>
+                  <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /><span>{ui('renderingReport')}</span>
                 </div>
               )}
               {error && (
@@ -1281,11 +1278,15 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
       </div>
       </div>
       {/* end h-full flex flex-col */}
-
-      <Dialog open={!!drillDownBp} onOpenChange={(o) => !o && setDrillDownBp(null)}>
-        <DialogContent className="max-w-5xl w-[85vw] h-[70vh] flex flex-col gap-3 p-4">
-          <DialogHeader className="shrink-0">
-            <DialogTitle>{drillDownBp?.name}{ui('detailsSuffix')}</DialogTitle>
+      <Dialog
+        open={!!drillDownBp}
+        onOpenChange={(o) => !o && setDrillDownBp(null)}
+        data-testid="Dialog__3c998a">
+        <DialogContent
+          className="max-w-5xl w-[85vw] h-[70vh] flex flex-col gap-3 p-4"
+          data-testid="DialogContent__3c998a">
+          <DialogHeader className="shrink-0" data-testid="DialogHeader__3c998a">
+            <DialogTitle data-testid="DialogTitle__3c998a">{drillDownBp?.name}{ui('detailsSuffix')}</DialogTitle>
           </DialogHeader>
           {drillDownBp && (
             <DrillDownViewer
@@ -1293,15 +1294,19 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               token={token}
               baseParams={params}
               bpId={drillDownBp.id}
-            />
+              data-testid="DrillDownViewer__3c998a" />
           )}
         </DialogContent>
       </Dialog>
-
-      <Dialog open={!!drillDownAccount} onOpenChange={(o) => !o && setDrillDownAccount(null)}>
-        <DialogContent className="max-w-5xl w-[85vw] h-[70vh] flex flex-col gap-3 p-4">
-          <DialogHeader className="shrink-0">
-            <DialogTitle>{drillDownAccount?.value} — {drillDownAccount?.name}</DialogTitle>
+      <Dialog
+        open={!!drillDownAccount}
+        onOpenChange={(o) => !o && setDrillDownAccount(null)}
+        data-testid="Dialog__3c998a">
+        <DialogContent
+          className="max-w-5xl w-[85vw] h-[70vh] flex flex-col gap-3 p-4"
+          data-testid="DialogContent__3c998a">
+          <DialogHeader className="shrink-0" data-testid="DialogHeader__3c998a">
+            <DialogTitle data-testid="DialogTitle__3c998a">{drillDownAccount?.value} — {drillDownAccount?.name}</DialogTitle>
           </DialogHeader>
           {drillDownAccount && (
             <DrillDownViewer
@@ -1310,17 +1315,21 @@ function ReportViewer({ report, onBack, token, selectedOrgId, roleOrgIds, catego
               baseParams={params}
               targetReportId="report-general-ledger"
               extraParams={{ fromAccountId: drillDownAccount.value, toAccountId: drillDownAccount.value }}
-            />
+              data-testid="DrillDownViewer__3c998a" />
           )}
         </DialogContent>
       </Dialog>
-
-      <Dialog open={!!invoicePopup} onOpenChange={(o) => !o && setInvoicePopup(null)}>
-        <DialogContent className="max-w-5xl w-[85vw] h-[80vh] p-0 overflow-hidden">
+      <Dialog
+        open={!!invoicePopup}
+        onOpenChange={(o) => !o && setInvoicePopup(null)}
+        data-testid="Dialog__3c998a">
+        <DialogContent
+          className="max-w-5xl w-[85vw] h-[80vh] p-0 overflow-hidden"
+          data-testid="DialogContent__3c998a">
           {invoicePopup && (
             <iframe
               src={`${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '')}/purchase-invoice/${invoicePopup.id}?embedded=1`}
-              title="Invoice"
+              title={ui('invoice')}
               className="w-full h-full border-0"
             />
           )}
@@ -1373,35 +1382,50 @@ function ReportList({ reports, loading, searchQuery, setSearchQuery, categoryFil
     grouped[cat].push(r);
   }
 
+  let reportListContent;
+  if (loading) {
+    reportListContent = (
+      <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__3c998a" /> {ui('loading')}
+      </div>
+    );
+  } else if (filtered.length === 0) {
+    reportListContent = (
+      <div className="text-center text-muted-foreground py-12">
+        <FileText
+          className="h-10 w-10 mx-auto mb-3 opacity-30"
+          data-testid="FileText__3c998a" />
+        <p>{ui('noResults')}</p>
+      </div>
+    );
+  } else {
+    reportListContent = (
+      <div className="space-y-6 max-w-2xl">
+        {Object.entries(grouped).map(([cat, catReports]) => (
+          <div key={cat}>
+            {!categoryFilter && Object.keys(grouped).length > 1 && (
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                {CATEGORY_LABELS[cat]?.[localeLangKey] || cat}
+              </h2>
+            )}
+            <div className="grid gap-3">
+              {catReports.map(r => (
+                <ReportCard
+                  key={r.id}
+                  report={r}
+                  onRun={selectReport}
+                  data-testid="ReportCard__3c998a" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 min-h-0 overflow-auto px-6 py-6">
-      {loading ? (
-        <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" /> {ui('loading')}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center text-muted-foreground py-12">
-          <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p>{ui('noResults')}</p>
-        </div>
-      ) : (
-        <div className="space-y-6 max-w-2xl">
-          {Object.entries(grouped).map(([cat, catReports]) => (
-            <div key={cat}>
-              {!categoryFilter && Object.keys(grouped).length > 1 && (
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  {CATEGORY_LABELS[cat]?.[localeLangKey] || cat}
-                </h2>
-              )}
-              <div className="grid gap-3">
-                {catReports.map(r => (
-                  <ReportCard key={r.id} report={r} onRun={selectReport} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {reportListContent}
     </div>
   );
 }
@@ -1448,7 +1472,7 @@ export default function ReportViewerPage() {
         selectedOrgId={selectedOrg?.id || null}
         roleOrgIds={(selectedRole?.orgList || []).map(o => o.id).filter(Boolean)}
         categoryFilter={categoryFilter}
-      />
+        data-testid="ReportViewer__3c998a" />
     );
   }
 
@@ -1462,6 +1486,6 @@ export default function ReportViewerPage() {
       selectReport={selectReport}
       locale={locale}
       localeLangKey={localeLangKey}
-    />
+      data-testid="ReportList__3c998a" />
   );
 }

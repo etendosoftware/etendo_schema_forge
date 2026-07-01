@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useUI, useMenuLabel } from '@/i18n';
 import InvoicePaymentModal from '@/windows/custom/shared/InvoicePaymentModal.jsx';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import SendToSifButton from './SendToSifButton';
+import { getArSubtype } from './invoiceSubtype';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -50,8 +51,15 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
+  const [showShipmentDialog, setShowShipmentDialog] = useState(false);
+  const [shipmentCreating, setShipmentCreating] = useState(false);
   const [installments, setInstallments] = useState([]);
   const [installmentsLoading, setInstallmentsLoading] = useState(true);
+
+  // Keep a ref to the latest data so the event listener (with [] deps) can
+  // check arInvoiceSubtype without a stale closure.
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const headers = useMemo(() => ({
@@ -82,27 +90,65 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
 
   useEffect(() => { fetchInstallments(); }, [fetchInstallments]);
 
-  // Listen for DocAction process completion and auto-open Send modal
+  // Listen for DocAction process completion — set flags for send modal and
+  // (for standard FAC invoices only) shipment creation prompt.
   useEffect(() => {
     const handler = (e) => {
       if (e.detail?.entity === 'header' && e.detail?.process?.columnName === 'DocAction' && e.detail?.recordId) {
         sessionStorage.setItem(`invoice:sendAfterConfirm:${e.detail.recordId}`, '1');
+        const subtype = getArSubtype(dataRef.current);
+        if (subtype === 'FAC') {
+          sessionStorage.setItem(`invoice:createShipment:${e.detail.recordId}`, '1');
+        }
       }
     };
     window.addEventListener('neo:processSuccess', handler);
     return () => window.removeEventListener('neo:processSuccess', handler);
   }, []);
 
-  // Auto-open Send modal after Confirm & Send
+  // After the record re-fetches as CO, open queued modals in order.
   useEffect(() => {
     if (isCompleted && recordId) {
-      const key = `invoice:sendAfterConfirm:${recordId}`;
-      if (sessionStorage.getItem(key)) {
-        sessionStorage.removeItem(key);
+      const sendKey = `invoice:sendAfterConfirm:${recordId}`;
+      if (sessionStorage.getItem(sendKey)) {
+        sessionStorage.removeItem(sendKey);
         setShowSendModal(true);
+      }
+      const shipKey = `invoice:createShipment:${recordId}`;
+      if (sessionStorage.getItem(shipKey)) {
+        sessionStorage.removeItem(shipKey);
+        setShowShipmentDialog(true);
       }
     }
   }, [isCompleted, recordId]);
+
+  const handleCreateShipment = async () => {
+    setShipmentCreating(true);
+    try {
+      const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
+      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+      const res = await fetch(`${base}/sales-invoice/header/${recordId}/action/createShipment`, {
+        method: 'POST', headers, body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      const shipmentData = json?.response?.data;
+      if (res.ok && shipmentData?.documentNo) {
+        setShowShipmentDialog(false);
+        // Soft feedback — no hard toast dependency in topbar
+        window.dispatchEvent(new CustomEvent('neo:toast', {
+          detail: { type: 'success', message: `${ui('shipmentCreated')}: ${shipmentData.documentNo}` },
+        }));
+      } else {
+        const msg = json?.response?.error || ui('failedToImportLines');
+        window.dispatchEvent(new CustomEvent('neo:toast', { detail: { type: 'error', message: msg } }));
+        setShowShipmentDialog(false);
+      }
+    } catch {
+      setShowShipmentDialog(false);
+    } finally {
+      setShipmentCreating(false);
+    }
+  };
 
   // Derive badge status from installments (must be before any early return)
   const badgeInfo = useMemo(() => {
@@ -175,6 +221,22 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     );
   }
 
+  // Credit instruments (NC / DEV) — no payment lifecycle, just show applied amount
+  const arSubtype = getArSubtype(data);
+  const isCreditInstrument = arSubtype === 'NC' || arSubtype === 'DEV';
+  if (isCompleted && isCreditInstrument) {
+    const amount = Math.abs(typeof grandTotal === 'string' ? parseFloat(grandTotal) : (grandTotal ?? 0));
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 text-[13px] font-medium h-9"
+        style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: '#eff6ff', color: '#1e40af' }}
+      >
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#3b82f6' }} />
+        {ui('creditApplied')} · {fmt(amount, currency)}
+      </span>
+    );
+  }
+
   // While loading, show a subtle placeholder
   if (installmentsLoading) {
     return (
@@ -210,6 +272,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     return (
       <button
         type="button"
+        data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
         style={{
@@ -231,6 +294,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       {/* Badge pill — sole entry point to payments modal */}
       <button
         type="button"
+        data-testid="payment-status-badge"
         onClick={() => setShowPaymentsModal(true)}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:opacity-80 cursor-pointer h-9"
         style={{
@@ -281,6 +345,40 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           token={token}
           onClose={() => setShowSendModal(false)}
         />
+      )}
+
+      {/* "¿Gestionar envío?" dialog — offered after confirming a standard invoice */}
+      {showShipmentDialog && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.3)' }}
+          onClick={() => !shipmentCreating && setShowShipmentDialog(false)}
+        >
+          <div
+            style={{ background: '#fff', borderRadius: 12, padding: '28px 32px', maxWidth: 360, width: '90%', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <p style={{ fontSize: 16, fontWeight: 600, color: '#111827', marginBottom: 8 }}>{ui('manageShipment')}</p>
+            <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 24 }}>{ui('createShipmentDraftHint')}</p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                disabled={shipmentCreating}
+                onClick={() => setShowShipmentDialog(false)}
+                style={{ padding: '8px 16px', borderRadius: 8, border: '0.5px solid #d1d5db', background: 'transparent', fontSize: 13, fontWeight: 500, color: '#374151', cursor: 'pointer' }}
+              >
+                {ui('skipShipment')}
+              </button>
+              <button
+                type="button"
+                disabled={shipmentCreating}
+                onClick={handleCreateShipment}
+                style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: '#18181b', fontSize: 13, fontWeight: 500, color: '#fff', cursor: shipmentCreating ? 'not-allowed' : 'pointer', opacity: shipmentCreating ? 0.7 : 1 }}
+              >
+                {shipmentCreating ? ui('creating') : ui('createShipmentDraft')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

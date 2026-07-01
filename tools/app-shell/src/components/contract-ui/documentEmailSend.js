@@ -6,13 +6,19 @@ export function resolveDocumentEmailContract(windowName) {
   return `${windowName}-send`;
 }
 
-export function buildEmailContractCommand(contractName, documentId) {
-  return {
+export function buildEmailContractCommand(contractName, documentId, options = {}) {
+  const command = {
     version: 'v1',
     recordId: documentId,
     intent: 'send-document',
-    idempotencyKey: `${contractName}:${documentId}:send:v1`,
   };
+  if (options.recipientEdits) {
+    // Server derives the idempotency key from the final recipient set.
+    command.recipientEdits = options.recipientEdits;
+    return command;
+  }
+  command.idempotencyKey = `${contractName}:${documentId}:send:v1`;
+  return command;
 }
 
 export async function readEmailContractResponse(res) {
@@ -125,6 +131,7 @@ export async function sendDocumentEmail({
   documentNo,
   pdfBlob,
   pdfBlobUrl,
+  recipientEdits,
 }) {
   const contractName = resolveDocumentEmailContract(windowName);
   await cacheDocumentPreviewFile({
@@ -142,7 +149,7 @@ export async function sendDocumentEmail({
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(buildEmailContractCommand(contractName, documentId)),
+    body: JSON.stringify(buildEmailContractCommand(contractName, documentId, { recipientEdits })),
   });
   return readEmailContractResponse(res);
 }

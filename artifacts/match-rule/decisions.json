@@ -1,0 +1,231 @@
+{
+  "$schema": "decisions-v2",
+  "version": 2,
+  "window": {
+    "category": "finance",
+    "name": "Match Rule",
+    "detailEntity": null,
+    "layoutType": "list-modal",
+    "breadcrumb": "Finance / Accounts / Match Rule",
+    "templateConfig": {
+      "titleKey": "matchRuleNewTitle",
+      "editTitleKey": "matchRuleEditTitle",
+      "subtitleKey": "matchRuleNewSubtitle",
+      "submitLabelKey": "matchRuleSubmitCreate",
+      "editSubmitLabelKey": "matchRuleSubmitSave",
+      "bannerKey": "matchRuleBanner",
+      "searchPlaceholderKey": "matchRuleSearchPlaceholder",
+      "newLabelKey": "matchRuleNew",
+      "autoPriorityField": "priority",
+      "autoPriorityStep": 10,
+      "allowClone": true,
+      "sectionGrid": { "general": 3, "dimensions": 3 },
+      "sections": [
+        { "key": "general" },
+        { "key": "dimensions", "label": "matchRuleSectionDimensions" }
+      ],
+      "backLabelKey": "cancel",
+      "toolbarFilters": [
+        {
+          "key": "active",
+          "field": "active",
+          "allLabelKey": "matchRuleFilterAllRules",
+          "options": [
+            { "value": "Y", "labelKey": "matchRuleFilterActive" },
+            { "value": "N", "labelKey": "matchRuleFilterInactive" }
+          ]
+        }
+      ]
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Name": "Nombre",
+        "Priority": "Prioridad",
+        "TextCondition": "Condición sobre el concepto",
+        "TextPattern": "Patrón a buscar",
+        "ETGO_Transaction_Type_ID": "Tipo de transacción",
+        "C_GLItem_ID": "Concepto contable",
+        "MatchCount": "Conciliaciones",
+        "Isactive": "Activa",
+        "C_BPartner_ID": "Contacto",
+        "FIN_Financial_Account_ID": "Afecta a",
+        "C_Project_ID": "Proyecto",
+        "C_Costcenter_ID": "Centro de coste",
+        "M_Product_ID": "Producto"
+      },
+      "en_US": {
+        "Name": "Name",
+        "Priority": "Priority",
+        "TextCondition": "Concept condition",
+        "TextPattern": "Pattern to match",
+        "ETGO_Transaction_Type_ID": "Transaction type",
+        "C_GLItem_ID": "Accounting concept",
+        "MatchCount": "Reconciliations",
+        "Isactive": "Active",
+        "C_BPartner_ID": "Contact",
+        "FIN_Financial_Account_ID": "Applies to",
+        "C_Project_ID": "Project",
+        "C_Costcenter_ID": "Cost center",
+        "M_Product_ID": "Product"
+      }
+    }
+  },
+  "entities": {
+    "etgoMatchRuleHeader": {
+      "javaQualifier": "match-rule",
+      "fields": {
+        "priority": {
+          "grid": true,
+          "gridOrder": 1,
+          "gridLabelKey": "matchRuleColPriority",
+          "form": true,
+          "section": "general",
+          "seq": 8,
+          "required": true,
+          "inlineEdit": true,
+          "cellType": "priorityPill"
+        },
+        "name": {
+          "grid": true,
+          "gridOrder": 2,
+          "gridLabelKey": "matchRuleColName",
+          "form": true,
+          "section": "general",
+          "seq": 1,
+          "searchable": true,
+          "required": true,
+          "placeholderKey": "matchRuleNamePlaceholder",
+          "cellType": "nameWithSubline",
+          "subField": "financialAccount",
+          "subEmptyKey": "matchRuleAllAccounts"
+        },
+        "textCondition": {
+          "grid": true,
+          "gridOrder": 3,
+          "gridLabelKey": "matchRuleColCondition",
+          "form": true,
+          "section": "general",
+          "seq": 6,
+          "required": true,
+          "inputMode": "selector",
+          "searchSelect": true,
+          "placeholderKey": "matchRuleConditionPlaceholder",
+          "cellType": "conditionChip",
+          "kindField": "textCondition",
+          "patternField": "textPattern",
+          "kindLabels": {
+            "C": "matchRuleConditionContains",
+            "S": "matchRuleConditionStartsWith",
+            "R": "matchRuleConditionRegex"
+          }
+        },
+        "textPattern": {
+          "grid": false,
+          "form": true,
+          "section": "general",
+          "seq": 2,
+          "required": true,
+          "searchable": true,
+          "placeholderKey": "matchRulePatternPlaceholder"
+        },
+        "transactionType": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 4,
+          "gridLabelKey": "matchRuleColType",
+          "form": true,
+          "section": "general",
+          "seq": 4,
+          "inputMode": "selector",
+          "searchSelect": true,
+          "placeholderKey": "matchRuleTypePlaceholder",
+          "allowCreate": true,
+          "createLabelKey": "matchRuleTypeCreate",
+          "createTitleKey": "matchRuleTypeCreateTitle",
+          "createNamePlaceholderKey": "matchRuleTypeNamePlaceholder",
+          "createSpec": "transaction-type",
+          "createEntity": "transactionType"
+        },
+        "accountingConcept": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 5,
+          "gridLabelKey": "matchRuleColConcept",
+          "form": true,
+          "section": "general",
+          "seq": 5,
+          "inputMode": "selector",
+          "searchSelect": true,
+          "required": true
+        },
+        "matchCount": {
+          "grid": true,
+          "gridOrder": 6,
+          "gridLabelKey": "matchRuleColReconciliations",
+          "form": false,
+          "visibility": "readOnly",
+          "cellType": "boldText"
+        },
+        "active": {
+          "grid": true,
+          "gridOrder": 7,
+          "gridLabelKey": "matchRuleColActive",
+          "form": true,
+          "section": "general",
+          "seq": 10,
+          "inlineToggle": true,
+          "cellType": "toggle"
+        },
+        "financialAccount": {
+          "grid": false,
+          "form": true,
+          "section": "general",
+          "seq": 3,
+          "inputMode": "selector",
+          "emptyOptionLabelKey": "matchRuleAllAccounts",
+          "searchSelect": true
+        },
+        "businessPartner": {
+          "grid": false,
+          "form": true,
+          "section": "general",
+          "seq": 9,
+          "inputMode": "selector",
+          "searchSelect": true
+        },
+        "project": {
+          "grid": false,
+          "form": true,
+          "section": "dimensions",
+          "seq": 20,
+          "inputMode": "selector",
+          "searchSelect": true
+        },
+        "costCenter": {
+          "grid": false,
+          "form": true,
+          "section": "dimensions",
+          "seq": 21,
+          "inputMode": "selector",
+          "searchSelect": true
+        },
+        "product": {
+          "visibility": "editable",
+          "grid": false,
+          "form": true,
+          "section": "dimensions",
+          "seq": 24,
+          "inputMode": "selector",
+          "searchSelect": true
+        },
+        "organization": { "visibility": "system" },
+        "client": { "visibility": "system" },
+        "matchRule": { "visibility": "system" },
+        "creationDate": { "visibility": "system" },
+        "createdBy": { "visibility": "system" },
+        "updated": { "visibility": "system" },
+        "updatedBy": { "visibility": "system" }
+      }
+    }
+  }
+}

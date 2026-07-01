@@ -1,17 +1,16 @@
-import MovementTable from '@generated/goods-movements/generated/web/goods-movements/MovementTable';
 import GeneratedApp from '@generated/goods-movements/generated/web/goods-movements/index.jsx';
+import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
 
-const COLUMNS = [
-  { key: 'name', column: 'Name', type: 'string' },
-  { key: 'movementDate', column: 'MovementDate', type: 'date', dot: false },
-  { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'processed', column: 'Processed', type: 'status' },
-];
-
-function CustomMovementTable(props) {
-  return <MovementTable columns={COLUMNS} {...props} />;
-}
-
+// Column definitions (including movementDate dot:false and the processed status
+// enumLabels) are driven entirely by decisions.json -> the generated MovementTable.
+// This wrapper only swaps the toolbar sort/refresh icons.
 export default function GoodsMovementsWindow(props) {
-  return <GeneratedApp {...props} Table={CustomMovementTable} />;
+  return (
+    <GeneratedApp
+      {...props}
+      SortIconComponent={SortIcon}
+      RefreshIconComponent={RefreshIcon}
+      data-testid="GeneratedApp__5b4efc"
+    />
+  );
 }

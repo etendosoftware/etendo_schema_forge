@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
+import { toast } from 'sonner';
 import GoodsReceiptTable from './GoodsReceiptTable';
 import GoodsReceiptForm from './GoodsReceiptForm';
 import GoodsReceiptLineTable from './GoodsReceiptLineTable';
@@ -24,7 +25,9 @@ const statusField = 'documentStatus';
 // @sf-generated-end summary:goodsReceipt
 
 // @sf-generated-start extraBadges:goodsReceipt
-const extraBadges = [];
+const extraBadges = [
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+];
 // @sf-generated-end extraBadges:goodsReceipt
 
 // @sf-generated-start processes:goodsReceipt
@@ -334,12 +337,6 @@ export const api = {
     },
     {
       "entity": "goodsReceipt",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/posted"
-    },
-    {
-      "entity": "goodsReceipt",
       "field": "calculateFreight",
       "column": "Calculate_Freight",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/calculateFreight",
@@ -376,6 +373,14 @@ export const api = {
       "column": "Invoicefromshipment",
       "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/invoicefromshipment",
       "processId": "62250E8866EA4D96A66C309878DC039E",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "goodsReceipt",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -417,6 +422,7 @@ export const api = {
 export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="goodsReceipt"
         detailEntity="goodsReceiptLine"
@@ -442,12 +448,17 @@ export default function GoodsReceiptPage({ windowName, recordId, ...props }) {
         bottomSection={GoodsReceiptBottomPanel}
         topbarRight={GoodsReceiptActions}
         topbarExtra={GoodsReceiptDraftChips}
+        menuActions={({ data, status }) => [
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
+        ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         linesLayout="inlineEditable"
         sendDocument
         {...props}
       />
+      </>
     );
   }
 

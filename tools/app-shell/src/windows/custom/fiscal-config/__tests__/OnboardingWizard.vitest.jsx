@@ -644,3 +644,38 @@ describe('OnboardingWizard — OrgDropdown multi-org', () => {
     expect(screen.queryByText('Other Org')).not.toBeInTheDocument();
   });
 });
+
+// ── renderPageHead helper ─────────────────────────────────────────────────────
+
+describe('OnboardingWizard — renderPageHead helper', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders the org name in the page head on the territory step', () => {
+    renderWizard();
+    // renderPageHead passes selectedOrg to PageHead which renders the org name
+    expect(screen.getByText('Test Organization')).toBeInTheDocument();
+  });
+
+  it('renders the manual config link on the territory step (onGoToManual variant)', () => {
+    renderWizard();
+    // Territory step calls renderPageHead with onGoToManual → shows the link
+    expect(screen.getByText('fiscal.onboarding.territory.prefer.manual.link')).toBeInTheDocument();
+  });
+
+  it('does NOT render the manual config link on the skipped step (no onGoToManual)', () => {
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.onboarding.skip'));
+    // SkippedScreen calls renderPageHead without onGoToManual → link absent
+    expect(screen.queryByText('fiscal.onboarding.territory.prefer.manual.link')).not.toBeInTheDocument();
+  });
+
+  it('re-renders the org name on subquestion step', () => {
+    renderWizard();
+    fireEvent.click(screen.getByText('fiscal.territory.alava'));
+    fireEvent.click(screen.getByText('fiscal.onboarding.continue'));
+    // SubquestionScreen also calls renderPageHead
+    expect(screen.getByText('Test Organization')).toBeInTheDocument();
+  });
+});

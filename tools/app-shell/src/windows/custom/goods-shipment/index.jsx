@@ -22,19 +22,25 @@ const COLUMNS = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'string' },
   { key: 'documentStatus', column: 'DocStatus', type: 'status' },
+  { key: 'posted', column: 'Posted', type: 'boolean', badge: true, badgeLabels: { true: { en_US: 'Posted', es_ES: 'Contabilizado' }, false: { en_US: 'Not posted', es_ES: 'Sin contabilizar' } }, badgeVariants: { true: 'green', false: 'orange' } },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'string' },
   { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent' },
 ];
 
 function CustomGoodsShipmentTable(props) {
-  return <GoodsShipmentTable columns={COLUMNS} {...props} />;
+  return <GoodsShipmentTable columns={COLUMNS} {...props} data-testid="GoodsShipmentTable__9851c7" />;
 }
 
 function GoodsShipmentBulkActions(props) {
   return (
     <>
-      <BulkInvoiceFromShipment {...props} />
-      <BulkDocumentAction {...props} entity="goodsShipment" buildActions={buildInOutActions} labelKey="confirmBulk" />
+      <BulkInvoiceFromShipment {...props} data-testid="BulkInvoiceFromShipment__9851c7" />
+      <BulkDocumentAction
+        {...props}
+        entity="goodsShipment"
+        buildActions={buildInOutActions}
+        labelKey="confirmBulk"
+        data-testid="BulkDocumentAction__9851c7" />
     </>
   );
 }
@@ -88,9 +94,10 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           Table={CustomGoodsShipmentTable}
           processes={[]}
           draftMode={{ enabled: true, label: 'Confirm', style: 'positive', onConfirm: () => window.dispatchEvent(new CustomEvent('goods-shipment:open-confirm-modal')) }}
-          hideMoreMenu={true}
+          hideMoreMenu={({ data }) => data?.documentStatus !== 'CO'}
+          autoSaveOnBlur={true}
           {...rest}
-        />
+          data-testid="GoodsShipmentPage__9851c7" />
         {contactPortal}
       </CreateContactContext.Provider>
     );
@@ -117,10 +124,10 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
             windowName={windowName}
             onClose={onClose}
             onEdit={onEdit}
-          />
+            data-testid="GoodsShipmentPreview__9851c7" />
         )}
         {...rest}
-      />
+        data-testid="GoodsShipmentPage__9851c7" />
       {deleteDialog}
       {cloneTargets && createPortal(
         <CloneOrderModal
@@ -131,7 +138,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           routePrefix="/goods-shipment/"
           onClose={() => setCloneTargets(null)}
           onCloned={() => setRefreshKey(k => k + 1)}
-        />,
+          data-testid="CloneOrderModal__9851c7" />,
         document.body,
       )}
     </>

@@ -538,15 +538,15 @@ describe('CertModal — real certificate upload endpoint', () => {
   });
 
   it('SiiSection passes orgId to CertSection', () => {
-    assert.match(siiSectionSrc, /CertSection context="sii" orgId=\{orgId\}/);
+    assert.match(siiSectionSrc, /CertSection[\s\S]{0,100}context="sii"[\s\S]{0,100}orgId=\{orgId\}/);
   });
 
   it('TbaiSection passes orgId to CertSection', () => {
-    assert.match(tbaiSectionSrc, /CertSection context="tbai" orgId=\{orgId\}/);
+    assert.match(tbaiSectionSrc, /CertSection[\s\S]{0,100}context="tbai"[\s\S]{0,100}orgId=\{orgId\}/);
   });
 
   it('VerifactuSection includes CertSection with verifactu context', () => {
-    assert.match(verifactuSectionSrc, /CertSection context="verifactu" orgId=\{orgId\}/);
+    assert.match(verifactuSectionSrc, /CertSection[\s\S]{0,100}context="verifactu"[\s\S]{0,100}orgId=\{orgId\}/);
   });
 
   it('FiscalConfigPage passes orgId to SiiSection, TbaiSection and VerifactuSection', () => {

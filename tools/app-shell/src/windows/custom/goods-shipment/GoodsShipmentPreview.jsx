@@ -31,27 +31,37 @@ function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
   const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-gray-50 text-gray-600 border-gray-200';
 
   return (
-    <div className="pb-4">
-      <CardShell>
-        <div className="px-4 py-3 border-b border-gray-100">
-          <span className="font-bold text-gray-900 text-sm">{ui('shipmentPreviewStatus')}</span>
-        </div>
-        <div className="px-4 py-2">
-          <InfoRow label={ui('shipmentPreviewDocNo')} value={shipment.documentNo || '—'} />
-          <InfoRow label={ui('shipmentPreviewContact')} value={partnerName} />
-          <InfoRow label={ui('shipmentPreviewWarehouse')} value={warehouseLabel} />
-          <InfoRow label={ui('shipmentPreviewDate')} value={movementDate} />
-          <InfoRow label={ui('shipmentPreviewStatus')}>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass}`}>
-              {statusLabel}
-            </span>
-          </InfoRow>
-          <InfoRow label={ui('shipmentPreviewInvoiceStatus')}>
-            <PercentBar value={invoiceStatusPct} />
-          </InfoRow>
-        </div>
-      </CardShell>
-    </div>
+    <CardShell data-testid="CardShell__5d626b">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <span className="font-bold text-gray-900 text-sm">{ui('shipmentPreviewStatus')}</span>
+      </div>
+      <div className="px-4 py-2">
+        <InfoRow
+          label={ui('shipmentPreviewDocNo')}
+          value={shipment.documentNo || '—'}
+          data-testid="InfoRow__5d626b" />
+        <InfoRow
+          label={ui('shipmentPreviewContact')}
+          value={partnerName}
+          data-testid="InfoRow__5d626b" />
+        <InfoRow
+          label={ui('shipmentPreviewWarehouse')}
+          value={warehouseLabel}
+          data-testid="InfoRow__5d626b" />
+        <InfoRow
+          label={ui('shipmentPreviewDate')}
+          value={movementDate}
+          data-testid="InfoRow__5d626b" />
+        <InfoRow label={ui('shipmentPreviewStatus')} data-testid="InfoRow__5d626b">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusBadgeClass}`}>
+            {statusLabel}
+          </span>
+        </InfoRow>
+        <InfoRow label={ui('shipmentPreviewInvoiceStatus')} data-testid="InfoRow__5d626b">
+          <PercentBar value={invoiceStatusPct} data-testid="PercentBar__5d626b" />
+        </InfoRow>
+      </div>
+    </CardShell>
   );
 }
 
@@ -111,7 +121,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
       pdfUrl={pdfUrl}
       generatingText={ui('shipmentPdfGenerating')}
       errorText={ui('shipmentPdfError')}
-    />
+      data-testid="PreviewPdfPanel__5d626b" />
   );
 
   // ── Derived values ──────────────────────────────────────────────────────────
@@ -142,8 +152,8 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         size="sm"
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[#121217] hover:bg-[#2a2a30] text-white [&_svg]:size-5"
         onClick={openEmailModal}
-      >
-        <Mail />
+        data-testid="Button__5d626b">
+        <Mail data-testid="Mail__5d626b" />
         {ui('invoicePreviewSend')}
       </Button>
       <Button
@@ -152,8 +162,8 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
         disabled={!pdfBlob}
         onClick={pdfBlob ? handleDownload : undefined}
-      >
-        <Download className="text-[#828FA3]" />
+        data-testid="Button__5d626b">
+        <Download className="text-[#828FA3]" data-testid="Download__5d626b" />
         {ui('invoicePreviewDownloadPdf')}
       </Button>
       <Button
@@ -161,8 +171,8 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         variant="outline"
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-white border-[#D1D4DB] shadow-sm text-[#121217] [&_svg]:size-5"
         onClick={() => modalRef.current?.triggerEdit?.()}
-      >
-        <Edit2 className="text-[#828FA3]" />
+        data-testid="Button__5d626b">
+        <Edit2 className="text-[#828FA3]" data-testid="Edit2__5d626b" />
         {ui('invoicePreviewEdit')}
       </Button>
     </>
@@ -181,25 +191,31 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
             partnerName={partnerName}
             movementDate={movementDate}
             ui={ui}
-          />
+            data-testid="ShipmentStatsPanel__5d626b" />
           <RelatedDocumentsCard
             documentId={shipment.id}
             token={token}
             apiBaseUrl={apiBaseUrl}
             specs={shipmentDocSpecs}
-          />
+            data-testid="RelatedDocumentsCard__5d626b" />
         </div>
       ),
     },
     {
       key: 'messages',
       label: ui('invoicePreviewMessages'),
-      content: <EmptyPanel icon="💬" text={ui('invoicePreviewNoMessagesYet')} />,
+      content: <EmptyPanel
+        icon="💬"
+        text={ui('invoicePreviewNoMessagesYet')}
+        data-testid="EmptyPanel__5d626b" />,
     },
     {
       key: 'history',
       label: ui('invoicePreviewHistory'),
-      content: <EmptyPanel icon="🕐" text={ui('invoicePreviewNoActivityRecorded')} />,
+      content: <EmptyPanel
+        icon="🕐"
+        text={ui('invoicePreviewNoActivityRecorded')}
+        data-testid="EmptyPanel__5d626b" />,
     },
   ];
 
@@ -216,7 +232,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         onEdit={() => onEdit?.(shipment.id)}
         tabs={tabs}
         actionButtons={actionButtons}
-      />
+        data-testid="GenericPreviewModal__5d626b" />
       {showSendModal && (
         <SendDocumentModal
           documentType={windowLabel}
@@ -230,7 +246,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
           pdfBlobUrl={pdfUrl}
           isClosing={sendModalClosing}
           onClose={closeEmailModal}
-        />
+          data-testid="SendDocumentModal__5d626b" />
       )}
     </>
   );

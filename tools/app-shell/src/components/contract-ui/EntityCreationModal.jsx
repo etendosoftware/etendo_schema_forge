@@ -1,13 +1,16 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from './modal-styles.js';
+import { LABEL_GAP, FIELD_HEIGHT_IMPORTANT } from '@/components/ui/formDensity';
 
 const INPUT_BASE =
   'w-full rounded-md border border-input bg-white px-3 focus:ring-2 focus:ring-primary focus:outline-none';
-const INPUT_CLS = `${INPUT_BASE} !h-[40px] !text-[14px]`;
+const INPUT_CLS = `${INPUT_BASE} ${FIELD_HEIGHT_IMPORTANT} !text-[14px]`;
 const SELECT_CLS =
-  'w-full !h-[40px] rounded-md border border-input bg-white px-3 !text-[14px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer';
-const SELECT_STYLE = { height: '40px', minHeight: '40px', fontSize: '14px' };
+  `w-full ${FIELD_HEIGHT_IMPORTANT} rounded-md border border-input bg-white px-3 !text-[14px] focus:ring-2 focus:ring-primary focus:outline-none cursor-pointer`;
+// ETP-4321: height now comes from the FIELD_HEIGHT class (36px). Keep fontSize
+// only — the inline height/minHeight would otherwise override the token.
+const SELECT_STYLE = { fontSize: '14px' };
 
 export function DynamicSelect({
   value,
@@ -85,7 +88,7 @@ function FieldRenderer({ field, value, onChange, opts, ui, form, autoFocus }) {
         value={value}
         onChange={e => onChange(field.id, e.target.value)}
         options={selector.options ?? []}
-      />
+        data-testid={"DynamicSelect__" + field.id} />
     );
   }
 
@@ -111,7 +114,7 @@ function FieldRenderer({ field, value, onChange, opts, ui, form, autoFocus }) {
         onChange={e => onChange(field.id, e.target.value)}
         options={selector.options ?? []}
         placeholder={field.dependsOn && !form[field.dependsOn] ? ui('selectCountryFirst') : '—'}
-      />
+        data-testid={"DynamicSelect__" + field.id} />
     );
   }
 
@@ -182,7 +185,7 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
                   <input
                     key={f.id}
                     type={f.type === 'email' ? 'email' : f.type === 'tel' ? 'tel' : 'text'}
-                    style={{ height: '40px', fontSize: '14px' }}
+                    style={{ fontSize: '14px' }}
                     className={`${INPUT_CLS} w-full`}
                     value={row[f.id] ?? ''}
                     placeholder={ui(f.labelKey)}
@@ -271,6 +274,19 @@ function RepeatableSection({ section, rows, onAdd, onUpdate, onRemove, ui }) {
   );
 }
 
+function renderFieldInput(f, { form, onChange, opts, ui }) {
+  return (
+    <FieldRenderer
+      field={f}
+      value={form[f.id] ?? ''}
+      onChange={onChange}
+      opts={opts}
+      ui={ui}
+      form={form}
+      data-testid="FieldRenderer__195103" />
+  );
+}
+
 function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
   const [expanded, setExpanded] = useState(false);
   const allFields = section.fields ?? [];
@@ -305,11 +321,9 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
           </button>
         )}
       </div>
-
       {!expanded && !hasData && (
         <p className="text-xs text-muted-foreground">{ui(section.emptyTextKey)}</p>
       )}
-
       {!expanded && hasData && (
         <div className="rounded-md border border-border overflow-hidden">
           <div className="flex items-center">
@@ -333,13 +347,12 @@ function CollapsibleFieldSection({ section, form, onChange, opts, ui }) {
           </div>
         </div>
       )}
-
       {expanded && (
         <div className="grid grid-cols-4 gap-3">
           {allFields.map(f => (
-            <div key={f.id} className={`space-y-1.5${f.fullWidth ? ' col-span-4' : ''}`}>
+            <div key={f.id} className={`${LABEL_GAP}${f.fullWidth ? ' col-span-4' : ''}`}>
               <label style={MODAL_STYLES.fieldLabel}>{ui(f.labelKey)}</label>
-              <FieldRenderer field={f} value={form[f.id] ?? ''} onChange={onChange} opts={opts} ui={ui} form={form} />
+              {renderFieldInput(f, { form, onChange, opts, ui })}
             </div>
           ))}
         </div>
@@ -447,7 +460,14 @@ export default function EntityCreationModal({
     if (section.component) {
       const Component = componentMap[section.component];
       if (!Component) return null;
-      return <Component form={form} onChange={onChange} opts={opts} requiredFields={requiredFields} />;
+      return (
+        <Component
+          form={form}
+          onChange={onChange}
+          opts={opts}
+          requiredFields={requiredFields}
+          data-testid="Component__195103" />
+      );
     }
     if (section.plain && section.fields) {
       return (
@@ -455,7 +475,7 @@ export default function EntityCreationModal({
           {section.fields.map(f => (
             <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <label style={MODAL_STYLES.fieldLabel}>{ui(f.labelKey)}</label>
-              <FieldRenderer field={f} value={form[f.id] ?? ''} onChange={onChange} opts={opts} ui={ui} form={form} />
+              {renderFieldInput(f, { form, onChange, opts, ui })}
             </div>
           ))}
         </div>
@@ -481,7 +501,7 @@ export default function EntityCreationModal({
             }))
           }
           ui={ui}
-        />
+          data-testid="RepeatableSection__195103" />
       );
     }
     if (section.fields) {
@@ -492,7 +512,7 @@ export default function EntityCreationModal({
           onChange={onChange}
           opts={opts}
           ui={ui}
-        />
+          data-testid="CollapsibleFieldSection__195103" />
       );
     }
     return null;
@@ -528,7 +548,15 @@ export default function EntityCreationModal({
                 <label style={MODAL_STYLES.fieldLabel}>
                   {ui(f.labelKey)}{f.required && <span style={{ color: '#ef4444', marginLeft: '2px' }}>*</span>}
                 </label>
-                <FieldRenderer field={f} value={form[f.id] ?? ''} onChange={onChange} opts={opts} ui={ui} form={form} autoFocus={idx === 0} />
+                <FieldRenderer
+                  field={f}
+                  value={form[f.id] ?? ''}
+                  onChange={onChange}
+                  opts={opts}
+                  ui={ui}
+                  form={form}
+                  autoFocus={idx === 0}
+                  data-testid="FieldRenderer__195103" />
               </div>
             ))}
           </div>

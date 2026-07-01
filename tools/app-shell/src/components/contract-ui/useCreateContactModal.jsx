@@ -31,7 +31,7 @@ export function useCreateContactModal({ apiBaseUrl, token, documentType = 'sale'
         createContactState.onSelect({ id: newBP.id, name: newBP.name });
         setCreateContactState(null);
       }}
-    />,
+      data-testid="CreateContactModal__2fcf00" />,
     document.body,
   ) : null;
 

@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Quotation",
+    "selectorPriceCurrency": "org",
     "salesTheme": true,
     "notesField": "description",
     "relatedDocuments": true,
@@ -135,13 +136,17 @@
           "visibility": "discarded"
         },
         "priceList": {
-          "section": "principal"
+          "section": "principal",
+          "order": 11
         },
         "currency": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": false,
-          "form": false,
-          "section": "summary"
+          "form": true,
+          "section": "principal",
+          "order": 10,
+          "readOnlyLogic": "@Processed@='Y'",
+          "derivation": null
         },
         "paymentTerms": {
           "section": "principal"
@@ -282,6 +287,11 @@
         "etgoTotalDiscount": {
           "visibility": "editable",
           "form": false
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         }
       },
       "javaQualifier": "salesQuotationHeaderHandler"
@@ -328,7 +338,8 @@
           "inputMode": "number",
           "order": 5,
           "gridOrder": 5,
-          "min": 0
+          "min": 0,
+          "max": 100
         },
         "lineNetAmount": {
           "grid": false,

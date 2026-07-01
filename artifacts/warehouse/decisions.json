@@ -9,7 +9,11 @@
         "label": "Transactions",
         "customPanel": "WarehouseTransactionsTable"
       }
-    }
+    },
+    "hidePrint": true,
+    "hideLink": true,
+    "listbarPaddingX": "px-2",
+    "tablePaddingX": "px-2"
   },
   "entities": {
     "header": {
@@ -17,20 +21,28 @@
       "fields": {
         "searchKey": {
           "searchable": true,
-          "grid": true
+          "grid": true,
+          "seq": 1
         },
         "name": {
           "searchable": true,
-          "grid": true
+          "grid": true,
+          "seq": 2
         },
         "description": {
-          "grid": false
+          "grid": false,
+          "seq": 4,
+          "span": 4,
+          "rows": 1
         },
         "locationAddress": {
-          "grid": false
+          "grid": true,
+          "seq": 3,
+          "span": 2
         },
         "warehouseRule": {
-          "grid": false
+          "grid": false,
+          "visibility": "discarded"
         },
         "storageBinSeparator": {
           "visibility": "discarded"
@@ -49,17 +61,30 @@
         },
         "mReturnlocatorID": {
           "visibility": "discarded"
+        },
+        "allocated": {
+          "visibility": "discarded"
         }
-      }
+      },
+      "formCols": 4
     },
     "storageBin": {
       "name": "storageBin"
     },
     "productTransactions": {
-      "name": "productTransactions"
+      "name": "productTransactions",
+      "javaQualifier": "productTransactionsHandler"
     },
     "binContents": {
-      "name": "binContents"
+      "name": "binContents",
+      "javaQualifier": "binContentsHandler",
+      "fields": {
+        "etgoValuation": {
+          "grid": true,
+          "form": false,
+          "visibility": "readOnly"
+        }
+      }
     },
     "accounting": {
       "name": "accounting",

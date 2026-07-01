@@ -11,6 +11,6 @@ export default function PaymentOutWindow(props) {
       secondaryTabs={[]}
       notesField="description"
       customTabs={[{ key: 'related', label: ui('relatedDocuments'), Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: 'FIN_Payment', config: {} } }]}
-    />
+      data-testid="GeneratedApp__608fd4" />
   );
 }

@@ -119,11 +119,10 @@ public interface NeoHandler {
 
 ### 2.2 Registration
 
-1. Annotate your class with `@ApplicationScoped` and `@Named("qualifierName")`.
+1. Annotate your class with `@Named("qualifierName")` **only** — do **not** add `@ApplicationScoped` or any other normal scope (see the warning below).
 2. Set `JAVA_QUALIFIER = 'qualifierName'` on the ETGO_SF_Entity record.
 
 ```java
-@ApplicationScoped
 @Named("purchaseOrderHandler")
 public class PurchaseOrderHandler implements NeoHandler { ... }
 ```
@@ -139,6 +138,17 @@ Or in `src-db/database/sourcedata/ETGO_SF_ENTITY.xml`:
 
 Discovery: `NeoServlet.lookupHandler()` calls `WeldUtils.getInstances(NeoHandler.class)` and
 matches by `@Named` value — no servlet restart needed (just compile + deploy).
+
+> **⚠️ Never annotate a NeoHandler with `@ApplicationScoped` (or any normal scope).**
+> `lookupHandler()` reads the qualifier via `handler.getClass().getAnnotation(Named.class)`.
+> For a normal-scoped bean, `WeldUtils.getInstances(...)` returns a **Weld client proxy** — a
+> generated subclass — and `@Named` is **not `@Inherited`**, so `getAnnotation()` returns `null`
+> on the proxy and the handler is silently skipped (`"No NeoHandler found with @Named(...)"`).
+> The module's `beans.xml` uses `bean-discovery-mode="all"`, so a `@Named`-only class is still a
+> bean; it just defaults to `@Dependent`, which is **not** proxied — so its real class carries the
+> `@Named` annotation and the lookup matches. This bit ETP-4244 (GL Journal): the handler was
+> deployed but `@ApplicationScoped` made it undiscoverable, so completion fell through to the
+> broken default dispatch.
 
 Place handlers in: `src/com/etendoerp/go/schemaforge/handlers/` (one class per window/entity).
 

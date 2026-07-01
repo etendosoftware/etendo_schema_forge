@@ -56,16 +56,19 @@ export function CommandPalette() {
   };
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder={ui('searchPages')} />
-      <CommandList>
-        <CommandEmpty>{ui('noResultsFound')}</CommandEmpty>
+    <CommandDialog open={open} onOpenChange={setOpen} data-testid="CommandDialog__73263e">
+      <CommandInput placeholder={ui('searchPages')} data-testid="global-search-input" />
+      <CommandList data-testid="CommandList__73263e">
+        <CommandEmpty data-testid="CommandEmpty__73263e">{ui('noResultsFound')}</CommandEmpty>
         {menuConfig.menu.filter(g => !g.hidden).map((group) => {
           const Icon = ICON_MAP[group.icon] || Package;
           const visibleItems = group.items.filter(i => !i.hidden);
           if (visibleItems.length === 0) return null;
           return (
-            <CommandGroup key={group.group} heading={tMenu(group.group)}>
+            <CommandGroup
+              key={group.group}
+              heading={tMenu(group.group)}
+              data-testid="CommandGroup__73263e">
               {visibleItems.map((item) => {
                 const translatedLabel = tMenu(item.label);
                 return (
@@ -73,8 +76,8 @@ export function CommandPalette() {
                     key={item.name}
                     value={`${translatedLabel} ${item.label} ${item.name}`}
                     onSelect={() => handleSelect(item.name)}
-                  >
-                    <Icon className="mr-2 h-4 w-4" />
+                    data-testid="CommandItem__73263e">
+                    <Icon className="mr-2 h-4 w-4" data-testid="Icon__73263e" />
                     <span>{translatedLabel}</span>
                   </CommandItem>
                 );

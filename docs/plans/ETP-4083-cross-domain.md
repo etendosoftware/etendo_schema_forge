@@ -1,64 +1,62 @@
-# ETP-4083 Cross-Domain Plan: Cognitive-Complexity Refactor Sweep
+# ETP-4083 Cross-Domain Plan: DetailView / generate-frontend Refactor + Estimate Skill
 
 ## Domains
 
-- `generator-change`: behavior-preserving cognitive-complexity refactors in the
-  CLI — restructure the quality-gate runner (`cli/src/quality-gate/runner.js`)
-  and extract the per-step validators in `cli/src/validate-processes.js` into
-  named helpers. Both land alongside their tests
-  (`cli/test/quality-gate-runner.test.js`, `cli/test/validate-processes.test.js`).
-- `platform-change`: extract the report selector helpers in shared app-shell
-  code (`tools/app-shell/src/pages/ReportViewerPage.jsx`) with a dedicated test
-  (`tools/app-shell/src/pages/__tests__/ReportViewerPage.helpers.vitest.jsx`) —
-  no rendering or data-flow change.
-- `window:payment-out`: extract the linked-document helpers in the payment-out
-  custom window (`RelatedDocuments.jsx`) and add unit coverage
-  (`__tests__/RelatedDocuments.vitest.jsx`).
-- `unknown`: add the `innocuous-check` skill (`.claude/skills/innocuous-check/SKILL.md`)
-  — the behavior-preservation gate authored to verify exactly the refactors in
-  this PR. Documentation/tooling only, no runtime effect.
-
-Detected vertical: `finance` (single window: `payment-out`).
+- `platform-change`: behavior-preserving cognitive-complexity refactor of the
+  long routines in `tools/app-shell/src/components/contract-ui/DetailView.jsx`.
+  UI helpers (title, row-click/label, inline row update, delete row) are
+  extracted into pure functions, each covered by a focused vitest suite:
+  `DetailView.uiHelpers.vitest.js`, `DetailView.titleHelpers.vitest.js`,
+  `DetailView.rowClickAndLabel.vitest.js`, `DetailView.inlineRowUpdate.vitest.js`,
+  `DetailView.deleteRow.vitest.js`, and `DetailView.extractedHelpers.vitest.js`.
+  No rendering or data-flow change.
+- `generator-change`: matching behavior-preserving helper extraction in
+  `cli/src/generate-frontend.js`, landing alongside its tests
+  (`cli/test/generate-frontend.test.js`). No change to generated output
+  (confirmed by the generator unit tests and the Offline Regeneration Check).
+- `unknown` (Claude developer tooling): the new `estimate` skill under
+  `.claude/skills/estimate/` (`SKILL.md`, `points-table.md`,
+  `calibration-log.md`). Classified `unknown` only because `.claude/skills/`
+  has no scope glob; it is local developer tooling that produces task estimates
+  and has zero runtime, generator, or window impact. It ships here because it is
+  the deliverable of the same ETP-4083 task as the refactor sweep above.
 
 ## Why This Cannot Be Split Cleanly
 
-This PR is one ETP-4083 readability sweep: a set of pure, behavior-preserving
-extractions made to lower cognitive complexity and clear SonarQube findings,
-each paired with the tests that prove the extracted code is exercised. The
-`innocuous-check` skill is the verification harness created in the same effort
-to gate these refactors, so it ships with them rather than as a standalone
-tooling PR. None of the individual extractions carry functional change or have
-independent review value; splitting per scope would yield several trivial PRs
-that only make sense reviewed together as "the complexity-reduction pass."
+This PR is one ETP-4083 unit: a pair of pure, behavior-preserving extractions
+made to lower cognitive complexity (one on the shared `DetailView`, one on the
+`generate-frontend` generator), each paired with the tests that prove the
+extracted code is exercised, plus the `estimate` skill that the same ticket asked
+for. The extractions carry no functional change and have no independent review
+value on their own; the skill is documentation/tooling. Reviewed together they
+are coherent as "the ETP-4083 readability pass plus its estimation tooling";
+split apart they would yield trivial PRs with no standalone value.
 
 ## Review Order
 
-1. Generator refactors — `cli/src/quality-gate/runner.js` and
-   `cli/src/validate-processes.js`: confirm extracted helpers are called
-   identically and the suites (`quality-gate-runner.test.js`,
-   `validate-processes.test.js`) exercise each one.
-2. Platform refactor — `ReportViewerPage.jsx` selector helpers: confirm the
-   extracted helpers preserve behavior, covered by
-   `ReportViewerPage.helpers.vitest.jsx`.
-3. Window refactor — payment-out `RelatedDocuments.jsx` linked-doc helpers:
-   confirm output is unchanged, covered by `RelatedDocuments.vitest.jsx`.
-4. Tooling — `innocuous-check/SKILL.md`: read-only verification skill, no
-   runtime impact.
-5. Review this plan.
+1. Platform refactor — `DetailView.jsx`: confirm extracted helpers are called
+   identically and the six `DetailView.*.vitest.js` suites exercise each one.
+2. Generator refactor — `cli/src/generate-frontend.js`: confirm extracted
+   helpers preserve behavior, covered by `generate-frontend.test.js` and the
+   Offline Regeneration Check.
+3. Estimate skill — `.claude/skills/estimate/*`: documentation/tooling review
+   only; no executable runtime path.
+4. Review this plan.
 
 ## Tests
 
-- `make test` (CLI suite — covers `quality-gate/runner.js` and
-  `validate-processes.js`; both targeted files run green).
-- `npm test --workspace=tools/app-shell` (app-shell vitest — covers the
-  ReportViewer selector helpers and the payment-out RelatedDocuments helpers).
+- App-shell vitest: the six new `DetailView.*.vitest.js` suites pass.
+- CLI suite: `generate-frontend.test.js` passes; Offline Regeneration Check and
+  Pipeline Validation stay green (no generated-output drift).
 - No DB, NEO push, or `export.database` involved — these are source-level
-  refactors and test additions only.
+  refactors plus a tooling/skill addition.
 
 ## Rollback
 
-Every change is behavior-preserving (helper extractions, added tests, a new
-read-only skill doc), so rollback is a straight revert of the PR merge commit.
-If a single extraction regresses, revert that one file to its pre-PR state; no
-data migration, NEO re-push, or `export.database` is required. Reverting the
-skill addition removes the doc with no runtime effect.
+Every change is behavior-preserving (helper extractions plus added tests) or
+inert (a Claude skill), so rollback is a straight revert of the PR merge commit.
+Each extraction is an isolated, atomically committed change, so a single
+regression can be reverted with `git revert <commit>` without touching the
+others. No data migration, NEO re-push, or `export.database` is required —
+reverting fully restores prior behavior. Detection is via the existing unit
+suites and the Offline Regeneration Check.

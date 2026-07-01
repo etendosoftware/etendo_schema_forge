@@ -6,10 +6,13 @@ description: >
   complexity, resolve SonarQube issues, rename, extract/inline functions, or apply
   guard clauses. Analyzes the diff hunk by hunk for behavior-changing edits, flags poor
   function names (generic auto-extract names, placeholders), then runs the affected tests.
+  Optionally (opt-in) places START/END extraction markers in a too-complex function or .jsx
+  component to plan a behavior-preserving extract-method/extract-component refactor.
   Triggers on: "is this safe", "inocuo", "inocuidad", "refactor", "bad function names",
   "did I break anything", "behavior preserving", "Sonar fix", "bajar complejidad cognitiva",
-  "check my changes", "verify diff".
-argument-hint: "[staged | unstaged | both]  (default: both)"
+  "check my changes", "verify diff", "marca start/end", "marcadores para extraer",
+  "comentarios para extraer", "extract markers", "ayudame a extraer", "WebStorm extract".
+argument-hint: "[staged | unstaged | both]  (default: both)  |  mark <function|component> in <file> [--target=N]"
 ---
 
 # /innocuous-check — Behavior-Preservation Verification
@@ -21,8 +24,26 @@ effects. The intent of these changes is to lower cognitive complexity, fix Sonar
 and improve readability **without changing what the code does**. This skill is the gate that
 catches accidental behavior changes hiding inside a "harmless" refactor.
 
-This is a **read-and-verify** skill: it inspects and runs tests. It never edits code, never
-commits, never stages. It produces a verdict only.
+This is a **read-and-verify** skill: it inspects and runs tests. By default it never edits code,
+never commits, never stages — it produces a verdict only.
+
+**One opt-in exception — extraction-marker mode.** When (and only when) the user explicitly asks
+to *mark* a function/component for extraction (e.g. "marcá los start/end para extraer",
+"give me extract markers", "ayudame a bajar la complejidad de `runWindowPipeline`"), the skill may
+insert `// ┌─ EXTRACT … ─ START` / `// └─ EXTRACT … ─ END` comment markers. Inserting comment
+markers is always safe (comments change nothing). But any *enabling tweak* (a real code change that
+makes a region extractable) has two hard requirements:
+
+1. **It MUST be functionally innocuous** — the tweak by itself must be a provable behavior-preserving
+   transformation (same inputs → same outputs and side effects). If you cannot prove a proposed tweak
+   is innocuous, do NOT propose it as a tweak — surface it as an INTENTIONAL change for the user to
+   own.
+2. **It MUST be confirmed by the user before being applied.** Describe each tweak (what + why +
+   why it's innocuous) and wait for an explicit go-ahead. Never apply a tweak silently. Markers may
+   be inserted without that gate; tweaks may not.
+
+This is the ONLY case where the skill edits files, and it still never commits or stages. See
+**Extraction-marker mode** below. The default verification flow does NOT mark or tweak anything.
 
 ---
 
@@ -252,9 +273,122 @@ Be honest and specific. The value of this skill is catching the one inverted con
 
 ---
 
+## Extraction-marker mode (OPT-IN — only when explicitly requested)
+
+This mode is **off by default**. Enter it ONLY when the user explicitly asks to mark a function or
+component for extraction — phrases like "marcá los start/end", "dame comentarios para extraer",
+"give me extract markers", "ayudame a bajar la complejidad de `X`", "WebStorm extract", or
+`mark <function|component> in <file>`. If the user only asked "is this safe?" / "inocuo?", do NOT
+mark anything — run the default verification flow instead.
+
+Goal: turn one over-complex function/component into a set of **behavior-preserving** extractions a
+developer can apply with one click (WebStorm *Extract Method* / *Extract Component*, or VS Code
+*Extract to function*). The skill plans the cut lines, inserts the markers, and applies the minimal
+*enabling tweak* — it does NOT perform the extraction itself (the user drives the IDE).
+
+### M1 — Locate and measure the target
+- Read the whole target function/component. State its current cyclomatic/cognitive complexity
+  (count decision points: `if`/`else if`, `case`, `for`/`while`, `catch`, `&&`/`||`/`??`, ternary,
+  optional chaining `?.`, JSX `&&`/`? :`/`.map()` callbacks). Name the requested target (default 15
+  for cyclomatic, or whatever `--target=N` / the user said).
+- Identify the **dominant contributors** — the blocks that, if extracted, drop the most complexity
+  (a `switch` with N cases, a long `try/catch`, a deeply-conditional JSX subtree, a `.map()` row
+  renderer). Extracting tiny blocks rarely helps; go for the big ones.
+
+### M2 — Decide the cut lines (each extraction = one clean region)
+A region is extractable **only if** it has a single entry and a single exit and does not smuggle
+control flow out of itself. Before marking, check each candidate region for these blockers. Each
+fix below is an **enabling tweak** — and every enabling tweak is subject to the two hard rules:
+it must be **functionally innocuous** (provably behavior-preserving) AND **confirmed by the user
+before being applied** (see the gate at the top of this skill and M2-bis below). The blockers:
+- **Multiple output variables** — a block that reassigns ≥2 outer locals consumed later. IDEs emit
+  awkward array/object returns. *Enabling tweak:* collapse them into one mutable object
+  (`const result = {...}`) the region mutates in place → zero output variables. (This is exactly the
+  `pushToNeoRan`/`frontendGenerated` → `result` tweak.)
+- **`break` / `continue` / mid-block `return`** belonging to an enclosing `switch`/loop. Can't be
+  extracted as-is. *Enabling tweak:* restructure to `if/else` so the region has no `break` inside,
+  leaving the `break`/`continue` in the caller (e.g. early-`break` custom branch → `if/else`).
+- **`await` inside** → the extracted function must be `async` and the call site `await`ed. Note it.
+- **Closure-captured locals** that are declared *inside* the region are fine (they become locals of
+  the new function); only those declared *before* and read *after* are inputs/outputs.
+
+For each region, derive the **method name from what it does** (verb-noun, matching file style — never
+`extractedMethod1`) and list its inferred params + whether it returns a value or mutates an object.
+
+### M2-bis — Confirm enabling tweaks BEFORE touching code (mandatory gate)
+If a region needs no tweak (it is already extractable), just mark it — comments are safe. If it needs
+an enabling tweak, STOP and gate it:
+1. **Prove innocuousness.** For each proposed tweak, write one line: the before→after transformation
+   and *why it preserves behavior* (e.g. "`if (x) {…; break;}` + tail ≡ `if (x) {…} else {tail}`;
+   same branches run, same order"). If you cannot prove it, it is NOT a valid enabling tweak — label
+   it INTENTIONAL and hand it to the user; do not apply it.
+2. **Ask for confirmation.** Present the list of tweaks (what + why + innocuousness proof) and wait
+   for an explicit go-ahead. Use the question tool if helpful. Do NOT apply any tweak before the user
+   confirms. Markers (comments only) may be inserted now; code-changing tweaks may not.
+3. After confirmation, apply only the confirmed tweaks, each behind a `// TWEAK:` comment, and then
+   verify them with tests (M5) — the tweak is the only real code change, so it is what the
+   innocuousness verdict covers.
+
+### M3 — Marker format (exact)
+Insert a matched START/END pair around each region. Number them in **application order** — innermost
+/ smallest-scope first, the big container (e.g. the whole `switch`) LAST — and say so in the marker:
+
+```
+// ┌─ EXTRACT METHOD #2: runGenerateFrontendStep(windowName, result) ─ START
+... region ...
+// └─ EXTRACT METHOD #2 ─ END  (mutates result.frontendGenerated; no output variable)
+```
+
+- The START line carries the **suggested signature**; the END line notes the **output contract**
+  (returns X / mutates Y / none) so the developer knows what to wire up.
+- If a container region (e.g. the switch) wraps inner regions, give it the highest number and a
+  `(do LAST)` hint, since the inner extractions shrink it first.
+- Put each tweak you applied behind a short `// TWEAK:` comment so it is reviewable in the diff.
+
+### M4 — .jsx components (Extract Component / render helper)
+React components are extracted the same way, but with extra rules — flag these explicitly:
+- **Rules of Hooks are inviolable.** A region that contains a `useState`/`useEffect`/`useMemo`/etc.
+  call can be pulled into a **child component** (hooks move with it) but NOT into a plain helper
+  called conditionally or inside a `.map()`/loop — that would change hook order and IS a behavior
+  change, not innocuous. If the region has no hooks, a plain `renderX()` helper or a child component
+  both work.
+- **A JSX subtree** (a block of `<.../>`) extracts into either:
+  - a **child component** `function PartName({ ...props }) { return (<...>); }` — preferred when it
+    has its own hooks/state or is reused; or
+  - a **render helper** `const renderPart = () => (<...>);` / `function renderPart() {…}` — fine for
+    a pure presentational slice with no hooks.
+  Mark it: `// ┌─ EXTRACT COMPONENT: <PartName> (props: items, onSelect, isLoading) ─ START`.
+- **Inputs = every identifier the subtree reads** from the parent scope (props, state, handlers,
+  derived vars). List them as the new component's props. Extracting must pass them all — a missing
+  prop is a behavior change (renders `undefined`). Closures over event handlers must be passed too.
+- **`key` props, refs, and context**: a subtree using `useContext` keeps working in a child
+  component (context flows through); a `ref` into an extracted element needs forwarding — flag it.
+- **`.map()` row renderers** are the highest-value cut in list/table components: extract the row
+  JSX into `<Row item={item} … />`. Each `item` becomes a prop; the `key` stays on `<Row>` at the
+  call site, not inside.
+- Do NOT extract a region that splits a single JSX expression such that the result no longer parses
+  (e.g. half of a ternary, or an unclosed tag) — regions must be whole elements/expressions.
+
+### M5 — After marking
+- Re-estimate the complexity the target will have **after** all extractions (and each new helper's
+  complexity) and confirm it clears the requested target. If a single extraction is not enough, mark
+  several.
+- Run the affected tests (Step 5 flow) to prove the **confirmed enabling tweak(s) alone** (the only
+  real code change you made) are innocuous before the user extracts. If a needed tweak was never
+  confirmed, do not apply it — mark the region as blocked-pending-confirmation in the plan. Report
+  the usual verdict, plus an "Extraction plan" block: each marker #, name, signature, output
+  contract, est. complexity, and which confirmed tweak (if any) it depends on.
+- Remind the user the markers are comments — after extracting in their IDE they can delete them — and
+  to re-run `/innocuous-check` on the post-extraction diff to confirm each extraction stayed pure.
+- Still **never commit or stage**.
+
+---
+
 ## Notes
 
-- Stay read-only. Do not stage, commit, edit, or regenerate anything.
+- Stay read-only by default; the sole exception is extraction-marker mode above, and even then never
+  stage, commit, or regenerate — only insert markers (always safe) plus enabling tweaks that are
+  both **functionally innocuous** and **confirmed by the user first**.
 - Cognitive-complexity / Sonar refactors are the primary use case: the code should be *equivalent*,
   just simpler. If you cannot convince yourself a hunk is equivalent, it is RISKY.
 - Test commands and the full suite live in the project `Makefile` (`make test`) and root

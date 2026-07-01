@@ -33,7 +33,7 @@ export default function CloneButton({ onClick, title }) {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <CopyIcon />
+      <CopyIcon data-testid="CopyIcon__b4cd7a" />
     </button>
   );
 }

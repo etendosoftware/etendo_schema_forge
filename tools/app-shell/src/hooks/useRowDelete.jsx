@@ -57,15 +57,22 @@ export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess }
   }, [pending, apiBaseUrl, entity, token, onSuccess, ui]);
 
   const deleteDialog = (
-    <Dialog open={Boolean(pending)} onOpenChange={(open) => { if (!open) close(); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{ui('deleteConfirmTitle')}</DialogTitle>
-          <DialogDescription>{ui('deleteConfirmMessage')}</DialogDescription>
+    <Dialog
+      open={Boolean(pending)}
+      onOpenChange={(open) => { if (!open) close(); }}
+      data-testid="Dialog__ab22b5">
+      <DialogContent className="max-w-sm" data-testid="DialogContent__ab22b5">
+        <DialogHeader data-testid="DialogHeader__ab22b5">
+          <DialogTitle data-testid="DialogTitle__ab22b5">{ui('deleteConfirmTitle')}</DialogTitle>
+          <DialogDescription data-testid="DialogDescription__ab22b5">{ui('deleteConfirmMessage')}</DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" size="sm" disabled={deleting}>{ui('cancel')}</Button>
+        <DialogFooter data-testid="DialogFooter__ab22b5">
+          <DialogClose asChild data-testid="DialogClose__ab22b5">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deleting}
+              data-testid="Button__ab22b5">{ui('cancel')}</Button>
           </DialogClose>
           <Button
             variant="destructive"

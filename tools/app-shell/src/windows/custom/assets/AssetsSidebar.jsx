@@ -52,23 +52,23 @@ export default function AssetsSidebar({ data }) {
             label={ui('assetsCurrentValue')}
             value={hasData ? formatCurrency(orgCurrency, assetValue) : '—'}
             subtitle={ui('assetsBookValue')}
-          />
+            data-testid="MetricCard__b651ab" />
           <MetricCard
             label={ui('assetsResidualValueLabel')}
             value={hasData ? formatCurrency(orgCurrency, residualAssetValue) : '—'}
-          />
+            data-testid="MetricCard__b651ab" />
           <MetricCard
             label={ui('assetsPlannedDepreciation')}
             value={hasData ? formatCurrency(orgCurrency, depreciatedPlan) : '—'}
             subtitle={ui('assetsTotalScheduled')}
             tint="green"
-          />
+            data-testid="MetricCard__b651ab" />
           <MetricCard
             label={ui('assetsDepreciated')}
             value={hasData ? `${pct}%` : '—'}
             subtitle={hasData ? (isComplete ? ui('assetsFullyDepreciated') : ui('assetsStillInProgress')) : null}
             tint="amber"
-          />
+            data-testid="MetricCard__b651ab" />
         </div>
       </div>
     </div>

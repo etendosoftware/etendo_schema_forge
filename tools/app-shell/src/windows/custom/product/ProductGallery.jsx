@@ -1,54 +1,42 @@
-import { useState, useEffect } from 'react';
-import { PackageOpen } from 'lucide-react';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { useUI } from '@/i18n';
+import { BoxIcon } from './ProductListCells';
+import { useProductImage } from './useProductImage';
+
+/* eslint-disable react/prop-types */
 
 function ProductCard({ row, onNavigate, token, apiBaseUrl }) {
-  const [imgSrc, setImgSrc] = useState(null);
-  const imageId = row.image;
-  // apiBaseUrl is e.g. "/sws/neo/product"; image endpoint lives at "/sws/neo/image/{id}"
-  const neoBaseUrl = apiBaseUrl.replace(/\/[^/]+$/, '');
-
-  useEffect(() => {
-    if (!imageId) return;
-    let objectUrl;
-    fetch(`${neoBaseUrl}/image/${imageId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => (r.ok ? r.blob() : null))
-      .then((blob) => {
-        if (blob) {
-          objectUrl = URL.createObjectURL(blob);
-          setImgSrc(objectUrl);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [imageId, token, neoBaseUrl]);
+  const imgSrc = useProductImage(row.image, token, apiBaseUrl);
 
   const categoryLabel = resolveIdentifier(row, 'productCategory');
 
   return (
     <div
       onClick={() => onNavigate(row.id)}
-      className="cursor-pointer border border-border rounded-xl p-3 hover:shadow-md transition-shadow bg-white flex flex-col gap-2"
+      className="cursor-pointer bg-white border border-[#E8EAEF] rounded-xl p-1 shadow-[0px_1px_2px_rgba(18,18,23,0.05)] flex flex-col hover:shadow-md transition-shadow"
     >
-      <div className="w-full aspect-square bg-gray-50 rounded-lg flex items-center justify-center overflow-hidden">
+      {/* Image area */}
+      <div className="relative w-full h-[180px] rounded-lg overflow-hidden flex-shrink-0 bg-[#E8EAEF]">
         {imgSrc ? (
-          <img src={imgSrc} alt={row.name} className="w-full h-full object-contain" />
+          <img src={imgSrc} alt={row.name} className="w-full h-full object-cover" />
         ) : (
-          <PackageOpen size={40} className="text-gray-300" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <BoxIcon size={64} color="#828FA3" data-testid="BoxIcon__a29533" />
+          </div>
         )}
       </div>
-      <div className="text-sm font-semibold truncate leading-tight">{row.name}</div>
-      {row.searchKey && (
-        <div className="text-xs text-muted-foreground truncate">{row.searchKey}</div>
-      )}
-      {categoryLabel && (
-        <div className="text-xs text-gray-400 truncate">{categoryLabel}</div>
-      )}
+      {/* Text area */}
+      <div className="flex flex-col p-3 gap-1">
+        <span className="text-sm font-semibold text-[#121217] leading-5 truncate">{row.name}</span>
+        {row.searchKey && (
+          <span className="inline-flex items-center px-2 py-1 bg-[#F5F7F9] rounded-full text-xs text-[#3F3F50] leading-4 w-fit max-w-full truncate">
+            {row.searchKey}
+          </span>
+        )}
+        {categoryLabel && (
+          <span className="text-sm text-[#555B6D] leading-5 truncate">{categoryLabel}</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -58,8 +46,8 @@ export default function ProductGallery({ data, onNavigate, token, apiBaseUrl }) 
   if (!data || data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-        <PackageOpen size={48} className="mb-3 text-gray-300" />
-        <p className="text-sm">{ui('noProductsFound')}</p>
+        <BoxIcon size={48} color="#828FA3" data-testid="BoxIcon__a29533" />
+        <p className="text-sm mt-3">{ui('noProductsFound')}</p>
       </div>
     );
   }
@@ -73,7 +61,7 @@ export default function ProductGallery({ data, onNavigate, token, apiBaseUrl }) 
           onNavigate={onNavigate}
           token={token}
           apiBaseUrl={apiBaseUrl}
-        />
+          data-testid="ProductCard__a29533" />
       ))}
     </div>
   );

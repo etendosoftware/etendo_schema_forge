@@ -96,6 +96,22 @@ export const DOCUMENT_CHIP_TYPES = {
     statusField: 'documentStatus',
     routePrefix: '/return-to-vendor-shipment',
   },
+  'goods-receipt': {
+    iconKey: 'shipment',
+    titleKey: 'receiptDoc',
+    titleField: 'documentNo',
+    statusField: 'documentStatus',
+    routePrefix: '/goods-receipt',
+  },
+  'purchase-invoice': {
+    iconKey: 'invoice',
+    titleKey: 'invoiceDoc',
+    titleField: 'documentNo',
+    amountField: 'grandTotalAmount',
+    currencyField: 'currency$_identifier',
+    statusField: 'documentStatus',
+    routePrefix: '/purchase-invoice',
+  },
 };
 
 /**

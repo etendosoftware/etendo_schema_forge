@@ -142,6 +142,32 @@ describe('AccountSummaryStrip', () => {
     expect(screen.getByTestId('iban-copy-button')).toBeInTheDocument();
   });
 
+  it('shows the masked card number (not an IBAN) for a card account, with no copy button', () => {
+    render(
+      <AccountSummaryStrip
+        account={{ type: 'CA', iban: null, maskedPan: '**** **** **** 1234', name: 'Tarjeta' }}
+        totals={TOTALS}
+        loading={false}
+      />,
+    );
+    expect(screen.getByTestId('iban-text')).toHaveTextContent('**** **** **** 1234');
+    // The label is the card-number key, not "IBAN", and there is no copy button.
+    expect(screen.getByText('financeAccountDetailCardNumber')).toBeInTheDocument();
+    expect(screen.queryByTestId('iban-copy-button')).not.toBeInTheDocument();
+  });
+
+  it('hides the identifier block for a card account without a masked PAN', () => {
+    render(
+      <AccountSummaryStrip
+        account={{ type: 'CA', iban: null, maskedPan: '', name: 'Tarjeta' }}
+        totals={TOTALS}
+        loading={false}
+      />,
+    );
+    expect(screen.queryByTestId('iban-text')).not.toBeInTheDocument();
+    expect(screen.getByTestId('kpi-balance')).toBeInTheDocument();
+  });
+
   it('copies the IBAN to the clipboard and toasts on success', async () => {
     const writeText = vi.fn().mockResolvedValue();
     Object.assign(navigator, { clipboard: { writeText } });

@@ -41,6 +41,7 @@ The Assets window should let a finance user register fixed assets, define how ea
 - After a successful asset process event (`neo:processSuccess` for the current asset), the amortization footer re-fetches its lines. This is the clearest visible evidence that generating an amortization plan should refresh the schedule immediately in the detail view.
 - `AssetsSidebar.jsx` reads `data.etgoAmortizationStatus` (DB-backed integer 0–100, maintained by `ETGO_A_ASSET_AMORT_STATUS_TRG`) for the "Depreciado %" card — no frontend math. `renderDepreciationProgress` in the list table does the same. `AssetsAmortizationPanel.jsx` batch-fetches the `processed` field of each parent amortization document (`/amortization/header/{id}`) to show accurate "Confirmado/Pendiente" badges — the previous heuristic based on `depreciatedValue` was removed because it inverted statuses when individual amortizations were reactivated out of order.
 - In the Asset Amortization child surface, editable fields become read-only when the line is processed, which indicates that posted or finalized schedule lines should no longer be freely editable.
+- The `GroupDivider` component in `AssetsDetailPanel.jsx` carries `mt-5` so each section heading (Depreciación, Financiero, Fechas, Dimensiones contables) has visible breathing room above the separator line. Without this margin the border-t line was flush against the fields from the previous section.
 - In the Accounting child surface, selectors are exposed for general ledger, accumulated depreciation, and depreciation accounts. The current evidence shows selectable mappings, but no additional reactive cross-field behavior is visible.
 - No totals, discounts, or tax-style recalculations are visible here beyond depreciation progress, planned amount totals, and sequence-based schedule refresh.
 
@@ -71,6 +72,12 @@ The Assets window should let a finance user register fixed assets, define how ea
 10. If amortization lines already exist, confirm the asset currency can no longer be edited.
 11. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
 
+## ETP-4190 changes (feature/ETP-4190)
+
+### Section divider spacing fix
+
+- `AssetsDetailPanel.jsx` — `GroupDivider` wrapper now includes `mt-5`. This adds 20 px of top margin before the `border-t` line that separates each configuration group (Depreciation, Financial, Dates, Accounting dimensions). Previously the line sat flush against the fields above it with no visual gap.
+
 ## Automated evidence
 
 - `tools/app-shell/src/menu.json` exposes **Assets** in the Finance menu and routes the slug to `/assets`.
@@ -90,6 +97,41 @@ The Assets window should let a finance user register fixed assets, define how ea
 - `renderDepreciationProgress` in `cli/src/generate-frontend.js` reads `row.etgoAmortizationStatus` directly instead of computing `depreciatedValue / depreciationAmt` on the frontend.
 - No assets-specific browser or component test file was found in `tools/app-shell/test` or `tools/app-shell/src/**/__tests__`, so the automated evidence is structural/code-backed rather than end-to-end behavioral proof.
 - The generated `AssetsPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `A_Asset` AD table.
+
+## ETP-4333 — DeferredInput amount fields and currency-echo freeze fix
+
+### DeferredInput for the three amount fields
+
+`assetValue`, `residualAssetValue`, and `depreciationAmt` now use `calloutOn: 'blur'` in `AssetsDetailPanel.jsx`. `EntityForm` renders these fields via `DeferredInput`: typing only updates a local buffer inside the input; the commit fires on blur, not per keystroke. This prevents the async `SL_Assets` callout from racing against partially-typed values (the "Asset Value 4000 keeps Residual at -2000" race bug).
+
+When the user blurs one of these fields, the commit does **not** fire the async `/assets/callout`. Instead, `AssetsDetailPanel.handleAmountChange` calls the exported `computeAssetAmounts()` function, which replicates the `SL_Assets` Java callout arithmetic locally and synchronously:
+
+- `assetValue` changed: if `depreciationAmt ≠ 0` then `residualAssetValue = assetValue − depreciationAmt`; then `depreciationAmt = assetValue − residualAssetValue`.
+- `residualAssetValue` changed: `depreciationAmt = assetValue − residualAssetValue`.
+- `depreciationAmt` changed: `residualAssetValue = assetValue − depreciationAmt`.
+
+All three fields are written together via `onLocalChange` (which calls `handleChange` without triggering a callout), so the sidebar "Current Value" and sibling inputs update immediately and consistently. All results are rounded to 2 decimal places via `round2()` (avoids JS float drift).
+
+**Source of truth:** `org.openbravo.erpCommon.ad_callouts.SL_Assets#execute` (lines 43–63 in Etendo Classic). If that Java arithmetic ever changes, `computeAssetAmounts` in `AssetsDetailPanel.jsx` **must** be updated in sync — they are not automatically linked.
+
+### Currency-echo freeze fix
+
+`AssetsDetailPanel` contains a `useEffect` that echoes the backend-provided default currency (`@C_Currency_ID@`) into the form change handler exactly once per new-record session. Without a guard, this creates a passive-effect feedback loop:
+
+> `onChange` fires → `setEditing` updates identity → new `onChange` reference is created → effect re-runs because `onChange` was in its deps → repeat
+
+Because this cycles through React's passive-effect phase (one commit per frame), it never trips the synchronous "Maximum update depth" guard — it silently starves the render queue and freezes route transitions (Cancel and sidebar navigation stop unmounting the detail view).
+
+The fix uses two `useRef` guards:
+- `currencyEchoedRef` — set to `true` after the first echo; reset to `false` when the record gains an `id` (saved, no longer a new record).
+- `onChangeRef` — stores the latest `onChange` so it can be called inside the effect without being listed in the dependency array.
+
+The effect only re-runs when `isNewRecord` or `d.currency` changes, not when `onChange` identity rotates.
+
+### Tests
+
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanel.test.js` — unit tests for `computeAssetAmounts` covering all three field paths and the `round2` rounding.
+- `tools/app-shell/src/windows/custom/assets/__tests__/AssetsDetailPanelCurrencyEcho.vitest.jsx` — regression test for the currency-echo freeze fix: verifies the effect fires exactly once per new-record session and does not loop.
 
 ## ETP-4103 changes
 
@@ -112,7 +154,7 @@ Changes landed in `feature/ETP-4103`. Covers visual polish, full-form restructur
 - `AssetsDetailPanel.jsx` added at `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` — custom `formFooter` component that renders all fields in four grouped sections. Replaces both the standard `EntityForm` and `AssetsConfigPanel` as the primary form UI.
 - Group 1 (Asset Info): renders searchKey, name, assetCategory, description in a 4-column grid **without a subtitle or GroupHead** — the `assetsGroupInfoTitle` title was removed. Fields render inline.
 - Group 2 (Financial Info): currency, assetValue, residualAssetValue, depreciationAmt, previouslyDepreciatedAmt — moved **inside** Group 3 (Depreciation Config). It only appears when `depreciate=true`. When depreciation is disabled, only the ToggleCard and a disabled hint text are shown.
-- Group 3 (Depreciation Config): ToggleCards + conditional depreciation fields. Financial Info (Group 2) is nested here, visible only when `depreciate=true`.
+- Group 3 (Depreciation Config): ToggleCards + conditional depreciation fields. Financial Info (Group 2) is nested here, visible only when `depreciate=true`. The `ToggleCard` switch now renders the shared `PillToggle` component (`@/components/PillToggle`) instead of an inline `<button role="switch">` — same size/colors/behavior (disabled while not editing), deduped with the match-rule footer and grid toggles. No behavior change.
 - Group 4 (Dates): still visible only when `depreciate=true`.
 - Group 5 (Accounting dimensions): **last section**, visible only when `depreciate=true`. Title key `assetsGroupDimensionsTitle` ("Dimensiones contables" / "Accounting dimensions"). Renders 8 dimension selectors in a 4-column grid (`cols={4}`) via `EntityForm`: Project (C_Project_ID), Cost Center (EM_Etadas_Costcenter_ID), Business Partner (C_BPartner_ID), 1st Dimension (EM_Etadas_User1_ID), 2nd Dimension (EM_Etadas_User2_ID), Sales Region (EM_Etadas_Salesregion_ID), Activity (EM_Etadas_C_Activity_ID), Sales Campaign (EM_Etadas_Campaign_ID). Placed after Dates because it is optional. The grid wrapper forces white backgrounds on selectors (`[&_button[role=combobox]]:!bg-white [&_input]:!bg-white`).
 - All header fields set to `form: false` in `decisions.json` — the standard `EntityForm` renders nothing. `hideFormCard: true` hides the now-empty card. The 8 dimension fields are set to `visibility: editable, form: false` in `decisions.json` so they are registered in the NEO spec (`ETGO_SF_FIELD`) — required for the `/assets/selectors/<column>` endpoints to return options — without being rendered by the standard form. `project` was previously `discarded` and is now re-enabled.
@@ -165,3 +207,92 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - `linesLayout: "classic"` is now written explicitly to `contract.json`; previously the classic layout was the implicit default.
 - `requiredHeaderFields` is now emitted in the page component; this window has no required header fields so the array is empty and there is no behavioral change.
 - LinesTable template updated in ETP-3908 to include the inline-editable add-row alignment fix. This window uses `linesLayout: "classic"` so the new template branch is dead code here — no behavioral change.
+
+## ETP-4229 — Fix spec assets: defaults + depreciationEndDate callout
+
+### Default values fix
+
+- `decisions.json`: `depreciate` field now has `defaultExpr: "Y"` — `neo_defaults` returns `depreciate: true` (boolean, coerced from Yes/No column). Previously returned null.
+- `decisions.json`: `calculateType` field now has `defaultExpr: "TI"` — `neo_defaults` returns `calculateType: "TI"` (Time-based). Previously returned `"PE"` (Percentage), which was the wrong default for the standard amortization flow.
+- Both values are written to `ETGO_SF_FIELD.DefaultValue` via `push-to-neo.js` and persisted to `src-db/database/sourcedata/ETGO_SF_FIELD.xml` via `export.database`.
+
+### depreciationEndDate auto-computation (AssetsHandler)
+
+- `decisions.json`: `entities.assets.javaQualifier: "assetsHandler"` — wires the `AssetsHandler` CDI bean to the assets entity via `ETGO_SF_ENTITY.JAVA_QUALIFIER`.
+- `AssetsHandler.java` (com.etendoerp.go): new `NeoHandler` that auto-computes `depreciationEndDate = depreciationStartDate + usableLifeMonths` on every POST and PATCH that touches either source field.
+  - **POST**: both `depreciationStartDate` and `usableLifeMonths` must be present in the body. Computes and injects `depreciationEndDate` before the record is persisted.
+  - **PATCH (partial update)**: fires whenever either source field is in the diff body. The missing field is loaded from the persisted record via `OBDal.getInstance().get(Asset.class, recordId)`, so single-field edits (e.g., only changing `usableLifeMonths`) still trigger a recompute.
+  - Date arithmetic uses `java.time.LocalDate.plusMonths()`. The persisted `Date` is formatted via `SimpleDateFormat("yyyy-MM-dd")` (consistent with the rest of the module; avoids `java.sql.Date.toInstant()` which throws `UnsupportedOperationException`).
+  - `depreciationEndDate` must remain `visibility: editable` in the spec — if reclassified to `readOnly`, the PATCH write is filtered by `NeoFieldFilter.filterWriteRequest` and the recompute silently stops persisting. Move the write to `afterHandle()` if that classification ever changes.
+
+## ETP-4232 — businessCritical advisory flag on depreciation fields
+
+### What changed
+
+- `decisions.json`: 12 fields marked `businessCritical: true` — these are the fields
+  an AI agent must confirm with the user before creating or updating an asset, because
+  they represent business or fiscal decisions that the ERP cannot infer automatically:
+  `assetCategory`, `depreciationType`, `calculateType`, `annualDepreciation`,
+  `amortize`, `usableLifeYears`, `usableLifeMonths`, `depreciationStartDate`,
+  `assetValue`, `residualAssetValue`, `depreciationAmt`, `previouslyDepreciatedAmt`.
+- `contract.json` and `contract.mcp.json` regenerated to reflect the flag.
+
+### What this does NOT change
+
+- No UI behavior is affected. The flag is advisory metadata only: it surfaces in the
+  `neo_schema` MCP response (`businessCritical: true/false` per field) so that AI
+  agents know which fields to ask for explicitly. The window renders identically.
+- `depreciationEndDate` is intentionally excluded — it is auto-computed by
+  `AssetsHandler` from `depreciationStartDate + usableLifeMonths` and should not be
+  requested from the user.
+
+## ETP-4334 — Visual & toolbar refinements (feature/ETP-4334)
+
+Window-scoped polish plus two cross-cutting changes. Items flagged **(global)** affect
+all windows; everything else is scoped to Assets via `decisions.json` or a custom component.
+
+### Window-scoped changes
+
+- `decisions.json` — `purchaseDate` now has `"dot": false`, removing the red status dot
+  from the grid cell (same treatment already applied to `depreciationStartDate`). The dot
+  was meaningless for this date column.
+- `decisions.json` — `"tabsSeparator": true` added. Draws a full-width `border-b` between
+  the form/sidebar region and the secondary tabs (Amortization Plan / Attachments),
+  spanning across the sidebar column too. Only takes effect together with the existing
+  `sidebarAboveTabsOnly` + sidebar content (both already present). See the generator note below.
+- `decisions.json` — `"formScrollPaddingX": "px-2"` added. The detail content container
+  (form + sidebar + tabs) now uses 8 px horizontal padding instead of the `px-6` (24 px)
+  default. `formScrollPaddingX` was already a generator passthrough; Assets simply did not
+  set it before.
+- `tools/app-shell/src/windows/custom/assets/index.jsx` — **new** custom wrapper (mirrors
+  the generated `index.jsx`) that passes `saveBeforeProcesses` to `AssetsPage`. This renders
+  the **Save** button before the process buttons (e.g. **Create Amortization**) in the
+  toolbar, so the order becomes `[delete] [Save] [Create Amortization]`. The flag is kept out
+  of the global generator vocabulary on purpose — it is an Assets-only toolbar preference.
+- `tools/app-shell/src/windows/registry.js` — `assets` entry added to `customLoaders` so the
+  route resolves to the custom wrapper above (overrides the generated `windowLoaders` entry;
+  `customLoaders` wins). `registry.js` is hand-maintained / pipeline-appended, so the override
+  survives regeneration.
+- `tools/app-shell/src/windows/custom/assets/AssetsDetailPanel.jsx` — the Depreciation Config
+  grid is now always `grid grid-cols-2 gap-4` (was `grid-cols-1 max-w-sm` when depreciation
+  was off). The **Depreciate** ToggleCard previously resized when toggled because the grid
+  switched column templates; it now keeps a constant width in both states, and the
+  **Every month is 30 days** card simply appears in the second column when depreciation is enabled.
+
+### Cross-cutting changes
+
+- `cli/src/generate-frontend.js` + `cli/src/resolve-curated.js` — `tabsSeparator` wired as a
+  first-class `decisions.json` window prop (passthrough + `fragmentIf` emission, mirroring
+  `sidebarAboveTabsOnly`). Additive: defaults to `false`, so no other window's generated
+  output changes. Consumed by `DetailView.jsx` (the full-width border only renders when
+  `sidebarAboveTabsOnly && sidebarContent && tabsSeparator`).
+- **(global)** `tools/app-shell/src/components/contract-ui/DetailView.jsx`
+  (`renderExistingRecordSaveAction`) — the existing-record **Save** button now uses the
+  `Save` (floppy) icon with the light/outline style (`variant="outline"`,
+  `bg-white border-[#D1D4DB] text-[#121217]`, icon color `#64748B`) instead of the `Check`
+  icon on the dark primary button. This affects **all non-draft windows** and aligns the
+  existing-record Save with the new-record Save (which already used the floppy icon) and the
+  draft-mode "Save Draft" button.
+- `tools/app-shell/src/components/contract-ui/DetailView.jsx` — new `saveBeforeProcesses`
+  prop (default `false`). When set, `renderSaveActions` is rendered before the process-button
+  block instead of after it. Default-off, so no behavioral change for any other window.

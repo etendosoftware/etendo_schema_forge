@@ -53,8 +53,8 @@ export function KPICard({ label, value, format, trend, previousValue, icon: Icon
   const scheme = KPI_SCHEMES[kpiKey] || DEFAULT_SCHEME;
 
   return (
-    <Card className="flex-1 min-w-[160px]">
-      <CardContent className="p-4">
+    <Card className="flex-1 min-w-[160px]" data-testid="Card__e18695">
+      <CardContent className="p-4" data-testid="CardContent__e18695">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-muted-foreground truncate">
@@ -66,7 +66,7 @@ export function KPICard({ label, value, format, trend, previousValue, icon: Icon
           </div>
           {Icon && (
             <div className={`h-8 w-8 shrink-0 rounded-md ${scheme.bg} flex items-center justify-center`}>
-              <Icon className={`h-4 w-4 ${scheme.icon}`} />
+              <Icon className={`h-4 w-4 ${scheme.icon}`} data-testid="Icon__e18695" />
             </div>
           )}
         </div>
@@ -79,9 +79,9 @@ export function KPICard({ label, value, format, trend, previousValue, icon: Icon
             )}
           >
             {isPositive ? (
-              <TrendingUp className="h-3.5 w-3.5" />
+              <TrendingUp className="h-3.5 w-3.5" data-testid="TrendingUp__e18695" />
             ) : (
-              <TrendingDown className="h-3.5 w-3.5" />
+              <TrendingDown className="h-3.5 w-3.5" data-testid="TrendingDown__e18695" />
             )}
             <span>
               {isPositive ? '+' : ''}
@@ -123,7 +123,7 @@ export function KPIHeader({ kpis = [], currencyLabel = '' }) {
           previousValue={kpi.previousValue}
           icon={kpi.icon}
           currencyLabel={currencyLabel}
-        />
+          data-testid="KPICard__e18695" />
       ))}
     </div>
   );

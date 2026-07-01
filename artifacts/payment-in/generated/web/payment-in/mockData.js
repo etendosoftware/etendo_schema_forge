@@ -12,7 +12,11 @@ export const finPayment = [
     "amount": 38907,
     "account": "Sample account",
     "currency": "USD",
-    "status": "DR"
+    "status": "DR",
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-002",
@@ -25,7 +29,11 @@ export const finPayment = [
     "amount": 9306,
     "account": "Sample account",
     "currency": "EUR",
-    "status": "CO"
+    "status": "CO",
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-003",
@@ -38,7 +46,11 @@ export const finPayment = [
     "amount": 11544,
     "account": "Sample account",
     "currency": "GBP",
-    "status": "VO"
+    "status": "VO",
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-004",
@@ -51,7 +63,11 @@ export const finPayment = [
     "amount": 11872,
     "account": "Sample account",
     "currency": "USD",
-    "status": "IP"
+    "status": "IP",
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-005",
@@ -64,7 +80,11 @@ export const finPayment = [
     "amount": 48460,
     "account": "Sample account",
     "currency": "EUR",
-    "status": "DR"
+    "status": "DR",
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-006",
@@ -77,7 +97,11 @@ export const finPayment = [
     "amount": 45418,
     "account": "Sample account",
     "currency": "GBP",
-    "status": "CO"
+    "status": "CO",
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-007",
@@ -90,7 +114,11 @@ export const finPayment = [
     "amount": 33840,
     "account": "Sample account",
     "currency": "USD",
-    "status": "VO"
+    "status": "VO",
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-008",
@@ -103,7 +131,11 @@ export const finPayment = [
     "amount": 25716,
     "account": "Sample account",
     "currency": "EUR",
-    "status": "IP"
+    "status": "IP",
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-009",
@@ -116,7 +148,11 @@ export const finPayment = [
     "amount": 44780,
     "account": "Sample account",
     "currency": "GBP",
-    "status": "DR"
+    "status": "DR",
+    "etblkpAccountingstatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-010",
@@ -129,7 +165,11 @@ export const finPayment = [
     "amount": 12483,
     "account": "Sample account",
     "currency": "USD",
-    "status": "CO"
+    "status": "CO",
+    "etblkpAccountingstatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-011",
@@ -142,7 +182,11 @@ export const finPayment = [
     "amount": 46022,
     "account": "Sample account",
     "currency": "EUR",
-    "status": "VO"
+    "status": "VO",
+    "etblkpAccountingstatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   },
   {
     "id": "mock-finPayment-012",
@@ -155,7 +199,11 @@ export const finPayment = [
     "amount": 38634,
     "account": "Sample account",
     "currency": "GBP",
-    "status": "IP"
+    "status": "IP",
+    "etblkpAccountingstatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "etprReactivatePayment": "Sample etprReactivatePayment",
+    "eTPRRemovePayment": "Sample eTPRRemovePayment"
   }
 ];
 

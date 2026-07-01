@@ -75,15 +75,14 @@ export default function FirstStepsPage() {
   const ui = useUI();
   return (
     <div className="flex flex-col h-full">
-      <TopBar title={ui("firstStepsPageTitle")} />
-
+      <TopBar title={ui("firstStepsPageTitle")} data-testid="TopBar__45a28a" />
       <div className="flex-1 overflow-auto bg-page-bg">
         <div className="mx-auto max-w-2xl px-6 py-8 space-y-6">
 
           {/* Copilot banner */}
           <div className="flex items-center justify-between rounded-xl border bg-card px-5 py-3.5 shadow-sm">
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Settings className="h-5 w-5 shrink-0" />
+              <Settings className="h-5 w-5 shrink-0" data-testid="Settings__45a28a" />
               <span>{ui("firstStepsCopilotBanner")}</span>
             </div>
             <button
@@ -91,7 +90,7 @@ export default function FirstStepsPage() {
               disabled
               className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground opacity-60 cursor-default"
             >
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-4 w-4" data-testid="Sparkles__45a28a" />
               {ui("firstStepsStart")}
             </button>
           </div>
@@ -129,7 +128,7 @@ export default function FirstStepsPage() {
                   <div className="flex items-start gap-4">
                     {/* Left icon */}
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                      <Icon className="h-5 w-5" />
+                      <Icon className="h-5 w-5" data-testid="Icon__45a28a" />
                     </div>
 
                     {/* Content */}
@@ -150,7 +149,7 @@ export default function FirstStepsPage() {
                               {ui("firstStepsConfigure")}
                             </button>
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Clock className="h-3.5 w-3.5" />
+                              <Clock className="h-3.5 w-3.5" data-testid="Clock__45a28a" />
                               {step.time} {ui("minutes")}
                             </span>
                           </div>
@@ -166,14 +165,16 @@ export default function FirstStepsPage() {
                     <div className="shrink-0 flex items-center gap-2 mt-0.5">
                       {!step.done && !step.expanded && Boolean(step.time) && (
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3.5 w-3.5" />
-                          {step.time} min
+                          <Clock className="h-3.5 w-3.5" data-testid="Clock__45a28a" />
+                          {step.time} {ui('minutes')}
                         </span>
                       )}
                       {step.done ? (
-                        <CheckCircle className="h-6 w-6 text-green-500 fill-green-500 stroke-white" />
+                        <CheckCircle
+                          className="h-6 w-6 text-green-500 fill-green-500 stroke-white"
+                          data-testid="CheckCircle__45a28a" />
                       ) : (
-                        <Circle className="h-6 w-6 text-muted-foreground/30" />
+                        <Circle className="h-6 w-6 text-muted-foreground/30" data-testid="Circle__45a28a" />
                       )}
                     </div>
                   </div>

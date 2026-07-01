@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.20.0",
   "generatedAt": "2026-04-29T19:05:20.719Z",
-  "updatedAt": "2026-06-03T14:04:33.662Z",
-  "contractChecksum": "c2c8b32368e94888",
+  "updatedAt": "2026-06-24T20:46:47.331Z",
+  "contractChecksum": "6703d7bbadc768b6",
   "apiPrediction": {
     "specName": "goods-receipt",
     "baseUrl": "/sws/neo/goods-receipt",
@@ -350,44 +350,6 @@
         "processType": "classic"
       },
       {
-        "name": "posted",
-        "actionType": "documentAction",
-        "entity": "goodsReceipt",
-        "column": "Posted",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/posted",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ]
-      },
-      {
         "name": "calculateFreight",
         "actionType": "utilityAction",
         "entity": "goodsReceipt",
@@ -500,6 +462,46 @@
         "processType": "obuiapp"
       },
       {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "goodsReceipt",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/goods-receipt/goodsReceipt/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
         "name": "managePrereservation",
         "actionType": "utilityAction",
         "entity": "goodsReceiptLine",
@@ -604,6 +606,11 @@
             "required": true,
             "defaultValue": "DR"
           },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
           "project": {
             "readOnlyLogic": "@Posted@='Y'"
           },
@@ -621,6 +628,10 @@
           },
           "invoiceStatus": {
             "readOnly": true
+          },
+          "processed": {
+            "readOnly": true,
+            "required": true
           }
         }
       },
@@ -690,7 +701,9 @@
         }
       }
     },
-    "requiredSessionVariables": [],
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
     "evaluationMode": "runtime"
   },
   "agentProfile": {
@@ -782,9 +795,9 @@
       "createLinesFrom",
       "generateTo",
       "documentAction",
-      "posted",
       "receiveMaterials",
-      "sendMaterials"
+      "sendMaterials",
+      "etblkpBulkposting"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -835,5 +848,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "0c985ab59132d152"
+  "checksum": "fc78652a77337d78"
 }

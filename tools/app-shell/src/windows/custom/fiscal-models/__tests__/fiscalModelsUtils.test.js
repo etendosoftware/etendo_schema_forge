@@ -47,9 +47,9 @@ describe('formatAmount', () => {
 describe('formatPercent', () => {
   it('returns em-dash for null', () => assert.equal(formatPercent(null), '—'));
   it('returns em-dash for undefined', () => assert.equal(formatPercent(undefined), '—'));
-  it('formats integer rate without decimals', () => assert.equal(formatPercent(21), '21 %'));
-  it('formats decimal rate with comma separator', () => assert.equal(formatPercent(1.75), '1,75 %'));
-  it('formats zero', () => assert.equal(formatPercent(0), '0 %'));
+  it('formats integer rate without decimals', () => assert.equal(formatPercent(21), '21,00'));
+  it('formats decimal rate with comma separator', () => assert.equal(formatPercent(1.75), '1,75'));
+  it('formats zero', () => assert.equal(formatPercent(0), '0,00'));
 });
 
 describe('fmtDecl', () => {

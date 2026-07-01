@@ -14,8 +14,8 @@ describe('financial-accounts barrel exports', () => {
   });
 
   it('re-exports the ACCOUNT_TYPE map and ordering', () => {
-    expect(featureExports.ACCOUNT_TYPE).toEqual({ BANK: 'B', CASH: 'C', CARD: 'T' });
-    expect(featureExports.ACCOUNT_TYPE_ORDER).toEqual(['B', 'C', 'T']);
+    expect(featureExports.ACCOUNT_TYPE).toEqual({ BANK: 'B', CASH: 'C', CARD: 'CA' });
+    expect(featureExports.ACCOUNT_TYPE_ORDER).toEqual(['B', 'C', 'CA']);
   });
 });
 
@@ -34,7 +34,7 @@ describe('financial-accounts tokens', () => {
   it('exposes the account-type constants', () => {
     expect(ACCOUNT_TYPE.BANK).toBe('B');
     expect(ACCOUNT_TYPE.CASH).toBe('C');
-    expect(ACCOUNT_TYPE.CARD).toBe('T');
+    expect(ACCOUNT_TYPE.CARD).toBe('CA');
     expect(ACCOUNT_TYPE_ORDER.length).toBe(3);
   });
 });

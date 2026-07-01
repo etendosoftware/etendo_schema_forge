@@ -29,7 +29,7 @@ export function StatementLinesView({ statementId, statementName, currency, onBac
           onClick={onBack}
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#D1D4DB] bg-white text-[#6c6c89] shadow-[0_1px_2px_rgba(18,18,23,0.05)] hover:bg-[#F5F7F9] hover:text-[#121217]"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4" data-testid="ArrowLeft__4e62e5" />
         </button>
         <div className="flex flex-col">
           <span className="text-sm font-semibold text-[#121217]">
@@ -40,10 +40,13 @@ export function StatementLinesView({ statementId, statementName, currency, onBac
           </span>
         </div>
       </div>
-
       {/* Lines table */}
       <div className="flex-1 overflow-auto">
-        <StatementLinesTable lines={lines} loading={loading} currency={currency} />
+        <StatementLinesTable
+          lines={lines}
+          loading={loading}
+          currency={currency}
+          data-testid="StatementLinesTable__4e62e5" />
       </div>
     </div>
   );

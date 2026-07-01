@@ -31,6 +31,7 @@ Agent definitions live in `.claude/agents/` — each agent wrote their own file 
 | reviewer.md | Alex | REVIEW | Balanced |
 | qa.md | Sentinel | QA | Methodical |
 | documentarian.md | Sage | DOCS | Comprehensive |
+| tenant-fixer.md | Remedy | TENANT REMEDIATION — closes Etendo GO provisioning gaps on both fronts (preventive onboarding fixes for new tenants + corrective data-fixes for existing ones) | Diagnostic |
 
 When spawning agents, use `subagent_type="general-purpose"` and include the agent identity/role in the prompt.
 Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `SendMessage`.
@@ -52,6 +53,9 @@ Include the agent's name, role, and key rules in the prompt passed to the subage
 | "Add a new custom component slot for sidebars" | **Schema Forge Developer** | New extension point in generator + docs |
 | "Build a generic component for document preview" | **Schema Forge Developer** | New shared UI component in `tools/app-shell/` |
 | "Create the feature branch and PR" | **Clerk** | Workflow operations |
+| "Remediate accounting/period/org-tree gaps for an existing client" | **Remedy** | Corrective data-fix (`cli/src/data-fixes/`) scoped by `ad_client_id` |
+| "Fix the onboarding so new clients get a chart of accounts" | **Remedy** | Preventive onboarding-gap fix (root cause) |
+| "Write a tenant data-fix / migration SQL" | **Remedy** | Owns the data-fixes framework + SQL-first criterion |
 
 **Mixed tasks:** If a task requires both (e.g., "add a new layout type and apply it to sales"), split into two subtasks — developer first (build the feature), then window-agent (configure the window).
 </team>
@@ -277,6 +281,18 @@ Requires `SONAR_TOKEN` and `SONAR_HOST_URL` exported in `~/.zshrc` or `~/.bashrc
 The script scans, waits for the report to process, and prints issues sorted by severity. Exit code 0 = clean, 1 = issues found.
 **Delegate to Alex (Reviewer) or Sentinel (QA)** for running static analysis as part of the pipeline.
 
+### Per-file line coverage (`make sonar-file-coverage` / `cli/sonar-coverage.sh`)
+
+`cli/sonar-coverage.sh` reads EXISTING SonarQube analysis (it does NOT run a scan) and reports, for given files, which lines remain uncovered — collapsed into ranges. It works for files in BOTH repos (schema_forge and com.etendoerp.go): each file's repo and project key are auto-detected from its on-disk location (override with `--project schema-forge|etendo-go`). Use `NEW_ONLY=1` to show only new-code uncovered lines — the "coverage dropped in this PR" review case. Other flags: `BRANCH=`, `PR=`, plus `--partial` (also list partial branches) and `-q`. Exit 0 = fully covered, 1 = uncovered lines found, 2 = error.
+
+```bash
+make sonar-file-coverage FILES="cli/src/push-to-neo.js"
+make sonar-file-coverage FILES="cli/src/push-to-neo.js" NEW_ONLY=1 PR=123
+./cli/sonar-coverage.sh --project etendo-go src/com/etendoerp/go/schemaforge/NeoServlet.java
+```
+
+Requires a User Token (`squ_…`) with Browse permission in `SONAR_TOKEN`. Full design/reference: `docs/sonar-file-coverage-investigation.md`.
+
 ## Decisions
 
 `decisions.json` is the primary config per window. Before modifying, read `docs/decisions-reference.md`.
@@ -406,13 +422,13 @@ Auto-memory (NOT committed) only for: GitHub usernames, local paths, personal pr
 
 **Minimal implementation:**
 ```java
-@ApplicationScoped
 @Named("internal-consumption-line")   // matches ETGO_SF_ENTITY.Java_Qualifier
 public class InternalConsumptionLineHandler implements NeoHandler {
     @Override public NeoResponse handle(NeoContext context) { return null; }      // pre-hook
     @Override public NeoResponse afterHandle(NeoContext context) { return null; } // post-hook
 }
 ```
+**⚠️ `@Named` only — NEVER `@ApplicationScoped` (or any normal scope).** `lookupHandler()` reads `@Named` off `handler.getClass()`; a normal-scoped bean resolves to a Weld client proxy whose subclass does not carry the (non-`@Inherited`) `@Named`, so it is silently skipped. `@Named`-only defaults to `@Dependent` (no proxy). See `docs/neo-headless-extensibility.md` §2.2.
 
 - `handle()` → `null` continues to default CRUD; `NeoResponse` short-circuits.
 - `afterHandle()` → `null` keeps default result; `NeoResponse` replaces it.

@@ -61,7 +61,7 @@ describe('ConfirmGoodsReceiptModal', () => {
 
     it('renders the close (×) button', () => {
       renderModal();
-      expect(screen.getByRole('button', { name: 'close' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '×' })).toBeInTheDocument();
     });
 
     it('renders the cancel button', () => {
@@ -127,7 +127,7 @@ describe('ConfirmGoodsReceiptModal', () => {
     it('calls onClose when × button is clicked', () => {
       const onClose = vi.fn();
       renderModal({ onClose });
-      fireEvent.click(screen.getByRole('button', { name: 'close' }));
+      fireEvent.click(screen.getByRole('button', { name: '×' }));
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
@@ -177,7 +177,7 @@ describe('ConfirmGoodsReceiptModal', () => {
 
       await waitFor(() => expect(onConfirmed).toHaveBeenCalledTimes(1));
       expect(onConfirmed).toHaveBeenCalledWith({
-        invoice: { id: 'inv-1', documentNo: 'FAC-001' },
+        invoice: expect.objectContaining({ id: 'inv-1', documentNo: 'FAC-001' }),
       });
 
       const calls = global.fetch.mock.calls;

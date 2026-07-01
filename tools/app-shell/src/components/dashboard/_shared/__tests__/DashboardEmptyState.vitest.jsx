@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 
 import { DashboardEmptyState } from '../DashboardEmptyState.jsx';
 
-const IconStub = (props) => <svg data-testid="icon-stub" {...props} />;
+const IconStub = (props) => <svg {...props} data-testid="icon-stub" />;
 
 describe('DashboardEmptyState', () => {
   it('renders title and subtitle', () => {

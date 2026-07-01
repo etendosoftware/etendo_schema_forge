@@ -8,21 +8,18 @@ vi.mock('../useWarehouseStock', () => ({
   useWarehouseStock: vi.fn(),
 }));
 
-vi.mock('@/lib/dashboardNumberFormat', () => ({
-  niceScale: (max) => ({ niceMax: max || 10, ticks: [0, max || 10] }),
-  formatDashboardAxisTick: (v) => String(v),
+vi.mock('@/hooks/useCurrency', () => ({
+  useCurrency: vi.fn(() => 'USD'),
 }));
 
-vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ children }) => <div data-testid="dialog">{children}</div>,
-  DialogContent: ({ children }) => <div data-testid="dialog-content">{children}</div>,
-  DialogHeader: ({ children }) => <div>{children}</div>,
-  DialogTitle: ({ children }) => <span>{children}</span>,
+vi.mock('@/lib/formatCurrency', () => ({
+  formatCurrency: vi.fn((code, value) => `${code}:${value}`),
 }));
 
 import { render, screen } from '@testing-library/react';
 import WarehouseSummary from '../WarehouseSummary.jsx';
 import { useWarehouseStock } from '../useWarehouseStock';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 describe('WarehouseSummary', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -39,59 +36,32 @@ describe('WarehouseSummary', () => {
     expect(screen.getByText('warehouseStockError')).toBeInTheDocument();
   });
 
-  it('renders products count and total units from stock data', () => {
+  it('renders the "Datos de stock" section with valuation and products-with-stock stats', () => {
     useWarehouseStock.mockReturnValue({
       loading: false,
       error: null,
       products: [
-        { qty: 10 },
-        { qty: 5 },
-        { qty: 3 },
+        { qty: 5, valuation: 500 },
+        { qty: 3, valuation: 417 },
       ],
       transactions: [],
     });
     render(<WarehouseSummary data={{ id: 'wh-1' }} token="t" apiBaseUrl="/api" />);
-    expect(screen.getByText('warehouseProducts')).toBeInTheDocument();
-    expect(screen.getByText('warehouseTotalUnits')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument(); // totalProducts
-    expect(screen.getByText('18')).toBeInTheDocument(); // totalUnits
-  });
 
-  it('renders the stock trend label when data is available', () => {
-    useWarehouseStock.mockReturnValue({
-      loading: false,
-      error: null,
-      products: [{ qty: 1 }],
-      transactions: [],
-    });
-    render(<WarehouseSummary data={{ id: 'wh-1' }} token="t" apiBaseUrl="/api" />);
-    expect(screen.getAllByText('warehouseStockTrend').length).toBeGreaterThan(0);
-  });
+    // Section title
+    expect(screen.getByText('warehouseStockDataTitle')).toBeInTheDocument();
 
-  it('shows no-data message in chart when no transactions', () => {
-    useWarehouseStock.mockReturnValue({
-      loading: false,
-      error: null,
-      products: [{ qty: 5 }],
-      transactions: [],
-    });
-    render(<WarehouseSummary data={{ id: 'wh-1' }} token="t" apiBaseUrl="/api" />);
-    expect(screen.getAllByText('warehouseNoMovementData').length).toBeGreaterThan(0);
-  });
+    // Valuation stat labels and badge
+    expect(screen.getByText('warehouseTotalValuation')).toBeInTheDocument();
+    expect(screen.getByText('warehouseValuationBadge')).toBeInTheDocument();
 
-  it('renders SVG chart when transactions with quantities exist', () => {
-    const now = new Date();
-    useWarehouseStock.mockReturnValue({
-      loading: false,
-      error: null,
-      products: [{ qty: 10 }],
-      transactions: [
-        { movementDate: now.toISOString(), movementQuantity: 20 },
-        { movementDate: now.toISOString(), movementQuantity: 30 },
-      ],
-    });
-    const { container } = render(<WarehouseSummary data={{ id: 'wh-1' }} token="t" apiBaseUrl="/api" />);
-    expect(container.querySelector('svg')).toBeInTheDocument();
+    // formatCurrency was called with the summed valuation (500 + 417 = 917)
+    expect(formatCurrency).toHaveBeenCalledWith('USD', 917);
+
+    // Products-with-stock stat labels, count, and badge
+    expect(screen.getByText('warehouseProductsWithStock')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('warehouseProductsWithStockBadge')).toBeInTheDocument();
   });
 
   it('renders without crashing when data prop is undefined', () => {

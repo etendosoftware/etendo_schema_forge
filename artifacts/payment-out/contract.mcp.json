@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-05-26T18:48:56.919Z",
-  "contractChecksum": "50e2d6f3d51446ad",
+  "updatedAt": "2026-06-24T20:46:47.878Z",
+  "contractChecksum": "b0be7c943af86da5",
   "apiPrediction": {
     "specName": "payment-out",
     "baseUrl": "/sws/neo/payment-out",
@@ -78,6 +78,17 @@
         "listUrl": "/sws/neo/payment-out/accounting",
         "detailUrl": "/sws/neo/payment-out/accounting/{id}",
         "supportedFilters": []
+      },
+      "bankPayments": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/payment-out/bankPayments",
+        "detailUrl": "/sws/neo/payment-out/bankPayments/{id}",
+        "supportedFilters": []
       }
     },
     "selectors": [
@@ -128,7 +139,16 @@
         "column": "C_Currency_ID",
         "reference": "Currency",
         "inputMode": "selector",
-        "url": "/sws/neo/payment-out/header/selectors/currency"
+        "url": "/sws/neo/payment-out/header/selectors/currency",
+        "context": {
+          "required": [
+            {
+              "param": "FIN_Financial_Account_ID",
+              "source": "parentField",
+              "field": "financialAccount"
+            }
+          ]
+        }
       },
       {
         "entity": "header",
@@ -393,6 +413,22 @@
         "reference": "User2",
         "inputMode": "selector",
         "url": "/sws/neo/payment-out/accounting/selectors/ndDimension"
+      },
+      {
+        "entity": "bankPayments",
+        "field": "currency",
+        "column": "C_Currency_ID",
+        "reference": "Currency",
+        "inputMode": "selector",
+        "url": "/sws/neo/payment-out/bankPayments/selectors/currency"
+      },
+      {
+        "entity": "bankPayments",
+        "field": "financialAccount",
+        "column": "FIN_Financial_Account_ID",
+        "reference": "Financial_Account",
+        "inputMode": "selector",
+        "url": "/sws/neo/payment-out/bankPayments/selectors/financialAccount"
       }
     ],
     "actions": [
@@ -586,6 +622,155 @@
         ],
         "processId": "EA02D79CA1DE4B46909EA6EF64A66B53",
         "processType": "obuiapp"
+      },
+      {
+        "name": "psd2GenerateBankPayment",
+        "actionType": "paymentAction",
+        "entity": "header",
+        "column": "EM_Psd2_Generate_Bank_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/payment-out/header/{id}/action/psd2GenerateBankPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "0661406A983B4D8EA611F8596F114D52",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "header",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/payment-out/header/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "etprReactivatePayment",
+        "actionType": "documentAction",
+        "entity": "header",
+        "column": "EM_Etpr_Reactivate_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/payment-out/header/{id}/action/etprReactivatePayment",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "84628BC70CDB49B58054E80C20BCBFEE",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "eTPRRemovePayment",
+        "actionType": "paymentAction",
+        "entity": "header",
+        "column": "em_etpr_remove_payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/payment-out/header/{id}/action/eTPRRemovePayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "FB79E902A5384754990AD145F6CAC9FB",
+        "processType": "obuiapp"
+      },
+      {
+        "name": "refreshPayment",
+        "actionType": "paymentAction",
+        "entity": "bankPayments",
+        "column": "Refresh_Payment",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/payment-out/bankPayments/{id}/action/refreshPayment",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates or processes payment records",
+          "May update invoice/order payment status"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Payment amount exceeds remaining balance",
+          "Payment method is not configured for the business partner",
+          "Invoice is already fully paid"
+        ],
+        "processId": "3894F258A80D4FAB8A5131B5172145AF",
+        "processType": "obuiapp"
       }
     ],
     "queryParams": {
@@ -691,7 +876,23 @@
           },
           "ndDimension": {
             "readOnlyLogic": "@Posted@='Y'"
-          }
+          },
+          "psd2GenerateBankPayment": {},
+          "etblkpAccountingstatus": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etblkpBulkposting": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
+          "etprReactivatePayment": {
+            "required": true,
+            "defaultValue": "N"
+          },
+          "eTPRRemovePayment": {}
         }
       },
       "lines": {
@@ -860,9 +1061,36 @@
             "readOnly": true
           }
         }
+      },
+      "bankPayments": {
+        "fields": {
+          "status": {
+            "required": true,
+            "defaultValue": "requested"
+          },
+          "saltedgeProviderCode": {},
+          "amount": {
+            "required": true,
+            "defaultValue": "0"
+          },
+          "currency": {
+            "required": true
+          },
+          "creditorName": {},
+          "creditorIban": {},
+          "debtorName": {},
+          "debtorIban": {},
+          "description": {},
+          "financialAccount": {
+            "required": true
+          },
+          "refreshPayment": {}
+        }
       }
     },
-    "requiredSessionVariables": [],
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
     "evaluationMode": "runtime"
   },
   "agentProfile": {
@@ -877,7 +1105,8 @@
         "account",
         "currency",
         "financialTransactionAmount",
-        "financialTransactionConvertRate"
+        "financialTransactionConvertRate",
+        "etprReactivatePayment"
       ],
       "lineFields": [
         "amount",
@@ -886,7 +1115,11 @@
         "foreignAmount",
         "creditPaymentUsed",
         "amount",
-        "currency"
+        "currency",
+        "status",
+        "amount",
+        "currency",
+        "financialAccount"
       ],
       "recommendedOrder": [
         "createHeader",
@@ -906,12 +1139,27 @@
             }
           ]
         }
+      },
+      {
+        "entity": "header",
+        "field": "currency",
+        "context": {
+          "required": [
+            {
+              "param": "FIN_Financial_Account_ID",
+              "source": "parentField",
+              "field": "financialAccount"
+            }
+          ]
+        }
       }
     ],
     "actions": [
       "posted",
       "aPRMReversePayment",
-      "aeatsiiSend"
+      "aeatsiiSend",
+      "etblkpBulkposting",
+      "etprReactivatePayment"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -941,7 +1189,8 @@
           "account",
           "currency",
           "financialTransactionAmount",
-          "financialTransactionConvertRate"
+          "financialTransactionConvertRate",
+          "etprReactivatePayment"
         ]
       },
       {
@@ -954,7 +1203,11 @@
           "foreignAmount",
           "creditPaymentUsed",
           "amount",
-          "currency"
+          "currency",
+          "status",
+          "amount",
+          "currency",
+          "financialAccount"
         ]
       },
       {
@@ -966,8 +1219,9 @@
     "warnings": [],
     "knownLimitations": [],
     "dangerousOperations": [
-      "aPRMReversePayment"
+      "aPRMReversePayment",
+      "etprReactivatePayment"
     ]
   },
-  "checksum": "e985a72a9564e072"
+  "checksum": "6fb65ab26f846b7a"
 }

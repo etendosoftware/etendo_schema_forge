@@ -20,7 +20,9 @@ const statusField = null;
 // @sf-generated-end summary:priceList
 
 // @sf-generated-start extraBadges:priceList
-const extraBadges = [];
+const extraBadges = [
+
+];
 // @sf-generated-end extraBadges:priceList
 
 // @sf-generated-start processes:priceList
@@ -28,6 +30,12 @@ const processes = [
 
 ];
 // @sf-generated-end processes:priceList
+
+// @sf-generated-start detailProcesses:priceListVersion
+const detailProcesses = [
+  { name: 'create', label: 'Create Price List', style: 'positive' },
+];
+// @sf-generated-end detailProcesses:priceListVersion
 
 // @sf-generated-start draftMode:priceList
 const draftMode = null;
@@ -181,6 +189,7 @@ const labelOverrides = api.labelOverrides;
 export default function PriceListPage({ windowName, recordId, ...props }) {
   if (recordId) {
     return (
+      <>
       <DetailView
         entity="priceList"
         detailEntity="priceListVersion"
@@ -191,6 +200,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        detailProcesses={detailProcesses}
         addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Price List"
@@ -206,6 +216,7 @@ export default function PriceListPage({ windowName, recordId, ...props }) {
         labelOverrides={labelOverrides}
         {...props}
       />
+      </>
     );
   }
 

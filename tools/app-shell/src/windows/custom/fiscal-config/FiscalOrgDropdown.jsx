@@ -36,7 +36,10 @@ export default function FiscalOrgDropdown({ selectedOrg, orgList, onSelect }) {
           {initial}
         </span>
         <span className="text-sm font-medium">{selectedOrg.name}</span>
-        {canSwitch && <ChevronDown size={13} className="text-muted-foreground" />}
+        {canSwitch && <ChevronDown
+          size={13}
+          className="text-muted-foreground"
+          data-testid="ChevronDown__e2fb94" />}
       </button>
       {open && canSwitch && (
         <div className="absolute top-full mt-1 left-0 z-50 min-w-[200px] rounded-xl border border-border bg-background shadow-lg py-1">

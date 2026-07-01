@@ -127,7 +127,7 @@ the discount. The earlier client-side factor double-applied it.
 8c. Inline-create flow: open the reject modal, click `+ Crear razón`/`+ Create reason`. The sub-modal pre-fills the input with the current search text, lets the user edit, and disables the confirm button until the name is non-blank. On confirm, the new reason appears in the parent dropdown, is preselected, and the parent confirm button is now enabled. Cancelling the sub-modal closes only the sub-modal, leaving the reject modal open. Repeat in the alternate locale.
 9. From the list view, select one or more quotations, run `Clone`, close the result modal and confirm the cloned drafts appear in the list without manually pressing `Refresh`.
 10. On a draft quotation with a business partner already chosen, change `Payment Terms` to a different value than the BP default and save. Reopen the record and confirm the chosen value persisted (regression: it used to revert to the BP default).
-11. Open the Send Email modal from the topbar and confirm: the `Para` field is pre-filled with the business partner's email when one is registered in `EM_Etgo_Email`; the field is empty (showing the "no email found" hint) when none is registered; and the modal title reads the translated document name in the active UI language.
+11. Open the Send Email modal from the topbar and confirm: the business partner's email registered in `EM_Etgo_Email` is proposed as an editable `To` chip (when none is registered, the To list starts empty); the proposed chip can be removed; additional To recipients and CC recipients (via the `Add CC` affordance) can be added; entering a syntactically invalid email shows an inline validation error and disables Send; Send is also disabled while the final To list is empty (even with CC entries) or when more than 10 recipients are entered across To and CC; and the modal title reads the translated document name in the active UI language.
 12. Open an existing draft quotation without touching any field and confirm the "Guardar" (Save Draft) button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirmar" button stays enabled throughout all these states.
 13. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
 
@@ -149,7 +149,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - Draft-only confirmation and send-document behavior are grounded in `artifacts/sales-quotation/custom/QuotationTopbarActions.jsx` and `artifacts/sales-quotation/custom/QuotationConfirmModal.jsx`.
 - The only quotation-specific automated test evidence currently observed is source-shape coverage for the top-bar actions component in `artifacts/sales-quotation/custom/__tests__/QuotationTopbarActions.test.js`; no browser-level automation was found for pricing reactions, conversion flow, or related-documents navigation.
 - `artifacts/sales-quotation/generated/web/sales-quotation/LinesTable.jsx` — the `unitPrice` column (`PriceActual`) uses `type: 'amount'` so the net unit price renders as a formatted currency value rather than a raw number.
-- `artifacts/sales-quotation/custom/QuotationTopbarActions.jsx` proves the Send Email modal is wired with `bPartnerId`, `apiBaseUrl`, and `windowName="sales-quotation"` so the recipient preview is resolved from the contacts spec at open time, `documentType` is translated via `useMenuLabel()`, and backend delivery routes to the `sales-quotation-send` transactional email contract.
+- `artifacts/sales-quotation/custom/QuotationTopbarActions.jsx` proves the Send Email modal is wired with `bPartnerId`, `apiBaseUrl`, and `windowName="sales-quotation"` so the recipient email is resolved from the contacts spec at open time and proposed as an editable `To` chip (removable, with additional To/CC recipients supported per ETP-4226 — edits reach the backend only through the allowlisted `recipientEdits` command field), `documentType` is translated via `useMenuLabel()`, and backend delivery routes to the `sales-quotation-send` transactional email contract.
 - `tools/app-shell/src/hooks/__tests__/useEntity-dirty-state.test.js` verifies the `isDirtyHeader` computation (dirty when editing differs from selected, clean when they match, new-record initial state) and the `refreshHeaderTotals` selective merge (server-computed totals update while user-edited fields in `editing` are preserved using `userChangedKeysRef`).
 - `tools/app-shell/src/components/contract-ui/__tests__/DetailView.dirtyState.test.js` guards the `isDirty` composite expression, the `additionalDirtyState` extension prop, and the save-button disabled conditions (new record always active, existing record gated by `!isDirty`, Confirm button never gated by dirty state).
 - `artifacts/sales-quotation/__tests__/contract-integrity.test.js` locks the rejectReason surface change for the CJ-form display: it asserts `form: true`, `section: 'principal'`, an evaluable `displayLogic.js` that gates on `documentStatus === 'CJ'`, the read-only logic still covers CJ and CA, and `window.labelOverrides.C_Reject_Reason_ID` carries both Spanish and English translations.
@@ -162,3 +162,128 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - **ETP-4096 — Restore `rejectReason` to `readOnly`**: commit `c4907e08` (ETP-4070 mass regen, 2026-05-22) accidentally reverted `decisions.json → entities.header.fields.rejectReason.visibility` from `"readOnly"` back to `"editable"`, re-introducing the regression that ETP-4006 had fixed. ETP-4096 restores it to `"readOnly"`, regenerates the contract and frontend, and updates the contract-integrity test assertion to match.
 
 - **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.
+
+## Currency selector and quotation-to-order conversion — ETP-4027
+
+### CurrencyRatePicker on quotations
+
+`EntityForm.jsx` wires `CurrencyRatePicker` for the `C_Currency_ID` field when
+`entity === 'quotation'` and `apiBaseUrl` matches `/sales-quotation`. The
+condition is:
+
+```js
+f.column === 'C_Currency_ID' &&
+(entity === 'header' || entity === 'quotation') &&
+/\/(sales-order|purchase-order|sales-quotation)(\/|$)/.test(apiBaseUrl || '')
+```
+
+The component (`tools/app-shell/src/components/contract-ui/CurrencyRatePicker.jsx`)
+replaces the standard `SelectorInput` and:
+
+- Renders each option as `{isoCode} — {rate}` (e.g. `USD — 1.1523`), where
+  `rate` is the conversion from the org currency to that currency for the
+  quotation's `dateOrdered`.
+- Fetches options lazily from
+  `GET {apiBaseUrl}/quotation/{id}/action/currencyOptions`
+  when the user opens the dropdown. The entity path `'quotation'` is passed via
+  the `entityPath` prop, so the URL differs from the sales-order equivalent
+  (`header/{id}/action/currencyOptions`).
+- Also fires an eager fetch when `hasRecord` becomes `true` (i.e., after the
+  quotation is first saved and a real `id` is available), so the rate is
+  immediately visible in the trigger without requiring the user to open the
+  dropdown.
+- Shows a pencil icon (`data-testid="currency-rate-pencil"`) when `value &&
+  hasRecord`. Clicking it enters inline-edit mode with a numeric input
+  (`data-testid="currency-rate-input"`). Enter confirms and calls
+  `onChange('eTGOCurrencyRate', rate, 'EM_ETGO_Currency_Rate')` to stage the
+  overridden rate. Escape cancels without change.
+- The displayed rate is the staged `eTGOCurrencyRate` value (if present in
+  `formData`) or the rate returned by `currencyOptions` for the currently
+  selected currency.
+- The field `eTGOCurrencyRate` is declared in `decisions.json` as
+  `form: false, grid: false` — it is invisible to the user; only
+  `CurrencyRatePicker` manages it.
+
+The `currencyOptions` endpoint is the same one used by sales-order —
+implemented in `CurrencyOptionsHandler.java` (`com.etendoerp.go`). It filters
+by client and org, returns only currencies that have an active exchange rate for
+the document date, and always includes the org currency with `rate: 1.0`.
+
+### Convertquotation — preserved prices
+
+`SalesQuotationHeaderHandler.handle()` intercepts the `Convertquotation` action
+before it reaches NEO's generic button handler and calls:
+
+```java
+Order newOrder = convertQuotationProcess.convertQuotationIntoSalesOrder(false, quotationId);
+```
+
+The `false` parameter is `recalculatePrices`. Standard Etendo passes `true`
+(re-fetches prices from the active price list), which overwrites the amounts
+agreed in the quotation. With `false`, `ConvertQuotationIntoOrder.java` copies
+lines directly without touching `PriceActual` or `ListPrice`. Returning a
+non-null `NeoResponse` from `handle()` short-circuits the default NEO handler,
+so the overriding parameter is guaranteed to take effect.
+
+The backend action response body is `{ "salesOrderId": "<id>" }`. The frontend
+(`QuotationConfirmModal.jsx`) does not read `salesOrderId` from this response —
+instead it fires a follow-up
+`GET {baseNeoUrl}/sales-order/header?criteria=[{fieldName:'quotation',operator:'equals',value:quotationId}]`
+to resolve the created order and display its document number and total in the
+success state. If the order was auto-completed (`documentStatus === 'CO'`), the
+modal issues a best-effort `POST DocAction { docAction: 'RE' }` to reactivate it
+to Draft before surfacing the result.
+
+`afterHandle()` copies `EM_ETGO_Currency_Rate` from the quotation header to the
+new order header via JDBC:
+
+```java
+UPDATE c_order SET em_etgo_currency_rate = ?
+WHERE c_order_id = (
+  SELECT c_order_id FROM c_order
+  WHERE quotation_id = ? AND issotrx = 'Y' AND em_etgo_currency_rate IS NULL
+  ORDER BY created DESC LIMIT 1
+)
+```
+
+This ensures that an exchange rate agreed during the quotation stage is
+carried forward to the resulting sales order without the user having to
+re-enter it.
+
+### Currency change on quotations
+
+The behavior is identical to Sales Order — see
+`docs/generated-custom-windows/sales-order.md` under "Currency change handling
+(ETP-4027 functional model)". Briefly:
+
+- The `currency` field is always editable on quotations in `DR` or `UE` status.
+- When the user picks a new currency in the dropdown, `DetailView.jsx` validates
+  exchange-rate availability via `validate-exchange-rate` before applying the
+  change. If no rate exists, the dropdown reverts to the previous value and
+  shows a toast.
+- A `useEffect` in `DetailView.jsx` keeps `activeCurrencyConversionRef`
+  synchronized with the saved currency/date so that newly added lines have their
+  prices converted automatically from the pricelist currency to the order
+  currency.
+
+### Automated evidence
+
+- `e2e/tests/flows/sales-quotation-convert-prices.mocked.spec.js` — Playwright
+  mocked spec: modal selection, POST to `Convertquotation`, total display in the
+  blue summary card, and success state showing the new order's `documentNo`.
+- `e2e/tests/flows/sales-order-currency-rate-picker.mocked.spec.js` — covers
+  `CurrencyRatePicker` behavior (rate display in the trigger, pencil-edit flow,
+  rate confirm/cancel, currency change with and without an available rate). This
+  spec targets the sales-order entity but the component is shared; the quotation
+  path (`entityPath='quotation'`) is wired identically.
+
+## PSD2 dependency — `EM_Psd2_Generate_Bank_Payment`
+
+`com.etendoerp.go` now depends on the **PSD2** module, which adds the
+`EM_Psd2_Generate_Bank_Payment` ("Generate Bank Payment") column to the shared
+core table this window sits on (`C_Order` / `C_Invoice` / `FIN_Payment`). Because
+Schema Forge extracts from AD, that column surfaces in this window's contract as a
+**system field** — present in the backend contract but **not** rendered in the
+frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
+this note only records why the contract was regenerated when the PSD2 dependency
+was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).

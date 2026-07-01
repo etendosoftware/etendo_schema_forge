@@ -30,15 +30,18 @@ export default function ConfirmDeleteDialog({ open, onClose, onConfirm, title, m
   };
 
   return (
-    <Dialog open={open} onOpenChange={(value) => { if (!value) onClose?.(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => { if (!value) onClose?.(); }}
+      data-testid="Dialog__4d1545">
       <DialogContent data-testid="confirm-delete-dialog">
-        <DialogHeader>
-          <DialogTitle>{title || ui('confirm')}</DialogTitle>
-          <DialogDescription>
+        <DialogHeader data-testid="DialogHeader__4d1545">
+          <DialogTitle data-testid="DialogTitle__4d1545">{title || ui('confirm')}</DialogTitle>
+          <DialogDescription data-testid="DialogDescription__4d1545">
             {message || ui('attachmentsConfirmDelete')}
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter>
+        <DialogFooter data-testid="DialogFooter__4d1545">
           <Button type="button" variant="outline" data-testid="confirm-delete-cancel" onClick={() => onClose?.()}>
             {ui('cancel')}
           </Button>

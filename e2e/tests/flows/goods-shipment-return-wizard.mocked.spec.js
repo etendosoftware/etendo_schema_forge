@@ -5,7 +5,7 @@ import { login } from '../helpers/auth.js';
  * Goods Shipment — Return Wizard (mocked) — ETP-4031
  *
  * Validates ReturnWizard step 2 quality:
- *   - "Crear Devolución" button gating (isCompleted && !hasReturn)
+ *   - "Crear Devolución" button gating (isCompleted && canCreateReturn)
  *   - Wizard dialog opens with Spanish title
  *   - Step 1: lines load, "Siguiente" enabled when lines have qty > 0
  *   - Step 2: document card shows correct translated strings,
@@ -114,7 +114,7 @@ async function installGoodsShipmentMock(page, records) {
 
 test.describe('Goods Shipment — Return Wizard step 2 quality (no credit note, translated strings)', () => {
   test('opens wizard, advances to step 2, asserts Spanish content and no credit note', async ({ page }) => {
-    // 1. Completed shipment without returnReceipts (shows "Crear Devolución" button)
+    // 1. Completed shipment with canCreateReturn=true (backend-computed field, shows "Crear Devolución" button)
     const shipment = makeShipment({
       id: 'gs-return-001',
       documentNo: 'GS-RETURN-001',
@@ -122,19 +122,19 @@ test.describe('Goods Shipment — Return Wizard step 2 quality (no credit note, 
       'documentStatus$_identifier': 'Completado',
       processed: true,
       returnReceipts: [],
+      canCreateReturn: true,
     });
 
     await login(page);
     await installGoodsShipmentMock(page, [shipment]);
 
-    // 2. Override the lines endpoint to return actual shipment lines.
+    // 2. Mock the action endpoint the wizard uses to fetch available return lines.
+    //    ETP-4299 changed the fetch from GET goodsShipmentLine to POST availableShipmentLines.
     //    Registered AFTER installGoodsShipmentMock → takes LIFO priority.
-    //    The wizard opens when wizardOpen becomes true and fetches these lines
-    //    at: ${base}/goods-shipment/goodsShipmentLine?parentId=${recordId}&...
     await page.route(
-      (url) => url.href.includes('/sws/neo/goods-shipment/goodsShipmentLine'),
+      (url) => url.href.includes('/sws/neo/return-material-receipt/returnMaterialReceipt/_/action/availableShipmentLines'),
       async (route) => {
-        if (route.request().method() === 'GET') {
+        if (route.request().method() === 'POST') {
           await route.fulfill({
             status: 200,
             contentType: 'application/json',

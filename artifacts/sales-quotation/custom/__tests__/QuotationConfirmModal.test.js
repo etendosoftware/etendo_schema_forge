@@ -69,4 +69,16 @@ describe('QuotationConfirmModal', () => {
       assert.doesNotMatch(src, /['"`]\s*Invoice\s+#/);
     });
   });
+
+  // ETP-4312: the arrow on the "go to document" button comes from code (a literal
+  // " →" glyph after the label in JSX), never baked into the translatable label.
+  describe('go-to-document button arrow (ETP-4312)', () => {
+    it('renders the derived label followed by a literal " →" glyph in JSX', () => {
+      assert.match(src, /\{goLabel\}\s*→/);
+    });
+
+    it('derives goLabel from createdDoc.type (sqViewOrder / soViewInvoice)', () => {
+      assert.match(src, /createdDoc\.type\s*===\s*'order'\s*\?\s*ui\('sqViewOrder'\)\s*:\s*ui\('soViewInvoice'\)/);
+    });
+  });
 });

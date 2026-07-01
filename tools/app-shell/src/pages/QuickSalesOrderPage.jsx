@@ -310,7 +310,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
     return (
       <div className="h-full flex items-center justify-center" data-testid="quick-sales-order-page">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
+          <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__79898e" />
           <span className="text-sm">{ui('qsoLoading')}</span>
         </div>
       </div>
@@ -321,7 +321,9 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
     return (
       <div className="h-full flex items-center justify-center" data-testid="quick-sales-order-page">
         <div className="text-center space-y-2">
-          <Receipt className="h-10 w-10 text-muted-foreground/30 mx-auto" />
+          <Receipt
+            className="h-10 w-10 text-muted-foreground/30 mx-auto"
+            data-testid="Receipt__79898e" />
           <p className="text-sm font-medium text-destructive">{dataError}</p>
         </div>
       </div>
@@ -340,14 +342,14 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
               onSelect={setCustomer}
               customers={customers}
               inputRef={customerSearchRef}
-            />
+              data-testid="CustomerSelector__79898e" />
             <div className="flex gap-2 items-center">
               <div className="flex-1 relative">
                 <ProductSearchBar
                   query={searchQuery}
                   onChange={setSearchQuery}
                   inputRef={productSearchRef}
-                />
+                  data-testid="ProductSearchBar__79898e" />
               </div>
               <div
                 title={lastScan ? `${ui('qsoScanDetected')}: ${lastScan}` : ui('qsoScanDetected')}
@@ -357,7 +359,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
                     : 'border-border bg-white text-muted-foreground/40'
                 }`}
               >
-                <ScanBarcode className="h-4 w-4" />
+                <ScanBarcode className="h-4 w-4" data-testid="ScanBarcode__79898e" />
               </div>
               <button
                 onClick={() => setShowPriority(prev => !prev)}
@@ -368,7 +370,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
                     : 'border-border bg-white text-muted-foreground hover:bg-muted/30'
                 }`}
               >
-                <TrendingUp className="h-4 w-4" />
+                <TrendingUp className="h-4 w-4" data-testid="TrendingUp__79898e" />
               </button>
             </div>
             <div className="flex-1 overflow-auto">
@@ -382,7 +384,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
                 showPriority={showPriority}
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
-              />
+                data-testid="ProductGrid__79898e" />
             </div>
           </div>
 
@@ -400,7 +402,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
                 customerId={customer?.id}
                 onRepeatOrder={handleRepeatOrder}
                 previousOrders={previousOrders}
-              />
+                data-testid="CartPanel__79898e" />
               <PaymentPanel
                 visible={showPayment}
                 grandTotal={grandTotal}
@@ -411,7 +413,7 @@ export default function QuickSalesOrderPage({ apiBaseUrl }) {
                 onConfirm={handleConfirmPayment}
                 onBack={() => setShowPayment(false)}
                 methods={PAYMENT_METHODS}
-              />
+                data-testid="PaymentPanel__79898e" />
             </div>
           </div>
         </div>

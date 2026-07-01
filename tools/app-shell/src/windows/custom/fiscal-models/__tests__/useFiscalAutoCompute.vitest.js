@@ -24,8 +24,13 @@ describe('useFiscalAutoCompute — initial compute', () => {
       })
     );
     await waitFor(() => expect(computeFn).toHaveBeenCalledTimes(2));
-    expect(result.current.computedMap[DECL_A.id]).toMatchObject({ summary: SUMMARY });
-    expect(result.current.computedMap[DECL_B.id]).toMatchObject({ summary: SUMMARY });
+    // Wait for the async state commit, not just the call count: computeFn resolves
+    // before computedMap is set, so assert on the map itself to avoid a load-dependent
+    // race that reads the map before React flushes the update.
+    await waitFor(() => {
+      expect(result.current.computedMap[DECL_A.id]).toMatchObject({ summary: SUMMARY });
+      expect(result.current.computedMap[DECL_B.id]).toMatchObject({ summary: SUMMARY });
+    });
   });
 
   it('sets error entry when computeFn rejects', async () => {
@@ -143,7 +148,9 @@ describe('useFiscalAutoCompute — sessionStorage cache', () => {
     );
 
     await waitFor(() => expect(computeFn).toHaveBeenCalled());
-    expect(result.current.computedMap[DECL_A.id]).toMatchObject({ boxes: freshBoxes });
+    await waitFor(() =>
+      expect(result.current.computedMap[DECL_A.id]).toMatchObject({ boxes: freshBoxes })
+    );
   });
 
   it('falls through to computeFn when cache exists but checkModifiedFn throws', async () => {
@@ -156,7 +163,9 @@ describe('useFiscalAutoCompute — sessionStorage cache', () => {
     );
 
     await waitFor(() => expect(computeFn).toHaveBeenCalled());
-    expect(result.current.computedMap[DECL_A.id]).toMatchObject({ summary: SUMMARY });
+    await waitFor(() =>
+      expect(result.current.computedMap[DECL_A.id]).toMatchObject({ summary: SUMMARY })
+    );
   });
 
   it('computes directly when no checkModifiedFn provided (cache not consulted)', async () => {

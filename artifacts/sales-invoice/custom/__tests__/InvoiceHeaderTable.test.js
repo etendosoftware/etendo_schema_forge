@@ -15,10 +15,12 @@ const columnsBlock =
 
 const expectedKeysInOrder = [
   'invoiceDate',
+  'transactionDocument',
   'documentNo',
   'eTGODueDate',
   'businessPartner',
   'documentStatus',
+  'posted',
   'grandTotalAmount',
   'outstandingAmount',
   'eTGODeliveryStatus',
@@ -29,7 +31,7 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     assert.ok(columnsBlock, 'expected `const columns = useMemo(() => [...], [])` block');
   });
 
-  it('renders the eight expected columns in order', () => {
+  it('renders the ten expected columns in order', () => {
     const block = columnsBlock[1];
     const keys = [...block.matchAll(/key:\s*'([^']+)'/g)].map(m => m[1]);
     assert.deepEqual(keys, expectedKeysInOrder);
@@ -42,7 +44,7 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     assert.match(src, /key: 'businessPartner', column: 'C_BPartner_ID'/);
     assert.match(src, /key: 'documentStatus', column: 'DocStatus'/);
     assert.match(src, /key: 'grandTotalAmount', column: 'GrandTotal'/);
-    assert.match(src, /key: 'outstandingAmount', column: 'OutstandingAmt'/);
+    assert.match(src, /key: 'outstandingAmount',[\s\S]{0,30}column: 'OutstandingAmt'/);
     assert.match(src, /key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status'/);
   });
 
@@ -54,8 +56,10 @@ describe('Sales InvoiceHeaderTable — columns', () => {
     );
   });
 
-  it('keeps the credit-note pill on documentNo', () => {
-    assert.match(src, /pill:\s*\{[\s\S]*?when:\s*\(row\)\s*=>\s*isCreditNote\(row\)/);
+  it('renders doc-type badge on transactionDocument column via getArSubtype', () => {
+    assert.match(src, /getArSubtype\(row\)/, 'transactionDocument column must call getArSubtype to detect NC/DEV subtypes');
+    assert.match(src, /creditNotesTab/, 'NC badge must use the creditNotesTab i18n key');
+    assert.match(src, /returnsTab/, 'DEV badge must use the returnsTab i18n key');
   });
 });
 
@@ -75,12 +79,22 @@ describe('Sales InvoiceHeaderTable — due date column', () => {
   });
 });
 
-describe('Sales InvoiceHeaderTable — type/payment filters', () => {
-  it('exposes invoice / credit-note tabs and an all-payments dropdown', () => {
-    assert.match(src, /value: 'all',\s*label: t\('allTab'\)/);
-    assert.match(src, /value: 'invoices',\s*label: t\('invoicesTab'\)/);
-    assert.match(src, /value: 'credit-notes',\s*label: t\('creditNotesTab'\)/);
-    assert.match(src, /value: 'all',\s*label: t\('allPayments'\)/);
+describe('Sales InvoiceHeaderTable — type filter (ETP-4035 rework)', () => {
+  it('delegates type filtering to ListView subsetFilters (no local TYPE_OPTIONS)', () => {
+    assert.doesNotMatch(src, /TYPE_OPTIONS/,
+      'Type filter pills were moved to ListView subsetFilters; InvoiceHeaderTable must not maintain them');
+  });
+
+  it('declares a FILTERS array for the DataTable search bar', () => {
+    assert.match(src, /const FILTERS\s*=/, 'FILTERS constant must be declared for DataTable');
+    assert.match(src, /'documentNo'/, 'documentNo must be in FILTERS');
+    assert.match(src, /'invoiceDate'/, 'invoiceDate must be in FILTERS');
+    assert.match(src, /'businessPartner'/, 'businessPartner must be in FILTERS');
+  });
+
+  it('renders DataTable with FILTERS (no wrapping div with custom toolbar)', () => {
+    assert.match(src, /<DataTable columns=\{columns\} filters=\{FILTERS\}/,
+      'Component must render DataTable directly without a custom filter wrapper');
   });
 });
 

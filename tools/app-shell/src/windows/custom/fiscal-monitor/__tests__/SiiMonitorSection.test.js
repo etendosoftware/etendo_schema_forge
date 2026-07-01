@@ -170,3 +170,34 @@ describe('SiiMonitorSection — pending status opens invoice preview', () => {
     assert.match(src, /fiscalMonitor\.openInvoice/);
   });
 });
+
+// Guards: export button and related state/constants are present
+describe('SiiMonitorSection — CSV export wiring', () => {
+  it('imports fetchCsvAndDownload from FmPrimitives', () => {
+    assert.match(src, /fetchCsvAndDownload.*from.*FmPrimitives/);
+  });
+
+  it('declares SII_EXPORT_COLS constant', () => {
+    assert.match(src, /const SII_EXPORT_COLS/);
+  });
+
+  it('SII_EXPORT_COLS is an array with at least one column definition', () => {
+    assert.match(src, /SII_EXPORT_COLS\s*=\s*\[/);
+  });
+
+  it('declares exporting state with useState', () => {
+    assert.match(src, /const\s+\[exporting,\s*setExporting\]\s*=\s*useState\(false\)/);
+  });
+
+  it('export button has onClick={handleExport}', () => {
+    assert.match(src, /onClick=\{handleExport\}/);
+  });
+
+  it('export button is disabled when loading or exporting', () => {
+    assert.match(src, /disabled=\{loading \|\| exporting\}/);
+  });
+
+  it('handleExport calls fetchCsvAndDownload with SII_EXPORT_COLS', () => {
+    assert.match(src, /fetchCsvAndDownload[\s\S]*?SII_EXPORT_COLS/);
+  });
+});

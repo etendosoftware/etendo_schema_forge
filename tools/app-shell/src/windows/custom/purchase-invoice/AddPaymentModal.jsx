@@ -51,7 +51,7 @@ export default function AddPaymentModal({ invoice, outstanding, onClose, onSave 
             className="text-gray-400 hover:text-gray-600 transition-colors"
             aria-label={ui('close')}
           >
-            <X size={18} />
+            <X size={18} data-testid="X__4f30ab" />
           </button>
         </div>
 
@@ -82,7 +82,7 @@ export default function AddPaymentModal({ invoice, outstanding, onClose, onSave 
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {ui('date')}
             </label>
-            <DateField value={date} onChange={setDate} />
+            <DateField value={date} onChange={setDate} data-testid="DateField__4f30ab" />
           </div>
 
           {/* Account */}
@@ -104,10 +104,14 @@ export default function AddPaymentModal({ invoice, outstanding, onClose, onSave 
 
         {/* Actions */}
         <div className="flex gap-3 mt-6">
-          <Button variant="outline" className="flex-1" onClick={onClose}>
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={onClose}
+            data-testid="Button__4f30ab">
             {ui('cancel')}
           </Button>
-          <Button className="flex-1" onClick={handleSave}>
+          <Button className="flex-1" onClick={handleSave} data-testid="Button__4f30ab">
             {ui('save')}
           </Button>
         </div>

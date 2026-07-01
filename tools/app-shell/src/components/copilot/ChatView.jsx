@@ -89,7 +89,7 @@ export function ChatView({
           >
             {message.role !== 'user' && (
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-                <Bot className="h-4 w-4 text-muted-foreground" />
+                <Bot className="h-4 w-4 text-muted-foreground" data-testid="Bot__61b427" />
               </div>
             )}
             <div
@@ -109,7 +109,7 @@ export function ChatView({
                       key={`${file.name}-${index}`}
                       variant="secondary"
                       className="max-w-full truncate"
-                    >
+                      data-testid="Badge__61b427">
                       {file.name}
                     </Badge>
                   ))}
@@ -123,7 +123,7 @@ export function ChatView({
         {isSending && (
           <div className="flex gap-2 mr-auto">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
-              <Bot className="h-4 w-4 text-muted-foreground" />
+              <Bot className="h-4 w-4 text-muted-foreground" data-testid="Bot__61b427" />
             </div>
             <div className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
               <span className="inline-flex gap-1">
@@ -138,29 +138,27 @@ export function ChatView({
         {/* Scroll anchor */}
         <div ref={messagesEndRef} />
       </div>
-
       {/* Attached record / list-view context chips */}
       {attachments.length > 0 && (
         <>
-          <Separator />
+          <Separator data-testid="Separator__61b427" />
           <AttachmentChips
             attachments={attachments}
             onRemove={onRemoveAttachment}
-          />
+            data-testid="AttachmentChips__61b427" />
         </>
       )}
-
       {/* Pending file preview bar */}
       {files.length > 0 && (
         <>
-          <Separator />
+          <Separator data-testid="Separator__61b427" />
           <div className="flex flex-wrap gap-2 p-3">
             {files.map((file, index) => (
               <Badge
                 key={`${file.name}-${index}`}
                 variant="outline"
                 className="gap-2"
-              >
+                data-testid="Badge__61b427">
                 <span className="max-w-[180px] truncate">{file.name}</span>
                 <button
                   type="button"
@@ -168,16 +166,14 @@ export function ChatView({
                   className="text-muted-foreground hover:text-foreground"
                   aria-label={`${ui('remove')} ${file.name}`}
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-3 w-3" data-testid="X__61b427" />
                 </button>
               </Badge>
             ))}
           </div>
         </>
       )}
-
-      <Separator />
-
+      <Separator data-testid="Separator__61b427" />
       {/* Input form */}
       <form onSubmit={handleSubmit} className="flex items-center gap-2 p-3">
         {/* Hidden real file input */}
@@ -197,8 +193,8 @@ export function ChatView({
           onClick={handleFilePick}
           disabled={isSending}
           aria-label={ui('copilotAttachFile')}
-        >
-          <Paperclip className="h-4 w-4" />
+          data-testid="Button__61b427">
+          <Paperclip className="h-4 w-4" data-testid="Paperclip__61b427" />
         </Button>
 
         <Input
@@ -208,7 +204,7 @@ export function ChatView({
           placeholder={inputPlaceholder || ui('askSomething')}
           className="flex-1 h-9"
           disabled={isSending}
-        />
+          data-testid="Input__61b427" />
 
         <Button
           type="submit"
@@ -216,8 +212,8 @@ export function ChatView({
           className="h-9 w-9 shrink-0"
           disabled={!input.trim() || isSending}
           aria-label={ui('send')}
-        >
-          <Send className="h-4 w-4" />
+          data-testid="Button__61b427">
+          <Send className="h-4 w-4" data-testid="Send__61b427" />
         </Button>
       </form>
     </>

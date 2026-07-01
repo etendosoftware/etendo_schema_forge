@@ -19,7 +19,7 @@ export function ReconcilePill({ pendingCount = 0, onClick }) {
         className="inline-flex items-center gap-1 rounded-full bg-[#EEFBF4] px-2 py-1 text-xs font-normal text-[#17663A]"
         data-testid="reconcile-status-reconciled"
       >
-        <Check className="h-3.5 w-3.5 text-[#1E874C]" />
+        <Check className="h-3.5 w-3.5 text-[#1E874C]" data-testid="Check__69351f" />
         {ui('financeAccountsStatusReconciled')}
       </span>
     );
@@ -34,7 +34,7 @@ export function ReconcilePill({ pendingCount = 0, onClick }) {
     >
       <span className="h-1.5 w-1.5 rounded-full bg-[#f3164e]" aria-hidden="true" />
       {ui('financeAccountsReconcilePending', { count: pendingCount })}
-      <ArrowUpRight className="h-3 w-3" />
+      <ArrowUpRight className="h-3 w-3" data-testid="ArrowUpRight__69351f" />
     </button>
   );
 }

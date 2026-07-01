@@ -120,7 +120,7 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
       expect(chevron).not.toBeNull();
     });
     const chevron = container.querySelector('svg.lucide-chevron-down');
-    expect(chevron.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+    expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
   });
 
   it('chevron stays right-anchored when the chip is shown', async () => {
@@ -132,6 +132,6 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
       expect(chevron).not.toBeNull();
     });
     const chevron = container.querySelector('svg.lucide-chevron-down');
-    expect(chevron.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
+    expect(chevron.parentElement.getAttribute('class')).toMatch(/(^|\s)ml-auto(\s|$)/);
   });
 });
