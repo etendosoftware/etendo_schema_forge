@@ -22,7 +22,7 @@ const summary = [
 
 ];
 
-const statusField = null;
+const statusField = 'oBTIKVIESStatus';
 // @sf-generated-end summary:businessPartner
 
 // @sf-generated-start extraBadges:businessPartner
