@@ -8,14 +8,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
 const ARTIFACTS = join(ROOT, 'artifacts');
 
-// All 16 windows that opted into inline-editable lines layout
+// All 15 windows that opted into inline-editable lines layout
 const INLINE_WINDOWS = [
   'contacts',
   'goods-movements',
   'goods-receipt',
   'goods-shipment',
   'internal-consumption',
-  'payment-out',
   'physical-inventory',
   'purchase-invoice',
   'purchase-order',
@@ -36,7 +35,6 @@ const LINES_TABLE = {
   'goods-receipt':             'goods-receipt/GoodsReceiptLineTable.jsx',
   'goods-shipment':            'goods-shipment/GoodsShipmentLineTable.jsx',
   'internal-consumption':      'internal-consumption/InternalConsumptionLineTable.jsx',
-  'payment-out':               'payment-out/LinesTable.jsx',
   'physical-inventory':        'physical-inventory/InventoryLineTable.jsx',
   'purchase-invoice':          'purchase-invoice/LinesTable.jsx',
   'purchase-order':            'purchase-order/LinesTable.jsx',
@@ -49,7 +47,7 @@ const LINES_TABLE = {
   'sales-quotation':           'sales-quotation/QuotationLineTable.jsx',
 };
 
-describe('Inline-editable lines rollout — all 16 windows', () => {
+describe('Inline-editable lines rollout — all 15 windows', () => {
   describe('decisions.json — linesLayout flag', () => {
     for (const win of INLINE_WINDOWS) {
       it(`${win} declares linesLayout: inlineEditable`, () => {

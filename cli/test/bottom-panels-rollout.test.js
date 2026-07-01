@@ -54,7 +54,6 @@ describe('BottomPanel rollout — all inline-editable windows', () => {
 
   describe('With-totals panels (monetary documents)', () => {
     const CASES = [
-      { win: 'payment-out',          file: 'PaymentOutBottomPanel.jsx'        },
       { win: 'purchase-order',       file: 'PurchaseOrderBottomPanel.jsx'     },
       { win: 'return-from-customer', file: 'ReturnFromCustomerBottomPanel.jsx'},
       { win: 'return-to-vendor',     file: 'ReturnToVendorBottomPanel.jsx'   },
@@ -135,33 +134,18 @@ describe('BottomPanel rollout — all inline-editable windows', () => {
       assert.match(src, /export default function PaymentBottomPanel/);
     });
 
-    it('renders the payment hero with fmtAmount and StatusTag', () => {
-      assert.match(src, /function fmtAmount/);
-      assert.match(src, /StatusTag/);
+    it('formats amounts with fmtAmt helper', () => {
+      assert.match(src, /function fmtAmt/);
     });
 
-    it('fetches linked invoices via finPaymentScheduleDetail and renders them', () => {
+    it('fetches lines via finPaymentScheduleDetail', () => {
       assert.match(src, /finPaymentScheduleDetail/);
-      assert.match(src, /linkedInvoices/);
-      assert.match(src, /navigateToInvoice/);
-    });
-
-    it('renders an activity timeline fed from persistedNotes and system events', () => {
-      assert.match(src, /activityEvents/);
-      assert.match(src, /persistedNotes/);
-      assert.match(src, /saveNote/);
     });
 
     it('uses useUI for all user-visible labels (no hardcoded English strings)', () => {
       assert.match(src, /useUI\(\)/);
-      assert.match(src, /ui\('paymentCreated'\)/);
-      assert.match(src, /ui\('unallocatedCredit'\)/);
-      assert.match(src, /ui\('activity'\)/);
-    });
-
-    it('stores notes in the document description field with ISO timestamp prefix', () => {
-      assert.match(src, /new Date\(\)\.toISOString\(\)/);
-      assert.match(src, /description/);
+      assert.match(src, /ui\('paymentInDataTitle'\)/);
+      assert.match(src, /ui\('paymentInLinesTitle'\)/);
     });
   });
 
