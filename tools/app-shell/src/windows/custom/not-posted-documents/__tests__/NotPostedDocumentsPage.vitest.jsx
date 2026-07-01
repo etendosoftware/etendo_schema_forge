@@ -457,6 +457,28 @@ describe('NotPostedDocumentsPage', () => {
     expect(toast.error).toHaveBeenCalledWith('Accounting period closed');
   });
 
+  // ── postRow: ambiguous/unparseable body must not be treated as success ─────
+  it('shows error toast when postRow gets a 200 with an unparseable body (e.g. proxy error page)', async () => {
+    globalThis.fetch = mkFetch(ROWS);
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
+
+    globalThis.fetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        statusText: 'OK',
+        json: async () => { throw new SyntaxError('Unexpected token <'); },
+      }),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
+    });
+
+    expect(toast.error).toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
   // ── postRow: network error ────────────────────────────────────────────────
   it('shows error toast when postRow fetch throws', async () => {
     globalThis.fetch = mkFetch(ROWS);

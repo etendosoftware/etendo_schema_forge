@@ -179,12 +179,12 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         }
       );
       const json = await res.json().catch(() => null);
-      if (res.ok && json?.success !== false) {
+      if (res.ok && json?.success === true) {
         toast.success(`${row.description ?? row.documentId} — ${ui('documentPosted')}`);
         fetchRows({ document, accountingStatuses, dateFrom, dateTo });
         setSelected(p => { const n = new Set(p); n.delete(row.documentId); return n; });
       } else {
-        toast.error(json?.message || ui('postingFailed'));
+        toast.error(json?.message || res.statusText || ui('postingFailed'));
       }
     } catch (e) {
       toast.error(ui('postingFailed'));
