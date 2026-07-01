@@ -109,7 +109,7 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       // gate must read balance.funds, not balance.amount (ETP-4331 bug fix).
       assert.match(
         src,
-        /const missingRequired = !\(balance\.funds > 0\) \|\| !date \|\| !methodId \|\| !accountId;/,
+        /const missingRequired = balance\.funds <= 0 \|\| !date \|\| !methodId \|\| !accountId;/,
       );
     });
 
