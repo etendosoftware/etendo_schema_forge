@@ -3233,7 +3233,7 @@ export function DetailView({
                         }
                       }}
                       data-testid="Button__fa3275">
-                      {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" />}
+                      {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
                       {tMenu(p.label)}
                     </Button>
                   );

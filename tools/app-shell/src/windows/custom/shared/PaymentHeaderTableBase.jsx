@@ -303,18 +303,16 @@ function PaymentSidebar({ dir, data, ui }) {
           </span>
         </div>
       </div>
-
       {/* Hero importe */}
       <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', padding: '0 12px', gap: 8, alignSelf: 'stretch', height: 32 }}>
         {data === null ? (
-          <SidebarSkeleton />
+          <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         ) : (
           <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 30, lineHeight: '32px', color: heroColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
             {heroSign} {fmtAmt(thisMonth, currency)}
           </span>
         )}
       </div>
-
       {/* Widgets */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: 12, gap: 12, alignSelf: 'stretch' }}>
         <WidgetCard
@@ -324,7 +322,7 @@ function PaymentSidebar({ dir, data, ui }) {
           badgeStyle={{ background: '#FFF9EB', color: '#8A6100' }}
           count={data === null ? '—' : fmtAmt(pending, currency)}
           countStyle={{ color: '#C28800' }}
-        />
+          data-testid="WidgetCard__743b1b" />
         <WidgetCard
           iconSlot={IC_WARNING}
           label={ui('sinConfirmar')}
@@ -332,9 +330,8 @@ function PaymentSidebar({ dir, data, ui }) {
           badgeStyle={{ background: '#F5F7F9', color: '#3F3F50' }}
           count={data === null ? '—' : draftCount}
           countStyle={{ color: '#121217' }}
-        />
+          data-testid="WidgetCard__743b1b" />
       </div>
-
       {/* Desglose por método de pago */}
       {methods.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0 12px 12px', gap: 10, alignSelf: 'stretch' }}>

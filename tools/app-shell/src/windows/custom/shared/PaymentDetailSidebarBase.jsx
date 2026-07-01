@@ -121,7 +121,6 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           {ui(titleKey)}
         </h2>
       </div>
-
       {/* Datos: amount, padding 4px 12px 8px */}
       <div style={{ padding: '4px 12px 8px' }}>
         {(() => {
@@ -136,7 +135,6 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
           );
         })()}
       </div>
-
       {/* Breakdown outer: padding 12px, gap 10px */}
       <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* Detalle moneda card: padding 12px, gap 12px — Info sub-section has gap 8px */}
@@ -146,22 +144,21 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
             <BreakdownRow
               label={ui('totalAmount')}
               value={fmtAmt(totalAmount)}
-            />
-            <Separator />
+              data-testid="BreakdownRow__624cef" />
+            <Separator data-testid="Separator__624cef" />
             <BreakdownRow
               label={ui('appliedToInvoices')}
               value={lines === null ? '...' : fmtAmt(applied)}
-            />
-            <Separator />
+              data-testid="BreakdownRow__624cef" />
+            <Separator data-testid="Separator__624cef" />
             <BreakdownRow
               label={ui('unallocated')}
               value={lines === null ? '...' : fmtAmt(unapplied)}
               muted={unapplied === 0}
-            />
+              data-testid="BreakdownRow__624cef" />
           </div>
         </div>
       </div>
-
       {/* Actividad: padding 8px 12px 0, column gap 10px */}
       <div style={{ padding: '8px 12px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* Title with 4px bottom padding */}
