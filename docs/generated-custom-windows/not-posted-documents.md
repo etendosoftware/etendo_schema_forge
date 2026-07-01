@@ -57,39 +57,46 @@ SELECT 'FIN_Finacc_Transaction', posted, count(*) FROM fin_finacc_transaction GR
 ORDER BY 1, 2;
 ```
 
-### How to enable or disable a document type
+### How the dynamic filter works
 
-**In `NotPostedDocumentsHandler.java`** (the only file you need to edit):
+`refListDocumentTypes()` runs this query at request time and compares each code's backing table:
 
-```java
-// File: modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/NotPostedDocumentsHandler.java
-
-static final Set<String> ENABLED_DOCUMENT_TYPE_CODES = new LinkedHashSet<>(Arrays.asList(
-    "A",    // Amortization             → A_Amortization
-    "BMP",  // Bill of Mat. Production  → M_Production
-    // ... add or remove codes here
-));
+```sql
+SELECT DISTINCT ad_table_id FROM c_acctschema_table WHERE isactive = 'Y'
 ```
 
-**Before enabling a new code, verify:**
-1. The code appears in `AD_Ref_List` for reference `DE94535164E741AB9B1A560EF3F72854`
-2. Its backing table exists in `c_acctschema_table` with `isactive = 'Y'`:
-   ```sql
-   SELECT ast.isactive, count(*)
-   FROM c_acctschema_table ast
-   JOIN ad_table t ON ast.ad_table_id = t.ad_table_id
-   WHERE t.tablename = 'YOUR_TABLE_NAME'
-   GROUP BY ast.isactive;
-   ```
-3. Documents of that type have records with `posted` values other than `'D'`:
-   ```sql
-   SELECT posted, count(*) FROM your_table GROUP BY posted;
-   ```
-4. Add the table → `AD_Table_ID` mapping to `DOCUMENT_TYPE_TO_TABLE_ID` if not already present (needed for the post action to resolve the correct table).
+A document type is shown if and only if:
+1. Its code is in `DOCUMENT_TYPE_CODE_TO_TABLE_ID` (the static code → `AD_Table_ID` map in the handler)
+2. That `AD_Table_ID` is returned by the query above
+3. Its code is NOT in `APRM_DISABLED_TYPES`
 
-**To enable `DD` (Doubtful Debt) or `CA` (Cost Adjustment)** when those modules go live: simply add `"DD"` or `"CA"` to the set — no other change needed.
+**Consequence:** any new Etendo module that registers its document table in `c_acctschema_table` with `isactive = 'Y'` will automatically appear in the dropdown — no code change needed.
 
-**To re-enable payments (PIN/POT)** if APRM accounting is ever reconfigured: add `"PIN"` and `"POT"` back. You will also need to verify that `FIN_Payment` records are no longer initialized with `posted = 'D'`.
+### How to enable a new document type
+
+**Case A — new module adds a new table:**
+1. The module inserts a row into `c_acctschema_table` with `isactive = 'Y'` for the new table.
+2. Add the code → `AD_Table_ID` entry to `DOCUMENT_TYPE_CODE_TO_TABLE_ID` in the handler. That's the only code change needed.
+3. If the code is also new in `AD_Ref_List` (reference `DE94535164E741AB9B1A560EF3F72854`), `NoPostedDocumentDS` must handle that document type in its `searchStrategies` too — that's inside the `bulk.posting` JAR and out of scope here.
+
+**Case B — existing excluded code (DD, CA) has its module activated:**
+Add its `AD_Table_ID` entry to `DOCUMENT_TYPE_CODE_TO_TABLE_ID` if missing. Since DD and CA already have `c_acctschema_table` rows with `isactive = 'Y'`, they will appear automatically — no further change needed.
+
+**Case C — APRM type (BS/PIN/POT/R) is re-enabled:**
+Remove its code from `APRM_DISABLED_TYPES`. Also verify that new documents of that type are no longer initialized with `posted = 'D'`.
+
+### How to disable a document type
+
+Remove its code from `DOCUMENT_TYPE_CODE_TO_TABLE_ID`, or add it to `APRM_DISABLED_TYPES` (if it should be permanently suppressed regardless of accounting schema state).
+
+To verify accounting schema state at any time:
+```sql
+SELECT t.tablename, count(*) FILTER (WHERE ast.isactive = 'Y') as active_schemas
+FROM c_acctschema_table ast
+JOIN ad_table t ON ast.ad_table_id = t.ad_table_id
+GROUP BY t.tablename
+ORDER BY t.tablename;
+```
 
 ---
 
