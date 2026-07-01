@@ -39,6 +39,10 @@ export function MoneyAmount({ value, currency = 'EUR', tone = 'auto', compact = 
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
     notation: compact ? 'compact' : 'standard',
+    // Explicit: the 'auto' default silently drops thousand separators for
+    // style:'currency' in some Intl implementations (e.g. Node's V8), so
+    // amounts over 999 render as "2345,00 €" instead of "2.345,00 €".
+    useGrouping: true,
   }).format(absValue);
 
   let prefix = '';

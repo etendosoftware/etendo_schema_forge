@@ -307,13 +307,27 @@ describe('PurchaseInvoiceHeaderTable', () => {
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
   });
 
-  it('calls onRefresh when payment is added and modal closes', () => {
-    const onRefresh = vi.fn();
-    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} onRefresh={onRefresh} />);
+  it('calls onDataMutated (ListView refresh contract) when payment is added and modal closes', () => {
+    const onDataMutated = vi.fn();
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} onDataMutated={onDataMutated} />);
     const outstandingCol = screen.getByTestId('col-render-outstandingAmount');
     fireEvent.click(outstandingCol.querySelector('button'));
     fireEvent.click(screen.getByText('Payment added'));
-    expect(onRefresh).toHaveBeenCalled();
+    expect(onDataMutated).toHaveBeenCalled();
+  });
+
+  it('does not blow up when only the stale onRefresh prop is passed (regression guard for ETP-4331)', () => {
+    // ListView never passes `onRefresh` — only `onDataMutated`. This test locks in
+    // that passing the old (bugged) prop name has no effect on the callback path,
+    // guarding against silently reintroducing the stale-list bug.
+    const onRefresh = vi.fn();
+    const onDataMutated = vi.fn();
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} onRefresh={onRefresh} onDataMutated={onDataMutated} />);
+    const outstandingCol = screen.getByTestId('col-render-outstandingAmount');
+    fireEvent.click(outstandingCol.querySelector('button'));
+    fireEvent.click(screen.getByText('Payment added'));
+    expect(onRefresh).not.toHaveBeenCalled();
+    expect(onDataMutated).toHaveBeenCalled();
   });
 });
 

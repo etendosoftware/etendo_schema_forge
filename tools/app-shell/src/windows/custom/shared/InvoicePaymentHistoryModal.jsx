@@ -3,27 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { MoneyAmount } from '@/components/ui/money-amount';
 import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
-
-function addThousandDots(s) {
-  let out = '';
-  for (let i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 === 0) out += '.';
-    out += s[i];
-  }
-  return out;
-}
-
-/** Short currency suffix: "€" for EUR (or unknown), otherwise the ISO code. */
-function curSuffix(curr) {
-  return !curr || curr === 'EUR' ? '€' : curr;
-}
-
-function fmt(val, curr) {
-  const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
-  const abs = Math.abs(n).toFixed(2).split('.');
-  return (n < 0 ? '-' : '') + addThousandDots(abs[0]) + ',' + abs[1] + ' ' + curSuffix(curr);
-}
 
 function fmtDate(raw) {
   if (!raw) return '—';
@@ -145,12 +126,18 @@ export default function InvoicePaymentHistoryModal({
 
   const currency = invoiceData?.['currency$_identifier'] || 'EUR';
   const grandTotal = parseFloat(invoiceData?.grandTotalAmount ?? 0);
-  const outstandingAmt = parseFloat(invoiceData?.outstandingAmount ?? 0);
   const bpName = invoiceData?.['businessPartner$_identifier'] || invoiceData?.businessPartner || '';
   const docNo = invoiceData?.documentNo || '';
   const isCompleted = invoiceData?.documentStatus === 'CO';
 
   const [payments, setPayments] = useState([]);
+  // Payment plan installments — the source of truth for the outstanding amount once
+  // loaded, since `invoiceData.outstandingAmount` is a snapshot from when the modal
+  // opened and never updates after a payment is registered in this same session.
+  const [installments, setInstallments] = useState([]);
+  const outstandingAmt = installments.length > 0
+    ? installments.reduce((s, i) => s + Math.max(0, Number(i.outstandingAmount ?? 0)), 0)
+    : parseFloat(invoiceData?.outstandingAmount ?? 0);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   // Track whether a payment was added so we notify the parent on close
@@ -159,11 +146,13 @@ export default function InvoicePaymentHistoryModal({
   const fetchData = useCallback(async () => {
     if (!invoiceId || !base) { setLoading(false); return; }
     try {
-      const res = await apiFetch(
-        `/${specName}/header/${invoiceId}/action/invoicePayments`,
-        { method: 'POST', body: '{}' },
-      );
-      if (res.ok) setPayments((await res.json())?.response?.data || []);
+      const [paymentsRes, planRes] = await Promise.all([
+        apiFetch(`/${specName}/header/${invoiceId}/action/invoicePayments`,
+          { method: 'POST', body: '{}' }),
+        apiFetch(`/${specName}/paymentPlan?parentId=${invoiceId}&_startRow=0&_endRow=50`),
+      ]);
+      if (paymentsRes.ok) setPayments((await paymentsRes.json())?.response?.data || []);
+      if (planRes.ok) setInstallments((await planRes.json())?.response?.data || []);
     } catch { /* silent */ }
     finally { setLoading(false); }
   }, [apiFetch, base, invoiceId, specName]);
@@ -261,7 +250,7 @@ export default function InvoicePaymentHistoryModal({
                     data-testid="PaymentStateTag__b82d4f" />
                 </div>
                 <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, color: isSales ? '#17663A' : '#C5234A', whiteSpace: 'nowrap' }}>
-                  {amtSign}{fmt(p.amount, currency)}
+                  {amtSign}<MoneyAmount value={p.amount} currency={currency} tone="neutral" className={isSales ? 'text-[#17663A]' : 'text-[#C5234A]'} data-testid="MoneyAmount__cp-history-row" />
                 </div>
               </div>
             );
@@ -285,19 +274,19 @@ export default function InvoicePaymentHistoryModal({
         data-testid="InvoicePaymentHistoryModal__panel"
       >
         {/* Header */}
-        <div style={{ padding: '16px 20px 12px', display: 'flex', flexDirection: 'column', gap: 6, position: 'relative', flexShrink: 0 }}>
+        <div style={{ padding: '16px 20px 12px', display: 'flex', alignItems: 'center', gap: 10, position: 'relative', flexShrink: 0 }}>
           <button
             type="button"
             onClick={handleClose}
             aria-label={ui('close')}
             data-testid="InvoicePaymentHistoryModal__close"
-            style={{ position: 'absolute', top: 12, right: 12, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 360, border: 'none', background: 'none', cursor: 'pointer', color: '#828FA3', fontSize: 20, lineHeight: 1 }}
+            style={{ position: 'absolute', top: 12, right: 12, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 360, border: 'none', outline: 'none', background: 'none', cursor: 'pointer', color: '#828FA3', fontSize: 20, lineHeight: 1 }}
           >
             &times;
           </button>
           <div style={{ fontSize: 20, lineHeight: '28px', fontWeight: 600, color: '#121217' }}>{title}</div>
           {docNo && (
-            <span style={{ alignSelf: 'flex-start', fontSize: 12, lineHeight: '16px', color: '#3F3F50', background: '#F5F7F9', borderRadius: 8, padding: '4px 8px' }}>
+            <span style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50', background: '#F5F7F9', borderRadius: 8, padding: '4px 8px', flexShrink: 0 }}>
               {docNo}
             </span>
           )}
@@ -312,11 +301,20 @@ export default function InvoicePaymentHistoryModal({
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50' }}>{ui('importeTotal')}</div>
-              <div className="tabular-nums" style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500, color: '#121217' }}>{fmt(grandTotal, currency)}</div>
+              <div className="tabular-nums" style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500 }}>
+                <MoneyAmount value={grandTotal} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-history-total" />
+              </div>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, lineHeight: '16px', color: '#3F3F50' }}>{ui('saldoPendiente')}</div>
-              <div className="tabular-nums" style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500, color: outstandingAmt > 0 ? '#C28800' : '#17663A' }}>{fmt(outstandingAmt, currency)}</div>
+              <div className="tabular-nums" style={{ fontSize: 16, lineHeight: '24px', fontWeight: 500 }}>
+                <MoneyAmount
+                  value={outstandingAmt}
+                  currency={currency}
+                  tone="neutral"
+                  className={outstandingAmt > 0 ? 'text-[#C28800]' : 'text-[#17663A]'}
+                  data-testid="MoneyAmount__cp-history-pending" />
+              </div>
             </div>
           </div>
         </div>
@@ -337,7 +335,7 @@ export default function InvoicePaymentHistoryModal({
               type="button"
               onClick={handleClose}
               data-testid="InvoicePaymentHistoryModal__cerrar-btn"
-              style={{ fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 12px', borderRadius: 360, border: 'none', background: 'none', color: '#121217', cursor: 'pointer' }}
+              style={{ fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'none', color: '#121217', cursor: 'pointer' }}
             >
               {ui('cancel')}
             </button>
@@ -346,7 +344,8 @@ export default function InvoicePaymentHistoryModal({
                 type="button"
                 onClick={() => setShowPaymentModal(true)}
                 data-testid="InvoicePaymentHistoryModal__add-btn"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', background: '#121217', color: '#fff', cursor: 'pointer' }}
+                className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217] transition-colors"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '24px', fontWeight: 500, padding: '8px 14px', borderRadius: 360, border: 'none', outline: 'none', cursor: 'pointer' }}
               >
                 <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
                 {isSales ? ui('addCobro') : ui('addPago')}

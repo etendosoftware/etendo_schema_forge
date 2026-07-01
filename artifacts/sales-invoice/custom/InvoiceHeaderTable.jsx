@@ -185,7 +185,7 @@ export default function InvoiceHeaderTable(props) {
           specName="sales-invoice"
           apiBaseUrl={apiBaseUrl}
           onClose={() => setPaymentRow(null)}
-          onPaymentAdded={() => { setPaymentRow(null); props.onRefresh?.(); }}
+          onPaymentAdded={() => { setPaymentRow(null); props.onDataMutated?.(); }}
         />
       )}
     </>

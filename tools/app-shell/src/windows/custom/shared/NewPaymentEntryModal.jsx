@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DateField } from '@/components/ui/date-field';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
+import { MoneyAmount } from '@/components/ui/money-amount';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import { usePaymentBalance, formatPlain } from './usePaymentBalance.js';
@@ -18,16 +19,21 @@ const GREEN_BG = '#EEFBF4';
 const RED_FG = '#C5234A';
 const RED_BG = '#FDE2E9';
 const AMBER = '#C28800';
-const PURPLE = '#7047EB';
-const BLUE_BG = '#F0FAFF';
-const BLUE_BORDER = '#ADE4FF';
-const BLUE_FG = '#0075AD';
+const EXCESS_BG = '#F5F7F9';
+const EXCESS_BORDER = '#D1D4DB';
+const EXCESS_FG = '#3F3F50';
 
 // Per-source-kind row accents. credit → purple, abono (saldo a favor) → green.
 const BADGE = {
   credit: { bg: '#F4F1FD', fg: '#4316CA' },
   abono: { bg: GREEN_BG, fg: GREEN_FG },
 };
+
+// Stable field descriptors for the CreatableSearchSelect pickers below — these
+// use `staticOptions` (methods/accounts are already fetched in state), so no
+// selectorUrl/token/dependsOn is needed; `key`/`id` only drive element ids/testids.
+const METHOD_FIELD = { key: 'paymentMethod', id: 'paymentMethod', required: false };
+const ACCOUNT_FIELD = { key: 'account', id: 'account', required: true };
 
 /** Returns a short currency suffix ("€" for EUR, otherwise the ISO code). */
 function curSuffix(currency) {
@@ -56,10 +62,19 @@ async function readJson(res) {
   return res?.ok ? res.json() : null;
 }
 
+// `paymentMethodIds` is only present once the backend module has been rebuilt with
+// the per-account method list; `undefined` (older backend) means "unknown — don't
+// filter this account out" so existing deployments degrade gracefully.
 function mapAccounts(json) {
   return (json?.items || []).map(a => ({
     id: a.id, name: a.label || a.name, defaultMethod: a.defaultPaymentMethod,
+    paymentMethodIds: a.paymentMethodIds, defaultForMethodIds: a.defaultForMethodIds || [],
   }));
+}
+
+/** True when `account` supports `methodId` (or the account's methods are unknown/legacy). */
+function accountSupportsMethod(account, methodId) {
+  return !methodId || !account.paymentMethodIds || account.paymentMethodIds.includes(methodId);
 }
 
 function mapMethods(json) {
@@ -81,6 +96,38 @@ function pickMethodId(accList, methList) {
   const def = accList[0]?.defaultMethod;
   const match = def ? methList.find(m => m.name === def) : null;
   return (match || methList[0])?.id || '';
+}
+
+/** Default method id: the invoice's own method (if valid), else the legacy per-account heuristic. */
+function pickDefaultMethodId(accJson, accList, methList) {
+  const invoiceMethodId = accJson?.defaultMethodId;
+  if (invoiceMethodId && methList.some(m => m.id === invoiceMethodId)) return invoiceMethodId;
+  return pickMethodId(accList, methList);
+}
+
+/**
+ * Default account for the given method, mirroring Classic's priority order:
+ *   1. the business partner's preferred account (`account`/`pOFinancialAccount`), if it
+ *      supports the method;
+ *   2. the account flagged `default` for that method (`FinAccPaymentMethod.default`);
+ *   3. the first account that supports the method (legacy heuristic fallback);
+ * "Default for this method" is meaningless without a method — with no `methodId`, there is
+ * nothing to default to, so an empty method never auto-fills the account (e.g. clearing the
+ * method after clearing the account must leave the account cleared, not silently refill it).
+ */
+function pickDefaultAccountId(accList, methodId, bpPreferredAccountId) {
+  if (!methodId) return '';
+
+  const bpAccount = bpPreferredAccountId
+    ? accList.find(a => a.id === bpPreferredAccountId && accountSupportsMethod(a, methodId))
+    : null;
+  if (bpAccount) return bpAccount.id;
+
+  const flaggedDefault = accList.find(a => a.defaultForMethodIds?.includes(methodId));
+  if (flaggedDefault) return flaggedDefault.id;
+
+  const firstSupporting = accList.find(a => accountSupportsMethod(a, methodId));
+  return firstSupporting?.id || '';
 }
 
 /** Resolves the first pending installment's schedule id from the payment plan. */
@@ -129,10 +176,12 @@ function Radio({ checked }) {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, required = false, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-      <label style={{ font: '500 14px/24px Inter', color: INK }}>{label}</label>
+      <label style={{ font: '500 14px/24px Inter', color: INK }}>
+        {label}{required && <span style={{ color: RED_FG }}> *</span>}
+      </label>
       {children}
     </div>
   );
@@ -149,35 +198,37 @@ function WidgetCell({ label, children, valueColor = INK, valueWeight = 500 }) {
 }
 
 // ─── consumable credit/abono row ──────────────────────────────────────────────
-function CreditRow({ l, currency, ui, onToggle, onStep, step }) {
+const ROW_HEIGHT = 44;
+
+function CreditRow({ l, currency, ui, onToggle, onUseChange, onUseBlur }) {
   const badge = BADGE[l.kind] || BADGE.credit;
   const tagLabel = l.kind === 'credit' ? ui('cpCreditBadge') : ui('cpFavorBadge');
   return (
     <div
       onClick={onToggle}
       data-testid={`cp-credit-row-${l.id}`}
-      style={{ display: 'grid', gridTemplateColumns: '32px 1fr 150px 210px', gap: 12, alignItems: 'center', padding: '8px 12px', borderTop: `1px solid ${BORDER1}`, background: l.sel ? WIDGET_BG : 'transparent', cursor: 'pointer' }}
+      style={{ display: 'grid', gridTemplateColumns: '32px 1fr 130px 160px', gap: 12, alignItems: 'center', height: ROW_HEIGHT, padding: '0 12px', borderTop: `1px solid ${BORDER1}`, background: l.sel ? badge.bg : 'transparent', cursor: 'pointer' }}
     >
       <Check checked={l.sel} data-testid="Check__7727b3" />
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ font: '600 14px/20px "JetBrains Mono", monospace', color: INK }}>{l.doc}</span>
-          <span style={{ font: '400 12px/16px Inter', padding: '4px 8px', borderRadius: 360, background: badge.bg, color: badge.fg }}>{tagLabel}</span>
-        </div>
-        <div style={{ font: '500 12px/16px Inter', color: FG3, marginTop: 1 }}>{l.date}{l.note ? ` · ${l.note}` : ''}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' }}>
+        <span style={{ font: '600 14px/20px "JetBrains Mono", monospace', color: INK, flexShrink: 0 }}>{l.doc}</span>
+        <span style={{ font: '400 12px/16px Inter', padding: '4px 8px', borderRadius: 360, background: badge.bg, color: badge.fg, flexShrink: 0 }}>{tagLabel}</span>
+        <span style={{ font: '400 12px/16px Inter', color: FG3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.date}</span>
       </div>
       <div style={{ textAlign: 'right', font: '400 14px/20px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>
-        {ui('cpAvailShort')} {fmtCur(l.avail, currency)}
+        {ui('cpAvailShort')} <MoneyAmount value={l.avail} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-avail" />
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
         {l.sel ? (
-          <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', flex: 1, padding: '0 8px', gap: 4 }}>
-              <span style={{ font: '400 14px/24px Inter', color: INK }}>{curSuffix(currency)}</span>
-              <span style={{ flex: 1, textAlign: 'right', font: '500 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>{formatPlain(l.use)}</span>
-            </div>
-            <button type="button" onClick={() => onStep(-step)} style={{ width: 40, height: 38, borderLeft: `1px solid ${BORDER1}`, background: '#fff', cursor: 'pointer', color: FG4, font: '600 16px/1 Inter' }}>−</button>
-            <button type="button" onClick={() => onStep(step)} style={{ width: 40, height: 38, borderLeft: `1px solid ${BORDER1}`, background: '#fff', cursor: 'pointer', color: FG4, font: '600 16px/1 Inter' }}>+</button>
+          <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', padding: '0 12px', gap: 4, minWidth: 0 }}>
+            <input
+              type="text" inputMode="decimal" value={l.useStr}
+              onChange={e => onUseChange(e.target.value)}
+              onBlur={onUseBlur}
+              data-testid={`cp-credit-use-${l.id}`}
+              style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+            />
+            <span style={{ font: '400 14px/24px Inter', color: FG3, flexShrink: 0 }}>{curSuffix(currency)}</span>
           </div>
         ) : <span style={{ font: '400 14px/20px Inter', color: FG3 }}>{ui('cpUnused')}</span>}
       </div>
@@ -195,7 +246,11 @@ function CreditSection({ rows, currency, ui, balance }) {
         <span style={{ font: '600 12px/16px Inter', color: INK }}>{ui('cpCreditSectionTitle')}</span>
         <span style={{ font: '400 12px/16px Inter', color: FG3 }}>· {ui('cpCreditSectionHint')}</span>
         <div style={{ flex: 1 }} />
-        {used > 0 && <span style={{ font: '600 12px/16px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>− {fmtCur(used, currency)}</span>}
+        {used > 0 && (
+          <span style={{ font: '600 12px/16px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>
+            − <MoneyAmount value={used} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-used" />
+          </span>
+        )}
       </div>
       {rows.map(l => (
         <CreditRow
@@ -203,9 +258,9 @@ function CreditSection({ rows, currency, ui, balance }) {
           l={l}
           currency={currency}
           ui={ui}
-          step={balance.STEP}
           onToggle={() => balance.toggleLine(l.id)}
-          onStep={(d) => balance.stepLine(l.id, d)}
+          onUseChange={(str) => balance.onLineUseChange(l.id, str)}
+          onUseBlur={() => balance.onLineUseBlur(l.id)}
           data-testid="CreditRow__7727b3" />
       ))}
     </div>
@@ -230,7 +285,7 @@ function ExcessBand({ balance, currency, ui, isReceipt }) {
       type="button"
       data-testid={testid}
       onClick={() => balance.setExcessMode(mode)}
-      style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 12, border: `${balance.excessMode === mode ? 2 : 1}px solid ${balance.excessMode === mode ? INK : BORDER1}`, background: '#fff', cursor: 'pointer', textAlign: 'left', boxShadow: balance.excessMode === mode ? '0 10px 15px -3px rgba(18,18,23,.08), 0 4px 6px -2px rgba(18,18,23,.05)' : '0 1px 2px rgba(18,18,23,.05)' }}
+      style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 12, border: `${balance.excessMode === mode ? 2 : 1}px solid ${balance.excessMode === mode ? INK : BORDER1}`, outline: 'none', background: '#fff', cursor: 'pointer', textAlign: 'left', boxShadow: balance.excessMode === mode ? '0 10px 15px -3px rgba(18,18,23,.08), 0 4px 6px -2px rgba(18,18,23,.05)' : '0 1px 2px rgba(18,18,23,.05)' }}
     >
       <div style={{ flex: 1 }}>
         <div style={{ font: '500 14px/20px Inter', color: INK }}>{title}</div>
@@ -240,10 +295,10 @@ function ExcessBand({ balance, currency, ui, isReceipt }) {
     </button>
   );
   return (
-    <div style={{ padding: 12, background: BLUE_BG, border: `1px solid ${BLUE_BORDER}`, borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div style={{ padding: 12, background: EXCESS_BG, border: `1px solid ${EXCESS_BORDER}`, borderRadius: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BLUE_FG} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
-        <span style={{ font: '500 14px/20px Inter', color: BLUE_FG }}>{ui('cpExcessQuestion', { amount })}</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={EXCESS_FG} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+        <span style={{ font: '500 14px/20px Inter', color: EXCESS_FG }}>{ui('cpExcessQuestion', { amount })}</span>
       </div>
       <div style={{ display: 'flex', gap: 16 }}>
         {card('credit', ui('cpLeaveCredit'), ui('cpLeaveCreditHint', { amount }), 'cp-excess-credit')}
@@ -301,6 +356,9 @@ export default function NewPaymentEntryModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [dateInvalid, setDateInvalid] = useState(false);
+  // Business partner's preferred account for this direction (Classic parity) — set once
+  // from the fetch response; read via ref so it doesn't need to be threaded into deps.
+  const bpPreferredAccountIdRef = useRef('');
 
   const balance = usePaymentBalance({ total, dir, sources });
 
@@ -316,13 +374,16 @@ export default function NewPaymentEntryModal({
         ]);
         if (cancelled) return;
 
-        const accList = mapAccounts(await readJson(accRes));
+        const accJson = await readJson(accRes);
+        const accList = mapAccounts(accJson);
         const methList = mapMethods(await readJson(methRes));
         setAccounts(accList);
         setMethods(methList);
         setSources(mapSources(await readJson(srcRes)));
-        if (accList.length) setAccountId(accList[0].id);
-        setMethodId(pickMethodId(accList, methList));
+        bpPreferredAccountIdRef.current = accJson?.bpPreferredAccountId || '';
+        const defaultMethodId = pickDefaultMethodId(accJson, accList, methList);
+        setMethodId(defaultMethodId);
+        setAccountId(pickDefaultAccountId(accList, defaultMethodId, bpPreferredAccountIdRef.current));
 
         if (!scheduleIdProp) {
           const sched = await fetchPendingSchedule(apiFetch, specName, invoiceId);
@@ -337,6 +398,21 @@ export default function NewPaymentEntryModal({
     // render and loop. Re-fetch only when the target invoice changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [specName, invoiceId]);
+
+  // ── account/method dependency: only accounts that support the selected method ──
+  const filteredAccounts = useMemo(
+    () => accounts.filter(a => accountSupportsMethod(a, methodId)),
+    [accounts, methodId],
+  );
+
+  const onMethodChange = useCallback((id) => {
+    setMethodId(id);
+    setAccountId(prevAccountId => {
+      const account = accounts.find(a => a.id === prevAccountId);
+      const stillValid = account && accountSupportsMethod(account, id);
+      return stillValid ? prevAccountId : pickDefaultAccountId(accounts, id, bpPreferredAccountIdRef.current);
+    });
+  }, [accounts]);
 
   // ── save / confirm ────────────────────────────────────────────────────────
   const submit = useCallback(async (process) => {
@@ -374,8 +450,10 @@ export default function NewPaymentEntryModal({
 
   const title = isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
   const deltaLabel = deltaLabelFor(balance, ui);
-  const deltaColor = balance.isPartial ? RED_FG : GREEN_FG;
-  const confirmDisabled = saving || !date || !balance.canConfirm;
+  // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm.
+  const missingRequired = !(balance.amount > 0) || !date || !methodId || !accountId;
+  const saveDisabled = saving || loading || missingRequired;
+  const confirmDisabled = saving || missingRequired || !balance.canConfirm;
 
   // Floppy + check icons for the footer actions (Figma).
   const floppy = (
@@ -388,7 +466,7 @@ export default function NewPaymentEntryModal({
       onClick={onClose}
     >
       <div
-        style={{ width: 861, maxWidth: '100%', maxHeight: '100%', background: '#fff', borderRadius: 8, boxShadow: '0 0 0 1px rgba(18,18,23,.1), 0 24px 48px rgba(18,18,23,.03), 0 10px 18px rgba(18,18,23,.03), 0 5px 8px rgba(18,18,23,.04), 0 2px 4px rgba(18,18,23,.04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
+        style={{ width: 940, maxWidth: '100%', maxHeight: '100%', background: '#fff', borderRadius: 8, boxShadow: '0 0 0 1px rgba(18,18,23,.1), 0 24px 48px rgba(18,18,23,.03), 0 10px 18px rgba(18,18,23,.03), 0 5px 8px rgba(18,18,23,.04), 0 2px 4px rgba(18,18,23,.04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
         data-testid="cp-new-payment-modal"
         onClick={e => e.stopPropagation()}
       >
@@ -398,7 +476,7 @@ export default function NewPaymentEntryModal({
         </div>
         <button
           type="button" onClick={onClose} aria-label={ui('close')} data-testid="cp-cancel"
-          style={{ position: 'absolute', top: 6, right: 8, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 360, color: FG4, cursor: 'pointer', background: 'none', border: 'none', fontSize: 20, lineHeight: 1, zIndex: 1 }}
+          style={{ position: 'absolute', top: 6, right: 8, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 360, color: FG4, cursor: 'pointer', background: 'none', border: 'none', outline: 'none', fontSize: 20, lineHeight: 1, zIndex: 1 }}
         >×</button>
 
         {/* body */}
@@ -415,49 +493,54 @@ export default function NewPaymentEntryModal({
                 <span style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('statusColumn')}</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', width: 'fit-content', font: '400 12px/16px Inter', padding: '4px 8px', borderRadius: 360, background: WIDGET_BG, color: FG2, marginTop: 2 }}>{ui('cpStatusDraft')}</span>
               </div>
-              <WidgetCell label={ui('cpPendingPrefix')} valueColor={AMBER} data-testid="WidgetCell__pending">{fmtCur(total, currency)}</WidgetCell>
+              <WidgetCell label={ui('cpPendingPrefix')} valueColor={AMBER} data-testid="WidgetCell__pending">
+                <MoneyAmount value={total} currency={currency} tone="neutral" className="text-[#C28800]" data-testid="MoneyAmount__cp-pending" />
+              </WidgetCell>
             </div>
           </div>
 
           {/* 4 compact fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 20, padding: '0 20px' }}>
-            <Field label={ui('cpAmount')} data-testid="Field__7727b3">
-              <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', overflow: 'hidden', minWidth: 0 }}>
-                <span style={{ display: 'flex', alignItems: 'center', height: '100%', padding: '0 12px', borderRight: `1px solid ${BORDER1}`, font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(currency)}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 0.85fr 1.15fr 1.15fr', gap: 20, padding: '0 20px' }}>
+            <Field label={ui('cpAmount')} required data-testid="Field__7727b3">
+              <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                 <input
                   type="text" inputMode="decimal" value={balance.amountStr}
                   onChange={e => balance.onAmountChange(e.target.value)}
                   onBlur={balance.onAmountBlur}
                   data-testid="cp-amount-input"
-                  style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'left', padding: '0 12px', font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                  style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
                 />
+                <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(currency)}</span>
               </div>
             </Field>
-            <Field label={ui('date')} data-testid="Field__7727b3">
+            <Field label={ui('date')} required data-testid="Field__7727b3">
               <DateField
                 value={date}
                 onChange={(v) => { setDate(v); if (dateInvalid) setDateInvalid(false); }}
                 className={dateInvalid ? 'border-red-500 focus-within:ring-red-500' : ''}
                 data-testid="DateField__7727b3" />
             </Field>
-            <Field label={ui('cpPaymentMethod')} data-testid="Field__7727b3">
-              <Select value={methodId} onValueChange={setMethodId} data-testid="Select__7727b3">
-                <SelectTrigger style={{ height: 40, fontSize: 14 }} data-testid="SelectTrigger__7727b3"><SelectValue placeholder={ui('cpSelectMethod')} data-testid="SelectValue__7727b3" /></SelectTrigger>
-                <SelectContent style={{ zIndex: 70 }} data-testid="SelectContent__7727b3">
-                  {methods.map(m => <SelectItem key={m.id} value={m.id} data-testid="SelectItem__7727b3">{m.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <Field label={ui('cpPaymentMethod')} required data-testid="Field__7727b3">
+              <CreatableSearchSelect
+                key={loading ? 'method-loading' : 'method-loaded'}
+                field={METHOD_FIELD}
+                value={methodId}
+                displayValue={methods.find(m => m.id === methodId)?.name || ''}
+                onChange={onMethodChange}
+                resolvedLabel={ui('cpPaymentMethod')}
+                staticOptions={methods}
+                data-testid="cp-method-select" />
             </Field>
-            <Field label={ui('account')} data-testid="Field__7727b3">
-              <Select
+            <Field label={ui('account')} required data-testid="Field__7727b3">
+              <CreatableSearchSelect
+                key={`account-${methodId}`}
+                field={ACCOUNT_FIELD}
                 value={accountId}
-                onValueChange={setAccountId}
-                data-testid="Select__7727b3">
-                <SelectTrigger style={{ height: 40, fontSize: 14 }} data-testid="SelectTrigger__7727b3"><SelectValue placeholder={ui('cpSelectAccount')} data-testid="SelectValue__7727b3" /></SelectTrigger>
-                <SelectContent style={{ zIndex: 70 }} data-testid="SelectContent__7727b3">
-                  {accounts.map(a => <SelectItem key={a.id} value={a.id} data-testid="SelectItem__7727b3">{a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+                displayValue={filteredAccounts.find(a => a.id === accountId)?.name || ''}
+                onChange={(id) => setAccountId(id)}
+                resolvedLabel={ui('account')}
+                staticOptions={filteredAccounts}
+                data-testid="cp-account-select" />
             </Field>
           </div>
 
@@ -476,18 +559,18 @@ export default function NewPaymentEntryModal({
           {/* balance summary */}
           <div style={{ padding: '0 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', padding: '8px 12px', borderRadius: 8, background: WIDGET_BG }}>
-              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpTotalInvoice')}</div><div style={{ font: '500 14px/20px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>{fmtCur(balance.applied, currency)}</div></div>
+              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpTotalInvoice')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.applied} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-total" /></div></div>
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>·</span>
-              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpMoney')}</div><div style={{ font: '500 14px/20px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>{fmtCur(balance.amount, currency)}</div></div>
+              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpMoney')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.amount} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-money" /></div></div>
               {balance.usedCredit > 0 && (<>
                 <span style={{ color: FG2, font: '400 12px/16px Inter' }}>+</span>
-                <div><div style={{ font: '400 12px/16px Inter', color: '#8D6CEF' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter', color: PURPLE, fontVariantNumeric: 'tabular-nums' }}>{fmtCur(balance.usedCredit, currency)}</div></div>
+                <div><div style={{ font: '400 12px/16px Inter', color: '#8D6CEF' }}>{ui('cpFavorBadge')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.usedCredit} currency={currency} tone="neutral" className="text-[#7047EB]" data-testid="MoneyAmount__cp-credit" /></div></div>
               </>)}
               <span style={{ color: FG2, font: '400 12px/16px Inter' }}>=</span>
-              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}>{fmtCur(balance.funds, currency)}</div></div>
+              <div><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{ui('cpApplied')}</div><div style={{ font: '500 14px/20px Inter' }}><MoneyAmount value={balance.funds} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-applied" /></div></div>
               <div style={{ flex: 1 }} />
-              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter', color: deltaColor, fontVariantNumeric: 'tabular-nums' }}>{fmtCur(Math.abs(balance.diff), currency)}</div></div>
-              <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
+              <div style={{ textAlign: 'right' }}><div style={{ font: '400 12px/16px Inter', color: FG2 }}>{deltaLabel}</div><div style={{ font: '600 14px/20px Inter' }}><MoneyAmount value={Math.abs(balance.diff)} currency={currency} tone="neutral" className={balance.isPartial ? 'text-[#C5234A]' : 'text-[#17663A]'} data-testid="MoneyAmount__cp-delta" /></div></div>
+              <button type="button" data-testid="cp-equalize" onClick={balance.equalize} style={{ height: 32, padding: '0 12px', borderRadius: 8, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', cursor: 'pointer', color: INK, font: '500 14px/24px Inter' }}>{ui('cpEqualize')}</button>
             </div>
           </div>
 
@@ -504,13 +587,13 @@ export default function NewPaymentEntryModal({
         </div>
 
         {/* footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px 4px', borderTop: `1px solid ${BORDER1}`, background: '#fff', flexShrink: 0 }}>
-          <button type="button" onClick={onClose} disabled={saving} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', background: 'transparent', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}>{ui('cancel')}</button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: '#fff', flexShrink: 0 }}>
+          <button type="button" onClick={onClose} disabled={saving} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'transparent', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}>{ui('cancel')}</button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button type="button" data-testid="cp-save-draft" onClick={() => submit('draft')} disabled={saving || loading} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1 }}>
+            <button type="button" data-testid="cp-save-draft" onClick={() => submit('draft')} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
               {floppy}{ui('save')}
             </button>
-            <button type="button" data-testid="cp-confirm" onClick={() => submit('confirm')} disabled={confirmDisabled || loading} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', background: INK, color: '#fff', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
+            <button type="button" data-testid="cp-confirm" onClick={() => submit('confirm')} disabled={confirmDisabled || loading} className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
               {ui('cpConfirm')}
             </button>
