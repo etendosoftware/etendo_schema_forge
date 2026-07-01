@@ -24,7 +24,7 @@ const T = {
   starEmpty:   '#D1D1DB',
 };
 
-const font = (size, weight = 400, lh) =>
+const font = (size, weight = 400, lh = undefined) =>
   `${weight} ${size}px/${lh ? lh + 'px' : 1} Inter, ui-sans-serif, system-ui, sans-serif`;
 
 // ─── Close icon ──────────────────────────────────────────────────────────────
@@ -281,6 +281,18 @@ function ThanksBody({ title, line }) {
 }
 
 // ─── NPS survey content ───────────────────────────────────────────────────────
+function npsSegment(score) {
+  if (score <= 5) return 'detractor';
+  if (score <= 7) return 'passive';
+  return 'promoter';
+}
+
+function npsQ2Copy(segment, ui) {
+  if (segment === 'detractor') return ui('surveyNpsQ2Detractor');
+  if (segment === 'passive') return ui('surveyNpsQ2Passive');
+  return ui('surveyNpsQ2Promoter');
+}
+
 function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedback, tags, setTags, onDismiss, ui }) {
 
   if (phase === 'thanks') {
@@ -293,12 +305,8 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
   }
 
   if (phase === 'followup') {
-    const segment = score <= 5 ? 'detractor' : score <= 7 ? 'passive' : 'promoter';
-    const q2 = segment === 'detractor'
-      ? ui('surveyNpsQ2Detractor')
-      : segment === 'passive'
-        ? ui('surveyNpsQ2Passive')
-        : ui('surveyNpsQ2Promoter');
+    const segment = npsSegment(score);
+    const q2 = npsQ2Copy(segment, ui);
     const chipOptions = segment === 'promoter'
       ? [ui('surveyChipSpeed'), ui('surveyChipDesign'), ui('surveyChipFeatures'), ui('surveyChipSupport'), ui('surveyChipPrice'), ui('surveyChipDocs'), ui('surveyChipAI')]
       : [ui('surveyChipSpeed'), ui('surveyChipDesign'), ui('surveyChipFeatures'), ui('surveyChipSupport'), ui('surveyChipPrice'), ui('surveyChipDocs')];
