@@ -24,7 +24,7 @@
     "sidebarClassName": "w-[30%] shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5 border-l border-[#E8EAEF]",
     "attachments": true,
     "customTabsAfterBottom": true,
-    "detailEntity": null,
+    "detailEntity": "accounting",
     "customPanelTabs": [
       { "key": "pricing", "labelKey": "price", "component": "ProductPriceBar" }
     ],
@@ -386,7 +386,57 @@
       "exclude": true
     },
     "accounting": {
-      "exclude": true
+      "javaQualifier": "productAccountingHandler",
+      "fields": {
+        "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
+        "fixedAsset": {
+          "visibility": "editable",
+          "grid": true,
+          "seq": 1
+        },
+        "productExpense": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 2
+        },
+        "productRevenue": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 3
+        },
+        "productCOGS": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 4
+        },
+        "pDefExpenseAcct": {
+          "visibility": "discarded"
+        },
+        "productDeferredRevenue": {
+          "visibility": "discarded"
+        },
+        "invoicePriceVariance": {
+          "visibility": "discarded"
+        },
+        "productRevenueReturn": {
+          "visibility": "discarded"
+        },
+        "productCOGSReturn": {
+          "visibility": "discarded"
+        },
+        "purchasePriceVariance": {
+          "visibility": "discarded"
+        },
+        "tradeDiscountReceived": {
+          "visibility": "discarded"
+        },
+        "tradeDiscountGranted": {
+          "visibility": "discarded"
+        }
+      }
     },
     "costingRule": {
       "exclude": true

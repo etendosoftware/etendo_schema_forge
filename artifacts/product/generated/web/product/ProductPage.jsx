@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
 import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
+import AccountingTable from './AccountingTable';
+import AccountingForm from './AccountingForm';
 import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import { AttachmentsTab } from '@/components/attachments';
 import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
@@ -40,7 +42,22 @@ const draftMode = null;
 const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'returnable'];
 // @sf-generated-end requiredHeaderFields:product
 
+// @sf-generated-start addLineFields:accounting
+const addLineFields = {
+  entry: [
+    { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
+    { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
+  ],
+  derived: [
 
+  ],
+  hidden: [
+    { key: 'accountingSchema', fromSibling: 'accountingSchema' },
+  ],
+};
+// @sf-generated-end addLineFields:accounting
 
 export const api = {
   "specName": "product",
@@ -83,6 +100,17 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/product/priceRuleVersion",
       "detailUrl": "/sws/neo/product/priceRuleVersion/{id}",
+      "supportedFilters": []
+    },
+    "accounting": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/product/accounting",
+      "detailUrl": "/sws/neo/product/accounting/{id}",
       "supportedFilters": []
     },
     "billOfMaterials": {
@@ -246,6 +274,38 @@ export const api = {
       "reference": "ServicePriceRule",
       "inputMode": "selector",
       "url": "/sws/neo/product/priceRuleVersion/selectors/servicePriceRule"
+    },
+    {
+      "entity": "accounting",
+      "field": "fixedAsset",
+      "column": "P_Asset_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/fixedAsset"
+    },
+    {
+      "entity": "accounting",
+      "field": "productExpense",
+      "column": "P_Expense_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/productExpense"
+    },
+    {
+      "entity": "accounting",
+      "field": "productRevenue",
+      "column": "P_Revenue_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/productRevenue"
+    },
+    {
+      "entity": "accounting",
+      "field": "productCOGS",
+      "column": "P_Cogs_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/product/accounting/selectors/productCOGS"
     },
     {
       "entity": "billOfMaterials",
@@ -471,13 +531,18 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       <>
       <DetailView
         entity="product"
+        detailEntity="accounting"
         Form={ProductForm}
+        DetailTable={AccountingTable}
+        DetailForm={AccountingForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
+        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Product"
+        detailLabel="Accounting"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
