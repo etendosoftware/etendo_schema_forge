@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.36.0",
   "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-07-02T11:02:02.915Z",
-  "checksum": "e92b7dbeb1870554",
+  "updatedAt": "2026-07-02T11:04:08.139Z",
+  "checksum": "b099c42c4c15ee8c",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -1178,35 +1178,35 @@
                 "value": "D",
                 "name": "After Delivery",
                 "labels": {
-                  "es_ES": "Después de entregado"
+                  "es_ES": "After Delivery"
                 }
               },
               {
                 "value": "O",
                 "name": "After Order Delivered",
                 "labels": {
-                  "es_ES": "Pedido completamente entregado"
+                  "es_ES": "After Order Delivered"
                 }
               },
               {
                 "value": "S",
                 "name": "Customer Schedule After Delivery",
                 "labels": {
-                  "es_ES": "Periódico después de entregado"
+                  "es_ES": "Customer Schedule After Delivery"
                 }
               },
               {
                 "value": "N",
                 "name": "Do Not Invoice",
                 "labels": {
-                  "es_ES": "No facturar"
+                  "es_ES": "Do Not Invoice"
                 }
               },
               {
                 "value": "I",
                 "name": "Immediate",
                 "labels": {
-                  "es_ES": "Inmediato"
+                  "es_ES": "Immediate"
                 }
               }
             ],
@@ -3391,28 +3391,28 @@
                 "value": "GENERIC",
                 "name": "Use Generic Account No.",
                 "labels": {
-                  "es_ES": "Utilizar Número Genérico de Cuenta"
+                  "es_ES": "Use Generic Account No."
                 }
               },
               {
                 "value": "IBAN",
                 "name": "Use IBAN",
                 "labels": {
-                  "es_ES": "Utilizar IBAN"
+                  "es_ES": "Use IBAN"
                 }
               },
               {
                 "value": "SWIFT",
                 "name": "Use SWIFT + Generic Account No.",
                 "labels": {
-                  "es_ES": "Usar código SWIFT + Número Genérico de Cuenta"
+                  "es_ES": "Use SWIFT + Generic Account No."
                 }
               },
               {
                 "value": "SPANISH",
                 "name": "Use Spanish",
                 "labels": {
-                  "es_ES": "Utilizar Español"
+                  "es_ES": "Use Spanish"
                 }
               }
             ],
