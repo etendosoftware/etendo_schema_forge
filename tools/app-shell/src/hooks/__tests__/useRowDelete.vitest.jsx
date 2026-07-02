@@ -120,4 +120,52 @@ describe('useRowDelete', () => {
     );
     expect(defaultOpts.onSuccess).toHaveBeenCalled();
   });
+
+  it('calls deleteFn instead of a plain DELETE when provided', async () => {
+    const deleteFn = vi.fn().mockResolvedValue(undefined);
+
+    function TestComponent() {
+      const { requestDelete, deleteDialog } = useRowDelete({ ...defaultOpts, deleteFn });
+      return (
+        <>
+          <button onClick={() => requestDelete({ id: '789', status: 'RPPC' })}>Del</button>
+          {deleteDialog}
+        </>
+      );
+    }
+
+    render(<TestComponent />);
+    const user = userEvent.setup();
+
+    await act(async () => { await user.click(screen.getByText('Del')); });
+    await act(async () => { await user.click(screen.getByTestId('row-quick-action-delete-confirm')); });
+
+    expect(deleteFn).toHaveBeenCalledWith({ id: '789', status: 'RPPC' });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(defaultOpts.onSuccess).toHaveBeenCalled();
+  });
+
+  it('shows an error toast and does not call onSuccess when deleteFn throws', async () => {
+    const { toast } = await import('sonner');
+    const deleteFn = vi.fn().mockRejectedValue(new Error('Cannot remove: referenced elsewhere'));
+
+    function TestComponent() {
+      const { requestDelete, deleteDialog } = useRowDelete({ ...defaultOpts, deleteFn });
+      return (
+        <>
+          <button onClick={() => requestDelete({ id: '999' })}>Del</button>
+          {deleteDialog}
+        </>
+      );
+    }
+
+    render(<TestComponent />);
+    const user = userEvent.setup();
+
+    await act(async () => { await user.click(screen.getByText('Del')); });
+    await act(async () => { await user.click(screen.getByTestId('row-quick-action-delete-confirm')); });
+
+    expect(toast.error).toHaveBeenCalledWith('Cannot remove: referenced elsewhere');
+    expect(defaultOpts.onSuccess).not.toHaveBeenCalled();
+  });
 });
