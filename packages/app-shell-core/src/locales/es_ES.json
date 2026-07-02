@@ -16919,6 +16919,8 @@
     "paymentOutNoLines": "Sin líneas de pago.",
     "cobroConfirmado": "Cobro confirmado",
     "pagoConfirmado": "Pago confirmado",
+    "cobroReactivado": "Cobro reactivado",
+    "pagoReactivado": "Pago reactivado",
     "asientoContabilizado": "Asiento contabilizado",
     "borradoresLabel": "Borradores",
     "borradoresSub": "Pendientes de procesar",

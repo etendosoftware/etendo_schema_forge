@@ -45,6 +45,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const ui = useUI();
   const [lines, setLines] = useState(null);
   const [confirmedAt, setConfirmedAt] = useState(null);
+  const [reactivatedAt, setReactivatedAt] = useState(null);
 
   const isIn = dir === 'in';
   const status = data?.status || '';
@@ -54,7 +55,10 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   useEffect(() => {
     if (!data?.id) return;
     const handler = (e) => {
-      if (e.detail?.recordId === data.id) setConfirmedAt(new Date());
+      if (e.detail?.recordId !== data.id) return;
+      const isReactivate = e.detail?.process?.columnName === 'etprReactivatePayment';
+      if (isReactivate) setReactivatedAt(new Date());
+      else setConfirmedAt(new Date());
     };
     window.addEventListener('neo:processSuccess', handler);
     return () => window.removeEventListener('neo:processSuccess', handler);
@@ -99,6 +103,12 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
       date: createdDate,
       dot: isDraft ? '#FAAF00' : '#17663A',
     },
+    ...(isDraft && reactivatedAt ? [{
+      label: ui(isIn ? 'cobroReactivado' : 'pagoReactivado'),
+      confirmedAt: reactivatedAt,
+      date: null,
+      dot: '#6C6C89',
+    }] : []),
     ...(!isDraft ? [{
       label: ui(isIn ? 'cobroConfirmado' : 'pagoConfirmado'),
       confirmedAt,

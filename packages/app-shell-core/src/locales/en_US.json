@@ -16677,6 +16677,8 @@
     "paymentOutNoLines": "No payment lines.",
     "cobroConfirmado": "Collection confirmed",
     "pagoConfirmado": "Payment confirmed",
+    "cobroReactivado": "Collection reactivated",
+    "pagoReactivado": "Payment reactivated",
     "asientoContabilizado": "Journal entry posted",
     "borradoresLabel": "Drafts",
     "borradoresSub": "Pending to process",
