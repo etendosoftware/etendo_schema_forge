@@ -344,14 +344,6 @@
       },
       {
         "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/customerAccounting/selectors/accountingSchema"
-      },
-      {
-        "entity": "customerAccounting",
         "field": "customerReceivablesNo",
         "column": "C_Receivable_Acct",
         "reference": "ValidCombination",
@@ -422,14 +414,6 @@
         "reference": "BP_TaxCategory",
         "inputMode": "search",
         "url": "/sws/neo/contacts/vendorCreditor/selectors/taxCategory"
-      },
-      {
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/vendorAccounting/selectors/accountingSchema"
       },
       {
         "entity": "vendorAccounting",
@@ -873,10 +857,6 @@
       },
       "customerAccounting": {
         "fields": {
-          "accountingSchema": {
-            "readOnly": true,
-            "required": true
-          },
           "customerReceivablesNo": {
             "required": true
           },
@@ -939,10 +919,6 @@
       },
       "vendorAccounting": {
         "fields": {
-          "accountingSchema": {
-            "readOnly": true,
-            "required": true
-          },
           "vendorLiability": {
             "required": true
           },
@@ -1271,5 +1247,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "73ffa3db9b0b06c4"
+  "checksum": "c893e5be2aae8206"
 }
