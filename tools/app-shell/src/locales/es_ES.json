@@ -14013,7 +14013,7 @@
       "label": "Producción LDM"
     },
     "Business Partner Category": {
-      "label": "Grupos de Terceros"
+      "label": "Categoría de Contacto"
     },
     "Payment Proposal": {
       "label": "Propuesta de Pago"
@@ -15229,7 +15229,7 @@
       "label": "Productos"
     },
     "Business Partner Category": {
-      "label": "Grupos de terceros"
+      "label": "Categoría de Contacto"
     },
     "Cashbook": {
       "label": "Caja"
@@ -21784,7 +21784,7 @@
       "label": "Producción LDM"
     },
     "Business Partner Category": {
-      "label": "Grupos de Terceros"
+      "label": "Categoría de Contacto"
     },
     "Bank Statement": {
       "label": "Extracto bancario"
