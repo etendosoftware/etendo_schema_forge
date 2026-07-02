@@ -1,0 +1,219 @@
+{
+  "version": "0.9.0",
+  "generatedAt": "2026-06-29T17:22:42.125Z",
+  "updatedAt": "2026-06-29T18:56:13.744Z",
+  "contractChecksum": "256550c56ea48e6b",
+  "apiPrediction": {
+    "specName": "asset-group",
+    "baseUrl": "/sws/neo/asset-group",
+    "crud": {
+      "assetCategory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/asset-group/assetCategory",
+        "detailUrl": "/sws/neo/asset-group/assetCategory/{id}",
+        "supportedFilters": []
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/asset-group/accounting",
+        "detailUrl": "/sws/neo/asset-group/accounting/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "accounting",
+        "field": "accumulatedDepreciation",
+        "column": "A_Accumdepreciation_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/asset-group/accounting/selectors/accumulatedDepreciation"
+      },
+      {
+        "entity": "accounting",
+        "field": "depreciation",
+        "column": "A_Depreciation_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/asset-group/accounting/selectors/depreciation"
+      }
+    ],
+    "actions": [
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "accounting",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/asset-group/accounting/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "800136",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    }
+  },
+  "formState": {
+    "entities": {
+      "assetCategory": {
+        "fields": {
+          "name": {
+            "required": true
+          },
+          "description": {},
+          "depreciate": {
+            "required": true
+          },
+          "depreciationType": {
+            "required": true
+          },
+          "calculateType": {
+            "required": true
+          },
+          "annualDepreciation": {},
+          "amortize": {
+            "required": true
+          },
+          "usableLifeMonths": {}
+        }
+      },
+      "accounting": {
+        "fields": {
+          "accumulatedDepreciation": {
+            "required": true
+          },
+          "depreciation": {
+            "required": true
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage asset group financial records.",
+    "whenToUse": [
+      "Use for asset group management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "name",
+        "depreciate",
+        "depreciationType",
+        "calculateType",
+        "amortize"
+      ],
+      "lineFields": [
+        "accumulatedDepreciation",
+        "depreciation"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "processNow"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Required field without default value must be provided",
+      "Validate the current form state before running lifecycle actions",
+      "Do not run destructive lifecycle actions without explicit user confirmation"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "name",
+          "depreciate",
+          "depreciationType",
+          "calculateType",
+          "amortize"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "accumulatedDepreciation",
+          "depreciation"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "processNow"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "e65214139b9bce0d"
+}

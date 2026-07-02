@@ -138,6 +138,12 @@ function createCacheReadPool() {
       if (!entry) throw new CacheMissError(key, sql, params);
       return { rows: entry.rows, rowCount: entry.rows.length };
     },
+    async connect() {
+      return {
+        query: (sql, params) => pool.query(sql, params),
+        release: () => {},
+      };
+    },
     async end() { /* no-op */ },
     __cacheRead: true,
   };

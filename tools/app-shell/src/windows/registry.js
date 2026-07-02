@@ -53,6 +53,7 @@ const windowLoaders = {
   'payment-out': () => import('@generated/payment-out/generated/web/payment-out/index.jsx'),
   'chart-of-accounts': () => import('@generated/chart-of-accounts/generated/web/chart-of-accounts/index.jsx'),
   'assets': () => import('@generated/assets/generated/web/assets/index.jsx'),
+  'asset-group': () => import('@generated/asset-group/generated/web/asset-group/index.jsx'),
   'conversion-rates': () => import('@generated/conversion-rates/generated/web/conversion-rates/index.jsx'),
   'conversion-rate-downloader-log': () => import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/index.jsx'),
   'amortization': () => import('@generated/amortization/generated/web/amortization/index.jsx'),

@@ -15,6 +15,8 @@
     "test:all": "npm run test && npm run test:vitest"
   },
   "dependencies": {
+    "@etendosoftware/app-shell-core": "0.1.1",
+    "@etendosoftware/etendo-go-core": "0.1.1",
     "@iconicapp/iconic-react": "^1.1.4",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-collapsible": "^1.1.12",
@@ -27,7 +29,6 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@etendosoftware/app-shell-core": "0.1.0",
     "@sentry/react": "^10.53.0",
     "aws-rum-web": "^1.18.0",
     "class-variance-authority": "^0.7.1",
