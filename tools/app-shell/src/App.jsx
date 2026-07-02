@@ -50,6 +50,7 @@ async function loadAllMockData() {
   const modules = await Promise.all([
     import('@generated/sales-order/custom/mockData.js'),
     import('@generated/business-partner/generated/web/business-partner/mockData.js'),
+    import('@generated/business-partner-category/generated/web/business-partner-category/mockData.js'),
     import('@generated/warehouse/generated/web/warehouse/mockData.js'),
     import('@generated/price-list/generated/web/price-list/mockData.js'),
     import('@generated/payment-term/generated/web/payment-term/mockData.js'),
