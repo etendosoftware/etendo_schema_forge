@@ -41,4 +41,14 @@ describe('EmailsCard', () => {
     render(<EmailsCard />);
     expect(() => fireEvent.click(screen.getByText('previewCardSendEmail'))).not.toThrow();
   });
+
+  // ── ETP-4372 regression: EMAILS-section Send link must be wired ─────────────
+  // The bug was a dead "Enviar email" link (onSend passed as undefined). This
+  // guards the component boundary: a wired onSend must fire exactly once on click.
+  it('ETP-4372: send link invokes the wired onSend exactly once (not a dead link)', () => {
+    const onSend = vi.fn();
+    render(<EmailsCard onSend={onSend} />);
+    fireEvent.click(screen.getByText('previewCardSendEmail'));
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
 });

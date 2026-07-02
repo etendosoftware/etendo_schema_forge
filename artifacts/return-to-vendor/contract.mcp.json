@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T19:46:13.628Z",
-  "updatedAt": "2026-06-25T00:35:57.934Z",
-  "contractChecksum": "034f5543bd50bf76",
+  "updatedAt": "2026-07-01T19:01:45.751Z",
+  "contractChecksum": "a51bd3c0ec5874f5",
   "apiPrediction": {
     "specName": "return-to-vendor",
     "baseUrl": "/sws/neo/return-to-vendor",
@@ -17,6 +17,7 @@
         "listUrl": "/sws/neo/return-to-vendor/header",
         "detailUrl": "/sws/neo/return-to-vendor/header/{id}",
         "supportedFilters": [
+          "documentNo",
           "businessPartner"
         ]
       },
@@ -1015,6 +1016,11 @@
             "defaultValue": "CO"
           },
           "rMPickfromreceipt": {},
+          "documentNo": {
+            "readOnly": true,
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y' | @DocStatus@='TMP'"
+          },
           "orderReference": {},
           "orderDate": {
             "required": true,
@@ -1488,5 +1494,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "b5bf32eb518387ef"
+  "checksum": "1bb8d818001ab9ee"
 }

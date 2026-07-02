@@ -312,7 +312,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        sendDocument
+        sendDocument={{"enabled":false}}
         {...props}
       />
       </>
@@ -330,7 +330,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
       dateFilterKey="movementDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument
+      sendDocument={{"enabled":false}}
       {...props}
     />
   );
