@@ -41,6 +41,26 @@ function fmtNow(d) {
   return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) + ` · ${h}:${m}`;
 }
 
+function reactivatedStorageKey(id) {
+  return `etgo:payment:${id}:reactivatedAt`;
+}
+
+function readReactivatedAt(id) {
+  if (!id) return null;
+  try {
+    const stored = window.localStorage.getItem(reactivatedStorageKey(id));
+    return stored ? new Date(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeReactivatedAt(id, date) {
+  try {
+    window.localStorage.setItem(reactivatedStorageKey(id), date.toISOString());
+  } catch { /* storage unavailable (privacy mode, quota) — non-fatal */ }
+}
+
 export default function PaymentDetailSidebarBase({ dir, specName, data, token, apiBaseUrl }) {
   const ui = useUI();
   const [lines, setLines] = useState(null);
@@ -53,12 +73,21 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const totalAmount = parseFloat(data?.amount ?? 0);
 
   useEffect(() => {
+    setReactivatedAt(readReactivatedAt(data?.id));
+  }, [data?.id]);
+
+  useEffect(() => {
     if (!data?.id) return;
     const handler = (e) => {
       if (e.detail?.recordId !== data.id) return;
       const isReactivate = e.detail?.process?.columnName === 'etprReactivatePayment';
-      if (isReactivate) setReactivatedAt(new Date());
-      else setConfirmedAt(new Date());
+      if (isReactivate) {
+        const now = new Date();
+        setReactivatedAt(now);
+        writeReactivatedAt(data.id, now);
+      } else {
+        setConfirmedAt(new Date());
+      }
     };
     window.addEventListener('neo:processSuccess', handler);
     return () => window.removeEventListener('neo:processSuccess', handler);
