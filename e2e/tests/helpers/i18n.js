@@ -16,7 +16,7 @@ const LOCALE = process.env.LOCALE || 'es_ES';
 
 const localePath = join(
   __dirname,
-  '../../../node_modules/@etendosoftware/app-shell-core/src/locales',
+  '../../../tools/app-shell/src/locales',
   `${LOCALE}.json`,
 );
 

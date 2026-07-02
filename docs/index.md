@@ -82,6 +82,7 @@ General findings about how the Etendo Application Dictionary works. Not window-s
 
 | File | Description |
 |------|-------------|
+| [surveys.md](surveys.md) | **In-app survey system (NPS/CSAT)**: architecture, survey types, anti-fatigue rules, localStorage schema, how to add a new survey or emit a trigger from a window |
 | [developer-tools.md](developer-tools.md) | CLI tools used by the team: RTK (token optimization) and GWS (Google Workspace CLI) |
 | [claude-md-best-practices.md](claude-md-best-practices.md) | Best practices for writing effective CLAUDE.md files (research compilation) |
 | [self-documentation-policy.md](self-documentation-policy.md) | Self-documentation policy: triggers, checklists, and phase responsibilities for keeping docs in sync with code |

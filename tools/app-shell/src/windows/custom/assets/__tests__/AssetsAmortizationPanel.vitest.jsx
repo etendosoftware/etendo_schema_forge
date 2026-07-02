@@ -23,27 +23,6 @@ vi.mock('@/components/ui/status-tag', () => ({
   StatusTag: ({ status, label }) => <span data-testid={`status-${status}`}>{label}</span>,
 }));
 
-vi.mock('@/components/ui/checkbox', () => ({
-  Checkbox: ({ checked, onChange, 'data-testid': testId, 'aria-label': ariaLabel }) => (
-    <input
-      type="checkbox"
-      data-testid={testId}
-      aria-label={ariaLabel}
-      checked={!!checked}
-      onChange={onChange}
-    />
-  ),
-}));
-
-vi.mock('@/components/contract-ui/LinesSelectionBar.jsx', () => ({
-  default: ({ visible, count, deleting, onDelete, onClose }) => (
-    <div data-testid="lines-selection-bar" data-visible={String(visible)} data-count={count}>
-      <button data-testid="bar-delete" disabled={deleting} onClick={onDelete}>delete</button>
-      <button data-testid="bar-close" onClick={onClose}>close</button>
-    </div>
-  ),
-}));
-
 import AssetsAmortizationPanel from '../AssetsAmortizationPanel.jsx';
 
 const BASE_PROPS = {
@@ -264,6 +243,309 @@ describe('AssetsAmortizationPanel', () => {
       expect(screen.getByText('EUR 42')).toBeInTheDocument();
     });
   });
+
+  // ── Row selection + bulk delete (ETP-4335) ──
+
+  const TWO_LINES = [
+    { id: 'l1', sEQNoAsset: 1, amortizationAmount: 100 },
+    { id: 'l2', sEQNoAsset: 2, amortizationAmount: 200 },
+  ];
+
+  it('checking a row checkbox shows the selection bar with the selected count', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+
+    const deleteButton = await screen.findByTitle('delete');
+    expect(deleteButton).toBeInTheDocument();
+    expect(screen.getByTitle('close')).toBeInTheDocument();
+    expect(screen.getByTestId('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('unchecking the only selected row hides the selection bar', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    await screen.findByTitle('delete');
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+
+    await waitFor(() => {
+      expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
+    });
+  });
+
+  it('select-all checkbox selects every row and reflects indeterminate state', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-all')).toBeInTheDocument();
+    });
+
+    // Select a single row first -> header checkbox should be indeterminate.
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-all')).toHaveAttribute('aria-checked', 'mixed');
+    });
+
+    // Toggling "select all" while indeterminate/partial should select every row.
+    fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('Checkbox__amort-all')).toHaveAttribute('aria-checked', 'true');
+    });
+
+    // Toggling again with all selected should clear the whole selection.
+    fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByTestId('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'false');
+    });
+  });
+
+  it('deletes selected rows via DELETE requests and refetches the lines', async () => {
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    await screen.findByTitle('delete');
+
+    globalThis.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) }); // DELETE response
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ response: { data: [TWO_LINES[1]] } }),
+    }); // refetch after delete
+
+    const deleteButton = screen.getByTitle('delete');
+    fireEvent.click(deleteButton);
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${BASE_PROPS.apiBaseUrl}/amortizationLine/l1`,
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    // Selection is cleared and lines are refetched (3rd call = refetch list).
+    await waitFor(() => {
+      expect(globalThis.fetch.mock.calls.length).toBeGreaterThanOrEqual(3);
+    });
+    await waitFor(() => {
+      expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
+    });
+  });
+
+  it('close (X) button on the selection bar clears the selection', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    await screen.findByTitle('delete');
+
+    const closeButton = screen.getByTitle('close');
+    fireEvent.click(closeButton);
+
+    await waitFor(() => {
+      expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
+    // No DELETE request should have been issued.
+    expect(globalThis.fetch).not.toHaveBeenCalledWith(
+      expect.stringContaining('/amortizationLine/'),
+      expect.anything()
+    );
+  });
+
+  it('clears the current selection when the lines list is refetched externally', async () => {
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} recordId="asset-1" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    await screen.findByTitle('delete');
+
+    // Simulate an external refetch trigger (e.g. process-success event),
+    // which re-runs fetchLines -> setLines -> the [lines] effect resets selection.
+    // Use a fresh array reference (even with identical content) so the
+    // `useEffect(() => setSelectedRows(new Set()), [lines])` dependency changes.
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ response: { data: [...TWO_LINES] } }),
+    });
+    fireEvent(
+      window,
+      new CustomEvent('neo:processSuccess', { detail: { entity: 'assets', recordId: 'asset-1' } })
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
+    });
+  });
+
+  it('ignores neo:processSuccess events for a different entity or recordId', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} recordId="asset-1" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+    const callsBefore = globalThis.fetch.mock.calls.length;
+
+    fireEvent(
+      window,
+      new CustomEvent('neo:processSuccess', { detail: { entity: 'other-entity', recordId: 'asset-1' } })
+    );
+    fireEvent(
+      window,
+      new CustomEvent('neo:processSuccess', { detail: { entity: 'assets', recordId: 'different-id' } })
+    );
+
+    // Neither mismatched event should trigger an extra fetch.
+    expect(globalThis.fetch.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('ignores a neo:processSuccess event with no detail payload', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} recordId="asset-1" />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+    const callsBefore = globalThis.fetch.mock.calls.length;
+
+    // No `detail` at all -> `event?.detail ?? {}` fallback branch.
+    fireEvent(window, new CustomEvent('neo:processSuccess'));
+
+    expect(globalThis.fetch.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('falls back to sEQNoAsset as the row key when a line has no id', async () => {
+    const linesWithoutId = [
+      { sEQNoAsset: 7, amortizationAmount: 100 },
+    ];
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: linesWithoutId } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-7')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-7'));
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-7')).toHaveAttribute('aria-checked', 'true');
+    });
+
+    // Select-all with a line that also relies on sEQNoAsset as its key.
+    fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-7')).toHaveAttribute('aria-checked', 'false');
+    });
+    fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-7')).toHaveAttribute('aria-checked', 'true');
+    });
+  });
+
+  it('does not call handleDeleteSelected fetch when apiBaseUrl is missing', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    const { rerender } = render(<AssetsAmortizationPanel {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    await screen.findByTitle('delete');
+
+    // Remove apiBaseUrl so handleDeleteSelected's guard short-circuits.
+    rerender(<AssetsAmortizationPanel {...BASE_PROPS} apiBaseUrl={undefined} />);
+
+    const callsBefore = globalThis.fetch.mock.calls.length;
+    fireEvent.click(screen.getByTitle('delete'));
+
+    // No DELETE request should be issued when apiBaseUrl is falsy.
+    expect(globalThis.fetch.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('sends DELETE requests without an Authorization header when token is missing', async () => {
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ response: { data: TWO_LINES } }),
+    });
+    render(<AssetsAmortizationPanel {...BASE_PROPS} token={undefined} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    await screen.findByTitle('delete');
+
+    globalThis.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ response: { data: [TWO_LINES[1]] } }),
+    });
+
+    fireEvent.click(screen.getByTitle('delete'));
+
+    await waitFor(() => {
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${BASE_PROPS.apiBaseUrl}/amortizationLine/l1`,
+        expect.objectContaining({ method: 'DELETE', headers: {} })
+      );
+    });
+  });
 });
 
 describe('AssetsAmortizationPanel — row selection & bulk delete', () => {
@@ -294,12 +576,11 @@ describe('AssetsAmortizationPanel — row selection & bulk delete', () => {
 
   it('shows the selection bar when a row is selected', async () => {
     await renderWithLines();
-    expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-visible', 'false');
+    expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
-    await waitFor(() => {
-      expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-visible', 'true');
-    });
-    expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-count', '1');
+    const deleteButton = await screen.findByTitle('delete');
+    expect(deleteButton).toBeInTheDocument();
+    expect(screen.getByTitle('close')).toBeInTheDocument();
   });
 
   it('select-all checks every row, and toggling it off clears selection', async () => {
@@ -307,50 +588,50 @@ describe('AssetsAmortizationPanel — row selection & bulk delete', () => {
     const selectAll = screen.getByTestId('Checkbox__amort-all');
     fireEvent.click(selectAll);
     await waitFor(() => {
-      expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-count', '2');
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
     });
-    expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeChecked();
-    expect(screen.getByTestId('Checkbox__amort-row-l2')).toBeChecked();
     // select-all is now checked → clicking again clears.
     fireEvent.click(selectAll);
     await waitFor(() => {
-      expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-count', '0');
+      expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByTestId('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'false');
     });
   });
 
   it('deselecting a row removes it from the selection', async () => {
     await renderWithLines();
     fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
-    await waitFor(() => {
-      expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-count', '1');
-    });
+    await screen.findByTitle('delete');
     fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
     await waitFor(() => {
-      expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-count', '0');
+      expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
     });
   });
 
   it('the close button on the bar clears the selection', async () => {
     await renderWithLines();
     fireEvent.click(screen.getByTestId('Checkbox__amort-row-l1'));
+    await screen.findByTitle('delete');
+    fireEvent.click(screen.getByTitle('close'));
     await waitFor(() => {
-      expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-count', '1');
+      expect(screen.queryByTitle('delete')).not.toBeInTheDocument();
     });
-    fireEvent.click(screen.getByTestId('bar-close'));
-    await waitFor(() => {
-      expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-count', '0');
-    });
+    expect(screen.getByTestId('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'false');
   });
 
   it('bulk delete DELETEs each selected line then refetches', async () => {
     await renderWithLines();
     fireEvent.click(screen.getByTestId('Checkbox__amort-all'));
     await waitFor(() => {
-      expect(screen.getByTestId('lines-selection-bar')).toHaveAttribute('data-count', '2');
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByTestId('Checkbox__amort-row-l2')).toHaveAttribute('aria-checked', 'true');
     });
 
     const callsBefore = globalThis.fetch.mock.calls.length;
-    fireEvent.click(screen.getByTestId('bar-delete'));
+    const deleteButton = await screen.findByTitle('delete');
+    fireEvent.click(deleteButton);
 
     await waitFor(() => {
       const deleteCalls = globalThis.fetch.mock.calls.filter(

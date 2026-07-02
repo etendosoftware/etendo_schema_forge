@@ -1,8 +1,14 @@
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+// @vitest-environment jsdom
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('@/hooks/useCurrencyPrecision.js', () => ({
-  useCurrencyPrecision: () => 3,
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ token: 'ctx-token' }),
+}));
+
+vi.mock('@/hooks/useNeoResource.js', () => ({
+  getApiBase: () => '',
 }));
 
 vi.mock('@/components/ui/label', () => ({
@@ -19,22 +25,27 @@ vi.mock('lucide-react', () => ({
 
 import { CurrencyRatePicker } from '../CurrencyRatePicker.jsx';
 
-const field = {
-  id: 'currency-field',
-  key: 'currency',
-  column: 'C_Currency_ID',
-  required: true,
-};
+const FIELD = { key: 'cCurrencyId', column: 'C_Currency_ID', id: 'fld-1', required: false };
+const BASE_URL = 'http://localhost/sws/neo/sales-order';
+const TOKEN = 'test-token';
 
-const options = [
-  { id: 'eur', isoCode: 'EUR', rate: 1.23456 },
-  { id: 'usd', isoCode: 'USD', rate: 0.98765 },
+const CURRENCIES = [
+  { id: 'usd-id', isoCode: 'USD', rate: 1.2345 },
+  { id: 'eur-id', isoCode: 'EUR', rate: 1 },
 ];
 
-function mockCurrencyOptionsFetch(list = options) {
-  global.fetch = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ response: { data: list } }),
+function mkFetch(currencies = CURRENCIES, sessionPrecision) {
+  return vi.fn((url) => {
+    if (String(url).includes('/sws/neo/session')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => (sessionPrecision != null ? { currencyStandardPrecision: sessionPrecision } : {}),
+      });
+    }
+    if (String(url).includes('/action/currencyOptions')) {
+      return Promise.resolve({ ok: true, json: async () => currencies });
+    }
+    return Promise.resolve({ ok: true, json: async () => ({}) });
   });
 }
 
@@ -42,14 +53,14 @@ function renderPicker(props = {}) {
   const onChange = vi.fn();
   const view = render(
     <CurrencyRatePicker
-      field={field}
-      value="eur"
-      displayValue="Euro"
+      field={FIELD}
+      value="usd-id"
+      displayValue="USD"
       onChange={onChange}
-      formData={{ id: 'order-1' }}
+      formData={{ id: 'rec-1' }}
       resolvedLabel="Currency"
-      token="token-1"
-      apiBaseUrl="/sws/neo/sales-order"
+      token={TOKEN}
+      apiBaseUrl={BASE_URL}
       {...props}
     />,
   );
@@ -59,51 +70,86 @@ function renderPicker(props = {}) {
 describe('CurrencyRatePicker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCurrencyOptionsFetch();
+    globalThis.fetch = mkFetch();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('renders the current currency and fetched rate using org precision', async () => {
+  it('renders a read-only display with iso code and formatted rate', () => {
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'new', eTGOCurrencyRate: '1.5' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        isReadOnly
+        onChange={() => {}}
+      />,
+    );
+    const container = screen.getByTestId(`field-${FIELD.key}`);
+    expect(within(container).getByText('USD')).toBeInTheDocument();
+    // orgPrecision defaults to 2 (useCurrencyPrecision's initial state) before its fetch resolves.
+    expect(within(container).getByText('— 1.50')).toBeInTheDocument();
+  });
+
+  it('renders the placeholder when no value is selected', () => {
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value=""
+        formData={{ id: 'new' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByText(/Seleccionar Currency/)).toBeInTheDocument();
+    expect(screen.queryByTestId('currency-rate-pencil')).not.toBeInTheDocument();
+  });
+
+  it('renders the current currency and fetched rate, calling currencyOptions with the record id', async () => {
     renderPicker();
 
     expect(screen.getByText('Currency')).toBeInTheDocument();
-    expect(screen.getByText('*')).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('EUR');
-      expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('1.235');
+      expect(screen.getByTestId('currency-rate-trigger')).toHaveTextContent('USD');
     });
-    expect(global.fetch).toHaveBeenCalledWith(
-      '/sws/neo/sales-order/header/order-1/action/currencyOptions',
-      { headers: { Authorization: 'Bearer token-1' } },
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      `${BASE_URL}/header/rec-1/action/currencyOptions`,
+      { headers: { Authorization: `Bearer ${TOKEN}` } },
     );
   });
 
-  it('opens the dropdown, filters currencies, and stages the selected currency and rate', async () => {
-    const user = userEvent.setup();
-    const { onChange } = renderPicker();
-
-    await user.click(screen.getByTestId('currency-rate-trigger'));
-    expect(screen.getByPlaceholderText('Buscar moneda...')).toBeInTheDocument();
-
-    await user.type(screen.getByPlaceholderText('Buscar moneda...'), 'usd');
-    const dropdown = screen.getByPlaceholderText('Buscar moneda...').closest('.absolute');
-    expect(within(dropdown).queryByText('EUR')).not.toBeInTheDocument();
-    await user.click(within(dropdown).getByText('USD'));
-
-    expect(onChange).toHaveBeenCalledWith('currency', 'usd', 'C_Currency_ID');
-    expect(onChange).toHaveBeenCalledWith('currency$_identifier', 'USD');
-    expect(onChange).toHaveBeenCalledWith('eTGOCurrencyRate', 0.98765, 'EM_ETGO_Currency_Rate');
-    expect(screen.queryByPlaceholderText('Buscar moneda...')).not.toBeInTheDocument();
+  it('opens the dropdown, fetches options, and lists them', async () => {
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value=""
+        formData={{ id: 'new' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-trigger'));
+    await waitFor(() => expect(screen.getByText('USD')).toBeInTheDocument());
+    expect(screen.getByText('EUR')).toBeInTheDocument();
   });
 
   it('uses "new" for unsaved records and shows the empty state for non-array responses', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ response: { data: { unexpected: true } } }),
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('/action/currencyOptions')) {
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: { unexpected: true } } }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
     });
 
     const user = userEvent.setup();
@@ -112,17 +158,119 @@ describe('CurrencyRatePicker', () => {
     await user.click(screen.getByTestId('currency-rate-trigger'));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/sws/neo/sales-order/quotation/new/action/currencyOptions',
-        { headers: { Authorization: 'Bearer token-1' } },
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${BASE_URL}/quotation/new/action/currencyOptions`,
+        { headers: { Authorization: `Bearer ${TOKEN}` } },
       );
     });
     expect(await screen.findByText('Sin resultados')).toBeInTheDocument();
   });
 
-  it('supports manual rate confirmation, invalid input, escape cancel, and click cancel', async () => {
+  it('shows "Sin resultados" when the search filter matches nothing', async () => {
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value=""
+        formData={{ id: 'new' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-trigger'));
+    await waitFor(() => expect(screen.getByText('USD')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText('Buscar moneda...'), { target: { value: 'zzz' } });
+
+    expect(screen.getByText('Sin resultados')).toBeInTheDocument();
+  });
+
+  it('filters options by iso code as the user types', async () => {
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value=""
+        formData={{ id: 'new' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-trigger'));
+    await waitFor(() => expect(screen.getByText('USD')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByPlaceholderText('Buscar moneda...'), { target: { value: 'eur' } });
+
+    expect(screen.queryByText('USD')).not.toBeInTheDocument();
+    expect(screen.getByText('EUR')).toBeInTheDocument();
+  });
+
+  it('selecting an option stages the currency, identifier, and system rate', async () => {
+    const onChange = vi.fn();
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value=""
+        formData={{ id: 'new' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-trigger'));
+    await waitFor(() => expect(screen.getByText('USD')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('USD'));
+
+    expect(onChange).toHaveBeenCalledWith('cCurrencyId', 'usd-id', 'C_Currency_ID');
+    expect(onChange).toHaveBeenCalledWith('cCurrencyId$_identifier', 'USD');
+    expect(onChange).toHaveBeenCalledWith('eTGOCurrencyRate', 1.2345, 'EM_ETGO_Currency_Rate');
+    expect(screen.queryByText('Buscar moneda...')).not.toBeInTheDocument();
+  });
+
+  it('does not stage a rate when the selected option has no rate', async () => {
+    globalThis.fetch = mkFetch([{ id: 'no-rate-id', isoCode: 'XYZ', rate: null }]);
+    const onChange = vi.fn();
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value=""
+        formData={{ id: 'new' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-trigger'));
+    await waitFor(() => expect(screen.getByText('XYZ')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('XYZ'));
+
+    expect(onChange).not.toHaveBeenCalledWith('eTGOCurrencyRate', expect.anything(), expect.anything());
+  });
+
+  it('shows the pencil icon once a currency is selected on a saved record', () => {
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'rec-1', eTGOCurrencyRate: '1.2345' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('currency-rate-pencil')).toBeInTheDocument();
+  });
+
+  it('supports the full manual rate override flow: pre-fill, confirm, invalid input, escape, and cancel', async () => {
     const user = userEvent.setup();
-    const { onChange } = renderPicker({ formData: { id: 'order-1', eTGOCurrencyRate: '2.5' } });
+    const { onChange } = renderPicker({ formData: { id: 'rec-1', eTGOCurrencyRate: '2.5' } });
 
     await user.click(await screen.findByTestId('currency-rate-pencil'));
     const input = screen.getByTestId('currency-rate-input');
@@ -148,32 +296,199 @@ describe('CurrencyRatePicker', () => {
     expect(screen.queryByTestId('currency-rate-input')).not.toBeInTheDocument();
   });
 
-  it('closes on outside click and escape inside the search input', async () => {
+  it('confirming an invalid (non-numeric) rate does not call onChange', () => {
+    const onChange = vi.fn();
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'rec-1', eTGOCurrencyRate: '1.2345' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-pencil'));
+    fireEvent.change(screen.getByTestId('currency-rate-input'), { target: { value: 'not-a-number' } });
+    fireEvent.click(screen.getByTestId('currency-rate-confirm'));
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('currency-rate-input')).not.toBeInTheDocument();
+  });
+
+  it('confirming a zero or negative rate does not call onChange', () => {
+    const onChange = vi.fn();
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'rec-1', eTGOCurrencyRate: '1.2345' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-pencil'));
+    fireEvent.change(screen.getByTestId('currency-rate-input'), { target: { value: '-1' } });
+    fireEvent.click(screen.getByTestId('currency-rate-confirm'));
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('pressing Enter in the rate input confirms the override', () => {
+    const onChange = vi.fn();
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'rec-1', eTGOCurrencyRate: '1.2345' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-pencil'));
+    fireEvent.change(screen.getByTestId('currency-rate-input'), { target: { value: '3.3' } });
+    fireEvent.keyDown(screen.getByTestId('currency-rate-input'), { key: 'Enter' });
+
+    expect(onChange).toHaveBeenCalledWith('eTGOCurrencyRate', 3.3, 'EM_ETGO_Currency_Rate');
+  });
+
+  it('pressing Escape in the rate input cancels the override', () => {
+    const onChange = vi.fn();
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'rec-1', eTGOCurrencyRate: '1.2345' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-pencil'));
+    fireEvent.keyDown(screen.getByTestId('currency-rate-input'), { key: 'Escape' });
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('currency-rate-input')).not.toBeInTheDocument();
+  });
+
+  it('closes the dropdown on outside click and on Escape inside the search input', async () => {
     const user = userEvent.setup();
-    renderPicker();
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value=""
+        formData={{ id: 'new' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
 
     await user.click(screen.getByTestId('currency-rate-trigger'));
-    expect(screen.getByPlaceholderText('Buscar moneda...')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('USD')).toBeInTheDocument());
     fireEvent.mouseDown(document.body);
     expect(screen.queryByPlaceholderText('Buscar moneda...')).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId('currency-rate-trigger'));
+    await waitFor(() => expect(screen.getByText('USD')).toBeInTheDocument());
     fireEvent.keyDown(screen.getByPlaceholderText('Buscar moneda...'), { key: 'Escape' });
     expect(screen.queryByPlaceholderText('Buscar moneda...')).not.toBeInTheDocument();
   });
 
-  it('renders read-only values and handles failed option fetches without blocking the dropdown', async () => {
-    const { unmount } = renderPicker({
-      isReadOnly: true,
-      formData: { id: 'order-1', eTGOCurrencyRate: '4.2' },
-    });
+  it('does not fetch options when the component token prop is missing', () => {
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value=""
+        formData={{ id: 'new' }}
+        resolvedLabel="Currency"
+        token=""
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('currency-rate-trigger'));
+    // useCurrencyPrecision reads its own token from the (mocked) AuthContext, so a
+    // /sws/neo/session call still fires — only the component's own currencyOptions
+    // fetch must be gated on the token PROP.
+    const calledUrls = globalThis.fetch.mock.calls.map((c) => String(c[0]));
+    expect(calledUrls.some((u) => u.includes('currencyOptions'))).toBe(false);
+  });
 
-    expect(screen.getByText('Euro')).toBeInTheDocument();
-    expect(screen.getByTestId('field-currency')).toHaveTextContent('4.200');
+  it('shows a required marker when the field is required', () => {
+    render(
+      <CurrencyRatePicker
+        field={{ ...FIELD, required: true }}
+        value=""
+        formData={{ id: 'new' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('*')).toBeInTheDocument();
+  });
+
+  it('applies the fetched org precision when formatting the trigger rate', async () => {
+    globalThis.fetch = mkFetch(CURRENCIES, 2);
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'rec-1', eTGOCurrencyRate: '1.2345' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
+    await waitFor(() => expect(screen.getByText('— 1.23')).toBeInTheDocument());
+  });
+
+  it('renders read-only values and keeps the dropdown usable when the option fetch fails', async () => {
+    const { unmount } = render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'rec-1', eTGOCurrencyRate: '4.2' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        isReadOnly
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('USD')).toBeInTheDocument();
+    expect(screen.getByTestId(`field-${FIELD.key}`)).toHaveTextContent('4.20');
 
     unmount();
-    global.fetch = vi.fn().mockRejectedValue(new Error('offline'));
-    renderPicker();
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('offline'));
+    render(
+      <CurrencyRatePicker
+        field={FIELD}
+        value="usd-id"
+        displayValue="USD"
+        formData={{ id: 'rec-1' }}
+        resolvedLabel="Currency"
+        token={TOKEN}
+        apiBaseUrl={BASE_URL}
+        onChange={() => {}}
+      />,
+    );
 
     await userEvent.click(screen.getByTestId('currency-rate-trigger'));
     expect(await screen.findByText('Sin resultados')).toBeInTheDocument();

@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'custom', 'fiscal-monitor', 'FiscalMonitorPage.jsx'), 'utf8');
 
-const en = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', '..', '..', 'node_modules', '@etendosoftware', 'app-shell-core', 'src', 'locales', 'en_US.json'), 'utf8'));
-const es = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', '..', '..', 'node_modules', '@etendosoftware', 'app-shell-core', 'src', 'locales', 'es_ES.json'), 'utf8'));
+const en = JSON.parse(readFileSync(join(__dirname, '..', '..', 'locales', 'en_US.json'), 'utf8'));
+const es = JSON.parse(readFileSync(join(__dirname, '..', '..', 'locales', 'es_ES.json'), 'utf8'));
 
 // Guards: ContactDetailModal wiring — modal state and API base must be present
 describe('FiscalMonitorPage — ContactDetailModal wiring', () => {
