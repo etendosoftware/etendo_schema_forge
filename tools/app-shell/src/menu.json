@@ -393,6 +393,12 @@
           "windowId": "138"
         },
         {
+          "name": "business-partner-category",
+          "label": "Business Partner Category",
+          "favname": "Business Partner Category",
+          "windowId": "192"
+        },
+        {
           "name": "user",
           "label": "User",
           "favname": "User",

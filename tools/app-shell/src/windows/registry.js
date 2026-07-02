@@ -26,6 +26,7 @@ const windowLoaders = {
   'product-category': () => import('@/windows/custom/product-category/index.jsx'),
   'tax': () => import('@generated/tax/generated/web/tax/index.jsx'),
   'tax-category': () => import('@generated/tax-category/generated/web/tax-category/index.jsx'),
+  'business-partner-category': () => import('@generated/business-partner-category/generated/web/business-partner-category/index.jsx'),
   'user': () => import('@generated/user/generated/web/user/index.jsx'),
   'purchase-order': () => import('@generated/purchase-order/generated/web/purchase-order/index.jsx'),
   'goods-receipt': () => import('@generated/goods-receipt/generated/web/goods-receipt/index.jsx'),
