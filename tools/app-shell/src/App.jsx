@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
@@ -12,6 +13,8 @@ import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
+import { SurveyModal } from './components/survey/SurveyModal.jsx';
+import { useSurveyEngine } from './hooks/useSurveyEngine.js';
 
 function detectBasePath() {
   const envBase = import.meta.env.VITE_API_BASE;
@@ -135,6 +138,21 @@ function ServiceWorkerManager() {
   return null;
 }
 
+function SurveyManager() {
+  const { activeSurvey, handleRespond, handleClose, handleDismiss } = useSurveyEngine();
+  if (!activeSurvey) return null;
+  return createPortal(
+    <SurveyModal
+      survey={activeSurvey}
+      open={!!activeSurvey}
+      onRespond={handleRespond}
+      onClose={handleClose}
+      onDismiss={handleDismiss}
+      data-testid="SurveyModal__ecaf3f" />,
+    document.body,
+  );
+}
+
 export default function App() {
   const installedApps = useInstalledApps();
   const appStoreUnlocked = useAppStoreUnlock();
@@ -172,6 +190,7 @@ export default function App() {
       <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
       <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
       <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
+      <SurveyManager data-testid="SurveyManager__ecaf3f" />
     </AppShellRuntime>
   );
 }
