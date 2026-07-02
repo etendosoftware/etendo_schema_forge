@@ -18,7 +18,6 @@ describe('StatusTag — getStatusTone', () => {
     it('maps IP (In Process) to warning', () => assert.equal(getStatusTone('IP'), 'warning'));
     it('maps UE (Under Evaluation) to warning', () => assert.equal(getStatusTone('UE'), 'warning'));
     it('maps RPAE to warning', () => assert.equal(getStatusTone('RPAE'), 'warning'));
-    it('maps RPAP to warning', () => assert.equal(getStatusTone('RPAP'), 'warning'));
   });
 
   describe('destructive tone', () => {
@@ -31,6 +30,7 @@ describe('StatusTag — getStatusTone', () => {
   describe('neutral tone (default)', () => {
     it('maps DR (Draft) to neutral', () => assert.equal(getStatusTone('DR'), 'neutral'));
     it('maps CL (Closed) to neutral', () => assert.equal(getStatusTone('CL'), 'neutral'));
+    it('maps RPAP (Awaiting Execution) to neutral', () => assert.equal(getStatusTone('RPAP'), 'neutral'));
     it('maps unknown code to neutral', () => assert.equal(getStatusTone('XYZ'), 'neutral'));
     it('maps empty string to neutral', () => assert.equal(getStatusTone(''), 'neutral'));
     it('maps null to neutral', () => assert.equal(getStatusTone(null), 'neutral'));
