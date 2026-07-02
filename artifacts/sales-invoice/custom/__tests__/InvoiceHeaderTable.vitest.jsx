@@ -119,6 +119,38 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'ARInvoice',
     aeatsiiEstado: null,
   },
+  // Credit note — mostly applied (ETP-4331 repro: -25.30 total, only -2.30 left
+  // unused). Must show "Saldo a favor", never "Pendiente".
+  {
+    eTGODueDate: '2026-03-01',
+    outstandingAmount: '-2.30',
+    grandTotalAmount: '-25.30',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'ARCreditMemo',
+    aeatsiiEstado: null,
+  },
+  // Return — fully unapplied (nothing applied yet). Sibling of the ETP-4331
+  // repro screenshot's "Factura de devolución" row.
+  {
+    eTGODueDate: '2026-03-15',
+    outstandingAmount: '-27.60',
+    grandTotalAmount: '-27.60',
+    documentStatus: 'CO',
+    'currency$_identifier': 'EUR',
+    'transactionDocument$_identifier': 'ARReturn',
+    aeatsiiEstado: null,
+  },
+  // Credit note — fully applied (outstanding ~ 0). Must still show "Aplicada".
+  {
+    eTGODueDate: '2026-03-20',
+    outstandingAmount: '0',
+    grandTotalAmount: '-900',
+    documentStatus: 'CO',
+    'currency$_identifier': 'GBP',
+    'transactionDocument$_identifier': 'ARCreditMemo',
+    aeatsiiEstado: null,
+  },
 ];
 
 vi.mock('@/components/contract-ui', () => ({
@@ -246,5 +278,38 @@ describe('InvoiceHeaderTable (sales-invoice)', () => {
     getInvoiceFiscalTargets.mockReturnValue({ showSii: true, showTbai: false, showVerifactu: false });
     render(<InvoiceHeaderTable {...BASE_PROPS} />);
     expect(screen.getAllByTestId('fiscal-status-badge').length).toBeGreaterThan(0);
+  });
+});
+
+// ── ETP-4331: credit notes/returns always show "Saldo a favor", never "Pendiente" ──
+// Risk: a credit note/return with most of its balance already applied elsewhere
+// (e.g. -25.30 total, -2.30 unused) must never regress to the amber "Pendiente"
+// badge — it always represents money owed BACK to the counterparty.
+describe('InvoiceHeaderTable — outstandingAmount credit-note/return badge (ETP-4331 bugfix)', () => {
+  it('mostly-applied credit note shows "Saldo a favor", never "Pendiente" (bug repro)', () => {
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    const badge = screen.getByText(/Saldo a favor · 2\.3:EUR/);
+    expect(badge).toBeInTheDocument();
+    const outstandingCol = screen.getByTestId('col-render-outstandingAmount');
+    expect(outstandingCol.textContent).not.toMatch(/Pendiente/);
+  });
+
+  it('fully-unapplied return also shows "Saldo a favor" (regression guard)', () => {
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    expect(screen.getByText(/Saldo a favor · 27\.6:EUR/)).toBeInTheDocument();
+  });
+
+  it('fully-applied credit note still shows the green "Aplicada" badge (unchanged)', () => {
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    expect(screen.getByText('Aplicada')).toBeInTheDocument();
+  });
+
+  it('regular invoice with partial payment still shows the amber pending badge, unaffected', () => {
+    render(<InvoiceHeaderTable {...BASE_PROPS} />);
+    // MOCK_ROWS[0] — regular AR invoice, outstanding 500, non-credit type.
+    const pendingBadge = screen.getByText('500:EUR');
+    const pendingButton = pendingBadge.closest('button');
+    expect(pendingButton).toHaveAttribute('aria-label', 'addCobro');
+    expect(pendingButton.textContent).not.toMatch(/Saldo a favor/);
   });
 });
