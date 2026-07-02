@@ -15,6 +15,10 @@ import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
+import en_US from './locales/en_US.json';
+import es_ES from './locales/es_ES.json';
+
+const LOCALE_DICTIONARIES = { en_US, es_ES };
 
 function detectBasePath() {
   const envBase = import.meta.env.VITE_API_BASE;
@@ -185,6 +189,7 @@ export default function App() {
       auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" /> }}
       locale={locale}
       setLocale={setLocale}
+      dictionaries={LOCALE_DICTIONARIES}
       notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
       data-testid="AppShellRuntime__ecaf3f">
       <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
