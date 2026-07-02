@@ -285,7 +285,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const incidentCount = blocking + warning;
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
   const fileBlocked = blocking > 0;
-  const summary = liveSummary ?? decl.summary ?? {};
+  // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
+  // are reflected in the accrued/deductible/result cards without a full recalculate.
+  const boxGet = (num) => { const e = toBoxArray(liveBoxes).find(b => b.num === num); return e ? (e.value ?? 0) : null; };
+  const liveBoxSummary = liveBoxes ? { accrued: boxGet(27), deductible: boxGet(45), result: boxGet(46) } : null;
+  const summary = liveBoxSummary ?? liveSummary ?? decl.summary ?? {};
   const resultKind = decl.result?.kind ?? null;
 
   // Derive result sublabel from kind

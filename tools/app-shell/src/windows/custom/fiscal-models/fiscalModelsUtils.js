@@ -99,10 +99,13 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
       // Complementaria (2021-2023 forms)
       if (identChecks.complementaria === true) {
         params.set('IsComplementary', 'Y');
-        if (identChecks.complementaria_num) params.set('ComplementaryNo', identChecks.complementaria_num);
+        if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
       }
-      // Rectifying reason from casillas form
+      // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
+      // Without it, the motivo flags are ignored and no rectificativa field is written.
       if (identChecks.rectificativa) {
+        params.set('IsComplementary', 'Y');
+        if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
         if (identChecks.motivo_rectificacion === 'R') params.set('RectifyingReason', 'Y');
         else if (identChecks.motivo_rectificacion === 'D')
           params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
