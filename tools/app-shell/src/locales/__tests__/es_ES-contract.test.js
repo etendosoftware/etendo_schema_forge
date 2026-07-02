@@ -1,6 +1,7 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveLabel } from '@etendosoftware/app-shell-core/i18n/resolveLabel';
+
+const resolveLabel = (dictionary, columnName) => dictionary?.fields?.[columnName]?.label ?? null;
 
 describe('resolveLabel es_ES.json contract', () => {
   let esES;

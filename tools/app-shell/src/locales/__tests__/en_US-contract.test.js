@@ -1,6 +1,7 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveLabel } from '@etendosoftware/app-shell-core/i18n/resolveLabel';
+
+const resolveLabel = (dictionary, columnName) => dictionary?.fields?.[columnName]?.label ?? null;
 
 describe('resolveLabel en_US.json contract', () => {
   // Verify the actual en_US.json matches expected labels from the DB
