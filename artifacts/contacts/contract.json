@@ -937,24 +937,15 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Pendiente",
-                "labels": {
-                  "es_ES": "Pendiente"
-                }
+                "name": "Pendiente"
               },
               {
                 "value": "V",
-                "name": "Válido",
-                "labels": {
-                  "es_ES": "Válido"
-                }
+                "name": "Válido"
               },
               {
                 "value": "I",
-                "name": "No válido",
-                "labels": {
-                  "es_ES": "No válido"
-                }
+                "name": "No válido"
               }
             ],
             "section": "principal",
