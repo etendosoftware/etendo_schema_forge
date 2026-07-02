@@ -1459,5 +1459,72 @@
     ],
     "author": "pipeline",
     "date": "2026-06-29"
+  },
+  {
+    "from": "0.30.0",
+    "to": "0.31.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryMethod\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"priority\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryTerms\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"tax\" property \"validationRule\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"status\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-01"
+  },
+  {
+    "from": "0.31.0",
+    "to": "0.32.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryMethod\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"priority\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryTerms\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"status\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-02"
+  },
+  {
+    "from": "0.32.0",
+    "to": "0.33.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"businessPartner\" property \"seq\" changed from \"undefined\" to \"10\" in frontend (additive)",
+      "Field \"documentNo\" property \"seq\" changed from \"undefined\" to \"20\" in frontend (additive)",
+      "Field \"orderDate\" property \"seq\" changed from \"undefined\" to \"30\" in frontend (additive)",
+      "Field \"partnerAddress\" property \"seq\" changed from \"undefined\" to \"40\" in frontend (additive)",
+      "Field \"scheduledDeliveryDate\" property \"seq\" changed from \"undefined\" to \"50\" in frontend (additive)",
+      "Field \"warehouse\" property \"seq\" changed from \"undefined\" to \"60\" in frontend (additive)",
+      "Field \"paymentMethod\" property \"seq\" changed from \"undefined\" to \"70\" in frontend (additive)",
+      "Field \"paymentTerms\" property \"seq\" changed from \"undefined\" to \"80\" in frontend (additive)",
+      "Field \"priceList\" property \"seq\" changed from \"undefined\" to \"100\" in frontend (additive)",
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"currency\" property \"seq\" changed from \"undefined\" to \"90\" in frontend (additive)",
+      "Field \"deliveryMethod\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"priority\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryTerms\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"status\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-02"
+  },
+  {
+    "from": "0.33.0",
+    "to": "0.34.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentStatus\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryMethod\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"priority\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"deliveryTerms\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)",
+      "Field \"status\" property \"enumValues\" changed from \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" to \"[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object],[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-07-02"
   }
 ]

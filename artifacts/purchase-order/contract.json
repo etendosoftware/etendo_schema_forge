@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.34.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-06-29T12:09:16.715Z",
-  "checksum": "4eb0aebcfcc997cc",
+  "updatedAt": "2026-07-02T18:08:53.714Z",
+  "checksum": "5cf035cdbd63c921",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -67,6 +67,7 @@
             "reference": "BusinessPartner",
             "inputMode": "search",
             "section": "principal",
+            "seq": 10,
             "gridOrder": 3,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartner"
@@ -94,6 +95,7 @@
               "source": "documentType.sequence"
             },
             "section": "principal",
+            "seq": 20,
             "gridOrder": 2,
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
@@ -119,6 +121,7 @@
             },
             "defaultValue": "@#Date@",
             "section": "principal",
+            "seq": 30,
             "gridOrder": 1,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_UpdateLinesDate"
@@ -148,6 +151,7 @@
               "filterKey": "C_BPartner_ID"
             },
             "section": "principal",
+            "seq": 40,
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -182,6 +186,7 @@
             },
             "defaultValue": "@#Date@",
             "section": "principal",
+            "seq": 50,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_UpdateLinesDate"
             },
@@ -244,6 +249,7 @@
             "sourceRequired": true,
             "reference": "Warehouse",
             "inputMode": "selector",
+            "seq": 60,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -264,6 +270,7 @@
             "reference": "PaymentMethod",
             "inputMode": "selector",
             "section": "principal",
+            "seq": 70,
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -292,6 +299,7 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "seq": 80,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -313,6 +321,7 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "seq": 100,
             "validationRule": {
               "code": "M_PriceList.issopricelist = @isSOTrx@",
               "contextParams": [],
@@ -350,21 +359,21 @@
                 "value": "AE",
                 "name": "Automatic Evaluation",
                 "labels": {
-                  "es_ES": "Evaluación Automática"
+                  "es_ES": "Automatic Evaluation"
                 }
               },
               {
                 "value": "CO",
                 "name": "Booked",
                 "labels": {
-                  "es_ES": "Registrado"
+                  "es_ES": "Booked"
                 }
               },
               {
                 "value": "CL",
                 "name": "Closed",
                 "labels": {
-                  "es_ES": "Cerrado"
+                  "es_ES": "Closed"
                 }
               },
               {
@@ -378,56 +387,56 @@
                 "value": "CA",
                 "name": "Closed - Order Created",
                 "labels": {
-                  "es_ES": "Cerrado - Pedido creado"
+                  "es_ES": "Closed - Order Created"
                 }
               },
               {
                 "value": "CJ",
                 "name": "Closed - Rejected",
                 "labels": {
-                  "es_ES": "Cerrado - Rechazado"
+                  "es_ES": "Closed - Rejected"
                 }
               },
               {
                 "value": "DR",
                 "name": "Draft",
                 "labels": {
-                  "es_ES": "Borrador"
+                  "es_ES": "Draft"
                 }
               },
               {
                 "value": "ME",
                 "name": "Manual Evaluation",
                 "labels": {
-                  "es_ES": "Evaluación Manual"
+                  "es_ES": "Manual Evaluation"
                 }
               },
               {
                 "value": "NA",
                 "name": "Not Accepted",
                 "labels": {
-                  "es_ES": "No aprobado"
+                  "es_ES": "Not Accepted"
                 }
               },
               {
                 "value": "NC",
                 "name": "Not Confirmed",
                 "labels": {
-                  "es_ES": "No Confirmado"
+                  "es_ES": "Not Confirmed"
                 }
               },
               {
                 "value": "WP",
                 "name": "Not Paid",
                 "labels": {
-                  "es_ES": "Pendiente de Pago"
+                  "es_ES": "Not Paid"
                 }
               },
               {
                 "value": "RE",
                 "name": "Re-Opened",
                 "labels": {
-                  "es_ES": "Reabierto"
+                  "es_ES": "Re-Opened"
                 }
               },
               {
@@ -441,28 +450,28 @@
                 "value": "UE",
                 "name": "Under Evaluation",
                 "labels": {
-                  "es_ES": "Bajo evaluación"
+                  "es_ES": "Under Evaluation"
                 }
               },
               {
                 "value": "IP",
                 "name": "Under Way",
                 "labels": {
-                  "es_ES": "En curso"
+                  "es_ES": "Under Way"
                 }
               },
               {
                 "value": "??",
                 "name": "Unknown",
                 "labels": {
-                  "es_ES": "Desconocido"
+                  "es_ES": "Unknown"
                 }
               },
               {
                 "value": "VO",
                 "name": "Voided",
                 "labels": {
-                  "es_ES": "Anulado"
+                  "es_ES": "Voided"
                 }
               }
             ],
@@ -514,6 +523,7 @@
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
             "section": "principal",
+            "seq": 90,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -695,21 +705,21 @@
                 "value": "D",
                 "name": "Delivery",
                 "labels": {
-                  "es_ES": "Entrega"
+                  "es_ES": "Delivery"
                 }
               },
               {
                 "value": "P",
                 "name": "Pickup",
                 "labels": {
-                  "es_ES": "Recogida"
+                  "es_ES": "Pickup"
                 }
               },
               {
                 "value": "S",
                 "name": "Shipper",
                 "labels": {
-                  "es_ES": "Transportista"
+                  "es_ES": "Shipper"
                 }
               }
             ],
@@ -755,21 +765,21 @@
                 "value": "3",
                 "name": "High",
                 "labels": {
-                  "es_ES": "Alta"
+                  "es_ES": "High"
                 }
               },
               {
                 "value": "7",
                 "name": "Low",
                 "labels": {
-                  "es_ES": "Baja"
+                  "es_ES": "Low"
                 }
               },
               {
                 "value": "5",
                 "name": "Medium",
                 "labels": {
-                  "es_ES": "Media"
+                  "es_ES": "Medium"
                 }
               }
             ],
@@ -1040,28 +1050,28 @@
                 "value": "R",
                 "name": "After Receipt",
                 "labels": {
-                  "es_ES": "Después de cobrado"
+                  "es_ES": "After Receipt"
                 }
               },
               {
                 "value": "A",
                 "name": "Availability",
                 "labels": {
-                  "es_ES": "Si hay disponible"
+                  "es_ES": "Availability"
                 }
               },
               {
                 "value": "L",
                 "name": "Complete Line",
                 "labels": {
-                  "es_ES": "Línea completa"
+                  "es_ES": "Complete Line"
                 }
               },
               {
                 "value": "O",
                 "name": "Complete Order",
                 "labels": {
-                  "es_ES": "Pedido completo"
+                  "es_ES": "Complete Order"
                 }
               }
             ],
@@ -1347,7 +1357,7 @@
             "section": "principal",
             "gridOrder": 6,
             "validationRule": {
-              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID=@AD_CLIENT_ID@ AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
               "cascadeParams": [
                 "DateInvoiced",
@@ -2322,56 +2332,56 @@
                 "value": "RPAP",
                 "name": "Awaiting Payment",
                 "labels": {
-                  "es_ES": "A Pagar"
+                  "es_ES": "Awaiting Payment"
                 }
               },
               {
                 "value": "RPAE",
                 "name": "Awaiting Execution",
                 "labels": {
-                  "es_ES": "A Ejecutar"
+                  "es_ES": "Awaiting Execution"
                 }
               },
               {
                 "value": "RPVOID",
                 "name": "Void",
                 "labels": {
-                  "es_ES": "Anulado"
+                  "es_ES": "Void"
                 }
               },
               {
                 "value": "PPM",
                 "name": "Payment Made",
                 "labels": {
-                  "es_ES": "Pagado"
+                  "es_ES": "Payment Made"
                 }
               },
               {
                 "value": "RPR",
                 "name": "Payment Received",
                 "labels": {
-                  "es_ES": "Cobrado"
+                  "es_ES": "Payment Received"
                 }
               },
               {
                 "value": "RDNC",
                 "name": "Deposited not Cleared",
                 "labels": {
-                  "es_ES": "Cobro depositado"
+                  "es_ES": "Deposited not Cleared"
                 }
               },
               {
                 "value": "PWNC",
                 "name": "Withdrawn not Cleared",
                 "labels": {
-                  "es_ES": "Pago reintegrado"
+                  "es_ES": "Withdrawn not Cleared"
                 }
               },
               {
                 "value": "RPPC",
                 "name": "Payment Cleared",
                 "labels": {
-                  "es_ES": "Conciliado"
+                  "es_ES": "Payment Cleared"
                 }
               }
             ]
