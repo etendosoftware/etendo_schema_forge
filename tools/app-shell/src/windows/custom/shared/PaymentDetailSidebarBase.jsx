@@ -181,6 +181,11 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
   const titleKey = isIn ? 'amountLabelIn' : 'amountLabelOut';
 
   const hasConfirmedEvent = events.some(ev => ev.type === 'confirmed');
+  const eventLabelKey = (ev) => {
+    const reactivatedKey = isIn ? 'cobroReactivado' : 'pagoReactivado';
+    const confirmedKey = isIn ? 'cobroConfirmado' : 'pagoConfirmado';
+    return ev.type === 'reactivated' ? reactivatedKey : confirmedKey;
+  };
   const activityItems = [
     {
       label: ui(isIn ? 'cobroCreado' : 'pagoCreado'),
@@ -191,9 +196,7 @@ export default function PaymentDetailSidebarBase({ dir, specName, data, token, a
     // reactivate → confirm) shows as three separate rows, not just the
     // latest occurrence of each type.
     ...events.map(ev => ({
-      label: ui(isIn
-        ? (ev.type === 'reactivated' ? 'cobroReactivado' : 'cobroConfirmado')
-        : (ev.type === 'reactivated' ? 'pagoReactivado' : 'pagoConfirmado')),
+      label: ui(eventLabelKey(ev)),
       confirmedAt: new Date(ev.at),
       date: null,
       dot: ev.type === 'reactivated' ? '#6C6C89' : '#2DCA72',
