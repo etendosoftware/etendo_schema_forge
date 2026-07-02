@@ -426,7 +426,12 @@ switch-to-es: ## Switch active locale to Spain (ES)
 
 ensure-locale: ## Bootstrap ES locale if .active-locale does not exist (called automatically)
 	@if [ ! -f .active-locale ]; then \
-		$(MAKE) switch-to-es --no-print-directory; \
+		if [ -f tools/app-shell/.env.es ]; then \
+			$(MAKE) switch-to-es --no-print-directory; \
+		else \
+			echo "default" > .active-locale; \
+			echo "Active locale: default (tools/app-shell/.env) — .env.es not present, skipping switch-to-es"; \
+		fi; \
 	fi
 
 project-status: ## Show active locale and module ID
