@@ -25,6 +25,22 @@ function buildSelectPlaceholder(ui, label) {
   return `${ui('selectLabelPrefix')} ${label}...`;
 }
 
+/**
+ * Headers for selector option requests. Carries the active GO locale via
+ * `Accept-Language` so the backend resolves selector values (e.g. UoM) in that
+ * language instead of the base one (ETP-4304). Mirrors the locale read in
+ * `useEntity.buildHeaders`.
+ */
+function selectorHeaders(token, extra) {
+  let locale = 'es_ES';
+  try {
+    locale = localStorage.getItem('schema-forge-locale') || 'es_ES';
+  } catch {
+    // localStorage unavailable — fall back to the default locale
+  }
+  return { 'Authorization': `Bearer ${token}`, 'Accept-Language': locale, ...extra };
+}
+
 function evalReadOnlyLogic(field, data) {
   if (typeof field?.readOnlyLogic !== 'function') return false;
   try {
@@ -150,7 +166,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
     // Try server selector with ?id=
     if (!selectorUrl || !token) return;
     fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: selectorHeaders(token),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -173,7 +189,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
 
     setFetching(true);
     fetch(buildUrlWithParams(selectorUrl, params), {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: selectorHeaders(token, { 'Content-Type': 'application/json' }),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -399,7 +415,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
       [field.dependsOn?.filterKey]: parentValue,
     });
     fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: selectorHeaders(token, { 'Content-Type': 'application/json' }),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
