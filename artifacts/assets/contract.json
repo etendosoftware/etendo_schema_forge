@@ -1,8 +1,8 @@
 {
   "version": "0.36.1",
   "generatedAt": "2026-04-29T19:06:30.936Z",
-  "updatedAt": "2026-06-30T11:52:45.953Z",
-  "checksum": "69c0f8096afd15d6",
+  "updatedAt": "2026-07-01T17:08:54.791Z",
+  "checksum": "9a848f60a68f9576",
   "frontendContract": {
     "window": {
       "id": "800027",
@@ -34,7 +34,18 @@
           ]
         }
       },
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "assetAcct": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "accumulatedDepreciation",
+            "depreciation"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
       "statusField": "none",
       "detailSortBy": "sEQNoAsset asc",
@@ -1045,7 +1056,18 @@
           ]
         }
       },
-      "secondaryTabs": {},
+      "secondaryTabs": {
+        "assetAcct": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "accumulatedDepreciation",
+            "depreciation"
+          ],
+          "requireSavedRecord": true
+        }
+      },
       "detailEntity": null,
       "statusField": "none",
       "detailSortBy": "sEQNoAsset asc",
