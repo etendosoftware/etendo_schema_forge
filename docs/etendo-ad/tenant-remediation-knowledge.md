@@ -36,6 +36,86 @@
 
 ---
 
+## ETP-4402 — "Anticipo de acreedores" account (417/4170/41700000)
+
+- **2026-07-02 — `c_elementvalue` has NO `parent_id` column.** The chart hierarchy lives ENTIRELY in
+  `AD_TREENODE` (`ad_tree_id`, `node_id`, `parent_id`) — never on the `C_ELEMENTVALUE` row itself.
+  Corrects an assumption in the ETP-4402 task brief that asked to "read the chain's `parent_id`
+  values" — there is no such column; the parent linkage must be read/written via `AD_TREENODE` joined
+  on `node_id = c_elementvalue_id`.
+- **2026-07-02 — `c_elementvalue_trg()` (standard core trigger) auto-handles 3 things on INSERT.**
+  Verified by reading `pg_get_functiondef`: (1) creates one `C_ElementValue_Trl` row per active
+  language; (2) when the new row is `elementlevel='S'` (a postable leaf — never `'C'`/`'D'` summary),
+  auto-creates ONE `C_VALIDCOMBINATION` row per `C_AcctSchema` wired to that `C_ELEMENT_ID` via
+  `C_AcctSchema_Element` — the exact same "trigger does it, don't insert it by hand" pattern as
+  `c_bp_group_trg()` for `C_BP_Group_Acct` (already documented above); (3) auto-inserts ONE
+  `AD_TREENODE` row, but ALWAYS attached to the tree's ROOT node (the row with `parent_id IS NULL`),
+  never the semantically correct parent. **Apply:** after inserting a new `C_ELEMENTVALUE` row via SQL
+  (data-fix or onboarding), the row's `C_VALIDCOMBINATION` needs NO manual insert, but its
+  `AD_TREENODE` parent DOES need a follow-up guarded `UPDATE` to re-parent it correctly (mirror a
+  sibling account's own parent).
+- **2026-07-02 — GOClient has TWO `C_Element` rows sharing the SAME `AD_Tree_ID`, but only ONE is
+  load-bearing.** `91D04C02EF8F4975B9E4F5E07543B6EA` ("GOOrg Account Tree") and
+  `BB9B64C5B6534A40A36F7C0F45C2CC0B` ("Arbol de cuentas GO") both point at `AD_Tree_ID
+  D937A98591DC4F6386C8130D350B17C7`. On the LIVE DB, `91D04...` has **zero** `issummary='N'` rows
+  (1132 rows, 100% summary) and is **not** referenced by any `C_AcctSchema_Element` — it is a
+  legacy/orphan element, not load-bearing for posting. `BB9B64...` is the ONLY element wired via
+  `C_AcctSchema_Element.elementtype='AC'` to the client's `C_AcctSchema`, and the only one with
+  postable leaves (658 `issummary='N'` rows) and any `C_ValidCombination` rows. **Apply:** when adding
+  a new account to an EXISTING tenant's chart via a corrective fix, resolve the target element
+  dynamically via `C_AcctSchema_Element` (never hardcode which of a tenant's `C_Element` rows to use)
+  — do not blindly duplicate into a second element just because a sibling account happens to exist
+  there too. NOTE: the bundled ONBOARDING sampledata XML (`referencedata/sampledata/GOClient/
+  C_ELEMENTVALUE.xml`) DOES carry full postable-leaf rows under BOTH elements (e.g. `40700000`
+  appears twice, once per element, with different ids) — the live-DB asymmetry is drift between the
+  frozen sampledata snapshot and GOClient's current live state, not evidence that new tenants only
+  get one element. For the PREVENTIVE front (sampledata), mirror the existing dual-block pattern; for
+  the CORRECTIVE front (already-provisioned tenants), resolve dynamically per the tenant's actual
+  live state.
+- **2026-07-02 — `C_BP_Group_Acct.notinvoicedreceipts_acct` vs `.notinvoicedreceivables_acct` are
+  DIFFERENT columns — do not confuse them.** Confirmed via `ad_element`/`ad_element_trl`:
+  `notinvoicedreceipts_acct` = "Non-Invoiced Receipts" / "Recibos no facturados" (Account for
+  not-invoiced Material Receipts — the AP/creditor-side GRNI concept). `notinvoicedreceivables_acct` =
+  "Non-Invoiced Receivables" / "Cuenta pendiente no facturable" (Account for not-invoiced
+  Receivables — an AR/customer-side concept, unbilled revenue). **Bug found+fixed:** an earlier
+  revision of `OnboardingAccountingWiringService.overrideAcreedorGroupAccounts` (Java, preventive
+  front) wired the wrong one (`notinvoicedreceivables_acct`) for the "Acreedor" (vendor/creditor)
+  group's "Recibos no facturados" account, while the sibling corrective data-fix
+  (`R9-bp-category-seed.sql`) already had the correct column (`notinvoicedreceipts_acct`). Always
+  verify BOTH fronts use the identical column name for the same named account — a silent column-name
+  mismatch between corrective and preventive is easy to miss since both compile/run fine, they just
+  write to different columns.
+- **2026-07-02 — `C_BP_Group_Acct.v_prepayment_acct` vs `.v_liability_services_acct` — pick by
+  semantic fit, not name-similarity.** `v_liability_services_acct` = "Vendor Service Liability" /
+  "Pasivo de servicio del proveedor" — a SECOND liability slot for service-type vendor invoices,
+  unrelated to an advance. `v_prepayment_acct` = "Vendor Prepayment" / "Pagos por adelantado del
+  proveedor" — literally "advance payment to a vendor", the correct fit for "Anticipo de acreedores".
+  Confirmed empirically on GOClient: `C_ACCTSCHEMA_DEFAULT` defaults `v_prepayment_acct` to a generic
+  long-term-payables account (`40001000`, "Proveedores (euros) a largo plazo") for every
+  `C_BP_Group` — NOT an advances/anticipo account — so overriding it for a specific group is a
+  deliberate, meaningful correction, not a no-op.
+- **2026-07-02 — `referencedata/sampledata/GOClient/*.xml` IS the live onboarding source, confirmed
+  by literal id match.** `tasks.gradle`'s `prepareOnboardingSampledata` task copies every `*.xml` file
+  from this directory VERBATIM into the classpath resource path
+  (`com/etendoerp/go/onboarding/sampledata/GOClient`) that `OnboardingAccountingWiringService` reads
+  from at runtime for new-tenant provisioning — it is a required dependency of every WAR-packaging
+  task. Confirmed empirically: the `C_ELEMENTVALUE_ID` for account `40700000` in the sampledata XML
+  (`54823C0EB1F941C689DFED85EF3A9B81`) is the EXACT SAME id as on the live GOClient DB — the XML is a
+  literal dump of GOClient's own historical state, not a separate hand-authored template. **Apply:**
+  when a new account/entity needs to reach NEW tenants, add it to this XML (matching the exact
+  existing block shape/column set for a sibling row) rather than assuming a webhook or Java-only path
+  — the files end with a `</data>` closing tag; new blocks can be appended just before it (row order
+  in these dumps is not semantically significant, only ids matter).
+- **2026-07-02 — Editing an unshipped `.sql` data-fix in place is acceptable within the SAME
+  in-flight ticket/branch.** The "applied migrations are immutable" rule (mandatory framework rule)
+  protects fixes already applied to real tenant DBs (tracked in `ETGO_DATA_FIX_HISTORY`) — it does
+  NOT forbid revising a `.sql` file that is still on a feature branch and has zero ledger rows
+  anywhere (verified via `SELECT count(*) FROM etgo_data_fix_history WHERE fix_id LIKE '%<fix>%'` = 0
+  before editing). Extending `R9-bp-category-seed.sql` in place for ETP-4402's 3rd account (rather
+  than shipping a new dated file) kept the `OnboardingBaselineService.ONBOARDING_PROVISIONED_THROUGH`
+  CUT untouched (still equal to R9's own filename timestamp) — no CUT bump needed since no new
+  `.sql` file was added.
+
 ## c_elementvalue code structure (GOClient chart of accounts)
 
 - **2026-06-26 — Numeric codes are strictly hierarchical and 3/4/5 digits:** `issummary='Y'` rows carry 3-digit (584 rows) and 4-digit (1140 rows) group codes; `issummary='N'` rows carry 5-digit posting codes (1312 rows). Non-numeric codes (1088 rows: section labels like `A`, `PYG`, `A.B.II.1`, `P.G.D`) also exist in both element trees and must never be padded.
