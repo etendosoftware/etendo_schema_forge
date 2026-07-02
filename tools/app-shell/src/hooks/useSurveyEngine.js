@@ -16,7 +16,9 @@ function isAdminRole(selectedRole) {
 
 function trackSurveyEvent(eventDef, properties) {
   const { name, properties: safeProps } = buildObservabilityEvent(eventDef, properties);
-  if (name) void track(name, safeProps);
+  if (name) {
+    Promise.resolve(track(name, safeProps)).catch(() => {});
+  }
 }
 
 export function useSurveyEngine() {
