@@ -6,15 +6,16 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..', '..', '..', '..');
+const localesDir = join(repoRoot, 'tools', 'app-shell', 'src', 'locales');
 const enRoot = JSON.parse(
   readFileSync(
-    join(repoRoot, 'node_modules', '@etendosoftware', 'app-shell-core', 'src', 'locales', 'en_US.json'),
+    join(localesDir, 'en_US.json'),
     'utf8',
   ),
 );
 const esRoot = JSON.parse(
   readFileSync(
-    join(repoRoot, 'node_modules', '@etendosoftware', 'app-shell-core', 'src', 'locales', 'es_ES.json'),
+    join(localesDir, 'es_ES.json'),
     'utf8',
   ),
 );

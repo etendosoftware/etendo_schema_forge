@@ -4,10 +4,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const APP_SHELL = resolve(import.meta.dirname, '..');
-const REPO_ROOT = resolve(APP_SHELL, '../..');
 const SOURCE = resolve(APP_SHELL, 'src/windows/custom/shared/PdfViewer.jsx');
-const EN_LOCALE = resolve(REPO_ROOT, 'node_modules/@etendosoftware/app-shell-core/src/locales/en_US.json');
-const ES_LOCALE = resolve(REPO_ROOT, 'node_modules/@etendosoftware/app-shell-core/src/locales/es_ES.json');
+const EN_LOCALE = resolve(APP_SHELL, 'src/locales/en_US.json');
+const ES_LOCALE = resolve(APP_SHELL, 'src/locales/es_ES.json');
 
 describe('PdfViewer source', () => {
   it('file exists', () => {

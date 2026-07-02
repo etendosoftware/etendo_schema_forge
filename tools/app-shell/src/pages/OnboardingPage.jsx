@@ -5,6 +5,7 @@ import { checkSalesInvoiceReadiness } from './onboarding/onboardingReadiness.js'
 import { track } from '../lib/observability.js';
 import { buildObservabilityEvent } from '../lib/observability/events.js';
 import { trackSessionStarted } from '../lib/observability/health-events.js';
+import { markOnboardingCompleted } from '../lib/surveys/survey-state.js';
 
 export default function OnboardingPage() {
   const ui = useUI();
@@ -34,6 +35,9 @@ export default function OnboardingPage() {
     track: (eventDefinition, properties) => {
       const event = buildObservabilityEvent(eventDefinition, properties);
       const name = event.name || (typeof eventDefinition === 'string' ? eventDefinition : eventDefinition?.name);
+      if (name === 'onboarding_run_succeeded') {
+        markOnboardingCompleted();
+      }
       return track(name, { ...properties, ...event.properties });
     },
     onSessionStarted: (env) => trackSessionStarted({

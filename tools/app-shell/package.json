@@ -8,14 +8,14 @@
     "dev:mock": "VITE_MOCK=true vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/lib/__tests__/*.test.js src/hooks/__tests__/*.test.js src/windows/__tests__/*.test.js",
+    "test": "node --test src/lib/__tests__/*.test.js src/hooks/__tests__/*.test.js src/windows/__tests__/*.test.js src/locales/__tests__/*.test.js",
     "test:vitest": "vitest run",
     "test:vitest:coverage": "vitest run --coverage",
     "test:vitest:watch": "vitest",
     "test:all": "npm run test && npm run test:vitest"
   },
   "dependencies": {
-    "@etendosoftware/app-shell-core": "0.1.1",
+    "@etendosoftware/app-shell-core": "0.2.0",
     "@etendosoftware/etendo-go-core": "0.1.1",
     "@iconicapp/iconic-react": "^1.1.4",
     "@phosphor-icons/react": "^2.1.10",

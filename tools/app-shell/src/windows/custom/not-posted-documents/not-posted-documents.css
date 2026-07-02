@@ -238,3 +238,83 @@
 .npd-error {
   color: var(--npd-red-700);
 }
+
+/* ── Multi-select ───────────────────────────────────────────────────────────── */
+
+.npd-multiselect {
+  position: relative;
+  min-width: 160px;
+}
+
+.npd-multiselect-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--npd-gray-200);
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: var(--npd-gray-800);
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+}
+
+.npd-multiselect-trigger:focus {
+  border-color: var(--npd-blue-600);
+  box-shadow: 0 0 0 2px rgba(0, 117, 173, 0.12);
+}
+
+.npd-multiselect-trigger .npd-placeholder {
+  color: var(--npd-gray-400);
+}
+
+.npd-chevron {
+  flex-shrink: 0;
+  color: var(--npd-gray-400);
+  transition: transform 0.15s;
+}
+
+.npd-chevron.open {
+  transform: rotate(180deg);
+}
+
+.npd-multiselect-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  background: #fff;
+  border: 1px solid var(--npd-gray-200);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  z-index: 100;
+  padding: 4px 0;
+}
+
+.npd-multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--npd-gray-800);
+}
+
+.npd-multiselect-option:hover {
+  background: var(--npd-gray-50);
+}
+
+.npd-multiselect-option input[type="checkbox"] {
+  accent-color: var(--npd-blue-600);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
