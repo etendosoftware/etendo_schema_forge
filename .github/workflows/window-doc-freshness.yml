@@ -42,7 +42,7 @@ jobs:
         id: check
         run: |
           REPORT_FILE="$(mktemp)"
-          if node cli/src/check-window-docs.js --base "${{ steps.range.outputs.base }}" --head "${{ steps.range.outputs.head }}" >"$REPORT_FILE" 2>&1; then
+          if node scripts/check-window-docs.js --base "${{ steps.range.outputs.base }}" --head "${{ steps.range.outputs.head }}" >"$REPORT_FILE" 2>&1; then
             echo "missing=false" >> "$GITHUB_OUTPUT"
           else
             echo "missing=true" >> "$GITHUB_OUTPUT"

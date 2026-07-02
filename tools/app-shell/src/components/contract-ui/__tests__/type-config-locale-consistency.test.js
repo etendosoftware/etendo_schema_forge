@@ -8,8 +8,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const modalSrc = readFileSync(join(__dirname, '..', 'ConfirmResultModal.jsx'), 'utf8');
 
-// Locale files live in the shared core package.
-const localesDir = join(__dirname, '..', '..', '..', '..', '..', '..', 'packages', 'app-shell-core', 'src', 'locales');
+// Locale files live in the shared core package (installed dependency).
+const localesDir = join(__dirname, '..', '..', '..', '..', '..', '..', 'node_modules', '@etendosoftware', 'app-shell-core', 'src', 'locales');
 const es = JSON.parse(readFileSync(join(localesDir, 'es_ES.json'), 'utf8'));
 const en = JSON.parse(readFileSync(join(localesDir, 'en_US.json'), 'utf8'));
 

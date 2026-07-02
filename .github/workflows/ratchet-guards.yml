@@ -22,6 +22,8 @@ jobs:
   window-leak-budget:
     name: window-leak-budget (contract-ui)
     runs-on: ubuntu-latest
+    env:
+      SF_ROOT: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
 
@@ -29,8 +31,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          registry-url: https://npm.pkg.github.com
 
       - run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Window-specific leak ratchet (fail only if it grew)
-        run: node cli/src/window-leak-budget.js --list
+        run: npx sf-window-leak-budget --list
