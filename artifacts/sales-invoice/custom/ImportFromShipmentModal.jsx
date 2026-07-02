@@ -141,19 +141,42 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     }
   }
 
-  let documents = [];
+  let candidates = [];
   if (shipRes.ok) {
     const all = (await shipRes.json())?.response?.data || [];
-    documents = all.filter(s =>
+    candidates = all.filter(s =>
       s.documentStatus === 'CO'
       && s.businessPartner === bpId
       && s.invoiced !== true
     );
   }
 
+  // Shipments have no currency of their own (M_InOut has no C_Currency_ID column) —
+  // resolve it via the linked sales order. Shipments with no linked order can't be
+  // compared, so they're never excluded by this filter.
+  const invoiceCurrency = invoiceHeader.currency || null;
+  let documents = candidates;
+  let excludedByCurrency = false;
+  if (invoiceCurrency) {
+    const orderIds = [...new Set(candidates.filter(s => s.salesOrder).map(s => s.salesOrder))];
+    const orderCurrencyMap = {};
+    await Promise.all(orderIds.map(async (id) => {
+      try {
+        const r = await fetch(`${base}/sales-order/header/${id}`, { headers });
+        if (r.ok) {
+          const o = (await r.json())?.response?.data?.[0];
+          if (o) orderCurrencyMap[id] = o.currency;
+        }
+      } catch { /* ignore — treat as unresolved, don't exclude */ }
+    }));
+    documents = candidates.filter(s => !s.salesOrder || orderCurrencyMap[s.salesOrder] === invoiceCurrency);
+    excludedByCurrency = documents.length === 0 && candidates.length > 0;
+  }
+
   return {
     documents,
     sharedContext: { invoiceHeader, productAuxMap, alreadyImportedShipmentLines, alreadyImportedOrderLines, invoicedElsewhere },
+    excludedByCurrency,
   };
 };
 
@@ -255,6 +278,7 @@ export default function ImportFromShipmentModal(props) {
       searchPlaceholderKey="searchShipment"
       emptyMessageKey="noPendingShipmentsForCustomer"
       noSearchResultsKey="noShipmentsMatchYourSearch"
+      noCurrencyMatchMessageKey="noShipmentsMatchCurrency"
       successMessageKey="linesImportedFromShipment"
       showPriceColumns={false}
       fetchDocuments={fetchDocuments}

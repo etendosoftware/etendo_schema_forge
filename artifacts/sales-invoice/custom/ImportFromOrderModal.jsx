@@ -1,9 +1,10 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 
 const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
-  const [ordersRes, invLinesRes] = await Promise.all([
+  const [ordersRes, invLinesRes, headerRes] = await Promise.all([
     fetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
     fetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
+    fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
   ]);
 
   const alreadyImportedOrderLines = new Set();
@@ -12,20 +13,28 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     invLines.forEach(il => { if (il.cOrderlineId) alreadyImportedOrderLines.add(il.cOrderlineId); });
   }
 
+  let invoiceCurrency = null;
+  if (headerRes.ok) {
+    invoiceCurrency = (await headerRes.json())?.response?.data?.[0]?.currency || null;
+  }
+
   let documents = [];
+  let excludedByCurrency = false;
   const orderDiscountMap = {};
   if (ordersRes.ok) {
     const all = (await ordersRes.json())?.response?.data || [];
-    documents = all.filter(o =>
+    const candidates = all.filter(o =>
       o.documentStatus === 'CO'
       && o.businessPartner === bpId
       && Number(o.invoiceStatus ?? 0) < 100
     );
+    documents = invoiceCurrency ? candidates.filter(o => o.currency === invoiceCurrency) : candidates;
+    excludedByCurrency = !!invoiceCurrency && documents.length === 0 && candidates.length > 0;
     documents.forEach(o => {
       if (o.etgoTotalDiscount) orderDiscountMap[o.id] = Number(o.etgoTotalDiscount);
     });
   }
-  return { documents, sharedContext: { alreadyImportedOrderLines, orderDiscountMap } };
+  return { documents, sharedContext: { alreadyImportedOrderLines, orderDiscountMap }, excludedByCurrency };
 };
 
 const fetchLines = async ({ base, headers, docId, sharedContext }) => {
@@ -98,6 +107,7 @@ export default function ImportFromOrderModal(props) {
       searchPlaceholderKey="searchSalesOrder"
       emptyMessageKey="noCompletedSalesOrdersForThisCustomer"
       noSearchResultsKey="noOrdersMatchYourSearch"
+      noCurrencyMatchMessageKey="noSalesOrdersMatchCurrency"
       successMessageKey="linesImportedFromSalesOrder"
       fetchDocuments={fetchDocuments}
       fetchLines={fetchLines}
