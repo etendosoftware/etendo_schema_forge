@@ -5,8 +5,22 @@
 Adds an in-app survey engine (NPS loyalty + 3 CSAT surveys) that runs entirely
 in the frontend. Triggers are detected from existing observability call-sites
 (onboarding completion, record creation) and state is kept in localStorage.
-The feature touches `tools/app-shell` for the engine/UI, `packages/app-shell-core`
-for session read access and i18n keys, and the observability event catalog.
+The feature touches `tools/app-shell` for the engine/UI, the purchase-order and
+sales-order window actions for the CSAT trigger call-sites, `app-shell-core`
+(schema_forge_core) for i18n keys, and the observability event catalog.
+
+**Post-split note (ETP-4413 merge, 2026-07-02):** this branch predates the
+repo split. Its `packages/app-shell-core/src/locales/*.json` changes (36 survey
+i18n keys) do not apply in `etendo_schema_forge` — that package now lives in
+`schema_forge_core` and is consumed here as the published
+`@etendosoftware/app-shell-core` dependency. Those key additions are ported to
+`schema_forge_core` in a separate, dedicated PR. `tools/app-shell/src/App.jsx`
+and `tools/app-shell/src/pages/OnboardingPage.jsx` were also independently
+refactored on `feature/ETP-4413` (extraction of `OnboardingFlow`/
+`AppShellRuntime` into `app-shell-core`) between this branch's creation and the
+merge; both survey hook points (`SurveyManager` mount, `markOnboardingCompleted()`
+on run success) were re-applied against the new structure rather than merged
+verbatim.
 
 ## Domains Touched
 
@@ -17,12 +31,15 @@ for session read access and i18n keys, and the observability event catalog.
 | platform-change | `tools/app-shell/src/lib/surveys/surveys.js` | New: survey definitions (4 surveys) |
 | platform-change | `tools/app-shell/src/components/survey/SurveyModal.jsx` | New: modal UI matching Etendo design |
 | platform-change | `tools/app-shell/src/hooks/useSurveyEngine.js` | New: React hook wiring engine to UI |
-| platform-change | `tools/app-shell/src/App.jsx` | Mount SurveyManager inside AuthProvider |
-| platform-change | `tools/app-shell/src/pages/OnboardingPage.jsx` | Call markOnboardingCompleted() on run success |
+| platform-change | `tools/app-shell/src/App.jsx` | Mount SurveyManager as an `AppShellRuntime` child (inside `AuthProvider`) |
+| platform-change | `tools/app-shell/src/pages/OnboardingPage.jsx` | Call `markOnboardingCompleted()` from the `track` callback on `onboarding_run_succeeded` |
 | platform-change | `tools/app-shell/src/hooks/useEntity.js` | Increment invoice/PO counters on record created |
 | platform-change | `tools/app-shell/src/lib/observability/events.js` | Add SURVEY_SHOWN, SURVEY_RESPONDED, SURVEY_DISMISSED events |
-| app-shell-core | `packages/app-shell-core/src/locales/en_US.json` | 36 survey i18n keys added to genericLabels |
-| app-shell-core | `packages/app-shell-core/src/locales/es_ES.json` | 36 survey i18n keys added to genericLabels (Spanish primary) |
+| platform-change | `tools/app-shell/src/lib/observability/payload.js` | Pass through survey event properties |
+| window:purchase-order | `tools/app-shell/src/windows/custom/purchase-order/PurchaseOrderActions.jsx`, `artifacts/purchase-order/custom/PurchaseOrderActions.jsx` | Call `incrementSurveyCounter('order')` on confirm, `emitSurveyTrigger()` on related-docs modal close |
+| window:sales-order | `artifacts/sales-order/custom/OrderCreateInvoice.jsx` | Same CSAT trigger wiring as purchase-order |
+| app-shell-core (schema_forge_core, separate PR) | `packages/app-shell-core/src/locales/en_US.json` | 36 survey i18n keys added to genericLabels |
+| app-shell-core (schema_forge_core, separate PR) | `packages/app-shell-core/src/locales/es_ES.json` | 36 survey i18n keys added to genericLabels (Spanish primary) |
 
 ## Anti-Fatigue Rules Implemented
 
