@@ -1,8 +1,8 @@
 {
   "version": "0.17.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-07-01T17:17:00.382Z",
-  "checksum": "fc385f5e95764989",
+  "updatedAt": "2026-07-02T16:30:37.816Z",
+  "checksum": "1a9e34ebe9c1b0d0",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -10,14 +10,25 @@
       "primaryEntity": "product",
       "category": "inventory",
       "sidebarLayout": true,
-      "customTabsAfterBottom": true,
       "hidePrint": true,
       "hideMoreMenu": true,
       "contentBg": "bg-white",
       "hideLink": true,
       "breadcrumb": "Inventory / Product",
-      "secondaryTabs": {},
-      "detailEntity": "accounting",
+      "secondaryTabs": {
+        "accounting": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "fixedAsset",
+            "productExpense",
+            "productRevenue",
+            "productCOGS"
+          ],
+          "requireSavedRecord": true
+        }
+      },
+      "detailEntity": null,
       "headerExtra": {},
       "labelOverrides": {
         "en_US": {
@@ -1887,14 +1898,25 @@
       "primaryEntity": "product",
       "category": "inventory",
       "sidebarLayout": true,
-      "customTabsAfterBottom": true,
       "hidePrint": true,
       "hideMoreMenu": true,
       "contentBg": "bg-white",
       "hideLink": true,
       "breadcrumb": "Inventory / Product",
-      "secondaryTabs": {},
-      "detailEntity": "accounting",
+      "secondaryTabs": {
+        "accounting": {
+          "tabOrder": 1,
+          "label": "Accounting",
+          "addLineFields": [
+            "fixedAsset",
+            "productExpense",
+            "productRevenue",
+            "productCOGS"
+          ],
+          "requireSavedRecord": true
+        }
+      },
+      "detailEntity": null,
       "headerExtra": {},
       "labelOverrides": {
         "en_US": {

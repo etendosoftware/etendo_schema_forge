@@ -42,22 +42,7 @@ const draftMode = null;
 const requiredHeaderFields = ['searchKey', 'name', 'uOM', 'productCategory', 'taxCategory', 'purchase', 'sale', 'productType', 'stocked', 'returnable'];
 // @sf-generated-end requiredHeaderFields:product
 
-// @sf-generated-start addLineFields:accounting
-const addLineFields = {
-  entry: [
-    { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
-    { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
-  ],
-  derived: [
 
-  ],
-  hidden: [
-    { key: 'accountingSchema', fromSibling: 'accountingSchema' },
-  ],
-};
-// @sf-generated-end addLineFields:accounting
 
 export const api = {
   "specName": "product",
@@ -531,27 +516,29 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       <>
       <DetailView
         entity="product"
-        detailEntity="accounting"
         Form={ProductForm}
-        DetailTable={AccountingTable}
-        DetailForm={AccountingForm}
         summary={summary}
         statusField={statusField}
         extraBadges={extraBadges}
         processes={processes}
-        addLineFields={addLineFields}
         catalogs={catalogs}
         entityLabel="Product"
-        detailLabel="Accounting"
         windowName={windowName}
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        secondaryTabs={[
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, addLineFields: { entry: [
+          { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'productRevenue', column: 'P_Revenue_Acct', type: 'selector', required: true, label: 'Product Revenue', reference: 'ValidCombination', inputMode: 'selector' },
+          { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true },
+        ]}
         primaryTabs={[
           { key: 'general', label: 'General' },
           { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
         ]}
-        customTabsAfterBottom
         hidePrint
         hideMoreMenu
         noHeaderBorder
