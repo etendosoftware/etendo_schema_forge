@@ -416,8 +416,12 @@ export function CreatableSearchSelect({
             </button>
           )}
 
-          {/* Create action — always pinned at the top */}
-          {createLabel && onCreateRequest && (
+          {/* Create action — pinned at the top. A string createLabel is always shown (e.g.
+              "+ Add address" opens a blank creation modal). A function createLabel marks a
+              free-text picker: it renders createLabel(query) and only appears once the user
+              has typed something, so it reads as "use what I typed" (e.g. Usar «ES91…»). */}
+          {createLabel && onCreateRequest
+            && (typeof createLabel !== 'function' || query.trim()) && (
             <button
               type="button"
               data-testid={`action-create-${field.key}`}
@@ -425,7 +429,7 @@ export function CreatableSearchSelect({
               style={{ color: '#202452' }}
               onMouseDown={(e) => { e.preventDefault(); handleCreate(); }}
             >
-              {createLabel}
+              {typeof createLabel === 'function' ? createLabel(query.trim()) : createLabel}
             </button>
           )}
 

@@ -34,6 +34,54 @@ const BADGE = {
 // selectorUrl/token/dependsOn is needed; `key`/`id` only drive element ids/testids.
 const METHOD_FIELD = { key: 'paymentMethod', id: 'paymentMethod', required: false };
 const ACCOUNT_FIELD = { key: 'account', id: 'account', required: true };
+const PIS_IBAN_FIELD = { key: 'pisIban', id: 'pisIban', required: true };
+const PIS_TEMPLATE_FIELD = { key: 'pisTemplate', id: 'pisTemplate', required: true };
+
+// ─── PIS (bank transfer via Salt Edge) — ETP-4406 ─────────────────────────────
+const PIS_AMBER_TEXT = '#8A6100';
+const PIS_ALERT_BG = '#FFF9EB';
+const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'GBP']);
+const PIS_NON_TERMINAL_STATUSES = ['requested', 'authorizing', 'authorized', 'processing'];
+const PIS_STATUS_KEYS = {
+  requested: 'cpPisStatusRequested',
+  authorizing: 'cpPisStatusAuthorizing',
+  authorized: 'cpPisStatusAuthorized',
+  processing: 'cpPisStatusProcessing',
+  executed: 'cpPisStatusExecuted',
+};
+// Template search-keys (match the AD "Template List for Bank Payments" ref-list values).
+const PIS_TEMPLATE_SEPA = 'SEPA';
+const PIS_TEMPLATE_DOMESTIC = 'DOMESTIC';
+const PIS_TEMPLATE_FPS = 'FPS';
+
+/**
+ * Which creditor fields each template requires — mirrors the classic "Generate Bank Payment"
+ * display logic and the PSD2 orchestrator's per-template validation:
+ *   SEPA → creditor IBAN · DOMESTIC → IBAN + BBAN + account number · FPS → sort code + account number.
+ */
+function pisTemplateFields(template) {
+  return {
+    iban: template === PIS_TEMPLATE_SEPA || template === PIS_TEMPLATE_DOMESTIC,
+    bban: template === PIS_TEMPLATE_DOMESTIC,
+    accountNumber: template === PIS_TEMPLATE_DOMESTIC || template === PIS_TEMPLATE_FPS,
+    sortCode: template === PIS_TEMPLATE_FPS,
+  };
+}
+
+/** Default template search-key for a currency (EUR→SEPA, GBP→FPS); the user can change it. */
+function defaultPisTemplate(currency) {
+  return currency === 'GBP' ? PIS_TEMPLATE_FPS : PIS_TEMPLATE_SEPA;
+}
+
+/**
+ * True when the creditor fields required by {@code template} are filled — SEPA needs an IBAN,
+ * FPS needs sort code + account number, DOMESTIC needs at least one account identifier.
+ */
+function pisFieldsComplete(template, f) {
+  if (template === PIS_TEMPLATE_FPS) return !!(f.sortCode && f.accountNumber);
+  if (template === PIS_TEMPLATE_DOMESTIC) return !!(f.iban || f.bban || f.accountNumber);
+  return !!f.iban; // SEPA (and any default)
+}
 
 /** Returns a short currency suffix ("€" for EUR, otherwise the ISO code). */
 function curSuffix(currency) {
@@ -69,7 +117,50 @@ function mapAccounts(json) {
   return (json?.items || []).map(a => ({
     id: a.id, name: a.label || a.name, defaultMethod: a.defaultPaymentMethod,
     paymentMethodIds: a.paymentMethodIds, defaultForMethodIds: a.defaultForMethodIds || [],
+    // PSD2/PIS enrichment (ETP-4406) — absent on older backends, so default
+    // to "not connected" rather than throwing off the eligibility gate.
+    psd2Connected: !!a.psd2Connected, maskedPan: a.maskedPan || null,
   }));
+}
+
+// The backend returns id === IBAN (not the bank-account record id) so a picked account and a
+// hand-typed IBAN are handled uniformly; the option label is "Name · IBAN".
+function mapPisAccounts(json) {
+  return (json?.items || []).map(a => ({
+    id: a.iban || a.id,
+    name: a.name ? `${a.name} · ${a.iban || a.id}` : (a.iban || a.id),
+    iban: a.iban || a.id,
+    default: !!a.default,
+  }));
+}
+
+/** Maps the PIS template ref-list (`pisTemplates` action) to CreatableSearchSelect options. */
+function mapPisTemplates(json) {
+  return (json?.items || []).map(t => ({ id: t.value, name: t.label || t.value }));
+}
+
+/** True when a payment method's display name looks like a bank transfer (mirrors the backend heuristic). */
+function looksLikeTransfer(methodName) {
+  return /transfer|transferencia/i.test(methodName || '');
+}
+
+/**
+ * Opens the Salt Edge SCA widget in a centered popup WINDOW (not a browser tab), matching the
+ * Classic "Generate Bank Payment" behaviour. Passing window features (and a named target, so a
+ * second confirm reuses the same window) makes the browser open a popup instead of a tab.
+ */
+function openPisPopup(url) {
+  const w = 500;
+  const h = 720;
+  const left = Math.max(0, (window.screen?.width || 1024) / 2 - w / 2);
+  const top = Math.max(0, (window.screen?.height || 768) / 2 - h / 2);
+  const features = `popup=yes,width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`;
+  return window.open(url, 'saltEdgePisWidget', features);
+}
+
+/** i18n key for a PIS payment status; any terminal status other than "executed" reads as a failure. */
+function pisStatusKey(status) {
+  return PIS_STATUS_KEYS[status] || 'cpPisStatusFailed';
 }
 
 /** True when `account` supports `methodId` (or the account's methods are unknown/legacy). */
@@ -308,6 +399,154 @@ function ExcessBand({ balance, currency, ui, isReceipt }) {
   );
 }
 
+// A plain text field styled like the modal's other inputs, for the DOMESTIC/FPS creditor
+// identifiers (BBAN, account number, sort code) that are hand-typed, not selected.
+function PisTextField({ label, value, onChange, placeholder, testid }) {
+  return (
+    <Field label={label} required data-testid={`Field__${testid}`}>
+      <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', padding: '0 12px' }}>
+        <input
+          type="text" value={value} placeholder={placeholder}
+          onChange={e => onChange(e.target.value)}
+          data-testid={testid}
+          style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', padding: 0, font: '400 14px/24px Inter', color: INK }}
+        />
+      </div>
+    </Field>
+  );
+}
+
+// ─── PIS transfer section (Figma "Transferencia bancaria (PIS) – Salt Edge") ──
+// Purchase-invoice payments only: lets the user hand off a real bank transfer
+// to Salt Edge instead of just recording a manual payment. The template (from the AD
+// "Template List for Bank Payments" ref-list) drives which creditor fields show, mirroring
+// the classic "Generate Bank Payment" dialog. See the module-level PIS_* constants and
+// pisEligible in NewPaymentEntryModal for the visibility gate.
+function PisTransferSection({
+  balance, currency, ui, party, account,
+  templateOptions, template, onTemplateChange,
+  ibanOptions, iban, onIbanChange,
+  bban, onBbanChange, accountNumber, onAccountNumberChange, sortCode, onSortCodeChange,
+}) {
+  const show = pisTemplateFields(template);
+  const alertParts = [
+    ui('cpPisAlertTransfer', {
+      dinero: fmtCur(balance.amount, currency),
+      cuenta: account?.name || '',
+      maskedPan: account?.maskedPan || '',
+      proveedor: party || '',
+    }),
+  ];
+  if (balance.usedCredit > 0) {
+    alertParts.push(ui('cpPisAlertCredit', { credito: fmtCur(balance.usedCredit, currency) }));
+  }
+  alertParts.push(ui('cpPisAlertSca'));
+
+  return (
+    <div
+      data-testid="cp-pis-section"
+      style={{ display: 'flex', flexDirection: 'column', gap: 10, background: WIDGET_BG, border: `1px solid ${BORDER2}`, borderRadius: 8, padding: 12 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={FG4} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M2 10l10-6 10 6" /><path d="M3 21h18" /><path d="M5 21V10" /><path d="M19 21V10" /><path d="M9 21V10" /><path d="M15 21V10" />
+        </svg>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+          <span style={{ font: '500 14px/24px Inter', color: INK }}>{ui('cpPisTitle')}</span>
+          <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{ui('cpPisSubtitle')}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', border: `1px solid ${BORDER2}`, borderRadius: 8, background: WIDGET_BG, flexShrink: 0 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={FG4} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+          </svg>
+          <span style={{ font: '400 14px/20px Inter', color: FG2 }}>
+            <MoneyAmount value={balance.amount} currency={currency} tone="neutral" data-testid="MoneyAmount__cp-pis-amount" />
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 45%', minWidth: 0 }}>
+          <Field label={ui('cpPisTemplateLabel')} required data-testid="Field__pis-template">
+            {/* White wrapper: CreatableSearchSelect is bg-transparent, so on the grey PIS card it
+                would read grey — this keeps it white like the BBAN/account-number text inputs. */}
+            <div style={{ background: '#fff', borderRadius: 8 }}>
+            <CreatableSearchSelect
+              // CreatableSearchSelect seeds its options from staticOptions only on mount; the
+              // ref-list loads async, so remount once it arrives to pick the options up.
+              key={templateOptions.length ? 'pis-tpl-loaded' : 'pis-tpl-loading'}
+              field={PIS_TEMPLATE_FIELD}
+              value={template}
+              displayValue={templateOptions.find(o => o.id === template)?.name || ''}
+              onChange={onTemplateChange}
+              resolvedLabel={ui('cpPisTemplateLabel')}
+              staticOptions={templateOptions}
+              data-testid="cp-pis-template-select" />
+            </div>
+          </Field>
+        </div>
+        {show.iban && (
+          <div style={{ flex: '1 1 45%', minWidth: 0 }}>
+            <Field label={ui('cpPisIbanLabel')} required data-testid="Field__pis-iban">
+              {/* White wrapper — see the template select above. */}
+              <div style={{ background: '#fff', borderRadius: 8 }}>
+              <CreatableSearchSelect
+                // Same async-options remount as the template select above (supplier IBANs load async).
+                key={ibanOptions.length ? 'pis-iban-loaded' : 'pis-iban-loading'}
+                field={PIS_IBAN_FIELD}
+                value={iban}
+                displayValue={ibanOptions.find(o => o.id === iban)?.name || iban || ''}
+                onChange={onIbanChange}
+                resolvedLabel={ui('cpPisIbanLabel')}
+                staticOptions={ibanOptions}
+                createLabel={(q) => ui('cpPisIbanUseTyped', { iban: q })}
+                onCreateRequest={(query, onCreated) => {
+                  const typed = (query || '').trim();
+                  if (typed) onCreated(typed, typed);
+                }}
+                data-testid="cp-pis-iban-select" />
+              </div>
+            </Field>
+          </div>
+        )}
+        {show.bban && (
+          <div style={{ flex: '1 1 45%', minWidth: 0 }}>
+            <PisTextField label={ui('cpPisBbanLabel')} value={bban} onChange={onBbanChange}
+              placeholder={ui('cpPisBbanPlaceholder')} testid="cp-pis-bban" data-testid="PisTextField__bban" />
+          </div>
+        )}
+        {show.sortCode && (
+          <div style={{ flex: '1 1 45%', minWidth: 0 }}>
+            <PisTextField label={ui('cpPisSortCodeLabel')} value={sortCode} onChange={onSortCodeChange}
+              placeholder={ui('cpPisSortCodePlaceholder')} testid="cp-pis-sort-code" data-testid="PisTextField__sort" />
+          </div>
+        )}
+        {show.accountNumber && (
+          <div style={{ flex: '1 1 45%', minWidth: 0 }}>
+            <PisTextField label={ui('cpPisAccountNumberLabel')} value={accountNumber} onChange={onAccountNumberChange}
+              placeholder={ui('cpPisAccountNumberPlaceholder')} testid="cp-pis-account-number" data-testid="PisTextField__acct" />
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: PIS_ALERT_BG, borderRadius: 8, padding: '12px 8px' }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={AMBER} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+        <span style={{ font: '400 14px/20px Inter', color: PIS_AMBER_TEXT }}>{alertParts.join(' ')}</span>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={FG4} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z" />
+        </svg>
+        <span style={{ font: '400 12px/16px Inter', color: FG3 }}>{ui('cpPisHint')}</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * NewPaymentEntryModal — step 2 of the two-step Cobros/Pagos flow.
  * Opens from the invoice payment-history popup ("+ Añadir cobro/pago").
@@ -359,6 +598,20 @@ export default function NewPaymentEntryModal({
   // Business partner's preferred account for this direction (Classic parity) — set once
   // from the fetch response; read via ref so it doesn't need to be threaded into deps.
   const bpPreferredAccountIdRef = useRef('');
+
+  // ── PIS (Salt Edge bank transfer) state — ETP-4406 ──────────────────────────
+  const [pisAccounts, setPisAccounts] = useState([]);
+  const [pisTemplates, setPisTemplates] = useState([]);
+  const [pisTemplate, setPisTemplate] = useState('');
+  const [pisIban, setPisIban] = useState('');
+  const [pisBban, setPisBban] = useState('');
+  const [pisAccountNumber, setPisAccountNumber] = useState('');
+  const [pisSortCode, setPisSortCode] = useState('');
+  const [pisPolling, setPisPolling] = useState(null); // { pisPaymentId, status } | null
+  const pisAccountsFetchedRef = useRef(false);
+  // registerPayment's response.data captured at confirm time, replayed into
+  // onSaved once polling reaches the "executed" terminal status.
+  const pisResultRef = useRef(null);
 
   const balance = usePaymentBalance({ total, dir, sources });
 
@@ -414,6 +667,81 @@ export default function NewPaymentEntryModal({
     });
   }, [accounts]);
 
+  // ── PIS (Salt Edge bank transfer) eligibility — ETP-4406 ────────────────────
+  // Purchase-invoice payments only, on a PSD2-connected account, paid via a
+  // transfer-like method, in a currency Salt Edge supports. Imperfect by design
+  // (mirrors the backend's own heuristic) — not meant to be exhaustive.
+  const selectedAccount = useMemo(() => accounts.find(a => a.id === accountId), [accounts, accountId]);
+  const selectedMethodObj = useMemo(() => methods.find(m => m.id === methodId), [methods, methodId]);
+  const pisEligible = dir === 'out'
+    && !!selectedAccount?.psd2Connected
+    && looksLikeTransfer(selectedMethodObj?.name)
+    && PIS_ELIGIBLE_CURRENCIES.has(currency);
+
+  // Fetch the supplier's PIS-eligible bank accounts + the payment-template ref-list once,
+  // the first time the block becomes eligible (avoids the requests for non-PIS payments).
+  useEffect(() => {
+    if (!pisEligible || pisAccountsFetchedRef.current) return;
+    pisAccountsFetchedRef.current = true;
+    (async () => {
+      try {
+        const post = (action) => apiFetch(`/${specName}/header/${invoiceId}/action/${action}`,
+          { method: 'POST', body: '{}' }).catch(() => null);
+        const [accRes, tplRes] = await Promise.all([
+          post('pisSupplierAccounts'), post('pisTemplates'),
+        ]);
+        const items = mapPisAccounts(await readJson(accRes));
+        setPisAccounts(items);
+        const def = items.find(a => a.default) || items[0];
+        if (def) setPisIban(def.iban);
+
+        const templates = mapPisTemplates(await readJson(tplRes));
+        setPisTemplates(templates);
+        // Default the template by currency (EUR→SEPA, GBP→FPS) when that value exists.
+        const preferred = defaultPisTemplate(currency);
+        const initial = templates.find(t => t.id === preferred) || templates[0];
+        if (initial) setPisTemplate(initial.id);
+      } catch { /* silent — the block degrades to empty; user can't confirm PIS */ }
+    })();
+    // apiFetch/specName/invoiceId/currency intentionally excluded — same rationale as the
+    // catalog effect above; this must run once per eligibility flip, not per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pisEligible]);
+
+  // Poll pisPaymentStatus every ~3s while a PIS transfer is awaiting SCA
+  // authorization. Re-runs on every status change (new object identity),
+  // scheduling the next poll or reacting to a terminal status inline.
+  useEffect(() => {
+    if (!pisPolling) return undefined;
+    if (pisPolling.status === 'executed') {
+      onSaved?.(pisResultRef.current || {}, 'deposited');
+      setPisPolling(null);
+      return undefined;
+    }
+    if (!PIS_NON_TERMINAL_STATUSES.includes(pisPolling.status)) {
+      // Terminal, non-executed status (or an unrecognized one) — stop polling,
+      // surface an inline error, and let the user retry from the editable form.
+      setError(ui('cpPisFailedError'));
+      setPisPolling(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await apiFetch(`/${specName}/header/${invoiceId}/action/pisPaymentStatus`, {
+          method: 'POST', body: JSON.stringify({ pisPaymentId: pisPolling.pisPaymentId }),
+        });
+        const json = await readJson(res);
+        if (cancelled) return;
+        setPisPolling(prev => (prev ? { ...prev, status: json?.status || 'failed' } : prev));
+      } catch {
+        if (!cancelled) setPisPolling(prev => (prev ? { ...prev, status: 'failed' } : prev));
+      }
+    }, 3000);
+    return () => { cancelled = true; clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pisPolling]);
+
   // ── save / confirm ────────────────────────────────────────────────────────
   const submit = useCallback(async (process) => {
     if (!date) { setDateInvalid(true); setError(ui('paymentDateRequired')); return; }
@@ -433,6 +761,21 @@ export default function NewPaymentEntryModal({
         creditSources: balance.consumedSources,
         overpaymentAction: overpaymentActionFor(balance),
       };
+      // PIS only ever accompanies the primary "confirm" action — Guardar
+      // borrador keeps recording a plain manual payment, byte-for-byte
+      // unchanged, even when the PIS block is showing. Only the creditor fields
+      // the chosen template actually uses are sent, so a stale value from a
+      // previously-selected template (e.g. a preselected IBAN) never leaks into
+      // an FPS/DOMESTIC request.
+      if (pisEligible && process === 'confirm') {
+        const show = pisTemplateFields(pisTemplate);
+        body.pis = true;
+        body.pisTemplate = pisTemplate;
+        body.pisCreditorIban = show.iban ? (pisIban || undefined) : undefined;
+        body.pisCreditorBban = show.bban ? (pisBban || undefined) : undefined;
+        body.pisCreditorAccountNumber = show.accountNumber ? (pisAccountNumber || undefined) : undefined;
+        body.pisCreditorSortCode = show.sortCode ? (pisSortCode || undefined) : undefined;
+      }
       const res = await apiFetch(`/${specName}/header/${invoiceId}/action/registerPayment`, {
         method: 'POST', body: JSON.stringify(body),
       });
@@ -440,13 +783,21 @@ export default function NewPaymentEntryModal({
       if (!res.ok || json?.response?.error || json?.response?.status === -1) {
         throw new Error(extractSaveError(json, ui));
       }
-      onSaved?.(json?.response?.data || {}, process === 'confirm' ? 'deposited' : 'draft');
+      const data = json?.response?.data || {};
+      if (body.pis && data.pisPaymentUrl && data.pisPaymentId) {
+        pisResultRef.current = data;
+        openPisPopup(data.pisPaymentUrl);
+        setPisPolling({ pisPaymentId: data.pisPaymentId, status: 'requested' });
+        return;
+      }
+      onSaved?.(data, process === 'confirm' ? 'deposited' : 'draft');
     } catch (err) {
       setError(err.message || ui('cpSaveFailed'));
     } finally {
       setSaving(false);
     }
-  }, [apiFetch, specName, invoiceId, scheduleId, accountId, methodId, date, balance, ui, onSaved]);
+  }, [apiFetch, specName, invoiceId, scheduleId, accountId, methodId, date, balance, ui, onSaved,
+    pisEligible, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode]);
 
   const title = isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
   const deltaLabel = deltaLabelFor(balance, ui);
@@ -455,7 +806,14 @@ export default function NewPaymentEntryModal({
   // a credit/saldo a favor line covering 100% legitimately leaves the cash amount at 0.
   const missingRequired = balance.funds <= 0 || !date || !methodId || !accountId;
   const saveDisabled = saving || loading || missingRequired;
-  const confirmDisabled = saving || missingRequired || !balance.canConfirm;
+  // For PIS, the template-specific creditor fields must be filled before confirming
+  // (SEPA→IBAN, FPS→sort code + account number, DOMESTIC→any one identifier).
+  const pisReady = !pisEligible || pisFieldsComplete(pisTemplate, {
+    iban: pisIban, bban: pisBban, accountNumber: pisAccountNumber, sortCode: pisSortCode,
+  });
+  const confirmDisabled = saving || missingRequired || !balance.canConfirm
+    || !!pisPolling || !pisReady;
+  const confirmLabel = pisEligible ? ui('cpPisConfirmButton') : ui('cpConfirm');
 
   // Floppy + check icons for the footer actions (Figma).
   const floppy = (
@@ -576,6 +934,29 @@ export default function NewPaymentEntryModal({
             </div>
           </div>
 
+          {pisEligible && (
+            <div style={{ padding: '0 20px' }}>
+              <PisTransferSection
+                balance={balance}
+                currency={currency}
+                ui={ui}
+                party={party}
+                account={selectedAccount}
+                templateOptions={pisTemplates}
+                template={pisTemplate}
+                onTemplateChange={setPisTemplate}
+                ibanOptions={pisAccounts}
+                iban={pisIban}
+                onIbanChange={setPisIban}
+                bban={pisBban}
+                onBbanChange={setPisBban}
+                accountNumber={pisAccountNumber}
+                onAccountNumberChange={setPisAccountNumber}
+                sortCode={pisSortCode}
+                onSortCodeChange={setPisSortCode} />
+            </div>
+          )}
+
           <div style={{ padding: '0 20px' }}>
             <ExcessBand
               balance={balance}
@@ -591,15 +972,30 @@ export default function NewPaymentEntryModal({
         {/* footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: '#fff', flexShrink: 0 }}>
           <button type="button" onClick={onClose} disabled={saving} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'transparent', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}>{ui('cancel')}</button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button type="button" data-testid="cp-save-draft" onClick={() => submit('draft')} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
-              {floppy}{ui('save')}
-            </button>
-            <button type="button" data-testid="cp-confirm" onClick={() => submit('confirm')} disabled={confirmDisabled || loading} className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-              {ui('cpConfirm')}
-            </button>
-          </div>
+          {pisPolling ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="cp-pis-waiting">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, font: '500 14px/24px Inter', color: INK }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: AMBER, flexShrink: 0 }} />
+                {ui(pisStatusKey(pisPolling.status))}
+              </span>
+              <button
+                type="button" data-testid="cp-pis-cancel-wait" onClick={() => setPisPolling(null)}
+                style={{ height: 32, padding: '0 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}
+              >
+                {ui('cpPisCancelWait')}
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button type="button" data-testid="cp-save-draft" onClick={() => submit('draft')} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
+                {floppy}{ui('save')}
+              </button>
+              <button type="button" data-testid="cp-confirm" onClick={() => submit('confirm')} disabled={confirmDisabled || loading} className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                {confirmLabel}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
