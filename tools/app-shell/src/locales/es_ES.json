@@ -20385,6 +20385,8 @@
     "fm.new_decl.model": "Modelo",
     "fm.new_decl.year": "Año",
     "fm.new_decl.period": "Período",
+    "fm.new_decl.period_quarterly": "Trimestral",
+    "fm.new_decl.period_monthly": "Mensual",
     "fm.incidents.title": "Incidencias",
     "fm.incidents.blocking": "bloqueante(s)",
     "fm.incidents.warning": "aviso(s)",

@@ -20135,6 +20135,8 @@
     "fm.new_decl.model": "Model",
     "fm.new_decl.year": "Year",
     "fm.new_decl.period": "Period",
+    "fm.new_decl.period_quarterly": "Quarterly",
+    "fm.new_decl.period_monthly": "Monthly",
     "fm.incidents.title": "Incidents",
     "fm.incidents.blocking": "blocking",
     "fm.incidents.warning": "warnings",

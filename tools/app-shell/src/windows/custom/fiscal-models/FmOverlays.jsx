@@ -263,6 +263,8 @@ export function FileGenModal303({ decl, defaultFilename, onConfirm, onClose }) {
 export function NewDeclModal({ onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
+  const QUARTERLY_PERIODS = ['T1', 'T2', 'T3', 'T4'];
+  const MONTHLY_PERIODS   = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
   const [model, setModel] = useState('303');
   const _cy = new Date().getFullYear();
   const [year, setYear] = useState(SUPPORTED_YEARS.includes(_cy) ? _cy : SUPPORTED_YEARS[SUPPORTED_YEARS.length - 1]);
@@ -274,7 +276,7 @@ export function NewDeclModal({ onConfirm, onClose }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
           <label style={{ fontSize: 12, color: '#374151' }}>
             {t('fm.new_decl.model')}
-            <select value={model} onChange={e => setModel(e.target.value)} style={{ marginLeft: 8, fontSize: 12 }}>
+            <select value={model} onChange={e => { setModel(e.target.value); setPeriod('T1'); }} style={{ marginLeft: 8, fontSize: 12 }}>
               <option value="303">303</option>
               <option value="349">349</option>
             </select>
@@ -293,11 +295,14 @@ export function NewDeclModal({ onConfirm, onClose }) {
           </label>
           <label style={{ fontSize: 12, color: '#374151' }}>
             {t('fm.new_decl.period')}
-            <input
-              value={period}
-              onChange={e => setPeriod(e.target.value)}
-              style={{ marginLeft: 8, fontSize: 12, width: 60 }}
-            />
+            <select value={period} onChange={e => setPeriod(e.target.value)} style={{ marginLeft: 8, fontSize: 12 }}>
+              <optgroup label={t('fm.new_decl.period_quarterly') ?? 'Trimestral'}>
+                {QUARTERLY_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+              </optgroup>
+              <optgroup label={t('fm.new_decl.period_monthly') ?? 'Mensual'}>
+                {MONTHLY_PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
+              </optgroup>
+            </select>
           </label>
         </div>
         <div className="fm-present-modal__actions">
