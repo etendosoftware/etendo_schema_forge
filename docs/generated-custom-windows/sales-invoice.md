@@ -228,3 +228,44 @@ Schema Forge extracts from AD, that column surfaces in this window's contract as
 frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
 this note only records why the contract was regenerated when the PSD2 dependency
 was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## TBAI status staleness fix in invoice preview — ETP-4391
+
+**Symptom:** after sending a completed invoice to TicketBAI via **Enviar a SIF**, the
+"Estado TicketBAI" row shown in the invoice preview modal's **General** tab (i18n key
+`invoicePreview.fiscalStatus.tbai`) never left "Pendiente", even though the send itself
+succeeded.
+
+**Root cause — confirmed, not a backend/persistence bug.** Direct DB inspection during
+investigation confirmed `com.smf.ticketbai`'s send flow (`XMLConvertionFromInvoice` →
+`SynchronizeUtils`) reliably writes `C_Invoice.EM_Tbai_Issent = 'Y'` and creates a
+matching `tbai_syncinvoice` row for every invoice successfully sent through Etendo GO —
+including through the NEO Headless path — and `TbaiSyncStatusInjector` (which powers the
+**list** column's `tbaiSyncEstado` field) reads that data correctly on every header GET.
+The bug was isolated to a *second*, independent status source: `useFiscalStatus.js`
+(`tools/app-shell/src/windows/custom/shared/useFiscalStatus.js`), which the invoice
+**preview modal's General tab** uses to query the `sii-monitor` / `tbai-facturas-enviadas`
+/ `monitor-verifactu` specs directly by invoice ID (a mechanism separate from the list's
+`tbaiSyncEstado` injection). Its data-fetching `useEffect` was keyed only by
+`[invoiceId, specName, profile, apiBaseUrl, apiFetch, orgId]` — none of which change when
+the user sends the invoice from within the same open preview modal, so the hook never
+re-ran its fetch after a successful send. The pill kept showing its pre-send snapshot
+(`tbai: null` → "Pendiente" fallback) for the rest of that preview session, regardless of
+how many times the user re-sent or re-checked without closing and reopening the modal.
+
+**Fix:** `useFiscalStatus` now also listens for the same `${specName}:invoice-updated`
+window event that `useInvoicePreview.js`'s `refetchInvoice()` already dispatches after a
+successful SIF send (the identical event `SalesInvoiceTopbar.jsx` /
+`PurchaseInvoiceTopbar.jsx` already consume via the shared `useInvoiceUpdatedListener`
+hook — no second event mechanism was introduced), via a `refreshTick` state bumped by
+`useInvoiceUpdatedListener(specName, invoiceId, ...)` and added to the fetch effect's
+dependency array. A successful send now triggers a real re-fetch of all three fiscal
+statuses (SII, TBAI, Verifactu) inside the same open preview modal.
+
+**Scope:** shared hook fix — applies identically to both `sales-invoice` and
+`purchase-invoice` (both consume `useFiscalStatus` through the same `InvoicePreview.jsx`).
+The list column's `tbaiSyncEstado` (server-injected, `TbaiSyncStatusInjector`) was not
+affected and required no change.
+
+Regression coverage:
+`tools/app-shell/src/windows/custom/shared/__tests__/useFiscalStatus.vitest.jsx`.
