@@ -772,7 +772,7 @@ function getInputType(f) {
 function isCurrencyRateSelectorField(entity, apiBaseUrl, f) {
   return f.column === 'C_Currency_ID'
     && (entity === 'header' || entity === 'quotation')
-    && /\/(sales-order|purchase-order|sales-quotation)(\/|$)/.test(apiBaseUrl || '');
+    && /\/(sales-order|purchase-order|sales-quotation|sales-invoice|purchase-invoice)(\/|$)/.test(apiBaseUrl || '');
 }
 
 

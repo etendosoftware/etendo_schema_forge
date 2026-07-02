@@ -1,8 +1,8 @@
 {
-  "version": "0.60.0",
+  "version": "0.65.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-06-29T19:54:37.694Z",
-  "checksum": "b370f896543f140f",
+  "updatedAt": "2026-07-02T15:30:57.108Z",
+  "checksum": "beeef50fcfd3a20e",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -53,6 +53,7 @@
           }
         }
       },
+      "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
@@ -552,7 +553,7 @@
             "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
             "derivation": {
               "type": "fromConfig",
@@ -561,7 +562,13 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
-            "section": "other"
+            "section": "principal",
+            "seq": 65,
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
           },
           {
             "name": "paymentComplete",
@@ -1359,6 +1366,18 @@
             "grid": true,
             "form": false,
             "gridOrder": 9
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "label": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false
           }
         ],
         "searchableFields": [
@@ -1681,7 +1700,7 @@
             "section": "principal",
             "gridOrder": 6,
             "validationRule": {
-              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID=@AD_CLIENT_ID@ AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
               "cascadeParams": [
                 "DateInvoiced",
@@ -4399,6 +4418,7 @@
           }
         }
       },
+      "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
@@ -5762,6 +5782,14 @@
             "type": "button",
             "visibility": "discarded",
             "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
           }
         ],
         "javaQualifier": "purchaseInvoiceHeaderHandler"
@@ -10798,6 +10826,14 @@
         "description": "Field 'dueAmount' should be present in header"
       },
       {
+        "id": "t-field-presence-header-eTGOCurrencyRate",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-eTGODeliveryStatus",
         "category": "field-presence",
         "entity": "header",
@@ -11982,6 +12018,14 @@
         "description": "Field 'dueAmount' should have type 'number' in header"
       },
       {
+        "id": "t-field-type-header-eTGOCurrencyRate",
+        "category": "field-type",
+        "entity": "header",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-eTGODeliveryStatus",
         "category": "field-type",
         "entity": "header",
@@ -12870,6 +12914,14 @@
         "description": "Read-only logic for 'chargeAmount' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-currency",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-documentNo",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -13372,6 +13424,14 @@
         "field": "chargeAmount",
         "runner": "node",
         "description": "Read-only logic for 'chargeAmount' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-currency",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-documentNo",
@@ -16934,17 +16994,17 @@
       }
     ],
     "summary": {
-      "total": 936,
+      "total": 940,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 12,
         "default-value-type": 38,
         "displaylogic-evaluable": 17,
         "displaylogic-valid": 17,
-        "field-presence": 148,
-        "field-type": 148,
-        "readonlylogic-evaluable": 63,
-        "readonlylogic-valid": 63,
+        "field-presence": 149,
+        "field-type": 149,
+        "readonlylogic-evaluable": 64,
+        "readonlylogic-valid": 64,
         "rule-declared": 21,
         "searchable-filters": 6,
         "selector-endpoint": 50,
@@ -16952,7 +17012,7 @@
         "visibility": 12
       },
       "byRunner": {
-        "node": 936,
+        "node": 940,
         "junit": 0
       }
     }
