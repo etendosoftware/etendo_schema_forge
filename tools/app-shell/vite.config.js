@@ -166,7 +166,7 @@ export default defineConfig(({ mode }) => {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallbackDenylist: [
           /^\/etendo\//,
           /^\/mcp(?:\/|$)/,
@@ -209,6 +209,24 @@ export default defineConfig(({ mode }) => {
     dedupe: ['react', 'react-dom', 'react-router-dom', 'sonner', 'lucide-react'],
     // Ensure modules imported from artifacts/ resolve to app-shell node_modules
     modules: [resolve(__dirname, 'node_modules'), 'node_modules'],
+  },
+  optimizeDeps: {
+    // `@etendosoftware/app-shell-core` gets pre-bundled for its `/runtime` and `.`
+    // entry points (discovered via static imports), but this repo's local shims
+    // (src/hooks/useCurrency.jsx, src/hooks/use-mobile.jsx) reach the package via
+    // deep subpath imports esbuild's `include` cannot pre-bundle on their own
+    // (Vite logs "Cannot optimize dependency: ... present in client
+    // 'optimizeDeps.include'" and silently drops them). Left as-is, the package
+    // ends up loaded TWICE — once pre-bundled (used internally by CurrencyProvider
+    // inside `/runtime`) and once as raw, un-optimized source for the direct hook
+    // import — two separate module instantiations. `createContext(null)` in
+    // useCurrency.jsx then runs twice, so CurrencyProvider updates one Context
+    // instance while every consumer's `useCurrency()` reads the other, permanently
+    // unmatched, instance (dashboard and any other consumer stays stuck reading a
+    // currency that never "arrives"). Excluding the whole package keeps every
+    // subpath on the same raw-source resolution path, so there is only one
+    // instance to begin with.
+    exclude: ['@etendosoftware/app-shell-core'],
   },
   server: {
     allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],

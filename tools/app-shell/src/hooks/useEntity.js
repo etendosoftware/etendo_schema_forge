@@ -11,6 +11,9 @@ import {
     trackRecordCreated,
     trackRecordUpdated,
 } from '@/lib/productUsageTelemetry.js';
+import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
+import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
+import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 
 function buildHeaders(token) {
     let locale = 'es_ES';
@@ -553,6 +556,29 @@ export function showSaveSuccessToast(silent, isNew, ui) {
     if (!silent) toast.success(getSaveSuccessMessage(isNew, ui));
 }
 
+function afterSaveNotifications(data, { silent, isNew, entity, specName, ui }) {
+    const backendMessages = data?.messages ?? [];
+    if (backendMessages.length > 0) {
+        for (const msg of backendMessages) {
+            const type = (msg.type || '').toLowerCase();
+            const title = msg.title || '';
+            const description = msg.text || undefined;
+            if (type === 'success') toast.success(title, { description });
+            else if (type === 'error') toast.error(title, { description });
+            else if (type === 'warning') toast.warning(title, { description });
+            else if (title) toast.info(title, { description });
+        }
+    } else {
+        showSaveSuccessToast(silent, isNew, ui);
+    }
+    if (isNew) {
+        trackDocumentCreated();
+        trackRecordCreated({ entity, specName });
+    } else {
+        trackRecordUpdated({ entity, specName });
+    }
+}
+
 export function useEntity(entity, childEntity, {
     token,
     apiBaseUrl,
@@ -910,13 +936,7 @@ export function useEntity(entity, childEntity, {
                 setEditing({ ...resolvedSaved });
                 setSaveError(null);
                 setFieldErrors({});
-                showSaveSuccessToast(silent, isNew, ui);
-                if (isNew) {
-                    trackDocumentCreated();
-                    trackRecordCreated({ entity, specName });
-                } else {
-                    trackRecordUpdated({ entity, specName });
-                }
+                afterSaveNotifications(data, { silent, isNew, entity, specName, ui });
                 return saved;
             } else {
                 await handleSaveErrorResponse(res, ui, setFieldErrors, setSaveError);
@@ -1042,6 +1062,13 @@ export function useEntity(entity, childEntity, {
             source: 'detail_view',
             operation: 'complete',
         });
+        if (isInvoiceSpec(specName)) {
+            incrementSurveyCounter('invoicing');
+            emitSurveyTrigger();
+        } else if (isOrderSpec(specName)) {
+            incrementSurveyCounter('order');
+            emitSurveyTrigger();
+        }
         refresh();
         // Fetch updated record and update selected state so the detail view reflects the new status
         try {

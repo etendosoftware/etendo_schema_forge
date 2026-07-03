@@ -299,6 +299,12 @@
           "windowId": "800027"
         },
         {
+          "name": "asset-group",
+          "label": "Asset Category",
+          "favname": "Asset Category",
+          "windowId": "252"
+        },
+        {
           "name": "amortization",
           "label": "Amortization",
           "favname": "Amortization",

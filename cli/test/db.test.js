@@ -1,247 +1,262 @@
-import { describe, it } from 'node:test';
+import { afterEach, describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createDbPool, resolveDbDefaults } from '../src/db.js';
+import { tmpdir } from 'node:os';
+import {
+  closePool,
+  createDbPool,
+  flushCacheWrites,
+  getCacheMode,
+  resolveDbDefaults,
+  setCacheMode,
+  wrapPoolWithCache,
+} from '../src/db.js';
+import { cacheKey, readCache, writeCache } from '../src/lib/ad-cache.js';
 
-const DB_ENV_KEYS = [
+const ENV_KEYS = [
   'ETENDO_DB_HOST',
   'ETENDO_DB_PORT',
   'ETENDO_DB_USER',
   'ETENDO_DB_PASSWORD',
   'ETENDO_DB_NAME',
   'ETENDO_GRADLE_PROPERTIES',
+  'SF_CACHE_MODE',
+  'SF_CACHE_PATH',
 ];
 
-const FIXTURE_DB_PWD = 'fixture-pwd';
-const PASSWORD_PROP = ['bbdd', 'password'].join('.');
-// Computed env-var key, built via join so the password env-var name never
-// appears verbatim next to a colon or equals sign. The PR-review secret scanner
-// (cli/src/pr-review.js) flags that adjacency; these are fixture values only.
-const PWD_ENV_KEY = ['ETENDO_DB', 'PASSWORD'].join('_');
+const ORIGINAL_ENV = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
-function withDbEnv(overrides, fn) {
-  const previous = new Map(DB_ENV_KEYS.map((key) => [key, process.env[key]]));
-  for (const key of DB_ENV_KEYS) delete process.env[key];
-  for (const [key, value] of Object.entries(overrides)) {
-    if (value !== undefined) process.env[key] = value;
-  }
-  try {
-    return fn();
-  } finally {
-    for (const [key, value] of previous) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
+function restoreEnv() {
+  for (const key of ENV_KEYS) {
+    if (ORIGINAL_ENV[key] === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = ORIGINAL_ENV[key];
     }
   }
 }
 
-describe('db', () => {
-  it('createDbPool returns a pool with query method', () => {
-    const pool = createDbPool({
-      host: 'localhost', port: 5432,
-      user: 'test', password: FIXTURE_DB_PWD, database: 'test'
-    });
-    assert.ok(typeof pool.query === 'function');
-    pool.end();
-  });
+function withTempDir() {
+  const dir = mkdtempSync(join(tmpdir(), 'schema-forge-db-test-'));
+  return {
+    dir,
+    path: (...parts) => join(dir, ...parts),
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
 
-  it('createDbPool resolves host/port from gradle.properties bbdd.url', () => {
-    withDbEnv({
-      ETENDO_DB_HOST: 'localhost',
-      ETENDO_DB_PORT: '5432',
-      ETENDO_DB_USER: 'tad',
-      [PWD_ENV_KEY]: FIXTURE_DB_PWD,
-      ETENDO_DB_NAME: 'etendo',
-    }, () => {
-      const dir = mkdtempSync(join(tmpdir(), 'sf-db-test-'));
-      const file = join(dir, 'gradle.properties');
-      writeFileSync(file, [
-        'bbdd.url=jdbc:postgresql://customhost:6543/foo',
-        'bbdd.user=customuser',
-        `${PASSWORD_PROP}=${FIXTURE_DB_PWD}`,
-        'bbdd.sid=customdb',
-      ].join('\n'));
-      try {
-        const pool = createDbPool(undefined, file);
-        assert.equal(pool.options.host, 'customhost');
-        assert.equal(pool.options.port, 6543);
-        assert.equal(pool.options.user, 'customuser');
-        assert.equal(pool.options.database, 'customdb');
-        pool.end();
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    });
-  });
+afterEach(() => {
+  setCacheMode({ mode: 'off' });
+  restoreEnv();
+});
 
-  it('createDbPool rewrites gradle host "db" to localhost', () => {
-    withDbEnv({ ETENDO_DB_HOST: 'ignored-host' }, () => {
-      const dir = mkdtempSync(join(tmpdir(), 'sf-db-test-'));
-      const file = join(dir, 'gradle.properties');
-      writeFileSync(file, [
-        'bbdd.url=jdbc:postgresql://db:5432/x',
-        'bbdd.user=u',
-        `${PASSWORD_PROP}=${FIXTURE_DB_PWD}`,
-        'bbdd.sid=x'
-      ].join('\n'));
-      try {
-        const pool = createDbPool(undefined, file);
-        assert.equal(pool.options.host, 'localhost');
-        pool.end();
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
+describe('resolveDbDefaults', () => {
+  it('uses environment variables when no explicit gradle file is available', () => {
+    process.env.ETENDO_DB_HOST = 'db.internal';
+    process.env.ETENDO_DB_PORT = '6543';
+    process.env.ETENDO_DB_USER = 'admin';
+    process.env.ETENDO_DB_PASSWORD = 'secret';
+    process.env.ETENDO_DB_NAME = 'erp';
+
+    assert.deepEqual(resolveDbDefaults('/missing/gradle.properties'), {
+      host: 'localhost',
+      port: 5432,
+      user: 'etendo',
+      password: '',
+      database: 'etendo_dev',
+      source: 'defaults',
+    });
+
+    assert.deepEqual(resolveDbDefaults(), {
+      host: 'db.internal',
+      port: 6543,
+      user: 'admin',
+      password: 'secret',
+      database: 'erp',
+      source: 'env',
     });
   });
 
-  it('createDbPool: bbdd.port overrides URL port', () => {
-    withDbEnv({ ETENDO_DB_PORT: '5432' }, () => {
-      const dir = mkdtempSync(join(tmpdir(), 'sf-db-test-'));
-      const file = join(dir, 'gradle.properties');
-      writeFileSync(file, [
-        'bbdd.url=jdbc:postgresql://h:1111/x',
-        'bbdd.port=2222',
-        'bbdd.user=u',
-        `${PASSWORD_PROP}=${FIXTURE_DB_PWD}`,
-        'bbdd.sid=x'
-      ].join('\n'));
-      try {
-        const pool = createDbPool(undefined, file);
-        assert.equal(pool.options.port, 2222);
-        pool.end();
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    });
-  });
-
-  it('createDbPool falls back to defaults when gradle.properties is missing', () => {
-    withDbEnv({
-      ETENDO_DB_HOST: 'localhost',
-      ETENDO_DB_PORT: '5432',
-      ETENDO_DB_USER: 'tad',
-      [PWD_ENV_KEY]: FIXTURE_DB_PWD,
-      ETENDO_DB_NAME: 'etendo',
-    }, () => {
-      const pool = createDbPool(undefined, '/nonexistent/path/gradle.properties');
-      assert.equal(pool.options.host, 'localhost');
-      assert.equal(pool.options.port, 5432);
-      assert.equal(pool.options.user, 'etendo');
-      pool.end();
-    });
-  });
-
-  it('createDbPool reads from env when no config provided', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'sf-db-test-'));
-    const file = join(dir, 'gradle.properties');
-    writeFileSync(file, 'some.other.key=value');
+  it('uses explicit gradle.properties ahead of environment variables', () => {
+    const tmp = withTempDir();
     try {
-      withDbEnv({
-        ETENDO_DB_HOST: 'testhost',
-        ETENDO_DB_PORT: '5433',
-        ETENDO_DB_USER: 'testuser',
-        [PWD_ENV_KEY]: FIXTURE_DB_PWD,
-        ETENDO_DB_NAME: 'testdb',
-        ETENDO_GRADLE_PROPERTIES: file,
-      }, () => {
-        const pool = createDbPool();
-        assert.equal(pool.options.host, 'testhost');
-        assert.equal(pool.options.port, 5433);
-        assert.equal(pool.options.user, 'testuser');
-        assert.equal(pool.options.password, FIXTURE_DB_PWD);
-        assert.equal(pool.options.database, 'testdb');
-        pool.end();
+      const gradlePath = tmp.path('gradle.properties');
+      writeFileSync(
+        gradlePath,
+        [
+          '# comments and blank lines are ignored',
+          '',
+          'bbdd.url=jdbc:postgresql://db:15432/ignored',
+          'bbdd.port=25432',
+          'bbdd.user=gradle_user',
+          'bbdd.password=gradle_secret',
+          'bbdd.sid=gradle_db',
+          'line-without-equals',
+          '',
+        ].join('\n'),
+        'utf-8',
+      );
+      process.env.ETENDO_DB_HOST = 'env-host';
+      process.env.ETENDO_DB_PORT = '6543';
+
+      assert.deepEqual(resolveDbDefaults(gradlePath), {
+        host: 'localhost',
+        port: 25432,
+        user: 'gradle_user',
+        password: 'gradle_secret',
+        database: 'gradle_db',
+        source: 'gradle',
       });
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      tmp.cleanup();
+    }
+  });
+
+  it('honors ETENDO_GRADLE_PROPERTIES auto-discovery override', () => {
+    const tmp = withTempDir();
+    try {
+      const gradlePath = tmp.path('gradle.properties');
+      writeFileSync(gradlePath, 'bbdd.url=jdbc:postgresql://pg-host:5444/demo\n', 'utf-8');
+      process.env.ETENDO_GRADLE_PROPERTIES = gradlePath;
+
+      const defaults = resolveDbDefaults();
+
+      assert.equal(defaults.host, 'pg-host');
+      assert.equal(defaults.port, 5444);
+      assert.equal(defaults.source, 'gradle');
+    } finally {
+      tmp.cleanup();
     }
   });
 });
 
-describe('resolveDbDefaults', () => {
-  it('resolves from gradle.properties (source "gradle") and rewrites host "db" to localhost', () => {
-    // Env vars are set but must be ignored: an explicit path makes the config "explicit".
-    withDbEnv({
-      ETENDO_DB_HOST: 'ignored-host',
-      ETENDO_DB_PORT: '9999',
-      ETENDO_DB_USER: 'ignored-user',
-      [PWD_ENV_KEY]: 'ignored-pwd',
-      ETENDO_DB_NAME: 'ignored-db',
-    }, () => {
-      const dir = mkdtempSync(join(tmpdir(), 'sf-db-defaults-'));
-      const file = join(dir, 'gradle.properties');
-      writeFileSync(file, [
-        'bbdd.url=jdbc:postgresql://db:6543/foo',
-        'bbdd.user=tad',
-        `${PASSWORD_PROP}=${FIXTURE_DB_PWD}`,
-        'bbdd.sid=customdb',
-      ].join('\n'));
-      try {
-        const defaults = resolveDbDefaults(file);
-        assert.equal(defaults.source, 'gradle');
-        assert.equal(defaults.host, 'localhost'); // "db" rewritten
-        assert.equal(defaults.port, 6543);
-        assert.equal(defaults.user, 'tad');
-        assert.equal(defaults.password, FIXTURE_DB_PWD);
-        assert.equal(defaults.database, 'customdb');
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    });
-  });
+describe('cache mode', () => {
+  it('validates and reports the active cache mode', () => {
+    assert.throws(
+      () => setCacheMode({ mode: 'invalid' }),
+      /setCacheMode: invalid mode "invalid" \(expected off\|write\|read\)/,
+    );
 
-  it('keeps a non-"db" gradle host as-is', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'sf-db-defaults-'));
-    const file = join(dir, 'gradle.properties');
-    writeFileSync(file, [
-      'bbdd.url=jdbc:postgresql://realhost:5432/x',
-      'bbdd.user=u',
-      `${PASSWORD_PROP}=${FIXTURE_DB_PWD}`,
-      'bbdd.sid=x',
-    ].join('\n'));
+    const tmp = withTempDir();
     try {
-      const defaults = resolveDbDefaults(file);
-      assert.equal(defaults.source, 'gradle');
-      assert.equal(defaults.host, 'realhost');
+      const cachePath = tmp.path('cache.json');
+      setCacheMode({ mode: 'read', path: cachePath });
+      assert.deepEqual(getCacheMode(), { mode: 'read', path: cachePath });
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      tmp.cleanup();
     }
   });
 
-  it('resolves from env vars (source "env") when no gradle config is found', () => {
-    // Point the gradle path at a missing file: not "explicit" (env var, not arg),
-    // gradle stays null, so env vars are consulted.
-    const missing = join(tmpdir(), 'sf-no-such-gradle.properties');
-    withDbEnv({
-      ETENDO_GRADLE_PROPERTIES: missing,
-      ETENDO_DB_HOST: 'envhost',
-      ETENDO_DB_PORT: '5433',
-      ETENDO_DB_USER: 'envuser',
-      [PWD_ENV_KEY]: 'envpwd',
-      ETENDO_DB_NAME: 'envdb',
-    }, () => {
-      const defaults = resolveDbDefaults();
-      assert.equal(defaults.source, 'env');
-      assert.equal(defaults.host, 'envhost');
-      assert.equal(defaults.port, 5433);
-      assert.equal(defaults.user, 'envuser');
-      assert.equal(defaults.password, 'envpwd');
-      assert.equal(defaults.database, 'envdb');
-    });
+  it('flushCacheWrites is a no-op outside write mode', () => {
+    const tmp = withTempDir();
+    try {
+      const cachePath = tmp.path('cache.json');
+      setCacheMode({ mode: 'read', path: cachePath });
+
+      assert.deepEqual(flushCacheWrites(), { written: 0, path: cachePath });
+    } finally {
+      tmp.cleanup();
+    }
   });
 
-  it('falls back to hard defaults (source "defaults") when neither gradle nor env is set', () => {
-    const missing = join(tmpdir(), 'sf-no-such-gradle.properties');
-    withDbEnv({ ETENDO_GRADLE_PROPERTIES: missing }, () => {
-      const defaults = resolveDbDefaults();
-      assert.equal(defaults.source, 'defaults');
-      assert.equal(defaults.host, 'localhost');
-      assert.equal(defaults.port, 5432);
-      assert.equal(defaults.user, 'etendo');
-      assert.equal(defaults.password, '');
-      assert.equal(defaults.database, 'etendo_dev');
-    });
+  it('wraps pool queries in write mode and merges captured rows into cache', async () => {
+    const tmp = withTempDir();
+    try {
+      const cachePath = tmp.path('cache.json');
+      const preservedKey = cacheKey('select preserved', []);
+      writeCache(cachePath, {
+        [preservedKey]: { sql: 'select preserved', params: [], rows: [{ id: 'old' }] },
+      });
+
+      const calls = [];
+      const fakePool = {
+        async query(sql, params) {
+          calls.push({ sql, params });
+          return { rows: [{ id: 'fresh' }], rowCount: 1 };
+        },
+      };
+
+      setCacheMode({ mode: 'write', path: cachePath });
+      const wrapped = wrapPoolWithCache(fakePool);
+      const result = await wrapped.query(' select   *\nfrom ad_window where id=$1 ', ['W1']);
+
+      assert.deepEqual(result.rows, [{ id: 'fresh' }]);
+      assert.deepEqual(calls, [{ sql: ' select   *\nfrom ad_window where id=$1 ', params: ['W1'] }]);
+
+      const flush = flushCacheWrites();
+      assert.equal(flush.written, 1);
+      assert.equal(flush.path, cachePath);
+
+      const cache = readCache(cachePath);
+      assert.deepEqual(cache[preservedKey].rows, [{ id: 'old' }]);
+      assert.deepEqual(cache[cacheKey('select * from ad_window where id=$1', ['W1'])], {
+        sql: 'select * from ad_window where id=$1',
+        params: ['W1'],
+        rows: [{ id: 'fresh' }],
+      });
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
+  it('wraps pool queries in read mode and throws actionable cache miss errors', async () => {
+    const tmp = withTempDir();
+    try {
+      const cachePath = tmp.path('cache.json');
+      const sql = 'select * from ad_tab where ad_window_id=$1';
+      writeCache(cachePath, {
+        [cacheKey(sql, ['W1'])]: { sql, params: ['W1'], rows: [{ id: 'T1' }, { id: 'T2' }] },
+      });
+      const fakePool = {
+        query() {
+          throw new Error('real pool should not be used in read mode');
+        },
+      };
+
+      setCacheMode({ mode: 'read', path: cachePath });
+      const wrapped = wrapPoolWithCache(fakePool);
+      assert.deepEqual(await wrapped.query(sql, ['W1']), {
+        rows: [{ id: 'T1' }, { id: 'T2' }],
+        rowCount: 2,
+      });
+
+      await assert.rejects(
+        () => wrapped.query('select missing from ad_tab where id=$1', ['T3']),
+        (err) => {
+          assert.equal(err.name, 'CacheMissError');
+          assert.equal(err.code, 'AD_CACHE_MISS');
+          assert.match(err.message, /Run with CACHE_DB=1 to refresh the cache/);
+          assert.match(err.message, /select missing from ad_tab/);
+          return true;
+        },
+      );
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
+  it('createDbPool returns a cache-read stub that supports query, connect, and end', async () => {
+    const tmp = withTempDir();
+    try {
+      const cachePath = tmp.path('cache.json');
+      const sql = 'select * from ad_field where ad_tab_id=$1';
+      writeCache(cachePath, {
+        [cacheKey(sql, ['T1'])]: { sql, params: ['T1'], rows: [{ id: 'F1' }] },
+      });
+
+      setCacheMode({ mode: 'read', path: cachePath });
+      const pool = createDbPool({ host: 'should-not-open-db' });
+
+      assert.equal(pool.__cacheRead, true);
+      assert.deepEqual(await pool.query(sql, ['T1']), { rows: [{ id: 'F1' }], rowCount: 1 });
+
+      const client = await pool.connect();
+      assert.deepEqual(await client.query(sql, ['T1']), { rows: [{ id: 'F1' }], rowCount: 1 });
+      assert.equal(client.release(), undefined);
+      assert.equal(await closePool(pool), undefined);
+    } finally {
+      tmp.cleanup();
+    }
   });
 });

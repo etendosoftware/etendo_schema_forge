@@ -23,5 +23,10 @@ describe('AssetsTable — renderDepreciationProgress', () => {
   it('renders 100% in green only when pct === 100', () => {
     assert.match(src, /pct === 100.*#10b981/);
   });
+
+  it('renders bar at 0% instead of hiding it when pct is 0', () => {
+    assert.doesNotMatch(src, /pct == null \|\| pct === 0/);
+    assert.match(src, /pct == null/);
+  });
 });
 
