@@ -1,8 +1,8 @@
 {
-  "version": "0.65.0",
+  "version": "0.66.0",
   "generatedAt": "2026-04-30T15:42:46.722Z",
-  "updatedAt": "2026-07-02T15:30:57.108Z",
-  "checksum": "beeef50fcfd3a20e",
+  "updatedAt": "2026-07-02T18:07:17.531Z",
+  "checksum": "3980fdce6a14fd26",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -53,7 +53,6 @@
           }
         }
       },
-      "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
@@ -446,42 +445,42 @@
                 "value": "CL",
                 "name": "Closed",
                 "labels": {
-                  "es_ES": "Cerrado"
+                  "es_ES": "Closed"
                 }
               },
               {
                 "value": "CO",
                 "name": "Completed",
                 "labels": {
-                  "es_ES": "Completado"
+                  "es_ES": "Completed"
                 }
               },
               {
                 "value": "DR",
                 "name": "Draft",
                 "labels": {
-                  "es_ES": "Borrador"
+                  "es_ES": "Draft"
                 }
               },
               {
                 "value": "NA",
                 "name": "Not Accepted",
                 "labels": {
-                  "es_ES": "No aprobado"
+                  "es_ES": "Not Accepted"
                 }
               },
               {
                 "value": "WP",
                 "name": "Not Paid",
                 "labels": {
-                  "es_ES": "Pendiente de Pago"
+                  "es_ES": "Not Paid"
                 }
               },
               {
                 "value": "RE",
                 "name": "Re-Opened",
                 "labels": {
-                  "es_ES": "Reabierto"
+                  "es_ES": "Re-Opened"
                 }
               },
               {
@@ -495,21 +494,21 @@
                 "value": "IP",
                 "name": "Under Way",
                 "labels": {
-                  "es_ES": "En curso"
+                  "es_ES": "Under Way"
                 }
               },
               {
                 "value": "??",
                 "name": "Unknown",
                 "labels": {
-                  "es_ES": "Desconocido"
+                  "es_ES": "Unknown"
                 }
               },
               {
                 "value": "VO",
                 "name": "Voided",
                 "labels": {
-                  "es_ES": "Anulado"
+                  "es_ES": "Voided"
                 }
               }
             ],
@@ -3240,56 +3239,56 @@
                 "value": "RPAP",
                 "name": "Awaiting Payment",
                 "labels": {
-                  "es_ES": "A Pagar"
+                  "es_ES": "Awaiting Payment"
                 }
               },
               {
                 "value": "RPAE",
                 "name": "Awaiting Execution",
                 "labels": {
-                  "es_ES": "A Ejecutar"
+                  "es_ES": "Awaiting Execution"
                 }
               },
               {
                 "value": "RPVOID",
                 "name": "Void",
                 "labels": {
-                  "es_ES": "Anulado"
+                  "es_ES": "Void"
                 }
               },
               {
                 "value": "PPM",
                 "name": "Payment Made",
                 "labels": {
-                  "es_ES": "Pagado"
+                  "es_ES": "Payment Made"
                 }
               },
               {
                 "value": "RPR",
                 "name": "Payment Received",
                 "labels": {
-                  "es_ES": "Cobrado"
+                  "es_ES": "Payment Received"
                 }
               },
               {
                 "value": "RDNC",
                 "name": "Deposited not Cleared",
                 "labels": {
-                  "es_ES": "Cobro depositado"
+                  "es_ES": "Deposited not Cleared"
                 }
               },
               {
                 "value": "PWNC",
                 "name": "Withdrawn not Cleared",
                 "labels": {
-                  "es_ES": "Pago reintegrado"
+                  "es_ES": "Withdrawn not Cleared"
                 }
               },
               {
                 "value": "RPPC",
                 "name": "Payment Cleared",
                 "labels": {
-                  "es_ES": "Conciliado"
+                  "es_ES": "Payment Cleared"
                 }
               }
             ]
@@ -4033,28 +4032,28 @@
                 "value": "A",
                 "name": "Actual",
                 "labels": {
-                  "es_ES": "Real"
+                  "es_ES": "Actual"
                 }
               },
               {
                 "value": "B",
                 "name": "Budget",
                 "labels": {
-                  "es_ES": "Presupuesto"
+                  "es_ES": "Budget"
                 }
               },
               {
                 "value": "E",
                 "name": "Encumbrance",
                 "labels": {
-                  "es_ES": "Gravamen"
+                  "es_ES": "Encumbrance"
                 }
               },
               {
                 "value": "S",
                 "name": "Statistical",
                 "labels": {
-                  "es_ES": "Estadística"
+                  "es_ES": "Statistical"
                 }
               }
             ]
@@ -4418,7 +4417,6 @@
           }
         }
       },
-      "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "POReference": "Nº documento",
