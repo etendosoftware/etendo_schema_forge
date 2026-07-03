@@ -644,7 +644,10 @@ export default function SideMenu({
                 >
                   <Headphones className="h-5 w-5" data-testid="Headphones__247c75" />
                   {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ring-2 ring-white">
+                    <span
+                      className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold leading-none ring-2 ring-white"
+                      style={{ background: '#FFD400', color: '#121217' }}
+                    >
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}
@@ -660,15 +663,13 @@ export default function SideMenu({
             >
               <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <Headphones className="h-4 w-4" data-testid="Headphones__247c75" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold leading-none ring-2 ring-white">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
               </span>
               <span className="flex-1 text-left truncate">{ui('helpAndSupport')}</span>
               {unreadCount > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-white text-[10px] font-bold leading-none">
+                <span
+                  className="flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold leading-none"
+                  style={{ background: '#FFD400', color: '#121217' }}
+                >
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}

@@ -1,5 +1,8 @@
 import * as React from 'react';
 import { useApiFetch } from '@/auth/useApiFetch';
+import { getStoredLocale } from '@/i18n';
+import { track } from '@/lib/observability.js';
+import { OBSERVABILITY_EVENTS, buildObservabilityEvent } from '@/lib/observability/events.js';
 
 const TEXT_MIME_TYPES = new Set([
   'text/plain', 'text/csv', 'text/html', 'text/xml', 'text/markdown',
@@ -44,6 +47,12 @@ async function serializeFile(file) {
 async function serializeFiles(files) {
   if (!files || files.length === 0) return [];
   return Promise.all(files.map(serializeFile));
+}
+
+// Fire-and-forget telemetry: a failed track() call should never block the UI.
+function trackSupportEvent(eventDefinition, properties = {}) {
+  const event = buildObservabilityEvent(eventDefinition, properties);
+  Promise.resolve(track(event.name, event.properties)).catch(() => {});
 }
 
 const SupportChatContext = React.createContext(null);
@@ -99,9 +108,9 @@ function reducer(state, action) {
     case 'UPDATE_CONVERSATION':
       return {
         ...state,
-        conversations: state.conversations.map((c) =>
-          c.id === action.conversation.id ? { ...c, ...action.conversation } : c
-        ),
+        conversations: state.conversations
+          .map((c) => (c.id === action.conversation.id ? { ...c, ...action.conversation } : c))
+          .sort((a, b) => new Date(b.lastActivity || 0) - new Date(a.lastActivity || 0)),
       };
     case 'DISMISS_RATING':
       return {
@@ -182,7 +191,7 @@ export function SupportChatProvider({ children }) {
     dispatch({ type: 'CLEAR_PENDING_FILES' });
     try {
       const attachments = await serializeFiles(files);
-      const body = { message: text, attachments };
+      const body = { message: text, attachments, locale: getStoredLocale() };
       const res = await apiFetch('/sws/support/conversations', {
         method: 'POST',
         body: JSON.stringify(body),
@@ -270,6 +279,12 @@ export function SupportChatProvider({ children }) {
       await apiFetch(`/sws/support/conversations/${conversationId}/rating`, {
         method: 'POST',
         body: JSON.stringify({ score, comment }),
+      });
+      trackSupportEvent(OBSERVABILITY_EVENTS.SUPPORT_CSAT_SUBMITTED, {
+        category: 'support',
+        source: 'support_chat',
+        score,
+        hasComment: Boolean(comment && comment.trim()),
       });
       dispatch({
         type: 'UPDATE_CONVERSATION',
@@ -365,7 +380,11 @@ export function SupportChatProvider({ children }) {
           incoming.length !== current.conversations.length ||
           incoming.some((c) => {
             const existing = current.conversations.find((e) => e.id === c.id);
-            return existing && existing.unread !== c.unread;
+            return existing && (
+              existing.unread !== c.unread ||
+              existing.status !== c.status ||
+              existing.rated !== c.rated
+            );
           });
         if (hasChange) dispatch({ type: 'SET_CONVERSATIONS', conversations: incoming });
       } catch (_) { /* silent */ }

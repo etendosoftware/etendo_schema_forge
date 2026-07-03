@@ -18,6 +18,7 @@ const OBSERVABILITY_PROPERTY_VALUES = Object.freeze({
   COUNT: 'count',
   DURATION_MS: 'durationMs',
   ENTITY: 'entity',
+  HAS_COMMENT: 'hasComment',
   OPERATION: 'operation',
   POSITION: 'position',
   PROVIDER: 'provider',
@@ -474,6 +475,15 @@ export const OBSERVABILITY_EVENTS = Object.freeze({
       OBSERVABILITY_PROPERTY_KEYS.ACTION,
       OBSERVABILITY_PROPERTY_KEYS.STATUS,
       OBSERVABILITY_PROPERTY_KEYS.TYPE,
+    ],
+  }),
+  SUPPORT_CSAT_SUBMITTED: defineEvent('support_csat_submitted', {
+    channels: [OBSERVABILITY_CHANNELS.MIXPANEL],
+    properties: [
+      OBSERVABILITY_PROPERTY_KEYS.CATEGORY,
+      OBSERVABILITY_PROPERTY_KEYS.HAS_COMMENT,
+      OBSERVABILITY_PROPERTY_KEYS.SCORE,
+      OBSERVABILITY_PROPERTY_KEYS.SOURCE,
     ],
   }),
 });

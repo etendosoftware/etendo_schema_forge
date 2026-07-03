@@ -3,10 +3,9 @@ import {
   ChevronRight, MoreVertical, X, Plus, ArrowUp, Paperclip,
   Users, CheckCircle, Smile, Mic, Maximize2, Minimize2,
 } from 'lucide-react';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import { ValerIATile } from './ValerIATile.jsx';
 import { useAuth } from '@/auth/AuthContext.jsx';
-
-const WELCOME_QUICK_REPLIES = ['¿Cómo creo una factura?', 'Importar contactos', 'Configurar impuestos', 'Cambiar plan'];
 
 const EMOJIS = [
   '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩',
@@ -100,12 +99,13 @@ function renderBold(txt) {
 }
 
 function Bubble({ message, onQuickReply, audioMap = {} }) {
+  const ui = useUI();
   const role = message.sender;
   const isHumanAgent = role === 'agent' || role === 'human';
   const ts = message.timestamp
     ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
-  const fullTs = ts ? `Hoy · ${ts}` : undefined;
+  const fullTs = ts ? `${ui('supportToday')} · ${ts}` : undefined;
   const bubbleRole = role === 'user' ? 'user' : 'bot';
 
   const [playingName, setPlayingName] = React.useState(null);
@@ -136,7 +136,7 @@ function Bubble({ message, onQuickReply, audioMap = {} }) {
         <div className={`sc-bub-av${isHumanAgent ? ' human' : ''}`}>
           {isHumanAgent
             ? (message.senderInitials || message.senderName?.[0] || 'A')
-            : <ValerIATile size={20} radius={999} />
+            : <ValerIATile size={20} radius={999} data-testid="ValerIATile__50ab90" />
           }
         </div>
       )}
@@ -153,13 +153,13 @@ function Bubble({ message, onQuickReply, audioMap = {} }) {
                   const isAudio = name.match(/\.(webm|ogg|mp3|wav|m4a)$/i) || audioMap[name];
                   return (
                     <div key={i} className="sc-att">
-                      {isAudio ? <Mic size={14} /> : <Paperclip size={14} />}
+                      {isAudio ? <Mic size={14} data-testid="Mic__50ab90" /> : <Paperclip size={14} data-testid="Paperclip__50ab90" />}
                       <span className="sc-a-name">{isAudio ? 'Audio' : name}</span>
                       {isAudio && audioMap[name] && (
                         <button
                           className="sc-audio-play"
                           onClick={() => toggleAudio(name)}
-                          title={playingName === name ? 'Detener' : 'Reproducir'}
+                          title={playingName === name ? ui('supportStopAudio') : ui('supportPlayAudio')}
                         >
                           {playingName === name ? '■' : '▶'}
                         </button>
@@ -184,6 +184,7 @@ function Bubble({ message, onQuickReply, audioMap = {} }) {
 }
 
 function CSATCard({ onSubmit, onDismiss }) {
+  const ui = useUI();
   const [rating, setRating] = React.useState(null);
   const [comment, setComment] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
@@ -197,15 +198,15 @@ function CSATCard({ onSubmit, onDismiss }) {
 
   return (
     <div className="sc-csat-card">
-      <div className="sc-csat-q">¿Cómo fue tu experiencia?</div>
-      <div className="sc-csat-sub">Tu opinión nos ayuda a mejorar el soporte.</div>
+      <div className="sc-csat-q">{ui('supportRateExperience')}</div>
+      <div className="sc-csat-sub">{ui('supportFeedbackHelps')}</div>
       <div className="sc-csat-faces">
         {faces.map((f, i) => (
           <button
             key={i}
             className={`sc-csat-face${rating === i + 1 ? ' selected' : ''}`}
             onClick={() => setRating(i + 1)}
-            aria-label={`Valoración ${i + 1}`}
+            aria-label={ui('supportRatingAriaLabel', { n: i + 1 })}
           >
             {f}
           </button>
@@ -214,15 +215,15 @@ function CSATCard({ onSubmit, onDismiss }) {
       {rating != null && (
         <>
           <textarea
-            placeholder="Cuéntanos algo más (opcional)"
+            placeholder={ui('supportAddComment')}
             value={comment}
             onChange={(e) => setComment(e.target.value.slice(0, 280))}
             maxLength={280}
           />
           <div className="sc-csat-foot">
-            <button className="sc-btn-tertiary" onClick={onDismiss}>Más tarde</button>
+            <button className="sc-btn-tertiary" onClick={onDismiss}>{ui('supportLater')}</button>
             <button className="sc-btn-primary" onClick={handleSubmit} disabled={submitting}>
-              Enviar valoración
+              {ui('supportSubmitRating')}
             </button>
           </div>
         </>
@@ -251,6 +252,12 @@ export function ConversationView({
   isExpanded,
   onToggleExpand,
 }) {
+  const ui = useUI();
+  const { locale } = useLocaleSwitch();
+  const dateLocale = (locale || 'es_ES').replace('_', '-');
+  const welcomeQuickReplies = React.useMemo(() => ([
+    ui('supportQuickReply1'), ui('supportQuickReply2'), ui('supportQuickReply3'), ui('supportQuickReply4'),
+  ]), [ui]);
   const [draft, setDraft] = React.useState('');
   const [isDragging, setIsDragging] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -468,21 +475,23 @@ export function ConversationView({
       {isDragging && (
         <div className={`sc-drop-overlay${isClosed ? ' closed' : ''}`}>
           <div className="sc-drop-inner">
-            <Paperclip size={28} />
-            <span>{isClosed ? 'La conversación está cerrada' : 'Suelta aquí para adjuntar'}</span>
+            <Paperclip size={28} data-testid="Paperclip__50ab90" />
+            <span>{isClosed ? ui('supportClosedConversation') : ui('supportDropToAttach')}</span>
           </div>
         </div>
       )}
-
       {/* Header */}
       <div className="sc-conv-head">
-        <button className="sc-back" onClick={onBack} aria-label="Volver">
-          <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} />
+        <button className="sc-back" onClick={onBack} aria-label={ui('back')}>
+          <ChevronRight
+            size={16}
+            style={{ transform: 'rotate(180deg)' }}
+            data-testid="ChevronRight__50ab90" />
         </button>
         <div className={`sc-conv-av${isHuman ? ' human' : ''}`}>
           {isHuman
             ? (conversation?.assigneeInitials || assigneeName[0])
-            : <ValerIATile size={26} radius={999} />
+            : <ValerIATile size={26} radius={999} data-testid="ValerIATile__50ab90" />
           }
           {!isClosed && <div className="sc-status-dot" />}
         </div>
@@ -490,10 +499,10 @@ export function ConversationView({
           <div className="sc-conv-name">{assigneeName}</div>
           <div className="sc-conv-meta">
             {isClosed
-              ? 'Conversación cerrada'
+              ? ui('supportConversationClosedMeta')
               : isHuman
-                ? <><span className="sc-typing-dot" />Activo ahora</>
-                : 'El equipo también puede ayudar'
+                ? <><span className="sc-typing-dot" />{ui('supportActiveNow')}</>
+                : ui('supportTeamCanHelp')
             }
           </div>
         </div>
@@ -501,19 +510,19 @@ export function ConversationView({
           <button
             className="sc-head-icn"
             onClick={onToggleExpand}
-            aria-label={isExpanded ? 'Contraer ventana' : 'Ampliar ventana'}
-            title={isExpanded ? 'Contraer ventana' : 'Ampliar ventana'}
+            aria-label={isExpanded ? ui('collapse') : ui('expand')}
+            title={isExpanded ? ui('collapse') : ui('expand')}
           >
-            {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            {isExpanded ? <Minimize2 size={16} data-testid="Minimize2__50ab90" /> : <Maximize2 size={16} data-testid="Maximize2__50ab90" />}
           </button>
           {conversation && !isClosed && (
             <>
               <button
                 className="sc-head-icn"
-                aria-label="Más opciones"
+                aria-label={ui('moreOptions')}
                 onClick={() => setMenuOpen((v) => !v)}
               >
-                <MoreVertical size={16} />
+                <MoreVertical size={16} data-testid="MoreVertical__50ab90" />
               </button>
               {menuOpen && (
                 <div className="sc-head-menu">
@@ -521,59 +530,58 @@ export function ConversationView({
                     className="danger"
                     onClick={() => { setMenuOpen(false); onCloseConversation?.(); }}
                   >
-                    Cerrar conversación
+                    {ui('supportCloseConversation')}
                   </button>
                 </div>
               )}
             </>
           )}
-          <button className="sc-head-icn" onClick={onClose} aria-label="Cerrar"><X size={16} /></button>
+          <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__50ab90" /></button>
         </div>
       </div>
-
       {/* Thread */}
       <div className="sc-conv-thread" ref={threadRef}>
         <div className="sc-conv-greet">
-          Estamos aquí para ayudarte con cualquier cosa que necesites.
+          {ui('supportGreetingBanner')}
         </div>
 
         {showWelcome && (
           <>
             <Bubble
-              message={{ id: 'w1', sender: 'bot', text: `👋 ¡Hola${firstName ? `, ${firstName}` : ''}! Soy ValerIA, tu asistente de Etendo GO.` }}
-            />
+              message={{ id: 'w1', sender: 'bot', text: ui('supportWelcomeBubble1', { name: firstName ? `, ${firstName}` : '' }) }}
+              data-testid="Bubble__50ab90" />
             <Bubble
-              message={{ id: 'w2', sender: 'bot', text: 'Puedo ayudarte con dudas sobre facturación, contactos, configuración y más. Si no logro resolverlo, te paso con alguien del equipo.' }}
-            />
+              message={{ id: 'w2', sender: 'bot', text: ui('supportWelcomeBubble2') }}
+              data-testid="Bubble__50ab90" />
             <Bubble
-              message={{ id: 'w3', sender: 'bot', text: '¿Sobre qué necesitas ayuda hoy?', quickReplies: WELCOME_QUICK_REPLIES }}
+              message={{ id: 'w3', sender: 'bot', text: ui('supportWelcomeBubble3'), quickReplies: welcomeQuickReplies }}
               onQuickReply={(q) => setDraft(q)}
-            />
+              data-testid="Bubble__50ab90" />
           </>
         )}
 
         {isLoadingMessages ? (
           <div style={{ textAlign: 'center', padding: '24px', color: 'var(--sc-fg-3)', fontSize: 13 }}>
-            Cargando…
+            {ui('loading')}
           </div>
         ) : (
           messages.map((m, i) => {
             if (m.handover) {
               return (
                 <div key={i} className="sc-handover">
-                  <div className="sc-handover-icn"><Users size={16} /></div>
+                  <div className="sc-handover-icn"><Users size={16} data-testid="Users__50ab90" /></div>
                   <div>
                     <div className="sc-handover-txt">
-                      <b>Te paso con {m.agentName}</b>, del equipo de soporte
+                      {ui('supportHandoverIntro', { name: m.agentName })}
                     </div>
-                    <div className="sc-handover-sub">Activo · suele responder en menos de 5 min</div>
+                    <div className="sc-handover-sub">{ui('supportHandoverStatus')}</div>
                   </div>
                 </div>
               );
             }
             const prev = messages[i - 1];
-            const mDate = m.timestamp ? new Date(m.timestamp).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : null;
-            const prevDate = prev?.timestamp ? new Date(prev.timestamp).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : null;
+            const mDate = m.timestamp ? new Date(m.timestamp).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) : null;
+            const prevDate = prev?.timestamp ? new Date(prev.timestamp).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) : null;
             const showDivider = mDate && mDate !== prevDate;
             // Show "Nuevos" before the first message that arrived after the conversation was opened
             const showNewDivider = seenCountRef.current !== null
@@ -582,12 +590,16 @@ export function ConversationView({
             return (
               <React.Fragment key={m.id || i}>
                 {showNewDivider && (
-                  <div className="sc-new-divider"><span>Nuevos</span></div>
+                  <div className="sc-new-divider"><span>{ui('supportNewDivider')}</span></div>
                 )}
                 {showDivider && !showNewDivider && (
                   <div className="sc-day-divider"><span>{mDate}</span></div>
                 )}
-                <Bubble message={m} onQuickReply={(q) => { setDraft(q); }} audioMap={audioMapRef.current} />
+                <Bubble
+                  message={m}
+                  onQuickReply={(q) => { setDraft(q); }}
+                  audioMap={audioMapRef.current}
+                  data-testid="Bubble__50ab90" />
               </React.Fragment>
             );
           })
@@ -595,7 +607,7 @@ export function ConversationView({
 
         {isSending && (
           <div className="sc-msg bot">
-            <div className="sc-bub-av"><ValerIATile size={20} radius={999} /></div>
+            <div className="sc-bub-av"><ValerIATile size={20} radius={999} data-testid="ValerIATile__50ab90" /></div>
             <div className="sc-bubble">
               <span className="sc-typing"><i /><i /><i /></span>
             </div>
@@ -604,33 +616,35 @@ export function ConversationView({
 
         {isClosed && (
           <div className="sc-closed-bar">
-            <CheckCircle size={14} />
-            Tu conversación ha finalizado
+            <CheckCircle size={14} data-testid="CheckCircle__50ab90" />
+            {ui('supportConversationEnded')}
           </div>
         )}
 
         {showCSAT && (
-          <CSATCard onSubmit={onSubmitRating} onDismiss={onDismissRating} />
+          <CSATCard
+            onSubmit={onSubmitRating}
+            onDismiss={onDismissRating}
+            data-testid="CSATCard__50ab90" />
         )}
 
         {isRated && (
           <div className="sc-csat-thanks">
-            <CheckCircle />
-            ¡Gracias por tu valoración! El equipo la revisará.
+            <CheckCircle data-testid="CheckCircle__50ab90" />
+            {ui('supportRatingThanks')}
           </div>
         )}
 
         {isClosed && (
           <div className="sc-reopen-card">
             <div className="sc-grow">
-              <div className="sc-r-title">¿Necesitas algo más sobre este tema?</div>
-              <div className="sc-r-sub">Empezaremos una nueva conversación enlazada con esta.</div>
+              <div className="sc-r-title">{ui('supportNeedMoreHelp')}</div>
+              <div className="sc-r-sub">{ui('supportNewLinkedConversation')}</div>
             </div>
-            <button onClick={onReopenConversation}>Reabrir</button>
+            <button onClick={onReopenConversation}>{ui('supportReopen')}</button>
           </div>
         )}
       </div>
-
       {/* Composer */}
       <div className={`sc-composer${isClosed ? ' disabled' : ''}`}>
         {pendingFiles.length > 0 && (
@@ -640,14 +654,14 @@ export function ConversationView({
               return (
                 <div key={i} className="sc-att-chip">
                   <div className="sc-a-thumb">
-                    {isAudio ? <Mic size={12} /> : <Paperclip size={12} />}
+                    {isAudio ? <Mic size={12} data-testid="Mic__50ab90" /> : <Paperclip size={12} data-testid="Paperclip__50ab90" />}
                   </div>
                   {isAudio ? (
                     <>
                       <span>Audio</span>
                       <button
                         className="sc-audio-play"
-                        title="Escuchar"
+                        title={ui('supportPlayAudio')}
                         onClick={() => {
                           const url = URL.createObjectURL(f);
                           const audio = new Audio(url);
@@ -668,7 +682,7 @@ export function ConversationView({
                     </>
                   )}
                   <span className="sc-x" onClick={() => onRemoveFile(i)}>
-                    <X size={12} />
+                    <X size={12} data-testid="X__50ab90" />
                   </span>
                 </div>
               );
@@ -677,8 +691,8 @@ export function ConversationView({
         )}
         <div className="sc-input-row">
           {/* Attach file */}
-          <button className="sc-clip" onClick={() => fileRef.current?.click()} aria-label="Adjuntar">
-            <Plus size={16} />
+          <button className="sc-clip" onClick={() => fileRef.current?.click()} aria-label={ui('supportAttachFile')}>
+            <Plus size={16} data-testid="Plus__50ab90" />
           </button>
           <input
             ref={fileRef}
@@ -696,7 +710,7 @@ export function ConversationView({
               onClick={() => setShowEmoji((v) => !v)}
               aria-label="Emoji"
             >
-              <Smile size={16} />
+              <Smile size={16} data-testid="Smile__50ab90" />
             </button>
             {showEmoji && (
               <div className="sc-emoji-picker">
@@ -710,7 +724,7 @@ export function ConversationView({
           </div>
 
           <textarea
-            placeholder={isClosed ? 'Esta conversación está cerrada' : 'Escribe un mensaje…'}
+            placeholder={isClosed ? ui('supportClosedConversation') : ui('supportTypeMessage')}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKey}
@@ -728,22 +742,22 @@ export function ConversationView({
           <button
             className={`sc-clip sc-mic-btn${recording ? ' recording' : ''}`}
             onClick={recording ? stopRecording : startRecording}
-            aria-label={recording ? 'Detener grabación' : 'Grabar audio'}
+            aria-label={recording ? ui('supportStopRecording') : ui('supportStartRecording')}
           >
-            <Mic size={16} />
+            <Mic size={16} data-testid="Mic__50ab90" />
           </button>
 
           <button
             className="sc-send"
             disabled={!recording && !draft.trim() && pendingFiles.length === 0}
             onClick={send}
-            aria-label="Enviar"
+            aria-label={ui('send')}
           >
-            <ArrowUp size={14} />
+            <ArrowUp size={14} data-testid="ArrowUp__50ab90" />
           </button>
         </div>
         <div className="sc-footer-hint">
-          ValerIA puede equivocarse. Si necesitas, te pasamos con un agente.
+          {ui('supportAiDisclaimer')}
         </div>
       </div>
     </div>

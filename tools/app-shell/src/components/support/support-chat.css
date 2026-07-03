@@ -494,6 +494,13 @@
 .sc-h-title { font: 600 14px/20px 'Inter', sans-serif; color: var(--sc-fg-1); }
 .sc-h-desc  { font: 400 13px/18px 'Inter', sans-serif; color: var(--sc-fg-3); margin-top: 2px; }
 .sc-h-count-s { font: 400 12px/16px 'Inter', sans-serif; color: var(--sc-fg-4); margin-top: 4px; }
+.sc-help-coll.link { text-decoration: none; color: inherit; }
+.sc-help-empty {
+  padding: 32px 18px;
+  text-align: center;
+  font: 400 13px/18px 'Inter', sans-serif;
+  color: var(--sc-fg-3);
+}
 
 /* ---- NOTICIAS tab ------------------------------------------------------- */
 .sc-news-list { padding: 8px 18px 22px; display: flex; flex-direction: column; gap: 12px; }
