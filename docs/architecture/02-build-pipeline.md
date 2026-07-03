@@ -149,7 +149,6 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         cleanupOutdatedCaches: true,
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },
     }),
   ],
