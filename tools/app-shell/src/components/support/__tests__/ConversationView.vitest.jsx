@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -6,8 +6,11 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 
+// A plain vi.fn() wrapper (instead of a bare arrow function) so a single test
+// can override the username via mockReturnValueOnce without affecting the rest.
+const mockUseAuth = vi.fn(() => ({ username: 'lucas.palacios' }));
 vi.mock('@/auth/AuthContext.jsx', () => ({
-  useAuth: () => ({ username: 'lucas.palacios' }),
+  useAuth: () => mockUseAuth(),
 }));
 
 import { ConversationView } from '../ConversationView.jsx';
@@ -330,6 +333,239 @@ describe('ConversationView', () => {
       expect(text).toBe('Nota');
       expect(files).toHaveLength(1);
       expect(files[0]).toBeInstanceOf(File);
+    });
+  });
+
+  describe('additional coverage', () => {
+    afterEach(() => {
+      delete window.AudioContext;
+      vi.useRealTimers();
+    });
+
+    it('hides message text but still shows attachments when the message has no text', () => {
+      const messages = [{ id: 'm1', sender: 'ai', text: undefined, attachments: [{ name: 'sin-texto.pdf' }] }];
+      render(<ConversationView {...baseProps({ messages })} />);
+      expect(screen.getByText('sin-texto.pdf')).toBeInTheDocument();
+    });
+
+    it('renders **bold** markdown segments as <strong> elements', () => {
+      const messages = [{ id: 'm1', sender: 'ai', text: 'Esto es **importante** de verdad' }];
+      const { container } = render(<ConversationView {...baseProps({ messages })} />);
+      const strong = container.querySelector('strong');
+      expect(strong).toHaveTextContent('importante');
+    });
+
+    it('splits a message with a blank line into separate paragraphs', () => {
+      const messages = [{ id: 'm1', sender: 'ai', text: 'Primer párrafo\n\nSegundo párrafo' }];
+      const { container } = render(<ConversationView {...baseProps({ messages })} />);
+      const paragraphs = container.querySelectorAll('.sc-bubble p');
+      expect(paragraphs.length).toBe(2);
+      expect(paragraphs[0]).toHaveTextContent('Primer párrafo');
+      expect(paragraphs[1]).toHaveTextContent('Segundo párrafo');
+    });
+
+    it('plays a receive sound when the bot finishes responding', () => {
+      class FakeGainNode {
+        constructor() { this.gain = { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() }; }
+        connect() {}
+      }
+      class FakeOscillatorNode {
+        constructor() { this.frequency = { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() }; this.onended = null; }
+        connect() {}
+        start() {}
+        stop() { queueMicrotask(() => this.onended?.()); }
+      }
+      class FakeAudioContext {
+        constructor() { this.currentTime = 0; this.destination = {}; this.close = vi.fn(); }
+        createOscillator() { return new FakeOscillatorNode(); }
+        createGain() { return new FakeGainNode(); }
+      }
+      window.AudioContext = FakeAudioContext;
+      vi.useFakeTimers();
+      const messages = [{ id: 'm1', sender: 'bot', text: 'Ya está' }];
+      const { rerender } = render(<ConversationView {...baseProps({ isSending: true, messages })} />);
+      rerender(<ConversationView {...baseProps({ isSending: false, messages })} />);
+      vi.advanceTimersByTime(700);
+      expect(screen.getByText('Ya está')).toBeInTheDocument();
+    });
+
+    it('sends a message and lets the outgoing sound finish without crashing', async () => {
+      const user = userEvent.setup();
+      let closeSpy;
+      class FakeGainNode {
+        constructor() { this.gain = { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() }; }
+        connect() {}
+      }
+      class FakeOscillatorNode {
+        constructor() { this.frequency = { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() }; this.onended = null; }
+        connect() {}
+        start() {}
+        stop() { queueMicrotask(() => this.onended?.()); }
+      }
+      class FakeAudioContext {
+        constructor() { this.currentTime = 0; this.destination = {}; closeSpy = vi.fn(); this.close = closeSpy; }
+        createOscillator() { return new FakeOscillatorNode(); }
+        createGain() { return new FakeGainNode(); }
+      }
+      window.AudioContext = FakeAudioContext;
+      const onSend = vi.fn();
+      render(<ConversationView {...baseProps({ onSend })} />);
+      await user.type(screen.getByPlaceholderText('supportTypeMessage'), 'Con sonido');
+      await user.click(screen.getByLabelText('send'));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(onSend).toHaveBeenCalledWith('Con sonido', []);
+      expect(closeSpy).toHaveBeenCalled();
+    });
+
+    it('toggles playback of a locally recorded audio bubble on repeated clicks', async () => {
+      const user = userEvent.setup();
+      const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1700000000000);
+      global.navigator.mediaDevices = {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+      };
+      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+      class FakeMediaRecorder {
+        constructor() { this.state = 'recording'; this.mimeType = 'audio/webm'; }
+        start() {}
+        stop() { this.state = 'inactive'; this.onstop?.(); }
+      }
+      global.MediaRecorder = FakeMediaRecorder;
+
+      const onAddFile = vi.fn();
+      const messages = [{ id: 'm1', sender: 'ai', text: 'Nota', attachments: [{ name: 'audio-1700000000000.webm' }] }];
+      render(<ConversationView {...baseProps({ onAddFile, messages })} />);
+      await user.click(screen.getByLabelText('supportStartRecording'));
+      await screen.findByLabelText('supportStopRecording');
+      await user.click(screen.getByLabelText('supportStopRecording'));
+      expect(onAddFile).toHaveBeenCalledTimes(1);
+
+      const playButton = await screen.findByTitle('supportPlayAudio');
+      await user.click(playButton);
+      expect(screen.getByTitle('supportStopAudio')).toBeInTheDocument();
+      await user.click(screen.getByTitle('supportStopAudio'));
+      expect(screen.getByTitle('supportPlayAudio')).toBeInTheDocument();
+      nowSpy.mockRestore();
+    });
+
+    it('plays a pending audio attachment from the composer', async () => {
+      const user = userEvent.setup();
+      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+      const file = new File(['x'], 'nota.webm', { type: 'audio/webm' });
+      render(<ConversationView {...baseProps({ pendingFiles: [file] })} />);
+      await user.click(screen.getByTitle('supportPlayAudio'));
+      expect(global.URL.createObjectURL).toHaveBeenCalledWith(file);
+    });
+
+    it('shows a "new messages" divider once earlier messages are marked as seen', () => {
+      const initialMessages = [
+        { id: 'm1', sender: 'user', text: 'Hola' },
+        { id: 'm2', sender: 'bot', text: 'Hola, ¿en qué te ayudo?' },
+      ];
+      const { rerender } = render(
+        <ConversationView {...baseProps({ isLoadingMessages: true, messages: [] })} />
+      );
+      rerender(<ConversationView {...baseProps({ isLoadingMessages: false, messages: initialMessages })} />);
+      const withNewMessage = [...initialMessages, { id: 'm3', sender: 'bot', text: 'Nuevo mensaje' }];
+      rerender(<ConversationView {...baseProps({ isLoadingMessages: false, messages: withNewMessage })} />);
+      expect(screen.getByText('supportNewDivider')).toBeInTheDocument();
+    });
+
+    it('stops an in-progress recording when the component unmounts', async () => {
+      const user = userEvent.setup();
+      global.navigator.mediaDevices = {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+      };
+      const stop = vi.fn();
+      class FakeMediaRecorder {
+        constructor() { this.state = 'recording'; this.mimeType = 'audio/webm'; }
+        start() {}
+        stop = stop;
+      }
+      global.MediaRecorder = FakeMediaRecorder;
+      const { unmount } = render(<ConversationView {...baseProps()} />);
+      await user.click(screen.getByLabelText('supportStartRecording'));
+      await screen.findByLabelText('supportStopRecording');
+      unmount();
+      expect(stop).toHaveBeenCalled();
+    });
+
+    it('shows the drop overlay only while dragging and hides it on drag-leave', () => {
+      const { container } = render(<ConversationView {...baseProps()} />);
+      const wrap = container.querySelector('.sc-conv-wrap');
+      fireEvent.dragEnter(wrap);
+      fireEvent.dragOver(wrap);
+      expect(screen.getByText('supportDropToAttach')).toBeInTheDocument();
+      fireEvent.dragLeave(wrap);
+      expect(screen.queryByText('supportDropToAttach')).not.toBeInTheDocument();
+    });
+
+    it('clicking a quick reply on a regular bot message fills the draft', async () => {
+      const user = userEvent.setup();
+      const messages = [{ id: 'm1', sender: 'bot', text: '¿Cómo puedo ayudarte?', quickReplies: ['Facturación', 'Soporte técnico'] }];
+      render(<ConversationView {...baseProps({ messages })} />);
+      await user.click(screen.getByText('Facturación'));
+      expect(screen.getByPlaceholderText('supportTypeMessage')).toHaveValue('Facturación');
+    });
+
+    it('clicking the attach-file icon triggers the hidden file input', async () => {
+      const user = userEvent.setup();
+      const { container } = render(<ConversationView {...baseProps()} />);
+      const input = container.querySelector('input[type="file"]');
+      const clickSpy = vi.spyOn(input, 'click');
+      await user.click(screen.getByLabelText('supportAttachFile'));
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back through the sender-initial chain for human/agent messages without explicit initials', () => {
+      const messages = [
+        { id: 'm1', sender: 'human', senderInitials: 'LP', text: 'Con iniciales' },
+        { id: 'm2', sender: 'agent', senderName: 'Lucas', text: 'Con nombre' },
+        { id: 'm3', sender: 'human', text: 'Sin nada' },
+      ];
+      render(<ConversationView {...baseProps({ messages })} />);
+      expect(screen.getByText('LP')).toBeInTheDocument();
+      expect(screen.getByText('L')).toBeInTheDocument();
+      expect(screen.getByText('A')).toBeInTheDocument();
+    });
+
+    it('does not send on Enter while the conversation is closed', () => {
+      const onSend = vi.fn();
+      const conversation = { id: 'c1', status: 'closed' };
+      render(<ConversationView {...baseProps({ conversation, onSend })} />);
+      const textarea = screen.getByPlaceholderText('supportClosedConversation');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
+    it('does not send on Enter while a message is already being sent', () => {
+      const onSend = vi.fn();
+      render(<ConversationView {...baseProps({ onSend, isSending: true })} />);
+      const textarea = screen.getByPlaceholderText('supportTypeMessage');
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
+    it('does not show the "more options" menu button once a conversation is closed', () => {
+      const conversation = { id: 'c1', status: 'closed' };
+      render(<ConversationView {...baseProps({ conversation })} />);
+      expect(screen.queryByLabelText('moreOptions')).not.toBeInTheDocument();
+    });
+
+    it('silently ignores a denied microphone permission when starting to record', async () => {
+      const user = userEvent.setup();
+      global.navigator.mediaDevices = {
+        getUserMedia: vi.fn().mockRejectedValue(new Error('denied')),
+      };
+      render(<ConversationView {...baseProps()} />);
+      await user.click(screen.getByLabelText('supportStartRecording'));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(screen.queryByLabelText('supportStopRecording')).not.toBeInTheDocument();
+    });
+
+    it('shows an empty first-name greeting when there is no authenticated username', () => {
+      mockUseAuth.mockReturnValueOnce({ username: '' });
+      render(<ConversationView {...baseProps({ conversation: null })} />);
+      expect(screen.getByText(/supportWelcomeBubble1/)).toBeInTheDocument();
     });
   });
 });

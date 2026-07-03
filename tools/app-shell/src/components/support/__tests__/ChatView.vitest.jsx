@@ -139,4 +139,69 @@ describe('ChatView', () => {
     render(<ChatView {...baseProps({ pendingFiles: [file] })} />);
     expect(screen.getByAltText('photo.png')).toBeInTheDocument();
   });
+
+  describe('additional coverage', () => {
+    it('shows the formatted time for a message with a valid timestamp', () => {
+      const messages = [{ id: 'm1', sender: 'ai', text: 'Hola', timestamp: '2024-01-01T10:00:00.000Z' }];
+      const { container } = render(<ChatView {...baseProps({ messages })} />);
+      const timeEl = container.querySelector('.text-\\[10px\\]');
+      expect(timeEl).not.toBeNull();
+      expect(timeEl.textContent).not.toBe('');
+    });
+
+    it('falls back to an empty time label when formatting the timestamp throws', () => {
+      const spy = vi.spyOn(Date.prototype, 'toLocaleTimeString').mockImplementation(() => {
+        throw new Error('boom');
+      });
+      const messages = [{ id: 'm1', sender: 'ai', text: 'Hola', timestamp: '2024-01-01T10:00:00.000Z' }];
+      const { container } = render(<ChatView {...baseProps({ messages })} />);
+      const timeEl = container.querySelector('.text-\\[10px\\]');
+      expect(timeEl.textContent).toBe('');
+      spy.mockRestore();
+    });
+
+    it('keys an attachment link by its filename when no url is provided', () => {
+      const messages = [
+        { id: 'm1', sender: 'ai', text: 'Aquí tenés', attachments: [{ filename: 'sin-url.pdf' }] },
+      ];
+      render(<ChatView {...baseProps({ messages })} />);
+      const link = screen.getByText('sin-url.pdf');
+      expect(link.closest('a')).not.toHaveAttribute('href');
+    });
+
+    it('adds files selected via the hidden file input and resets its value', () => {
+      const onAddFile = vi.fn();
+      const { container } = render(<ChatView {...baseProps({ onAddFile })} />);
+      const input = container.querySelector('input[type="file"]');
+      const file = new File(['x'], 'doc.txt', { type: 'text/plain' });
+      fireEvent.change(input, { target: { files: [file] } });
+      expect(onAddFile).toHaveBeenCalledWith(file);
+      expect(input.value).toBe('');
+    });
+
+    it('clicking the attach button triggers the hidden file input', async () => {
+      const user = userEvent.setup();
+      const { container } = render(<ChatView {...baseProps()} />);
+      const input = container.querySelector('input[type="file"]');
+      const clickSpy = vi.spyOn(input, 'click');
+      await user.click(screen.getByLabelText('supportAttachFile'));
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('typing in the composer calls onInputChange with the new value', () => {
+      const onInputChange = vi.fn();
+      render(<ChatView {...baseProps({ onInputChange })} />);
+      const textarea = screen.getByPlaceholderText('supportTypeMessage');
+      fireEvent.change(textarea, { target: { value: 'Hola' } });
+      expect(onInputChange).toHaveBeenCalledWith('Hola');
+    });
+
+    it('adjusts the textarea height as content grows', () => {
+      render(<ChatView {...baseProps()} />);
+      const textarea = screen.getByPlaceholderText('supportTypeMessage');
+      Object.defineProperty(textarea, 'scrollHeight', { value: 80, configurable: true });
+      fireEvent.input(textarea, { target: { value: 'Una línea más larga' } });
+      expect(textarea.style.height).toBe('80px');
+    });
+  });
 });

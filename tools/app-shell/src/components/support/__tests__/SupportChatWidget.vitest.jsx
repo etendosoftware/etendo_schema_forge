@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -17,7 +17,9 @@ vi.mock('../ConversationView.jsx', () => ({
   ConversationView: (props) => (
     <div data-testid="conversation-view">
       <span data-testid="expanded-flag">{String(props.isExpanded)}</span>
+      <span data-testid="active-subject">{props.conversation?.subject}</span>
       <button onClick={() => props.onSend('hi', [])}>conv-send</button>
+      <button onClick={() => props.onSend(undefined, undefined)}>conv-send-fallback</button>
       <button onClick={() => props.onBack()}>conv-back</button>
       <button onClick={() => props.onSubmitRating(5, 'ok')}>conv-rate</button>
       <button onClick={() => props.onDismissRating()}>conv-dismiss</button>
@@ -44,7 +46,7 @@ vi.mock('../helpDocs.js', () => ({
   docUrl: (loc) => `https://docs.example/${loc}`,
 }));
 
-import { fetchHelpDocs } from '../helpDocs.js';
+import { fetchHelpDocs, groupHelpCollections, searchHelpDocs } from '../helpDocs.js';
 import { SupportChatWidget } from '../SupportChatWidget.jsx';
 
 const BASE_STATE = {
@@ -296,5 +298,128 @@ describe('SupportChatWidget', () => {
     expect(screen.getByTestId('expanded-flag')).toHaveTextContent('false');
     await user.click(screen.getByText('conv-toggle-expand'));
     expect(screen.getByTestId('expanded-flag')).toHaveTextContent('true');
+  });
+
+  describe('additional coverage', () => {
+    it('pressing Enter on the ask-a-question card starts a new conversation', () => {
+      const actions = mockChat({ isOpen: true, activeTab: 'inicio' });
+      render(<SupportChatWidget />);
+      const card = screen.getByText('supportAskQuestionCta').closest('[role="button"]');
+      fireEvent.keyDown(card, { key: 'Enter' });
+      expect(actions.selectConversation).toHaveBeenCalledWith('new');
+      expect(actions.setTab).toHaveBeenCalledWith('mensajes');
+    });
+
+    it('clicking the search bar on Inicio switches to the Ayuda tab', async () => {
+      const user = userEvent.setup();
+      const actions = mockChat({ isOpen: true, activeTab: 'inicio' });
+      render(<SupportChatWidget />);
+      await user.click(screen.getByPlaceholderText('supportSearchHelp'));
+      expect(actions.setTab).toHaveBeenCalledWith('ayuda');
+    });
+
+    it('clicking the sample search result on Inicio switches to the Ayuda tab', async () => {
+      const user = userEvent.setup();
+      const actions = mockChat({ isOpen: true, activeTab: 'inicio' });
+      render(<SupportChatWidget />);
+      await user.click(screen.getByText('supportSampleSearchResult'));
+      expect(actions.setTab).toHaveBeenCalledWith('ayuda');
+    });
+
+    it('shows the exact unread count on the closed FAB when it is 9 or fewer', () => {
+      mockChat({ isOpen: false, unreadCount: 3 });
+      render(<SupportChatWidget />);
+      expect(screen.getByText('3')).toBeInTheDocument();
+    });
+
+    it('renders the conversation view scoped to the matching active conversation', () => {
+      mockChat({
+        isOpen: true,
+        activeConversationId: 'c2',
+        conversations: [{ id: 'c1', subject: 'Uno' }, { id: 'c2', subject: 'Dos' }],
+      });
+      render(<SupportChatWidget />);
+      expect(screen.getByTestId('active-subject')).toHaveTextContent('Dos');
+    });
+
+    it('falls back to pendingFiles and the stored input when the conversation view sends without explicit values', async () => {
+      const user = userEvent.setup();
+      const actions = mockChat({
+        isOpen: true,
+        activeConversationId: 'c1',
+        input: 'hi',
+        pendingFiles: [{ name: 'a.txt' }],
+      });
+      render(<SupportChatWidget />);
+      await user.click(screen.getByText('conv-send-fallback'));
+      expect(actions.sendMessage).toHaveBeenCalledWith('c1', 'hi', [{ name: 'a.txt' }]);
+    });
+
+    it('does not dismiss a rating when there is no real active conversation', async () => {
+      const user = userEvent.setup();
+      const actions = mockChat({ isOpen: true, activeConversationId: 'new' });
+      render(<SupportChatWidget />);
+      await user.click(screen.getByText('conv-dismiss'));
+      expect(actions.dismissRating).not.toHaveBeenCalled();
+    });
+
+    describe('Ayuda tab search and browsing', () => {
+      beforeEach(() => {
+        fetchHelpDocs.mockResolvedValue([{ id: 1 }]);
+        groupHelpCollections.mockReturnValue([]);
+        searchHelpDocs.mockReturnValue([]);
+      });
+
+      it('typing a query shows matching help articles with a snippet', async () => {
+        searchHelpDocs.mockReturnValue([{ location: 'facturas/', title: 'Facturas', snippet: 'Cómo pagar' }]);
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'ayuda' });
+        render(<SupportChatWidget />);
+        await waitFor(() => expect(fetchHelpDocs).toHaveBeenCalled());
+        await user.type(screen.getByPlaceholderText('supportSearchArticles'), 'pagar');
+        expect(screen.getByText('supportResultsCount {"count":1}')).toBeInTheDocument();
+        expect(screen.getByText('Cómo pagar…')).toBeInTheDocument();
+        const link = screen.getByText('Facturas').closest('a');
+        expect(link).toHaveAttribute('href', 'https://docs.example/facturas/');
+      });
+
+      it('shows a no-articles message when a search yields no results', async () => {
+        searchHelpDocs.mockReturnValue([]);
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'ayuda' });
+        render(<SupportChatWidget />);
+        await waitFor(() => expect(fetchHelpDocs).toHaveBeenCalled());
+        await user.type(screen.getByPlaceholderText('supportSearchArticles'), 'inexistente');
+        expect(screen.getByText(/supportNoArticlesFor/)).toBeInTheDocument();
+      });
+
+      it('browsing a help collection shows its pages and the back button returns to the collection list', async () => {
+        groupHelpCollections.mockReturnValue([
+          { id: 'c1', title: 'Facturación', pages: [{ location: 'a/', title: 'Página A' }, { location: 'b/', title: 'Página B' }] },
+        ]);
+        const user = userEvent.setup();
+        mockChat({ isOpen: true, activeTab: 'ayuda' });
+        render(<SupportChatWidget />);
+        await waitFor(() => expect(fetchHelpDocs).toHaveBeenCalled());
+        await user.click(await screen.findByText('Facturación'));
+        expect(screen.getByText('Página A')).toBeInTheDocument();
+        expect(screen.getByText('Página B')).toBeInTheDocument();
+        await user.click(screen.getByLabelText('back'));
+        expect(screen.queryByText('Página A')).not.toBeInTheDocument();
+        expect(screen.getByText('Facturación')).toBeInTheDocument();
+      });
+
+      it('pressing Enter on a help collection row selects it', async () => {
+        groupHelpCollections.mockReturnValue([
+          { id: 'c1', title: 'Envíos', pages: [{ location: 'x/', title: 'Página X' }] },
+        ]);
+        mockChat({ isOpen: true, activeTab: 'ayuda' });
+        render(<SupportChatWidget />);
+        await waitFor(() => expect(fetchHelpDocs).toHaveBeenCalled());
+        const row = (await screen.findByText('Envíos')).closest('[role="button"]');
+        fireEvent.keyDown(row, { key: 'Enter' });
+        expect(screen.getByText('Página X')).toBeInTheDocument();
+      });
+    });
   });
 });

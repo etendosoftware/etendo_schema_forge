@@ -375,5 +375,197 @@ describe('SupportChatContext', () => {
       });
       expect(result.current.state.conversations[0].unread).toBe(true);
     });
+
+    it('the 5s message poll leaves messages unchanged when the response is not ok', async () => {
+      const { result } = await renderSupportChat();
+      act(() => {
+        result.current.actions.open();
+        result.current.actions.selectConversation('c1');
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({}, false));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(result.current.state.messages).toEqual([]);
+    });
+
+    it('the 15s conversation-list poll ignores a failed response', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversations: [{ id: 'c1', subject: 'X' }] }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({}, false));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15000);
+      });
+      expect(result.current.state.conversations).toHaveLength(1);
+    });
+
+    // Documents current behavior: hasChange only inspects per-id field diffs for ids
+    // present in both snapshots. When the total count coincidentally stays the same
+    // (one conversation replaced by another), a genuinely new conversation with no
+    // "existing" counterpart contributes `false` to the `.some()` check, so the poll
+    // does not refresh the list even though the composition changed.
+    it('does not refresh the list when a swapped-in conversation keeps the total count unchanged', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversations: [
+          { id: 'c1', subject: 'A', unread: false, status: 'open', rated: false },
+          { id: 'c2', subject: 'B', unread: false, status: 'open', rated: false },
+        ],
+      }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversations: [
+          { id: 'c1', subject: 'A', unread: false, status: 'open', rated: false },
+          { id: 'c3', subject: 'Nueva', unread: false, status: 'open', rated: false },
+        ],
+      }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15000);
+      });
+      expect(result.current.state.conversations.map((c) => c.id)).toEqual(['c1', 'c2']);
+    });
+  });
+
+  describe('additional coverage', () => {
+    it('serializes text and binary attachments differently when starting a conversation', async () => {
+      // jsdom's FileReader schedules its onload/onerror callbacks via a real timer,
+      // which the describe-level fake timers would otherwise freeze forever.
+      vi.useRealTimers();
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversation: { id: 'c9', subject: 'Con archivos' },
+        messages: [],
+      }));
+      const textFile = new File(['contenido de texto'], 'notas.txt', { type: 'text/plain' });
+      const imageFile = new File(['\x89PNG'], 'foto.png', { type: 'image/png' });
+      await act(async () => {
+        await result.current.actions.startConversation('Con archivos adjuntos', [textFile, imageFile]);
+      });
+      const [, options] = mockApiFetch.mock.calls[mockApiFetch.mock.calls.length - 1];
+      const body = JSON.parse(options.body);
+      expect(body.attachments).toHaveLength(2);
+      expect(body.attachments[0]).toMatchObject({ name: 'notas.txt', mimeType: 'text/plain' });
+      expect(body.attachments[0].text).toContain('contenido de texto');
+      expect(body.attachments[1]).toMatchObject({ name: 'foto.png', mimeType: 'image/png' });
+      expect(typeof body.attachments[1].data).toBe('string');
+    });
+
+    it('detects text attachments via file extension and generic text/ mime types', async () => {
+      vi.useRealTimers();
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ reply: { id: 'm3', sender: 'ai', text: 'Recibido' } }));
+      const csvFile = new File(['a,b,c'], 'datos.csv', { type: '' });
+      const rtfFile = new File(['texto'], 'nota.rtf', { type: 'text/rtf' });
+      await act(async () => {
+        await result.current.actions.sendMessage('c1', 'Con adjuntos', [csvFile, rtfFile]);
+      });
+      const [, options] = mockApiFetch.mock.calls[mockApiFetch.mock.calls.length - 1];
+      const body = JSON.parse(options.body);
+      expect(body.attachments[0]).toMatchObject({ mimeType: 'application/octet-stream', text: 'a,b,c' });
+      expect(body.attachments[1]).toMatchObject({ mimeType: 'text/rtf', text: 'texto' });
+    });
+
+    it('startConversation records an error when the request fails', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({}, false));
+      await act(async () => {
+        await result.current.actions.startConversation('Hola', []);
+      });
+      expect(result.current.state.error).toBe('Failed to start conversation');
+      expect(result.current.state.isSending).toBe(false);
+    });
+
+    it('sendMessage replaces the full thread when the server returns a message list', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        messages: [{ id: 'm1', sender: 'user', text: 'Hola' }, { id: 'm2', sender: 'ai', text: 'Respuesta' }],
+        conversation: { id: 'c1', subject: 'X', status: 'open' },
+      }));
+      await act(async () => {
+        await result.current.actions.sendMessage('c1', 'Hola', []);
+      });
+      expect(result.current.state.messages).toHaveLength(2);
+    });
+
+    it('submitRating records an error when the request fails', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockRejectedValueOnce(new Error('network down'));
+      await act(async () => {
+        await result.current.actions.submitRating('c1', 4, '');
+      });
+      expect(result.current.state.error).toBe('network down');
+    });
+
+    it('does not let a telemetry failure block a successful rating submission', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversations: [{ id: 'c1', subject: 'X', status: 'closed' }] }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({}));
+      mockTrack.mockReturnValueOnce(Promise.reject(new Error('telemetry down')));
+      await act(async () => {
+        await result.current.actions.submitRating('c1', 5, 'great');
+      });
+      expect(result.current.state.conversations[0].rated).toBe(true);
+    });
+
+    it('setInput updates the composer draft text', async () => {
+      const { result } = await renderSupportChat();
+      act(() => result.current.actions.setInput('Draft text'));
+      expect(result.current.state.input).toBe('Draft text');
+    });
+
+    it('UPDATE_CONVERSATION re-sorts multiple conversations by lastActivity', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversations: [
+          { id: 'c1', subject: 'Vieja', lastActivity: '2024-01-01T00:00:00.000Z' },
+          { id: 'c2', subject: 'Nueva', lastActivity: '2024-01-02T00:00:00.000Z' },
+        ],
+      }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversation: { id: 'c1', lastActivity: '2024-01-03T00:00:00.000Z' } }));
+      await act(async () => {
+        await result.current.actions.closeConversation('c1');
+      });
+      expect(result.current.state.conversations[0].id).toBe('c1');
+    });
+
+    it('dismissRating flags only the matching conversation among several', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversations: [
+          { id: 'c1', subject: 'A', status: 'closed' },
+          { id: 'c2', subject: 'B', status: 'closed' },
+        ],
+      }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      act(() => result.current.actions.dismissRating('c2'));
+      expect(result.current.state.conversations.find((c) => c.id === 'c2').csatDismissed).toBe(true);
+      expect(result.current.state.conversations.find((c) => c.id === 'c1').csatDismissed).toBeUndefined();
+    });
+
+    it('silently ignores a failed initial silent load of conversations', async () => {
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({}, false));
+      const { result } = await renderSupportChat();
+      expect(result.current.state.conversations).toEqual([]);
+      expect(result.current.state.error).toBeNull();
+    });
+
+    it('populates the conversation list on the very first silent load when the server already has conversations', async () => {
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversations: [{ id: 'c1', subject: 'Ya existente' }] }));
+      const { result } = await renderSupportChat();
+      expect(result.current.state.conversations).toEqual([{ id: 'c1', subject: 'Ya existente' }]);
+    });
   });
 });
