@@ -25,12 +25,13 @@ function fetchCanonicalLocations() {
       return res.text();
     })
     .then((text) => {
-      // The body class deliberately excludes "." so it can never overlap with
-      // the literal `.md` suffix — the engine never has more than one way to
-      // split the match, so there is nothing to backtrack over regardless of
-      // input length (unlike the earlier `X+(?:/X+)*` and `[\w./-]+` shapes,
-      // both flagged by Sonar for super-linear backtracking risk).
-      const mdPaths = text.match(/[\w/-]+\.md/g) || [];
+      // Tokenize on whitespace/colons instead of matching a quantified regex
+      // against the whole blob — Sonar (javascript:S5852) flags any `X+`
+      // followed by more pattern as a super-linear backtracking risk, even
+      // when the class is provably disjoint from what follows. Splitting
+      // sidesteps that shape entirely: a plain string suffix check has no
+      // regex backtracking to reason about.
+      const mdPaths = text.split(/[\s:]+/).filter((token) => token.endsWith('.md'));
       return new Set(mdPaths.map(mdPathToLocation));
     });
 }
