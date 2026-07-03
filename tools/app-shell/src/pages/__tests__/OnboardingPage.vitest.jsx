@@ -965,10 +965,23 @@ describe('OnboardingPage', () => {
   });
 
   it('keeps retrying environment discovery after a successful run before falling back', async () => {
+    // Hold the first retry's 2s timer until the test has observed the
+    // transient success screen, then let every subsequent retry resolve
+    // on a microtask so the fallback-to-profile still happens quickly.
+    let releaseFirstRetryTimer;
+    const firstRetryGate = new Promise((resolve) => {
+      releaseFirstRetryTimer = resolve;
+    });
+    let timerCount = 0;
     const realSetTimeout = globalThis.setTimeout;
     vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
       if (delay === 2000) {
-        queueMicrotask(callback);
+        timerCount += 1;
+        if (timerCount === 1) {
+          firstRetryGate.then(callback);
+        } else {
+          queueMicrotask(callback);
+        }
         return 1;
       }
       return realSetTimeout(callback, delay, ...args);
@@ -985,10 +998,17 @@ describe('OnboardingPage', () => {
     fireEvent.click(await screen.findByText('onboardingContinueAction'));
     fireEvent.click(screen.getByText('onboardingStartAction'));
 
+    // The run succeeds and the success screen renders immediately, before
+    // any retry timer has been allowed to fire.
+    expect(await screen.findByText('onboardingSuccessTitle')).toBeInTheDocument();
+    releaseFirstRetryTimer();
+
+    // No environment ever shows up, so it retries discovery 3 times (plus the
+    // initial mount call) before falling back to the profile step.
     await waitFor(() => {
       expect(fetchEnvironments).toHaveBeenCalledTimes(5);
     });
-    expect(await screen.findByText('onboardingSuccessTitle')).toBeInTheDocument();
+    expect(await screen.findByText('onboardingContinueAction')).toBeInTheDocument();
   });
 
   it('tracks readiness failures after a successful onboarding run', async () => {
