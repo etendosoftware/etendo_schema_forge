@@ -182,6 +182,8 @@ Schema Forge (this repo)  ──writes via webhooks──▶  com.etendoerp.go (
 
 **Key principle:** Schema Forge decides WHAT to expose. Etendo Go decides HOW to serve it at runtime.
 
+**Repo topology & dev profiles:** This functional repo consumes the tooling (generators, pipeline, app-shell-core, CLI) as **published** packages from `schema_forge_core`. The default (servers, CI, functional-only devs) is always the published packages. Developers who also work on the core can run **everything from the local core source** — React via `make dev-local-core`, CLI via `make <target> LOCAL_CORE=1` — strictly opt-in and gated by `LOCAL_CORE` so it never breaks environments without the core cloned. Full reference (two dev profiles, GitHub Packages auth, prerequisites): **`docs/repo-topology.md`**.
+
 See `docs/architecture-overview.md` for the full system architecture (two-loop system, stack, components, DB tables, URL patterns, data flow diagrams).
 
 ## Data Flow (summary)

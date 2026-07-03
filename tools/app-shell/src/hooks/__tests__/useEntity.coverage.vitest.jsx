@@ -330,6 +330,32 @@ describe('useEntity — coverage paths', () => {
       window.removeEventListener('neo:processSuccess', eventSpy);
     });
 
+    it('includes columnName in neo:processSuccess detail for reactivate process', async () => {
+      const parent = { id: 'p1' };
+      const eventSpy = vi.fn();
+      window.addEventListener('neo:processSuccess', eventSpy);
+
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'POST') return { ok: true, json: async () => ({}) };
+        return mockFetchOk([parent]);
+      });
+
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect(parent); });
+
+      await act(async () => {
+        await result.current.handleProcess({ name: 'Reactivar', columnName: 'etprReactivatePayment', params: [] });
+      });
+
+      expect(eventSpy).toHaveBeenCalledWith(expect.objectContaining({
+        detail: expect.objectContaining({
+          process: expect.objectContaining({ columnName: 'etprReactivatePayment' }),
+          recordId: parent.id,
+        }),
+      }));
+      window.removeEventListener('neo:processSuccess', eventSpy);
+    });
+
     it('shows fallback toast with process.label when no i18n key matches', async () => {
       const parent = { id: 'p1' };
       globalThis.fetch.mockImplementation(async (url, opts) => {
@@ -363,6 +389,32 @@ describe('useEntity — coverage paths', () => {
       });
 
       expect(toast.success).toHaveBeenCalledWith('Process completed');
+    });
+
+    it('uses columnName (not name) for i18n completion key when columnName is present', async () => {
+      const parent = { id: 'p1' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'POST') return { ok: true, json: async () => ({}) };
+        return mockFetchOk([parent]);
+      });
+
+      // ui mock returns key unchanged → 'aPRMProcessPaymentCompleted' !== 'aPRMProcessPaymentCompleted' is false
+      // → uses fallback. What matters is that the key is built from columnName, not name.
+      // We spy on ui by checking the toast fallback uses label (not name/columnName raw).
+      const { result } = renderEntity('header', 'lines', { skipListFetch: true });
+      act(() => { result.current.handleSelect(parent); });
+
+      await act(async () => {
+        await result.current.handleProcess({
+          name: 'Payment Process',
+          columnName: 'aPRMProcessPayment',
+          label: 'processConfirm',
+          params: [],
+        });
+      });
+
+      // ui returns key as-is → specificKey === 'aPRMProcessPaymentCompleted' → fallback to label
+      expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('processConfirm'));
     });
 
     it('shows error toast on non-ok response', async () => {

@@ -130,3 +130,26 @@ describe('Sales InvoiceHeaderTable — fiscal status columns (ETP-4125)', () => 
       'fiscalLoading was part of the removed batch-fetch hook');
   });
 });
+
+// ── ETP-4331: list must refresh after adding a payment from the list badge ────
+// Risk: ListView (the parent) only ever passes `onDataMutated` to this component's
+// slot, never `onRefresh`. Wiring onPaymentAdded to `props.onRefresh` is a silent
+// no-op that leaves the outstanding-amount badge stale until a manual reload.
+
+describe('Sales InvoiceHeaderTable — payment-added refresh wiring (ETP-4331)', () => {
+  it('calls props.onDataMutated when the payment modal reports a new payment', () => {
+    assert.match(
+      src,
+      /onPaymentAdded=\{\(\)\s*=>\s*\{\s*setPaymentRow\(null\);\s*props\.onDataMutated\?\.\(\);\s*\}\}/,
+      'onPaymentAdded must close the modal and call props.onDataMutated (the prop ListView actually passes)',
+    );
+  });
+
+  it('never references the stale props.onRefresh prop', () => {
+    assert.doesNotMatch(
+      src,
+      /props\.onRefresh/,
+      'ListView never passes onRefresh — using it here silently no-ops and leaves the list stale (ETP-4331 bug)',
+    );
+  });
+});
