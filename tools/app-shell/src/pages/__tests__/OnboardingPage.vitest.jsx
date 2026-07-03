@@ -965,6 +965,9 @@ describe('OnboardingPage', () => {
   });
 
   it('keeps retrying environment discovery after a successful run before falling back', async () => {
+    // Vitest's default 5s test timeout is shorter than the internal 10s wait
+    // timeouts below (needed for slower/shared CI runners) — raise it via the
+    // third `it()` argument, not just the inner waitFor/findByText options.
     // Hold the first retry's 2s timer until the test has observed the
     // transient success screen, then let every subsequent retry resolve
     // on a microtask so the fallback-to-profile still happens quickly.
@@ -1011,7 +1014,7 @@ describe('OnboardingPage', () => {
       expect(fetchEnvironments).toHaveBeenCalledTimes(5);
     }, { timeout: 10_000 });
     expect(await screen.findByText('onboardingContinueAction', {}, { timeout: 10_000 })).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('tracks readiness failures after a successful onboarding run', async () => {
     const realSetTimeout = globalThis.setTimeout;
