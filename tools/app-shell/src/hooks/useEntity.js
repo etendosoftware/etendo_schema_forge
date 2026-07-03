@@ -1100,9 +1100,9 @@ export function useEntity(entity, childEntity, {
                 body: JSON.stringify({ fieldValues }),
             });
             if (res.ok) {
-                const specificKey = `${process.name}Completed`;
+                const specificKey = `${process.columnName ?? process.name}Completed`;
                 const specificMsg = ui(specificKey);
-                const fallbackMsg = process.label ? `${process.label} completed` : 'Process completed';
+                const fallbackMsg = process.label ? `${ui(process.label) || process.label} completed` : 'Process completed';
                 toast.success(specificMsg !== specificKey ? specificMsg : fallbackMsg);
                 window.dispatchEvent(new CustomEvent('neo:processSuccess', {
                     detail: {
