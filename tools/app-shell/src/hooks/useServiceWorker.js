@@ -63,6 +63,10 @@ export function useServiceWorker({ onUpdateAvailable } = {}) {
     // user who is mid-typing (see isUserEditing / pendingReload below).
     let reloading = false;
     let pendingReload = false;
+    // Set when a full-page redirect (e.g. post-login window.location.href) is
+    // about to happen — see 'etendo-go:navigating' below. A reload() here would
+    // race that pending navigation and can win, silently canceling it (ETP-4425).
+    let navigatingAway = false;
 
     function doReload() {
       if (reloading) return;
@@ -82,7 +86,16 @@ export function useServiceWorker({ onUpdateAvailable } = {}) {
         pendingReload = true;
         return;
       }
+      // Guard 3: a full-page navigation is already in flight (e.g. post-login
+      // redirect). The new SW already controls the page, so the destination
+      // page loads fresh assets on its own — reloading now would only race
+      // and potentially cancel that navigation.
+      if (navigatingAway) return;
       doReload();
+    }
+
+    function handleNavigatingAway() {
+      navigatingAway = true;
     }
 
     // Flush a deferred reload once the user stops editing. focusout fires before
@@ -102,6 +115,9 @@ export function useServiceWorker({ onUpdateAvailable } = {}) {
       handleControllerChange,
     );
     document.addEventListener('focusout', handleFocusOut);
+    // Dispatched by @etendosoftware/etendo-go-core's OnboardingFlow right
+    // before a post-login window.location.href redirect (see Guard 3 above).
+    window.addEventListener('etendo-go:navigating', handleNavigatingAway);
 
     // Poll for updates when the tab regains focus
     function handleVisibilityChange() {
@@ -120,6 +136,7 @@ export function useServiceWorker({ onUpdateAvailable } = {}) {
         handleControllerChange,
       );
       document.removeEventListener('focusout', handleFocusOut);
+      window.removeEventListener('etendo-go:navigating', handleNavigatingAway);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
