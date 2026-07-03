@@ -1,8 +1,8 @@
 {
   "version": "0.12.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-07-02T14:24:19.015Z",
-  "checksum": "d3f38103ac3cf5d0",
+  "updatedAt": "2026-07-03T12:41:25.580Z",
+  "checksum": "bfadfbb7c76dbe5e",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -71,7 +71,6 @@
         "PPM": "pagoDepositado",
         "PWNC": "pagoDepositado"
       },
-      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false,
@@ -1829,7 +1828,6 @@
         "PPM": "pagoDepositado",
         "PWNC": "pagoDepositado"
       },
-      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false
@@ -2943,51 +2941,11 @@
     ],
     "processEndpoints": [
       {
-        "name": "Add Payment",
-        "method": "POST",
-        "path": "/header/:id/action/aPRMAddScheduledpayments",
-        "entity": "header",
-        "columnName": "aPRMAddScheduledpayments",
-        "params": [],
-        "preconditions": [],
-        "steps": 0
-      },
-      {
         "name": "Payment Process",
         "method": "POST",
         "path": "/header/:id/action/aPRMProcessPayment",
         "entity": "header",
         "columnName": "aPRMProcessPayment",
-        "params": [],
-        "preconditions": [],
-        "steps": 0
-      },
-      {
-        "name": "Execute Payment",
-        "method": "POST",
-        "path": "/header/:id/action/aprmExecutepayment",
-        "entity": "header",
-        "columnName": "aprmExecutepayment",
-        "params": [],
-        "preconditions": [],
-        "steps": 0
-      },
-      {
-        "name": "Reverse Payment",
-        "method": "POST",
-        "path": "/header/:id/action/aPRMReversePayment",
-        "entity": "header",
-        "columnName": "aPRMReversePayment",
-        "params": [],
-        "preconditions": [],
-        "steps": 0
-      },
-      {
-        "name": "Reconcile Payment",
-        "method": "POST",
-        "path": "/header/:id/action/aPRMReconcilePayment",
-        "entity": "header",
-        "columnName": "aPRMReconcilePayment",
         "params": [],
         "preconditions": [],
         "steps": 0
@@ -5033,22 +4991,6 @@
         "description": "Field 'stDimension' should have type 'string' in lines"
       },
       {
-        "id": "t-process-failure-Add-Payment",
-        "category": "process-failure",
-        "process": "Add Payment",
-        "entity": "header",
-        "runner": "junit",
-        "description": "Process 'Add Payment' should fail when preconditions are not met"
-      },
-      {
-        "id": "t-process-failure-Execute-Payment",
-        "category": "process-failure",
-        "process": "Execute Payment",
-        "entity": "header",
-        "runner": "junit",
-        "description": "Process 'Execute Payment' should fail when preconditions are not met"
-      },
-      {
         "id": "t-process-failure-Payment-Process",
         "category": "process-failure",
         "process": "Payment Process",
@@ -5057,60 +4999,12 @@
         "description": "Process 'Payment Process' should fail when preconditions are not met"
       },
       {
-        "id": "t-process-failure-Reconcile-Payment",
-        "category": "process-failure",
-        "process": "Reconcile Payment",
-        "entity": "header",
-        "runner": "junit",
-        "description": "Process 'Reconcile Payment' should fail when preconditions are not met"
-      },
-      {
-        "id": "t-process-failure-Reverse-Payment",
-        "category": "process-failure",
-        "process": "Reverse Payment",
-        "entity": "header",
-        "runner": "junit",
-        "description": "Process 'Reverse Payment' should fail when preconditions are not met"
-      },
-      {
-        "id": "t-process-happy-Add-Payment",
-        "category": "process-happy",
-        "process": "Add Payment",
-        "entity": "header",
-        "runner": "junit",
-        "description": "Process 'Add Payment' should complete successfully with valid preconditions"
-      },
-      {
-        "id": "t-process-happy-Execute-Payment",
-        "category": "process-happy",
-        "process": "Execute Payment",
-        "entity": "header",
-        "runner": "junit",
-        "description": "Process 'Execute Payment' should complete successfully with valid preconditions"
-      },
-      {
         "id": "t-process-happy-Payment-Process",
         "category": "process-happy",
         "process": "Payment Process",
         "entity": "header",
         "runner": "junit",
         "description": "Process 'Payment Process' should complete successfully with valid preconditions"
-      },
-      {
-        "id": "t-process-happy-Reconcile-Payment",
-        "category": "process-happy",
-        "process": "Reconcile Payment",
-        "entity": "header",
-        "runner": "junit",
-        "description": "Process 'Reconcile Payment' should complete successfully with valid preconditions"
-      },
-      {
-        "id": "t-process-happy-Reverse-Payment",
-        "category": "process-happy",
-        "process": "Reverse Payment",
-        "entity": "header",
-        "runner": "junit",
-        "description": "Process 'Reverse Payment' should complete successfully with valid preconditions"
       },
       {
         "id": "t-readonlylogic-evaluable-header-account",
@@ -6846,7 +6740,7 @@
       }
     ],
     "summary": {
-      "total": 449,
+      "total": 441,
       "byCategory": {
         "action-endpoint": 12,
         "crud-flags": 3,
@@ -6855,8 +6749,8 @@
         "displaylogic-valid": 26,
         "field-presence": 62,
         "field-type": 62,
-        "process-failure": 5,
-        "process-happy": 5,
+        "process-failure": 1,
+        "process-happy": 1,
         "readonlylogic-evaluable": 16,
         "readonlylogic-valid": 16,
         "rule-declared": 105,
@@ -6867,7 +6761,7 @@
       },
       "byRunner": {
         "node": 439,
-        "junit": 10
+        "junit": 2
       }
     }
   }

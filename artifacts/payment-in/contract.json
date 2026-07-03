@@ -1,8 +1,8 @@
 {
   "version": "0.10.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-07-02T14:24:18.855Z",
-  "checksum": "2586d85d6d82290b",
+  "updatedAt": "2026-07-03T12:41:25.546Z",
+  "checksum": "27c17f623f22b5ec",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -74,7 +74,6 @@
         "PPM": "cobroDepositado",
         "PWNC": "cobroDepositado"
       },
-      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false,
@@ -911,7 +910,6 @@
         "PPM": "cobroDepositado",
         "PWNC": "cobroDepositado"
       },
-      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false
@@ -1674,51 +1672,11 @@
     ],
     "processEndpoints": [
       {
-        "name": "Add Payment",
-        "method": "POST",
-        "path": "/finPayment/:id/action/aPRMAddScheduledpayments",
-        "entity": "finPayment",
-        "columnName": "aPRMAddScheduledpayments",
-        "params": [],
-        "preconditions": [],
-        "steps": 0
-      },
-      {
         "name": "Payment Process",
         "method": "POST",
         "path": "/finPayment/:id/action/aPRMProcessPayment",
         "entity": "finPayment",
         "columnName": "aPRMProcessPayment",
-        "params": [],
-        "preconditions": [],
-        "steps": 0
-      },
-      {
-        "name": "Execute Payment",
-        "method": "POST",
-        "path": "/finPayment/:id/action/aprmExecutepayment",
-        "entity": "finPayment",
-        "columnName": "aprmExecutepayment",
-        "params": [],
-        "preconditions": [],
-        "steps": 0
-      },
-      {
-        "name": "Reverse Payment",
-        "method": "POST",
-        "path": "/finPayment/:id/action/aPRMReversePayment",
-        "entity": "finPayment",
-        "columnName": "aPRMReversePayment",
-        "params": [],
-        "preconditions": [],
-        "steps": 0
-      },
-      {
-        "name": "Reconcile Payment",
-        "method": "POST",
-        "path": "/finPayment/:id/action/aPRMReconcilePayment",
-        "entity": "finPayment",
-        "columnName": "aPRMReconcilePayment",
         "params": [],
         "preconditions": [],
         "steps": 0
@@ -2552,22 +2510,6 @@
         "description": "Field 'invoicePaymentSchedule' should have type 'string' in finPaymentScheduleDetail"
       },
       {
-        "id": "t-process-failure-Add-Payment",
-        "category": "process-failure",
-        "process": "Add Payment",
-        "entity": "finPayment",
-        "runner": "junit",
-        "description": "Process 'Add Payment' should fail when preconditions are not met"
-      },
-      {
-        "id": "t-process-failure-Execute-Payment",
-        "category": "process-failure",
-        "process": "Execute Payment",
-        "entity": "finPayment",
-        "runner": "junit",
-        "description": "Process 'Execute Payment' should fail when preconditions are not met"
-      },
-      {
         "id": "t-process-failure-Payment-Process",
         "category": "process-failure",
         "process": "Payment Process",
@@ -2576,60 +2518,12 @@
         "description": "Process 'Payment Process' should fail when preconditions are not met"
       },
       {
-        "id": "t-process-failure-Reconcile-Payment",
-        "category": "process-failure",
-        "process": "Reconcile Payment",
-        "entity": "finPayment",
-        "runner": "junit",
-        "description": "Process 'Reconcile Payment' should fail when preconditions are not met"
-      },
-      {
-        "id": "t-process-failure-Reverse-Payment",
-        "category": "process-failure",
-        "process": "Reverse Payment",
-        "entity": "finPayment",
-        "runner": "junit",
-        "description": "Process 'Reverse Payment' should fail when preconditions are not met"
-      },
-      {
-        "id": "t-process-happy-Add-Payment",
-        "category": "process-happy",
-        "process": "Add Payment",
-        "entity": "finPayment",
-        "runner": "junit",
-        "description": "Process 'Add Payment' should complete successfully with valid preconditions"
-      },
-      {
-        "id": "t-process-happy-Execute-Payment",
-        "category": "process-happy",
-        "process": "Execute Payment",
-        "entity": "finPayment",
-        "runner": "junit",
-        "description": "Process 'Execute Payment' should complete successfully with valid preconditions"
-      },
-      {
         "id": "t-process-happy-Payment-Process",
         "category": "process-happy",
         "process": "Payment Process",
         "entity": "finPayment",
         "runner": "junit",
         "description": "Process 'Payment Process' should complete successfully with valid preconditions"
-      },
-      {
-        "id": "t-process-happy-Reconcile-Payment",
-        "category": "process-happy",
-        "process": "Reconcile Payment",
-        "entity": "finPayment",
-        "runner": "junit",
-        "description": "Process 'Reconcile Payment' should complete successfully with valid preconditions"
-      },
-      {
-        "id": "t-process-happy-Reverse-Payment",
-        "category": "process-happy",
-        "process": "Reverse Payment",
-        "entity": "finPayment",
-        "runner": "junit",
-        "description": "Process 'Reverse Payment' should complete successfully with valid preconditions"
       },
       {
         "id": "t-readonlylogic-evaluable-finPayment-account",
@@ -3494,7 +3388,7 @@
       }
     ],
     "summary": {
-      "total": 200,
+      "total": 192,
       "byCategory": {
         "action-endpoint": 11,
         "crud-flags": 2,
@@ -3503,8 +3397,8 @@
         "displaylogic-valid": 6,
         "field-presence": 22,
         "field-type": 22,
-        "process-failure": 5,
-        "process-happy": 5,
+        "process-failure": 1,
+        "process-happy": 1,
         "readonlylogic-evaluable": 7,
         "readonlylogic-valid": 7,
         "rule-declared": 25,
@@ -3515,7 +3409,7 @@
       },
       "byRunner": {
         "node": 190,
-        "junit": 10
+        "junit": 2
       }
     }
   }
