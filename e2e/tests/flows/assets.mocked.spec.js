@@ -279,7 +279,7 @@ test.describe('Assets — AmortizationPlan row navigation', () => {
       .filter({ hasText: '08-04-2026' })
       .first();
     await expect(amortRow).toBeVisible({ timeout: 5_000 });
-    await amortRow.locator('button').first().click();
+    await amortRow.locator('button').nth(1).click(); // nth(0) is the checkbox, nth(1) is PeriodLink
 
     // URL must change to /amortization/mock-amort-001
     await expect(page).toHaveURL(

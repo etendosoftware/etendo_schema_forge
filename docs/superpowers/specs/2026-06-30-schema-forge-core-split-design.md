@@ -1,0 +1,163 @@
+# Design Spec: Schema Forge Core/Functional Repo Split
+
+- Date: 2026-06-30
+- Branch: feature/ETP-4346
+- Author: Forge (brainstorming session with sebastianbarrozo)
+
+## Problem
+
+`etendo_schema_forge` currently mixes two things that need independent release cycles:
+
+- **Tooling**: the generator/pipeline engine (`cli/`, reusable packages, generic app-shell runtime) — changes when the *tool* evolves.
+- **Functional content**: generated windows and their derivatives (`artifacts/<window>/**`, per-window docs, per-window custom UI, per-window e2e specs) — changes when *Etendo business config* evolves.
+
+Today both ship together, so a tooling change and a window content change always land in the same repo/version history, even though they have nothing to do with each other.
+
+## Goal
+
+Split into two repos that each get their own commit history and release cadence, starting from the same point-in-time history:
+
+- **`schema_forge_core`** (new repo) — the tool.
+- **`etendo_schema_forge`** (existing repo, same remote — continues unbroken) — the functional module, depending on packages published from `schema_forge_core`.
+
+Non-goals: this spec does not cover open-sourcing either repo, multi-tenant/multi-client reuse of `schema_forge_core` beyond Etendo, or rewriting/squashing git history. Both repos keep 100% of the current history; they diverge from this point forward.
+
+## Repo Identity
+
+| Repo | Origin | Role |
+|------|--------|------|
+| `etendosoftware/etendo_schema_forge` | Already exists, same remote, unchanged identity | Functional module — survives as-is, gets cleaned up in place |
+| `etendosoftware/schema_forge_core` | New, created as a full mirror of the current history | Core tooling — diverges from the mirror point via a cleanup PR |
+
+Both repos carry the full current history (no `git filter-repo`/path rewriting). The split is implemented as ordinary commits/PRs in each repo's own timeline, which keeps every step reversible.
+
+## Package Naming
+
+`@etendosoftware/schema-forge-core` (hyphenated) already exists today and means something specific and narrow: the `sf-domain-boundary-check` tool published from `packages/schema-forge-core`. Reusing that exact name for the much broader CLI/pipeline tooling would silently expand its scope and risk breaking whatever already consumes it.
+
+Least-disruptive resolution: leave `packages/schema-forge-core` and its published name `@etendosoftware/schema-forge-core` exactly as they are — it simply becomes one of several packages that live in the new `schema_forge_core` repo, unchanged. The CLI/pipeline tooling (`cli/`) is published as a **new, distinct package**: `@etendosoftware/schema-forge-cli`. `@etendosoftware/app-shell-core` also keeps its existing name (its scope is expanding, per the App Shell Composition Spike below, but the name and package boundary stay the same).
+
+So `etendo_schema_forge` ends up depending on three packages published from `schema_forge_core`, none of them newly named in a colliding way:
+
+- `@etendosoftware/schema-forge-cli` (new) — pipeline commands (`extract-from-db`, `generate-contract`, `generate-frontend`, `resolve-curated`, `push-to-neo`, `validate-pipeline`, etc.), exposed as published `bin` entries.
+- `@etendosoftware/app-shell-core` (existing, expanded scope) — the shell runtime, now including the App/router/page composition and a registry-injection API (see below).
+- `@etendosoftware/schema-forge-core` (existing, unchanged scope) — `sf-domain-boundary-check`, kept as-is for CI policy checks.
+
+## Boundary
+
+### `schema_forge_core` keeps (everything that is NOT a generated window or its derivative)
+
+- `cli/` in full — extractors, generators, pipeline, validators (`extract-from-db.js`, `generate-contract.js`, `generate-frontend.js`, `resolve-curated.js`, `push-to-neo.js`, `validate-pipeline.js`, etc.)
+- `packages/*` — `app-shell-core`, `schema-forge-core`, `schema-forge-stack`, `schema-forge-agent-context`, `apps-sdk`, `apps-sdk-bff`, `etendo-go-core`
+- `tools/quick-order-app`, `tools/report-server`, `tools/decision-panel`, `tools/etendo-go-ar`, `tools/ui-preview`, `tools/spike-hello-app`
+- Generic docs (`architecture-overview.md`, `decisions-reference.md`, `pipeline-validator-reference.md`, `ui-customization.md`, `window-templates.md`, `conventions.md`, etc.)
+- `scripts/`, `Makefile`, `schemas/`, `templates/`, generator-level tests, CI for `cli/`/`packages/*`
+
+**Corrected after Phase 0 landed:** `tools/app-shell` does **not** split — it moves *wholesale* to `etendo_schema_forge`, listed below. The App Shell Composition Spike (implemented in Tasks 1-3 of `docs/superpowers/plans/2026-06-30-app-shell-runtime-composition.md`, reviewed and merged) found `App.jsx`/`AppLayout`/the ~23 business pages/`WindowLoader`/`registry.js` are all product-specific, not generic shell — nothing from `tools/app-shell` ended up moving into `packages/app-shell-core`. Only `packages/app-shell-core` (already its own directory) goes to core; it gained two new extension points (`children`, `layout`) so `tools/app-shell` can consume it via a normal npm dependency instead of a copy step. `e2e-testing-guide.md` moves with `e2e/` to functional, below — it documents that package's own conventions, not a generic capability.
+
+### `etendo_schema_forge` keeps (generated windows and their derivatives)
+
+- `artifacts/<window>/**` in full — `schema-raw.json`, `rules-raw.json`, `decisions.json`, `contract.json`, `contract.mcp.json`, `contract-changelog.json`, `generated/web/<window>/**`
+- `docs/generated-custom-windows/**` (including `INDEX.md`)
+- `tools/app-shell` in full — `App.jsx`, `AppLayout`, all pages, `WindowLoader`, `registry.js`, `runtime-routes.jsx`, `src/windows/custom/<window>/**`, build config, everything (see correction above)
+- `e2e/` in full — harness (`playwright.config.js`, `tests/helpers/*`, `tests/smoke.spec.js`) and all `tests/flows/*.spec.js` (see Disposition Table below — nothing to click through in `schema_forge_core`, so the harness moves with the specs, not with the tooling)
+- `docs/etendo-ad/**`
+- Adds `@etendosoftware/schema-forge-cli` as a real published dependency (replacing today's workspace-linked `cli/`), and upgrades its existing `@etendosoftware/app-shell-core` dependency to the version that ships the registry-injection API (see App Shell Composition Spike)
+
+## Split Mechanics (non-destructive)
+
+1. Create the empty GitHub repo `etendosoftware/schema_forge_core`.
+2. `git clone --mirror` the current `etendo_schema_forge` and `push --mirror` it into the new repo. Both repos now share byte-identical history.
+3. In `schema_forge_core`, on a feature branch: one cleanup PR that removes everything functional (`artifacts/`, `docs/generated-custom-windows`, `tools/app-shell` in full, `e2e/` in full, `docs/etendo-ad`, plus everything else the Disposition Table below assigns to `etendo_schema_forge` or marks out-of-scope). Merge.
+4. In `etendo_schema_forge`, on a feature branch: one cleanup PR that removes everything core (`cli/`, the `packages/*` listed above, the generic tools listed above, generic docs/scripts/Makefile that belong to the tool), wires the real dependency on the published `@etendosoftware/schema-forge-cli`, and rewrites `Makefile` targets to call the installed `bin` commands instead of `node cli/src/*.js` paths. Merge.
+5. Publish `schema_forge_core`'s packages (`@etendosoftware/schema-forge-cli`, `@etendosoftware/app-shell-core`, `@etendosoftware/schema-forge-core`) to GitHub Packages (`npm.pkg.github.com`) so step 4's dependency resolves against a real published version, not a local workspace symlink.
+6. Split CI: `cli/`/`packages/*` tests and the publish workflow live in `schema_forge_core`'s CI. `pipeline-validate` and per-window tests live in `etendo_schema_forge`'s CI, invoking the installed `@etendosoftware/schema-forge-cli` bin commands instead of local script paths.
+
+Steps 3 and 4 must not be merged independently of step 5 — `etendo_schema_forge` must not spend any time on `main` with `cli/` removed and no working dependency in its place (it would have a broken pipeline). Step 4's PR is only mergeable once step 5 has published a real version it can pin.
+
+Every step here is an ordinary commit/PR inside each repo's own history — nothing here rewrites or force-pushes over existing history, so any step can be reverted independently.
+
+## App Shell Composition Spike (prerequisite, resolved via npm — not file copy)
+
+An adversarial review (Opus subagent, 2026-06-30) found that today's `tools/app-shell` is **not** a thin shell consumer: `src/App.jsx` is a full bespoke app — its own `BrowserRouter`, layout, ~15 page components, and `WindowLoader` — and window code is wired in at build time via Vite aliases (`@generated → ../../artifacts`, `@/windows/custom/* → ./src/windows/custom`) that assume the generated artifacts live in the same repo tree. "Just add the npm dependency" does not work until `tools/app-shell` is actually wired to use the runtime `@etendosoftware/app-shell-core` already ships.
+
+Direct code inspection (not just the adversarial review) found the real shape of the gap is narrower than "build a registry injection API from scratch": `packages/app-shell-core/src/runtime/AppShellRuntime.jsx` already accepts `routes`/`menuGroups`/`auth`/`locale`/`currency` as runtime props and builds the router/providers itself — `tools/app-shell/src/App.jsx` simply doesn't use it yet, and hand-rolls an equivalent router instead. It also turns out `tools/app-shell`'s own `AppLayout` (`SideMenu`, `FavoritesProvider`, `CommandPalette`, `CopilotProvider`/`CopilotWidget`, `PageMetaProvider`) is genuinely product-specific chrome, not generic shell — it is **not** equivalent to `AppShellRuntime`'s default `ShellLayout`, so the runtime needs a layout override point, not a wholesale layout replacement.
+
+This is therefore a **prerequisite spike**, done entirely inside the current (still-single) repo, before the mirror is created (Phase 0 below — see Phasing). It does **not** relocate `App.jsx`, the pages, `AppLayout`, or `WindowLoader` into `packages/app-shell-core` — they stay in `tools/app-shell` (and move to `etendo_schema_forge` wholesale once the split happens, per the Boundary above), because they are functional/product-specific, not generic shell:
+
+1. Add two extension points to `AppShellRuntime`: a `children` prop (rendered inside the router/providers, for side-effect components that need `useLocation`/`useNavigate`/`useAuth`) and a `layout` component prop, defaulting to the existing generic `ShellLayout`, so a consumer can override it with its own chrome.
+2. Rewrite `tools/app-shell/src/App.jsx` to build a `routes` array from its existing pages/`WindowLoader`/`menuGroups`, pass its own `AppLayout` as the `layout` override, and delegate router/auth/locale/currency composition to `<AppShellRuntime>` — deleting the duplicate hand-rolled router/providers it has today.
+3. Acceptance criteria: `packages/app-shell-core` test suite passes; `tools/app-shell` builds and at least one already-working window renders end-to-end identically to today (including `AppLayout`'s `SideMenu`/`FavoritesProvider`/`CommandPalette`/`CopilotWidget`, none of which may be dropped); no Vite alias or import in `tools/app-shell` points outside `etendo_schema_forge`'s own tree.
+
+Full task-by-task plan: `docs/superpowers/plans/2026-06-30-app-shell-runtime-composition.md`.
+
+Once this spike lands and is validated in the current repo, `npm install` is sufficient going forward: the generic shell (`AppShellRuntime`, `ShellLayout`, auth/i18n/currency/reports) crosses the repo boundary as a versioned dependency, and the actual app composition (`App.jsx`, `AppLayout`, pages, `WindowLoader`, the registry, the `@generated`/`@/windows/custom/*` aliases) stays 100% local to `etendo_schema_forge`. No compose/copy script, no extra Makefile or CI step is needed to merge the two halves at that point.
+
+## Phasing
+
+0. **Schema Forge Developer** — App Shell Composition Spike (see above), landed and validated inside the *current*, still-single repo, before any mirror is created.
+1. **Clerk** — create `schema_forge_core`, perform the mirror push.
+2. **Schema Forge Developer** — cleanup PR in `schema_forge_core` (remove functional-only paths); define `@etendosoftware/schema-forge-cli` with published `bin` entries for every pipeline command; publish workflow for all three packages.
+3. **Schema Forge Developer** — cleanup PR in `etendo_schema_forge` (remove core-only paths), wire the dependency on `@etendosoftware/schema-forge-cli`, rewrite `Makefile`/CI to call installed bins, update docs. Gated on phase 2's packages being published.
+4. **Alex (Review) + Sentinel (QA)** — confirm both repos build/test green independently, and that `make regen` works end-to-end in `etendo_schema_forge` against the published packages.
+5. **Sage (Docs)** — update `architecture-overview.md`, `README.md`, and `CLAUDE.md` in both repos to describe the two-repo model and the new dependency direction.
+
+## Risks / Open Items
+
+Resolved by this revision (package naming, App Shell Composition) — tracked below are the remaining items an adversarial review flagged that the implementation plan must still produce concrete answers for; none of them change the architecture above, but each is large enough to derail a phase if left implicit:
+
+- **Boundary disposition table (resolved below).** The remaining root-level paths and CI workflows are now classified. Two things drove most of the calls: (1) `com.etendoerp.go` (the backend) is explicitly out of scope for this split and stays exactly as it is today — anything that is really about the backend, not schema_forge tooling, doesn't move to either new repo; (2) "who actually runs this" — `schema_forge_core` ships libraries/a CLI with nothing to deploy or click through, so anything that needs a *running* app (e2e, deploy, extraction against a live DB) belongs in `etendo_schema_forge`, which is the one that installs and executes the CLI/shell against its own Etendo instance.
+
+### Disposition Table
+
+| Path | Destination | Why |
+|------|-------------|-----|
+| `e2e/` (whole package: `playwright.config.js`, `package.json`, `MCP-DISCOVERY-GUIDE.md`, `tests/helpers/*`, `tests/smoke.spec.js`, all ~65 `tests/flows/*.spec.js`) | `etendo_schema_forge` | Playwright drives the *running* `tools/app-shell`; there is nothing to click through in `schema_forge_core`. Splitting the harness from the specs would only recreate the copy-step problem the App Shell Composition Spike just eliminated. |
+| `core-maps/ad-menu-cache.json` | `etendo_schema_forge` | Has a `refreshedAt` timestamp — a genuine live-DB extraction cache, refreshed by whoever actually runs extraction against a real Etendo instance. |
+| `core-maps/{system-columns,ad-reference-map,impact-messages}.json` | `schema_forge_core` | **Corrected during Phase 2 execution** (a test failure caught this, not the original planning pass): these three are static, hand-authored Etendo AD framework reference data (standard system columns, `AD_Reference_ID` → schema-type mapping, impact-category messages) — not per-instance, not regenerated by extraction. `cli/src/validate-schema.js` and `cli/src/extract-fields.js` read them directly as tooling data; they ship with the CLI. Only `ad-menu-cache.json` (above) is a real cache. |
+| `quality-gate.config.json` | `etendo_schema_forge` | Policy config scoped to `artifacts/*/decisions.json` (blast-radius rules) — same "consumer supplies its own policy file" pattern `packages/schema-forge-core`'s `domain-boundary.config.json` already documents. |
+| `cli/src/quality-gate/*.js` (the runner) | `schema_forge_core` | Tooling source, ships as part of the CLI; only its config is consumer-side. |
+| `tests/test-sales-order-endpoints.sh` | Out of scope | Hits `com.etendoerp.go`'s NEO Headless API directly (`localhost:8080/etendo/sws`) — this tests the backend, not schema_forge. Stays where it is; not carried by this split. |
+| `pipelines/` (Jenkins: `Jenkinsfile`, `Agent.yaml`, `DockerizedAgent.yaml`, `utils/*`) | Out of scope | Orchestrates full Etendo instance builds — backend-adjacent. Not reclassified here; owned by whoever manages backend deployment. |
+| `presentations/`, `caps/` | N/A | Neither is git-tracked (confirmed via `git ls-files` — only `.DS_Store`/`node_modules`, both ignored). Nothing to move. |
+| `pending/*.md` (`callout-endpoints-proposal.md`, `openapi-flow-autoregistration.md`) | Out of scope | Both propose NEO Headless (backend) API changes — backend-adjacent, not schema_forge tooling. |
+| `infra/cloudfront-functions/*` | `etendo_schema_forge` | CDN path-rewrite for serving the *deployed* app — same "who has the running thing" logic as `e2e/`. |
+| `.githooks/pre-push`, `.githooks/pre-commit` | Split (adapt, don't move wholesale) | Each repo's hooks must validate only what that repo owns — `schema_forge_core`'s runs `cli`/`packages` tests+lint; `etendo_schema_forge`'s keeps `pipeline-validate`/`offline-regen-check`/data-testid. Phase 2/3 write each repo's own version. |
+| Root `README.md`, `AGENTS.md`, `CLAUDE.md` | Split (each repo gets its own) | Already covered by Phasing step 5 (Sage). |
+| `proposal.md`, `review-report.json`, `pr-test-coverage-analysis.md`, `domain-boundary-report.{json,md}` | Neither — leave behind | Point-in-time analysis snapshots, not source. Retrievable from `etendo_schema_forge`'s pre-split git history if ever needed; not worth carrying into either new repo as live content. |
+| `feedback.md` | Needs manual triage | Mixes tool-level and window-level entries per `CLAUDE.md`'s own "Bugs/issues → feedback.md" convention — not cleanly splittable by a rule. Phase 2/3 implementer reads it once and files entries into whichever repo they actually describe. |
+| `.github/workflows/publish-private-packages.yml`, `base-branch-health.yml`, `sync-develop-to-epic.yml` | `schema_forge_core` | Generic CI/tooling with nothing window-specific in them; confirmed by reading each file — no reference to `artifacts/`/`tools/app-shell` anywhere. |
+| `.github/workflows/quality-gate.yml` | `etendo_schema_forge`, rewired to the installed bin | **Corrected during Phase 3 planning** (originally misclassified as core-only): the job's real subject is PR-affected `artifacts/*` windows — its config (`quality-gate.config.json`, already `etendo_schema_forge`-bound) is scoped to `artifacts/*/decisions.json`. The workflow's `node cli/src/quality-gate.js ...` invocation just needs to become `npx sf-quality-gate ...` (published bin already exists). |
+| `.github/workflows/epic-rollup-entry.yml`, `epic-rollup-report.yml` | `schema_forge_core` | Pure Jira/GitHub-API PR reporting — zero reference to `artifacts/`/`tools/app-shell`/any repo content. **Gap closed during Phase 3 planning**: the underlying script (`cli/src/epic-rollup-report.js`) had no published `bin` entry — added as `sf-epic-rollup-report` in a follow-up publish (`@etendosoftware/schema-forge-cli@0.1.1`). |
+| `.github/workflows/data-testid-check.yml` | **Both repos, each with its own copy** | `schema_forge_core`'s copy (already fixed in Phase 2) targets `packages/app-shell-core/src`. `etendo_schema_forge` needs its own copy targeting `tools/app-shell/src` (the original default) — not a single workflow that "moves," but two independent copies checking each repo's own JSX. |
+| `.github/workflows/offline-regen-check.yml`, `pipeline-validate.yml`, `window-doc-freshness.yml`, `deploy-staging.yml` | `etendo_schema_forge` | All validate or deploy `artifacts/<window>`/the running app — same "who has the live thing" logic. |
+| `.github/workflows/ratchet-guards.yml` | `etendo_schema_forge`, invoking the checker from the installed CLI | Its `window-leak-budget` job runs `cli/src/window-leak-budget.js` against `tools/app-shell/src/components/contract-ui/{DetailView,DataTable}.jsx` — the checker script is CLI tooling (`schema_forge_core`), but the files it enforces a ratchet on live in `tools/app-shell` (`etendo_schema_forge`). The workflow itself follows the files being checked, calling the checker as an installed `schema-forge-cli` command. Its own comment already notes the `method-budget`/`NeoDefaultsService.java` ratchet is deliberately NOT here because that file lives in `com.etendoerp.go` — consistent with backend being out of scope. |
+| `.github/workflows/test.yml`, `sonar-scan.yml` | Split into two per-repo versions | Each currently runs across the whole monorepo (`cli`+`packages` and `tools/app-shell`+`e2e` in one job) — must become two separate workflows, one per repo, not a straight move. |
+
+### Still needs a decision (not resolved by rule — flagging rather than guessing)
+
+- **`.github/workflows/domain-boundary-check.yml`, `core-approval.yml`, `pr-architecture-alert.yml`** — all three exist to police cross-domain mixing *inside one repo*. Once the repo is physically split, the thing they check for can't happen anymore inside either repo — these may simply become obsolete rather than needing a new home. But they're currently *required* CI gates; retiring a required gate is a governance call, not a mechanical one. Recommend revisiting once Phase 2/3 is actually being planned, not deciding now.
+### GitHub Packages Cross-Repo Auth (resolved: policy set, provisioning still pending real GitHub org action)
+
+The existing `publish-private-packages.yml` is `workflow_dispatch`-only and uses `secrets.GITHUB_TOKEN`, which is scoped to its own repo — it cannot read another repo's private packages. Policy:
+
+- Provision a GitHub App (preferred over a personal PAT — survives individual offboarding) scoped to `read:packages` on `schema_forge_core` only, installed on `etendo_schema_forge`'s CI as a repo secret (e.g. `SCHEMA_FORGE_CORE_READ_TOKEN`).
+- If a GitHub App isn't available in time, fall back to a bot-account PAT with the same narrow `read:packages` scope — never a personal PAT tied to an individual's account, since it breaks when that person leaves.
+- This is an org-admin action (creating the App/PAT and installing the secret) that only the user can actually perform — it must happen before Phase 3's dependency-wiring PR can pass CI, but planning it further now doesn't change what needs to happen: someone with GitHub org admin access provisions the token when Phase 2/3 is actually scheduled.
+
+### Cutover Coordination (resolved: policy set)
+
+- **Version pin:** `etendo_schema_forge` pins `@etendosoftware/schema-forge-cli`, `@etendosoftware/app-shell-core`, and `@etendosoftware/schema-forge-core` to **exact versions** (no `^`/`~` range) in `package.json`, matched to a `latest`-equivalent dist-tag on the active release line published from `schema_forge_core`. Exact pins make a breaking change in core an explicit, reviewed version bump in functional, not a silent `npm install` surprise.
+- **In-flight branches:** `etendo_schema_forge` (this repo) already behaves as an epic-aggregation branch model — feature branches merge into branches like `feature/ETP-4346` before that eventually lands upstream. Phase 2/3's cleanup PRs (removing `cli/`/`packages/*` from this repo) must not be merged while there are open branches with unmerged changes under the paths being removed — those changes would have nowhere to land. Concretely: before merging Phase 3's cleanup PR, whoever schedules the cutover checks `git branch -a --contains <merge-base>` for open work touching `cli/`, `packages/*`, or the other core-bound paths in the Disposition Table above, and gets those merged or explicitly abandoned first. This is a one-time coordination step at cutover, not an ongoing process change.
+- **Backend (`com.etendoerp.go`) is unaffected and explicitly out of scope** — it keeps its own existing epic-branch workflow unchanged; nothing about this cutover touches it.
+
+## Testing
+
+- `schema_forge_core`: existing `cli/test/*` and `packages/*/test/*` suites must pass standalone, with no relative imports into the old `artifacts/`.
+- `etendo_schema_forge`: `make regen ONLY=<window>` must succeed end-to-end against the installed `@etendosoftware/schema-forge-cli`, and the installed `validate-pipeline` bin must report the same result as `node cli/src/validate-pipeline.js` did before the split, for at least one already-working window.
+- App Shell Composition Spike (phase 0): at least one already-working window must render identically through the new `AppShell` registry-injection API before the spike is considered done. **Verified** — `AppShellRuntime` gained `children`/`layout` extension points, `tools/app-shell` added `buildRuntimeRoutes()`, and `App.jsx` now composes via `AppShellRuntime`; manual smoke confirmed no regression. `packages/app-shell-core` has zero references to `tools/app-shell` or `artifacts/` (`grep -rn "tools/app-shell\|\.\./\.\./\.\./artifacts" packages/app-shell-core/src` returns no matches), keeping the core/functional boundary intact per this spec's Boundary section. `@generated` imports remain legitimately scoped inside `tools/app-shell`'s own tree (`windows/custom/**`, business pages, dashboard widgets) since `tools/app-shell` and `artifacts/` move together in the eventual split. See this repo's implementation plan for the task-by-task breakdown (Tasks 1-4 on branch `feature/ETP-4346`).
+- Both repos: CI green on their own cleanup PR before phase 4 review starts.
+
+## Rollback
+
+Each phase is an isolated PR in its own repo's history. Any single phase can be reverted independently without affecting the other repo, except phases 2/3, which must be rolled back together if step 3's dependency wiring needs to be undone (see Risks).

@@ -121,6 +121,7 @@ VitePWA({
     cleanupOutdatedCaches: true,
     clientsClaim: true,
     skipWaiting: true,
+    maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
   },
 })
 ```
@@ -129,6 +130,7 @@ This means:
 - Registration is injected by the plugin in the built HTML; the app entrypoint does not call `navigator.serviceWorker.register(...)` directly
 - New service workers activate immediately once installed
 - `cleanupOutdatedCaches: true` removes old precache entries on activation
+- `maximumFileSizeToCacheInBytes` is raised to 8 MiB because the app-shell bundle includes generated runtime and injected locale dictionaries
 - The app polls `registration.update()` on tab focus and route changes; once the controller changes, it reloads automatically
 
 ### Service Worker Lifecycle

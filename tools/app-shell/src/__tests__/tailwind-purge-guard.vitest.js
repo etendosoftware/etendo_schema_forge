@@ -57,7 +57,14 @@ const appShellRoot = resolve(here, '../..');
 // file (see header). The package-source glob string is also assembled to avoid
 // writing the `* / s` sequence that would prematurely close this JSDoc-style
 // region in some tooling.
-const EXPECTED_PACKAGE_GLOB = ['..', '..', 'packages', '*', 'src', '**', '*.{js,jsx}'].join('/');
+//
+// After the core/functional repo split, shared UI/onboarding sources are
+// installed npm dependencies rather than local workspace packages. These globs
+// must point at node_modules instead of the (now-deleted) local packages/
+// directory. Same purpose, same regression class: whatever these globs are,
+// they must still scan wherever the package sources actually live.
+const EXPECTED_CORE_PACKAGE_GLOB = ['..', '..', 'node_modules', '@etendosoftware', 'app-shell-core', 'src', '**', '*.{js,jsx}'].join('/');
+const EXPECTED_GO_PACKAGE_GLOB = ['..', '..', 'node_modules', '@etendosoftware', 'etendo-go-core', 'src', '**', '*.{js,jsx}'].join('/');
 
 /**
  * The semantic utilities under guard. These are the EXACT classes that broke in
@@ -83,6 +90,12 @@ const GUARDED_UTILITIES = [
     cssVar: ['--' + POPOVER, 'foreground'].join('-'),
   },
 ];
+
+const AUTH_BG_CLASS = ['bg', '[#f4f6fa]'].join('-');
+
+function cssEscapedSelectorFor(className) {
+  return className.replace(/([:[\]#/().,%])/g, '\\$1');
+}
 
 /**
  * Build a regex matching the REAL generated rule for a utility. Tailwind emits
@@ -136,9 +149,18 @@ describe('Tailwind purge guard (ETP-4083)', () => {
     expect(
       tailwindConfig.content,
       `tailwind.config.js \`content\` must include the workspace-packages ` +
-        `source glob "${EXPECTED_PACKAGE_GLOB}" so Tailwind scans the ` +
+        `source glob "${EXPECTED_CORE_PACKAGE_GLOB}" so Tailwind scans the ` +
         `app-shell-core package sources. See ETP-4083.`,
-    ).toContain(EXPECTED_PACKAGE_GLOB);
+    ).toContain(EXPECTED_CORE_PACKAGE_GLOB);
+  });
+
+  it('scans the onboarding package source glob in the live config', () => {
+    expect(
+      tailwindConfig.content,
+      `tailwind.config.js \`content\` must include the onboarding source glob ` +
+        `"${EXPECTED_GO_PACKAGE_GLOB}" so Tailwind scans the etendo-go-core ` +
+        `login/onboarding package sources. See ETP-4413.`,
+    ).toContain(EXPECTED_GO_PACKAGE_GLOB);
   });
 
   it('produces a full stylesheet from the real Tailwind config', () => {
@@ -163,10 +185,25 @@ describe('Tailwind purge guard (ETP-4083)', () => {
           `unless those package sources are scanned.\n` +
           `FIX: ensure the \`content\` globs in ` +
           `tools/app-shell/tailwind.config.js still include the ` +
-          `workspace-packages source glob "${EXPECTED_PACKAGE_GLOB}". If that ` +
+          `workspace-packages source glob "${EXPECTED_CORE_PACKAGE_GLOB}". If that ` +
           `glob was removed or narrowed, restore it. See ETP-4083 and this ` +
           `file's header.\n`,
       ).toBe(true);
     },
   );
+
+  it('keeps the auth marketing surface utility from the onboarding package source', () => {
+    const selector = cssEscapedSelectorFor(AUTH_BG_CLASS).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`\\.${selector}\\s*\\{[^}]*background-color\\s*:\\s*rgb\\(244 246 250`);
+
+    expect(
+      re.test(css),
+      `\n\n>>> Tailwind PURGE REGRESSION (ETP-4413) <<<\n` +
+        `Expected the generated auth/onboarding marketing background utility ` +
+        `from the etendo-go-core package source, but it was PURGED from the ` +
+        `built CSS.\n` +
+        `FIX: ensure the \`content\` globs in tools/app-shell/tailwind.config.js ` +
+        `include "${EXPECTED_GO_PACKAGE_GLOB}".\n`,
+    ).toBe(true);
+  });
 });

@@ -173,6 +173,21 @@ describe('usePaymentBalance', () => {
       expect(result.current.diff).toBe(0);
     });
 
+    it('deselecting one line leaves a sibling line untouched', () => {
+      // Two lines selected; deselecting c1 must map over a1 unchanged (the
+      // `l.id === id ? ... : l` false arm), preserving a1's selection and use.
+      const { result } = setup({ total: 1000, dir: 'in', sources: [CREDIT, ABONO] });
+      act(() => result.current.toggleLine('c1')); // c1 use 200, cash 800
+      act(() => result.current.toggleLine('a1')); // a1 use 500, cash 300
+      act(() => result.current.toggleLine('c1')); // deselect c1
+      const c = result.current.lines.find(l => l.id === 'c1');
+      const a = result.current.lines.find(l => l.id === 'a1');
+      expect(c.sel).toBe(false);
+      expect(c.use).toBe(0);
+      expect(a.sel).toBe(true);   // sibling preserved through the deselect map
+      expect(a.use).toBe(500);
+    });
+
     it('a second credit line caps at the remaining need after the first', () => {
       // credit 200 used first (cash 800). Then abono 500 → need now 800,
       // use min(500, 800) = 500, cash drops to 300. credit total 700, exact.
@@ -187,6 +202,37 @@ describe('usePaymentBalance', () => {
       expect(result.current.amount).toBe(300);
       expect(result.current.diff).toBe(0);
       expect(result.current.isExact).toBe(true);
+    });
+  });
+
+  describe('toggleLine / stepLine on unknown ids', () => {
+    it('toggleLine is a no-op for an id that is not in the sources', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [CREDIT] });
+      const before = {
+        amount: result.current.amount,
+        usedCredit: result.current.usedCredit,
+        selected: result.current.lines.map(l => l.sel),
+      };
+      act(() => result.current.toggleLine('does-not-exist'));
+      expect(result.current.amount).toBe(before.amount);
+      expect(result.current.usedCredit).toBe(before.usedCredit);
+      expect(result.current.lines.map(l => l.sel)).toEqual(before.selected);
+    });
+
+    it('stepLine leaves other lines untouched and only mutates the matching id', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [CREDIT, ABONO] });
+      act(() => result.current.toggleLine('c1')); // c1.use = 200
+      act(() => result.current.stepLine('a1', 100)); // touches a1 only
+      expect(result.current.lines.find(l => l.id === 'c1').use).toBe(200);
+      expect(result.current.lines.find(l => l.id === 'a1').use).toBe(100);
+    });
+
+    it('stepLine is a no-op for an id that is not in the sources', () => {
+      const { result } = setup({ total: 1000, dir: 'in', sources: [CREDIT] });
+      act(() => result.current.toggleLine('c1'));
+      const useBefore = result.current.lines.find(l => l.id === 'c1').use;
+      act(() => result.current.stepLine('missing', 100));
+      expect(result.current.lines.find(l => l.id === 'c1').use).toBe(useBefore);
     });
   });
 
@@ -231,6 +277,17 @@ describe('usePaymentBalance', () => {
       act(() => result.current.toggleLine('a1')); // full 2000 (nothing missing path)
       act(() => result.current.equalize());
       expect(result.current.amount).toBe(0);
+    });
+
+    it('ignores unselected lines when computing the equalized amount', () => {
+      // c1 is stepped to a non-zero use but never selected; equalize's reduce
+      // only counts `l.sel ? l.use : 0`, so the full invoice falls to cash.
+      const { result } = setup({ total: 1000, dir: 'in', sources: [CREDIT] });
+      act(() => result.current.stepLine('c1', 150)); // use 150 but sel === false
+      act(() => result.current.equalize());
+      expect(result.current.usedCredit).toBe(0);
+      expect(result.current.amount).toBe(1000);
+      expect(result.current.isExact).toBe(true);
     });
 
     it('clears excessMode', () => {

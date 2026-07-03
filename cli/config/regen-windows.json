@@ -6,6 +6,11 @@
       "windowId": "800026"
     },
     {
+      "name": "asset-group",
+      "windowId": "252",
+      "menuName": "Asset Group"
+    },
+    {
       "name": "assets",
       "windowId": "800027"
     },

@@ -70,6 +70,7 @@ This folder is the entry point for documentation that describes how generated an
 | [chart-of-accounts.md](chart-of-accounts.md) | Generated chart-of-accounts maintenance window |
 | [open-close-period-control.md](open-close-period-control.md) | Generated open/close period control window for fiscal period status management |
 | [assets.md](assets.md) | Generated assets flow with custom setup, sidebar, and amortization surfaces |
+| [asset-group.md](asset-group.md) | Generated asset-category master/detail flow — header with conditional depreciation-policy fields (`displayLogicJs`), inline-editable accounting accounts subtab |
 | [amortization.md](amortization.md) | Generated amortization master/detail flow (MVP read+draft, sidebar metrics, linked assets) |
 | [simple-g-l-journal.md](simple-g-l-journal.md) | Generated manual-journal (Asientos Manuales) master/detail flow with a debit/credit balance footer that blocks save until Σ debit = Σ credit (posting deferred) |
 | [recurring-invoice.md](recurring-invoice.md) | Hidden route-only recurring-invoice template window |

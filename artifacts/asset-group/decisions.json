@@ -1,0 +1,117 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "finance",
+    "name": "Asset Group",
+    "detailEntity": null,
+    "linesLayout": "inlineEditable",
+    "noHeaderBorder": true,
+    "hidePrint": true,
+    "hideLink": true,
+    "customListIcons": true
+  },
+  "entities": {
+    "assetCategory": {
+      "name": "assetCategory",
+      "fields": {
+        "name": { "visibility": "editable", "grid": true, "gridOrder": 1, "form": true, "required": true },
+        "description": { "visibility": "editable", "grid": true, "gridOrder": 2, "form": true, "span": 2, "rows": 1 },
+        "depreciate": {
+          "visibility": "editable",
+          "form": true,
+          "section": "principal",
+          "defaultExpr": "N"
+        },
+
+        "organization": { "visibility": "system" },
+        "client": { "visibility": "system" },
+        "id": { "visibility": "system" },
+        "active": { "visibility": "system" },
+        "creationDate": { "visibility": "system" },
+        "createdBy": { "visibility": "system" },
+        "updated": { "visibility": "system" },
+        "updatedBy": { "visibility": "system" },
+
+        "depreciationType": {
+          "visibility": "editable",
+          "form": true,
+          "section": "principal",
+          "required": true,
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "calculateType": {
+          "visibility": "editable",
+          "form": true,
+          "section": "principal",
+          "required": true,
+          "displayLogicJs": "record.depreciate === true || record.depreciate === 'Y'"
+        },
+        "annualDepreciation": {
+          "visibility": "editable",
+          "form": true,
+          "section": "principal",
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'PE'"
+        },
+        "amortize": {
+          "visibility": "editable",
+          "form": true,
+          "section": "principal",
+          "required": true,
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
+        },
+        "usableLifeYears": { "visibility": "system" },
+        "usableLifeMonths": {
+          "visibility": "editable",
+          "form": true,
+          "section": "principal",
+          "displayLogicJs": "(record.depreciate === true || record.depreciate === 'Y') && record.calculateType === 'TI'"
+        },
+        "everyMonthIs30Days": { "visibility": "system" },
+        "owned": { "visibility": "system" },
+        "helpComment": { "visibility": "system" }
+      }
+    },
+    "accounting": {
+      "name": "accounting",
+      "fields": {
+        "accumulatedDepreciation": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 1,
+          "form": true,
+          "required": true,
+          "lookup": true,
+          "grow": true
+        },
+        "depreciation": {
+          "visibility": "editable",
+          "grid": true,
+          "gridOrder": 2,
+          "form": true,
+          "required": true,
+          "lookup": true,
+          "grow": true
+        },
+
+        "accountingSchema": { "visibility": "system", "derivation": "fromConfig" },
+        "assetCategory": { "visibility": "system", "derivation": "fromParent" },
+
+        "disposalGain": { "visibility": "system" },
+        "disposalLoss": { "visibility": "system" },
+        "processNow": { "visibility": "system" },
+
+        "organization": { "visibility": "system" },
+        "client": { "visibility": "system" },
+        "id": { "visibility": "system" },
+        "active": { "visibility": "system" },
+        "creationDate": { "visibility": "system" },
+        "createdBy": { "visibility": "system" },
+        "updated": { "visibility": "system" },
+        "updatedBy": { "visibility": "system" }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"],
+  "version": 2
+}

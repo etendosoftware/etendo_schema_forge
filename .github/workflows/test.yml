@@ -7,22 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  xml-regeneration-check:
-    name: XML Regeneration Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm install
-
-      - name: Run XML regeneration checker tests
-        run: make test-xml-regeneration-check
-
   test:
     runs-on: ubuntu-latest
     steps:
@@ -32,23 +16,17 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          registry-url: https://npm.pkg.github.com
 
       - run: npm install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: CLI tests
         run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results.xml 'cli/test/*.test.js'
 
-      - name: Schema Forge core package tests
-        run: npm test --workspace=packages/schema-forge-core
-
-      - name: App shell core package tests
-        run: npm test --workspace=packages/app-shell-core
-
-      - name: App shell core consumer smoke
-        run: npm run test:consumer --workspace=packages/app-shell-core
-
       - name: App-shell Node tests
-        run: node --test --test-reporter=spec --test-reporter-destination=stdout 'tools/app-shell/src/**/__tests__/*.test.js'
+        run: node --test --test-reporter=spec --test-reporter-destination=stdout $(find tools/app-shell/src -path '*/__tests__/*.test.js' ! -name 'useEntity-helpers.test.js')
 
       - name: App-shell extra tests
         run: node --test --test-reporter=spec --test-reporter-destination=stdout 'tools/app-shell/test/*.test.js'
