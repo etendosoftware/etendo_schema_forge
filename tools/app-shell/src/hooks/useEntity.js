@@ -11,6 +11,9 @@ import {
     trackRecordCreated,
     trackRecordUpdated,
 } from '@/lib/productUsageTelemetry.js';
+import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
+import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
+import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 
 function buildHeaders(token) {
     let locale = 'es_ES';
@@ -1059,6 +1062,13 @@ export function useEntity(entity, childEntity, {
             source: 'detail_view',
             operation: 'complete',
         });
+        if (isInvoiceSpec(specName)) {
+            incrementSurveyCounter('invoicing');
+            emitSurveyTrigger();
+        } else if (isOrderSpec(specName)) {
+            incrementSurveyCounter('order');
+            emitSurveyTrigger();
+        }
         refresh();
         // Fetch updated record and update selected state so the detail view reflects the new status
         try {
