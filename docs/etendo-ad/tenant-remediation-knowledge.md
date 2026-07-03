@@ -122,6 +122,45 @@
 - **2026-06-26 — Naive RPAD(value, 8, '0') on all numeric codes causes 1140 UNIQUE violations:** `100`, `1000`, and `10000` share the prefix `10000000` under the same `c_element_id`. The UNIQUE constraint is `C_ELEMENTVALUE_VALUE (c_element_id, value)`. **Apply:** always scope right-padding to `issummary='N'` AND `value ~ '^[0-9]+$'`. This yields 0 collisions (confirmed by query).
 - **2026-06-26 — Two element trees for GOClient, both with 1790 rows each:** "Arbol de cuentas GO" (`BB9B64C5B6534A40A36F7C0F45C2CC0B`) and "GOOrg Account Tree" (`91D04C02EF8F4975B9E4F5E07543B6EA`). The 1312 posting-account count is the total across both trees (656 per tree). The UNIQUE constraint is per element, not per client — codes are safe to update in one pass scoped by `ad_client_id`.
 - **2026-06-26 — ETP-4247 requires all posting account codes to be 8 digits.** Corrective: R8 data-fix (`20260626T120000Z__R8-account-codes-8digits.sql`). Preventive: the A1 onboarding step (when built) must seed 8-digit codes from the start.
+- **2026-07-02 — Bug found+fixed: `c_elementvalue_trg()`'s `C_VALIDCOMBINATION` auto-creation is NOT
+  reliably visible across the Java onboarding chain's multiple sequential native-query calls, even
+  though it IS reliable within a single plain-SQL transaction (the corrective data-fix runner's
+  execution model).** Live evidence on a REAL new tenant (client `D94AED60C3E0494AAFD44B8A05BB5CFC`,
+  "acreedortest", onboarded via the normal REST flow): `OnboardingAccountingWiringService
+  .ensureAcreedorPrepaymentAccount` successfully inserted the `41700000` leaf (confirmed:
+  `elementlevel='S'`, `isactive='Y'`, correctly parented in `AD_TREENODE`), but its
+  `C_VALIDCOMBINATION` row was NEVER created — confirmed via `SELECT * FROM c_validcombination WHERE
+  account_id = <the leaf's id>` returning ZERO rows, with no client/schema filter at all. Because
+  `overrideAcreedorGroupAccounts`'s `UPDATE` INNER-JOINs all 3 target accounts' combinations in one
+  statement, the missing 41700000 combination zeroed out the WHOLE update — the tenant's Acreedor
+  `C_BP_Group_Acct` row silently kept ALL 3 `C_AcctSchema_Default`-derived generic accounts (not just
+  the unresolvable one). Verified by contrast: the SAME account/override logic, run as the sibling
+  `R9-bp-category-seed.sql` corrective fix against GOClient (plain SQL, one Postgres transaction via
+  the data-fix runner), worked perfectly — GOClient's Acreedor row shows all 3 correct accounts
+  (41000000/41090000/41700000) after R9 applied. **Root cause is NOT the SQL logic** (identical logic
+  works in one context, fails in the other) **— it is that the Java onboarding path cannot guarantee
+  the DB trigger's cascade is visible to the very next `createNativeQuery(...).executeUpdate()` call**
+  across `OnboardingAccountingWiringService`'s several sequential native-query calls spanning
+  multiple onboarding service steps (exact mechanism not fully pinned down — candidates include
+  session/connection handling around `OBContext` admin-mode switches and `applyExecutionContext`;
+  not worth over-investigating further since the fix does not depend on knowing why). **Fix applied
+  (commit on `feat/bp-category-preventive`):** `ensureAcreedorPrepaymentAccount` now ALSO explicitly,
+  defensively `INSERT`s the `C_VALIDCOMBINATION` row itself (idempotent via `NOT EXISTS` on
+  `(account_id, c_acctschema_id)` — the same key the trigger itself relies on), instead of trusting
+  the trigger alone. `overrideAcreedorGroupAccounts` now also `log.warn`s on a 0-row outcome instead
+  of staying silent, so a future recurrence is diagnosable without manually inspecting
+  `C_BP_Group_Acct` on a live tenant. **Apply generally:** any onboarding Java code that inserts a
+  business-trigger-bearing row via raw native SQL and depends on that trigger's cascading side
+  effects (extra rows in OTHER tables) for a LATER native-SQL statement to join against, in a
+  multi-step onboarding chain, should not assume the cascade is visible — insert the derived row
+  explicitly and idempotently too. This class of bug does NOT affect the `.sql` corrective front
+  (single-transaction execution model makes the trigger cascade reliable there) — `R9-bp-category-seed.sql`
+  needed NO change. **Live-client retroactive fix:** ran a one-off transaction (BEGIN → verify
+  BEFORE state → the same 2 statements (VALIDCOMBINATION insert + override UPDATE) → verify AFTER
+  state matches `41000000`/`41090000`/`41700000` → COMMIT) directly against "acreedortest"; confirmed
+  by an independent re-read after commit. Not run through the data-fixes framework (no new `.sql`
+  file shipped) since this specific tenant's gap was closed directly and the framework fix (R9) was
+  unaffected.
 - **2026-07-01 — GOClient's real chart has NO `417%` account (PGC "Anticipos de acreedores").** Confirmed empty across every tenant checked (GOClient, F&B International Group, QA Testing, TaxesOrg) — `SELECT DISTINCT value FROM c_elementvalue WHERE value LIKE '417%'` returns 0 rows anywhere. GOClient's `41x` subgroups are only `410`/`411`/`419`. The nearby `407` "Anticipos a proveedores" is a different group (Proveedores, not Acreedores) and is not a substitute. **Apply:** any future ticket asking for a "creditor advance" / "anticipo de acreedores" account must either (a) add `41700000` to the bundled chart (an A1-adjacent change touching `C_ELEMENTVALUE.xml` + the R1/R8 chain) or (b) explicitly accept the account as unset — never fabricate a combination id. ETP-4402 (R9-bp-category-seed) hit this and shipped with 2/3 requested accounts, flagged for follow-up.
 
 ## Corrected misinterpretations (accounting FK targets)
