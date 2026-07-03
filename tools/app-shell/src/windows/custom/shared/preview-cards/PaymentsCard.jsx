@@ -2,7 +2,9 @@ import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 
-const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM']);
+// Processed APRM statuses. PWNC ("Withdrawn not Cleared") and RPAE ("Awaiting
+// Execution") are the processed states for payments-out / deferred accounts.
+const PAID_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
 
 function fmtPayDate(raw) {
   return formatCalendarDate(raw, 'es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -66,8 +68,10 @@ function resolveMethodKey(name) {
   return 'transfer';
 }
 
-function StateTag({ status, ui }) {
-  const isDeposited = PAID_STATUSES.has(status);
+function StateTag({ status, processed, ui }) {
+  // The backend `processed` flag is the source of truth; the status whitelist
+  // is a fallback for rows that don't carry it.
+  const isDeposited = processed === true || PAID_STATUSES.has(status);
   if (isDeposited) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '1px 7px', borderRadius: 5, background: '#E2F7EA', color: '#17663A', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap' }}>
@@ -200,7 +204,7 @@ export default function PaymentsCard({
                 <span className="tabular-nums" style={{ font: '600 13px/17px Inter', color: amtColor, whiteSpace: 'nowrap' }}>
                   {amtSign}{fmt(p.amount)} {currency}
                 </span>
-                <StateTag status={p.status || ''} ui={ui} data-testid="StateTag__c6fe34" />
+                <StateTag status={p.status || ''} processed={p.processed} ui={ui} data-testid="StateTag__c6fe34" />
               </div>
             </div>
           );

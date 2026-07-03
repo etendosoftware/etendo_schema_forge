@@ -92,15 +92,15 @@ describe('InvoiceTopbarExtra', () => {
 
   // ── Payment modal ──────────────────────────────────────────────────────────
 
-  it('renders InvoicePaymentModal for the payments modal', () => {
-    assert.match(src, /InvoicePaymentModal/);
+  it('renders the shared InvoicePaymentHistoryModal for the payments modal', () => {
+    assert.match(src, /InvoicePaymentHistoryModal/);
   });
 
-  it('passes specName="sales-invoice" to InvoicePaymentModal', () => {
+  it('passes specName="sales-invoice" to InvoicePaymentHistoryModal', () => {
     assert.match(src, /specName="sales-invoice"/);
   });
 
-  it('passes onPaymentAdded={fetchInstallments} to InvoicePaymentModal', () => {
+  it('passes onPaymentAdded={fetchInstallments} to InvoicePaymentHistoryModal', () => {
     assert.match(src, /onPaymentAdded=\{fetchInstallments\}/);
   });
 
