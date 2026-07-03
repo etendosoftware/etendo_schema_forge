@@ -25,7 +25,9 @@ function fetchCanonicalLocations() {
       return res.text();
     })
     .then((text) => {
-      const mdPaths = text.match(/[\w-]+(?:\/[\w-]+)*\.md/g) || [];
+      // Flat character class (no nested quantifiers) — avoids the catastrophic
+      // backtracking shape of `X+(?:/X+)*` while matching the same path tokens.
+      const mdPaths = text.match(/[\w./-]+\.md/g) || [];
       return new Set(mdPaths.map(mdPathToLocation));
     });
 }
