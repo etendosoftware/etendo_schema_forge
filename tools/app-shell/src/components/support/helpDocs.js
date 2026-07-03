@@ -25,9 +25,12 @@ function fetchCanonicalLocations() {
       return res.text();
     })
     .then((text) => {
-      // Flat character class (no nested quantifiers) — avoids the catastrophic
-      // backtracking shape of `X+(?:/X+)*` while matching the same path tokens.
-      const mdPaths = text.match(/[\w./-]+\.md/g) || [];
+      // The body class deliberately excludes "." so it can never overlap with
+      // the literal `.md` suffix — the engine never has more than one way to
+      // split the match, so there is nothing to backtrack over regardless of
+      // input length (unlike the earlier `X+(?:/X+)*` and `[\w./-]+` shapes,
+      // both flagged by Sonar for super-linear backtracking risk).
+      const mdPaths = text.match(/[\w/-]+\.md/g) || [];
       return new Set(mdPaths.map(mdPathToLocation));
     });
 }
