@@ -83,6 +83,98 @@ function HelpPageRow({ page, snippet }) {
   );
 }
 
+function AyudaTabHeader({ showCollectionPages, activeCollection, onBack, onClose, ui }) {
+  return (
+    <div className="sc-head" style={{ paddingBottom: 8 }}>
+      {showCollectionPages ? (
+        <button className="sc-back" onClick={onBack} aria-label={ui('back')}>
+          <ChevronRight
+            size={16}
+            style={{ transform: 'rotate(180deg)' }}
+            data-testid="ChevronRight__4d85ab" />
+        </button>
+      ) : null}
+      <div className="sc-grow" style={{ textAlign: 'center' }}>
+        <h1 className="sc-head-title" style={{ fontSize: 16, lineHeight: '24px' }}>
+          {showCollectionPages ? activeCollection.title : ui('supportTabHelp')}
+        </h1>
+      </div>
+      <div className="sc-head-actions" style={{ position: 'absolute', top: 14, right: 14 }}>
+        <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__4d85ab" /></button>
+      </div>
+    </div>
+  );
+}
+
+function AyudaTabResults({ results, query, ui }) {
+  if (results.length === 0) {
+    return <div className="sc-help-empty">{ui('supportNoArticlesFor', { query })}</div>;
+  }
+  return results.map((r) => (
+    <HelpPageRow key={r.location} page={r} snippet={r.snippet} data-testid="HelpPageRow__4d85ab" />
+  ));
+}
+
+function AyudaTabCollectionsList({ collections, onSelectCollection, ui }) {
+  return (
+    <div className="sc-help-collections">
+      <div className="sc-help-count">{ui('supportCollectionsCount', { count: collections.length })}</div>
+      {collections.map((c) => (
+        <div key={c.id} className="sc-help-coll" onClick={() => onSelectCollection(c)} role="button" tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && onSelectCollection(c)}>
+          <div className="sc-grow">
+            <div className="sc-h-title">{c.title}</div>
+            <div className="sc-h-count-s">{ui('supportArticlesCount', { count: c.pages.length })}</div>
+          </div>
+          <ChevronRight
+            size={16}
+            style={{ color: 'var(--sc-fg-3)', flexShrink: 0 }}
+            data-testid="ChevronRight__4d85ab" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AyudaTabBody({
+  error, docs, showSearchResults, showCollectionPages, query, results, activeCollection, collections, onSelectCollection, ui,
+}) {
+  if (error) return <div className="sc-help-empty">{ui('supportDocsLoadError')}</div>;
+  if (!docs) return <div className="sc-help-empty">{ui('supportDocsLoading')}</div>;
+
+  if (showSearchResults) {
+    return (
+      <div className="sc-help-collections">
+        <div className="sc-help-count">{ui('supportResultsCount', { count: results.length })}</div>
+        <AyudaTabResults
+          results={results}
+          query={query}
+          ui={ui}
+          data-testid="AyudaTabResults__4d85ab" />
+      </div>
+    );
+  }
+
+  if (showCollectionPages) {
+    return (
+      <div className="sc-help-collections">
+        <div className="sc-help-count">{ui('supportArticlesCount', { count: activeCollection.pages.length })}</div>
+        {activeCollection.pages.map((p) => (
+          <HelpPageRow key={p.location} page={p} data-testid="HelpPageRow__4d85ab" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <AyudaTabCollectionsList
+      collections={collections}
+      onSelectCollection={onSelectCollection}
+      ui={ui}
+      data-testid="AyudaTabCollectionsList__4d85ab" />
+  );
+}
+
 function AyudaTab({ onClose }) {
   const ui = useUI();
   const [docs, setDocs] = React.useState(null);
@@ -104,28 +196,16 @@ function AyudaTab({ onClose }) {
 
   const showSearchResults = query.trim().length > 0;
   const showCollectionPages = !showSearchResults && activeCollection;
-  const showCollectionsList = !showSearchResults && !activeCollection;
 
   return (
     <>
-      <div className="sc-head" style={{ paddingBottom: 8 }}>
-        {showCollectionPages ? (
-          <button className="sc-back" onClick={() => setActiveCollection(null)} aria-label={ui('back')}>
-            <ChevronRight
-              size={16}
-              style={{ transform: 'rotate(180deg)' }}
-              data-testid="ChevronRight__4d85ab" />
-          </button>
-        ) : null}
-        <div className="sc-grow" style={{ textAlign: 'center' }}>
-          <h1 className="sc-head-title" style={{ fontSize: 16, lineHeight: '24px' }}>
-            {showCollectionPages ? activeCollection.title : ui('supportTabHelp')}
-          </h1>
-        </div>
-        <div className="sc-head-actions" style={{ position: 'absolute', top: 14, right: 14 }}>
-          <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__4d85ab" /></button>
-        </div>
-      </div>
+      <AyudaTabHeader
+        showCollectionPages={showCollectionPages}
+        activeCollection={activeCollection}
+        onBack={() => setActiveCollection(null)}
+        onClose={onClose}
+        ui={ui}
+        data-testid="AyudaTabHeader__4d85ab" />
       <div className="sc-help-search">
         <div className="sc-help-search-inner">
           <Search size={16} data-testid="Search__4d85ab" />
@@ -136,48 +216,18 @@ function AyudaTab({ onClose }) {
           />
         </div>
       </div>
-      {error ? (
-        <div className="sc-help-empty">{ui('supportDocsLoadError')}</div>
-      ) : !docs ? (
-        <div className="sc-help-empty">{ui('supportDocsLoading')}</div>
-      ) : showSearchResults ? (
-        <div className="sc-help-collections">
-          <div className="sc-help-count">{ui('supportResultsCount', { count: results.length })}</div>
-          {results.length === 0 ? (
-            <div className="sc-help-empty">{ui('supportNoArticlesFor', { query })}</div>
-          ) : (
-            results.map((r) => <HelpPageRow
-              key={r.location}
-              page={r}
-              snippet={r.snippet}
-              data-testid="HelpPageRow__4d85ab" />)
-          )}
-        </div>
-      ) : showCollectionPages ? (
-        <div className="sc-help-collections">
-          <div className="sc-help-count">{ui('supportArticlesCount', { count: activeCollection.pages.length })}</div>
-          {activeCollection.pages.map((p) => (
-            <HelpPageRow key={p.location} page={p} data-testid="HelpPageRow__4d85ab" />
-          ))}
-        </div>
-      ) : (
-        <div className="sc-help-collections">
-          <div className="sc-help-count">{ui('supportCollectionsCount', { count: collections.length })}</div>
-          {collections.map((c) => (
-            <div key={c.id} className="sc-help-coll" onClick={() => setActiveCollection(c)} role="button" tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && setActiveCollection(c)}>
-              <div className="sc-grow">
-                <div className="sc-h-title">{c.title}</div>
-                <div className="sc-h-count-s">{ui('supportArticlesCount', { count: c.pages.length })}</div>
-              </div>
-              <ChevronRight
-                size={16}
-                style={{ color: 'var(--sc-fg-3)', flexShrink: 0 }}
-                data-testid="ChevronRight__4d85ab" />
-            </div>
-          ))}
-        </div>
-      )}
+      <AyudaTabBody
+        error={error}
+        docs={docs}
+        showSearchResults={showSearchResults}
+        showCollectionPages={showCollectionPages}
+        query={query}
+        results={results}
+        activeCollection={activeCollection}
+        collections={collections}
+        onSelectCollection={setActiveCollection}
+        ui={ui}
+        data-testid="AyudaTabBody__4d85ab" />
     </>
   );
 }
@@ -279,6 +329,57 @@ export function SupportChatWidget() {
 
   const showConversation = activeConversationId !== null;
 
+  let panelContent;
+  if (showConversation) {
+    panelContent = (
+      <ConversationView
+        conversation={activeConversation}
+        messages={messages}
+        input={input}
+        onInputChange={actions.setInput}
+        onSend={handleSend}
+        isSending={isSending}
+        isLoadingMessages={isLoadingMessages}
+        pendingFiles={pendingFiles}
+        onAddFile={actions.addPendingFile}
+        onRemoveFile={actions.removePendingFile}
+        onBack={() => {
+          actions.selectConversation(null);
+          actions.setTab('mensajes');
+        }}
+        onClose={actions.close}
+        onSubmitRating={handleSubmitRating}
+        onDismissRating={handleDismissRating}
+        onCloseConversation={handleCloseConversation}
+        onReopenConversation={handleReopenConversation}
+        isExpanded={isExpanded}
+        onToggleExpand={() => setIsExpanded((v) => !v)}
+        data-testid="ConversationView__4d85ab" />
+    );
+  } else if (activeTab === 'inicio') {
+    panelContent = (
+      <InicioTab
+        onStartChat={handleStartChat}
+        onSwitchTab={actions.setTab}
+        onClose={actions.close}
+        data-testid="InicioTab__4d85ab" />
+    );
+  } else if (activeTab === 'mensajes') {
+    panelContent = (
+      <MensajesTab
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        isLoading={isLoadingConversations}
+        onSelect={handleSelectTicket}
+        onStartChat={handleStartChat}
+        onClose={actions.close}
+        unreadCount={unreadCount}
+        data-testid="MensajesTab__4d85ab" />
+    );
+  } else {
+    panelContent = <AyudaTab onClose={actions.close} data-testid="AyudaTab__4d85ab" />;
+  }
+
   if (!isOpen) {
     return (
       <button className="sc-fab" onClick={actions.open} aria-label={ui('supportOpenAria')}>
@@ -296,49 +397,7 @@ export function SupportChatWidget() {
     <div className="sc-overlay" aria-modal="true" role="dialog">
       <div className={`sc-panel${isExpanded ? ' expanded' : ''}`}>
         <div className="sc-scroll">
-          {showConversation ? (
-            <ConversationView
-              conversation={activeConversation}
-              messages={messages}
-              input={input}
-              onInputChange={actions.setInput}
-              onSend={handleSend}
-              isSending={isSending}
-              isLoadingMessages={isLoadingMessages}
-              pendingFiles={pendingFiles}
-              onAddFile={actions.addPendingFile}
-              onRemoveFile={actions.removePendingFile}
-              onBack={() => {
-                actions.selectConversation(null);
-                actions.setTab('mensajes');
-              }}
-              onClose={actions.close}
-              onSubmitRating={handleSubmitRating}
-              onDismissRating={handleDismissRating}
-              onCloseConversation={handleCloseConversation}
-              onReopenConversation={handleReopenConversation}
-              isExpanded={isExpanded}
-              onToggleExpand={() => setIsExpanded((v) => !v)}
-              data-testid="ConversationView__4d85ab" />
-          ) : activeTab === 'inicio' ? (
-            <InicioTab
-              onStartChat={handleStartChat}
-              onSwitchTab={actions.setTab}
-              onClose={actions.close}
-              data-testid="InicioTab__4d85ab" />
-          ) : activeTab === 'mensajes' ? (
-            <MensajesTab
-              conversations={conversations}
-              activeConversationId={activeConversationId}
-              isLoading={isLoadingConversations}
-              onSelect={handleSelectTicket}
-              onStartChat={handleStartChat}
-              onClose={actions.close}
-              unreadCount={unreadCount}
-              data-testid="MensajesTab__4d85ab" />
-          ) : (
-            <AyudaTab onClose={actions.close} data-testid="AyudaTab__4d85ab" />
-          )}
+          {panelContent}
         </div>
 
         {!showConversation && (

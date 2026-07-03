@@ -71,7 +71,7 @@ function renderText(txt) {
       out.push(
         <p key={out.length}>
           {para.map((l, j) => (
-            <React.Fragment key={j}>
+            <React.Fragment key={l}>
               {j > 0 && <br />}
               {renderBold(l)}
             </React.Fragment>
@@ -93,8 +93,8 @@ function renderBold(txt) {
   const parts = txt.split(/\*\*([^*]+)\*\*/g);
   return parts.map((p, i) =>
     i % 2 === 1
-      ? <strong key={i}>{p}</strong>
-      : <React.Fragment key={i}>{p}</React.Fragment>
+      ? <strong key={p}>{p}</strong>
+      : <React.Fragment key={p}>{p}</React.Fragment>
   );
 }
 
@@ -148,11 +148,11 @@ function Bubble({ message, onQuickReply, audioMap = {} }) {
             {renderText(message.text)}
             {message.attachments?.length > 0 && (
               <div className="sc-att-list">
-                {message.attachments.map((a, i) => {
+                {message.attachments.map((a) => {
                   const name = a.filename || a.name || '';
                   const isAudio = name.match(/\.(webm|ogg|mp3|wav|m4a)$/i) || audioMap[name];
                   return (
-                    <div key={i} className="sc-att">
+                    <div key={name} className="sc-att">
                       {isAudio ? <Mic size={14} data-testid="Mic__50ab90" /> : <Paperclip size={14} data-testid="Paperclip__50ab90" />}
                       <span className="sc-a-name">{isAudio ? 'Audio' : name}</span>
                       {isAudio && audioMap[name] && (
@@ -171,14 +171,53 @@ function Bubble({ message, onQuickReply, audioMap = {} }) {
             )}
             {message.quickReplies?.length > 0 && (
               <div className="sc-quick-replies">
-                {message.quickReplies.map((q, i) => (
-                  <button key={i} onClick={() => onQuickReply?.(q)}>{q}</button>
+                {message.quickReplies.map((q) => (
+                  <button key={q} onClick={() => onQuickReply?.(q)}>{q}</button>
                 ))}
               </div>
             )}
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function PendingAttachmentChip({ file, onRemove, ui }) {
+  const isAudio = file.type?.startsWith('audio/');
+  return (
+    <div className="sc-att-chip">
+      <div className="sc-a-thumb">
+        {isAudio ? <Mic size={12} data-testid="Mic__50ab90" /> : <Paperclip size={12} data-testid="Paperclip__50ab90" />}
+      </div>
+      {isAudio ? (
+        <>
+          <span>Audio</span>
+          <button
+            className="sc-audio-play"
+            title={ui('supportPlayAudio')}
+            onClick={() => {
+              const url = URL.createObjectURL(file);
+              const audio = new Audio(url);
+              audio.play();
+              audio.onended = () => URL.revokeObjectURL(url);
+            }}
+          >▶</button>
+          <span style={{ color: 'var(--sc-fg-3)', fontSize: 11 }}>
+            · {(file.size / 1024).toFixed(0)} KB
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="sc-a-name">{file.name}</span>
+          <span style={{ color: 'var(--sc-fg-3)', fontSize: 11 }}>
+            · {(file.size / 1024).toFixed(0)} KB
+          </span>
+        </>
+      )}
+      <span className="sc-x" onClick={onRemove}>
+        <X size={12} data-testid="X__50ab90" />
+      </span>
     </div>
   );
 }
@@ -203,7 +242,7 @@ function CSATCard({ onSubmit, onDismiss }) {
       <div className="sc-csat-faces">
         {faces.map((f, i) => (
           <button
-            key={i}
+            key={f}
             className={`sc-csat-face${rating === i + 1 ? ' selected' : ''}`}
             onClick={() => setRating(i + 1)}
             aria-label={ui('supportRatingAriaLabel', { n: i + 1 })}
@@ -228,6 +267,114 @@ function CSATCard({ onSubmit, onDismiss }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function ConversationMessageItem({ message, index, messages, seenCount, dateLocale, onQuickReply, audioMap, ui }) {
+  if (message.handover) {
+    return (
+      <div className="sc-handover">
+        <div className="sc-handover-icn"><Users size={16} data-testid="Users__50ab90" /></div>
+        <div>
+          <div className="sc-handover-txt">
+            {ui('supportHandoverIntro', { name: message.agentName })}
+          </div>
+          <div className="sc-handover-sub">{ui('supportHandoverStatus')}</div>
+        </div>
+      </div>
+    );
+  }
+  const prev = messages[index - 1];
+  const mDate = message.timestamp ? new Date(message.timestamp).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) : null;
+  const prevDate = prev?.timestamp ? new Date(prev.timestamp).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) : null;
+  const showDivider = mDate && mDate !== prevDate;
+  // Show "Nuevos" before the first message that arrived after the conversation was opened
+  const showNewDivider = seenCount !== null && index === seenCount && messages.length > seenCount;
+  return (
+    <>
+      {showNewDivider && (
+        <div className="sc-new-divider"><span>{ui('supportNewDivider')}</span></div>
+      )}
+      {showDivider && !showNewDivider && (
+        <div className="sc-day-divider"><span>{mDate}</span></div>
+      )}
+      <Bubble
+        message={message}
+        onQuickReply={onQuickReply}
+        audioMap={audioMap}
+        data-testid="Bubble__50ab90" />
+    </>
+  );
+}
+
+function ConvMeta({ isClosed, isHuman, ui }) {
+  if (isClosed) return ui('supportConversationClosedMeta');
+  if (isHuman) return <><span className="sc-typing-dot" />{ui('supportActiveNow')}</>;
+  return ui('supportTeamCanHelp');
+}
+
+function ConversationHeader({
+  onBack, isHuman, isClosed, conversation, assigneeName, isExpanded, onToggleExpand,
+  menuOpen, onToggleMenu, onCloseConversation, onClose, menuRef, ui,
+}) {
+  return (
+    <div className="sc-conv-head">
+      <button className="sc-back" onClick={onBack} aria-label={ui('back')}>
+        <ChevronRight
+          size={16}
+          style={{ transform: 'rotate(180deg)' }}
+          data-testid="ChevronRight__50ab90" />
+      </button>
+      <div className={`sc-conv-av${isHuman ? ' human' : ''}`}>
+        {isHuman
+          ? (conversation?.assigneeInitials || assigneeName[0])
+          : <ValerIATile size={26} radius={999} data-testid="ValerIATile__50ab90" />
+        }
+        {!isClosed && <div className="sc-status-dot" />}
+      </div>
+      <div className="sc-grow">
+        <div className="sc-conv-name">{assigneeName}</div>
+        <div className="sc-conv-meta">
+          <ConvMeta
+            isClosed={isClosed}
+            isHuman={isHuman}
+            ui={ui}
+            data-testid="ConvMeta__50ab90" />
+        </div>
+      </div>
+      <div className="sc-conv-actions" ref={menuRef} style={{ position: 'relative' }}>
+        <button
+          className="sc-head-icn"
+          onClick={onToggleExpand}
+          aria-label={isExpanded ? ui('collapse') : ui('expand')}
+          title={isExpanded ? ui('collapse') : ui('expand')}
+        >
+          {isExpanded ? <Minimize2 size={16} data-testid="Minimize2__50ab90" /> : <Maximize2 size={16} data-testid="Maximize2__50ab90" />}
+        </button>
+        {conversation && !isClosed && (
+          <>
+            <button
+              className="sc-head-icn"
+              aria-label={ui('moreOptions')}
+              onClick={onToggleMenu}
+            >
+              <MoreVertical size={16} data-testid="MoreVertical__50ab90" />
+            </button>
+            {menuOpen && (
+              <div className="sc-head-menu">
+                <button
+                  className="danger"
+                  onClick={onCloseConversation}
+                >
+                  {ui('supportCloseConversation')}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+        <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__50ab90" /></button>
+      </div>
     </div>
   );
 }
@@ -481,64 +628,21 @@ export function ConversationView({
         </div>
       )}
       {/* Header */}
-      <div className="sc-conv-head">
-        <button className="sc-back" onClick={onBack} aria-label={ui('back')}>
-          <ChevronRight
-            size={16}
-            style={{ transform: 'rotate(180deg)' }}
-            data-testid="ChevronRight__50ab90" />
-        </button>
-        <div className={`sc-conv-av${isHuman ? ' human' : ''}`}>
-          {isHuman
-            ? (conversation?.assigneeInitials || assigneeName[0])
-            : <ValerIATile size={26} radius={999} data-testid="ValerIATile__50ab90" />
-          }
-          {!isClosed && <div className="sc-status-dot" />}
-        </div>
-        <div className="sc-grow">
-          <div className="sc-conv-name">{assigneeName}</div>
-          <div className="sc-conv-meta">
-            {isClosed
-              ? ui('supportConversationClosedMeta')
-              : isHuman
-                ? <><span className="sc-typing-dot" />{ui('supportActiveNow')}</>
-                : ui('supportTeamCanHelp')
-            }
-          </div>
-        </div>
-        <div className="sc-conv-actions" ref={menuRef} style={{ position: 'relative' }}>
-          <button
-            className="sc-head-icn"
-            onClick={onToggleExpand}
-            aria-label={isExpanded ? ui('collapse') : ui('expand')}
-            title={isExpanded ? ui('collapse') : ui('expand')}
-          >
-            {isExpanded ? <Minimize2 size={16} data-testid="Minimize2__50ab90" /> : <Maximize2 size={16} data-testid="Maximize2__50ab90" />}
-          </button>
-          {conversation && !isClosed && (
-            <>
-              <button
-                className="sc-head-icn"
-                aria-label={ui('moreOptions')}
-                onClick={() => setMenuOpen((v) => !v)}
-              >
-                <MoreVertical size={16} data-testid="MoreVertical__50ab90" />
-              </button>
-              {menuOpen && (
-                <div className="sc-head-menu">
-                  <button
-                    className="danger"
-                    onClick={() => { setMenuOpen(false); onCloseConversation?.(); }}
-                  >
-                    {ui('supportCloseConversation')}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-          <button className="sc-head-icn" onClick={onClose} aria-label={ui('close')}><X size={16} data-testid="X__50ab90" /></button>
-        </div>
-      </div>
+      <ConversationHeader
+        onBack={onBack}
+        isHuman={isHuman}
+        isClosed={isClosed}
+        conversation={conversation}
+        assigneeName={assigneeName}
+        isExpanded={isExpanded}
+        onToggleExpand={onToggleExpand}
+        menuOpen={menuOpen}
+        onToggleMenu={() => setMenuOpen((v) => !v)}
+        onCloseConversation={() => { setMenuOpen(false); onCloseConversation?.(); }}
+        onClose={onClose}
+        menuRef={menuRef}
+        ui={ui}
+        data-testid="ConversationHeader__50ab90" />
       {/* Thread */}
       <div className="sc-conv-thread" ref={threadRef}>
         <div className="sc-conv-greet">
@@ -565,44 +669,20 @@ export function ConversationView({
             {ui('loading')}
           </div>
         ) : (
-          messages.map((m, i) => {
-            if (m.handover) {
-              return (
-                <div key={i} className="sc-handover">
-                  <div className="sc-handover-icn"><Users size={16} data-testid="Users__50ab90" /></div>
-                  <div>
-                    <div className="sc-handover-txt">
-                      {ui('supportHandoverIntro', { name: m.agentName })}
-                    </div>
-                    <div className="sc-handover-sub">{ui('supportHandoverStatus')}</div>
-                  </div>
-                </div>
-              );
-            }
-            const prev = messages[i - 1];
-            const mDate = m.timestamp ? new Date(m.timestamp).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) : null;
-            const prevDate = prev?.timestamp ? new Date(prev.timestamp).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) : null;
-            const showDivider = mDate && mDate !== prevDate;
-            // Show "Nuevos" before the first message that arrived after the conversation was opened
-            const showNewDivider = seenCountRef.current !== null
-              && i === seenCountRef.current
-              && messages.length > seenCountRef.current;
-            return (
-              <React.Fragment key={m.id || i}>
-                {showNewDivider && (
-                  <div className="sc-new-divider"><span>{ui('supportNewDivider')}</span></div>
-                )}
-                {showDivider && !showNewDivider && (
-                  <div className="sc-day-divider"><span>{mDate}</span></div>
-                )}
-                <Bubble
-                  message={m}
-                  onQuickReply={(q) => { setDraft(q); }}
-                  audioMap={audioMapRef.current}
-                  data-testid="Bubble__50ab90" />
-              </React.Fragment>
-            );
-          })
+          messages.map((m, i) => (
+            <React.Fragment key={m.id}>
+              <ConversationMessageItem
+                message={m}
+                index={i}
+                messages={messages}
+                seenCount={seenCountRef.current}
+                dateLocale={dateLocale}
+                onQuickReply={(q) => setDraft(q)}
+                audioMap={audioMapRef.current}
+                ui={ui}
+                data-testid="ConversationMessageItem__50ab90" />
+            </React.Fragment>
+          ))
         )}
 
         {isSending && (
@@ -649,44 +729,14 @@ export function ConversationView({
       <div className={`sc-composer${isClosed ? ' disabled' : ''}`}>
         {pendingFiles.length > 0 && (
           <div className="sc-att-bar">
-            {pendingFiles.map((f, i) => {
-              const isAudio = f.type?.startsWith('audio/');
-              return (
-                <div key={i} className="sc-att-chip">
-                  <div className="sc-a-thumb">
-                    {isAudio ? <Mic size={12} data-testid="Mic__50ab90" /> : <Paperclip size={12} data-testid="Paperclip__50ab90" />}
-                  </div>
-                  {isAudio ? (
-                    <>
-                      <span>Audio</span>
-                      <button
-                        className="sc-audio-play"
-                        title={ui('supportPlayAudio')}
-                        onClick={() => {
-                          const url = URL.createObjectURL(f);
-                          const audio = new Audio(url);
-                          audio.play();
-                          audio.onended = () => URL.revokeObjectURL(url);
-                        }}
-                      >▶</button>
-                      <span style={{ color: 'var(--sc-fg-3)', fontSize: 11 }}>
-                        · {(f.size / 1024).toFixed(0)} KB
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="sc-a-name">{f.name}</span>
-                      <span style={{ color: 'var(--sc-fg-3)', fontSize: 11 }}>
-                        · {(f.size / 1024).toFixed(0)} KB
-                      </span>
-                    </>
-                  )}
-                  <span className="sc-x" onClick={() => onRemoveFile(i)}>
-                    <X size={12} data-testid="X__50ab90" />
-                  </span>
-                </div>
-              );
-            })}
+            {pendingFiles.map((f, i) => (
+              <PendingAttachmentChip
+                key={`${f.name}-${f.size}-${f.lastModified}`}
+                file={f}
+                onRemove={() => onRemoveFile(i)}
+                ui={ui}
+                data-testid="PendingAttachmentChip__50ab90" />
+            ))}
           </div>
         )}
         <div className="sc-input-row">

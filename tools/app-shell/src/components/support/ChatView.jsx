@@ -38,9 +38,9 @@ function MessageBubble({ message }) {
           <p className="whitespace-pre-wrap break-words">{message.text}</p>
           {message.attachments?.length > 0 && (
             <div className="mt-1 flex flex-col gap-1">
-              {message.attachments.map((att, i) => (
+              {message.attachments.map((att) => (
                 <a
-                  key={i}
+                  key={att.url || att.filename}
                   href={att.url}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -184,7 +184,7 @@ export function ChatView({
             <div className="flex flex-wrap gap-1.5 mb-2">
               {pendingFiles.map((f, i) => (
                 <PendingFileChip
-                  key={i}
+                  key={`${f.name}-${f.size}-${f.lastModified}`}
                   file={f}
                   onRemove={() => onRemoveFile(i)}
                   data-testid="PendingFileChip__159d1a" />

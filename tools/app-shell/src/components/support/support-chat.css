@@ -107,6 +107,7 @@
   pointer-events: auto;
   animation: sc-chat-in .22s cubic-bezier(.2,.8,.2,1);
   transform-origin: bottom right;
+  transition: width .22s cubic-bezier(.2,.8,.2,1), height .22s cubic-bezier(.2,.8,.2,1);
 }
 
 @keyframes sc-chat-in {
@@ -681,8 +682,8 @@
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
-.sc-msg.bot .sc-bubble { max-width: calc(100% - 36px); }
 .sc-msg.bot .sc-bubble {
+  max-width: calc(100% - 36px);
   background: #fff;
   color: var(--sc-fg-1);
   border: 1px solid var(--sc-border-1);
@@ -1039,9 +1040,6 @@
 .sc-att svg { width: 14px; height: 14px; flex-shrink: 0; }
 
 /* ---- Expanded panel -------------------------------------------------------- */
-.sc-panel {
-  transition: width .22s cubic-bezier(.2,.8,.2,1), height .22s cubic-bezier(.2,.8,.2,1);
-}
 .sc-panel.expanded {
   width: min(680px, calc(100vw - 40px));
   height: min(720px, calc(100vh - 40px));

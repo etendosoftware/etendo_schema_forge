@@ -33,6 +33,12 @@ function relativeTime(iso, ui) {
 // Relative labels ("hace 1h 20m") only stay accurate if something re-renders the
 // list as time passes — without this, a label computed at the last data change
 // silently goes stale while the widget sits open with no new activity.
+function ticketStatusClass(conv) {
+  if (conv.status === 'closed') return 'closed';
+  if (conv.unread) return 'unread';
+  return conv.status || 'open';
+}
+
 function useTick(intervalMs) {
   const [, setTick] = React.useState(0);
   React.useEffect(() => {
@@ -103,7 +109,7 @@ export function TicketList({ conversations, activeConversationId, isLoading, onS
                     <div className="sc-t-time">{relativeTime(conv.lastActivity || conv.updatedAt, ui)}</div>
                   </div>
                   <div className="sc-t-preview">{conv.lastMessage || conv.preview || ''}</div>
-                  <span className={`sc-t-status ${conv.status === 'closed' ? 'closed' : (conv.unread ? 'unread' : (conv.status || 'open'))}`}>
+                  <span className={`sc-t-status ${ticketStatusClass(conv)}`}>
                     {conv.unread && conv.status !== 'closed' && (
                       <><svg width="6" height="6" viewBox="0 0 6 6" style={{ flexShrink: 0 }}>
                         <circle cx="3" cy="3" r="3" fill="currentColor" />
