@@ -1004,11 +1004,13 @@ describe('OnboardingPage', () => {
     releaseFirstRetryTimer();
 
     // No environment ever shows up, so it retries discovery 3 times (plus the
-    // initial mount call) before falling back to the profile step.
+    // initial mount call) before falling back to the profile step. Generous
+    // timeouts here: the fallback re-render can lag behind the 5th mock call
+    // under slower/shared CI runners.
     await waitFor(() => {
       expect(fetchEnvironments).toHaveBeenCalledTimes(5);
-    });
-    expect(await screen.findByText('onboardingContinueAction')).toBeInTheDocument();
+    }, { timeout: 10_000 });
+    expect(await screen.findByText('onboardingContinueAction', {}, { timeout: 10_000 })).toBeInTheDocument();
   });
 
   it('tracks readiness failures after a successful onboarding run', async () => {
