@@ -96,7 +96,6 @@ async function loadAllMockData() {
     import('@generated/asset-group/generated/web/asset-group/mockData.js'),
     import('@generated/general-ledger-configuration/generated/web/general-ledger-configuration/mockData.js'),
     import('@generated/tax-category/generated/web/tax-category/mockData.js'),
-    import('@generated/asset-group/generated/web/asset-group/mockData.js'),
   ]);
 
   const merged = {};
