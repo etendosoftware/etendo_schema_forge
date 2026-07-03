@@ -20,7 +20,7 @@ function MessageBubble({ message }) {
     <div className={cn('flex gap-2 items-end', isUser ? 'flex-row-reverse' : 'flex-row')}>
       {!isUser && (
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary mb-1">
-          <Bot className="h-3.5 w-3.5" />
+          <Bot className="h-3.5 w-3.5" data-testid="Bot__159d1a" />
         </div>
       )}
       <div className={cn('flex flex-col gap-0.5 max-w-[75%]', isUser ? 'items-end' : 'items-start')}>
@@ -56,7 +56,7 @@ function MessageBubble({ message }) {
       </div>
       {isUser && (
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted mb-1">
-          <User className="h-3.5 w-3.5 text-muted-foreground" />
+          <User className="h-3.5 w-3.5 text-muted-foreground" data-testid="User__159d1a" />
         </div>
       )}
     </div>
@@ -74,7 +74,7 @@ function PendingFileChip({ file, onRemove }) {
           className="h-5 w-5 rounded object-cover"
         />
       ) : (
-        <Paperclip className="h-3 w-3 text-muted-foreground" />
+        <Paperclip className="h-3 w-3 text-muted-foreground" data-testid="Paperclip__159d1a" />
       )}
       <span className="max-w-[100px] truncate">{file.name}</span>
       <button
@@ -141,18 +141,18 @@ export function ChatView({
         {messages.length === 0 && !isLoadingMessages && (
           <div className="flex flex-col items-center gap-3 pt-6 text-center">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-              <Bot className="h-5 w-5 text-primary" />
+              <Bot className="h-5 w-5 text-primary" data-testid="Bot__159d1a" />
             </div>
             <p className="text-sm text-muted-foreground">{ui('supportAiGreeting')}</p>
           </div>
         )}
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
+          <MessageBubble key={msg.id} message={msg} data-testid="MessageBubble__159d1a" />
         ))}
         {isSending && (
           <div className="flex gap-2 items-end">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary mb-1">
-              <Bot className="h-3.5 w-3.5" />
+              <Bot className="h-3.5 w-3.5" data-testid="Bot__159d1a" />
             </div>
             <div className="rounded-2xl rounded-bl-sm bg-muted px-3 py-2">
               <span className="flex gap-1 text-muted-foreground">
@@ -165,17 +165,18 @@ export function ChatView({
         )}
         <div ref={bottomRef} />
       </div>
-
       {/* Closed: rating prompt */}
       {isClosed && (
         <div className="shrink-0">
           <div className="px-4 py-2 text-center text-xs text-muted-foreground border-t border-border/50">
             {ui('supportClosedConversation')}
           </div>
-          <SatisfactionRating onSubmit={onSubmitRating} submitted={isRated} />
+          <SatisfactionRating
+            onSubmit={onSubmitRating}
+            submitted={isRated}
+            data-testid="SatisfactionRating__159d1a" />
         </div>
       )}
-
       {/* Input area */}
       {!isClosed && (
         <div className="shrink-0 border-t border-border/50 px-3 py-2">
@@ -186,7 +187,7 @@ export function ChatView({
                   key={i}
                   file={f}
                   onRemove={() => onRemoveFile(i)}
-                />
+                  data-testid="PendingFileChip__159d1a" />
               ))}
             </div>
           )}
@@ -197,7 +198,7 @@ export function ChatView({
               aria-label={ui('supportAttachFile')}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
-              <Paperclip className="h-4 w-4" />
+              <Paperclip className="h-4 w-4" data-testid="Paperclip__159d1a" />
             </button>
             <input
               ref={fileInputRef}
@@ -226,8 +227,8 @@ export function ChatView({
               disabled={isSending || (!input.trim() && pendingFiles.length === 0)}
               onClick={onSend}
               aria-label={ui('send')}
-            >
-              <Send className="h-4 w-4" />
+              data-testid="Button__159d1a">
+              <Send className="h-4 w-4" data-testid="Send__159d1a" />
             </Button>
           </div>
         </div>

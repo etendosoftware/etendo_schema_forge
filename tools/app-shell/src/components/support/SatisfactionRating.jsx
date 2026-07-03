@@ -67,7 +67,7 @@ export function SatisfactionRating({ onSubmit, submitted }) {
         disabled={!selected || submitting}
         onClick={handleSubmit}
         className="w-full"
-      >
+        data-testid="Button__c3f9f4">
         {ui('supportSubmitRating')}
       </Button>
     </div>

@@ -72,7 +72,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
       </div>
       {!embedded && <CommandPalette data-testid="CommandPalette__488148" />}
       {!embedded && <CopilotWidget hideTrigger data-testid="CopilotWidget__488148" />}
-      {!embedded && <SupportChatWidget />}
+      {!embedded && <SupportChatWidget data-testid="SupportChatWidget__488148" />}
     </>
   );
 }
@@ -84,7 +84,7 @@ export default function AppLayout({ menuGroups }) {
   return (
     <CurrentWindowProvider data-testid="CurrentWindowProvider__488148">
       <CopilotProvider data-testid="CopilotProvider__488148">
-        <SupportChatProvider>
+        <SupportChatProvider data-testid="SupportChatProvider__488148">
           <FavoritesProvider data-testid="FavoritesProvider__488148">
             <SidebarProvider data-testid="SidebarProvider__488148">
               <PageMetaProvider data-testid="PageMetaProvider__488148">
