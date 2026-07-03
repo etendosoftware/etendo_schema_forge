@@ -126,9 +126,10 @@ describe('useEntity helpers', () => {
       expect(msg).toBeTruthy();
     });
 
-    it('handles response.json() failure — throws ReferenceError (known bug: translate not in scope)', async () => {
+    it('falls back to "Error <status>" when response.json() fails (non-JSON body, e.g. an HTML error page)', async () => {
       const badRes = { json: async () => { throw new Error('parse fail'); }, status: 500 };
-      await expect(extractErrorMessage(badRes)).rejects.toThrow();
+      const msg = await extractErrorMessage(badRes);
+      expect(msg).toBe('Error 500');
     });
 
     it('uses ui translate function when provided', async () => {
@@ -222,17 +223,12 @@ describe('useEntity helpers', () => {
     });
 
     // --- ultimate fallback: Error + status ---
-    // translate() is defined inside the try block. When json() succeeds but no
-    // message is found, the code exits the try normally and reaches line 167
-    // which calls translate() — translate IS still in scope because it was defined
-    // earlier in the same try block and the try completed normally (no throw).
-    // But wait — re-reading the code: the `return` on line 167 is OUTSIDE the try.
-    // `translate` was declared with `const` inside the try block, so it IS in scope
-    // only inside that try. This means the return on line 167 hits a ReferenceError.
-    // This is a known source bug — document the behavior.
-    it('throws ReferenceError for fallback path (translate out of scope bug)', async () => {
+    // When json() succeeds but no recognizable message is found in the payload,
+    // the function falls through to the generic "Error <status>" message.
+    it('falls back to "Error <status>" when no recognizable message is found', async () => {
       const data = { someIrrelevantKey: 42 };
-      await expect(extractErrorMessage(mockResponse(data, 422), ui)).rejects.toThrow();
+      const msg = await extractErrorMessage(mockResponse(data, 422), ui);
+      expect(msg).toBe('Error 422');
     });
 
     // --- translate without ui function ---
