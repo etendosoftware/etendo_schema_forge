@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -107,5 +107,36 @@ describe('ChatView', () => {
   it('shows the rating as already submitted when isRated is true', () => {
     render(<ChatView {...baseProps({ isClosed: true, isRated: true })} />);
     expect(screen.getByTestId('satisfaction-rating')).toHaveTextContent('submitted');
+  });
+
+  it('pressing Enter sends the message when there is text to send', () => {
+    const onSend = vi.fn();
+    render(<ChatView {...baseProps({ input: 'Hola', onSend })} />);
+    const textarea = screen.getByPlaceholderText('supportTypeMessage');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('Shift+Enter does not send the message', () => {
+    const onSend = vi.fn();
+    render(<ChatView {...baseProps({ input: 'Hola', onSend })} />);
+    const textarea = screen.getByPlaceholderText('supportTypeMessage');
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('pressing Enter with no text and no pending files does not send', () => {
+    const onSend = vi.fn();
+    render(<ChatView {...baseProps({ input: '   ', onSend })} />);
+    const textarea = screen.getByPlaceholderText('supportTypeMessage');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('renders an image preview for image pending files', () => {
+    global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+    const file = new File(['x'], 'photo.png', { type: 'image/png' });
+    render(<ChatView {...baseProps({ pendingFiles: [file] })} />);
+    expect(screen.getByAltText('photo.png')).toBeInTheDocument();
   });
 });

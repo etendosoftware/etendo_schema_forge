@@ -153,4 +153,227 @@ describe('SupportChatContext', () => {
     act(() => result.current.actions.dismissRating('c1'));
     expect(mockApiFetch).not.toHaveBeenCalled();
   });
+
+  describe('closeConversation', () => {
+    it('updates the conversation with the server response on success', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversations: [{ id: 'c1', subject: 'X', status: 'open' }] }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversation: { id: 'c1', status: 'closed' } }));
+      await act(async () => {
+        await result.current.actions.closeConversation('c1');
+      });
+      expect(mockApiFetch).toHaveBeenLastCalledWith('/sws/support/conversations/c1/close', { method: 'POST' });
+      expect(result.current.state.conversations[0].status).toBe('closed');
+    });
+
+    it('records an error when the request fails', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({}, false));
+      await act(async () => {
+        await result.current.actions.closeConversation('c1');
+      });
+      expect(result.current.state.error).toBe('Failed to close conversation');
+    });
+  });
+
+  describe('reopenConversation', () => {
+    it('updates the conversation and replaces messages when the server returns both', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversations: [{ id: 'c1', subject: 'X', status: 'closed' }] }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversation: { id: 'c1', status: 'open' },
+        messages: [{ id: 'm1', sender: 'user', text: 'Hola de nuevo' }],
+      }));
+      await act(async () => {
+        await result.current.actions.reopenConversation('c1');
+      });
+      expect(mockApiFetch).toHaveBeenLastCalledWith('/sws/support/conversations/c1/reopen', { method: 'POST' });
+      expect(result.current.state.conversations[0].status).toBe('open');
+      expect(result.current.state.messages).toHaveLength(1);
+    });
+
+    it('updates the conversation without touching messages when the server omits them', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversations: [{ id: 'c1', subject: 'X', status: 'closed' }] }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversation: { id: 'c1', status: 'open' } }));
+      await act(async () => {
+        await result.current.actions.reopenConversation('c1');
+      });
+      expect(result.current.state.conversations[0].status).toBe('open');
+      expect(result.current.state.messages).toEqual([]);
+    });
+
+    it('records an error when the request fails', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({}, false));
+      await act(async () => {
+        await result.current.actions.reopenConversation('c1');
+      });
+      expect(result.current.state.error).toBe('Failed to reopen conversation');
+    });
+  });
+
+  describe('loadMessages', () => {
+    it('loads the thread and marks the conversation as read', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ conversations: [{ id: 'c1', subject: 'X', unread: true }] }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ messages: [{ id: 'm1', sender: 'user', text: 'Hola' }] }));
+      await act(async () => {
+        await result.current.actions.loadMessages('c1');
+      });
+      expect(result.current.state.messages).toHaveLength(1);
+      expect(result.current.state.conversations[0].unread).toBe(false);
+    });
+
+    it('sets the loading-messages flag while the request is in flight when not silent', async () => {
+      const { result } = await renderSupportChat();
+      let resolveFetch;
+      mockApiFetch.mockImplementationOnce(() => new Promise((resolve) => { resolveFetch = resolve; }));
+      let callPromise;
+      act(() => {
+        callPromise = result.current.actions.loadMessages('c1');
+      });
+      expect(result.current.state.isLoadingMessages).toBe(true);
+      await act(async () => {
+        resolveFetch(jsonResponse({ messages: [] }));
+        await callPromise;
+      });
+      expect(result.current.state.isLoadingMessages).toBe(false);
+    });
+
+    it('never raises the loading-messages flag when called silently', async () => {
+      const { result } = await renderSupportChat();
+      let resolveFetch;
+      mockApiFetch.mockImplementationOnce(() => new Promise((resolve) => { resolveFetch = resolve; }));
+      let callPromise;
+      act(() => {
+        callPromise = result.current.actions.loadMessages('c1', true);
+      });
+      expect(result.current.state.isLoadingMessages).toBe(false);
+      await act(async () => {
+        resolveFetch(jsonResponse({ messages: [{ id: 'm1', sender: 'ai', text: 'Silencioso' }] }));
+        await callPromise;
+      });
+      expect(result.current.state.isLoadingMessages).toBe(false);
+      expect(result.current.state.messages).toHaveLength(1);
+    });
+
+    it('records an error when the request fails', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({}, false));
+      await act(async () => {
+        await result.current.actions.loadMessages('c1');
+      });
+      expect(result.current.state.error).toBe('Failed to load messages');
+    });
+  });
+
+  describe('polling', () => {
+    it('the 5s message poll refreshes the thread when the server has new messages', async () => {
+      const { result } = await renderSupportChat();
+      act(() => {
+        result.current.actions.open();
+        result.current.actions.selectConversation('c1');
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({ messages: [{ id: 'm1', sender: 'ai', text: 'Nuevo' }] }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(result.current.state.messages).toHaveLength(1);
+      expect(result.current.state.messages[0].id).toBe('m1');
+    });
+
+    it('the 5s message poll does nothing while the widget is closed', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockClear();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(mockApiFetch).not.toHaveBeenCalled();
+      expect(result.current.state.messages).toEqual([]);
+    });
+
+    it('the 5s message poll does nothing when there is no active conversation', async () => {
+      const { result } = await renderSupportChat();
+      act(() => result.current.actions.open());
+      mockApiFetch.mockClear();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(mockApiFetch).not.toHaveBeenCalled();
+    });
+
+    it('the 5s message poll does nothing for an unsent draft conversation ("new")', async () => {
+      const { result } = await renderSupportChat();
+      act(() => {
+        result.current.actions.open();
+        result.current.actions.selectConversation('new');
+      });
+      mockApiFetch.mockClear();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(mockApiFetch).not.toHaveBeenCalled();
+    });
+
+    it('the 5s message poll does nothing while a message is being sent', async () => {
+      const { result } = await renderSupportChat();
+      act(() => {
+        result.current.actions.open();
+        result.current.actions.selectConversation('c1');
+      });
+      mockApiFetch.mockClear();
+      let resolveSend;
+      mockApiFetch.mockImplementationOnce(() => new Promise((resolve) => { resolveSend = resolve; }));
+      let sendPromise;
+      await act(async () => {
+        sendPromise = result.current.actions.sendMessage('c1', 'Hola', []);
+        // Flush the microtasks between the SET_SENDING dispatch and the actual
+        // apiFetch(...) call (sendMessage awaits serializeFiles() first), so
+        // the in-flight call is registered before we clear the mock below.
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(result.current.state.isSending).toBe(true);
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
+      mockApiFetch.mockClear();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      expect(mockApiFetch).not.toHaveBeenCalled();
+      await act(async () => {
+        resolveSend(jsonResponse({}));
+        await sendPromise;
+      });
+    });
+
+    it('the 15s conversation-list poll refreshes conversations when unread/status/rated differ', async () => {
+      const { result } = await renderSupportChat();
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversations: [{ id: 'c1', subject: 'X', unread: false, status: 'open', rated: false }],
+      }));
+      await act(async () => {
+        await result.current.actions.loadConversations();
+      });
+      mockApiFetch.mockResolvedValueOnce(jsonResponse({
+        conversations: [{ id: 'c1', subject: 'X', unread: true, status: 'open', rated: false }],
+      }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15000);
+      });
+      expect(result.current.state.conversations[0].unread).toBe(true);
+    });
+  });
 });

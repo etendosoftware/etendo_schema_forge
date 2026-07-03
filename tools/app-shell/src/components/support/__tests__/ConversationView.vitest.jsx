@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -151,5 +151,185 @@ describe('ConversationView', () => {
     await user.click(screen.getByLabelText('moreOptions'));
     await user.click(screen.getByText('supportCloseConversation'));
     expect(onCloseConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the "more options" menu on an outside click', async () => {
+    const user = userEvent.setup();
+    render(<ConversationView {...baseProps()} />);
+    await user.click(screen.getByLabelText('moreOptions'));
+    expect(screen.getByText('supportCloseConversation')).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByText('supportCloseConversation')).not.toBeInTheDocument();
+  });
+
+  it('shows a loading indicator while messages are loading', () => {
+    render(<ConversationView {...baseProps({ isLoadingMessages: true })} />);
+    expect(screen.getByText('loading')).toBeInTheDocument();
+  });
+
+  it('clicking a welcome quick reply fills the message draft', async () => {
+    const user = userEvent.setup();
+    render(<ConversationView {...baseProps({ conversation: null })} />);
+    await user.click(screen.getByText('supportQuickReply1'));
+    expect(screen.getByPlaceholderText('supportTypeMessage')).toHaveValue('supportQuickReply1');
+  });
+
+  it('renders a filename for a non-audio attachment', () => {
+    const messages = [{ id: 'm1', sender: 'ai', text: 'Aquí tenés', attachments: [{ name: 'factura.pdf' }] }];
+    render(<ConversationView {...baseProps({ messages })} />);
+    expect(screen.getByText('factura.pdf')).toBeInTheDocument();
+  });
+
+  it('renders an audio attachment as "Audio" without a play control when no local audio URL is available', () => {
+    const messages = [{ id: 'm1', sender: 'ai', text: 'Nota de voz', attachments: [{ name: 'nota.webm' }] }];
+    render(<ConversationView {...baseProps({ messages })} />);
+    expect(screen.getByText('Audio')).toBeInTheDocument();
+    expect(screen.queryByTitle('supportPlayAudio')).not.toBeInTheDocument();
+  });
+
+  it('shows a day divider before the first timestamped message and whenever the day changes', () => {
+    const messages = [
+      { id: 'm1', sender: 'user', text: 'Primero', timestamp: '2024-01-01T10:00:00.000Z' },
+      { id: 'm2', sender: 'user', text: 'Segundo mismo día', timestamp: '2024-01-01T18:00:00.000Z' },
+      { id: 'm3', sender: 'user', text: 'Otro día', timestamp: '2024-02-15T10:00:00.000Z' },
+    ];
+    const { container } = render(<ConversationView {...baseProps({ messages })} />);
+    expect(container.querySelectorAll('.sc-day-divider')).toHaveLength(2);
+  });
+
+  it('shows a drop hint while dragging a file over an open conversation and adds it on drop', () => {
+    const onAddFile = vi.fn();
+    const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+    const wrap = container.querySelector('.sc-conv-wrap');
+    fireEvent.dragEnter(wrap);
+    expect(screen.getByText('supportDropToAttach')).toBeInTheDocument();
+    const file = new File(['x'], 'a.txt', { type: 'text/plain' });
+    fireEvent.drop(wrap, { dataTransfer: { files: [file] } });
+    expect(onAddFile).toHaveBeenCalledWith(file);
+  });
+
+  it('shows a closed-conversation hint while dragging over a closed conversation and ignores the drop', () => {
+    const onAddFile = vi.fn();
+    const conversation = { id: 'c1', status: 'closed' };
+    const { container } = render(<ConversationView {...baseProps({ conversation, onAddFile })} />);
+    const wrap = container.querySelector('.sc-conv-wrap');
+    fireEvent.dragEnter(wrap);
+    expect(screen.getByText('supportClosedConversation')).toBeInTheDocument();
+    const file = new File(['x'], 'a.txt', { type: 'text/plain' });
+    fireEvent.drop(wrap, { dataTransfer: { files: [file] } });
+    expect(onAddFile).not.toHaveBeenCalled();
+  });
+
+  it('adds files selected via the hidden file input', () => {
+    const onAddFile = vi.fn();
+    const { container } = render(<ConversationView {...baseProps({ onAddFile })} />);
+    const input = container.querySelector('input[type="file"]');
+    const file = new File(['x'], 'b.txt', { type: 'text/plain' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onAddFile).toHaveBeenCalledWith(file);
+  });
+
+  it('pressing Enter sends the message', async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    render(<ConversationView {...baseProps({ onSend })} />);
+    const textarea = screen.getByPlaceholderText('supportTypeMessage');
+    await user.type(textarea, 'Hola{Enter}');
+    expect(onSend).toHaveBeenCalledWith('Hola', []);
+  });
+
+  it('Shift+Enter does not send the message', () => {
+    const onSend = vi.fn();
+    render(<ConversationView {...baseProps({ onSend })} />);
+    const textarea = screen.getByPlaceholderText('supportTypeMessage');
+    fireEvent.change(textarea, { target: { value: 'Hola' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('opens the emoji picker and appends an emoji to the draft', async () => {
+    const user = userEvent.setup();
+    render(<ConversationView {...baseProps()} />);
+    await user.click(screen.getByLabelText('Emoji'));
+    await user.click(screen.getByText('😀'));
+    expect(screen.getByPlaceholderText('supportTypeMessage')).toHaveValue('😀');
+  });
+
+  it('closes the emoji picker on an outside click', async () => {
+    const user = userEvent.setup();
+    render(<ConversationView {...baseProps()} />);
+    await user.click(screen.getByLabelText('Emoji'));
+    expect(screen.getByText('😀')).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByText('😀')).not.toBeInTheDocument();
+  });
+
+  it('submits a CSAT rating with the selected score and comment', async () => {
+    const user = userEvent.setup();
+    const onSubmitRating = vi.fn().mockResolvedValue();
+    const conversation = { id: 'c1', status: 'closed', rated: false };
+    render(<ConversationView {...baseProps({ conversation, onSubmitRating })} />);
+    await user.click(screen.getByLabelText('supportRatingAriaLabel {"n":5}'));
+    await user.type(screen.getByPlaceholderText('supportAddComment'), 'Genial');
+    await user.click(screen.getByText('supportSubmitRating'));
+    expect(onSubmitRating).toHaveBeenCalledWith(5, 'Genial');
+  });
+
+  it('dismisses the CSAT card via "later"', async () => {
+    const user = userEvent.setup();
+    const onDismissRating = vi.fn();
+    const conversation = { id: 'c1', status: 'closed', rated: false };
+    render(<ConversationView {...baseProps({ conversation, onDismissRating })} />);
+    await user.click(screen.getByLabelText('supportRatingAriaLabel {"n":3}'));
+    await user.click(screen.getByText('supportLater'));
+    expect(onDismissRating).toHaveBeenCalledTimes(1);
+  });
+
+  describe('voice recording', () => {
+    beforeEach(() => {
+      global.navigator.mediaDevices = {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [{ stop: vi.fn() }] }),
+      };
+      global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+
+      class FakeMediaRecorder {
+        constructor() {
+          this.state = 'recording';
+          this.mimeType = 'audio/webm';
+        }
+        start() {}
+        stop() {
+          this.state = 'inactive';
+          this.onstop?.();
+        }
+      }
+      global.MediaRecorder = FakeMediaRecorder;
+    });
+
+    it('starts and stops recording, adding the captured audio as a pending file', async () => {
+      const user = userEvent.setup();
+      const onAddFile = vi.fn();
+      render(<ConversationView {...baseProps({ onAddFile })} />);
+      await user.click(screen.getByLabelText('supportStartRecording'));
+      expect(await screen.findByLabelText('supportStopRecording')).toBeInTheDocument();
+      await user.click(screen.getByLabelText('supportStopRecording'));
+      expect(onAddFile).toHaveBeenCalledTimes(1);
+      expect(onAddFile.mock.calls[0][0]).toBeInstanceOf(File);
+    });
+
+    it('sends the recording immediately when clicking send while recording', async () => {
+      const user = userEvent.setup();
+      const onSend = vi.fn();
+      render(<ConversationView {...baseProps({ onSend })} />);
+      await user.click(screen.getByLabelText('supportStartRecording'));
+      await screen.findByLabelText('supportStopRecording');
+      await user.type(screen.getByPlaceholderText('supportTypeMessage'), 'Nota');
+      await user.click(screen.getByLabelText('send'));
+      expect(onSend).toHaveBeenCalledTimes(1);
+      const [text, files] = onSend.mock.calls[0];
+      expect(text).toBe('Nota');
+      expect(files).toHaveLength(1);
+      expect(files[0]).toBeInstanceOf(File);
+    });
   });
 });
