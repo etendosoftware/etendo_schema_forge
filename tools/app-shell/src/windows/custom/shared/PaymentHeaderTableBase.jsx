@@ -67,12 +67,6 @@ function fmtAmt(val, curr) {
   return (n < 0 ? '-' : '') + AMOUNT_FMT.format(Math.abs(n)) + ' ' + currencySymbol(curr);
 }
 
-function fmtDate(raw) {
-  if (!raw) return '';
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw));
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(raw);
-}
-
 // ─── SidebarSkeleton ──────────────────────────────────────────────────────────
 
 function SidebarSkeleton() {
