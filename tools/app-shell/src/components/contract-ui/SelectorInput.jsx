@@ -48,6 +48,12 @@ export function SelectorInput({
   const hasMoreRef = useRef(true);
   const offsetRef = useRef(0);
 
+  // Compare selectorContext by content, not by reference. DetailView/EntityForm
+  // recreate the context object on every render even when values are identical,
+  // which would otherwise make fetchPage (and the SelectContent ref callback that
+  // depends on it) re-identify on every render and re-trigger fetches indefinitely.
+  const contextKey = JSON.stringify(selectorContext ?? {});
+
   const fetchPage = useCallback((offset) => {
     if (!selectorUrl || !token || loadingRef.current || !hasMoreRef.current) return;
     loadingRef.current = true;
@@ -77,14 +83,13 @@ export function SelectorInput({
         setFetching(false);
       })
       .catch(() => { loadingRef.current = false; setFetching(false); });
-  }, [selectorUrl, selectorContext, token]);
+  }, [selectorUrl, contextKey, token]);
 
   // Invalidate cached options when the URL or the selector context changes.
   // We do NOT eager-fetch here — the identifier (`<field>$_identifier`) usually
   // arrives with the default/record payload, so the trigger can render the label
   // without a list. The actual fetch is deferred to the first time the user opens
   // the dropdown.
-  const contextKey = JSON.stringify(selectorContext ?? {});
   useEffect(() => {
     offsetRef.current = 0;
     hasMoreRef.current = true;

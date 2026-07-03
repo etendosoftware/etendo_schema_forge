@@ -62,28 +62,32 @@ export function pickMessage(node) {
  * Extract a human-readable error message from a NEO Headless error response.
  */
 export async function extractErrorMessage(res, ui) {
+    // Declared outside the try block (and thus outside the `data = await res.json()`
+    // call that can throw for non-JSON bodies, e.g. an HTML error page) so the final
+    // fallback below — `translate('error', 'Error')` — stays in scope even when
+    // res.json() fails.
+    const translate = (key, fallback, params = {}) => {
+        if (typeof ui !== 'function') {
+            let text = fallback;
+            Object.keys(params).forEach((p) => {
+                text = text.replace(`{${p}}`, params[p]);
+            });
+            return text;
+        }
+
+        const translated = ui(key, params);
+        if (!translated || translated === key) {
+            let text = fallback;
+            Object.keys(params).forEach((p) => {
+                text = text.replace(`{${p}}`, params[p]);
+            });
+            return text;
+        }
+        return translated;
+    };
+
     try {
         const data = await res.json();
-
-        const translate = (key, fallback, params = {}) => {
-            if (typeof ui !== 'function') {
-                let text = fallback;
-                Object.keys(params).forEach((p) => {
-                    text = text.replace(`{${p}}`, params[p]);
-                });
-                return text;
-            }
-
-            const translated = ui(key, params);
-            if (!translated || translated === key) {
-                let text = fallback;
-                Object.keys(params).forEach((p) => {
-                    text = text.replace(`{${p}}`, params[p]);
-                });
-                return text;
-            }
-            return translated;
-        };
 
         const decodeHtml = (input) => {
             if (typeof input !== 'string') return '';
