@@ -166,7 +166,7 @@ export default defineConfig(({ mode }) => {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallbackDenylist: [
           /^\/etendo\//,
           /^\/mcp(?:\/|$)/,
@@ -227,6 +227,15 @@ export default defineConfig(({ mode }) => {
     // subpath on the same raw-source resolution path, so there is only one
     // instance to begin with.
     exclude: ['@etendosoftware/app-shell-core'],
+    // react-day-picker (used by app-shell-core's Calendar) ships ~87 translated
+    // per-locale wrapper files, each importing the date-fns/locale barrel. Since
+    // it's only reachable through the excluded app-shell-core, Vite never
+    // discovers it for pre-bundling either, so on a cold dev cache it's served
+    // raw and loads every locale for every one of its own wrappers — ~1000+
+    // extra requests, 30+ seconds just for page.goto() to settle in CI (ETP-4431
+    // / ETP-4433). Explicitly including it forces pre-bundling (and therefore
+    // tree-shaking) regardless of the exclusion above.
+    include: ['react-day-picker'],
   },
   server: {
     allowedHosts: env.VITE_ALLOWED_HOSTS ? env.VITE_ALLOWED_HOSTS.split(',') : [],
