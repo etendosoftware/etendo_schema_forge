@@ -1,37 +1,33 @@
+// @vitest-environment jsdom
+
 // --- Mocks (before imports) ---
 
-vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
-}));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-const toastSuccess = vi.fn();
-const toastError = vi.fn();
-vi.mock('sonner', () => ({
-  toast: { success: (...a) => toastSuccess(...a), error: (...a) => toastError(...a) },
-}));
-
+// Render the dialog inline (no portal / pointer-events friction) — same pattern
+// used by AddPaymentModal.vitest.jsx.
 vi.mock('@/components/ui/dialog.jsx', () => ({
-  Dialog: ({ children, open, onOpenChange }) =>
+  Dialog: ({ open, children, onOpenChange }) =>
     open ? (
       <div data-testid="dialog">
-        <button data-testid="dialog-close-x" onClick={() => onOpenChange?.(false)} />
+        <button type="button" data-testid="dialog-overlay-close" onClick={() => onOpenChange(false)} />
         {children}
       </div>
     ) : null,
-  DialogContent: ({ children }) => <div data-testid="dialog-content">{children}</div>,
-  DialogHeader: ({ children }) => <div>{children}</div>,
-  DialogTitle: ({ children }) => <div>{children}</div>,
-  DialogFooter: ({ children }) => <div data-testid="dialog-footer">{children}</div>,
+  DialogContent: ({ children, ...rest }) => <div {...rest}>{children}</div>,
+  DialogHeader: ({ children, ...rest }) => <div {...rest}>{children}</div>,
+  DialogTitle: ({ children, ...rest }) => <div {...rest}>{children}</div>,
+  DialogFooter: ({ children, ...rest }) => <div {...rest}>{children}</div>,
 }));
 
-// AccountCodeField lives in @generated (artifacts) — stub it as a controlled input
-// so we can drive the searchKey value from the test.
+// Stub the generated AccountCodeField — expose a single input so tests can
+// drive onChange(fullCode) directly without depending on its own split-field logic.
 vi.mock('@generated/chart-of-accounts/custom/AccountCodeField', () => ({
-  default: ({ value, onChange, readOnly }) => (
+  default: ({ value, onChange }) => (
     <input
-      data-testid="account-code-field"
+      data-testid="account-code-stub"
       value={value}
-      readOnly={readOnly}
       onChange={(e) => onChange(e.target.value)}
     />
   ),
@@ -39,225 +35,235 @@ vi.mock('@generated/chart-of-accounts/custom/AccountCodeField', () => ({
 
 // --- Import under test ---
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { toast } from 'sonner';
 import NewAccountModal from '../NewAccountModal.jsx';
 
-// --- Fixtures ---
+const BASE_URL = 'http://localhost/sws/neo/chart-of-accounts';
+const TOKEN = 'test-token';
 
-// Flat list as delivered by the NeoHandler: leaves carry parentCode4 /
-// parentCode4Name, which the modal turns into virtual 4-digit parent options.
+// '4000' is an explicit summary row (no leaf references it, so no virtual
+// duplicate); '5000' only exists as a virtual group derived from a leaf row's
+// parentCode4 — covering both parent-option sources without overlap.
 const ACCOUNTS = [
-  {
-    id: 'acc-1',
-    searchKey: '43000001',
-    name: 'Client A',
-    parentCode4: '4300',
-    parentCode4Name: 'Clientes',
-    summaryLevel: 'N',
-  },
-  {
-    id: 'acc-2',
-    searchKey: '57000001',
-    name: 'Bank',
-    parentCode4: '5700',
-    parentCode4Name: 'Tesoreria',
-    summaryLevel: 'N',
-  },
+  { id: 'acc-4000', searchKey: '4000', name: 'Sales', summaryLevel: 'Y' },
+  { id: 'acc-50000001', searchKey: '50000001', name: 'Purchases US', summaryLevel: 'N', parentCode4: '5000', parentCode4Name: 'Purchases' },
 ];
 
-const defaultProps = {
-  isOpen: true,
-  onClose: vi.fn(),
-  onSaved: vi.fn(),
-  currentRecord: null,
-  allAccounts: ACCOUNTS,
-  apiBaseUrl: '/sws/neo/chart-of-accounts',
-  token: 'test-token',
-};
+function baseProps(overrides = {}) {
+  return {
+    isOpen: true,
+    onClose: vi.fn(),
+    onSaved: vi.fn(),
+    currentRecord: null,
+    allAccounts: ACCOUNTS,
+    apiBaseUrl: BASE_URL,
+    token: TOKEN,
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('NewAccountModal', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    globalThis.fetch = vi.fn();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('renders nothing when closed', () => {
-    render(<NewAccountModal {...defaultProps} isOpen={false} />);
+  it('does not render when closed', () => {
+    render(<NewAccountModal {...baseProps({ isOpen: false })} />);
     expect(screen.queryByTestId('dialog')).not.toBeInTheDocument();
   });
 
-  it('renders the form when open', () => {
-    render(<NewAccountModal {...defaultProps} />);
+  it('renders the form fields when open', () => {
+    render(<NewAccountModal {...baseProps()} />);
+    expect(screen.getByText('newSubAccount')).toBeInTheDocument();
     expect(screen.getByTestId('new-account-modal-parent')).toBeInTheDocument();
     expect(screen.getByTestId('new-account-modal-name')).toBeInTheDocument();
-    expect(screen.getByTestId('account-code-field')).toBeInTheDocument();
+    expect(screen.getByTestId('account-code-stub')).toBeInTheDocument();
   });
 
-  it('builds virtual parent options from parentCode4 of the account rows', () => {
-    render(<NewAccountModal {...defaultProps} />);
+  it('renders parent options sorted by code when open', () => {
+    render(<NewAccountModal {...baseProps()} />);
     const select = screen.getByTestId('new-account-modal-parent');
-    // 2 virtual groups + the placeholder option
-    expect(select.querySelectorAll('option')).toHaveLength(3);
-    expect(screen.getByRole('option', { name: '4300 — Clientes' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '5700 — Tesoreria' })).toBeInTheDocument();
+    const optionTexts = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
+    expect(optionTexts).toEqual([
+      'selectParentAccount',
+      '4000 — Sales',
+      '5000 — Purchases',
+    ]);
   });
 
-  it('fetches accounts when allAccounts is empty and the modal opens', async () => {
-    globalThis.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        response: {
-          data: [
-            {
-              id: 'x-1',
-              searchKey: '60000001',
-              parentCode4: '6000',
-              parentCode4Name: 'Compras',
-              summaryLevel: 'N',
-            },
-          ],
-        },
-      }),
-    });
-    render(<NewAccountModal {...defaultProps} allAccounts={[]} />);
-    await screen.findByRole('option', { name: '6000 — Compras' });
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/sws/neo/chart-of-accounts/elementValue?_startRow=0&_endRow=9999',
-      expect.objectContaining({ headers: { Authorization: 'Bearer test-token' } }),
+  it('auto-selects the current record as parent when it is itself a 4-digit summary account', () => {
+    render(<NewAccountModal {...baseProps({ currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
+    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('acc-4000');
+    expect(screen.getByTestId('account-code-stub')).toHaveValue('4000');
+  });
+
+  it('auto-selects the matching 4-digit parent from the leaf account prefix', () => {
+    render(<NewAccountModal {...baseProps({ currentRecord: { id: 'acc-50000001', searchKey: '50000001', summaryLevel: 'N' } })} />);
+    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('group-5000');
+    expect(screen.getByTestId('account-code-stub')).toHaveValue('5000');
+  });
+
+  it('falls back to no parent selection when nothing matches', () => {
+    render(<NewAccountModal {...baseProps({ currentRecord: { id: 'x', searchKey: '9999', summaryLevel: 'N' } })} />);
+    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('');
+  });
+
+  it('falls back to no parent selection when currentRecord is null', () => {
+    render(<NewAccountModal {...baseProps({ currentRecord: null })} />);
+    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('');
+  });
+
+  it('builds virtual parent groups from allAccounts when no explicit 4-digit summary row exists', () => {
+    const flatOnly = [
+      { id: 'acc-1', searchKey: '60000001', name: 'Leaf', summaryLevel: 'N', parentCode4: '6000', parentCode4Name: 'Expenses' },
+    ];
+    render(<NewAccountModal {...baseProps({ allAccounts: flatOnly, currentRecord: null })} />);
+    const select = screen.getByTestId('new-account-modal-parent');
+    const optionTexts = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
+    expect(optionTexts).toContain('6000 — Expenses');
+  });
+
+  it('fetches accounts from the API when allAccounts is empty', async () => {
+    globalThis.fetch = vi.fn(() =>
+      Promise.resolve({ ok: true, json: async () => ({ response: { data: ACCOUNTS } }) }),
     );
+    render(<NewAccountModal {...baseProps({ allAccounts: [] })} />);
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+      `${BASE_URL}/elementValue?_startRow=0&_endRow=9999`,
+      expect.objectContaining({ headers: { Authorization: `Bearer ${TOKEN}` } }),
+    ));
+    await waitFor(() => {
+      const select = screen.getByTestId('new-account-modal-parent');
+      expect(select.querySelectorAll('option').length).toBeGreaterThan(1);
+    });
+  });
+
+  it('does not fetch accounts when allAccounts already has rows', () => {
+    globalThis.fetch = vi.fn();
+    render(<NewAccountModal {...baseProps()} />);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('falls back to an empty list when the account fetch fails', async () => {
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false }));
+    render(<NewAccountModal {...baseProps({ allAccounts: [] })} />);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    const select = screen.getByTestId('new-account-modal-parent');
+    expect(select.querySelectorAll('option').length).toBe(1); // only the placeholder
+  });
+
+  it('falls back to an empty list when the account fetch throws', async () => {
+    globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
+    render(<NewAccountModal {...baseProps({ allAccounts: [] })} />);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    const select = screen.getByTestId('new-account-modal-parent');
+    expect(select.querySelectorAll('option').length).toBe(1);
   });
 
   it('selecting a parent fills the code prefix into the code field', async () => {
     const user = userEvent.setup();
-    render(<NewAccountModal {...defaultProps} />);
+    render(<NewAccountModal {...baseProps()} />);
     const select = screen.getByTestId('new-account-modal-parent');
-    await user.selectOptions(select, screen.getByRole('option', { name: '4300 — Clientes' }));
-    expect(screen.getByTestId('account-code-field')).toHaveValue('4300');
+    await user.selectOptions(select, screen.getByRole('option', { name: '5000 — Purchases' }));
+    expect(screen.getByTestId('account-code-stub')).toHaveValue('5000');
   });
 
-  it('shows validation errors when saving an empty form', async () => {
-    const user = userEvent.setup();
-    render(<NewAccountModal {...defaultProps} />);
-    await user.click(screen.getByTestId('new-account-modal-save'));
-    // parent required, name required, code must be 8 digits
-    expect(screen.getAllByText('required').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('codeExact8Digits')).toBeInTheDocument();
+  it('shows validation errors and does not submit when required fields are missing', () => {
+    globalThis.fetch = vi.fn();
+    render(<NewAccountModal {...baseProps()} />);
+    fireEvent.click(screen.getByTestId('new-account-modal-save'));
+
+    expect(screen.getAllByRole('alert')).toHaveLength(3); // parent, name, code
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('POSTs the new account and calls onSaved on success', async () => {
-    const user = userEvent.setup();
+  it('clears the name error as soon as the user types', () => {
+    render(<NewAccountModal {...baseProps()} />);
+    fireEvent.click(screen.getByTestId('new-account-modal-save'));
+    expect(screen.getAllByRole('alert')).toHaveLength(3);
+
+    fireEvent.change(screen.getByTestId('new-account-modal-name'), { target: { value: 'New sub account' } });
+    expect(screen.getAllByRole('alert')).toHaveLength(2);
+  });
+
+  it('switching the parent selector updates the code prefix and clears its error', () => {
+    render(<NewAccountModal {...baseProps({ currentRecord: null })} />);
+    fireEvent.click(screen.getByTestId('new-account-modal-save'));
+    expect(screen.getAllByRole('alert')).toHaveLength(3); // no parent selected yet
+
+    fireEvent.change(screen.getByTestId('new-account-modal-parent'), { target: { value: 'group-5000' } });
+
+    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('group-5000');
+    expect(screen.getByTestId('account-code-stub')).toHaveValue('5000');
+    expect(screen.getAllByRole('alert')).toHaveLength(2); // parent error cleared
+  });
+
+  it('submits the correct POST body and calls onSaved on success', async () => {
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
     const onSaved = vi.fn();
-    globalThis.fetch.mockResolvedValue({ ok: true });
-    render(<NewAccountModal {...defaultProps} onSaved={onSaved} />);
+    render(<NewAccountModal {...baseProps({ onSaved, currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
 
-    await user.selectOptions(
-      screen.getByTestId('new-account-modal-parent'),
-      screen.getByRole('option', { name: '4300 — Clientes' }),
-    );
-    await user.type(screen.getByTestId('new-account-modal-name'), 'New Client');
-    // Drive the stubbed AccountCodeField to a valid 8-digit code
-    fireEvent.change(screen.getByTestId('account-code-field'), {
-      target: { value: '43000099' },
+    fireEvent.change(screen.getByTestId('new-account-modal-name'), { target: { value: '  US Sales  ' } });
+    fireEvent.change(screen.getByTestId('account-code-stub'), { target: { value: '40001234' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('new-account-modal-save'));
     });
-    await user.click(screen.getByTestId('new-account-modal-save'));
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/sws/neo/chart-of-accounts/elementValue',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          searchKey: '43000099',
-          name: 'New Client',
-          accountType: 'E',
-        }),
-      }),
-    );
-    expect(toastSuccess).toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalledWith(`${BASE_URL}/elementValue`, expect.objectContaining({
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ searchKey: '40001234', name: 'US Sales', accountType: 'E' }),
+    }));
+    expect(toast.success).toHaveBeenCalledWith('newSubAccountSuccess');
     expect(onSaved).toHaveBeenCalled();
   });
 
-  it('shows an error toast and does not call onSaved when the POST fails', async () => {
-    const user = userEvent.setup();
+  it('shows an error toast and does not call onSaved when the server rejects the request', async () => {
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: false, status: 400, text: async () => 'Duplicate code' }));
     const onSaved = vi.fn();
-    globalThis.fetch.mockResolvedValue({
-      ok: false,
-      status: 500,
-      text: async () => 'boom',
-    });
-    render(<NewAccountModal {...defaultProps} onSaved={onSaved} />);
+    render(<NewAccountModal {...baseProps({ onSaved, currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
 
-    await user.selectOptions(
-      screen.getByTestId('new-account-modal-parent'),
-      screen.getByRole('option', { name: '4300 — Clientes' }),
-    );
-    await user.type(screen.getByTestId('new-account-modal-name'), 'New Client');
-    fireEvent.change(screen.getByTestId('account-code-field'), {
-      target: { value: '43000099' },
-    });
-    await user.click(screen.getByTestId('new-account-modal-save'));
+    fireEvent.change(screen.getByTestId('new-account-modal-name'), { target: { value: 'US Sales' } });
+    fireEvent.change(screen.getByTestId('account-code-stub'), { target: { value: '40001234' } });
 
-    expect(toastError).toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('new-account-modal-save'));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('newSubAccountError');
     expect(onSaved).not.toHaveBeenCalled();
   });
 
-  it('calls onClose from the cancel button', async () => {
-    const user = userEvent.setup();
+  it('shows an error toast when the save request throws a network error', async () => {
+    globalThis.fetch = vi.fn(() => Promise.reject(new Error('offline')));
+    render(<NewAccountModal {...baseProps({ currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
+
+    fireEvent.change(screen.getByTestId('new-account-modal-name'), { target: { value: 'US Sales' } });
+    fireEvent.change(screen.getByTestId('account-code-stub'), { target: { value: '40001234' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('new-account-modal-save'));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('newSubAccountError');
+  });
+
+  it('calls onClose when the cancel button is clicked', () => {
     const onClose = vi.fn();
-    render(<NewAccountModal {...defaultProps} onClose={onClose} />);
-    await user.click(screen.getByTestId('new-account-modal-cancel'));
+    render(<NewAccountModal {...baseProps({ onClose })} />);
+    fireEvent.click(screen.getByTestId('new-account-modal-cancel'));
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('calls onClose when the dialog is dismissed', async () => {
-    const user = userEvent.setup();
+  it('calls onClose when the dialog reports a close via onOpenChange', () => {
     const onClose = vi.fn();
-    render(<NewAccountModal {...defaultProps} onClose={onClose} />);
-    await user.click(screen.getByTestId('dialog-close-x'));
+    render(<NewAccountModal {...baseProps({ onClose })} />);
+    fireEvent.click(screen.getByTestId('dialog-overlay-close'));
     expect(onClose).toHaveBeenCalled();
-  });
-
-  it('auto-selects the parent when currentRecord is a 4-digit summary', () => {
-    const currentRecord = {
-      id: 'sum-1',
-      searchKey: '4300',
-      summaryLevel: 'Y',
-    };
-    // summaryParentOptions comes from the API list; provide a matching summary row.
-    const withSummary = [
-      { id: 'sum-1', searchKey: '4300', name: 'Clientes', summaryLevel: 'Y' },
-      ...ACCOUNTS,
-    ];
-    render(
-      <NewAccountModal
-        {...defaultProps}
-        allAccounts={withSummary}
-        currentRecord={currentRecord}
-      />,
-    );
-    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('sum-1');
-    expect(screen.getByTestId('account-code-field')).toHaveValue('4300');
-  });
-
-  it('derives the parent from a leaf record via its 4-digit prefix', () => {
-    const currentRecord = {
-      id: 'acc-1',
-      searchKey: '43000001',
-      summaryLevel: 'N',
-    };
-    render(<NewAccountModal {...defaultProps} currentRecord={currentRecord} />);
-    // Virtual group group-4300 should be pre-selected
-    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('group-4300');
-    expect(screen.getByTestId('account-code-field')).toHaveValue('4300');
-  });
-
-  it('handles null currentRecord without crashing (empty parent)', () => {
-    render(<NewAccountModal {...defaultProps} currentRecord={null} />);
-    expect(screen.getByTestId('new-account-modal-parent')).toHaveValue('');
   });
 });

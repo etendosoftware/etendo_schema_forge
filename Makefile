@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record generate regen dev dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -120,6 +120,9 @@ test-e2e-report: ## Show last E2E test report in browser
 
 test-e2e-record: ## Record a test flow (opens browser, generates code)
 	cd e2e && npx playwright codegen --save-storage=auth.json http://localhost:3100 --output=recordings/recorded-flow.spec.js
+
+test-e2e-onboarding-integration: ## Run the live onboarding integration spec (requires a running backend at BASE_URL, default :3100)
+	cd e2e && E2E_ONBOARDING_INTEGRATION=1 npx playwright test tests/flows/onboarding-register.integration.spec.js
 
 install-e2e: ## Install E2E dependencies + browsers
 	cd e2e && npm install && npx playwright install chromium
@@ -426,7 +429,12 @@ switch-to-es: ## Switch active locale to Spain (ES)
 
 ensure-locale: ## Bootstrap ES locale if .active-locale does not exist (called automatically)
 	@if [ ! -f .active-locale ]; then \
-		$(MAKE) switch-to-es --no-print-directory; \
+		if [ -f tools/app-shell/.env.es ]; then \
+			$(MAKE) switch-to-es --no-print-directory; \
+		else \
+			echo "default" > .active-locale; \
+			echo "Active locale: default (tools/app-shell/.env) — .env.es not present, skipping switch-to-es"; \
+		fi; \
 	fi
 
 project-status: ## Show active locale and module ID

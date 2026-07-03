@@ -12,6 +12,10 @@ export default {
     // `packages/*` no longer exists locally after the core/functional split —
     // this now scans the installed dependency's source directly.
     '../../node_modules/@etendosoftware/app-shell-core/src/**/*.{js,jsx}',
+    // Onboarding/login components live in the installed etendo-go-core package.
+    // Scan them too; otherwise Tailwind purges layout and auth-form utilities
+    // after the core/functional package split.
+    '../../node_modules/@etendosoftware/etendo-go-core/src/**/*.{js,jsx}',
   ],
   theme: {
   	extend: {

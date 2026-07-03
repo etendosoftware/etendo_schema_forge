@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
@@ -12,6 +13,12 @@ import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
+import { SurveyModal } from './components/survey/SurveyModal.jsx';
+import { useSurveyEngine } from './hooks/useSurveyEngine.js';
+import en_US from './locales/en_US.json';
+import es_ES from './locales/es_ES.json';
+
+const LOCALE_DICTIONARIES = { en_US, es_ES };
 
 function detectBasePath() {
   const envBase = import.meta.env.VITE_API_BASE;
@@ -85,6 +92,7 @@ async function loadAllMockData() {
     import('@generated/conversion-rates/generated/web/conversion-rates/mockData.js'),
     import('@generated/conversion-rate-downloader-log/generated/web/conversion-rate-downloader-log/mockData.js'),
     import('@generated/open-close-period-control/generated/web/open-close-period-control/mockData.js'),
+    import('@generated/asset-group/generated/web/asset-group/mockData.js'),
     import('@generated/general-ledger-configuration/generated/web/general-ledger-configuration/mockData.js'),
     import('@generated/tax-category/generated/web/tax-category/mockData.js'),
     import('@generated/asset-group/generated/web/asset-group/mockData.js'),
@@ -134,6 +142,21 @@ function ServiceWorkerManager() {
   return null;
 }
 
+function SurveyManager() {
+  const { activeSurvey, handleRespond, handleClose, handleDismiss } = useSurveyEngine();
+  if (!activeSurvey) return null;
+  return createPortal(
+    <SurveyModal
+      survey={activeSurvey}
+      open={!!activeSurvey}
+      onRespond={handleRespond}
+      onClose={handleClose}
+      onDismiss={handleDismiss}
+      data-testid="SurveyModal__ecaf3f" />,
+    document.body,
+  );
+}
+
 export default function App() {
   const installedApps = useInstalledApps();
   const appStoreUnlocked = useAppStoreUnlock();
@@ -166,11 +189,13 @@ export default function App() {
       auth={{ loginPath: '/login', unauthenticatedFallback: <UnauthenticatedRedirect data-testid="UnauthenticatedRedirect__ecaf3f" /> }}
       locale={locale}
       setLocale={setLocale}
+      dictionaries={LOCALE_DICTIONARIES}
       notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
       data-testid="AppShellRuntime__ecaf3f">
       <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
       <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
       <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
+      <SurveyManager data-testid="SurveyManager__ecaf3f" />
     </AppShellRuntime>
   );
 }

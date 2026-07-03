@@ -129,6 +129,7 @@ This means:
 - Registration is injected by the plugin in the built HTML; the app entrypoint does not call `navigator.serviceWorker.register(...)` directly
 - New service workers activate immediately once installed
 - `cleanupOutdatedCaches: true` removes old precache entries on activation
+- The default `maximumFileSizeToCacheInBytes` (2 MiB) applies; assets larger than that (e.g. the app-shell bundle with generated runtime and injected locale dictionaries) are skipped from precache rather than raising the limit, which lengthens the SW install window in production and widens the race window for `useServiceWorker`'s `controllerchange` reload to land mid-navigation (see ETP-4425)
 - The app polls `registration.update()` on tab focus and route changes; once the controller changes, it reloads automatically
 
 ### Service Worker Lifecycle

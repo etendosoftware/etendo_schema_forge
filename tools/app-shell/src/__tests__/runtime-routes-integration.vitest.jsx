@@ -18,6 +18,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 import { buildRuntimeRoutes } from '../runtime-routes.jsx';
+import en_US from '../locales/en_US.json';
+import es_ES from '../locales/es_ES.json';
+
+const LOCALE_DICTIONARIES = { en_US, es_ES };
 
 // Only WindowLoader is mocked: it does real `apiBaseUrl`/`windowMap`-driven fetching
 // (see tools/app-shell/src/windows/WindowLoader.jsx) that is out of scope for this test.
@@ -61,6 +65,7 @@ function renderAt(path, {
       routes={routes}
       auth={auth}
       currency={currency}
+      dictionaries={LOCALE_DICTIONARIES}
     />
   );
 }
