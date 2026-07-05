@@ -1,8 +1,8 @@
 {
-  "version": "0.12.0",
+  "version": "0.13.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-07-03T12:41:25.580Z",
-  "checksum": "bfadfbb7c76dbe5e",
+  "updatedAt": "2026-07-05T23:40:30.132Z",
+  "checksum": "a52960116ddf4843",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -71,6 +71,7 @@
         "PPM": "pagoDepositado",
         "PWNC": "pagoDepositado"
       },
+      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false,
@@ -811,129 +812,75 @@
             "enumValues": [
               {
                 "value": "NC",
-                "name": "Cost Not Calculated",
-                "labels": {
-                  "es_ES": "Coste No Calculado"
-                }
+                "name": "Cost Not Calculated"
               },
               {
                 "value": "d",
-                "name": "Disabled For Background",
-                "labels": {
-                  "es_ES": "Deshabilitado Para Background"
-                }
+                "name": "Disabled For Background"
               },
               {
                 "value": "D",
-                "name": "Document Disabled",
-                "labels": {
-                  "es_ES": "Documento Deshabilitado"
-                }
+                "name": "Document Disabled"
               },
               {
                 "value": "L",
-                "name": "Document Locked",
-                "labels": {
-                  "es_ES": "Documento Bloqueado"
-                }
+                "name": "Document Locked"
               },
               {
                 "value": "E",
-                "name": "Error",
-                "labels": {
-                  "es_ES": "Error"
-                }
+                "name": "Error"
               },
               {
                 "value": "C",
-                "name": "Error, No cost",
-                "labels": {
-                  "es_ES": "Error, No hay coste"
-                }
+                "name": "Error, No cost"
               },
               {
                 "value": "i",
-                "name": "Invalid Account",
-                "labels": {
-                  "es_ES": "Cuenta No Válida"
-                }
+                "name": "Invalid Account"
               },
               {
                 "value": "AD",
-                "name": "No Accounting Date",
-                "labels": {
-                  "es_ES": "Sin Fecha Contable"
-                }
+                "name": "No Accounting Date"
               },
               {
                 "value": "DT",
-                "name": "No Document Type",
-                "labels": {
-                  "es_ES": "Sin tipo de Documento"
-                }
+                "name": "No Document Type"
               },
               {
                 "value": "NO",
-                "name": "No Related PO",
-                "labels": {
-                  "es_ES": "Sin PO Relacionada"
-                }
+                "name": "No Related PO"
               },
               {
                 "value": "b",
-                "name": "Not Balanced",
-                "labels": {
-                  "es_ES": "No Balanceado"
-                }
+                "name": "Not Balanced"
               },
               {
                 "value": "c",
-                "name": "Not Convertible (no rate)",
-                "labels": {
-                  "es_ES": "No Convertible (no hay rango)"
-                }
+                "name": "Not Convertible (no rate)"
               },
               {
                 "value": "l",
-                "name": "Pending Refresh",
-                "labels": {
-                  "es_ES": "Pendiente de Actualización"
-                }
+                "name": "Pending Refresh"
               },
               {
                 "value": "p",
-                "name": "Period Closed",
-                "labels": {
-                  "es_ES": "Periodo Cerrado"
-                }
+                "name": "Period Closed"
               },
               {
                 "value": "y",
-                "name": "Post Prepared",
-                "labels": {
-                  "es_ES": "Contabilidad Preparada"
-                }
+                "name": "Post Prepared"
               },
               {
                 "value": "Y",
-                "name": "Posted",
-                "labels": {
-                  "es_ES": "Contabilizado"
-                }
+                "name": "Posted"
               },
               {
                 "value": "T",
-                "name": "Table Disabled",
-                "labels": {
-                  "es_ES": "Tabla Deshabilitada"
-                }
+                "name": "Table Disabled"
               },
               {
                 "value": "N",
-                "name": "Unposted",
-                "labels": {
-                  "es_ES": "No Contabilizado"
-                }
+                "name": "Unposted"
               }
             ],
             "defaultValue": "N"
@@ -1550,59 +1497,35 @@
             "enumValues": [
               {
                 "value": "authorized",
-                "name": "AUTHORIZED",
-                "labels": {
-                  "es_ES": "AUTHORIZED"
-                }
+                "name": "AUTHORIZED"
               },
               {
                 "value": "authorizing",
-                "name": "AUTHORIZING",
-                "labels": {
-                  "es_ES": "AUTHORIZING"
-                }
+                "name": "AUTHORIZING"
               },
               {
                 "value": "executed",
-                "name": "EXECUTED",
-                "labels": {
-                  "es_ES": "EXECUTED"
-                }
+                "name": "EXECUTED"
               },
               {
                 "value": "failed",
-                "name": "FAILED",
-                "labels": {
-                  "es_ES": "FAILED"
-                }
+                "name": "FAILED"
               },
               {
                 "value": "initiated",
-                "name": "INITIATED",
-                "labels": {
-                  "es_ES": "INITIATED"
-                }
+                "name": "INITIATED"
               },
               {
                 "value": "initiated_info_required",
-                "name": "INITIATED INFO REQUIRED",
-                "labels": {
-                  "es_ES": "INITIATED INFO REQUIRED"
-                }
+                "name": "INITIATED INFO REQUIRED"
               },
               {
                 "value": "requested",
-                "name": "REQUESTED",
-                "labels": {
-                  "es_ES": "REQUESTED"
-                }
+                "name": "REQUESTED"
               },
               {
                 "value": "settled",
-                "name": "SETTLED",
-                "labels": {
-                  "es_ES": "SETTLED"
-                }
+                "name": "SETTLED"
               }
             ],
             "defaultValue": "requested"
@@ -1828,6 +1751,7 @@
         "PPM": "pagoDepositado",
         "PWNC": "pagoDepositado"
       },
+      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false
