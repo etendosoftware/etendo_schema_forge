@@ -1,8 +1,8 @@
 {
-  "version": "0.11.0",
+  "version": "0.12.0",
   "generatedAt": "2026-06-11T01:47:08.755Z",
   "updatedAt": "2026-06-29T19:59:03.963Z",
-  "contractChecksum": "0a57da705218c899",
+  "contractChecksum": "7c7f9beae3361311",
   "apiPrediction": {
     "specName": "financial-account-detail",
     "baseUrl": "/sws/neo/financial-account-detail",
