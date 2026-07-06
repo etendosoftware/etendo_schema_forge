@@ -1030,11 +1030,21 @@ function getSaveBtnCls(toolbarButtonSize) {
   return toolbarButtonSize === 'default' ? 'h-10 gap-2' : 'gap-1.5';
 }
 
-function getDraftModeCompleted(draftMode, _headerData, isProcessed) {
+// Normalizes boolean-ish status values (true/'Y' -> 'true', false/'N' -> 'false') so
+// windows whose statusField is a boolean flag (e.g. goods-movements' `processed`) can
+// declare completedStatuses as string literals, matching the precedent in statusBadge.js.
+function normalizeStatusValue(value) {
+  if (value === true || value === 'Y') return 'true';
+  if (value === false || value === 'N') return 'false';
+  return value;
+}
+
+function getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField) {
+  const statusValue = _headerData?.[statusField || 'documentStatus'];
   return Boolean(
       draftMode?.enabled && (
           Array.isArray(draftMode.completedStatuses)
-              ? draftMode.completedStatuses.includes(_headerData?.documentStatus)
+              ? draftMode.completedStatuses.includes(normalizeStatusValue(statusValue))
               : (isProcessed || _headerData?.documentStatus === 'CO')
       )
   );
@@ -1909,7 +1919,7 @@ export function DetailView({
   // values hide the Save/Confirm pair. This lets windows like sales-quotation keep the
   // pair visible during intermediate processed states (UE) while still hiding it in
   // terminal states (CA, ETGO_CI, CL, VO).
-  const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed);
+  const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField);
   const sqBtnSize = getSqBtnSize(toolbarButtonSize);
   const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
   const [showPrint, setShowPrint] = useState(false);
