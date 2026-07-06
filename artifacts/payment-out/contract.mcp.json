@@ -1,8 +1,8 @@
 {
   "version": "0.14.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-06-24T20:46:47.878Z",
-  "contractChecksum": "b0be7c943af86da5",
+  "updatedAt": "2026-07-01T17:35:18.049Z",
+  "contractChecksum": "bfadfbb7c76dbe5e",
   "apiPrediction": {
     "specName": "payment-out",
     "baseUrl": "/sws/neo/payment-out",
@@ -33,50 +33,6 @@
         "delete": true,
         "listUrl": "/sws/neo/payment-out/lines",
         "detailUrl": "/sws/neo/payment-out/lines/{id}",
-        "supportedFilters": []
-      },
-      "executionHistory": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/payment-out/executionHistory",
-        "detailUrl": "/sws/neo/payment-out/executionHistory/{id}",
-        "supportedFilters": []
-      },
-      "exchangeRates": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/payment-out/exchangeRates",
-        "detailUrl": "/sws/neo/payment-out/exchangeRates/{id}",
-        "supportedFilters": []
-      },
-      "usedCreditSource": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/payment-out/usedCreditSource",
-        "detailUrl": "/sws/neo/payment-out/usedCreditSource/{id}",
-        "supportedFilters": []
-      },
-      "accounting": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/payment-out/accounting",
-        "detailUrl": "/sws/neo/payment-out/accounting/{id}",
         "supportedFilters": []
       },
       "bankPayments": {
@@ -285,134 +241,6 @@
         "reference": "UserDimension2",
         "inputMode": "selector",
         "url": "/sws/neo/payment-out/lines/selectors/ndDimension"
-      },
-      {
-        "entity": "executionHistory",
-        "field": "paymentRun",
-        "column": "FIN_Payment_Run_ID",
-        "reference": "Payment_Run",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/executionHistory/selectors/paymentRun"
-      },
-      {
-        "entity": "exchangeRates",
-        "field": "currency",
-        "column": "C_Currency_ID",
-        "reference": "Currency",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/exchangeRates/selectors/currency"
-      },
-      {
-        "entity": "exchangeRates",
-        "field": "toCurrency",
-        "column": "C_Currency_Id_To",
-        "reference": "Currency",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/exchangeRates/selectors/toCurrency"
-      },
-      {
-        "entity": "usedCreditSource",
-        "field": "creditPaymentUsed",
-        "column": "FIN_Payment_Id_Used",
-        "reference": "Payment",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/usedCreditSource/selectors/creditPaymentUsed"
-      },
-      {
-        "entity": "usedCreditSource",
-        "field": "currency",
-        "column": "C_Currency_ID",
-        "reference": "Currency",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/usedCreditSource/selectors/currency"
-      },
-      {
-        "entity": "accounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/accountingSchema"
-      },
-      {
-        "entity": "accounting",
-        "field": "currency",
-        "column": "C_Currency_ID",
-        "reference": "Currency",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/currency"
-      },
-      {
-        "entity": "accounting",
-        "field": "period",
-        "column": "C_Period_ID",
-        "reference": "Period",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/period"
-      },
-      {
-        "entity": "accounting",
-        "field": "account",
-        "column": "Account_ID",
-        "reference": "ElementValue",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/accounting/selectors/account"
-      },
-      {
-        "entity": "accounting",
-        "field": "businessPartner",
-        "column": "C_BPartner_ID",
-        "reference": "BPartner",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/accounting/selectors/businessPartner"
-      },
-      {
-        "entity": "accounting",
-        "field": "product",
-        "column": "M_Product_ID",
-        "reference": "Product",
-        "inputMode": "search",
-        "url": "/sws/neo/payment-out/accounting/selectors/product"
-      },
-      {
-        "entity": "accounting",
-        "field": "project",
-        "column": "C_Project_ID",
-        "reference": "Project",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/project"
-      },
-      {
-        "entity": "accounting",
-        "field": "costcenter",
-        "column": "C_Costcenter_ID",
-        "reference": "Costcenter",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/costcenter"
-      },
-      {
-        "entity": "accounting",
-        "field": "asset",
-        "column": "A_Asset_ID",
-        "reference": "Asset",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/asset"
-      },
-      {
-        "entity": "accounting",
-        "field": "stDimension",
-        "column": "User1_ID",
-        "reference": "User1",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/stDimension"
-      },
-      {
-        "entity": "accounting",
-        "field": "ndDimension",
-        "column": "User2_ID",
-        "reference": "User2",
-        "inputMode": "selector",
-        "url": "/sws/neo/payment-out/accounting/selectors/ndDimension"
       },
       {
         "entity": "bankPayments",
@@ -877,6 +705,16 @@
           "ndDimension": {
             "readOnlyLogic": "@Posted@='Y'"
           },
+          "creationDate": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "SYSDATE"
+          },
+          "updated": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "SYSDATE"
+          },
           "psd2GenerateBankPayment": {},
           "etblkpAccountingstatus": {
             "readOnly": true,
@@ -938,126 +776,8 @@
           "salesRegion": {},
           "costCenter": {},
           "stDimension": {},
-          "ndDimension": {}
-        }
-      },
-      "executionHistory": {
-        "fields": {
-          "executionDate": {
-            "readOnly": true
-          },
-          "paymentRun": {
-            "readOnly": true
-          },
-          "paymentRunStatus": {
-            "readOnly": true
-          },
-          "paymentRunMessage": {
-            "readOnly": true
-          },
-          "sourceOfTheExecution": {
-            "readOnly": true
-          },
-          "paymentExecutionResult": {
-            "readOnly": true
-          },
-          "paymentExecutionMessage": {
-            "readOnly": true
-          }
-        }
-      },
-      "exchangeRates": {
-        "fields": {
-          "active": {
-            "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-            "defaultValue": "Y"
-          },
-          "currency": {
-            "readOnly": true,
-            "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
-          },
-          "toCurrency": {
-            "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
-          },
-          "rate": {
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'"
-          },
-          "foreignAmount": {
-            "required": true,
-            "readOnlyLogic": "@HASREVERSEDINVOICESO@='Y' | @HASREVERSEDINVOICEPO@='Y' | @Posted@='Y'",
-            "defaultValue": "0"
-          }
-        }
-      },
-      "usedCreditSource": {
-        "fields": {
-          "creditPaymentUsed": {
-            "required": true
-          },
-          "amount": {
-            "required": true,
-            "defaultValue": "0"
-          },
-          "currency": {
-            "required": true
-          }
-        }
-      },
-      "accounting": {
-        "fields": {
-          "accountingSchema": {
-            "readOnly": true,
-            "required": true
-          },
-          "currency": {
-            "readOnly": true,
-            "required": true
-          },
-          "period": {
-            "readOnly": true,
-            "required": true
-          },
-          "accountingDate": {
-            "readOnly": true,
-            "required": true
-          },
-          "account": {
-            "readOnly": true,
-            "required": true
-          },
-          "debit": {
-            "readOnly": true,
-            "required": true
-          },
-          "credit": {
-            "readOnly": true,
-            "required": true
-          },
-          "description": {
-            "readOnly": true
-          },
-          "businessPartner": {
-            "readOnly": true
-          },
-          "product": {
-            "readOnly": true
-          },
-          "project": {
-            "readOnly": true
-          },
-          "costcenter": {
-            "readOnly": true
-          },
-          "asset": {
-            "readOnly": true
-          },
-          "stDimension": {
-            "readOnly": true
-          },
-          "ndDimension": {
+          "ndDimension": {},
+          "invoiceDocumentNo": {
             "readOnly": true
           }
         }
@@ -1110,12 +830,6 @@
       ],
       "lineFields": [
         "amount",
-        "active",
-        "toCurrency",
-        "foreignAmount",
-        "creditPaymentUsed",
-        "amount",
-        "currency",
         "status",
         "amount",
         "currency",
@@ -1198,12 +912,6 @@
         "description": "Add a line after the header exists and parent context is available.",
         "fields": [
           "amount",
-          "active",
-          "toCurrency",
-          "foreignAmount",
-          "creditPaymentUsed",
-          "amount",
-          "currency",
           "status",
           "amount",
           "currency",
@@ -1223,5 +931,5 @@
       "etprReactivatePayment"
     ]
   },
-  "checksum": "6fb65ab26f846b7a"
+  "checksum": "0a457d9d6ec045bd"
 }

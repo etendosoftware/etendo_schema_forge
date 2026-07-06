@@ -285,3 +285,16 @@ Schema Forge extracts from AD, that column surfaces in this window's contract as
 frontend (there is no `AD_Field` for it on this window). No UI or behavior change;
 this note only records why the contract was regenerated when the PSD2 dependency
 was added. Full rationale: [`docs/plans/psd2-dependency-cross-domain.md`](../plans/psd2-dependency-cross-domain.md).
+
+## Fiscal-status staleness fix in invoice preview — ETP-4391
+
+`useFiscalStatus.js` (`tools/app-shell/src/windows/custom/shared/useFiscalStatus.js`) is
+shared by the invoice preview modal's General tab across both `sales-invoice` and
+`purchase-invoice`. The hook previously never re-fetched the SII/TBAI/Verifactu status
+pills after a successful **Enviar a SIF** send performed inside the same open preview
+session (its fetch effect had no dependency that changed as a result of the send), so the
+SII status pill (the only one of the three that applies to purchase invoices — see
+`purchase-invoice.md` "Reactive behavior and dependencies" above) could keep showing a
+stale pre-send value. The fix and full root-cause writeup live in
+[`sales-invoice.md` — "TBAI status staleness fix in invoice preview — ETP-4391"](sales-invoice.md#tbai-status-staleness-fix-in-invoice-preview--etp-4391);
+only the spec name and which of the three panels apply differ between the two windows.

@@ -168,7 +168,6 @@ function openPisPopup(url) {
 function pisStatusKey(status) {
   return PIS_STATUS_KEYS[status] || 'cpPisStatusFailed';
 }
-
 /** True when `account` supports `methodId` (or the account's methods are unknown/legacy). */
 function accountSupportsMethod(account, methodId) {
   return !methodId || !account.paymentMethodIds || account.paymentMethodIds.includes(methodId);
@@ -788,8 +787,7 @@ export default function NewPaymentEntryModal({
     }, 3000);
     return () => { cancelled = true; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pisPolling]);
-
+    }, [pisPolling]);
   // ── save / confirm ────────────────────────────────────────────────────────
   const submit = useCallback(async (process) => {
     if (!date) { setDateInvalid(true); setError(ui('paymentDateRequired')); return; }
@@ -1049,7 +1047,6 @@ export default function NewPaymentEntryModal({
               isReceipt={isReceipt}
               data-testid="ExcessBand__7727b3" />
           </div>
-
           {error && <div style={{ padding: '0 20px', font: '500 12px/16px Inter', color: RED_FG }}>{error}</div>}
         </div>
 
