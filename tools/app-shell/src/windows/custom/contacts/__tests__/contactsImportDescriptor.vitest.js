@@ -21,6 +21,7 @@ describe('contacts import descriptor', () => {
     const [bp, location, contact] = ops;
     assert.equal(bp.entity, 'businessPartner');
     assert.equal(bp.body.name, 'Acme Corp');
+    assert.equal(bp.body.oBTIKTaxIDKey, '1');
     assert.equal(location.entity, 'locationAddress');
     assert.equal(location.parentRef, bp.id);
     assert.equal(location.body.country, 'C-AR');
@@ -33,6 +34,18 @@ describe('contacts import descriptor', () => {
     const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com' };
     const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
     assert.equal(ops.find((op) => op.entity === 'locationAddress'), undefined);
+  });
+
+  it('defaults oBTIKTaxIDKey to a valid enum value (NIF) when the row has no tax-id-key column', async () => {
+    const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.equal(ops[0].body.oBTIKTaxIDKey, '1');
+  });
+
+  it('lets a row-supplied oBTIKTaxIDKey override the default', async () => {
+    const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com', oBTIKTaxIDKey: '3' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.equal(ops[0].body.oBTIKTaxIDKey, '3');
   });
 
   it('surfaces an unresolved country as a thrown, catchable error the caller can turn into a row-level failure', async () => {

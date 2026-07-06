@@ -11,8 +11,20 @@ function pick(row, targets) {
   return body;
 }
 
+// EM_OBTIK_Tax_ID_Key (AD_Column) is mandatory with a configured DB default of '1', but
+// the /batch create pipeline's own default-injection fails to apply it (server error
+// references an unserialized `CachedSet` instead of the field's real value list — a
+// pre-existing NEO bug, reproduced independently of this import feature: any
+// businessPartner create through /batch that omits this field hits it). '1' ("NIF") is
+// confirmed a valid value in the field's own AD_Ref_List, so setting it explicitly here
+// sidesteps the broken server-side default path entirely rather than working around a
+// symptom. Not exposed as a decisions.import field for v1 — every imported contact gets
+// this identical default until a real per-row tax-id-type CSV column is needed.
+const DEFAULT_TAX_ID_KEY = '1';
+
 registerImportDescriptor('contacts', async (row, config) => {
-  const bpOp = { id: 'bp', spec: config.spec, entity: 'businessPartner', body: pick(row, BP_TARGETS) };
+  const bpBody = { oBTIKTaxIDKey: DEFAULT_TAX_ID_KEY, ...pick(row, BP_TARGETS) };
+  const bpOp = { id: 'bp', spec: config.spec, entity: 'businessPartner', body: bpBody };
   const ops = [bpOp];
 
   if (HAS_ADDRESS(row)) {
