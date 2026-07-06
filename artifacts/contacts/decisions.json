@@ -104,6 +104,32 @@
         "customAddModal": "LocationEditorModal",
         "requireSavedRecord": true
       }
+    },
+    "import": {
+      "enabled": true,
+      "spec": "contacts",
+      "entity": "businessPartner",
+      "formats": ["csv", "txt"],
+      "limit": { "maxRows": 5000, "concurrency": 4 },
+      "dedupe": { "scope": "file", "key": ["etgoEmail"] },
+      "descriptor": "contacts",
+      "fields": [
+        { "target": "name", "aliases": ["nombre comercial", "razon social"] },
+        { "target": "etgoFirstname", "aliases": ["nombre"] },
+        { "target": "etgoLastname", "aliases": ["apellido", "apellidos"] },
+        { "target": "etgoEmail", "aliases": ["email", "correo", "e-mail"] },
+        { "target": "etgoPhone", "aliases": ["telefono", "teléfono"] },
+        { "target": "email", "aliases": ["email de contacto"] },
+        { "target": "firstName", "aliases": ["nombre de contacto"] },
+        { "target": "lastName", "aliases": ["apellido de contacto"] },
+        { "target": "phone", "aliases": ["telefono de contacto"] },
+        { "target": "position", "aliases": ["cargo"] },
+        { "target": "address", "aliases": ["direccion", "dirección"], "label": "Address" },
+        { "target": "city", "aliases": ["ciudad"], "label": "City" },
+        { "target": "postal", "aliases": ["codigo postal", "código postal", "cp"], "label": "Postal Code" },
+        { "target": "country", "aliases": ["pais", "país"], "label": "Country" },
+        { "target": "region", "aliases": ["provincia", "region", "región"], "label": "Region" }
+      ]
     }
   },
   "entities": {

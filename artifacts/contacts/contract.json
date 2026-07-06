@@ -1,8 +1,8 @@
 {
   "version": "0.39.0",
   "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-07-03T13:04:01.522Z",
-  "checksum": "e92b7dbeb1870554",
+  "updatedAt": "2026-07-06T16:18:37.381Z",
+  "checksum": "fe84bb549d90a302",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -110,7 +110,176 @@
         }
       ],
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "import": {
+        "enabled": true,
+        "spec": "contacts",
+        "entity": "businessPartner",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "etgoEmail"
+          ]
+        },
+        "descriptor": "contacts",
+        "fields": [
+          {
+            "target": "name",
+            "aliases": [
+              "nombre comercial",
+              "razon social"
+            ],
+            "label": "Commercial Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoFirstname",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "First Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoLastname",
+            "aliases": [
+              "apellido",
+              "apellidos"
+            ],
+            "label": "Last Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoEmail",
+            "aliases": [
+              "email",
+              "correo",
+              "e-mail"
+            ],
+            "label": "Email",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoPhone",
+            "aliases": [
+              "telefono",
+              "teléfono"
+            ],
+            "label": "Phone",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "email",
+            "aliases": [
+              "email de contacto"
+            ],
+            "label": "Email",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "firstName",
+            "aliases": [
+              "nombre de contacto"
+            ],
+            "label": "First Name",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "lastName",
+            "aliases": [
+              "apellido de contacto"
+            ],
+            "label": "Last Name",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "phone",
+            "aliases": [
+              "telefono de contacto"
+            ],
+            "label": "Phone",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "position",
+            "aliases": [
+              "cargo"
+            ],
+            "label": "Position",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "address",
+            "aliases": [
+              "direccion",
+              "dirección"
+            ],
+            "label": "Address"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "city",
+            "aliases": [
+              "ciudad"
+            ],
+            "label": "City"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "postal",
+            "aliases": [
+              "codigo postal",
+              "código postal",
+              "cp"
+            ],
+            "label": "Postal Code"
+          },
+          {
+            "target": "country",
+            "aliases": [
+              "pais",
+              "país"
+            ],
+            "label": "Country of Origin",
+            "required": false,
+            "type": "foreignKey",
+            "reference": "Country"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "region",
+            "aliases": [
+              "provincia",
+              "region",
+              "región"
+            ],
+            "label": "Region"
+          }
+        ]
+      }
     },
     "entities": {
       "businessPartner": {
@@ -4389,7 +4558,176 @@
           "filter": "criteria=%5B%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D"
         }
       ],
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "import": {
+        "enabled": true,
+        "spec": "contacts",
+        "entity": "businessPartner",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "etgoEmail"
+          ]
+        },
+        "descriptor": "contacts",
+        "fields": [
+          {
+            "target": "name",
+            "aliases": [
+              "nombre comercial",
+              "razon social"
+            ],
+            "label": "Commercial Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoFirstname",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "First Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoLastname",
+            "aliases": [
+              "apellido",
+              "apellidos"
+            ],
+            "label": "Last Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "etgoEmail",
+            "aliases": [
+              "email",
+              "correo",
+              "e-mail"
+            ],
+            "label": "Email",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "etgoPhone",
+            "aliases": [
+              "telefono",
+              "teléfono"
+            ],
+            "label": "Phone",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "email",
+            "aliases": [
+              "email de contacto"
+            ],
+            "label": "Email",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "firstName",
+            "aliases": [
+              "nombre de contacto"
+            ],
+            "label": "First Name",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "lastName",
+            "aliases": [
+              "apellido de contacto"
+            ],
+            "label": "Last Name",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "phone",
+            "aliases": [
+              "telefono de contacto"
+            ],
+            "label": "Phone",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "target": "position",
+            "aliases": [
+              "cargo"
+            ],
+            "label": "Position",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "address",
+            "aliases": [
+              "direccion",
+              "dirección"
+            ],
+            "label": "Address"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "city",
+            "aliases": [
+              "ciudad"
+            ],
+            "label": "City"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "postal",
+            "aliases": [
+              "codigo postal",
+              "código postal",
+              "cp"
+            ],
+            "label": "Postal Code"
+          },
+          {
+            "target": "country",
+            "aliases": [
+              "pais",
+              "país"
+            ],
+            "label": "Country of Origin",
+            "required": false,
+            "type": "foreignKey",
+            "reference": "Country"
+          },
+          {
+            "required": false,
+            "type": "string",
+            "target": "region",
+            "aliases": [
+              "provincia",
+              "region",
+              "región"
+            ],
+            "label": "Region"
+          }
+        ]
+      }
     },
     "entities": {
       "businessPartner": {

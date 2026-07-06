@@ -40,7 +40,7 @@ export default defineConfig({
         inline: [
           '@etendosoftware/app-shell-core',
           '@etendosoftware/etendo-go-core',
-          ...(LOCAL_CORE ? ['react', 'react-dom'] : []),
+          ...(LOCAL_CORE ? [/react/, /react-dom/] : []),
         ],
       },
     },

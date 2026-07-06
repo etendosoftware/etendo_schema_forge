@@ -1,8 +1,8 @@
 {
   "version": "0.15.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-06-29T12:09:16.248Z",
-  "checksum": "abd729593e86f1be",
+  "updatedAt": "2026-07-06T16:18:37.566Z",
+  "checksum": "6e2128d287c0e54c",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -60,6 +60,94 @@
         }
       ],
       "layoutType": "gallery",
+      "import": {
+        "enabled": true,
+        "spec": "product",
+        "entity": "product",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "searchKey"
+          ]
+        },
+        "fields": [
+          {
+            "target": "searchKey",
+            "aliases": [
+              "codigo",
+              "código",
+              "sku"
+            ],
+            "label": "Search Key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "name",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "description",
+            "aliases": [
+              "descripcion",
+              "descripción"
+            ],
+            "label": "Description",
+            "required": false,
+            "type": "textarea"
+          },
+          {
+            "target": "uOM",
+            "aliases": [
+              "unidad de medida",
+              "uom"
+            ],
+            "matchEntity": "UOM",
+            "label": "UOM",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "UOM"
+          },
+          {
+            "target": "productCategory",
+            "aliases": [
+              "categoria",
+              "categoría"
+            ],
+            "matchEntity": "ProductCategory",
+            "label": "Product Category",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "ProductCategory"
+          },
+          {
+            "target": "taxCategory",
+            "aliases": [
+              "categoria impositiva",
+              "categoría impositiva",
+              "impuesto"
+            ],
+            "matchEntity": "TaxCategory",
+            "label": "Tax Category",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "TaxCategory"
+          }
+        ]
+      },
       "autoSaveOnBlur": true
     },
     "entities": {
@@ -1858,6 +1946,94 @@
         }
       ],
       "layoutType": "gallery",
+      "import": {
+        "enabled": true,
+        "spec": "product",
+        "entity": "product",
+        "formats": [
+          "csv",
+          "txt"
+        ],
+        "limit": {
+          "maxRows": 5000,
+          "concurrency": 4
+        },
+        "dedupe": {
+          "scope": "file",
+          "key": [
+            "searchKey"
+          ]
+        },
+        "fields": [
+          {
+            "target": "searchKey",
+            "aliases": [
+              "codigo",
+              "código",
+              "sku"
+            ],
+            "label": "Search Key",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "name",
+            "aliases": [
+              "nombre"
+            ],
+            "label": "Name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "target": "description",
+            "aliases": [
+              "descripcion",
+              "descripción"
+            ],
+            "label": "Description",
+            "required": false,
+            "type": "textarea"
+          },
+          {
+            "target": "uOM",
+            "aliases": [
+              "unidad de medida",
+              "uom"
+            ],
+            "matchEntity": "UOM",
+            "label": "UOM",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "UOM"
+          },
+          {
+            "target": "productCategory",
+            "aliases": [
+              "categoria",
+              "categoría"
+            ],
+            "matchEntity": "ProductCategory",
+            "label": "Product Category",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "ProductCategory"
+          },
+          {
+            "target": "taxCategory",
+            "aliases": [
+              "categoria impositiva",
+              "categoría impositiva",
+              "impuesto"
+            ],
+            "matchEntity": "TaxCategory",
+            "label": "Tax Category",
+            "required": true,
+            "type": "foreignKey",
+            "reference": "TaxCategory"
+          }
+        ]
+      },
       "autoSaveOnBlur": true
     },
     "entities": {
