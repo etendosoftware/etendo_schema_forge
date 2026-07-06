@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { DateField } from '@/components/ui/date-field';
+import { Skeleton } from '@/components/ui/skeleton';
 import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
 import { MoneyAmount } from '@/components/ui/money-amount';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -41,7 +43,11 @@ const PIS_TEMPLATE_FIELD = { key: 'pisTemplate', id: 'pisTemplate', required: tr
 const PIS_AMBER_TEXT = '#8A6100';
 const PIS_ALERT_BG = '#FFF9EB';
 const PIS_ELIGIBLE_CURRENCIES = new Set(['EUR', 'GBP']);
-const PIS_NON_TERMINAL_STATUSES = ['requested', 'authorizing', 'authorized', 'processing'];
+// 'initiated' is a real Salt Edge PIS status (seen for "connect"-flow payments) that isn't in the
+// PSD2_PIS_PAYMENT ref-list's documented set (requested/authorizing/authorized/processing/executed/
+// settled/failed) but does get returned/persisted — without it here, a payment sitting in that
+// state gets misread as a terminal failure and the modal wrongly shows "transfer failed".
+const PIS_NON_TERMINAL_STATUSES = ['requested', 'initiated', 'authorizing', 'authorized', 'processing'];
 const PIS_STATUS_KEYS = {
   requested: 'cpPisStatusRequested',
   authorizing: 'cpPisStatusAuthorizing',
@@ -608,10 +614,20 @@ export default function NewPaymentEntryModal({
   const [pisAccountNumber, setPisAccountNumber] = useState('');
   const [pisSortCode, setPisSortCode] = useState('');
   const [pisPolling, setPisPolling] = useState(null); // { pisPaymentId, status } | null
+  const [pisWindowClosed, setPisWindowClosed] = useState(false);
   const pisAccountsFetchedRef = useRef(false);
   // registerPayment's response.data captured at confirm time, replayed into
   // onSaved once polling reaches the "executed" terminal status.
   const pisResultRef = useRef(null);
+  // Handle to the Salt Edge popup window, so we can detect if the user closed it
+  // before authorizing (and reopen it on demand).
+  const pisPopupRef = useRef(null);
+  // True once the popup has redirected back to our own PIS callback route (meaning the bank
+  // authorization step completed) — as opposed to the user closing the bank tab/window early.
+  // Without this, the popup's own auto-close (see PisCallbackPage.jsx) would be indistinguishable
+  // from an early manual close, and we'd wrongly tell the user "you closed the window" right after
+  // they successfully authorized.
+  const pisReturnedRef = useRef(false);
 
   const balance = usePaymentBalance({ total, dir, sources });
 
@@ -708,12 +724,33 @@ export default function NewPaymentEntryModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pisEligible]);
 
+  // Listen for the "pis-completed" message the PIS callback popup (PisCallbackPage.jsx) posts to
+  // its opener right before closing itself. This marks the bank authorization as actually reached,
+  // so the closed-popup heuristic below doesn't mistake it for an early manual close.
+  useEffect(() => {
+    function handleMessage(event) {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'pis-completed') {
+        pisReturnedRef.current = true;
+        setPisWindowClosed(false);
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   // Poll pisPaymentStatus every ~3s while a PIS transfer is awaiting SCA
   // authorization. Re-runs on every status change (new object identity),
   // scheduling the next poll or reacting to a terminal status inline.
   useEffect(() => {
     if (!pisPolling) return undefined;
     if (pisPolling.status === 'executed') {
+      // Force-close the Salt Edge popup from the opener side rather than waiting on its own
+      // return page to close itself — that page is a shared Classic-styled static resource
+      // and self-close can be delayed/blocked, leaving the user staring at it needlessly.
+      pisPopupRef.current?.close();
+      pisPopupRef.current = null;
+      toast.success(ui('paymentRegistered'));
       onSaved?.(pisResultRef.current || {}, 'deposited');
       setPisPolling(null);
       return undefined;
@@ -721,12 +758,23 @@ export default function NewPaymentEntryModal({
     if (!PIS_NON_TERMINAL_STATUSES.includes(pisPolling.status)) {
       // Terminal, non-executed status (or an unrecognized one) — stop polling,
       // surface an inline error, and let the user retry from the editable form.
+      pisPopupRef.current?.close();
+      pisPopupRef.current = null;
       setError(ui('cpPisFailedError'));
       setPisPolling(null);
       return undefined;
     }
     let cancelled = false;
     const timer = setTimeout(async () => {
+      // Surface whether the user closed the Salt Edge window before authorizing. We keep polling
+      // regardless (the bank webhook can still confirm an authorization completed just before the
+      // window was closed), but the UI offers to reopen it. window.closed is only reliable for
+      // popups we opened ourselves, which is the case here. Skip this when the popup already
+      // reached our own callback route (pisReturnedRef) — its auto-close on success would
+      // otherwise look identical to the user bailing out early.
+      if (!cancelled) {
+        setPisWindowClosed(!!pisPopupRef.current && pisPopupRef.current.closed && !pisReturnedRef.current);
+      }
       try {
         const res = await apiFetch(`/${specName}/header/${invoiceId}/action/pisPaymentStatus`, {
           method: 'POST', body: JSON.stringify({ pisPaymentId: pisPolling.pisPaymentId }),
@@ -786,7 +834,9 @@ export default function NewPaymentEntryModal({
       const data = json?.response?.data || {};
       if (body.pis && data.pisPaymentUrl && data.pisPaymentId) {
         pisResultRef.current = data;
-        openPisPopup(data.pisPaymentUrl);
+        pisPopupRef.current = openPisPopup(data.pisPaymentUrl);
+        pisReturnedRef.current = false;
+        setPisWindowClosed(false);
         setPisPolling({ pisPaymentId: data.pisPaymentId, status: 'requested' });
         return;
       }
@@ -798,6 +848,32 @@ export default function NewPaymentEntryModal({
     }
   }, [apiFetch, specName, invoiceId, scheduleId, accountId, methodId, date, balance, ui, onSaved,
     pisEligible, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode]);
+
+  // Cancel a pending PIS wait: the payment was already processed to PPM (so the invoice shows as
+  // paid), but the transfer was never authorized — so we ask the backend to reactivate + delete it
+  // (com.etendoerp.payment.removal), restoring the invoice, then refresh via onSaved. Best-effort:
+  // if the backend refuses (transfer already in progress), we still leave the wait.
+  const cancelPisWait = useCallback(async () => {
+    const pid = pisPolling?.pisPaymentId;
+    pisPopupRef.current?.close();
+    setPisWindowClosed(false);
+    setPisPolling(null);
+    if (pid) {
+      try {
+        await apiFetch(`/${specName}/header/${invoiceId}/action/cancelPisPayment`, {
+          method: 'POST', body: JSON.stringify({ pisPaymentId: pid }),
+        });
+      } catch { /* best-effort — the invoice refresh below still reflects the real state */ }
+    }
+    onSaved?.({ cancelled: true }, 'reverted');
+  }, [apiFetch, specName, invoiceId, pisPolling, onSaved]);
+
+  // Closing the modal while a PIS transfer is still pending must also undo the PPM payment,
+  // otherwise the invoice is left looking paid for a transfer that never happened.
+  const requestClose = useCallback(() => {
+    if (pisPolling) { cancelPisWait(); return; }
+    onClose?.();
+  }, [pisPolling, cancelPisWait, onClose]);
 
   const title = isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
   const deltaLabel = deltaLabelFor(balance, ui);
@@ -823,7 +899,7 @@ export default function NewPaymentEntryModal({
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(16,20,28,.46)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         style={{ width: 940, maxWidth: '100%', maxHeight: '100%', background: '#fff', borderRadius: 8, boxShadow: '0 0 0 1px rgba(18,18,23,.1), 0 24px 48px rgba(18,18,23,.03), 0 10px 18px rgba(18,18,23,.03), 0 5px 8px rgba(18,18,23,.04), 0 2px 4px rgba(18,18,23,.04)', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
@@ -835,7 +911,7 @@ export default function NewPaymentEntryModal({
           <h2 style={{ margin: 0, font: '600 20px/28px Inter', color: INK }}>{title}</h2>
         </div>
         <button
-          type="button" onClick={onClose} aria-label={ui('close')} data-testid="cp-cancel"
+          type="button" onClick={requestClose} aria-label={ui('close')} data-testid="cp-cancel"
           style={{ position: 'absolute', top: 6, right: 8, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 360, color: FG4, cursor: 'pointer', background: 'none', border: 'none', outline: 'none', fontSize: 20, lineHeight: 1, zIndex: 1 }}
         >×</button>
 
@@ -881,26 +957,34 @@ export default function NewPaymentEntryModal({
                 data-testid="DateField__7727b3" />
             </Field>
             <Field label={ui('cpPaymentMethod')} required data-testid="Field__7727b3">
-              <CreatableSearchSelect
-                key={loading ? 'method-loading' : 'method-loaded'}
-                field={METHOD_FIELD}
-                value={methodId}
-                displayValue={methods.find(m => m.id === methodId)?.name || ''}
-                onChange={onMethodChange}
-                resolvedLabel={ui('cpPaymentMethod')}
-                staticOptions={methods}
-                data-testid="cp-method-select" />
+              {loading ? (
+                <Skeleton className="h-10 w-full rounded-lg" data-testid="cp-method-select-skeleton" />
+              ) : (
+                <CreatableSearchSelect
+                  key="method-loaded"
+                  field={METHOD_FIELD}
+                  value={methodId}
+                  displayValue={methods.find(m => m.id === methodId)?.name || ''}
+                  onChange={onMethodChange}
+                  resolvedLabel={ui('cpPaymentMethod')}
+                  staticOptions={methods}
+                  data-testid="cp-method-select" />
+              )}
             </Field>
             <Field label={ui('account')} required data-testid="Field__7727b3">
-              <CreatableSearchSelect
-                key={`account-${methodId}`}
-                field={ACCOUNT_FIELD}
-                value={accountId}
-                displayValue={filteredAccounts.find(a => a.id === accountId)?.name || ''}
-                onChange={(id) => setAccountId(id)}
-                resolvedLabel={ui('account')}
-                staticOptions={filteredAccounts}
-                data-testid="cp-account-select" />
+              {loading ? (
+                <Skeleton className="h-10 w-full rounded-lg" data-testid="cp-account-select-skeleton" />
+              ) : (
+                <CreatableSearchSelect
+                  key={`account-${methodId}`}
+                  field={ACCOUNT_FIELD}
+                  value={accountId}
+                  displayValue={filteredAccounts.find(a => a.id === accountId)?.name || ''}
+                  onChange={(id) => setAccountId(id)}
+                  resolvedLabel={ui('account')}
+                  staticOptions={filteredAccounts}
+                  data-testid="cp-account-select" />
+              )}
             </Field>
           </div>
 
@@ -971,15 +1055,30 @@ export default function NewPaymentEntryModal({
 
         {/* footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: '#fff', flexShrink: 0 }}>
-          <button type="button" onClick={onClose} disabled={saving} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'transparent', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}>{ui('cancel')}</button>
+          <button type="button" onClick={requestClose} disabled={saving} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'transparent', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}>{ui('cancel')}</button>
           {pisPolling ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="cp-pis-waiting">
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, font: '500 14px/24px Inter', color: INK }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: AMBER, flexShrink: 0 }} />
-                {ui(pisStatusKey(pisPolling.status))}
+                {pisWindowClosed ? ui('cpPisWindowClosed') : ui(pisStatusKey(pisPolling.status))}
               </span>
+              {pisWindowClosed && (
+                <button
+                  type="button" data-testid="cp-pis-reopen"
+                  onClick={() => {
+                    pisPopupRef.current = openPisPopup(pisResultRef.current?.pisPaymentUrl);
+                    pisReturnedRef.current = false;
+                    setPisWindowClosed(false);
+                  }}
+                  className="bg-[#121217] text-white"
+                  style={{ height: 32, padding: '0 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', cursor: 'pointer' }}
+                >
+                  {ui('cpPisReopen')}
+                </button>
+              )}
               <button
-                type="button" data-testid="cp-pis-cancel-wait" onClick={() => setPisPolling(null)}
+                type="button" data-testid="cp-pis-cancel-wait"
+                onClick={cancelPisWait}
                 style={{ height: 32, padding: '0 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}
               >
                 {ui('cpPisCancelWait')}

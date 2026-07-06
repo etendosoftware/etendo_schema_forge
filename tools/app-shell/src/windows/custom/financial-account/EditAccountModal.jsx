@@ -15,6 +15,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
+import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { useAccountMutations } from '@/hooks/useAccountMutations.js';
 import { usePsd2Actions, launchSaltEdgePopup } from '@/hooks/usePsd2Actions';
@@ -117,8 +118,8 @@ async function runReconnect({ account, reconnect, refresh, onSaved, ui, setBusy 
 }
 
 async function runDisconnect({ account, disconnect, onSaved, onClose, ui, setBusy }) {
-  // eslint-disable-next-line no-alert
-  if (!window.confirm(ui('financeAccountsPsd2DisconnectConfirm'))) return;
+  // Confirmation is handled by a styled ConfirmDialog at the EditAccountModal render level,
+  // so this just performs the disconnect (no native window.confirm).
   setBusy(true);
   try {
     await disconnect(account.id);
@@ -345,6 +346,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   const fields = useAccountFields(open, account, psd2Connected);
   const psd2 = usePsd2Connection(open, account, psd2Connected, onSaved, onClose);
   const recon = useReconciliationSettings(open, account);
+  const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -389,6 +391,7 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
   };
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(value) => { if (!value) onClose?.(); }}
@@ -437,12 +440,24 @@ export function EditAccountModal({ open, onClose, onSaved, account, onArchive, o
           busy={busy}
           canSave={canSave}
           onArchive={onArchive}
-          onDisconnect={psd2.handleDisconnect}
+          onDisconnect={() => setConfirmDisconnectOpen(true)}
           onCancel={onClose}
           onSave={handleSave}
           data-testid="EditFooter__73027d" />
       </DialogContent>
     </Dialog>
+    <ConfirmDialog
+      open={confirmDisconnectOpen}
+      onOpenChange={(o) => { if (!o) setConfirmDisconnectOpen(false); }}
+      title={ui('financeAccountsMenuDisconnect')}
+      description={ui('financeAccountsPsd2DisconnectConfirm')}
+      confirmLabel={ui('financeAccountsPsd2DisconnectAction')}
+      cancelLabel={ui('cancel')}
+      variant="destructive"
+      loading={psd2.busy}
+      onConfirm={async () => { setConfirmDisconnectOpen(false); await psd2.handleDisconnect(); }}
+      data-testid="DisconnectPsd2ConfirmDialog__73027d" />
+    </>
   );
 }
 

@@ -30,7 +30,7 @@ vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: () => (...args) => mockApiFetch(...args),
 }));
 
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import NewPaymentEntryModal from '../NewPaymentEntryModal.jsx';
 
@@ -1368,6 +1368,103 @@ describe('NewPaymentEntryModal', () => {
         fireEvent.click(screen.getByTestId('cp-pis-cancel-wait'));
         expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
         expect(screen.getByTestId('cp-confirm')).toBeInTheDocument();
+      });
+
+      it('undoes the PPM payment on cancel — posts cancelPisPayment and refreshes via onSaved', async () => {
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['authorizing'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('cp-pis-cancel-wait'));
+
+        // Reactivate + delete is delegated to the backend, keyed by the local PIS payment id.
+        await waitFor(() => {
+          const call = mockApiFetch.mock.calls.find(c => c[0].includes('cancelPisPayment'));
+          expect(call).toBeTruthy();
+          expect(JSON.parse(call[1].body).pisPaymentId).toBe('pis-1');
+        });
+        // The invoice/history is refreshed so the undone payment no longer shows as paid.
+        await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
+      });
+
+      // Regression coverage for the pisReturnedRef fix: the popup now auto-closes on its own
+      // once PisCallbackPage.jsx posts back `{ type: 'pis-completed' }`, so a closed popup must
+      // no longer be treated as "the user bailed out early" once that message was received.
+      describe('popup auto-close after pis-completed postMessage', () => {
+        it('does not show the "window closed" warning when the popup closes after a pis-completed message', async () => {
+          const fakePopup = { closed: false, close: vi.fn() };
+          openSpy.mockImplementation(() => fakePopup);
+          mockApiFetch = buildPisApiFetch({
+            register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+            pisStatusSequence: ['authorizing', 'authorizing', 'authorizing'],
+          });
+          renderModal({ dir: 'out', specName: 'purchase-invoice' });
+          await screen.findByTestId('cp-pis-section');
+
+          const confirm = screen.getByTestId('cp-confirm');
+          await waitFor(() => expect(confirm).not.toBeDisabled());
+          fireEvent.click(confirm);
+          expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+          // The bank auth completes: PisCallbackPage posts back to the opener, then the popup
+          // auto-closes itself — both happen before the next ~3s poll tick fires.
+          act(() => {
+            window.dispatchEvent(new MessageEvent('message', {
+              data: { type: 'pis-completed', paymentId: 'pis-1' },
+              origin: window.location.origin,
+            }));
+          });
+          fakePopup.closed = true;
+
+          // Wait past the poll tick that runs the "is the popup closed" heuristic — asserted via
+          // a second pisPaymentStatus call, since the closed-check runs synchronously before it.
+          await waitFor(() => {
+            const calls = mockApiFetch.mock.calls.filter(c => c[0].includes('pisPaymentStatus'));
+            expect(calls.length).toBeGreaterThanOrEqual(2);
+          }, { timeout: 8000 });
+
+          expect(screen.queryByTestId('cp-pis-reopen')).not.toBeInTheDocument();
+          expect(screen.queryByText('cpPisWindowClosed')).not.toBeInTheDocument();
+          expect(screen.getByText('cpPisStatusAuthorizing')).toBeInTheDocument();
+        }, 12000);
+
+        it('still shows the "window closed" warning + reopen button when the popup closes without a pis-completed message', async () => {
+          const fakePopup = { closed: false, close: vi.fn() };
+          openSpy.mockImplementation(() => fakePopup);
+          mockApiFetch = buildPisApiFetch({
+            register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+            pisStatusSequence: ['authorizing', 'authorizing', 'authorizing'],
+          });
+          renderModal({ dir: 'out', specName: 'purchase-invoice' });
+          await screen.findByTestId('cp-pis-section');
+
+          const confirm = screen.getByTestId('cp-confirm');
+          await waitFor(() => expect(confirm).not.toBeDisabled());
+          fireEvent.click(confirm);
+          expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+          // The user closes the Salt Edge window early — no pis-completed message ever arrives.
+          fakePopup.closed = true;
+
+          expect(await screen.findByTestId('cp-pis-reopen', {}, { timeout: 4500 })).toBeInTheDocument();
+          expect(screen.getByText('cpPisWindowClosed')).toBeInTheDocument();
+
+          // Reopening opens a fresh popup and clears the warning.
+          fireEvent.click(screen.getByTestId('cp-pis-reopen'));
+          expect(openSpy).toHaveBeenCalledWith(
+            'https://saltedge.example/widget/abc',
+            'saltEdgePisWidget',
+            expect.stringContaining('popup=yes'));
+          expect(screen.queryByTestId('cp-pis-reopen')).not.toBeInTheDocument();
+        }, 8000);
       });
     });
   });
