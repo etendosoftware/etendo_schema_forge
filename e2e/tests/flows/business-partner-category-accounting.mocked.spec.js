@@ -13,9 +13,10 @@ import { login } from '../helpers/auth.js';
  * record currently has ZERO accounting rows (`children.length < 1`) — rows
  * are normally pre-created by Etendo per accounting schema. This spec covers:
  *
- *   - The Accounting tab is present and shows the primary GL columns
+ *   - The Accounting tab is present and shows the five primary GL columns
  *     (Customer Receivables No., Customer Prepayment, Write-off, Vendor
- *     Liability, Vendor Prepayment) plus at least one secondary GL column.
+ *     Liability, Vendor Prepayment). The remaining GL accounts are grid:false
+ *     (form-only) and must NOT render as columns.
  *   - `accountingSchema` never renders as a column (system field, hidden).
  *   - On a record with no existing accounting rows, Add Line exposes the
  *     mandatory GL selectors but never accountingSchema (auto-filled
@@ -114,8 +115,10 @@ test.describe('Business Partner Category — Accounting tab (existing rows)', ()
     await expect(page.getByTestId('column-header-vendorLiability')).toBeVisible();
     await expect(page.getByTestId('column-header-vendorPrepayment')).toBeVisible();
 
-    // Secondary GL account column (sample) also present and editable.
-    await expect(page.getByTestId('column-header-nonInvoicedReceipts')).toBeVisible();
+    // Only the five primary GL accounts are grid columns (grid: true). The
+    // remaining ~16 GL accounts (e.g. nonInvoicedReceipts) are grid: false —
+    // editable via the row form but never rendered as columns.
+    await expect(page.getByTestId('column-header-nonInvoicedReceipts')).toHaveCount(0);
 
     // accountingSchema is a system field (addLineFromSibling) — never a visible column.
     await expect(page.getByTestId('column-header-accountingSchema')).toHaveCount(0);

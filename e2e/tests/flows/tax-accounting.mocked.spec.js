@@ -14,8 +14,10 @@ import { login } from '../helpers/auth.js';
  *     `TaxAccountingHandler`) never renders as a column or as an add-line
  *     field — the user cannot see or edit it.
  *
- * NOTE: the running spec name for this window is `tax-rate` (see
- * `api.baseUrl` in the generated `TaxPage.jsx`), NOT the `tax` route slug.
+ * NOTE: at runtime the window's apiBaseUrl is built from the ROUTE SLUG
+ * (`/sws/neo/tax`, see WindowLoader), NOT the `api.baseUrl` (`/sws/neo/tax-rate`)
+ * embedded in the generated `TaxPage.jsx` — the latter is stale and unused. The
+ * mocks below therefore target `/sws/neo/tax/**`.
  *
  * Mock mode only: routes are installed AFTER login() so they win over the
  * generic `/sws/**` catch-all (Playwright LIFO route matching).
@@ -42,11 +44,13 @@ const ACCOUNTING_ROW = {
 };
 
 async function installMocks(page, { accountingRows = [ACCOUNTING_ROW] } = {}) {
-  await page.route('**/sws/neo/tax-rate/tax**', async (route) => {
+  await page.route('**/sws/neo/tax/tax**', async (route) => {
     const req = route.request();
     const url = req.url();
 
-    if (req.method() === 'GET' && !/\/tax\/[^/?]+/.test(url)) {
+    // Detail = baseUrl(`/sws/neo/tax`) + entity(`tax`) + `/{id}` → `/tax/tax/{id}`.
+    // List = `/sws/neo/tax/tax` (no id segment). Match on `/tax/tax/` to tell them apart.
+    if (req.method() === 'GET' && !/\/tax\/tax\//.test(url)) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -65,7 +69,7 @@ async function installMocks(page, { accountingRows = [ACCOUNTING_ROW] } = {}) {
     route.fallback();
   });
 
-  await page.route('**/sws/neo/tax-rate/accounting**', async (route) => {
+  await page.route('**/sws/neo/tax/accounting**', async (route) => {
     const req = route.request();
     const url = req.url();
 

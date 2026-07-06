@@ -65,6 +65,20 @@ async function installBaseMocks(page, { customerRows = [], vendorRows = [] } = {
     route.fallback();
   });
 
+  // Other secondary tabs / related entities — return empty so they never
+  // trigger unrelated fetch errors while we exercise the accounting tabs.
+  // Registered BEFORE the accounting routes so the accounting routes win the
+  // LIFO match: the `customer` glob (`**/contacts/customer**`) is a prefix of
+  // `customerAccounting` and would otherwise shadow it, returning empty rows.
+  for (const entity of ['contact', 'bankAccount', 'locationAddress', 'customer', 'vendorCreditor']) {
+    await page.route(`**/sws/neo/contacts/${entity}**`, async (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [], totalRows: 0 } }) });
+      }
+      route.fallback();
+    });
+  }
+
   await page.route('**/sws/neo/contacts/customerAccounting**', async (route) => {
     const url = route.request().url();
     if (/\/customerAccounting\/selectors\//.test(url)) return route.fallback();
@@ -78,17 +92,6 @@ async function installBaseMocks(page, { customerRows = [], vendorRows = [] } = {
     if (route.request().method() !== 'GET') return route.fallback();
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: vendorRows, totalRows: vendorRows.length } }) });
   });
-
-  // Other secondary tabs / related entities — return empty so they never
-  // trigger unrelated fetch errors while we exercise the accounting tabs.
-  for (const entity of ['contact', 'bankAccount', 'locationAddress', 'customer', 'vendorCreditor']) {
-    await page.route(`**/sws/neo/contacts/${entity}**`, async (route) => {
-      if (route.request().method() === 'GET') {
-        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ response: { data: [], totalRows: 0 } }) });
-      }
-      route.fallback();
-    });
-  }
 }
 
 test.describe('Contacts — Customer Accounting tab', () => {

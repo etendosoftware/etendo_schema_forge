@@ -1719,15 +1719,20 @@ export function DetailView({
   // — the actions ref-controls the same modal so no functionality is lost.
   const getLineMenuActions = bottomSection?.lineMenuActions ?? null;
   const extraActionsRef = useRef(null);
-  // Static hooks for up to 4 secondary tabs (React rules forbid dynamic hook calls).
+  // Static hooks for up to 5 secondary tabs (React rules forbid dynamic hook calls).
   // Secondary hooks only consume child-level state (children, handleAddChild, handleDeleteChild,
   // handleSelect) — never the parent list. skipListFetch avoids refetching the parent entity
   // list once per hook (which would otherwise cause N+1 identical GETs on mount).
+  // Windows with fewer tabs pass a null entity key to the unused hooks (no-op fetch).
+  // NOTE: the contacts window has 5 secondary tabs (person, bank account, location,
+  // customer accounting, vendor accounting) — the 5th (index 4) needs its own hook or its
+  // rows never fetch. Bump this count in lockstep if a window ever exceeds 5.
   const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3];
+  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4];
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
   // currency is a read-only column on those tabs (e.g. exchange rates), so the

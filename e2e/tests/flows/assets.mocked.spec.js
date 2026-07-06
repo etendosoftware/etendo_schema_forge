@@ -283,6 +283,11 @@ test.describe('Assets — AmortizationPlan row navigation', () => {
     await page.goto(`/assets/${ASSET_WITH_DEPRECIATION.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
+    // ETP-4402 mounted the "Accounting" (assetAcct) tab as the primary detail
+    // tab, so the Amortization Plan now lives in a non-default tab. Activate it
+    // before the row can be visible/clickable.
+    await page.getByTestId('tab-custom:amortizationPlan').click();
+
     // Locate the PeriodLink button inside the row (only the button navigates, not the whole row)
     const amortRow = page
       .locator('tr, [role="row"]')

@@ -239,6 +239,9 @@ test.describe('Product pricing — create flow (no existing rows)', () => {
 
     await page.goto(`/product/${PRODUCT_NO_PRICES.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    // ETP-4402 made "Accounting" (Contabilidad) the default detail tab; the
+    // pricing UI now lives in the non-default "Precio" tab (customTab 'pricing').
+    await page.getByTestId('tab-custom:pricing').click();
   });
 
   test('empty state shows section toggle and add button; clicking add reveals version selector filtered to sales', async ({ page }) => {
@@ -360,6 +363,9 @@ test.describe('Product pricing — edit dialog populates dropdown from lazy fetc
 
     await page.goto(`/product/${PRODUCT_WITH_SALES_PRICE.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    // ETP-4402 made "Accounting" (Contabilidad) the default detail tab; the
+    // pricing UI now lives in the non-default "Precio" tab (customTab 'pricing').
+    await page.getByTestId('tab-custom:pricing').click();
   });
 
   test('switching to Compra toggle and clicking add triggers lazy fetch filtered to purchase options', async ({ page }) => {
