@@ -19,6 +19,90 @@ const STEPPER_INDEX = {
   skipped: -1,
 };
 
+function toBoxArray(src) {
+  if (Array.isArray(src)) return src;
+  if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
+  return [];
+}
+
+function applyOverrides(boxes, overrides) {
+  if (!Object.keys(overrides).length) return toBoxArray(boxes);
+  const arr = toBoxArray(boxes);
+  const result = arr.filter(b => !(b.num in overrides));
+  Object.entries(overrides).forEach(([num, val]) => {
+    if (val != null) result.push({ num: Number(num), value: val });
+  });
+  return result;
+}
+
+function removeBox108FromLive(prev) {
+  if (prev == null) return prev;
+  return recomputeDerivedBoxes(toBoxArray(prev).filter(b => b.num !== 108));
+}
+
+function applyBoxChange(prev, boxNum, value, fallbackBoxes) {
+  const base = prev != null ? toBoxArray(prev) : toBoxArray(fallbackBoxes);
+  const filtered = base.filter(b => b.num !== boxNum);
+  const updated = value != null ? [...filtered, { num: boxNum, value }] : filtered;
+  return recomputeDerivedBoxes(updated);
+}
+
+function parseBoxInput(rawValue) {
+  const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
+  return isNaN(numVal) ? null : numVal;
+}
+
+function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources) {
+  if (!res) return;
+  setLiveBoxes(recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides)));
+  setLiveSummary(res.summary);
+  if (res.sources) setLiveSources(res.sources);
+}
+
+function fetchOrgIdent(token, apiBaseUrl, setOrgIdent) {
+  if (!token || !apiBaseUrl) return;
+  fetch(`${neoBase(apiBaseUrl)}/session`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      const org = data?.organization;
+      if (!org) return;
+      setOrgIdent({ nif: org.taxId ?? '', nombre: org.name ?? '' });
+    })
+    .catch(() => {});
+}
+
+function applyGenerateError(result, t, setGenError) {
+  if (result.error === 'iban_required') {
+    setGenError(t('fm.gen303.error.iban_required') ?? 'Se necesita el IBAN para generar el fichero. Selecciona tipo C o N, o introduce el IBAN.');
+  } else {
+    const msg = result.serverMessage
+      || t('fm.gen303.error.generic')
+      || 'Error al generar el fichero. Por favor, inténtelo de nuevo.';
+    setGenError(msg);
+    console.error('generate303File failed:', result.error, result.serverMessage);
+  }
+}
+
+function recomputeDerivedBoxes(boxArr) {
+  const r2 = v => Math.round(v * 100) / 100;
+  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+  const box65entry = boxArr.find(b => b.num === 65);
+  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
+  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
+  const box46 = r2(get(27) - box45);
+  const box64 = r2(box46 + get(58) + get(76));
+  const box66 = r2(box64 * box65 / 100);
+  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
+  const box71 = r2(box69 - get(70) + get(109) - get(112));
+  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+  return [
+    ...boxArr.filter(b => !(b.num in derived)),
+    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+  ];
+}
+
 // ── Tab content components ────────────────────────────────────────
 
 // Casillas tab — left sidebar nav + content area
@@ -138,6 +222,27 @@ function MoreOptionsMenu({ onCompare, onConfig, onGenerate, generating, fileBloc
   );
 }
 
+function getBoxValue(liveBoxes, num) {
+  const e = toBoxArray(liveBoxes).find(b => b.num === num);
+  return e ? (e.value ?? 0) : null;
+}
+
+function buildIncidentVariants(blocking, warning, t) {
+  let tone = null;
+  if (blocking > 0) tone = 'danger';
+  else if (warning > 0) tone = 'warn';
+
+  let iconColor = '#828FA3';
+  if (blocking > 0) iconColor = '#D50B3E';
+  else if (warning > 0) iconColor = '#8A6100';
+
+  let badge = null;
+  if (blocking > 0) badge = t('fm.incidents.severity.block') ?? 'Bloqueante';
+  else if (warning > 0) badge = t('fm.incidents.severity.warn') ?? 'Advertencia';
+
+  return { tone, iconColor, badge };
+}
+
 // ── Main page ─────────────────────────────────────────────────────
 
 export default function FmModel303Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
@@ -155,69 +260,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     setIdentChecks(prev => ({ ...prev, [id]: value }));
     if (id === 'motivo_rectificacion' && value !== 'D') {
       setManualOverrides(prev => { const n = { ...prev }; delete n[108]; return n; });
-      setLiveBoxes(prev => {
-        if (prev == null) return prev;
-        const arr = toBoxArray(prev).filter(b => b.num !== 108);
-        return recomputeDerivedBoxes(arr);
-      });
+      setLiveBoxes(removeBox108FromLive);
     }
   };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
   const [manualOverrides, setManualOverrides] = useState({});
 
-  const toBoxArray = (src) => {
-    if (Array.isArray(src)) return src;
-    if (src && typeof src === 'object') return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v }));
-    return [];
-  };
-
-  function applyOverrides(boxes, overrides) {
-    if (!Object.keys(overrides).length) return toBoxArray(boxes);
-    const arr = toBoxArray(boxes);
-    const result = arr.filter(b => !(b.num in overrides));
-    Object.entries(overrides).forEach(([num, val]) => {
-      if (val != null) result.push({ num: Number(num), value: val });
-    });
-    return result;
-  }
-
-  // Recompute all derived resultado_final boxes from the current merged box array.
-  // Formulas follow the official AEAT 303 labels:
-  //   45 = 29+31+33+35+37+39+41+42+43+44
-  //   46 = 27 − 45
-  //   64 = 46 + 58 + 76   (suma resultados)
-  //   66 = 64 × 65 / 100  (atribuible Estado)
-  //   69 = 66 + 77 − 78 + 68 + 108
-  //   71 = 69 − 70 + 109
-  function recomputeDerivedBoxes(boxArr) {
-    const r2 = v => Math.round(v * 100) / 100;
-    const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
-    const box65entry = boxArr.find(b => b.num === 65);
-    const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
-    const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
-    const box46 = r2(get(27) - box45);
-    const box64 = r2(box46 + get(58) + get(76));
-    const box66 = r2(box64 * box65 / 100);
-    const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
-    const box71 = r2(box69 - get(70) + get(109) - get(112));
-    const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
-    return [
-      ...boxArr.filter(b => !(b.num in derived)),
-      ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
-    ];
-  }
-
   function handleBoxChange(boxNum, rawValue) {
-    const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
-    const value = isNaN(numVal) ? null : numVal;
+    const value = parseBoxInput(rawValue);
     setManualOverrides(prev => ({ ...prev, [boxNum]: value }));
-    setLiveSummary(null); // stale after manual edit — liveBoxSummary takes over
-    setLiveBoxes(prev => {
-      const base = prev != null ? toBoxArray(prev) : toBoxArray(decl._precomputed?.boxes ?? decl.boxes);
-      const filtered = base.filter(b => b.num !== boxNum);
-      const updated = value != null ? [...filtered, { num: boxNum, value }] : filtered;
-      return recomputeDerivedBoxes(updated);
-    });
+    setLiveSummary(null);
+    const fallback = decl._precomputed?.boxes ?? decl.boxes;
+    setLiveBoxes(prev => applyBoxChange(prev, boxNum, value, fallback));
   }
 
   const [liveSummary, setLiveSummary] = useState(decl._precomputed?.summary ?? null);
@@ -230,11 +284,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     setComputing(true);
     try {
       const res = await computeBoxes303(decl, { token, apiBaseUrl });
-      if (res) {
-        setLiveBoxes(recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides)));
-        setLiveSummary(res.summary);
-        if (res.sources) setLiveSources(res.sources);
-      }
+      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
     } finally {
       setComputing(false);
     }
@@ -245,32 +295,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     setGenerating(true);
     const result = await generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename });
     setGenerating(false);
-    if (!result.ok) {
-      if (result.error === 'iban_required') {
-        setGenError(t('fm.gen303.error.iban_required') ?? 'Se necesita el IBAN para generar el fichero. Selecciona tipo C o N, o introduce el IBAN.');
-      } else {
-        const msg = result.serverMessage
-          || t('fm.gen303.error.generic')
-          || 'Error al generar el fichero. Por favor, inténtelo de nuevo.';
-        setGenError(msg);
-        console.error('generate303File failed:', result.error, result.serverMessage);
-      }
-    }
+    if (!result.ok) applyGenerateError(result, t, setGenError);
   }
 
-  useEffect(() => {
-    if (!token || !apiBaseUrl) return;
-    fetch(`${neoBase(apiBaseUrl)}/session`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        const org = data?.organization;
-        if (!org) return;
-        setOrgIdent({ nif: org.taxId ?? '', nombre: org.name ?? '' });
-      })
-      .catch(() => {});
-  }, [token, apiBaseUrl]);
+  useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent); }, [token, apiBaseUrl]);
 
   function handleStatusChange(newStatus) {
     setStatus(newStatus);
@@ -288,8 +316,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const fileBlocked = blocking > 0;
   // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
   // are reflected in the accrued/deductible/result cards without a full recalculate.
-  const boxGet = (num) => { const e = toBoxArray(liveBoxes).find(b => b.num === num); return e ? (e.value ?? 0) : null; };
-  const kpi27 = boxGet(27); const kpi45 = boxGet(45); const kpi46 = boxGet(46);
+  const kpi27 = getBoxValue(liveBoxes, 27);
+  const kpi45 = getBoxValue(liveBoxes, 45);
+  const kpi46 = getBoxValue(liveBoxes, 46);
   const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi46 !== null)
     ? { accrued: kpi27, deductible: kpi45, result: kpi46 }
     : null;
@@ -300,17 +329,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
 
 
-  let incidentBadgeTone = null;
-  if (blocking > 0) incidentBadgeTone = 'danger';
-  else if (warning > 0) incidentBadgeTone = 'warn';
-
-  let incidentIconColor = '#828FA3';
-  if (blocking > 0) incidentIconColor = '#D50B3E';
-  else if (warning > 0) incidentIconColor = '#8A6100';
-
-  let incidentBadge = null;
-  if (blocking > 0) incidentBadge = t('fm.incidents.severity.block') ?? 'Bloqueante';
-  else if (warning > 0) incidentBadge = t('fm.incidents.severity.warn') ?? 'Advertencia';
+  const { tone: incidentBadgeTone, iconColor: incidentIconColor, badge: incidentBadge } =
+    buildIncidentVariants(blocking, warning, t);
 
   const tabs = [
     { id: 'boxes',     label: t('fm.tab.boxes') ?? 'Casillas',

@@ -74,6 +74,59 @@ const BOX_PARAM_MAP = {
  *   manualOverrides — editable box values keyed by box number
  *   filename      — optional download filename (defaults to 303_<period>_<year>.txt)
  */
+function applyRectificativaParams(params, identChecks) {
+  params.set('IsComplementary', 'Y');
+  if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
+  if (identChecks.motivo_rectificacion === 'R') params.set('RectifyingReason', 'Y');
+  else if (identChecks.motivo_rectificacion === 'D')
+    params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
+}
+
+function applyIdentParams(params, identChecks) {
+  for (const [field, paramName] of IDENT_PARAM_MAP) {
+    const v = identChecks[field];
+    if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
+  }
+  if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
+  if (identChecks.complementaria === true) {
+    params.set('IsComplementary', 'Y');
+    if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
+  }
+  // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
+  if (identChecks.rectificativa) applyRectificativaParams(params, identChecks);
+}
+
+function applyBoxParams(params, manualOverrides) {
+  for (const [boxNum, paramName] of Object.entries(BOX_PARAM_MAP)) {
+    const v = manualOverrides[Number(boxNum)];
+    if (v != null) params.set(paramName, String(v));
+  }
+}
+
+function parseServerMessage(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    const full = parsed?.error?.message || parsed?.message || '';
+    // Strip Java exception class prefix (e.g. "com.foo.SomeException: Actual message")
+    const exIdx = full.indexOf('Exception: ');
+    let cleaned = (exIdx >= 0 ? full.slice(exIdx + 11) : full).trim();
+    // Openbravo message keys arrive as "@AEAT303_SomeKey@" — strip the @ delimiters
+    if (cleaned.startsWith('@') && cleaned.endsWith('@')) cleaned = cleaned.slice(1, -1);
+    return cleaned || undefined;
+  } catch (_) { return undefined; }
+}
+
+function triggerDownload(blob, downloadName) {
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = downloadName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(objectUrl);
+}
+
 export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
   if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
 
@@ -88,63 +141,17 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period, tipo });
 
-    // ── identChecks: bank fields (1:1 string forwarding) ──────────────
-    if (identChecks) {
-      for (const [field, paramName] of IDENT_PARAM_MAP) {
-        const v = identChecks[field];
-        if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
-      }
-      // Declaration_NoActivity
-      if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
-      // Complementaria (2021-2023 forms)
-      if (identChecks.complementaria === true) {
-        params.set('IsComplementary', 'Y');
-        if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
-      }
-      // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
-      // Without it, the motivo flags are ignored and no rectificativa field is written.
-      if (identChecks.rectificativa) {
-        params.set('IsComplementary', 'Y');
-        if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
-        if (identChecks.motivo_rectificacion === 'R') params.set('RectifyingReason', 'Y');
-        else if (identChecks.motivo_rectificacion === 'D')
-          params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
-      }
-    }
-
-    // ── manualOverrides: editable box values → AEAT param names ───────
-    if (manualOverrides) {
-      for (const [boxNum, paramName] of Object.entries(BOX_PARAM_MAP)) {
-        const v = manualOverrides[Number(boxNum)];
-        if (v != null) params.set(paramName, String(v));
-      }
-    }
+    if (identChecks) applyIdentParams(params, identChecks);
+    if (manualOverrides) applyBoxParams(params, manualOverrides);
 
     const url = `${base}/fiscal303/generate?${params}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) {
       const raw = await res.text().catch(() => '');
-      let serverMessage;
-      try {
-        const parsed = JSON.parse(raw);
-        const full = parsed?.error?.message || parsed?.message || '';
-        // Strip Java exception class prefix (e.g. "com.foo.SomeException: Actual message")
-        let cleaned = full.replace(/^(?:[\w.$]+\.)+\w+Exception:\s*/i, '').trim();
-        // Openbravo message keys arrive as "@AEAT303_SomeKey@" — strip the @ delimiters
-        cleaned = cleaned.replace(/^@(.+)@$/, '$1');
-        serverMessage = cleaned || undefined;
-      } catch (_) { /* not JSON */ }
-      return { ok: false, error: `http_${res.status}`, serverMessage };
+      return { ok: false, error: `http_${res.status}`, serverMessage: parseServerMessage(raw) };
     }
     const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = filename ?? `303_${decl.period}_${decl.year}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(objectUrl);
+    triggerDownload(blob, filename ?? `303_${decl.period}_${decl.year}.txt`);
     return { ok: true };
   } catch (_) {
     return { ok: false, error: 'network' };
