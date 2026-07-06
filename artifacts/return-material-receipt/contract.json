@@ -1,8 +1,7 @@
 {
   "version": "0.18.0",
-  "generatedAt": "2026-04-29T18:11:05.114Z",
-  "updatedAt": "2026-07-06T14:43:53.221Z",
-  "checksum": "8b43215cd218a382",
+  "generatedAt": "2026-07-06T16:17:20.249Z",
+  "checksum": "5a9f480f8a98cfc4",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -124,10 +123,9 @@
               "className": "org.openbravo.erpCommon.ad_callouts.SL_InOut_BPartner"
             },
             "readOnlyLogic": {
-              "raw": "@Processed@='Y' | @HAS_M_INOUTLINES@='Y'",
-              "evaluable": false,
-              "reason": "session-variable",
-              "js": null
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
             }
           },
           {
@@ -311,164 +309,18 @@
             }
           },
           {
-            "name": "sourceShipmentDocNo",
-            "apiKey": "sourceShipmentDocNo",
-            "column": "sourceShipmentDocNo",
-            "label": "Source Shipment",
-            "type": "string",
-            "tsType": "string",
+            "name": "invoiceStatus",
+            "apiKey": "invoiceStatus",
+            "column": "InvoiceStatus",
+            "label": "Invoice Status",
+            "type": "integer",
+            "tsType": "number",
             "visibility": "readOnly",
             "required": false,
             "grid": true,
-            "form": true,
-            "section": "principal",
-            "gridOrder": 6
-          },
-          {
-            "name": "etblkpAccountingstatus",
-            "apiKey": "etblkpAccountingstatus",
-            "column": "EM_Etblkp_Accountingstatus",
-            "label": "Accounting Status",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "enumValues": [
-              {
-                "value": "NC",
-                "name": "Cost Not Calculated",
-                "labels": {
-                  "es_ES": "Coste No Calculado"
-                }
-              },
-              {
-                "value": "d",
-                "name": "Disabled For Background",
-                "labels": {
-                  "es_ES": "Deshabilitado Para Background"
-                }
-              },
-              {
-                "value": "D",
-                "name": "Document Disabled",
-                "labels": {
-                  "es_ES": "Documento Deshabilitado"
-                }
-              },
-              {
-                "value": "L",
-                "name": "Document Locked",
-                "labels": {
-                  "es_ES": "Documento Bloqueado"
-                }
-              },
-              {
-                "value": "E",
-                "name": "Error",
-                "labels": {
-                  "es_ES": "Error"
-                }
-              },
-              {
-                "value": "C",
-                "name": "Error, No cost",
-                "labels": {
-                  "es_ES": "Error, No hay coste"
-                }
-              },
-              {
-                "value": "i",
-                "name": "Invalid Account",
-                "labels": {
-                  "es_ES": "Cuenta No Válida"
-                }
-              },
-              {
-                "value": "AD",
-                "name": "No Accounting Date",
-                "labels": {
-                  "es_ES": "Sin Fecha Contable"
-                }
-              },
-              {
-                "value": "DT",
-                "name": "No Document Type",
-                "labels": {
-                  "es_ES": "Sin tipo de Documento"
-                }
-              },
-              {
-                "value": "NO",
-                "name": "No Related PO",
-                "labels": {
-                  "es_ES": "Sin PO Relacionada"
-                }
-              },
-              {
-                "value": "b",
-                "name": "Not Balanced",
-                "labels": {
-                  "es_ES": "No Balanceado"
-                }
-              },
-              {
-                "value": "c",
-                "name": "Not Convertible (no rate)",
-                "labels": {
-                  "es_ES": "No Convertible (no hay rango)"
-                }
-              },
-              {
-                "value": "l",
-                "name": "Pending Refresh",
-                "labels": {
-                  "es_ES": "Pendiente de Actualización"
-                }
-              },
-              {
-                "value": "p",
-                "name": "Period Closed",
-                "labels": {
-                  "es_ES": "Periodo Cerrado"
-                }
-              },
-              {
-                "value": "y",
-                "name": "Post Prepared",
-                "labels": {
-                  "es_ES": "Contabilidad Preparada"
-                }
-              },
-              {
-                "value": "Y",
-                "name": "Posted",
-                "labels": {
-                  "es_ES": "Contabilizado"
-                }
-              },
-              {
-                "value": "T",
-                "name": "Table Disabled",
-                "labels": {
-                  "es_ES": "Tabla Deshabilitada"
-                }
-              },
-              {
-                "value": "N",
-                "name": "Unposted",
-                "labels": {
-                  "es_ES": "No Contabilizado"
-                }
-              }
-            ],
-            "defaultValue": "N"
+            "form": false,
+            "columnType": "percent",
+            "gridOrder": 7
           },
           {
             "name": "etblkpBulkposting",
@@ -493,6 +345,20 @@
               "reason": "session-preference",
               "js": null
             }
+          },
+          {
+            "name": "sourceShipmentDocNo",
+            "apiKey": "sourceShipmentDocNo",
+            "column": "sourceShipmentDocNo",
+            "label": "Source Shipment",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "section": "principal",
+            "gridOrder": 6
           }
         ],
         "searchableFields": [
@@ -521,13 +387,6 @@
             "derivation": {
               "type": "computed",
               "source": "DR"
-            }
-          },
-          {
-            "name": "etblkpAccountingstatus",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
             }
           },
           {
@@ -1062,7 +921,7 @@
             "apiKey": "invoiceStatus",
             "column": "InvoiceStatus",
             "type": "integer",
-            "visibility": "discarded",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -1122,68 +981,20 @@
             "required": false
           },
           {
-            "name": "invoice",
-            "apiKey": "invoice",
-            "column": "C_Invoice_ID",
-            "type": "foreignKey",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "processed",
-            "apiKey": "processed",
-            "column": "Processed",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "salesTransaction",
-            "apiKey": "salesTransaction",
-            "column": "IsSOTrx",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "datePrinted",
-            "apiKey": "datePrinted",
-            "column": "DatePrinted",
-            "type": "date",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "sendMaterials",
-            "apiKey": "sendMaterials",
-            "column": "RM_Shipment_Pickedit",
+            "name": "etblkpBulkposting",
+            "apiKey": "etblkpBulkposting",
+            "column": "EM_Etblkp_Bulkposting",
             "type": "button",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
-            "name": "print",
-            "apiKey": "print",
-            "column": "IsPrinted",
-            "type": "boolean",
+            "name": "etblkpAccountingstatus",
+            "apiKey": "etblkpAccountingstatus",
+            "column": "EM_Etblkp_Accountingstatus",
+            "type": "enum",
             "visibility": "discarded",
             "required": true
-          },
-          {
-            "name": "processNow",
-            "apiKey": "processNow",
-            "column": "Processing",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": false
           },
           {
             "name": "id",
@@ -1222,6 +1033,70 @@
             "apiKey": "client",
             "column": "AD_Client_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "print",
+            "apiKey": "print",
+            "column": "IsPrinted",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "invoice",
+            "apiKey": "invoice",
+            "column": "C_Invoice_ID",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "sendMaterials",
+            "apiKey": "sendMaterials",
+            "column": "RM_Shipment_Pickedit",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "datePrinted",
+            "apiKey": "datePrinted",
+            "column": "DatePrinted",
+            "type": "date",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "salesTransaction",
+            "apiKey": "salesTransaction",
+            "column": "IsSOTrx",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "processed",
+            "apiKey": "processed",
+            "column": "Processed",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
@@ -1312,22 +1187,6 @@
             "type": "string",
             "visibility": "readOnly",
             "required": false
-          },
-          {
-            "name": "etblkpAccountingstatus",
-            "apiKey": "etblkpAccountingstatus",
-            "column": "EM_Etblkp_Accountingstatus",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "etblkpBulkposting",
-            "apiKey": "etblkpBulkposting",
-            "column": "EM_Etblkp_Bulkposting",
-            "type": "button",
-            "visibility": "readOnly",
-            "required": true
           }
         ],
         "javaQualifier": "returnMaterialReceiptHeaderHandler"
@@ -1482,38 +1341,6 @@
             "required": false
           },
           {
-            "name": "reinvoice",
-            "apiKey": "reinvoice",
-            "column": "IsInvoiced",
-            "type": "boolean",
-            "visibility": "discarded",
-            "required": true
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "IsActive",
-            "type": "boolean",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "M_InOutLine_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
             "name": "organization",
             "apiKey": "organization",
             "column": "AD_Org_ID",
@@ -1526,6 +1353,38 @@
             "apiKey": "shipmentReceipt",
             "column": "M_InOut_ID",
             "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "reinvoice",
+            "apiKey": "reinvoice",
+            "column": "IsInvoiced",
+            "type": "boolean",
+            "visibility": "discarded",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "M_InOutLine_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
@@ -1835,10 +1694,10 @@
       },
       {
         "entity": "returnMaterialReceipt",
-        "field": "sendMaterials",
-        "column": "RM_Shipment_Pickedit",
-        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
-        "processId": "4AD70293357245AB96E59C2CDB43A35D",
+        "field": "etblkpBulkposting",
+        "column": "EM_Etblkp_Bulkposting",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/etblkpBulkposting",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -1859,6 +1718,14 @@
       },
       {
         "entity": "returnMaterialReceipt",
+        "field": "sendMaterials",
+        "column": "RM_Shipment_Pickedit",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
+        "processId": "4AD70293357245AB96E59C2CDB43A35D",
+        "processType": "obuiapp"
+      },
+      {
+        "entity": "returnMaterialReceipt",
         "field": "invoicefromshipment",
         "column": "Invoicefromshipment",
         "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/invoicefromshipment",
@@ -1872,14 +1739,6 @@
         "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/processGoodsJava",
         "processId": "49DEE812BF0545269781FCEBF2235924",
         "processType": "classic"
-      },
-      {
-        "entity": "returnMaterialReceipt",
-        "field": "etblkpBulkposting",
-        "column": "EM_Etblkp_Bulkposting",
-        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/etblkpBulkposting",
-        "processId": "57496FB9CF9E4E8F847224017941570E",
-        "processType": "obuiapp"
       },
       {
         "entity": "returnMaterialReceiptLine",
@@ -2056,14 +1915,6 @@
         "description": "Default value for 'documentStatus' in returnMaterialReceipt should be a string"
       },
       {
-        "id": "t-default-value-type-returnMaterialReceipt-etblkpAccountingstatus",
-        "category": "default-value-type",
-        "entity": "returnMaterialReceipt",
-        "field": "etblkpAccountingstatus",
-        "runner": "node",
-        "description": "Default value for 'etblkpAccountingstatus' in returnMaterialReceipt should be a string"
-      },
-      {
         "id": "t-default-value-type-returnMaterialReceipt-etblkpBulkposting",
         "category": "default-value-type",
         "entity": "returnMaterialReceipt",
@@ -2176,20 +2027,20 @@
         "description": "Field 'documentStatus' should be present in returnMaterialReceipt"
       },
       {
-        "id": "t-field-presence-returnMaterialReceipt-etblkpAccountingstatus",
-        "category": "field-presence",
-        "entity": "returnMaterialReceipt",
-        "field": "etblkpAccountingstatus",
-        "runner": "node",
-        "description": "Field 'etblkpAccountingstatus' should be present in returnMaterialReceipt"
-      },
-      {
         "id": "t-field-presence-returnMaterialReceipt-etblkpBulkposting",
         "category": "field-presence",
         "entity": "returnMaterialReceipt",
         "field": "etblkpBulkposting",
         "runner": "node",
         "description": "Field 'etblkpBulkposting' should be present in returnMaterialReceipt"
+      },
+      {
+        "id": "t-field-presence-returnMaterialReceipt-invoiceStatus",
+        "category": "field-presence",
+        "entity": "returnMaterialReceipt",
+        "field": "invoiceStatus",
+        "runner": "node",
+        "description": "Field 'invoiceStatus' should be present in returnMaterialReceipt"
       },
       {
         "id": "t-field-presence-returnMaterialReceipt-movementDate",
@@ -2320,20 +2171,20 @@
         "description": "Field 'documentStatus' should have type 'string' in returnMaterialReceipt"
       },
       {
-        "id": "t-field-type-returnMaterialReceipt-etblkpAccountingstatus",
-        "category": "field-type",
-        "entity": "returnMaterialReceipt",
-        "field": "etblkpAccountingstatus",
-        "runner": "node",
-        "description": "Field 'etblkpAccountingstatus' should have type 'string' in returnMaterialReceipt"
-      },
-      {
         "id": "t-field-type-returnMaterialReceipt-etblkpBulkposting",
         "category": "field-type",
         "entity": "returnMaterialReceipt",
         "field": "etblkpBulkposting",
         "runner": "node",
         "description": "Field 'etblkpBulkposting' should have type 'string' in returnMaterialReceipt"
+      },
+      {
+        "id": "t-field-type-returnMaterialReceipt-invoiceStatus",
+        "category": "field-type",
+        "entity": "returnMaterialReceipt",
+        "field": "invoiceStatus",
+        "runner": "node",
+        "description": "Field 'invoiceStatus' should have type 'number' in returnMaterialReceipt"
       },
       {
         "id": "t-field-type-returnMaterialReceipt-movementDate",
@@ -2876,6 +2727,14 @@
         "description": "System field 'documentType' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
+        "id": "t-system-field-returnMaterialReceipt-etblkpAccountingstatus",
+        "category": "system-field",
+        "entity": "returnMaterialReceipt",
+        "field": "etblkpAccountingstatus",
+        "runner": "node",
+        "description": "System field 'etblkpAccountingstatus' should exist in backend but not frontend for returnMaterialReceipt"
+      },
+      {
         "id": "t-system-field-returnMaterialReceipt-externalBusinessPartnerReference",
         "category": "system-field",
         "entity": "returnMaterialReceipt",
@@ -2946,14 +2805,6 @@
         "field": "invoicefromshipment",
         "runner": "node",
         "description": "System field 'invoicefromshipment' should exist in backend but not frontend for returnMaterialReceipt"
-      },
-      {
-        "id": "t-system-field-returnMaterialReceipt-invoiceStatus",
-        "category": "system-field",
-        "entity": "returnMaterialReceipt",
-        "field": "invoiceStatus",
-        "runner": "node",
-        "description": "System field 'invoiceStatus' should exist in backend but not frontend for returnMaterialReceipt"
       },
       {
         "id": "t-system-field-returnMaterialReceipt-isnettingshipment",
@@ -3443,11 +3294,11 @@
       }
     ],
     "summary": {
-      "total": 190,
+      "total": 189,
       "byCategory": {
         "action-endpoint": 13,
         "crud-flags": 2,
-        "default-value-type": 6,
+        "default-value-type": 5,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
         "field-presence": 18,
@@ -3463,7 +3314,7 @@
         "visibility": 2
       },
       "byRunner": {
-        "node": 188,
+        "node": 187,
         "junit": 2
       }
     }

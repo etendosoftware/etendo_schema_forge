@@ -1,8 +1,7 @@
 {
-  "version": "0.20.0",
-  "generatedAt": "2026-04-29T18:11:17.025Z",
-  "updatedAt": "2026-06-24T20:46:49.172Z",
-  "contractChecksum": "468e65b1f2dfb6ea",
+  "version": "0.1.0",
+  "generatedAt": "2026-07-06T16:17:20.534Z",
+  "contractChecksum": "e3e80dd38d7f01c5",
   "apiPrediction": {
     "specName": "return-to-vendor-shipment",
     "baseUrl": "/sws/neo/return-to-vendor-shipment",
@@ -257,6 +256,46 @@
         "processType": "classic"
       },
       {
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
+        "entity": "returnToVendorShipment",
+        "column": "EM_Etblkp_Bulkposting",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "57496FB9CF9E4E8F847224017941570E",
+        "processType": "obuiapp"
+      },
+      {
         "name": "receiveMaterials",
         "actionType": "createFrom",
         "entity": "returnToVendorShipment",
@@ -346,46 +385,6 @@
         "processType": "classic"
       },
       {
-        "name": "etblkpBulkposting",
-        "actionType": "documentAction",
-        "entity": "returnToVendorShipment",
-        "column": "EM_Etblkp_Bulkposting",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/return-to-vendor-shipment/returnToVendorShipment/{id}/action/etblkpBulkposting",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "57496FB9CF9E4E8F847224017941570E",
-        "processType": "obuiapp"
-      },
-      {
         "name": "explode",
         "actionType": "utilityAction",
         "entity": "returnToVendorShipmentLine",
@@ -470,7 +469,7 @@
           },
           "businessPartner": {
             "required": true,
-            "readOnlyLogic": "@Processed@='Y' | @HAS_M_INOUTLINES@='Y'"
+            "readOnlyLogic": "@Processed@='Y'"
           },
           "partnerAddress": {
             "required": true,
@@ -491,19 +490,17 @@
             "required": true,
             "defaultValue": "DR"
           },
-          "trackingNo": {},
-          "sourceReceiptDocNo": {
-            "readOnly": true
-          },
-          "etblkpAccountingstatus": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
-          },
           "etblkpBulkposting": {
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
+          },
+          "trackingNo": {},
+          "invoiceStatus": {
+            "readOnly": true
+          },
+          "sourceReceiptDocNo": {
+            "readOnly": true
           }
         }
       },
@@ -583,8 +580,8 @@
       "generateTo",
       "documentAction",
       "posted",
-      "receiveMaterials",
-      "etblkpBulkposting"
+      "etblkpBulkposting",
+      "receiveMaterials"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -632,5 +629,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "ae8fd1d1a3362468"
+  "checksum": "1ee2a33d8641c12c"
 }

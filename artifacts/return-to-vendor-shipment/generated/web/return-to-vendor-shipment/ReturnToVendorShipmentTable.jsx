@@ -9,6 +9,7 @@ const columns = [
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'CL': 'Closed', 'CO': 'Completed', 'DR': 'Draft', 'NA': 'Not Accepted', 'WP': 'Not Paid', 'RE': 'Re-Opened', 'TEMP': 'Temporal', 'IP': 'Under Way', '??': 'Unknown', 'VO': 'Voided' }, required: true },
   { key: 'warehouse', column: 'M_Warehouse_ID', type: 'selector', label: 'Warehouse', required: true },
   { key: 'sourceReceiptDocNo', column: 'sourceReceiptDocNo', type: 'string', label: 'Source Receipt' },
+  { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent', label: 'InvoiceStatus' },
 ];
 // @sf-generated-end columns:returnToVendorShipment
 
