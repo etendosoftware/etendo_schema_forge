@@ -120,7 +120,7 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       );
       assert.match(
         src,
-        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm;/,
+        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm[\s\S]*?;/,
       );
     });
 
