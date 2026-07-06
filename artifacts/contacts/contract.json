@@ -1,8 +1,8 @@
 {
-  "version": "0.39.0",
+  "version": "0.40.0",
   "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-07-05T23:40:29.906Z",
-  "checksum": "1484f0531070845c",
+  "updatedAt": "2026-07-06T17:42:25.976Z",
+  "checksum": "43148e5c2c90e652",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -937,15 +937,24 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Pendiente"
+                "name": "Pendiente",
+                "labels": {
+                  "es_ES": "Pendiente"
+                }
               },
               {
                 "value": "V",
-                "name": "Válido"
+                "name": "Válido",
+                "labels": {
+                  "es_ES": "Válido"
+                }
               },
               {
                 "value": "I",
-                "name": "No válido"
+                "name": "No válido",
+                "labels": {
+                  "es_ES": "No válido"
+                }
               }
             ],
             "section": "principal",

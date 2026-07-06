@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-04-29T18:11:24.842Z",
-  "updatedAt": "2026-07-02T16:30:37.816Z",
-  "checksum": "1a9e34ebe9c1b0d0",
+  "updatedAt": "2026-07-06T17:42:30.156Z",
+  "checksum": "aebf17aa7bc1e6ab",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -4444,6 +4444,14 @@
             "name": "etgoValuation",
             "apiKey": "etgoValuation",
             "column": "EM_Etgo_Valuation",
+            "type": "amount",
+            "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "etgoCost",
+            "apiKey": "etgoCost",
+            "column": "EM_Etgo_Cost",
             "type": "amount",
             "visibility": "system",
             "required": false
@@ -10116,6 +10124,14 @@
         "description": "System field 'creationDate' should exist in backend but not frontend for stock"
       },
       {
+        "id": "t-system-field-stock-etgoCost",
+        "category": "system-field",
+        "entity": "stock",
+        "field": "etgoCost",
+        "runner": "node",
+        "description": "System field 'etgoCost' should exist in backend but not frontend for stock"
+      },
+      {
         "id": "t-system-field-stock-etgoValuation",
         "category": "system-field",
         "entity": "stock",
@@ -10601,7 +10617,7 @@
       }
     ],
     "summary": {
-      "total": 655,
+      "total": 656,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
@@ -10615,11 +10631,11 @@
         "rule-declared": 141,
         "searchable-filters": 5,
         "selector-endpoint": 27,
-        "system-field": 251,
+        "system-field": 252,
         "visibility": 12
       },
       "byRunner": {
-        "node": 655,
+        "node": 656,
         "junit": 0
       }
     }
