@@ -11,8 +11,8 @@ export const returnToVendorShipment = [
     "description": "Standard order for Q1 delivery",
     "documentStatus": "DR",
     "trackingNo": "RE-00001",
+    "invoiceStatus": "DR",
     "sourceReceiptDocNo": "RE-00001",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -25,8 +25,8 @@ export const returnToVendorShipment = [
     "description": "Rush order - priority shipping required",
     "documentStatus": "CO",
     "trackingNo": "RE-00002",
+    "invoiceStatus": "CO",
     "sourceReceiptDocNo": "RE-00002",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -39,8 +39,8 @@ export const returnToVendorShipment = [
     "description": "Bulk purchase for warehouse restocking",
     "documentStatus": "VO",
     "trackingNo": "RE-00003",
+    "invoiceStatus": "VO",
     "sourceReceiptDocNo": "RE-00003",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -53,8 +53,8 @@ export const returnToVendorShipment = [
     "description": "Sample order for client evaluation",
     "documentStatus": "IP",
     "trackingNo": "RE-00004",
+    "invoiceStatus": "IP",
     "sourceReceiptDocNo": "RE-00004",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -67,8 +67,8 @@ export const returnToVendorShipment = [
     "description": "Recurring monthly supply order",
     "documentStatus": "DR",
     "trackingNo": "RE-00005",
+    "invoiceStatus": "DR",
     "sourceReceiptDocNo": "RE-00005",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -81,8 +81,8 @@ export const returnToVendorShipment = [
     "description": "Special pricing agreement applies",
     "documentStatus": "CO",
     "trackingNo": "RE-00006",
+    "invoiceStatus": "CO",
     "sourceReceiptDocNo": "RE-00006",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -95,8 +95,8 @@ export const returnToVendorShipment = [
     "description": "Consolidated order from multiple requests",
     "documentStatus": "VO",
     "trackingNo": "RE-00007",
+    "invoiceStatus": "VO",
     "sourceReceiptDocNo": "RE-00007",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -109,8 +109,8 @@ export const returnToVendorShipment = [
     "description": "Trial order for new product line",
     "documentStatus": "IP",
     "trackingNo": "RE-00008",
+    "invoiceStatus": "IP",
     "sourceReceiptDocNo": "RE-00008",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -123,8 +123,8 @@ export const returnToVendorShipment = [
     "description": "Replacement for damaged goods",
     "documentStatus": "DR",
     "trackingNo": "RE-00009",
+    "invoiceStatus": "DR",
     "sourceReceiptDocNo": "RE-00009",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -137,8 +137,8 @@ export const returnToVendorShipment = [
     "description": "Pre-season inventory build-up",
     "documentStatus": "CO",
     "trackingNo": "RE-00010",
+    "invoiceStatus": "CO",
     "sourceReceiptDocNo": "RE-00010",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -151,8 +151,8 @@ export const returnToVendorShipment = [
     "description": "Customer-specific configuration",
     "documentStatus": "VO",
     "trackingNo": "RE-00011",
+    "invoiceStatus": "VO",
     "sourceReceiptDocNo": "RE-00011",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -165,8 +165,8 @@ export const returnToVendorShipment = [
     "description": "Government contract fulfillment",
     "documentStatus": "IP",
     "trackingNo": "RE-00012",
+    "invoiceStatus": "IP",
     "sourceReceiptDocNo": "RE-00012",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   }
 ];

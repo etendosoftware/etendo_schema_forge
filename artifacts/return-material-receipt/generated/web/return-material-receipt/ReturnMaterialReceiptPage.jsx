@@ -5,7 +5,6 @@ import ReturnMaterialReceiptForm from './ReturnMaterialReceiptForm';
 import ReturnMaterialReceiptLineTable from './ReturnMaterialReceiptLineTable';
 import ReturnMaterialReceiptLineForm from './ReturnMaterialReceiptLineForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
-import { AttachmentsTab } from '@/components/attachments';
 import ReturnMaterialReceiptBottomPanel from '../../../custom/ReturnMaterialReceiptBottomPanel';
 import ConfirmWithCreditButton from '@/windows/custom/return-material-receipt/ConfirmWithCreditButton';
 import catalogs from './mockCatalogs';
@@ -18,7 +17,6 @@ const breadcrumb = 'Sales / Return Material Receipt';
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'sourceShipmentDocNo', column: 'sourceShipmentDocNo', type: 'string' },
-  { key: 'etblkpAccountingstatus', column: 'EM_Etblkp_Accountingstatus', type: 'status' },
   { key: 'etblkpBulkposting', column: 'EM_Etblkp_Bulkposting', type: 'string' },
 ];
 
@@ -43,7 +41,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:returnMaterialReceipt
 
 // @sf-generated-start requiredHeaderFields:returnMaterialReceipt
-const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', 'warehouse', 'partnerAddress', 'etblkpAccountingstatus', 'etblkpBulkposting'];
+const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', 'warehouse', 'partnerAddress', 'etblkpBulkposting'];
 // @sf-generated-end requiredHeaderFields:returnMaterialReceipt
 
 // @sf-generated-start addLineFields:returnMaterialReceiptLine
@@ -313,7 +311,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         hideDeleteWhenComplete
         noHeaderBorder
         notesField="description"
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }]}
         bottomSection={ReturnMaterialReceiptBottomPanel}
         topbarRight={ConfirmWithCreditButton}
         requiredHeaderFields={requiredHeaderFields}

@@ -11,8 +11,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Acme Corp",
     "documentStatus": "DR",
     "trackingNo": "RE-00001",
+    "invoiceStatus": "DR",
     "sourceShipmentDocNo": "RE-00001",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -25,8 +25,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "TechFlow Inc",
     "documentStatus": "CO",
     "trackingNo": "RE-00002",
+    "invoiceStatus": "CO",
     "sourceShipmentDocNo": "RE-00002",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -39,8 +39,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Global Trade Ltd",
     "documentStatus": "VO",
     "trackingNo": "RE-00003",
+    "invoiceStatus": "VO",
     "sourceShipmentDocNo": "RE-00003",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -53,8 +53,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Summit Industries",
     "documentStatus": "IP",
     "trackingNo": "RE-00004",
+    "invoiceStatus": "IP",
     "sourceShipmentDocNo": "RE-00004",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -67,8 +67,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Pacific Partners",
     "documentStatus": "DR",
     "trackingNo": "RE-00005",
+    "invoiceStatus": "DR",
     "sourceShipmentDocNo": "RE-00005",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -81,8 +81,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Alpine Solutions",
     "documentStatus": "CO",
     "trackingNo": "RE-00006",
+    "invoiceStatus": "CO",
     "sourceShipmentDocNo": "RE-00006",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -95,8 +95,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Meridian Group",
     "documentStatus": "VO",
     "trackingNo": "RE-00007",
+    "invoiceStatus": "VO",
     "sourceShipmentDocNo": "RE-00007",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -109,8 +109,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Vertex Systems",
     "documentStatus": "IP",
     "trackingNo": "RE-00008",
+    "invoiceStatus": "IP",
     "sourceShipmentDocNo": "RE-00008",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -123,8 +123,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Atlas Manufacturing",
     "documentStatus": "DR",
     "trackingNo": "RE-00009",
+    "invoiceStatus": "DR",
     "sourceShipmentDocNo": "RE-00009",
-    "etblkpAccountingstatus": "DR",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -137,8 +137,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Nova Enterprises",
     "documentStatus": "CO",
     "trackingNo": "RE-00010",
+    "invoiceStatus": "CO",
     "sourceShipmentDocNo": "RE-00010",
-    "etblkpAccountingstatus": "CO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -151,8 +151,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Pinnacle Services",
     "documentStatus": "VO",
     "trackingNo": "RE-00011",
+    "invoiceStatus": "VO",
     "sourceShipmentDocNo": "RE-00011",
-    "etblkpAccountingstatus": "VO",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   },
   {
@@ -165,8 +165,8 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Horizon Labs",
     "documentStatus": "IP",
     "trackingNo": "RE-00012",
+    "invoiceStatus": "IP",
     "sourceShipmentDocNo": "RE-00012",
-    "etblkpAccountingstatus": "IP",
     "etblkpBulkposting": "Sample etblkpBulkposting"
   }
 ];

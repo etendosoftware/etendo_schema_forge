@@ -18,7 +18,6 @@ const breadcrumb = 'Purchases / Return to Vendor Shipment';
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
   { key: 'sourceReceiptDocNo', column: 'sourceReceiptDocNo', type: 'string' },
-  { key: 'etblkpAccountingstatus', column: 'EM_Etblkp_Accountingstatus', type: 'status' },
   { key: 'etblkpBulkposting', column: 'EM_Etblkp_Bulkposting', type: 'string' },
 ];
 
@@ -43,7 +42,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:returnToVendorShipment
 
 // @sf-generated-start requiredHeaderFields:returnToVendorShipment
-const requiredHeaderFields = ['documentNo', 'businessPartner', 'partnerAddress', 'movementDate', 'warehouse', 'etblkpAccountingstatus', 'etblkpBulkposting'];
+const requiredHeaderFields = ['documentNo', 'businessPartner', 'partnerAddress', 'movementDate', 'warehouse', 'etblkpBulkposting'];
 // @sf-generated-end requiredHeaderFields:returnToVendorShipment
 
 // @sf-generated-start addLineFields:returnToVendorShipmentLine

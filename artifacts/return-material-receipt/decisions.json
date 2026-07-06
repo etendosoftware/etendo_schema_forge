@@ -9,6 +9,7 @@
     "linesLayout": "inlineEditable",
     "noHeaderBorder": true,
     "hideDeleteWhenComplete": true,
+    "attachments": false,
     "customComponents": {
       "bottomSection": "ReturnMaterialReceiptBottomPanel",
       "topbarRight": "ConfirmWithCreditButton"
@@ -50,6 +51,9 @@
         }
       ],
       "fields": {
+        "etblkpAccountingstatus": {
+          "visibility": "discarded"
+        },
         "movementDate": {
           "grid": true,
           "gridOrder": 1,
@@ -205,7 +209,11 @@
           "visibility": "discarded"
         },
         "invoiceStatus": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 7,
+          "form": false,
+          "columnType": "percent"
         },
         "isnettingshipment": {
           "visibility": "discarded"
