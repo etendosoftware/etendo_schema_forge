@@ -7,6 +7,7 @@ import PaymentBottomPanel from '../../../custom/PaymentBottomPanel';
 import PaymentConciliadoBadge from '../../../custom/PaymentConciliadoBadge';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import NewPaymentModal from '../../../custom/NewPaymentModal';
+import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
 import catalogs from './mockCatalogs';
 
 
@@ -30,7 +31,7 @@ const extraBadges = [
 // @sf-generated-start processes:finPayment
 const processes = [
   { name: 'Payment Process', label: 'processConfirm', style: 'positive', columnName: 'aPRMProcessPayment',
-    displayLogicRaw: "@status@ = 'RPAP'" },
+    displayLogicRaw: "@status@ = 'RPAP'", confirmModal: true },
   { name: 'etprReactivatePayment', label: 'processReactivate', style: 'ghost-danger', columnName: 'etprReactivatePayment',
     displayLogicRaw: "@status@ != 'RPAP'" },
 ];
@@ -272,7 +273,9 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         topbarExtra={PaymentConciliadoBadge}
         sidePanel={PaymentDetailSidebar}
         sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid #E8EAEF","padding":0}}
+        processConfirmModal={ReactivarConfirmModal}
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"cobroDepositado","RDNC":"cobroDepositado","RPPC":"cobroDepositado","PPM":"cobroDepositado","PWNC":"cobroDepositado"}}
+        statusFieldLabel="statusColumnLabel"
         sendDocument
         {...props}
       />
