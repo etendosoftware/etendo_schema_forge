@@ -246,6 +246,67 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
   `AssetsHandler` from `depreciationStartDate + usableLifeMonths` and should not be
   requested from the user.
 
+## ETP-4402 — Fix orphaned Accounting tab (feature/assets-accounting)
+
+### What was wrong
+
+The `assetAcct` entity (AD_Tab 800190, table `A_Asset_Acct`, holding the general ledger
+schema plus the accumulated-depreciation and depreciation account combinations) was fully
+generated at the data layer — `contract.json` defined its fields, selector endpoints, and
+validations, and `artifacts/assets/generated/web/assets/AssetAcctTable.jsx` /
+`AssetAcctForm.jsx` existed and compiled cleanly — but `window.secondaryTabs` in
+`decisions.json` was an empty object (`{}`). Nothing in `decisions.json` referenced the
+`assetAcct` entity as a tab, so `generate-frontend.js` never imported `AssetAcctTable` /
+`AssetAcctForm` into `AssetsPage.jsx`, and the Accounting child surface never rendered in
+the running app. It looked "already done" from the artifacts alone (fields classified,
+components generated, contract tests passing), but the tab itself was unreachable —
+generated-but-unmounted. Live screenshots confirmed only **Plan de amortizacion**
+(the unrelated `amortizationLine`/`AssetsAmortizationPanel` surface, wired via
+`customPanelTabs`) appeared in the tab strip; there was no Accounting tab at all.
+
+### The fix
+
+Added an entry to `window.secondaryTabs` in `decisions.json`:
+
+```json
+"secondaryTabs": {
+  "assetAcct": {
+    "tabOrder": 1,
+    "label": "Accounting",
+    "addLineFields": ["accountingSchema", "accumulatedDepreciation", "depreciation"],
+    "requireSavedRecord": true
+  }
+}
+```
+
+No `customTable`/`customForm` override was needed — omitting them makes the generator
+default to the exact `AssetAcctTable`/`AssetAcctForm` naming that was already generated
+from the `assetAcct` entity, the same convention used by `contacts`' `secondaryTabs.contact`
+and `secondaryTabs.bankAccount`. `secondaryTabs` is the correct mechanism here (full generic
+grid + add-line form for a child entity), as opposed to `customPanelTabs` (used by
+`amortizationPlan`), which mounts an arbitrary hand-written component with no grid/form
+scaffolding — unnecessary since the generic Table/Form pair already existed and needed no
+custom rendering logic.
+
+Field visibility inside `assetAcct` was verified against the AD and left unchanged:
+`accountingSchema` (`C_AcctSchema_ID`) is `isupdateable = 'N'` at the AD level and correctly
+classified `readOnly` after creation; `accumulatedDepreciation` and `depreciation` are
+`isupdateable = 'Y'` and correctly classified `editable`. All three are exposed as selectors
+in the add-line mini-form so a new accounting mapping row can be created with all three
+values set once, then the accounting schema locks.
+
+No new i18n keys were required — `label: "Accounting"` resolves through `tMenu()` against
+the existing `menus.Accounting` / `tabs.Accounting` entries already present in both
+`en_US.json` and `es_ES.json` ("Accounting" / "Contabilidad").
+
+### Automated evidence (post-fix)
+
+- `artifacts/assets/generated/web/assets/AssetsPage.jsx` now imports `AssetAcctTable` and
+  `AssetAcctForm` from `'./AssetAcctTable'` / `'./AssetAcctForm'` and lists them in
+  `secondaryTabs={[{ key: 'assetAcct', label: 'Accounting', Table: AssetAcctTable, Form: AssetAcctForm, ... }]}`,
+  alongside the pre-existing `customTabs` entries for `amortizationPlan` and `attachments`.
+- `node cli/src/validate-pipeline.js --scope=assets` reports 0 violations.
+
 ## ETP-4334 — Visual & toolbar refinements (feature/ETP-4334)
 
 Window-scoped polish plus two cross-cutting changes. Items flagged **(global)** affect

@@ -1,8 +1,8 @@
 {
   "version": "0.39.0",
   "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-07-03T13:04:01.522Z",
-  "checksum": "e92b7dbeb1870554",
+  "updatedAt": "2026-07-05T23:40:29.906Z",
+  "checksum": "1484f0531070845c",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -54,6 +54,28 @@
           "tabOrder": 3,
           "label": "Location",
           "customAddModal": "LocationEditorModal",
+          "requireSavedRecord": true
+        },
+        "customerAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 4,
+          "label": "Customer Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "customerReceivablesNo",
+            "customerPrepayment"
+          ],
+          "requireSavedRecord": true
+        },
+        "vendorAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 5,
+          "label": "Vendor Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "vendorLiability",
+            "vendorPrepayment"
+          ],
           "requireSavedRecord": true
         }
       },
@@ -915,24 +937,15 @@
             "enumValues": [
               {
                 "value": "P",
-                "name": "Pendiente",
-                "labels": {
-                  "es_ES": "Pendiente"
-                }
+                "name": "Pendiente"
               },
               {
                 "value": "V",
-                "name": "Válido",
-                "labels": {
-                  "es_ES": "Válido"
-                }
+                "name": "Válido"
               },
               {
                 "value": "I",
-                "name": "No válido",
-                "labels": {
-                  "es_ES": "No válido"
-                }
+                "name": "No válido"
               }
             ],
             "section": "principal",
@@ -1594,21 +1607,6 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "accountingSchema",
-            "apiKey": "accountingSchema",
-            "column": "C_AcctSchema_ID",
-            "label": "General Ledger",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "AcctSchema",
-            "inputMode": "selector"
-          },
-          {
             "name": "customerReceivablesNo",
             "apiKey": "customerReceivablesNo",
             "column": "C_Receivable_Acct",
@@ -1617,11 +1615,16 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Receivables Account",
+              "es_ES": "Cuenta a Cobrar"
+            }
           },
           {
             "name": "customerPrepayment",
@@ -1632,14 +1635,23 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Prepayment Account",
+              "es_ES": "Cuenta de Anticipos"
+            }
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "customerAccountingHandler",
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
+        ]
       },
       "intrastatShipments": {
         "tableName": "INTR_C_BPARTNER",
@@ -2565,21 +2577,6 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "accountingSchema",
-            "apiKey": "accountingSchema",
-            "column": "C_AcctSchema_ID",
-            "label": "General Ledger",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "AcctSchema",
-            "inputMode": "selector"
-          },
-          {
             "name": "vendorLiability",
             "apiKey": "vendorLiability",
             "column": "V_Liability_Acct",
@@ -2588,11 +2585,16 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Liability Account",
+              "es_ES": "Cuenta a Pagar"
+            }
           },
           {
             "name": "vendorPrepayment",
@@ -2603,14 +2605,23 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Prepayment Account",
+              "es_ES": "Cuenta de Anticipos"
+            }
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "vendorAccountingHandler",
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
+        ]
       },
       "intrastatAdquisitions": {
         "tableName": "INTR_C_BPARTNER",
@@ -4335,6 +4346,28 @@
           "label": "Location",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
+        },
+        "customerAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 4,
+          "label": "Customer Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "customerReceivablesNo",
+            "customerPrepayment"
+          ],
+          "requireSavedRecord": true
+        },
+        "vendorAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 5,
+          "label": "Vendor Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "vendorLiability",
+            "vendorPrepayment"
+          ],
+          "requireSavedRecord": true
         }
       },
       "detailEntity": null,
@@ -6209,7 +6242,7 @@
             "apiKey": "accountingSchema",
             "column": "C_AcctSchema_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -6308,7 +6341,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "customerAccountingHandler"
       },
       "intrastatShipments": {
         "tableName": "INTR_C_BPARTNER",
@@ -7366,7 +7400,7 @@
             "apiKey": "accountingSchema",
             "column": "C_AcctSchema_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -7473,7 +7507,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "vendorAccountingHandler"
       },
       "intrastatAdquisitions": {
         "tableName": "INTR_C_BPARTNER",
@@ -10582,14 +10617,6 @@
       },
       {
         "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/customerAccounting/selectors/accountingSchema"
-      },
-      {
-        "entity": "customerAccounting",
         "field": "customerReceivablesNo",
         "column": "C_Receivable_Acct",
         "reference": "ValidCombination",
@@ -10660,14 +10687,6 @@
         "reference": "BP_TaxCategory",
         "inputMode": "search",
         "url": "/sws/neo/contacts/vendorCreditor/selectors/taxCategory"
-      },
-      {
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/vendorAccounting/selectors/accountingSchema"
       },
       {
         "entity": "vendorAccounting",
@@ -13054,14 +13073,6 @@
         "description": "Field 'taxExempt' should be present in customer"
       },
       {
-        "id": "t-field-presence-customerAccounting-accountingSchema",
-        "category": "field-presence",
-        "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should be present in customerAccounting"
-      },
-      {
         "id": "t-field-presence-customerAccounting-customerPrepayment",
         "category": "field-presence",
         "entity": "customerAccounting",
@@ -13300,14 +13311,6 @@
         "field": "taxLocation",
         "runner": "node",
         "description": "Field 'taxLocation' should be present in locationAddress"
-      },
-      {
-        "id": "t-field-presence-vendorAccounting-accountingSchema",
-        "category": "field-presence",
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should be present in vendorAccounting"
       },
       {
         "id": "t-field-presence-vendorAccounting-vendorLiability",
@@ -14198,14 +14201,6 @@
         "description": "Field 'taxExempt' should have type 'boolean' in customer"
       },
       {
-        "id": "t-field-type-customerAccounting-accountingSchema",
-        "category": "field-type",
-        "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should have type 'string' in customerAccounting"
-      },
-      {
         "id": "t-field-type-customerAccounting-customerPrepayment",
         "category": "field-type",
         "entity": "customerAccounting",
@@ -14444,14 +14439,6 @@
         "field": "taxLocation",
         "runner": "node",
         "description": "Field 'taxLocation' should have type 'boolean' in locationAddress"
-      },
-      {
-        "id": "t-field-type-vendorAccounting-accountingSchema",
-        "category": "field-type",
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should have type 'string' in vendorAccounting"
       },
       {
         "id": "t-field-type-vendorAccounting-vendorLiability",
@@ -15534,14 +15521,6 @@
         "description": "Selector endpoint for 'sOBPTaxCategory' in customer should exist"
       },
       {
-        "id": "t-selector-endpoint-customerAccounting-accountingSchema",
-        "category": "selector-endpoint",
-        "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Selector endpoint for 'accountingSchema' in customerAccounting should exist"
-      },
-      {
         "id": "t-selector-endpoint-customerAccounting-customerPrepayment",
         "category": "selector-endpoint",
         "entity": "customerAccounting",
@@ -15612,14 +15591,6 @@
         "field": "locationAddress",
         "runner": "node",
         "description": "Selector endpoint for 'locationAddress' in locationAddress should exist"
-      },
-      {
-        "id": "t-selector-endpoint-vendorAccounting-accountingSchema",
-        "category": "selector-endpoint",
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Selector endpoint for 'accountingSchema' in vendorAccounting should exist"
       },
       {
         "id": "t-selector-endpoint-vendorAccounting-vendorLiability",
@@ -17558,6 +17529,14 @@
         "description": "System field 'volumeOfSales' should exist in backend but not frontend for customer"
       },
       {
+        "id": "t-system-field-customerAccounting-accountingSchema",
+        "category": "system-field",
+        "entity": "customerAccounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for customerAccounting"
+      },
+      {
         "id": "t-system-field-customerAccounting-active",
         "category": "system-field",
         "entity": "customerAccounting",
@@ -18950,6 +18929,14 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for locationAddress"
       },
       {
+        "id": "t-system-field-vendorAccounting-accountingSchema",
+        "category": "system-field",
+        "entity": "vendorAccounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for vendorAccounting"
+      },
+      {
         "id": "t-system-field-vendorAccounting-active",
         "category": "system-field",
         "entity": "vendorAccounting",
@@ -19920,23 +19907,23 @@
       }
     ],
     "summary": {
-      "total": 1150,
+      "total": 1146,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
         "default-value-type": 46,
         "displaylogic-evaluable": 58,
         "displaylogic-valid": 58,
-        "field-presence": 143,
-        "field-type": 143,
+        "field-presence": 141,
+        "field-type": 141,
         "rule-declared": 104,
         "searchable-filters": 4,
-        "selector-endpoint": 41,
-        "system-field": 517,
+        "selector-endpoint": 39,
+        "system-field": 519,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1150,
+        "node": 1146,
         "junit": 0
       }
     }

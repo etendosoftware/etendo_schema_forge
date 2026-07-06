@@ -110,6 +110,18 @@ Hidden system fields in this entity: `accountingSchema` (derived `fromConfig` �
 
 **Tab ordering:** the Accounting tab renders before Attachments automatically. This is handled by `DetailView.buildInitialTabs`, which always places `secondaryTabs` before `customTabs` (Attachments). No extra configuration is needed for this ordering.
 
+**Declared in `decisions.json` (`window.secondaryTabs.accounting`):**
+
+```json
+"window": {
+  "secondaryTabs": {
+    "accounting": { "tabOrder": 1, "label": "Accounting" }
+  }
+}
+```
+
+No `addLineFields` or `requireSavedRecord` are declared for this tab — unlike Product/Tax/Assets' accounting tabs in this same family, the `accounting` entity here doesn't need the addLineFields/sibling-copy machinery because `accountingSchema` is resolved via a plain `fromConfig` derivation (a fixed General Ledger lookup), not `addLineFromSibling`. Before this declaration existed, `generate-frontend.js`'s backward-compat fallback (a hardcoded list of known secondary-tab entity names, including `accounting`) produced the identical tab wiring by inferring it from the entity name alone — which meant the tab worked only by accident and would have silently disappeared if the entity were ever renamed or the fallback list changed. Declaring it explicitly makes the wiring durable across pipeline re-runs, with zero change to the generated output (verified via `make regen ONLY=asset-group` + diff against the pre-change generated files).
+
 **Inline editing:** hovering over an accounting row shows pencil and trash icons. Clicking the pencil puts both selector cells in edit mode inline within the row. Adding new accounting rows follows the standard inline-editable add-row flow.
 
 ## Window configuration flags
@@ -199,7 +211,7 @@ node cli/src/push-to-neo.js asset-group
 - `artifacts/asset-group/generated/web/asset-group/AssetCategoryPage.jsx` renders `ListView` for the list route and `DetailView` with `secondaryTabs` (Accounting), `linesLayout="inlineEditable"`, `hidePrint`, `noHeaderBorder`, and `AttachmentsTab` in `customTabs`.
 - `artifacts/asset-group/generated/web/asset-group/AccountingTable.jsx` renders `InlineLinesPanel` when `linesLayout === "inlineEditable"`.
 - `artifacts/asset-group/generated/web/asset-group/AccountingForm.jsx` is generated but not used in the current inline-editable layout.
-- `artifacts/asset-group/decisions.json` is the source of truth for all field visibility, `displayLogicJs` conditions, layout (`span`/`rows`), and window config flags documented above.
+- `artifacts/asset-group/decisions.json` is the source of truth for all field visibility, `displayLogicJs` conditions, layout (`span`/`rows`), window config flags, and the `secondaryTabs.accounting` declaration documented above.
 
 ### Design note — history
 

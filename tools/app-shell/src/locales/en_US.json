@@ -1828,6 +1828,38 @@
       "label": "Unrealized Losses Acct.",
       "description": "Unrealized Loss Account for currency revaluation"
     },
+    "NotInvoicedReceivables_Acct": {
+      "label": "Non-Invoiced Receivables",
+      "description": "The Not Invoiced Receivables account indicates the account used for recording receivables that have not yet been invoiced."
+    },
+    "NotInvoicedRevenue_Acct": {
+      "label": "Non-Invoiced Revenues",
+      "description": "The Not Invoiced Revenue account indicates the account used for recording revenue that has not yet been invoiced."
+    },
+    "PayDiscount_Exp_Acct": {
+      "label": "Payment Discount Expense",
+      "description": "Indicates the account to be charged for payment discount expenses."
+    },
+    "PayDiscount_Rev_Acct": {
+      "label": "Payment Discount Revenue",
+      "description": "Indicates the account to be charged for payment discount revenues."
+    },
+    "RealizedGain_Acct": {
+      "label": "Realized Gain Acct",
+      "description": "The Realized Gain Account indicates the account to be used when recording gains achieved from currency revaluation that have been realized."
+    },
+    "UnEarnedRevenue_Acct": {
+      "label": "Unearned Revenue",
+      "description": "The Unearned Revenue indicates the account used for recording invoices sent for products or services not yet delivered. It is used in revenue recognition"
+    },
+    "UnrealizedGain_Acct": {
+      "label": "Unrealized Gains Acct.",
+      "description": "The Unrealized Gain Account indicates the account to be used when recording gains achieved from currency revaluation that have yet to be realized."
+    },
+    "V_Liability_Services_Acct": {
+      "label": "Vendor Service Liability",
+      "description": "The Vendor Service Liability account indicates the account to use for recording service liabilities. It is used if you need to distinguish between Liability for products and services"
+    },
     "BeginningBalance": {
       "label": "Beginning Balance",
       "description": "Balance prior to any transactions"

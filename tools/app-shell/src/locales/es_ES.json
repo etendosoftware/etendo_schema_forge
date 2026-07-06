@@ -6808,6 +6808,38 @@
       "label": "Cuenta de pérdidas no realizadas",
       "description": "Cuenta de pérdidas no realizadas"
     },
+    "NotInvoicedReceivables_Acct": {
+      "label": "Cuenta pendiente no facturable",
+      "description": "Indica la cuenta usada para recibos que no han sido aún facturados."
+    },
+    "NotInvoicedRevenue_Acct": {
+      "label": "Ingresos (renta) no facturados",
+      "description": "Indica la cuenta usada para ingresos que no han sido aún facturados."
+    },
+    "PayDiscount_Exp_Acct": {
+      "label": "Gasto por descuento por pronto pago",
+      "description": "Indica la cuenta en la que se cargan los gastos por descuentos por pronto pago."
+    },
+    "PayDiscount_Rev_Acct": {
+      "label": "Ingresos por descuento por pronto pago",
+      "description": "Indica la cuenta en la que se cargan los ingresos por descuentos por pronto pago."
+    },
+    "RealizedGain_Acct": {
+      "label": "Cuenta de ganancia realizada",
+      "description": "Esta es la cuenta utilizada para ganancias de revaloración de moneda."
+    },
+    "UnEarnedRevenue_Acct": {
+      "label": "Ganancias a realizar",
+      "description": "Indica la cuenta que se usa para facturas enviadas para productos o servicios que aún no se han servido."
+    },
+    "UnrealizedGain_Acct": {
+      "label": "Cuenta de beneficios no realizados",
+      "description": "Indica la cuenta que se usa para ganancias aún no realizadas por revalorización de moneda."
+    },
+    "V_Liability_Services_Acct": {
+      "label": "Pasivo de servicio del proveedor",
+      "description": "Es la cuenta relativa al pasivo del servicio de proveedor."
+    },
     "SO_Goods_Blocking": {
       "label": "Albarán (Cliente)",
       "description": "Permite bloquear albaranes de cliente para un cliente"
@@ -13981,7 +14013,7 @@
       "label": "Producción LDM"
     },
     "Business Partner Category": {
-      "label": "Grupos de Terceros"
+      "label": "Categoría de Contacto"
     },
     "Payment Proposal": {
       "label": "Propuesta de Pago"
@@ -15197,7 +15229,7 @@
       "label": "Productos"
     },
     "Business Partner Category": {
-      "label": "Grupos de terceros"
+      "label": "Categoría de Contacto"
     },
     "Cashbook": {
       "label": "Caja"
@@ -21752,7 +21784,7 @@
       "label": "Producción LDM"
     },
     "Business Partner Category": {
-      "label": "Grupos de Terceros"
+      "label": "Categoría de Contacto"
     },
     "Bank Statement": {
       "label": "Extracto bancario"
