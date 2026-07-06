@@ -172,7 +172,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   };
 
   function applyOverrides(boxes, overrides) {
-    if (!Object.keys(overrides).length) return boxes;
+    if (!Object.keys(overrides).length) return toBoxArray(boxes);
     const arr = toBoxArray(boxes);
     const result = arr.filter(b => !(b.num in overrides));
     Object.entries(overrides).forEach(([num, val]) => {
