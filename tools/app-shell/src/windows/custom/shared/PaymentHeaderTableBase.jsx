@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useLayoutEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { RotateCcw, Check } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import { DataTable } from '@/components/contract-ui';
 import { useRowDelete } from '@/hooks/useRowDelete.jsx';
 import ReactivarModal from './ReactivarModal';
@@ -13,11 +13,11 @@ const ENTITY_BY_SPEC = { 'payment-in': 'finPayment', 'payment-out': 'header' };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DEPOSITED_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
+const DEPOSITED_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
 
-const DEPOSITED_STATUSES_LIST = ['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC'];
+const DEPOSITED_STATUSES_LIST = ['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE'];
 
-function buildColumns(dir, ui) {
+function buildColumns(dir, ui, locale) {
   const depositedKey = dir === 'in' ? 'cobroDepositado' : 'pagoDepositado';
   const depositedEnum = Object.fromEntries(DEPOSITED_STATUSES_LIST.map(s => [s, depositedKey]));
   return [
@@ -28,11 +28,15 @@ function buildColumns(dir, ui) {
       enumLabels: { ...depositedEnum, RPAP: 'statusDraft', DR: 'statusDraft' } },
     {
       key: 'amount', column: 'Amount', type: 'amount', label: ui('amount'),
+      // `labels` (priority 1 in resolveColumnLabel) must be set so this header
+      // outranks the AD-dictionary fallback translate('Amount'), which
+      // otherwise resolves to "Importe cobrado/pagado".
+      labels: { [locale]: ui('amount') },
       render: (row) => {
         const isDeposited = DEPOSITED_STATUSES.has(row.status || '');
         const amt = parseFloat(row.amount ?? 0);
         const curr = row['currency$_identifier'] || 'EUR';
-        const sign = dir === 'in' ? '+ ' : '− ';
+        const sign = amt > 0 ? (dir === 'in' ? '+ ' : '− ') : '';
         return (
           <span className="tabular-nums" style={{ color: isDeposited ? '#17663A' : '#121217', fontWeight: 600, whiteSpace: 'nowrap' }}>
             {sign}{fmtAmt(amt, curr)}
@@ -304,7 +308,7 @@ function PaymentSidebar({ dir, data, ui }) {
           <SidebarSkeleton data-testid="SidebarSkeleton__743b1b" />
         ) : (
           <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 30, lineHeight: '32px', color: heroColor, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-            {heroSign} {fmtAmt(thisMonth, currency)}
+            {thisMonth > 0 ? `${heroSign} ` : ''}{fmtAmt(thisMonth, currency)}
           </span>
         )}
       </div>
@@ -336,7 +340,7 @@ function PaymentSidebar({ dir, data, ui }) {
             </span>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, alignSelf: 'stretch' }}>
               {methods.map((m, i) => (
-                <div key={m.label}>
+                <div key={m.label} style={{ width: '100%' }}>
                   <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10, alignSelf: 'stretch', height: 20 }}>
                     <span style={{ fontFamily: 'Inter', fontWeight: 400, fontSize: 12, lineHeight: '16px', color: '#555B6D' }}>{m.label}</span>
                     <span className="tabular-nums" style={{ fontFamily: 'Inter', fontWeight: 500, fontSize: 14, lineHeight: '20px', color: '#121217', fontVariantNumeric: 'tabular-nums' }}>
@@ -362,12 +366,13 @@ const DRAFT_STATUS = 'RPAP';
 
 export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate, apiBaseUrl, ...props }) {
   const ui = useUI();
+  const { locale } = useLocaleSwitch();
   const [reactivateRow, setReactivateRow] = useState(null);
   const [confirmRow, setConfirmRow] = useState(null);
   const rootRef = useRef(null);
   const token = props.token;
   const entity = ENTITY_BY_SPEC[specName];
-  const columns = useMemo(() => buildColumns(dir, ui), [dir, ui]);
+  const columns = useMemo(() => buildColumns(dir, ui, locale), [dir, ui, locale]);
 
   const runAction = async (row, action, okKey, errorKey) => {
     const url = `${apiBaseUrl}/${entity}/${row.id}/action/${action}`;
@@ -438,7 +443,7 @@ export default function PaymentHeaderTableBase({ dir, specName, data, onNavigate
     if (status === DRAFT_STATUS) {
       return [{
         key: 'aPRMProcessPayment',
-        label: ui('confirmar'),
+        label: ui('confirm'),
         icon: Check,
         onClick: () => { setConfirmRow(row); return Promise.resolve(); },
       }];

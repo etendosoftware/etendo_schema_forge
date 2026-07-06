@@ -20,8 +20,10 @@ describe('PaymentConciliadoBadge', () => {
   it('guards on the full deposited status set, not just RPPC', () => {
     // RPPC alone under-counts: most deposited payments in practice settle
     // into RDNC/PWNC, not RPPC — the badge must match the same "deposited"
-    // grouping used by the list's status color/label.
-    for (const code of ['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']) {
+    // grouping used by the list's status color/label. RPAE (Awaiting
+    // Execution) is included too: the DB translation already labels it
+    // "Cobro/Pago depositado", so it must count as reconciled here as well.
+    for (const code of ['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']) {
       assert.match(src, new RegExp(code));
     }
     assert.match(src, /data\?\.status/);

@@ -6,7 +6,7 @@ import { useUI } from '@/i18n';
 // status color/label, sidebar). Whatever counts as "Cobro/Pago depositado"
 // there must also show as reconciled here — RPPC is not the only status a
 // deposited payment actually settles into.
-const DEPOSITED_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']);
+const DEPOSITED_STATUSES = new Set(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE']);
 
 const CHECK_ICON = (
   <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor"

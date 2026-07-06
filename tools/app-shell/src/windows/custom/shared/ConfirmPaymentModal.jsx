@@ -37,7 +37,7 @@ export default function ConfirmPaymentModal({ dir, onConfirm, onClose }) {
             size="sm"
             onClick={onConfirm}
             data-testid="payment-confirm-action">
-            {ui('confirmar')}
+            {ui('confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

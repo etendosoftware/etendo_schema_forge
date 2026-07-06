@@ -32,7 +32,7 @@ describe('PaymentConciliadoBadge', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it.each(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC'])(
+  it.each(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC', 'RPAE'])(
     'renders the conciliado badge for deposited status %s',
     (status) => {
       render(<PaymentConciliadoBadge data={{ status }} />);
