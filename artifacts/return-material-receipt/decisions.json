@@ -79,7 +79,7 @@
           "searchable": true,
           "reference": "BusinessPartner",
           "inputMode": "search",
-          "readOnlyLogic": null,
+          "readOnlyLogic": "@Processed@='Y'",
           "section": "principal",
           "seq": 1
         },

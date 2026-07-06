@@ -1,8 +1,8 @@
 {
-  "version": "0.18.0",
+  "version": "0.19.0",
   "generatedAt": "2026-04-29T18:11:05.114Z",
-  "updatedAt": "2026-07-06T12:42:35.410Z",
-  "contractChecksum": "f28a1b4884221518",
+  "updatedAt": "2026-07-06T12:47:06.975Z",
+  "contractChecksum": "686a0ccd045ce966",
   "apiPrediction": {
     "specName": "return-material-receipt",
     "baseUrl": "/sws/neo/return-material-receipt",
@@ -483,7 +483,7 @@
           },
           "businessPartner": {
             "required": true,
-            "readOnlyLogic": "@Processed@='Y' | @HAS_M_INOUTLINES@='Y'"
+            "readOnlyLogic": "@Processed@='Y'"
           },
           "description": {},
           "warehouse": {
@@ -630,5 +630,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "9ca98c8dfe041fed"
+  "checksum": "cf3e9a12b368ad70"
 }

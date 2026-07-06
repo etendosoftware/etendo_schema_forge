@@ -79,7 +79,7 @@
           "reference": "BusinessPartner",
           "selectorFilter": "isVendor=Y",
           "inputMode": "search",
-          "readOnlyLogic": null,
+          "readOnlyLogic": "@Processed@='Y'",
           "section": "principal",
           "seq": 1
         },
