@@ -5,6 +5,7 @@ import ReturnMaterialReceiptForm from './ReturnMaterialReceiptForm';
 import ReturnMaterialReceiptLineTable from './ReturnMaterialReceiptLineTable';
 import ReturnMaterialReceiptLineForm from './ReturnMaterialReceiptLineForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
+import { AttachmentsTab } from '@/components/attachments';
 import ReturnMaterialReceiptBottomPanel from '../../../custom/ReturnMaterialReceiptBottomPanel';
 import ConfirmWithCreditButton from '@/windows/custom/return-material-receipt/ConfirmWithCreditButton';
 import catalogs from './mockCatalogs';
@@ -311,7 +312,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         hideDeleteWhenComplete
         noHeaderBorder
         notesField="description"
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }]}
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={ReturnMaterialReceiptBottomPanel}
         topbarRight={ConfirmWithCreditButton}
         requiredHeaderFields={requiredHeaderFields}
