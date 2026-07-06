@@ -226,6 +226,16 @@ codes by dropping the trailing 2 zeros — the same convention already establish
 `c_validcombination_id` → `c_elementvalue.value` and cross-checking the account name/description
 against the screenshot's Spanish label (not just mechanical truncation).
 
+**Leaf-existence check (R9 precedent applied — no new chart account was needed):** R9
+(`bp-category-seed`) established the pattern that a target account referenced by a data-fix might
+not actually exist as a `c_elementvalue` leaf and would need to be minted first. Applied that check
+here: queried `c_elementvalue` directly (not just `c_validcombination`) for all 15 target codes —
+`SELECT value, name, issummary, isactive FROM c_elementvalue WHERE ad_client_id = '802509E12436405C86BA1FD5B1DF508C' AND value = ANY(ARRAY['43600000','69400000','79400000','49000000','48000000','48500000','43000000','43800000','40000000','40700000','40090000','35000000','60000000','70000000'])`.
+All 14 unique codes (69400000 is shared by two labels) returned a row with `issummary='N'` and
+`isactive='Y'` — every target account, including all 6 previously-NULL ones, already existed as a
+real, active, posting-level leaf in GOClient's chart. **No R9-style `c_elementvalue` mint was
+required**; R11 only had to wire existing `c_validcombination` FKs into `c_acctschema_default`.
+
 **Full mapping (verified live against GOClient `802509E12436405C86BA1FD5B1DF508C`, 2026-07-06):**
 
 | Spanish label (screenshot) | `c_acctschema_default` column | Account value (8-digit) | Account name | State before fix |
