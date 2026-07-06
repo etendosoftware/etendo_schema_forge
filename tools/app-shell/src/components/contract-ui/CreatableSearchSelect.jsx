@@ -75,6 +75,89 @@ import { FIELD_HEIGHT } from '@/components/ui/formDensity';
  * />
  * ```
  */
+/** Derives the trigger/dropdown visual flags from the field/selection state (extracted to keep
+ * CreatableSearchSelect's own cognitive complexity down — pure, no side effects). */
+function computeSelectDisplayState({
+  parentKey, parentValue, value, emptyOptionLabel, required, editingIntent, open,
+  createLabel, loading, filteredOptions, query, resolvedLabel, ui,
+}) {
+  const hasSelection = value != null && value !== '';
+  const isDisabled = !!(parentKey && !parentValue && !value);
+  const showEmptyOption = !!emptyOptionLabel && !required;
+  const showChip = hasSelection && !editingIntent && !isDisabled;
+  const placeholder = (showEmptyOption && !hasSelection)
+    ? emptyOptionLabel
+    : `${ui('searchLabelPrefix')} ${resolvedLabel}...`;
+  const showDropdown = open && !isDisabled
+    && (showEmptyOption || createLabel || loading || filteredOptions.length > 0 || query.trim());
+  return { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown };
+}
+
+/** Pinned "create X" / "use typed value" action rendered at the top of the dropdown panel. */
+function CreateAction({ field, createLabel, onCreateRequest, onCreate, query }) {
+  if (!createLabel || !onCreateRequest || (typeof createLabel === 'function' && !query.trim())) {
+    return null;
+  }
+  return (
+    <button
+      type="button"
+      data-testid={`action-create-${field.key}`}
+      className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-blue-50 border-b border-border/40 transition-colors"
+      style={{ color: '#202452' }}
+      onMouseDown={(e) => { e.preventDefault(); onCreate(); }}
+    >
+      {typeof createLabel === 'function' ? createLabel(query.trim()) : createLabel}
+    </button>
+  );
+}
+
+/** Contents of the portaled options panel: empty-choice, create action, loading, list, no-results. */
+function SearchSelectOptionsPanel({
+  field, ui, query, showEmptyOption, emptyOptionLabel, onSelectEmpty,
+  createLabel, onCreateRequest, onCreate, loading, filteredOptions, onSelect,
+}) {
+  return (
+    <>
+      {showEmptyOption && !query.trim() && (
+        <button
+          type="button"
+          data-testid={`option-${field.key}-__empty__`}
+          className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 border-b border-border/40 cursor-pointer"
+          onMouseDown={(e) => { e.preventDefault(); onSelectEmpty(); }}
+        >
+          {emptyOptionLabel}
+        </button>
+      )}
+      <CreateAction
+        field={field}
+        createLabel={createLabel}
+        onCreateRequest={onCreateRequest}
+        onCreate={onCreate}
+        query={query}
+        data-testid={"CreateAction__" + field.id} />
+      {loading && (
+        <div className="px-3 py-2 text-xs text-muted-foreground">{ui('loading')}</div>
+      )}
+      {!loading && filteredOptions.map(opt => (
+        <button
+          key={opt.id}
+          type="button"
+          data-testid={`option-${field.key}-${opt.id}`}
+          className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer"
+          onMouseDown={(e) => { e.preventDefault(); onSelect(opt); }}
+        >
+          {opt.name}
+        </button>
+      ))}
+      {!loading && filteredOptions.length === 0 && query.trim() && (
+        <div className="px-3 py-2 text-xs text-muted-foreground">
+          {ui('noResultsFor')} &ldquo;{query}&rdquo;
+        </div>
+      )}
+    </>
+  );
+}
+
 export function CreatableSearchSelect({
   field,
   value,
@@ -122,7 +205,6 @@ export function CreatableSearchSelect({
   const parentKey = field.dependsOn?.field;
   const filterKey = field.dependsOn?.filterKey;
   const parentValue = formData?.[parentKey];
-  const isDisabled = !!(parentKey && !parentValue && !value);
 
   // Sync displayed text from outside when the user is not actively typing
   useEffect(() => {
@@ -196,7 +278,13 @@ export function CreatableSearchSelect({
     return options.filter(o => o.name.toLowerCase().includes(q));
   }, [options, query]);
 
-  const hasSelection = value != null && value !== '';
+  // Derived visibility/state flags for the trigger and dropdown — computed together
+  // since they all depend on the same selection/parent/query inputs.
+  const { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown } =
+    computeSelectDisplayState({
+      parentKey, parentValue, value, emptyOptionLabel, required: field.required,
+      editingIntent, open, createLabel, loading, filteredOptions, query, resolvedLabel, ui,
+    });
 
   const handleSelect = (opt) => {
     isEditingRef.current = false;
@@ -216,7 +304,6 @@ export function CreatableSearchSelect({
 
   // Explicit empty/null choice (e.g. "All accounts"): clears the value and shows
   // the empty-option label as the chip, mirroring SelectorInput's "__empty__" item.
-  const showEmptyOption = !!emptyOptionLabel && !field.required;
   const handleSelectEmpty = () => {
     isEditingRef.current = false;
     setEditingIntent(false);
@@ -228,7 +315,6 @@ export function CreatableSearchSelect({
   // Chip mode: show the Figma chip when a value is selected and the user is
   // not actively editing. Clicking the chip body flips editingIntent so the
   // input becomes typeable again.
-  const showChip = hasSelection && !editingIntent && !isDisabled;
   const handleChipClick = () => {
     setEditingIntent(true);
     requestAnimationFrame(() => {
@@ -256,15 +342,6 @@ export function CreatableSearchSelect({
       setRefreshKey(k => k + 1);
     });
   };
-
-  // When an empty-option label is configured and nothing is selected, surface it
-  // as the placeholder (e.g. "All accounts") instead of the generic search prompt —
-  // matching SelectorInput's trigger, where the empty label reads on the closed control.
-  const placeholder = (showEmptyOption && !hasSelection)
-    ? emptyOptionLabel
-    : `${ui('searchLabelPrefix')} ${resolvedLabel}...`;
-
-  const showDropdown = open && !isDisabled && (showEmptyOption || createLabel || loading || filteredOptions.length > 0 || query.trim());
 
   // Measure the trigger and compute a viewport-anchored (fixed) position for the
   // panel. Mirrors InlineSearchCombo: open downward by default, flip upward when
@@ -404,56 +481,20 @@ export function CreatableSearchSelect({
           style={dropdownStyle}
           data-open-up={openUp ? 'true' : 'false'}
         >
-          {/* Empty/null choice (e.g. "All accounts") — pinned at the top, hidden while filtering */}
-          {showEmptyOption && !query.trim() && (
-            <button
-              type="button"
-              data-testid={`option-${field.key}-__empty__`}
-              className="w-full text-left px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 border-b border-border/40 cursor-pointer"
-              onMouseDown={(e) => { e.preventDefault(); handleSelectEmpty(); }}
-            >
-              {emptyOptionLabel}
-            </button>
-          )}
-
-          {/* Create action — pinned at the top. A string createLabel is always shown (e.g.
-              "+ Add address" opens a blank creation modal). A function createLabel marks a
-              free-text picker: it renders createLabel(query) and only appears once the user
-              has typed something, so it reads as "use what I typed" (e.g. Usar «ES91…»). */}
-          {createLabel && onCreateRequest
-            && (typeof createLabel !== 'function' || query.trim()) && (
-            <button
-              type="button"
-              data-testid={`action-create-${field.key}`}
-              className="w-full text-left px-3 py-2 text-sm font-medium hover:bg-blue-50 border-b border-border/40 transition-colors"
-              style={{ color: '#202452' }}
-              onMouseDown={(e) => { e.preventDefault(); handleCreate(); }}
-            >
-              {typeof createLabel === 'function' ? createLabel(query.trim()) : createLabel}
-            </button>
-          )}
-
-          {loading && (
-            <div className="px-3 py-2 text-xs text-muted-foreground">{ui('loading')}</div>
-          )}
-
-          {!loading && filteredOptions.map(opt => (
-            <button
-              key={opt.id}
-              type="button"
-              data-testid={`option-${field.key}-${opt.id}`}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer"
-              onMouseDown={(e) => { e.preventDefault(); handleSelect(opt); }}
-            >
-              {opt.name}
-            </button>
-          ))}
-
-          {!loading && filteredOptions.length === 0 && query.trim() && (
-            <div className="px-3 py-2 text-xs text-muted-foreground">
-              {ui('noResultsFor')} &ldquo;{query}&rdquo;
-            </div>
-          )}
+          <SearchSelectOptionsPanel
+            field={field}
+            ui={ui}
+            query={query}
+            showEmptyOption={showEmptyOption}
+            emptyOptionLabel={emptyOptionLabel}
+            onSelectEmpty={handleSelectEmpty}
+            createLabel={createLabel}
+            onCreateRequest={onCreateRequest}
+            onCreate={handleCreate}
+            loading={loading}
+            filteredOptions={filteredOptions}
+            onSelect={handleSelect}
+            data-testid={"SearchSelectOptionsPanel__" + field.id} />
         </div>,
         document.body,
       )}

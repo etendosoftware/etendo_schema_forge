@@ -89,6 +89,19 @@ function pisFieldsComplete(template, f) {
   return !!f.iban; // SEPA (and any default)
 }
 
+/** Builds the PIS-specific fields for the registerPayment body when confirming with a bank transfer. */
+function buildPisPaymentFields(template, creditorValues) {
+  const show = pisTemplateFields(template);
+  return {
+    pis: true,
+    pisTemplate: template,
+    pisCreditorIban: show.iban ? (creditorValues.iban || undefined) : undefined,
+    pisCreditorBban: show.bban ? (creditorValues.bban || undefined) : undefined,
+    pisCreditorAccountNumber: show.accountNumber ? (creditorValues.accountNumber || undefined) : undefined,
+    pisCreditorSortCode: show.sortCode ? (creditorValues.sortCode || undefined) : undefined,
+  };
+}
+
 /** Returns a short currency suffix ("€" for EUR, otherwise the ISO code). */
 function curSuffix(currency) {
   return currency === 'EUR' ? '€' : (currency || '');
@@ -242,6 +255,27 @@ function extractSaveError(json, ui) {
     || json?.response?.message?.text
     || json?.response?.message
     || ui('cpSaveFailed');
+}
+
+/** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
+function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId, accountId, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
+  const pisEligible = dir === 'out'
+    && !!selectedAccount?.psd2Connected
+    && looksLikeTransfer(selectedMethodObj?.name)
+    && PIS_ELIGIBLE_CURRENCIES.has(currency);
+  // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm. "Importe"
+  // is satisfied by the total applied (cash + used credit), not the cash field alone —
+  // a credit/saldo a favor line covering 100% legitimately leaves the cash amount at 0.
+  const missingRequired = balance.funds <= 0 || !date || !methodId || !accountId;
+  const saveDisabled = saving || loading || missingRequired;
+  // For PIS, the template-specific creditor fields must be filled before confirming
+  // (SEPA→IBAN, FPS→sort code + account number, DOMESTIC→any one identifier).
+  const pisReady = !pisEligible || pisFieldsComplete(pisTemplate, {
+    iban: pisIban, bban: pisBban, accountNumber: pisAccountNumber, sortCode: pisSortCode,
+  });
+  const confirmDisabled = saving || missingRequired || !balance.canConfirm || !!pisPolling || !pisReady;
+  const confirmLabel = pisEligible ? ui('cpPisConfirmButton') : ui('cpConfirm');
+  return { pisEligible, saveDisabled, confirmDisabled, confirmLabel };
 }
 
 function Check({ checked, size = 18 }) {
@@ -552,6 +586,54 @@ function PisTransferSection({
   );
 }
 
+/** Footer actions (cancel / save draft / confirm, or the PIS-waiting state) — extracted to keep
+ * the main component's cognitive complexity down. */
+function PaymentModalFooter({
+  saving, pisPolling, pisWindowClosed, ui, requestClose, cancelPisWait, onReopenPis,
+  saveDisabled, confirmDisabled, loading, confirmLabel, onSaveDraft, onConfirm, floppy,
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: '#fff', flexShrink: 0 }}>
+      <button type="button" onClick={requestClose} disabled={saving} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'transparent', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}>{ui('cancel')}</button>
+      {pisPolling ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="cp-pis-waiting">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, font: '500 14px/24px Inter', color: INK }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: AMBER, flexShrink: 0 }} />
+            {pisWindowClosed ? ui('cpPisWindowClosed') : ui(pisStatusKey(pisPolling.status))}
+          </span>
+          {pisWindowClosed && (
+            <button
+              type="button" data-testid="cp-pis-reopen"
+              onClick={onReopenPis}
+              className="bg-[#121217] text-white"
+              style={{ height: 32, padding: '0 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', cursor: 'pointer' }}
+            >
+              {ui('cpPisReopen')}
+            </button>
+          )}
+          <button
+            type="button" data-testid="cp-pis-cancel-wait"
+            onClick={cancelPisWait}
+            style={{ height: 32, padding: '0 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}
+          >
+            {ui('cpPisCancelWait')}
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button type="button" data-testid="cp-save-draft" onClick={onSaveDraft} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
+            {floppy}{ui('save')}
+          </button>
+          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled || loading} className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+            {confirmLabel}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * NewPaymentEntryModal — step 2 of the two-step Cobros/Pagos flow.
  * Opens from the invoice payment-history popup ("+ Añadir cobro/pago").
@@ -688,10 +770,13 @@ export default function NewPaymentEntryModal({
   // (mirrors the backend's own heuristic) — not meant to be exhaustive.
   const selectedAccount = useMemo(() => accounts.find(a => a.id === accountId), [accounts, accountId]);
   const selectedMethodObj = useMemo(() => methods.find(m => m.id === methodId), [methods, methodId]);
-  const pisEligible = dir === 'out'
-    && !!selectedAccount?.psd2Connected
-    && looksLikeTransfer(selectedMethodObj?.name)
-    && PIS_ELIGIBLE_CURRENCIES.has(currency);
+  // Derived gating/eligibility state, computed together since save/confirm disabled-ness,
+  // the PIS block's visibility, and its "ready to confirm" state all share the same inputs.
+  const { pisEligible, saveDisabled, confirmDisabled, confirmLabel } =
+    computePaymentModalState({
+      dir, selectedAccount, selectedMethodObj, currency, saving, loading, balance, date, methodId,
+      accountId, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui,
+    });
 
   // Fetch the supplier's PIS-eligible bank accounts + the payment-template ref-list once,
   // the first time the block becomes eligible (avoids the requests for non-PIS payments).
@@ -814,13 +899,9 @@ export default function NewPaymentEntryModal({
       // previously-selected template (e.g. a preselected IBAN) never leaks into
       // an FPS/DOMESTIC request.
       if (pisEligible && process === 'confirm') {
-        const show = pisTemplateFields(pisTemplate);
-        body.pis = true;
-        body.pisTemplate = pisTemplate;
-        body.pisCreditorIban = show.iban ? (pisIban || undefined) : undefined;
-        body.pisCreditorBban = show.bban ? (pisBban || undefined) : undefined;
-        body.pisCreditorAccountNumber = show.accountNumber ? (pisAccountNumber || undefined) : undefined;
-        body.pisCreditorSortCode = show.sortCode ? (pisSortCode || undefined) : undefined;
+        Object.assign(body, buildPisPaymentFields(pisTemplate, {
+          iban: pisIban, bban: pisBban, accountNumber: pisAccountNumber, sortCode: pisSortCode,
+        }));
       }
       const res = await apiFetch(`/${specName}/header/${invoiceId}/action/registerPayment`, {
         method: 'POST', body: JSON.stringify(body),
@@ -866,6 +947,14 @@ export default function NewPaymentEntryModal({
     onSaved?.({ cancelled: true }, 'reverted');
   }, [apiFetch, specName, invoiceId, pisPolling, onSaved]);
 
+  // Reopens the Salt Edge popup after the user closed it before authorizing — reuses the
+  // last registerPayment result (which carries the pisPaymentUrl) rather than re-requesting it.
+  const onReopenPis = useCallback(() => {
+    pisPopupRef.current = openPisPopup(pisResultRef.current?.pisPaymentUrl);
+    pisReturnedRef.current = false;
+    setPisWindowClosed(false);
+  }, []);
+
   // Closing the modal while a PIS transfer is still pending must also undo the PPM payment,
   // otherwise the invoice is left looking paid for a transfer that never happened.
   const requestClose = useCallback(() => {
@@ -875,19 +964,6 @@ export default function NewPaymentEntryModal({
 
   const title = isReceipt ? ui('cpNewCollection') : ui('cpNewPayment');
   const deltaLabel = deltaLabelFor(balance, ui);
-  // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm. "Importe"
-  // is satisfied by the total applied (cash + used credit), not the cash field alone —
-  // a credit/saldo a favor line covering 100% legitimately leaves the cash amount at 0.
-  const missingRequired = balance.funds <= 0 || !date || !methodId || !accountId;
-  const saveDisabled = saving || loading || missingRequired;
-  // For PIS, the template-specific creditor fields must be filled before confirming
-  // (SEPA→IBAN, FPS→sort code + account number, DOMESTIC→any one identifier).
-  const pisReady = !pisEligible || pisFieldsComplete(pisTemplate, {
-    iban: pisIban, bban: pisBban, accountNumber: pisAccountNumber, sortCode: pisSortCode,
-  });
-  const confirmDisabled = saving || missingRequired || !balance.canConfirm
-    || !!pisPolling || !pisReady;
-  const confirmLabel = pisEligible ? ui('cpPisConfirmButton') : ui('cpConfirm');
 
   // Floppy + check icons for the footer actions (Figma).
   const floppy = (
@@ -1052,48 +1128,22 @@ export default function NewPaymentEntryModal({
         </div>
 
         {/* footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: '#fff', flexShrink: 0 }}>
-          <button type="button" onClick={requestClose} disabled={saving} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', background: 'transparent', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}>{ui('cancel')}</button>
-          {pisPolling ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }} data-testid="cp-pis-waiting">
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, font: '500 14px/24px Inter', color: INK }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: AMBER, flexShrink: 0 }} />
-                {pisWindowClosed ? ui('cpPisWindowClosed') : ui(pisStatusKey(pisPolling.status))}
-              </span>
-              {pisWindowClosed && (
-                <button
-                  type="button" data-testid="cp-pis-reopen"
-                  onClick={() => {
-                    pisPopupRef.current = openPisPopup(pisResultRef.current?.pisPaymentUrl);
-                    pisReturnedRef.current = false;
-                    setPisWindowClosed(false);
-                  }}
-                  className="bg-[#121217] text-white"
-                  style={{ height: 32, padding: '0 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', cursor: 'pointer' }}
-                >
-                  {ui('cpPisReopen')}
-                </button>
-              )}
-              <button
-                type="button" data-testid="cp-pis-cancel-wait"
-                onClick={cancelPisWait}
-                style={{ height: 32, padding: '0 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', color: INK, font: '500 14px/24px Inter', cursor: 'pointer' }}
-              >
-                {ui('cpPisCancelWait')}
-              </button>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button type="button" data-testid="cp-save-draft" onClick={() => submit('draft')} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(18,18,23,.05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
-                {floppy}{ui('save')}
-              </button>
-              <button type="button" data-testid="cp-confirm" onClick={() => submit('confirm')} disabled={confirmDisabled || loading} className="bg-[#121217] text-white hover:bg-[#FFD500] hover:text-[#121217] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                {confirmLabel}
-              </button>
-            </div>
-          )}
-        </div>
+        <PaymentModalFooter
+          saving={saving}
+          pisPolling={pisPolling}
+          pisWindowClosed={pisWindowClosed}
+          ui={ui}
+          requestClose={requestClose}
+          cancelPisWait={cancelPisWait}
+          onReopenPis={onReopenPis}
+          saveDisabled={saveDisabled}
+          confirmDisabled={confirmDisabled}
+          loading={loading}
+          confirmLabel={confirmLabel}
+          onSaveDraft={() => submit('draft')}
+          onConfirm={() => submit('confirm')}
+          floppy={floppy}
+          data-testid="PaymentModalFooter__7727b3" />
       </div>
     </div>
   );
