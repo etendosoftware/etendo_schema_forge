@@ -1,8 +1,8 @@
 {
   "version": "0.10.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-07-03T12:41:25.546Z",
-  "checksum": "27c17f623f22b5ec",
+  "updatedAt": "2026-07-06T12:59:12.859Z",
+  "checksum": "eee82f93d84a16a0",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -74,6 +74,7 @@
         "PPM": "cobroDepositado",
         "PWNC": "cobroDepositado"
       },
+      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false,
@@ -910,6 +911,7 @@
         "PPM": "cobroDepositado",
         "PWNC": "cobroDepositado"
       },
+      "statusFieldLabel": "statusColumnLabel",
       "toolbarBorderBottom": true,
       "hideFormCard": true,
       "attachments": false
