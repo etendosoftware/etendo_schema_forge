@@ -10,6 +10,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A1b | Accounting | Posting account codes are < 8 digits; ETP-4247 feature fails | Onboarding sampledata XML (`C_ELEMENTVALUE.xml`) — pad codes to 8 digits | ETP-4247 |
 | A2 | Accounting | "Account Not Defined" even with ledger present | *Initial Organization Setup* — auto-populate `*_acct` tables | — |
 | A3 | Accounting | Schema not predefined (Allow Negatives/Centrally Maintained=N); only 5 of 8 dimensions enabled (Cost Center/User1/User2 missing) | Onboarding sampledata XML (`C_ACCTSCHEMA.xml`, `C_ACCTSCHEMA_ELEMENT.xml`) — dataset-only, no new service | ETP-4245 |
+| A3b | Accounting | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL (doubtful debt, bad-debt expense/revenue, allowance for doubtful debt, deferred product expense/revenue) | Onboarding sampledata XML (`C_ACCTSCHEMA_DEFAULT.xml`) — dataset-only, no new service | ETP-4245 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -199,6 +200,73 @@ WHERE s.ad_client_id = :client_id
 | **TC-43** (Posting) | ✅ Already correct | A completed+posted sales invoice with a Bebidas product (`documentno=10000016`) posts with zero "Account Not Defined" errors: debits `43000000` (Clientes), credits `70000000` (Ventas) + `47700000` (IVA repercutido), balanced (27.83 = 23.00 + 4.83). |
 
 See also: `docs/plans/onboarding-gaps-remediation-plan.md` §"Gap A3" for the full investigation notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable facts extracted from this pass.
+
+### A3b — `C_ACCTSCHEMA_DEFAULT` "Defaults tab" incomplete — Jorge's list (ETP-4245 follow-up, 2026-07-06)
+
+**Symptom:** TC-41 in the A3 pass above only cross-checked 5 of the 15 "Defaults tab" fields and
+deferred the rest pending a fuller reference ("Jorge's list of extra default accounts"). That list
+arrived 2026-07-06 for client "LadyPipa" (used as the visual reference; the actual remediation
+target is GOClient) — 10 Tercero (Third Party) fields + 5 Producto (Product) fields, shown as
+10-digit codes in the classic "Valores por defecto" tab.
+
+**Root cause:** same class of gap as A2/A3 — the per-schema `c_acctschema_default` row is populated
+piecemeal across passes (A1's clone step wired ~9 columns; nothing had touched the other 6).
+
+**FK indirection gotcha (new — not documented before this pass):** `C_ACCTSCHEMA_DEFAULT`'s `*_acct`
+columns are **not** a direct FK to `c_elementvalue`. They point to **`C_VALIDCOMBINATION`** (the
+account + dimension combination row), whose own `account_id` then points to `c_elementvalue`. Every
+populated column in GOClient resolves to a combination with **every optional dimension column NULL**
+(an "unbalanced", dimensionless posting combination), scoped to the tenant's own `c_acctschema_id`.
+Any fix touching these columns must resolve through `c_validcombination`, not `c_elementvalue`
+directly — a raw `c_elementvalue_id` will not satisfy the FK.
+
+**Numeric convention confirmed:** the screenshot's 10-digit codes map to GOClient's real 8-digit
+codes by dropping the trailing 2 zeros — the same convention already established by A1b
+(`R8-account-codes-8digits`). Verified individually for all 15 accounts by resolving each
+`c_validcombination_id` → `c_elementvalue.value` and cross-checking the account name/description
+against the screenshot's Spanish label (not just mechanical truncation).
+
+**Full mapping (verified live against GOClient `802509E12436405C86BA1FD5B1DF508C`, 2026-07-06):**
+
+| Spanish label (screenshot) | `c_acctschema_default` column | Account value (8-digit) | Account name | State before fix |
+|---|---|---|---|---|
+| Recibos de clientes * | `c_receivable_acct` | `43000000` | Clientes (euros) a corto plazo | ✅ already correct |
+| Prepago del cliente | `c_prepayment_acct` | `43800000` | Anticipos de clientes | ✅ already correct |
+| Cancelaciones * (Write-off) | `writeoff_acct` | `69400000` | Pérdidas por deterioro de créditos por operaciones comerciales | ✅ already correct — **NOT changed to the screenshot's 65000000** (override, see below) |
+| Pasivo del proveedor * | `v_liability_acct` | `40000000` | Proveedores (euros) a corto plazo | ✅ already correct |
+| Pagos por adelantado del proveedor | `v_prepayment_acct` | `40700000` | Anticipos a proveedores | ✅ already correct |
+| Recibos no facturados | `notinvoicedreceipts_acct` | `40090000` | Proveedores facturas pendientes de recibir o de formalizar | ✅ already correct |
+| Cuenta de dudoso cobro | `doubtfuldebt_acct` | `43600000` | Clientes de dudoso cobro a corto plazo | ❌ **was NULL — fixed** |
+| Cuenta de gastos de dudoso cobro | `baddebtexpense_acct` | `69400000` | Pérdidas por deterioro de créditos por operaciones comerciales | ❌ **was NULL — fixed** (same account as write-off) |
+| Cuenta de ingresos de dudoso cobro | `baddebtrevenue_acct` | `79400000` | Reversión del deterioro de créditos por operaciones comerciales | ❌ **was NULL — fixed** |
+| Cuenta de provisión para dudoso cobro | `allowancefordoubtful_acct` | `49000000` | Deterioro de valor de créditos por operaciones comerciales a corto plazo | ❌ **was NULL — fixed** |
+| Inmovilizado del producto * | `p_asset_acct` | `35000000` | Productos terminados A | ✅ already correct |
+| Gastos del producto * | `p_expense_acct` | `60000000` | Compras de mercaderías | ✅ already correct |
+| Ingresos por el producto * | `p_revenue_acct` | `70000000` | Ventas de mercaderías | ✅ already correct |
+| Gasto de producto a periodificar | `p_def_expense_acct` | `48000000` | Gastos anticipados | ❌ **was NULL — fixed** |
+| Ingreso de producto a periodificar | `p_def_revenue_acct` | `48500000` | Ingresos anticipados | ❌ **was NULL — fixed** |
+
+`*` = required field on the classic UI. Source: "Jorge's list", verified 2026-07-06.
+
+**Write-off override (explicit product-owner decision — do not "re-fix"):** the screenshot shows
+Cancelaciones/Write-off = `6500000000` (65000000, "Pérdidas por créditos comerciales incobrables").
+The product owner explicitly confirmed the **DB's existing value (`69400000`) is correct** and must
+**not** be changed to `65000000`. GOClient's simplified chart reuses the same account (694, "Pérdidas
+por deterioro de créditos por operaciones comerciales") for both the write-off and the bad-debt
+expense default — this is a deliberate business decision, not a provisioning gap. Confirmed live:
+`writeoff_acct` already resolved to `c_validcombination` `997A522BF1124E029E99AB31CF2540F9` = account
+`69400000` before this fix ran, and R11's `@check`/`@apply` never reference `writeoff_acct`.
+
+**Both fronts closed (2026-07-06):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260706T160000Z__R11-acctschema-default-completion.sql` — 6 guarded `UPDATE`s (one per NULL column), each resolving its target account through `c_validcombination` (dimensionless combo) and gated by `col IS NULL AND EXISTS(...)`. Live-validated on GOClient: dry-run → `WOULD_APPLY`; real run → `APPLIED (6 rows)`; re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml` gains the 6 FK values (table already in `INCLUDED_TABLES` since the A1 pass; no onboarding Java references these specific columns — confirmed by grep). `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T16:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by a new test in `OnboardingDatasetNormalizerTest.java` (`testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts`), which also asserts the write-off value is unchanged. |
+
+See also: `docs/plans/onboarding-gaps-remediation-plan.md` §"Gap A3b" for the full investigation
+notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable facts (FK indirection via
+`C_VALIDCOMBINATION`, write-off override) extracted from this pass.
 
 ---
 

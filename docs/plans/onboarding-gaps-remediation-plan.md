@@ -296,6 +296,80 @@ line when merged — resolve to the later timestamp (this one) so neither cutoff
 
 ---
 
+## Gap A3b — `C_ACCTSCHEMA_DEFAULT` Defaults tab completion — Jorge's list (ETP-4245 follow-up, 2026-07-06) — BOTH FRONTS DONE
+
+### Trigger
+The A3 pass above (TC-41) only cross-checked 5 of the 15 "Defaults tab" fields and explicitly
+deferred the rest pending a fuller reference from the product owner ("Jorge's list of extra default
+accounts"). That list arrived 2026-07-06, listing 10 Tercero (Third Party) + 5 Producto (Product)
+fields for client "LadyPipa" (visual reference; GOClient is the actual remediation target), shown as
+10-digit codes in the classic "Valores por defecto" tab.
+
+### Column resolution (verified against live DB, not guessed)
+Introspected `information_schema.columns` for `c_acctschema_default` and cross-referenced each
+Spanish screenshot label against the matching `ad_column`/`ad_element` English name (joined via
+`ad_table.tablename='C_AcctSchema_Default'`). All 15 labels resolved with high confidence (name
+semantics matched exactly, e.g. "Cuenta de dudoso cobro" → `DoubtfulDebt_Acct` → "Doubtful Debt
+Account") — no ambiguous or unmapped labels.
+
+### FK indirection (new finding, not previously documented)
+`C_ACCTSCHEMA_DEFAULT.*_acct` columns are FKs to **`C_VALIDCOMBINATION`**, not directly to
+`c_elementvalue` — `c_validcombination.account_id` is the actual link to the account. Discovered
+because a first attempt to query `c_elementvalue` by the stored FK ids returned zero rows; pivoting
+the join through `c_validcombination` resolved every column. All 9 already-populated columns in
+GOClient point to a combination with every optional dimension (`m_product_id`, `c_bpartner_id`,
+`c_project_id`, `c_campaign_id`, `c_activity_id`, `ad_orgtrx_id`, `c_locfrom_id`, `c_locto_id`,
+`c_salesregion_id`, `user1_id`, `user2_id`) `NULL` — the "plain", dimensionless posting combination
+for that account, scoped to the tenant's own `c_acctschema_id`.
+
+### Verified DB state (2026-07-06, GOClient `802509E12436405C86BA1FD5B1DF508C`)
+
+| Column | Resolved account (8-digit) | Account name | State before fix |
+|---|---|---|---|
+| `c_receivable_acct` | `43000000` | Clientes (euros) a corto plazo | already correct |
+| `c_prepayment_acct` | `43800000` | Anticipos de clientes | already correct |
+| `writeoff_acct` | `69400000` | Pérdidas por deterioro de créditos por operaciones comerciales | already correct — **override, see below** |
+| `v_liability_acct` | `40000000` | Proveedores (euros) a corto plazo | already correct |
+| `v_prepayment_acct` | `40700000` | Anticipos a proveedores | already correct |
+| `notinvoicedreceipts_acct` | `40090000` | Proveedores facturas pendientes de recibir o de formalizar | already correct |
+| `doubtfuldebt_acct` | `43600000` | Clientes de dudoso cobro a corto plazo | **NULL — fixed** |
+| `baddebtexpense_acct` | `69400000` | Pérdidas por deterioro de créditos por operaciones comerciales | **NULL — fixed** |
+| `baddebtrevenue_acct` | `79400000` | Reversión del deterioro de créditos por operaciones comerciales | **NULL — fixed** |
+| `allowancefordoubtful_acct` | `49000000` | Deterioro de valor de créditos por operaciones comerciales a corto plazo | **NULL — fixed** |
+| `p_asset_acct` | `35000000` | Productos terminados A | already correct |
+| `p_expense_acct` | `60000000` | Compras de mercaderías | already correct |
+| `p_revenue_acct` | `70000000` | Ventas de mercaderías | already correct |
+| `p_def_expense_acct` | `48000000` | Gastos anticipados | **NULL — fixed** |
+| `p_def_revenue_acct` | `48500000` | Ingresos anticipados | **NULL — fixed** |
+
+9 of 15 were already correct (the A1 clone pass had wired them); 6 were `NULL`. All 6 target
+accounts already had a pre-existing dimensionless `C_VALIDCOMBINATION` row for GOClient's schema —
+no new `c_validcombination` rows needed to be created.
+
+### Write-off override — explicit product-owner decision (do not "re-fix")
+The screenshot shows Cancelaciones/Write-off = `6500000000` (65000000, "Pérdidas por créditos
+comerciales incobrables", Spanish PGC account 665). The product owner **explicitly overrode this**:
+the DB's existing value (`69400000`, PGC account 694, "Pérdidas por deterioro de créditos por
+operaciones comerciales") is correct and must **not** be changed. GOClient's simplified chart reuses
+account 694 for both the write-off default and the bad-debt-expense default — a deliberate
+simplification, not a provisioning gap. This fix's `@check`/`@apply` never reference `writeoff_acct`;
+verified live that it already resolved to `69400000` before and after the run.
+
+### Decision: dataset-only fix, no new `Onboarding*Service`
+`C_ACCTSCHEMA_DEFAULT` has been in `OnboardingDatasetDefinition.INCLUDED_TABLES` since the A1 pass,
+and no onboarding Java class references these specific columns (grepped the module). Same reasoning
+as A3: dataset-only edit is sufficient.
+
+### Both fronts closed (2026-07-06)
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260706T160000Z__R11-acctschema-default-completion.sql` — one guarded `UPDATE` per NULL column, each resolving its target through `c_validcombination` and gated by `col IS NULL AND EXISTS(resolvable combination)` (so a tenant whose chart never gets one of these 6 accounts does not loop forever). **Live-validated on GOClient**: dry-run → `WOULD_APPLY`; real run → `APPLIED (6 rows)`; re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml` gains the 6 FK values (`DOUBTFULDEBT_ACCT`, `BADDEBTEXPENSE_ACCT`, `BADDEBTREVENUE_ACCT`, `ALLOWANCEFORDOUBTFUL_ACCT`, `P_DEF_EXPENSE_ACCT`, `P_DEF_REVENUE_ACCT`); `WRITEOFF_ACCT` untouched. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T16:00:00Z` in `OnboardingBaselineService.java`. |
+| **Tests** | Corrective: live dry-run/apply/re-run cycle above (same project convention as every prior `Rn` fix). Preventive: one new JUnit test in `OnboardingDatasetNormalizerTest.java` — `testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts` (asserts all 6 new `c_validcombination_id` values appear in the normalized dataset XML, and that the write-off combination id is present unchanged as a regression guard). **Not executed in this session** — same worktree/Gradle limitation as the R10 pass (see its note above); recommend `./gradlew -p modules/com.etendoerp.go test --tests "*OnboardingDatasetNormalizerTest*"` against this branch before merge. |
+
+---
+
 ## Remaining gaps (queued — same two-front structure)
 
 | Gap | Area | Preventive front | Corrective front |
