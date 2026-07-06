@@ -1,0 +1,3002 @@
+{
+  "sql": "SELECT vr.AD_Val_Rule_ID, vr.Name, vr.Code, c.ColumnName FROM AD_Val_Rule vr JOIN AD_Column c ON c.AD_Val_Rule_ID = vr.AD_Val_Rule_ID JOIN AD_Tab t ON c.AD_Table_ID = t.AD_Table_ID WHERE t.AD_Window_ID = $1 ORDER BY vr.AD_Val_Rule_ID, c.ColumnName",
+  "versions": {
+    "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
+      "params": [
+        "144"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "772B9BE4957746EC809B8FE4D8E3F924",
+          "code": "Issummary='N'",
+          "columnname": "M_Product_Category_ID",
+          "name": "M_ProductCategory(Only Leaf)"
+        }
+      ]
+    },
+    "1feda5e22cc22a1d4e3aac66d18b6389393ebc433e692b138a3feed155b5c6e1": {
+      "params": [
+        "137"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "Rate",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "153",
+          "code": "C_Region.C_Country_ID=@C_Country_ID@",
+          "columnname": "C_Region_ID",
+          "name": "C_Region of Country"
+        },
+        {
+          "ad_val_rule_id": "155",
+          "code": "C_Region.C_Country_ID=@To_Country_ID@",
+          "columnname": "To_Region_ID",
+          "name": "C_Region of To_Country"
+        },
+        {
+          "ad_val_rule_id": "800010",
+          "code": "C_Region.C_Country_ID=@From_Country_ID@",
+          "columnname": "From_Region_ID",
+          "name": "C_Region of a Country From"
+        },
+        {
+          "ad_val_rule_id": "800019",
+          "code": "C_Region.C_Country_ID=@To_Country_ID@",
+          "columnname": "To_Region_ID",
+          "name": "C_Region of Country To"
+        },
+        {
+          "ad_val_rule_id": "8E16562D89744B2DA14DFE27B65F712B",
+          "code": "(C_Tax.C_Tax_ID <> @C_TAX_ID@ OR @C_TAX_ID@ IS NULL)",
+          "columnname": "Parent_Tax_ID",
+          "name": "Tax not included"
+        },
+        {
+          "ad_val_rule_id": "988E8605A37D465D8D0AEA968ABCB2AE",
+          "code": "C_TAX_GET_ROOT(C_TAX.C_TAX_ID) = C_TAX_GET_ROOT(@C_Tax_ID@) AND C_TAX_GET_LEVEL(C_TAX_GET_ROOT(C_TAX.C_TAX_ID), C_TAX.C_TAX_ID, 0) < C_TAX_GET_LEVEL(C_TAX_GET_ROOT(C_TAX.C_TAX_ID),@C_Tax_ID@ , 0) AND  C_TAX_GET_ROOT(C_TAX.C_TAX_ID)<>@C_Tax_ID@",
+          "columnname": "C_TaxBase_ID",
+          "name": "C_Tax - Base taxes"
+        }
+      ]
+    },
+    "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
+      "params": [
+        "123"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "131",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location"
+        },
+        {
+          "ad_val_rule_id": "3041353DA35A4C17BC434CF80FEE9CC9",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
+          "columnname": "FIN_Financial_Account_ID",
+          "name": "Financial Account - Customer"
+        },
+        {
+          "ad_val_rule_id": "3041353DA35A4C17BC434CF80FEE9CC9",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
+          "columnname": "FIN_Financial_Account_ID",
+          "name": "Financial Account - Customer"
+        },
+        {
+          "ad_val_rule_id": "3041353DA35A4C17BC434CF80FEE9CC9",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
+          "columnname": "FIN_Financial_Account_ID",
+          "name": "Financial Account - Customer"
+        },
+        {
+          "ad_val_rule_id": "3041353DA35A4C17BC434CF80FEE9CC9",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@)",
+          "columnname": "FIN_Financial_Account_ID",
+          "name": "Financial Account - Customer"
+        },
+        {
+          "ad_val_rule_id": "790328E3ABA342CAADA3858D54EF1B2B",
+          "code": "UPPER(Value)<>'SPANISH'",
+          "columnname": "BankFormat",
+          "name": "BankFormat List exclude Spanish"
+        },
+        {
+          "ad_val_rule_id": "800021",
+          "code": "EXISTS ( SELECT 1\n        FROM  AD_USER_ROLES A_U_R\n        WHERE A_U_R.AD_ROLE_ID = AD_Role.AD_Role_ID\n        AND A_U_R.ISACTIVE = 'Y'\n        AND A_U_R.AD_USER_ID = @AD_User_ID@)",
+          "columnname": "Default_Ad_Role_ID",
+          "name": "AD_Role_of_User"
+        },
+        {
+          "ad_val_rule_id": "800021",
+          "code": "EXISTS ( SELECT 1\n        FROM  AD_USER_ROLES A_U_R\n        WHERE A_U_R.AD_ROLE_ID = AD_Role.AD_Role_ID\n        AND A_U_R.ISACTIVE = 'Y'\n        AND A_U_R.AD_USER_ID = @AD_User_ID@)",
+          "columnname": "EM_Smfsws_Default_Ws_Role_ID",
+          "name": "AD_Role_of_User"
+        },
+        {
+          "ad_val_rule_id": "800022",
+          "code": "AD_CLIENT.ISACTIVE = 'Y' AND EXISTS (SELECT 1 FROM AD_ROLE_ORGACCESS WHERE AD_ROLE_ORGACCESS.AD_CLIENT_ID = AD_CLIENT.AD_CLIENT_ID AND AD_ROLE_ORGACCESS.AD_ROLE_ID = @Default_AD_Role_ID@ AND AD_ROLE_ORGACCESS.ISACTIVE = 'Y')",
+          "columnname": "Default_Ad_Client_ID",
+          "name": "AD_Client of Role"
+        },
+        {
+          "ad_val_rule_id": "800023",
+          "code": "EXISTS (SELECT 1 FROM AD_ROLE_ORGACCESS A_R_O, ad_role r\n        WHERE A_R_O.AD_ORG_ID = AD_ORG.AD_Org_ID\n        AND A_R_O.ISACTIVE = 'Y'\n        AND A_R_O.AD_ROLE_ID = R.AD_ROLE_ID\n        and r.ad_role_id = @Default_AD_Role_ID@\n        AND R.ISACTIVE = 'Y'\n        AND (LPAD(TO_CHAR(R.USERLEVEL), 1, '1')='S' OR AD_ORG.AD_ORG_ID <> '0')\n        AND A_R_O.AD_ROLE_ID = @Default_AD_Role_ID@)",
+          "columnname": "Default_Ad_Org_ID",
+          "name": "AD_Org of a Role"
+        },
+        {
+          "ad_val_rule_id": "800024",
+          "code": "M_Warehouse.AD_Client_ID = @Default_AD_Client_ID@",
+          "columnname": "Default_M_Warehouse_ID",
+          "name": "M_Warehouse of Role"
+        },
+        {
+          "ad_val_rule_id": "F7DCC072355648E7BFFF05014361A44C",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
+          "columnname": "PO_Financial_Account_ID",
+          "name": "Financial Account - Vendor"
+        },
+        {
+          "ad_val_rule_id": "F7DCC072355648E7BFFF05014361A44C",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
+          "columnname": "PO_Financial_Account_ID",
+          "name": "Financial Account - Vendor"
+        },
+        {
+          "ad_val_rule_id": "F7DCC072355648E7BFFF05014361A44C",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
+          "columnname": "PO_Financial_Account_ID",
+          "name": "Financial Account - Vendor"
+        },
+        {
+          "ad_val_rule_id": "F7DCC072355648E7BFFF05014361A44C",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@PO_Paymentmethod_ID@)",
+          "columnname": "PO_Financial_Account_ID",
+          "name": "Financial Account - Vendor"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "PO_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "PO_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "PO_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "PO_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        }
+      ]
+    },
+    "2f39e9609e474ff1203aed0f3c2e2ac4d33f2eefb8a503de19acec318125e2dc": {
+      "params": [
+        "170"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "D9A3E30D0CCA43F487EC83756C33D435",
+          "code": "(exists(select 1 from m_product p where p.m_product_id = @M_Product_ID@ and p.c_uom_id = td0.c_uom_id) or exists(select 1 from m_product_aum a where a.m_product_id = @M_Product_ID@ and a.logistics <> 'NA' and a.c_uom_id = td0.c_uom_id))  ",
+          "columnname": "C_Aum",
+          "name": "Available UOM's for Product for Logistics flow"
+        }
+      ]
+    },
+    "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
+      "params": [
+        "143"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "1000200003",
+          "code": "(AD_Ref_List.value IN ('I', 'D', 'O') OR (SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE.C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@) <> 'WR')",
+          "columnname": "InvoiceRule",
+          "name": "Invoice Rules for POS Sales orders"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "BillTo_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "120",
+          "code": "C_BPartner_Location.C_BPartner_ID=@DropShip_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y'",
+          "columnname": "DropShip_Location_ID",
+          "name": "C_BPartner Location - Drop Ship To"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "133",
+          "code": "C_DocType.DocBaseType IN ('SOO', 'POO') AND C_DocType.IsSOTrx='@IsSOTrx@'\nAND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')\nAND COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn\nAND ((@isQuotation@='Y' AND docsubtypeso like 'OB') OR ((@isQuotation@='N' OR @isQuotation@ is null) AND (docsubtypeso is null OR docsubtypeso not like 'OB')))",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType PO/SO"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "Delivery_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "168",
+          "code": "AD_User.C_BPartner_ID=@DropShip_BPartner_ID@",
+          "columnname": "DropShip_User_ID",
+          "name": "AD_User C_BPartner User/Contacts Drop"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "5BEA56148DC74215A63927481BDC0B63",
+          "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+          "columnname": "C_Tax_ID",
+          "name": "C_Tax_IsSOTrx_Date"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        }
+      ]
+    },
+    "329bb148af9a6baadc8cc6aa9df89e1dbde1f38927b1a7eb474a4e9522daff88": {
+      "params": [
+        "800076"
+      ],
+      "rows": []
+    },
+    "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
+      "params": [
+        "167"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "124",
+          "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType AR/AP Invoices and Credit Memos"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "324A9767D9B94A8A8154DEB3ACA6E063",
+          "code": "EXISTS (SELECT 1\n              FROM C_BP_Withholding w , C_BPartner b\n              WHERE w.C_BPartner_ID=b.C_BPartner_ID\n              AND w.C_Withholding_ID=C_Withholding.C_Withholding_ID\n              AND W.C_BPartner_ID=@C_BPartner_ID@)",
+          "columnname": "C_Withholding_ID",
+          "name": "Business Partner Withholding"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "58401EEE65CC4551BEC649A16FA16479",
+          "code": "EnableInFinInvoices = 'Y'",
+          "columnname": "Account_ID",
+          "name": "Financial Invoices GL Items"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "5BEA56148DC74215A63927481BDC0B63",
+          "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+          "columnname": "C_Tax_ID",
+          "name": "C_Tax_IsSOTrx_Date"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "E0541EB2493547BC934F5EFA044AB668",
+          "code": "exists (select 1 from c_year where c_period.c_year_id = c_year.c_year_id and (SELECT AD_InheritedCalendar_ID FROM AD_ORG WHERE AD_Client_ID= @AD_Client_ID@ AND AD_ORG_ID= @AD_Org_ID@) = c_year.c_calendar_id) and periodtype = 'S'",
+          "columnname": "C_Period_ID",
+          "name": "C_Period - Org Calendar Period"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "Fin_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        },
+        {
+          "ad_val_rule_id": "FF8081813088DED301308AB9CF0101D2",
+          "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
+          "columnname": "C_Currency_Id_To",
+          "name": "Accounting Schema currency"
+        },
+        {
+          "ad_val_rule_id": "FF8081813092D5DC013092DD70AD000C",
+          "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
+          "columnname": "C_Currency_ID",
+          "name": "Document currency"
+        }
+      ]
+    },
+    "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
+      "params": [
+        "6F8F913FA60F4CBD93DC1D3AA696E76E"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "49A6E01F27DB4D83939B1C34180837CC",
+          "code": "C_DocType.DocBaseType IN ('APP', 'ARR') AND C_DocType.IsSOTrx='@Isreceipt@' AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "C_DocType_ID",
+          "name": "C_DocType - Receive/Make Payment"
+        },
+        {
+          "ad_val_rule_id": "6910516E0A54432CA2E6A0C058346F92",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@ AND (CASE WHEN @IsReceipt@='Y' THEN Payin_Allow  ELSE Payout_Allow END)='Y' AND isActive='Y')",
+          "columnname": "Fin_Financial_Account_ID",
+          "name": "Fin_FinancialAccountofPaymentMethod"
+        },
+        {
+          "ad_val_rule_id": "B3DF10D5093140319BB2FBD43E5D8C47",
+          "code": "(((@Isreceipt@='Y') AND Value not IN  ('PPM','PWNC')) OR ((@Isreceipt@='N') AND Value not IN ('RPR','RDNC')))",
+          "columnname": "Status",
+          "name": "FIN_Payment Status validation"
+        },
+        {
+          "ad_val_rule_id": "DC79E946854746F1A7965DCADF1D76FE",
+          "code": "c_currency.c_currency_id in (select c_currency_id from fin_financial_account where fin_financial_account_id = @FIN_Financial_Account_ID@) \nOR \nexists (select 1 from fin_finacc_paymentmethod where fin_financial_account_id = @FIN_Financial_Account_ID@ and fin_paymentmethod_id = @FIN_PaymentMethod_ID@ and isactive='Y' and  (\n(@IsReceipt@ = 'Y' and payin_allow ='Y' and payin_ismulticurrency='Y')\nOR\n(@IsReceipt@ = 'N' and payout_allow ='Y' and payout_ismulticurrency='Y')\n))",
+          "columnname": "C_Currency_ID",
+          "name": "Currency of Financial Account"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "Fin_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        },
+        {
+          "ad_val_rule_id": "FF8081813088DED301308AB9CF0101D2",
+          "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
+          "columnname": "C_Currency_Id_To",
+          "name": "Accounting Schema currency"
+        },
+        {
+          "ad_val_rule_id": "FF8081813092D5DC013092DD70AD000C",
+          "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
+          "columnname": "C_Currency_ID",
+          "name": "Document currency"
+        }
+      ]
+    },
+    "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
+      "params": [
+        "183"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "124",
+          "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType AR/AP Invoices and Credit Memos"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "324A9767D9B94A8A8154DEB3ACA6E063",
+          "code": "EXISTS (SELECT 1\n              FROM C_BP_Withholding w , C_BPartner b\n              WHERE w.C_BPartner_ID=b.C_BPartner_ID\n              AND w.C_Withholding_ID=C_Withholding.C_Withholding_ID\n              AND W.C_BPartner_ID=@C_BPartner_ID@)",
+          "columnname": "C_Withholding_ID",
+          "name": "Business Partner Withholding"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "58401EEE65CC4551BEC649A16FA16479",
+          "code": "EnableInFinInvoices = 'Y'",
+          "columnname": "Account_ID",
+          "name": "Financial Invoices GL Items"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "5BEA56148DC74215A63927481BDC0B63",
+          "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+          "columnname": "C_Tax_ID",
+          "name": "C_Tax_IsSOTrx_Date"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "E0541EB2493547BC934F5EFA044AB668",
+          "code": "exists (select 1 from c_year where c_period.c_year_id = c_year.c_year_id and (SELECT AD_InheritedCalendar_ID FROM AD_ORG WHERE AD_Client_ID= @AD_Client_ID@ AND AD_ORG_ID= @AD_Org_ID@) = c_year.c_calendar_id) and periodtype = 'S'",
+          "columnname": "C_Period_ID",
+          "name": "C_Period - Org Calendar Period"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "Fin_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        },
+        {
+          "ad_val_rule_id": "FF8081813088DED301308AB9CF0101D2",
+          "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
+          "columnname": "C_Currency_Id_To",
+          "name": "Accounting Schema currency"
+        },
+        {
+          "ad_val_rule_id": "FF8081813092D5DC013092DD70AD000C",
+          "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
+          "columnname": "C_Currency_ID",
+          "name": "Document currency"
+        }
+      ]
+    },
+    "4cdbb6a1d5f88ee0967c42ec50f1ebf974918f41cfdc927579046b33fad8d0bc": {
+      "params": [
+        "800026"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        }
+      ]
+    },
+    "4e4b0d1c19b4dc9eb29dc45dd545b5060c06c718866acfa62c0cdf829eebc965": {
+      "params": [
+        "C327DE215AC945F69363905840118177"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "6D8A6A02F3C64A7A8F257A4B52B9E841",
+          "code": "AD_Ref_List.Value IN ('ARABA', 'BIZKAIA', 'GIPUZKOA')",
+          "columnname": "ETSG_SIF_Territory",
+          "name": "Territorios TicketBAI"
+        }
+      ]
+    },
+    "56f5905a31ee709b32fe7db282011c768b57a04bfefc93302253d932b0d79f20": {
+      "params": [
+        "141"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "34A2733B41B04DC19B3E54F764753D19",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID)",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccount"
+        }
+      ]
+    },
+    "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
+      "params": [
+        "184"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "012167BBF1BF42ED964D9C18CFC55A27",
+          "code": "C_DocType.DocBaseType IN ('LCC') AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' AND C_DocType.AD_Client_ID=@#AD_Client_ID@",
+          "columnname": "C_Doctype_ID",
+          "name": "C_DocType - Landed Cost Cost"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "125",
+          "code": "C_DocType.DocBaseType IN ('MMR', 'MMS') AND C_DocType.IsSOTrx='@IsSOTrx@' AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1'\nAND (COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn OR COALESCE(@isDocumentTypeWindow@, 'N') = 'Y')",
+          "columnname": "C_DocType_ID",
+          "name": "C_DocType Material Shipments/Receipts"
+        },
+        {
+          "ad_val_rule_id": "127",
+          "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
+          "columnname": "M_Locator_ID",
+          "name": "M_Locator of Warehouse"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "Delivery_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        }
+      ]
+    },
+    "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
+      "params": [
+        "FEF76C3E0F104F06A89AAD15A4A4A35C"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "124",
+          "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType AR/AP Invoices and Credit Memos"
+        },
+        {
+          "ad_val_rule_id": "124",
+          "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType AR/AP Invoices and Credit Memos"
+        },
+        {
+          "ad_val_rule_id": "124",
+          "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType AR/AP Invoices and Credit Memos"
+        },
+        {
+          "ad_val_rule_id": "124",
+          "code": "C_DocType.DocBaseType IN ('ARI', 'API','ARC','APC','ARI_RM') AND C_DocType.IsSOTrx='@IsSOTrx@' AND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType AR/AP Invoices and Credit Memos"
+        },
+        {
+          "ad_val_rule_id": "324A9767D9B94A8A8154DEB3ACA6E063",
+          "code": "EXISTS (SELECT 1\n              FROM C_BP_Withholding w , C_BPartner b\n              WHERE w.C_BPartner_ID=b.C_BPartner_ID\n              AND w.C_Withholding_ID=C_Withholding.C_Withholding_ID\n              AND W.C_BPartner_ID=@C_BPartner_ID@)",
+          "columnname": "C_Withholding_ID",
+          "name": "Business Partner Withholding"
+        },
+        {
+          "ad_val_rule_id": "324A9767D9B94A8A8154DEB3ACA6E063",
+          "code": "EXISTS (SELECT 1\n              FROM C_BP_Withholding w , C_BPartner b\n              WHERE w.C_BPartner_ID=b.C_BPartner_ID\n              AND w.C_Withholding_ID=C_Withholding.C_Withholding_ID\n              AND W.C_BPartner_ID=@C_BPartner_ID@)",
+          "columnname": "C_Withholding_ID",
+          "name": "Business Partner Withholding"
+        },
+        {
+          "ad_val_rule_id": "324A9767D9B94A8A8154DEB3ACA6E063",
+          "code": "EXISTS (SELECT 1\n              FROM C_BP_Withholding w , C_BPartner b\n              WHERE w.C_BPartner_ID=b.C_BPartner_ID\n              AND w.C_Withholding_ID=C_Withholding.C_Withholding_ID\n              AND W.C_BPartner_ID=@C_BPartner_ID@)",
+          "columnname": "C_Withholding_ID",
+          "name": "Business Partner Withholding"
+        },
+        {
+          "ad_val_rule_id": "324A9767D9B94A8A8154DEB3ACA6E063",
+          "code": "EXISTS (SELECT 1\n              FROM C_BP_Withholding w , C_BPartner b\n              WHERE w.C_BPartner_ID=b.C_BPartner_ID\n              AND w.C_Withholding_ID=C_Withholding.C_Withholding_ID\n              AND W.C_BPartner_ID=@C_BPartner_ID@)",
+          "columnname": "C_Withholding_ID",
+          "name": "Business Partner Withholding"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        }
+      ]
+    },
+    "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
+      "params": [
+        "27A453FA86974745977672F1A8DCCEFF"
+      ],
+      "rows": []
+    },
+    "7a7021f92d915e51e998b9560b17636c7f0484e0b332b42d81af899b72333123": {
+      "params": [
+        "118"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "159",
+          "code": "AD_Tree.TreeType='EV'",
+          "columnname": "Add1Tree_ID",
+          "name": "AD_Tree Element Value"
+        },
+        {
+          "ad_val_rule_id": "159",
+          "code": "AD_Tree.TreeType='EV'",
+          "columnname": "Add2Tree_ID",
+          "name": "AD_Tree Element Value"
+        },
+        {
+          "ad_val_rule_id": "77943B6C53574ACFA45DFC4DA4396B18",
+          "code": "C_Element_ID=@C_Element_ID@",
+          "columnname": "Account_ID",
+          "name": "C_Element_ID"
+        },
+        {
+          "ad_val_rule_id": "90EECFEEA13B4B8B98E252D2904FA876",
+          "code": "AD_Tree.AD_Client_ID = @AD_Client_ID@ and AD_Tree.TreeType = 'EV'",
+          "columnname": "AD_Tree_ID",
+          "name": "AD_TreeClientValidation"
+        }
+      ]
+    },
+    "815e23e49d7d45ef28d64a769100a5fa1e1aec24b8c6f25a101070342ebeaeb1": {
+      "params": [
+        "C50A8AEE6F044825B5EF54FAAE76826F"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "1000200003",
+          "code": "(AD_Ref_List.value IN ('I', 'D', 'O') OR (SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE.C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@) <> 'WR')",
+          "columnname": "InvoiceRule",
+          "name": "Invoice Rules for POS Sales orders"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "BillTo_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "120",
+          "code": "C_BPartner_Location.C_BPartner_ID=@DropShip_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y'",
+          "columnname": "DropShip_Location_ID",
+          "name": "C_BPartner Location - Drop Ship To"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "133",
+          "code": "C_DocType.DocBaseType IN ('SOO', 'POO') AND C_DocType.IsSOTrx='@IsSOTrx@'\nAND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')\nAND COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn\nAND ((@isQuotation@='Y' AND docsubtypeso like 'OB') OR ((@isQuotation@='N' OR @isQuotation@ is null) AND (docsubtypeso is null OR docsubtypeso not like 'OB')))",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType PO/SO"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "Delivery_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "168",
+          "code": "AD_User.C_BPartner_ID=@DropShip_BPartner_ID@",
+          "columnname": "DropShip_User_ID",
+          "name": "AD_User C_BPartner User/Contacts Drop"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "5BEA56148DC74215A63927481BDC0B63",
+          "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+          "columnname": "C_Tax_ID",
+          "name": "C_Tax_IsSOTrx_Date"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        }
+      ]
+    },
+    "843359d6657fbb328422a0e2b76bc9bab643118230c1597e04e3917031b6cb1f": {
+      "params": [
+        "E547CE89D4C04429B6340FFA44E70716"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "49A6E01F27DB4D83939B1C34180837CC",
+          "code": "C_DocType.DocBaseType IN ('APP', 'ARR') AND C_DocType.IsSOTrx='@Isreceipt@' AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "C_DocType_ID",
+          "name": "C_DocType - Receive/Make Payment"
+        },
+        {
+          "ad_val_rule_id": "6910516E0A54432CA2E6A0C058346F92",
+          "code": "Fin_Financial_Account_ID IN (SELECT Fin_Financial_Account_ID FROM Fin_Finacc_Paymentmethod WHERE Fin_Paymentmethod_ID=@Fin_Paymentmethod_ID@ AND (CASE WHEN @IsReceipt@='Y' THEN Payin_Allow  ELSE Payout_Allow END)='Y' AND isActive='Y')",
+          "columnname": "Fin_Financial_Account_ID",
+          "name": "Fin_FinancialAccountofPaymentMethod"
+        },
+        {
+          "ad_val_rule_id": "B3DF10D5093140319BB2FBD43E5D8C47",
+          "code": "(((@Isreceipt@='Y') AND Value not IN  ('PPM','PWNC')) OR ((@Isreceipt@='N') AND Value not IN ('RPR','RDNC')))",
+          "columnname": "Status",
+          "name": "FIN_Payment Status validation"
+        },
+        {
+          "ad_val_rule_id": "DC79E946854746F1A7965DCADF1D76FE",
+          "code": "c_currency.c_currency_id in (select c_currency_id from fin_financial_account where fin_financial_account_id = @FIN_Financial_Account_ID@) \nOR \nexists (select 1 from fin_finacc_paymentmethod where fin_financial_account_id = @FIN_Financial_Account_ID@ and fin_paymentmethod_id = @FIN_PaymentMethod_ID@ and isactive='Y' and  (\n(@IsReceipt@ = 'Y' and payin_allow ='Y' and payin_ismulticurrency='Y')\nOR\n(@IsReceipt@ = 'N' and payout_allow ='Y' and payout_ismulticurrency='Y')\n))",
+          "columnname": "C_Currency_ID",
+          "name": "Currency of Financial Account"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B118E5F60020",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.isActive='Y'\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@FIN_ISRECEIPT@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "Fin_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsReceiptControl"
+        },
+        {
+          "ad_val_rule_id": "FF8081813088DED301308AB9CF0101D2",
+          "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
+          "columnname": "C_Currency_Id_To",
+          "name": "Accounting Schema currency"
+        },
+        {
+          "ad_val_rule_id": "FF8081813092D5DC013092DD70AD000C",
+          "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
+          "columnname": "C_Currency_ID",
+          "name": "Document currency"
+        }
+      ]
+    },
+    "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
+      "params": [
+        "125"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "1007400000",
+          "code": "Value IN (SELECT DOCBASETYPE FROM C_DOCTYPE, C_ACCTSCHEMA_TABLE WHERE C_DOCTYPE.AD_TABLE_ID = C_ACCTSCHEMA_TABLE.AD_TABLE_ID AND C_ACCTSCHEMA_TABLE.C_ACCTSCHEMA_TABLE_ID = @C_Acctschema_Table_ID@)",
+          "columnname": "Docbasetype",
+          "name": "C_AcctSchema_Table DocBaseType"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "8195248D186A4DEC89938C45837A1BCB",
+          "code": "AD_CreateFact_Template.AD_Table_ID=@AD_Table_ID@",
+          "columnname": "AD_Createfact_Template_ID",
+          "name": "AD_Table Acctschema table"
+        },
+        {
+          "ad_val_rule_id": "8195248D186A4DEC89938C45837A1BCB",
+          "code": "AD_CreateFact_Template.AD_Table_ID=@AD_Table_ID@",
+          "columnname": "AD_Createfact_Template_ID",
+          "name": "AD_Table Acctschema table"
+        }
+      ]
+    },
+    "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
+      "params": [
+        "6CB5B67ED33F47DFA334079D3EA2340E"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "1000200003",
+          "code": "(AD_Ref_List.value IN ('I', 'D', 'O') OR (SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE.C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@) <> 'WR')",
+          "columnname": "InvoiceRule",
+          "name": "Invoice Rules for POS Sales orders"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "BillTo_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "120",
+          "code": "C_BPartner_Location.C_BPartner_ID=@DropShip_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y'",
+          "columnname": "DropShip_Location_ID",
+          "name": "C_BPartner Location - Drop Ship To"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "133",
+          "code": "C_DocType.DocBaseType IN ('SOO', 'POO') AND C_DocType.IsSOTrx='@IsSOTrx@'\nAND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')\nAND COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn\nAND ((@isQuotation@='Y' AND docsubtypeso like 'OB') OR ((@isQuotation@='N' OR @isQuotation@ is null) AND (docsubtypeso is null OR docsubtypeso not like 'OB')))",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType PO/SO"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "Delivery_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "168",
+          "code": "AD_User.C_BPartner_ID=@DropShip_BPartner_ID@",
+          "columnname": "DropShip_User_ID",
+          "name": "AD_User C_BPartner User/Contacts Drop"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "5BEA56148DC74215A63927481BDC0B63",
+          "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+          "columnname": "C_Tax_ID",
+          "name": "C_Tax_IsSOTrx_Date"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        }
+      ]
+    },
+    "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
+      "params": [
+        "273673D2ED914C399A6C51DB758BE0F9"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "125",
+          "code": "C_DocType.DocBaseType IN ('MMR', 'MMS') AND C_DocType.IsSOTrx='@IsSOTrx@' AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1'\nAND (COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn OR COALESCE(@isDocumentTypeWindow@, 'N') = 'Y')",
+          "columnname": "C_DocType_ID",
+          "name": "C_DocType Material Shipments/Receipts"
+        },
+        {
+          "ad_val_rule_id": "127",
+          "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
+          "columnname": "M_Locator_ID",
+          "name": "M_Locator of Warehouse"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "Delivery_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        }
+      ]
+    },
+    "b8f93f89d00e4397d71cd226a3704eee1045f69f9f26ff056c27d50de601db7e": {
+      "params": [
+        "B917E8A7B0864ACEA9D941E3B7494E53"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "102",
+          "code": "C_DocType.DocBaseType='GLJ' AND AD_ISORGINCLUDED( @AD_Org_ID@, C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "C_DocType_ID",
+          "name": "C_DocType Journals"
+        },
+        {
+          "ad_val_rule_id": "118",
+          "code": "GL_Category.CategoryType='M'",
+          "columnname": "GL_Category_ID",
+          "name": "GL_Category for Manual Journals"
+        },
+        {
+          "ad_val_rule_id": "147E6690EF6C42C7A937B0EE98516761",
+          "code": "@Multi_Gl@='Y'",
+          "columnname": "Account_ID",
+          "name": "GL Journal GL Items"
+        },
+        {
+          "ad_val_rule_id": "425D5A5259F64FDABC82896596D23A25",
+          "code": "(AD_ISORGINCLUDED(ad_org.ad_org_id, @Batch_Org@, ad_org.ad_client_id)<>-1 AND IsReady='Y') or @Batch_Org@ is null",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show batch's child organizations"
+        },
+        {
+          "ad_val_rule_id": "7BAD557A87B64D5386215D77F79A43D7",
+          "code": "EXISTS (SELECT 1 FROM AD_ORG_ACCTSCHEMA WHERE AD_ORG_ACCTSCHEMA.C_ACCTSCHEMA_ID = C_ACCTSCHEMA.C_ACCTSCHEMA_ID AND AD_ISORGINCLUDED(@AD_Org_ID@, AD_ORG_ID, AD_CLIENT_ID)<>-1)",
+          "columnname": "C_AcctSchema_ID",
+          "name": "C_AcctSchema - Schemas matching parent organizations"
+        },
+        {
+          "ad_val_rule_id": "959ADF046AFE4F509ABC6E2F41F9DB04",
+          "code": "EXISTS(\nSELECT FIN_PAYMENTMETHOD_ID \nFROM FIN_FINACC_PAYMENTMETHOD \nWHERE FIN_FINANCIAL_ACCOUNT_ID = CASE WHEN (@FIN_FINANCIAL_ACCOUNT_ID@ IS NOT NULL AND @FIN_FINANCIAL_ACCOUNT_ID@ <> COALESCE('','-1')) THEN @FIN_FINANCIAL_ACCOUNT_ID@ ELSE\n(SELECT CASE WHEN ((TO_NUMBER(@AMTACCTDR@) - TO_NUMBER(@AMTACCTCR@)) > 0) THEN FIN_FINANCIAL_ACCOUNT_ID ELSE PO_FINANCIAL_ACCOUNT_ID END FROM C_BPARTNER WHERE C_BPARTNER_ID = @C_BPARTNER_ID@)\nEND\nAND FIN_FINACC_PAYMENTMETHOD.FIN_PAYMENTMETHOD_ID = FIN_PAYMENTMETHOD.FIN_PAYMENTMETHOD_ID )",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodInFinancialAccountOrBPartnerAcc"
+        },
+        {
+          "ad_val_rule_id": "99659ACE4B8F404589A69F3FF1E8959B",
+          "code": "(AD_ISORGINCLUDED(ad_org.ad_org_id, @Batch_Org@, ad_org.ad_client_id)<>-1 AND IsReady='Y') or \nAD_ISORGINCLUDED(ad_org.ad_org_id, @Journal_Org@, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show GL_Header child organizations"
+        },
+        {
+          "ad_val_rule_id": "D244F181F37C4CC69DEACA12CA8F0DD4",
+          "code": "FIN_Financial_Account.C_Currency_ID = @C_CURRENCY_ID@",
+          "columnname": "FIN_Financial_Account_ID",
+          "name": "Financial Account Currency"
+        },
+        {
+          "ad_val_rule_id": "FF8081813088DED301308AB9CF0101D2",
+          "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
+          "columnname": "C_Currency_Id_To",
+          "name": "Accounting Schema currency"
+        },
+        {
+          "ad_val_rule_id": "FF8081813092D5DC013092DD70AD000C",
+          "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
+          "columnname": "C_Currency_ID",
+          "name": "Document currency"
+        }
+      ]
+    },
+    "bc1f176fd0a37e081c0035239df13fd8ae7e5d54086dc4ec03016c3c894c45f1": {
+      "params": [
+        "C1D3A2A017AC4B82B9FEE6F4D2A0C55A"
+      ],
+      "rows": []
+    },
+    "bf11b95a5cc3783d783796dc4000683f6dc92578ff1af8d116039bf87bade677": {
+      "params": [
+        "F4675DAB02134762B66881DAE4672AD0"
+      ],
+      "rows": []
+    },
+    "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
+      "params": [
+        "140"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "197EFF9A92394AD183B4034E2038F61D",
+          "code": "m_product_po.discontinued = 'N' and m_product_po.m_product_id = @M_Product_ID@",
+          "columnname": "M_Product_Po_ID",
+          "name": "M_Product_PO of the m_product_id"
+        },
+        {
+          "ad_val_rule_id": "57D84BE9C3774FDD87CD846F805A07FB",
+          "code": "IsReady='Y' AND ad_org_isinnaturaltree(ad_org_id, @Parent_AD_Org@, ad_client_id) ='Y' AND exists (select 1 from ad_orgtype where ad_orgtype.ad_orgtype_id = ad_org.ad_orgtype_id and islegalentity='Y')",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org In product costing tab"
+        },
+        {
+          "ad_val_rule_id": "772B9BE4957746EC809B8FE4D8E3F924",
+          "code": "Issummary='N'",
+          "columnname": "M_Product_Category_ID",
+          "name": "M_ProductCategory(Only Leaf)"
+        },
+        {
+          "ad_val_rule_id": "800017",
+          "code": "NOT EXISTS (SELECT 1 FROM M_Product_UOM pu WHERE pu.M_Product_ID = @M_Product_ID@ AND pu.C_UOM_ID = td0.C_UOM_ID AND pu.M_Product_UOM_ID <>@M_Product_UOM_ID@)",
+          "columnname": "C_UOM_ID",
+          "name": "C_Uom not as product_uom"
+        },
+        {
+          "ad_val_rule_id": "8AD089383C6A44DDB834DC2204430BAB",
+          "code": "m_characteristic_id IN (SELECT m_characteristic_id FROM m_product_ch WHERE m_product_id = @m_product_id@)",
+          "columnname": "M_Characteristic_ID",
+          "name": "M_Characteristic in Product"
+        },
+        {
+          "ad_val_rule_id": "8E796B7D6664453FB6C236CBC923078C",
+          "code": "m_ch_value.m_characteristic_id = @m_characteristic_id@",
+          "columnname": "M_Ch_Value_ID",
+          "name": "M_Ch_Value of Characteristic"
+        },
+        {
+          "ad_val_rule_id": "994D5D0FB26D44988D04CE19D66B0A2C",
+          "code": "EXISTS (SELECT 1 \n        FROM AD_ROLE_ORGACCESS A_R_O\n        INNER JOIN ad_role r ON (A_R_O.AD_ROLE_ID = r.AD_ROLE_ID)\n        WHERE A_R_O.ISACTIVE = 'Y'\n        AND r.ISACTIVE = 'Y'\n        and r.ad_role_id = @#AD_Role_ID@\n        AND (A_R_O.AD_ORG_ID = td0.AD_Org_ID \n             OR (SUBSTR(TO_CHAR(r.USERLEVEL), 2, 1) = 'C' AND td0.AD_ORG_ID = '0')\n             )\n        )",
+          "columnname": "M_PriceList_Version_ID",
+          "name": "Records belonging to any org declared in the role"
+        },
+        {
+          "ad_val_rule_id": "E00B19370995405C8014D48E2DE98FD1",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, @Product_Org@, ad_org.ad_client_id)<>-1 AND IsReady = 'Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show product's child organizations"
+        },
+        {
+          "ad_val_rule_id": "F998285191EA4BA9AC839BF540016DB4",
+          "code": "m_ch_value.m_characteristic_id  = (SELECT m_characteristic_id FROM m_product_ch WHERE m_product_ch_id = @M_Product_Ch_ID@)",
+          "columnname": "M_Ch_Value_ID",
+          "name": "M_Ch_Value of a M_Product_CH"
+        }
+      ]
+    },
+    "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
+      "params": [
+        "E66E701CCBA14B8BA480CBDE37C50D7A"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "CA6741A18A214FE9A50FDFC398662235",
+          "code": "Value<>'N'",
+          "columnname": "OpenClose",
+          "name": "Allowed PeriodActions"
+        },
+        {
+          "ad_val_rule_id": "CA6741A18A214FE9A50FDFC398662235",
+          "code": "Value<>'N'",
+          "columnname": "OpenClose",
+          "name": "Allowed PeriodActions"
+        }
+      ]
+    },
+    "d762ff016bca659cec9b3ea6091e7975b8e08865bfb35fdd621af88fa1f69d14": {
+      "params": [
+        "146"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "IsTaxIncluded",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "132",
+          "code": "M_PriceList.C_Currency_ID=@C_Currency_ID@",
+          "columnname": "BasePriceList_ID",
+          "name": "M_PriceList Base"
+        },
+        {
+          "ad_val_rule_id": "151",
+          "code": "M_DiscountSchema.DiscountType='P'",
+          "columnname": "M_DiscountSchema_ID",
+          "name": "M_DiscountSchema only PriceList"
+        },
+        {
+          "ad_val_rule_id": "994D5D0FB26D44988D04CE19D66B0A2C",
+          "code": "EXISTS (SELECT 1 \n        FROM AD_ROLE_ORGACCESS A_R_O\n        INNER JOIN ad_role r ON (A_R_O.AD_ROLE_ID = r.AD_ROLE_ID)\n        WHERE A_R_O.ISACTIVE = 'Y'\n        AND r.ISACTIVE = 'Y'\n        and r.ad_role_id = @#AD_Role_ID@\n        AND (A_R_O.AD_ORG_ID = td0.AD_Org_ID \n             OR (SUBSTR(TO_CHAR(r.USERLEVEL), 2, 1) = 'C' AND td0.AD_ORG_ID = '0')\n             )\n        )",
+          "columnname": "M_PriceList_Version_ID",
+          "name": "Records belonging to any org declared in the role"
+        }
+      ]
+    },
+    "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
+      "params": [
+        "108"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "131",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location"
+        },
+        {
+          "ad_val_rule_id": "158",
+          "code": "AD_Role.AD_Client_ID=@#AD_Client_ID@",
+          "columnname": "AD_Role_ID",
+          "name": "AD_Role of Client"
+        },
+        {
+          "ad_val_rule_id": "800021",
+          "code": "EXISTS ( SELECT 1\n        FROM  AD_USER_ROLES A_U_R\n        WHERE A_U_R.AD_ROLE_ID = AD_Role.AD_Role_ID\n        AND A_U_R.ISACTIVE = 'Y'\n        AND A_U_R.AD_USER_ID = @AD_User_ID@)",
+          "columnname": "Default_Ad_Role_ID",
+          "name": "AD_Role_of_User"
+        },
+        {
+          "ad_val_rule_id": "800021",
+          "code": "EXISTS ( SELECT 1\n        FROM  AD_USER_ROLES A_U_R\n        WHERE A_U_R.AD_ROLE_ID = AD_Role.AD_Role_ID\n        AND A_U_R.ISACTIVE = 'Y'\n        AND A_U_R.AD_USER_ID = @AD_User_ID@)",
+          "columnname": "EM_Smfsws_Default_Ws_Role_ID",
+          "name": "AD_Role_of_User"
+        },
+        {
+          "ad_val_rule_id": "800022",
+          "code": "AD_CLIENT.ISACTIVE = 'Y' AND EXISTS (SELECT 1 FROM AD_ROLE_ORGACCESS WHERE AD_ROLE_ORGACCESS.AD_CLIENT_ID = AD_CLIENT.AD_CLIENT_ID AND AD_ROLE_ORGACCESS.AD_ROLE_ID = @Default_AD_Role_ID@ AND AD_ROLE_ORGACCESS.ISACTIVE = 'Y')",
+          "columnname": "Default_Ad_Client_ID",
+          "name": "AD_Client of Role"
+        },
+        {
+          "ad_val_rule_id": "800023",
+          "code": "EXISTS (SELECT 1 FROM AD_ROLE_ORGACCESS A_R_O, ad_role r\n        WHERE A_R_O.AD_ORG_ID = AD_ORG.AD_Org_ID\n        AND A_R_O.ISACTIVE = 'Y'\n        AND A_R_O.AD_ROLE_ID = R.AD_ROLE_ID\n        and r.ad_role_id = @Default_AD_Role_ID@\n        AND R.ISACTIVE = 'Y'\n        AND (LPAD(TO_CHAR(R.USERLEVEL), 1, '1')='S' OR AD_ORG.AD_ORG_ID <> '0')\n        AND A_R_O.AD_ROLE_ID = @Default_AD_Role_ID@)",
+          "columnname": "Default_Ad_Org_ID",
+          "name": "AD_Org of a Role"
+        },
+        {
+          "ad_val_rule_id": "800024",
+          "code": "M_Warehouse.AD_Client_ID = @Default_AD_Client_ID@",
+          "columnname": "Default_M_Warehouse_ID",
+          "name": "M_Warehouse of Role"
+        }
+      ]
+    },
+    "db74276aff1dc1773fa3c1f1188863e1ae5906047451c707296b6d649243b515": {
+      "params": [
+        "139"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        }
+      ]
+    },
+    "dc3625edf6e3b3ba3d373862af247d21be277872e900727c4a4025b968fa702b": {
+      "params": [
+        "FF808081330213E60133021822E40007"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "1000200003",
+          "code": "(AD_Ref_List.value IN ('I', 'D', 'O') OR (SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE.C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@) <> 'WR')",
+          "columnname": "InvoiceRule",
+          "name": "Invoice Rules for POS Sales orders"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "BillTo_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "120",
+          "code": "C_BPartner_Location.C_BPartner_ID=@DropShip_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y'",
+          "columnname": "DropShip_Location_ID",
+          "name": "C_BPartner Location - Drop Ship To"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "133",
+          "code": "C_DocType.DocBaseType IN ('SOO', 'POO') AND C_DocType.IsSOTrx='@IsSOTrx@'\nAND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')\nAND COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn\nAND ((@isQuotation@='Y' AND docsubtypeso like 'OB') OR ((@isQuotation@='N' OR @isQuotation@ is null) AND (docsubtypeso is null OR docsubtypeso not like 'OB')))",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType PO/SO"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "Delivery_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "168",
+          "code": "AD_User.C_BPartner_ID=@DropShip_BPartner_ID@",
+          "columnname": "DropShip_User_ID",
+          "name": "AD_User C_BPartner User/Contacts Drop"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "5BEA56148DC74215A63927481BDC0B63",
+          "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+          "columnname": "C_Tax_ID",
+          "name": "C_Tax_IsSOTrx_Date"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        }
+      ]
+    },
+    "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
+      "params": [
+        "123271B9AD60469BAE8A924841456B63"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "125",
+          "code": "C_DocType.DocBaseType IN ('MMR', 'MMS') AND C_DocType.IsSOTrx='@IsSOTrx@' AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1'\nAND (COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn OR COALESCE(@isDocumentTypeWindow@, 'N') = 'Y')",
+          "columnname": "C_DocType_ID",
+          "name": "C_DocType Material Shipments/Receipts"
+        },
+        {
+          "ad_val_rule_id": "127",
+          "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
+          "columnname": "M_Locator_ID",
+          "name": "M_Locator of Warehouse"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "Delivery_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        }
+      ]
+    },
+    "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
+      "params": [
+        "181"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "1000200003",
+          "code": "(AD_Ref_List.value IN ('I', 'D', 'O') OR (SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE.C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@) <> 'WR')",
+          "columnname": "InvoiceRule",
+          "name": "Invoice Rules for POS Sales orders"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "119",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsBillTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "BillTo_ID",
+          "name": "C_BPartner Location - Bill To"
+        },
+        {
+          "ad_val_rule_id": "120",
+          "code": "C_BPartner_Location.C_BPartner_ID=@DropShip_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y'",
+          "columnname": "DropShip_Location_ID",
+          "name": "C_BPartner Location - Drop Ship To"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "133",
+          "code": "C_DocType.DocBaseType IN ('SOO', 'POO') AND C_DocType.IsSOTrx='@IsSOTrx@'\nAND (AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' OR COALESCE(@AD_Org_ID@,'-1')='-1')\nAND COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn\nAND ((@isQuotation@='Y' AND docsubtypeso like 'OB') OR ((@isQuotation@='N' OR @isQuotation@ is null) AND (docsubtypeso is null OR docsubtypeso not like 'OB')))",
+          "columnname": "C_DocTypeTarget_ID",
+          "name": "C_DocType PO/SO"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "Delivery_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "168",
+          "code": "AD_User.C_BPartner_ID=@DropShip_BPartner_ID@",
+          "columnname": "DropShip_User_ID",
+          "name": "AD_User C_BPartner User/Contacts Drop"
+        },
+        {
+          "ad_val_rule_id": "49DC1D6F086945AB82F84C66F5F13F16",
+          "code": "AD_ORG_ID <> '0'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org (without *)"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "5BEA56148DC74215A63927481BDC0B63",
+          "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+          "columnname": "C_Tax_ID",
+          "name": "C_Tax_IsSOTrx_Date"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "88C0B1F928434B4EAAA9D07B2D2F63E1",
+          "code": "(C_RETURN_REASON.ISRFC = @ISSOTRX@ OR C_RETURN_REASON.ISRTV=(case when @ISSOTRX@='N' then 'Y' else 'N' end))",
+          "columnname": "C_Return_Reason_ID",
+          "name": "Return reason RFC/RTV"
+        },
+        {
+          "ad_val_rule_id": "DB85A30739C3487988921CE3FFFD3BAD",
+          "code": "M_PriceList.issopricelist = @isSOTrx@",
+          "columnname": "M_PriceList_ID",
+          "name": "Price List isSOTrx"
+        },
+        {
+          "ad_val_rule_id": "FF80808130B107670130B1115F22000D",
+          "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
+          "columnname": "FIN_Paymentmethod_ID",
+          "name": "FIN_PaymentMethodsWithAccountIsSOTrxControl"
+        }
+      ]
+    },
+    "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
+      "params": [
+        "94EAA455D2644E04AB25D93BE5157B6D"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "129",
+          "code": "AD_Client.AD_Client_ID<>'0'",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "130",
+          "code": "AD_Org.AD_Org_ID<> '0' AND AD_Org.IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Trx Security validation"
+        },
+        {
+          "ad_val_rule_id": "16C9E72407D94B93968D1E81F32D537D",
+          "code": "C_DocType.DocBaseType IN ('BSF') AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' AND C_DocType.AD_Client_ID=@#AD_Client_ID@",
+          "columnname": "C_Doctype_ID",
+          "name": "C_DocType - Bank Statement File"
+        },
+        {
+          "ad_val_rule_id": "1D824F88E32F4282B26C48B5A910B006",
+          "code": "Value not IN ('RPR','RDNC') and seqno >=(select seqno FROM ad_ref_list WHERE ad_reference_id = '575BCB88A4694C27BC013DE9C73E6FE7' and value='PPM')",
+          "columnname": "Payout_Invoicepaidstatus",
+          "name": "FIN_Payment Out status validation"
+        },
+        {
+          "ad_val_rule_id": "27D8D0FDAE4742229DC64888DF9CB8A8",
+          "code": "Value not IN  ('PPM','PWNC') and seqno >=(select seqno FROM ad_ref_list WHERE ad_reference_id = '575BCB88A4694C27BC013DE9C73E6FE7' and value='RPR')",
+          "columnname": "Payin_Invoicepaidstatus",
+          "name": "FIN_Payment In status validation"
+        },
+        {
+          "ad_val_rule_id": "2E7335B7F14041DFBC61DCE771B1A57B",
+          "code": "((UPPER(Value)<>'SPANISH' AND @C_Country_ID@<>'106') OR @C_Country_ID@='106')",
+          "columnname": "BankFormat",
+          "name": "BankFormat Spanish Country"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "7736D1EBBD04477FB4419BC562328CC7",
+          "code": "AD_Ref_List.Value IN ('WIT', 'INT', 'CLE')",
+          "columnname": "Outuponclearinguse",
+          "name": "Payment OUT Accounts"
+        },
+        {
+          "ad_val_rule_id": "7736D1EBBD04477FB4419BC562328CC7",
+          "code": "AD_Ref_List.Value IN ('WIT', 'INT', 'CLE')",
+          "columnname": "Uponpaymentuse",
+          "name": "Payment OUT Accounts"
+        },
+        {
+          "ad_val_rule_id": "7736D1EBBD04477FB4419BC562328CC7",
+          "code": "AD_Ref_List.Value IN ('WIT', 'INT', 'CLE')",
+          "columnname": "Uponwithdrawaluse",
+          "name": "Payment OUT Accounts"
+        },
+        {
+          "ad_val_rule_id": "7A86F689FB1C46F19DBE338D6DECD703",
+          "code": "Value IN ('RPAP','RDNC','RPPC','PWNC')",
+          "columnname": "Status",
+          "name": "FIN_Payment status for transactons"
+        },
+        {
+          "ad_val_rule_id": "B0B962BC60AE4BF18F811EF818D8F138",
+          "code": "C_DocType.DocBaseType IN ('REC') AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1' AND C_DocType.AD_Client_ID=@#AD_Client_ID@",
+          "columnname": "C_Doctype_ID",
+          "name": "C_DocType - Reconciliation"
+        },
+        {
+          "ad_val_rule_id": "B450FAD7A56F40798D0931F8F9BB586E",
+          "code": "AD_Ref_List.Value IN ('INT', 'DEP', 'CLE')",
+          "columnname": "Inuponclearinguse",
+          "name": "Payment IN Accounts"
+        },
+        {
+          "ad_val_rule_id": "B450FAD7A56F40798D0931F8F9BB586E",
+          "code": "AD_Ref_List.Value IN ('INT', 'DEP', 'CLE')",
+          "columnname": "Upondeposituse",
+          "name": "Payment IN Accounts"
+        },
+        {
+          "ad_val_rule_id": "B450FAD7A56F40798D0931F8F9BB586E",
+          "code": "AD_Ref_List.Value IN ('INT', 'DEP', 'CLE')",
+          "columnname": "Uponreceiptuse",
+          "name": "Payment IN Accounts"
+        },
+        {
+          "ad_val_rule_id": "FDC45D1AE2404B8384D14DB6DED90DCF",
+          "code": "EXISTS (SELECT 1 FROM ad_orgtype WHERE ad_orgtype.ad_orgtype_id=ad_org.ad_orgtype_id AND IsTransactionsAllowed='Y') and IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org is transactions allowed"
+        },
+        {
+          "ad_val_rule_id": "FF8080812E448A62012E44943A160017",
+          "code": "((@Process_Reconciliation@ = 'P' AND AD_Ref_List.value='P') OR (@Process_Reconciliation@ = 'R' AND AD_Ref_List.value='R') OR (@Process_Reconciliation@ is null))",
+          "columnname": "EM_APRM_Process_Rec_Force",
+          "name": "APRM_Process Reconciliation valid actions"
+        },
+        {
+          "ad_val_rule_id": "FF8081813088DED301308AB9CF0101D2",
+          "code": "C_Currency.C_Currency_id in (SELECT C_Currency_ID FROM C_Acctschema)",
+          "columnname": "C_Currency_Id_To",
+          "name": "Accounting Schema currency"
+        },
+        {
+          "ad_val_rule_id": "FF8081813092D5DC013092DD70AD000C",
+          "code": "C_Currency.C_Currency_id = \nCASE WHEN @C_Invoice_ID@ is not null THEN (SELECT C_Currency_ID FROM C_Invoice WHERE C_Invoice_ID = COALESCE(@C_Invoice_ID@,'---'))\nWHEN @APRM_Finacc_Transaction_V_ID@ is not null THEN (SELECT c_currency_id FROM aprm_finacc_transaction_v WHERE aprm_finacc_transaction_v_id = COALESCE(@APRM_Finacc_Transaction_V_ID@, '---')) \nWHEN @FIN_Finacc_Transaction_ID@ is not null THEN (SELECT c_currency_id FROM fin_finacc_transaction WHERE fin_finacc_transaction_id = COALESCE(@FIN_Finacc_Transaction_ID@, '---'))\nWHEN @GL_Journal_ID@ is not null THEN (SELECT c_currency_id FROM gl_journal WHERE gl_journal_id = COALESCE(@GL_Journal_ID@, '---'))\nELSE (SELECT C_Currency_ID FROM FIN_Payment WHERE FIN_Payment_ID = COALESCE(@FIN_Payment_ID@, '---')) END",
+          "columnname": "C_Currency_ID",
+          "name": "Document currency"
+        }
+      ]
+    },
+    "f059b24ecd20866b3f9f2bc8f3e5f8c6e2852af85784f3ade7eaa77668d467e5": {
+      "params": [
+        "168"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "127",
+          "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
+          "columnname": "M_Locator_ID",
+          "name": "M_Locator of Warehouse"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        }
+      ]
+    },
+    "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
+      "params": [
+        "71F24BF89DE748B483BE87594747D6FB"
+      ],
+      "rows": []
+    },
+    "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
+      "params": [
+        "169"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "104",
+          "code": "(@AD_Client_ID@='0' AND AD_Org.AD_Org_ID='0') OR (@AD_Client_ID@!='0' AND ((AD_Org.AD_Client_ID IN (@#User_Client@) AND AD_Org.AD_Org_ID IN (@#User_Org@)) OR AD_Org.AD_Org_ID='0' AND AD_Org.IsSummary='N'))",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org Security validation"
+        },
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "125",
+          "code": "C_DocType.DocBaseType IN ('MMR', 'MMS') AND C_DocType.IsSOTrx='@IsSOTrx@' AND AD_ISORGINCLUDED(@AD_Org_ID@,C_DocType.AD_Org_ID, @#AD_Client_ID@) <> '-1'\nAND (COALESCE(@isReturnMaterial@, 'N') = C_DocType.IsReturn OR COALESCE(@isDocumentTypeWindow@, 'N') = 'Y')",
+          "columnname": "C_DocType_ID",
+          "name": "C_DocType Material Shipments/Receipts"
+        },
+        {
+          "ad_val_rule_id": "127",
+          "code": "M_Locator.M_Warehouse_ID=@M_Warehouse_ID@",
+          "columnname": "M_Locator_ID",
+          "name": "M_Locator of Warehouse"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "167",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
+          "columnname": "Delivery_Location_ID",
+          "name": "C_BPartner Location - Ship To"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        },
+        {
+          "ad_val_rule_id": "5ABEE0829BD24BFB9BA454E607825821",
+          "code": "td0.c_uom_id IN(select p.c_uom_id from m_product p where p.m_product_id = @M_Product_ID@) or td0.c_uom_id IN(select a.c_uom_id from m_product_aum a where a.m_product_id = @M_Product_ID@ and ((@IsSOTrx@ = 'Y' and a.sales <> 'NA') OR (@IsSOTrx@ <> 'Y' and a.purchase <> 'NA')))",
+          "columnname": "C_Aum",
+          "name": "UOM Validation"
+        },
+        {
+          "ad_val_rule_id": "6F75AF1B05464DD894033D50AEC67310",
+          "code": "AD_ISORGINCLUDED(@AD_Org_ID@, td0.AD_Org_ID, @#AD_Client_ID@) <> '-1'",
+          "columnname": "SalesRep_ID",
+          "name": "AD_User - Org Tree"
+        },
+        {
+          "ad_val_rule_id": "800001",
+          "code": "C_Project.projectstatus in ('OP', 'OR') and (C_Project.c_bpartner_id=@C_BPartner_ID@ or '@IsSOTrx@'='N') or C_Project.c_project_id = @c_project_id@",
+          "columnname": "C_Project_ID",
+          "name": "C_Project based on status and bpartner"
+        }
+      ]
+    },
+    "f71bd40f8548d0778bbf8b687c5cca2566403c65eb5aecc67560cd0b92ebd3b0": {
+      "params": [
+        "252"
+      ],
+      "rows": []
+    },
+    "f750141ebc99d41ec60eb871c5b5d9630d42737fc939771cef25ff208fc674df": {
+      "params": [
+        "138"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        },
+        {
+          "ad_val_rule_id": "103",
+          "code": "AD_Client.AD_Client_ID in (@#User_Client@)",
+          "columnname": "AD_Client_ID",
+          "name": "AD_Client Security validation"
+        }
+      ]
+    },
+    "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
+      "params": [
+        "800027"
+      ],
+      "rows": [
+        {
+          "ad_val_rule_id": "123",
+          "code": "AD_User.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "AD_User_ID",
+          "name": "AD_User C_BPartner User/Contacts"
+        },
+        {
+          "ad_val_rule_id": "131",
+          "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@",
+          "columnname": "C_BPartner_Location_ID",
+          "name": "C_BPartner Location"
+        },
+        {
+          "ad_val_rule_id": "53AE60A473D2460D8663D7A1BC5BA732",
+          "code": "AD_ISORGINCLUDED(ad_org.ad_org_id, CASE WHEN (@Parent_AD_Org@ IS NULL OR @Parent_AD_Org@ = '') THEN @AD_ORG_ID@ ELSE @Parent_AD_Org@ END, ad_org.ad_client_id)<>-1 AND IsReady='Y'",
+          "columnname": "AD_Org_ID",
+          "name": "AD_Org show child organizations"
+        }
+      ]
+    }
+  }
+}
