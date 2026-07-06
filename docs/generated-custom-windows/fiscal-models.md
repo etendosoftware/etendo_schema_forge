@@ -83,6 +83,21 @@ Three steps (0-based index):
 | Files | Generated `.txt` file download |
 | Incidents | Blocking and warning validation messages |
 
+### Identification section (`tipo_declaracion` + bank data)
+
+The top of the Boxes tab shows the declaration type selector and, conditionally, the bank data section (`datos_bancarios`).
+
+**`tipo_declaracion` options:** `C` (Complementaria), `D` (Devolución), `I` (Ingreso), `U` (Cuota cero), `N` (Sin resultado), `V` (Domiciliación — IVA), `X` (Domiciliación — extranjero).
+
+**`datos_bancarios` visibility** (`sectionVisibleWhen`): shown when `tipo_declaracion ∈ {D, G, I, V, X, U}`. Hidden for `N` and `C`.
+
+**Section title** varies by tipo:
+- `D` → "Devolución"
+- `G`, `I`, `V`, `U` → "Domiciliación"
+- `X` → "Domiciliación (extranjero)"
+
+**SWIFT/BIC field** is only shown when `tipo ∈ {D, V, X}`.
+
 ### Live data
 
 When in real mode, `FmModel303Page` reads `liveBoxes` / `liveSummary` from the `_precomputed` field passed at navigation. The compute button triggers a fresh `computeBoxes303` call. File generation calls `generate303File(decl, { token, apiBaseUrl })` → `GET /fiscal303/generate?year=&period=&tipo=`.
