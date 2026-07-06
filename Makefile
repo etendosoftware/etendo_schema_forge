@@ -155,13 +155,13 @@ SF_CACHE_PATH ?= cli/cache/ad-snapshot
 regen: ## Re-run full pipeline for all active windows (HELP=1 or `make regen-help` for options)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s regen-help; exit 0; fi; \
 	REGEN_ARGS=""; \
-	CACHE_ENV=""; \
+	CACHE_ENV="SF_CACHE_PATH=$(SF_CACHE_PATH)"; \
 	if [ "$(PUSH_TO_NEO)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --push-to-neo"; fi; \
 	if [ "$(SKIP_EXTRACT)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --skip-extract"; fi; \
 	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --write-cache"; \
 		if [ -z "$(ONLY)" ]; then CACHE_ENV="$$CACHE_ENV SF_CACHE_SWEEP=1"; fi; \
 	fi; \
-	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="$$CACHE_ENV SF_CACHE_MODE=read"; fi; \
 	if [ -n "$(ONLY)" ]; then REGEN_ARGS="$$REGEN_ARGS --only $(ONLY)"; fi; \
 	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS
 
