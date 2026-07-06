@@ -3,9 +3,9 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:finPaymentScheduleDetail
 const columns = [
+  { key: 'invoiceDocumentNo', column: 'invoiceDocumentNo', type: 'string', label: 'Invoice' },
   { key: 'dueDate', column: 'DueDate', type: 'date', label: 'Due Date' },
   { key: 'amount', column: 'Amount', type: 'amount', label: 'Received Amount', required: true },
-  { key: 'invoicePaymentSchedule', column: 'FIN_Payment_Schedule_Invoice', type: 'selector', label: 'Invoice Payment Schedule' },
 ];
 // @sf-generated-end columns:finPaymentScheduleDetail
 
