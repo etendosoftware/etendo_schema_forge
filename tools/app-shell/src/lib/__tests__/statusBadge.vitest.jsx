@@ -4,7 +4,7 @@ describe('statusBadge', () => {
   describe('getStatusTone', () => {
     it.each([
       ['co', 'success'], ['CO', 'success'], ['completed', 'success'], ['y', 'success'], ['true', 'success'], ['pa', 'success'],
-      ['ip', 'warning'], ['rpap', 'warning'], ['in process', 'warning'],
+      ['ip', 'warning'], ['rpap', 'neutral'], ['in process', 'warning'],
       ['vo', 'destructive'], ['cj', 'destructive'], ['voided', 'destructive'], ['rejected', 'destructive'],
       ['dr', 'neutral'], ['unknown', 'neutral'], [null, 'neutral'], [undefined, 'neutral'],
     ])('maps %s → %s', (status, expected) => {
@@ -72,7 +72,7 @@ describe('statusBadge', () => {
       ['ca', 'success'], ['etgo_ci', 'success'], ['rppc', 'success'], ['ppm', 'success'],
       ['pwnc', 'success'], ['rdnc', 'success'], ['confirmed', 'success'], ['booked', 'success'],
       ['paid', 'success'], ['processed', 'success'], ['yes', 'success'],
-      ['rpae', 'warning'], ['rpr', 'warning'], ['ue', 'warning'], ['under evaluation', 'warning'],
+      ['rpae', 'warning'], ['rpr', 'success'], ['ue', 'warning'], ['under evaluation', 'warning'],
       ['rpvoid', 'destructive'], ['rpvd', 'destructive'], ['cancelled', 'destructive'], ['void', 'destructive'],
     ])('maps %s to %s', (status, expected) => {
       expect(getStatusTone(status)).toBe(expected);
@@ -106,10 +106,14 @@ describe('statusBadge', () => {
       expect(getStatusBadgeProps('rejected').variant).toBe('destructive');
     });
 
-    it('returns amber for rpap/rpae/rpr', () => {
-      for (const code of ['RPAP', 'RPAE', 'RPR']) {
+    it('returns amber for rpae/rpr', () => {
+      for (const code of ['RPAE', 'RPR']) {
         expect(getStatusBadgeProps(code).className).toContain('amber');
       }
+    });
+
+    it('returns gray for rpap (draft payment)', () => {
+      expect(getStatusBadgeProps('RPAP').className).toContain('gray');
     });
   });
 
@@ -121,7 +125,7 @@ describe('statusBadge', () => {
       ['ppm', 'emerald'], ['pwnc', 'emerald'], ['rdnc', 'emerald'],
       ['pa', 'blue'], ['paid', 'blue'],
       ['rpvoid', 'red'], ['cj', 'red'], ['rejected', 'red'], ['cancelled', 'red'],
-      ['rpae', 'amber'], ['rpap', 'amber'], ['rpr', 'amber'],
+      ['rpae', 'amber'], ['rpap', 'gray'], ['rpr', 'amber'],
       ['ue', 'purple'],
     ])('maps %s to contain %s', (status, expected) => {
       expect(getStatusDotColor(status)).toContain(expected);
@@ -135,7 +139,7 @@ describe('statusBadge', () => {
       ['confirmed', 'emerald'], ['ca', 'emerald'],
       ['pa', 'blue'], ['cl', 'blue'],
       ['rpvoid', 'red'], ['cancelled', 'red'],
-      ['rpae', 'amber'], ['rpap', 'amber'], ['rpr', 'amber'],
+      ['rpae', 'amber'], ['rpap', 'gray'], ['rpr', 'amber'],
       ['ue', 'purple'],
     ])('maps %s to contain %s', (status, expected) => {
       expect(getStatusPillClass(status)).toContain(expected);
@@ -154,7 +158,7 @@ describe('statusBadge', () => {
       ['ca', 'emerald'], ['etgo_ci', 'emerald'],
       ['cl', 'slate'], ['pa', 'slate'],
       ['rpvoid', 'red'], ['cj', 'red'], ['rejected', 'red'],
-      ['rpae', 'amber'], ['rpap', 'amber'], ['rpr', 'amber'],
+      ['rpae', 'amber'], ['rpap', 'gray'], ['rpr', 'amber'],
       ['ue', 'purple'],
     ])('maps %s to contain %s', (status, expected) => {
       expect(getStatusGridPillClass(status)).toContain(expected);

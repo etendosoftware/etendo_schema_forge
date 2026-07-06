@@ -53,6 +53,9 @@ afterEach(() => {
 
 describe('resolveDbDefaults', () => {
   it('uses environment variables when no explicit gradle file is available', () => {
+    // Point auto-discovery at a missing file so the test stays hermetic on dev
+    // machines that have a real gradle.properties in the Etendo root above.
+    process.env.ETENDO_GRADLE_PROPERTIES = '/missing/gradle.properties';
     process.env.ETENDO_DB_HOST = 'db.internal';
     process.env.ETENDO_DB_PORT = '6543';
     process.env.ETENDO_DB_USER = 'admin';
@@ -67,6 +70,11 @@ describe('resolveDbDefaults', () => {
       database: 'etendo_dev',
       source: 'defaults',
     });
+
+    // Neutralize gradle.properties auto-discovery so the env-var fallback
+    // path is exercised deterministically (auto-discovery would otherwise
+    // find the Etendo root gradle.properties on dev machines).
+    process.env.ETENDO_GRADLE_PROPERTIES = '/missing/gradle.properties';
 
     assert.deepEqual(resolveDbDefaults(), {
       host: 'db.internal',

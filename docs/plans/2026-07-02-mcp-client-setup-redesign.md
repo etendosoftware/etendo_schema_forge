@@ -1,0 +1,437 @@
+# Propuesta: Remodelación de `mcp-client-setup.md`
+
+> **Estado:** borrador en iteración — este documento se va construyendo a medida que el usuario
+> aporta feedback. No implementar nada todavía; es la fase de diseño de la propuesta.
+
+## Problema
+
+El documento actual (`docs/agentic-validation/mcp-client-setup.md`) está escrito **solo para la
+CLI de Claude Code** (`claude mcp add`, `/mcp`, `claude mcp list`). Está organizado por
+**ambiente** (LOCAL vs EXPERIMENTAL), pero no por **cliente MCP** (el programa que se conecta:
+Claude Desktop, Claude Code, Cursor, Windsurf, VS Code + extensión MCP, un cliente HTTP genérico,
+etc.).
+
+Consecuencia: cualquier persona que use un cliente distinto a la CLI de Claude Code no tiene
+instrucciones aplicables — tiene que traducir mentalmente `claude mcp add --transport http ...`
+a lo que su cliente realmente necesita (JSON de config, UI de ajustes, etc.).
+
+## Objetivo
+
+Rediseñar la página/documento de instalación para que esté **orientada al cliente MCP**, no solo
+al ambiente. Cada cliente soportado debe tener sus propias instrucciones concretas y copiables
+(comando o snippet JSON), manteniendo la información de ambiente (LOCAL/EXPERIMENTAL) como un eje
+ortogonal (ej. un selector/parámetro dentro de cada instrucción de cliente).
+
+## Estado actual (referencia)
+
+- Archivo: `docs/agentic-validation/mcp-client-setup.md`
+- Estructura: LOCAL (con explicación profunda del problema de OAuth discovery URL-shape) →
+  EXPERIMENTAL (casi sin fricción) → "¿a cuál estoy conectado?"
+- Todo el contenido operativo asume la CLI de Claude Code.
+- No existe una página UI (React) equivalente — es puramente un doc markdown.
+- Doc relacionado de arquitectura: `docs/ops/cloudfront-alb-routing.md` (edge de producción/experimental).
+
+## Alcance real: NO es `docs/agentic-validation/mcp-client-setup.md`
+
+Ese markdown es doc **interno para devs de Schema Forge** (setup local de OAuth, troubleshooting de
+discovery URLs) y queda **fuera de este plan**, tal cual está.
+
+La pieza a rediseñar es la **página `ConnectionsLanding`** dentro de
+`tools/app-shell/src/pages/AuthorizePage.jsx` (líneas 215–265), que se renderiza en
+`http://localhost:3100/authorize` (y su equivalente en experimental/producción) cuando se accede
+**sin parámetros OAuth** — es la landing "cómo conectar tu cliente MCP a Etendo".
+
+Estado actual de esa página (`ConnectionsLanding`):
+- Título hardcodeado **"Connect with Claude"** (`tMenu('Connect with Claude')`) — sesgado a un solo
+  cliente aunque el copy de abajo diga "Claude Desktop or any MCP-compatible client".
+- 4 pasos genéricos y ya redactados pensando en Claude Desktop específicamente
+  (`oauthStep1`–`oauthStep4`, ver `packages/app-shell-core/src/locales/en_US.json:17051-17054`):
+  1. "Add this Etendo server as an MCP remote in Claude Desktop"
+  2. "Claude will open this page to request access"
+  3. "Review the permissions and click Authorize"
+  4. "Claude can now read and write data in Etendo on your behalf"
+- Un solo bloque con la **MCP Server URL**, calculada dinámicamente con
+  `detectMcpUrl()` = `window.location.origin + '/mcp'` (`AuthorizePage.jsx:18-20`) — esto es
+  exactamente el mecanismo de "URL dinámica según entorno" que ya funciona y **se debe conservar**:
+  como la página se sirve desde el mismo origin que el entorno activo (local `:3100`, experimental,
+  o producción), el origin ya resuelve solo el ambiente correcto. No hace falta rehacer esa lógica,
+  solo reutilizarla dentro de cada tab de cliente.
+- No hay ningún selector: es un único flujo de 4 pasos, un solo nombre de cliente en el título.
+
+## Decisiones confirmadas
+
+- **Selector de cliente**: la página `ConnectionsLanding` debe mostrar un **selector** (tabs) con,
+  como mínimo: **Claude Desktop, Claude Code (CLI), Cursor, VS Code, OpenAI Codex, OpenCode,
+  ChatGPT (Web/Desktop), Google Antigravity**, más una pestaña **"Otros / genérico"** para cualquier
+  cliente MCP no listado explícitamente (con la URL + explicación mínima de qué es un servidor MCP
+  remoto, para que sirva de fallback).
+- **Audiencia: usuarios sin contexto técnico.** Esto es lo que más cambia el copy respecto al doc
+  interno: nada de OAuth discovery, RFC 8414/9728, issuers ni audiencias. El público objetivo es,
+  literalmente, "el gerente de una empresa que quiere conectar su asistente de IA a Etendo". Cada
+  tab debe leerse como una receta de cocina: pasos numerados, lenguaje simple, capturas o nombres
+  de menú reales de cada cliente en vez de jerga OAuth. Nada de mostrar errores de discovery ni
+  explicar por qué algo falla a bajo nivel — si hace falta manejar errores, un mensaje simple
+  ("no pudimos conectar, contactá a soporte") alcanza para esta página.
+- **URL dinámica según entorno**: SE MANTIENE el mecanismo actual (`detectMcpUrl()` vía
+  `window.location.origin`) — ya resuelve local/experimental/producción solo por dónde se sirve la
+  página, sin selector adicional de ambiente. Cada tab de cliente debe interpolar esa misma URL en
+  su snippet/instrucción (ej. el JSON de Claude Desktop con la URL ya insertada, el comando
+  `claude mcp add ... <url>` con la URL ya insertada, etc.) — nunca URLs hardcodeadas de ejemplo
+  que el usuario tenga que editar a mano.
+
+## Propuesta
+
+### Estructura de la página `ConnectionsLanding`
+
+1. **Encabezado neutral** (no "Connect with Claude"): algo tipo "Conectá tu asistente de IA a
+   Etendo" — sin nombrar un cliente específico, ya que ahora hay varios.
+2. **Selector de cliente** (tabs horizontales, mismo patrón visual que el resto de la PWA):
+   `Claude Desktop | Claude Code | Cursor | VS Code | OpenAI Codex | Otros`.
+3. **Contenido por tab**, cada uno con:
+   - Pasos numerados específicos de ese cliente (dónde hace clic, qué menú, qué pega).
+   - El snippet/comando correspondiente con la **MCP Server URL ya interpolada** (vía
+     `detectMcpUrl()`), en un bloque copiable (botón "copiar").
+   - Para clientes con config por archivo JSON (Cursor, VS Code): mostrar el bloque JSON completo
+     listo para pegar, no solo el URL suelto.
+   - Para clientes CLI (Claude Code, OpenAI Codex si aplica): mostrar el comando completo.
+   - **Claude Desktop es la única tab con un sub-selector interno** (Cuenta personal / Organización
+     Team-Enterprise) porque el flujo de UI difiere realmente entre ambas — no es un simple cambio
+     de copy, son pantallas distintas (Configuración de usuario vs. Configuración de la
+     organización) confirmadas con capturas reales.
+4. La tab **"Otros"** mantiene el contenido genérico actual (URL + explicación breve) como fallback.
+
+### Qué NO cambia
+- El doc interno `docs/agentic-validation/mcp-client-setup.md` sigue existiendo tal cual, para devs
+  que necesitan el detalle técnico de OAuth/discovery en LOCAL vs EXPERIMENTAL.
+- El mecanismo `detectMcpUrl()` / `detectBaseUrl()`.
+- El resto del flujo de `AuthorizePage.jsx` (consentimiento OAuth cuando SÍ hay parámetros) no se
+  toca — el rediseño es solo sobre `ConnectionsLanding`.
+
+## Decisiones cerradas (ronda 2)
+
+- **El copy actual (título "Connect with Claude" + `oauthStep1`-`4`) se conserva íntegro pero se
+  reubica dentro de la tab "Otros"**, sin reescribir — es el fallback genérico para cualquier
+  cliente MCP no listado explícitamente. Las tabs nuevas (Claude Desktop, Claude Code, Cursor,
+  VS Code, OpenAI Codex) llevan copy nuevo, redactado con el tono "sin contexto técnico".
+- **OpenAI Codex SÍ soporta MCP remoto por HTTP**, confirmado contra la doc oficial
+  (developers.openai.com/codex/mcp, julio 2026):
+  - No existe un comando `codex mcp add` para servidores HTTP — se configuran a mano en
+    `~/.codex/config.toml` (o `.codex/config.toml` del proyecto) con:
+    ```toml
+    [mcp_servers.etendo-go]
+    url = "<MCP_SERVER_URL>"
+    ```
+  - OAuth se dispara con `codex mcp login <server-name>` — abre el navegador con un flow
+    equivalente al de Claude Code (`claude mcp add` + `/mcp` → Authenticate).
+- **Copy nuevo**: lo redacto yo en este plan (borrador abajo), el usuario ajusta antes de pasar a
+  desarrollo.
+
+## Decisión adicional: botón "Instalar" con deep link (Cursor y VS Code)
+
+Ambos clientes soportan (o soportaban a la fecha de este borrador) un **esquema de deep link** que
+permite dar de alta el servidor MCP con un solo clic, sin que el usuario tenga que copiar/pegar URL
+ni tipear nada manualmente — el botón abre directamente la app con el servidor pre-cargado, el
+usuario solo confirma. Esto reduce fricción especialmente para la audiencia sin contexto técnico.
+
+- **Alcance de esta decisión**: agregar un botón "Instalar en Cursor" / "Instalar en VS Code" en la
+  tab correspondiente, **además de** (no en reemplazo de) los pasos manuales — el deep link puede
+  fallar (versión vieja del cliente, esquema de URL no registrado en el SO) y el fallback manual
+  siempre debe quedar visible debajo.
+- **Formato exacto del deep link — AMBOS confirmados contra doc oficial**:
+  - **VS Code**: `vscode:mcp/install?<json-url-encoded>` con
+    `{"name":"etendo-go","type":"http","url":"{mcpUrl}"}` (variante `vscode-insiders:` para build
+    Insiders). Ver bloque completo en la tab de VS Code más abajo.
+  - **Cursor**: `cursor://anysphere.cursor-deeplink/mcp/install?name=etendo-go&config=<BASE64>`,
+    donde `<BASE64>` = `base64(JSON.stringify({ url: "{mcpUrl}" }))` — **el config va en base64**
+    (distinto de VS Code, que usa JSON URL-encoded plano), y debe calcularse dinámicamente en el
+    cliente porque `{mcpUrl}` varía por entorno. Ver bloque completo en la tab de Cursor más abajo.
+- **Claude Desktop y OpenAI Codex**: no se les conoce (a la fecha de este borrador) un esquema de
+  deep link equivalente — quedan con solo los pasos manuales.
+- **i18n**: el label del botón sigue la regla de naming general — `oauthConnect<Client>InstallButton`
+  (ej. `oauthConnectCursorInstallButton`, `oauthConnectVsCodeInstallButton`), como ejemplo del caso
+  "sufijo descriptivo" ya contemplado en la regla de naming.
+
+## Decisión adicional: bloque de "Prompt" para agentes CLI (Codex, Claude Code, OpenCode)
+
+Estos tres clientes no son solo "programas que leen un config" — son **agentes que ejecutan
+comandos por vos**. Para esos tres (y solo esos tres, por ahora) se agrega, dentro de su propia tab,
+un **segundo método de configuración** además de los pasos manuales: un cuadro con un texto
+copiable ("Prompt") pensado para pegarlo directamente en el chat del agente CLI. El propio agente
+interpreta el pedido y hace el `mcp add` / edición de config + login por su cuenta.
+
+- **Formato en la tab**: un bloque separado, con su propio título ("¿Preferís que el agente lo haga
+  por vos?" o similar) y un botón "copiar", debajo de los pasos manuales — no reemplaza el manual,
+  es una alternativa más rápida para quien ya tiene el agente abierto.
+- **Contenido del prompt**: en lenguaje natural, sin jerga OAuth, con la `{mcpUrl}` ya interpolada.
+  Borrador único (mismo texto para los tres, ya que los tres son agentes de código con acceso a
+  shell):
+  > Agregá el servidor MCP remoto de Etendo llamado `etendo-go` en `{mcpUrl}` usando transporte
+  > HTTP, y ayudame a completar el login cuando se abra el navegador.
+- **i18n**: clave `oauthConnectAgentPrompt` (compartida entre las 3 tabs, ya que el texto es el
+  mismo) — caso de contenido no numerado, sigue la regla de sufijo descriptivo ya definida
+  (`oauthConnect<Sufijo>` sin `<Client>` porque es transversal a los tres, no de-uno-solo).
+
+## Decisión adicional: evento de métricas al hacer click en una tab
+
+Se necesita saber **qué cliente MCP elige la gente** en esta página. Dos consecuencias directas
+sobre el diseño:
+
+- **Ninguna tab se abre por defecto.** Si hubiera una tab pre-seleccionada, no podríamos distinguir
+  "clickeó esta tab" de "nunca tocó nada y quedó la default" — el evento perdería sentido. La página
+  arranca con el selector sin selección (o con un estado "elegí tu cliente" placeholder) hasta que
+  el usuario clickea una tab por primera vez.
+- **Evento a enviar**: 1 evento por click en una tab, con el identificador del cliente elegido (el
+  mismo `<Client>` de la regla de naming: `ClaudeDesktopPersonal`, `ClaudeDesktopOrg`, `ClaudeCode`,
+  `Cursor`, `VsCode`, `Codex`, `OpenCode`, `ChatGpt`, `Antigravity`, `Other`) — no hace falta más
+  payload que eso para responder "qué cliente elige la gente".
+- **Mecanismo de envío — confirmado, ya existe, se reusa tal cual**:
+  - `tools/app-shell/src/lib/observability/core.js` expone `track(eventName, properties)` (importado
+    vía `@/lib/observability.js`); el sink real es Mixpanel
+    (`tools/app-shell/src/lib/observability/providers/mixpanel.js`, gateado por
+    `VITE_MIXPANEL_ENABLED`/`VITE_MIXPANEL_TOKEN`) — no hay backend propio de este repo para
+    eventos, van directo al cliente de Mixpanel.
+  - El evento nuevo se da de alta en el catálogo `tools/app-shell/src/lib/observability/events.js`
+    (`OBSERVABILITY_EVENTS`: nombre, categoría, canales) — ej.
+    `mcp_connect_tab_selected` con `properties: { client: '<Client>' }`.
+  - Se sigue el patrón de wrapper de dominio (no llamar `track()` directo desde el componente): una
+    función tipo `trackMcpConnectTabSelected({ client })` en un archivo `*Telemetry.js` nuevo o
+    existente que arme el evento y llame `track(...)` fire-and-forget (`.catch(() => {})`) — mismo
+    patrón que `trackSearchResultSelected` en `productUsageTelemetry.js`, invocado por ejemplo desde
+    `DataTable.jsx:1326`.
+
+## Propuesta de copy por tab (borrador — a revisar)
+
+Todas las tabs interpolan `{mcpUrl}` = `detectMcpUrl()` (URL ya resuelta según el entorno activo).
+
+### Tab: Claude Desktop (con 2 sub-tabs: Cuenta personal / Organización)
+
+Confirmado con capturas reales de la UI: el flujo **difiere** según el tipo de cuenta, así que esta
+tab lleva un sub-selector interno.
+
+#### Sub-tab: Cuenta personal
+Confirmado con capturas reales de la UI (Claude Desktop, cuenta personal):
+1. Abrí Claude Desktop → **Configuración → Conectores** (menú lateral izquierdo).
+2. Click en **"Agregar"** (arriba a la derecha del listado de conectores) → **"Agregar conector
+   personalizado"**.
+3. En el diálogo "Agregar conector personalizado" completá:
+   - **Nombre**: ej. "Etendo".
+   - **URL de MCP**: `{mcpUrl}`.
+4. Click en **"Agregar"**.
+5. El conector "Etendo" aparece en la lista como "No conectado" — click en **"Conectar"**.
+6. Se te va a pedir iniciar sesión en Etendo y aprobar el acceso — aceptá.
+7. Listo. Ya podés pedirle a Claude que consulte o actualice información de Etendo.
+
+#### Sub-tab: Organización (plan Team / Enterprise)
+> Este paso lo hace quien tenga rol de **owner/admin** de la organización — se configura una sola
+> vez para todo el equipo, no por cada persona.
+1. Andá a **Configuración de la organización → Conectores**.
+2. Click en **"+ Añadir" → Personalizado → Web**.
+3. En el diálogo "Añadir conector personalizado" completá **Nombre** (ej. "Etendo") y **URL del
+   servidor MCP remoto**: `{mcpUrl}`.
+4. ⚠️ **Importante** — en **Métodos de conexión** dejá **activado "Inicio de sesión individual"**
+   (viene así por defecto, no lo desactives): cada miembro del equipo inicia sesión con su propia
+   cuenta de Etendo la primera vez que lo usa. La opción "Autorización administrada" es Beta,
+   requiere solicitar acceso aparte y **no se usa** para este setup.
+5. Click en **"Añadir"**. El conector queda disponible para toda la organización.
+
+**Para cada miembro del equipo** (una vez que el owner ya hizo los pasos de arriba):
+1. Andá a tu **Configuración** personal (no la de la organización) y buscá el conector que el
+   admin habilitó (ej. "Etendo") en la lista.
+2. Hacé clic en **"Conectar"**.
+3. Se te va a pedir iniciar sesión en Etendo Go — completá el login y aprobá el acceso.
+4. Listo, ya podés pedirle a Claude que consulte o actualice información de Etendo.
+
+### Tab: Claude Code (CLI)
+1. Abrí una terminal.
+2. Ejecutá: `claude mcp add --scope user --transport http etendo-go {mcpUrl}`
+   > `--scope user` registra el servidor a nivel usuario (disponible en cualquier proyecto/carpeta
+   > donde uses Claude Code), no solo en el directorio actual — mismo criterio que se usa para
+   > servidores MCP remotos de terceros (ej. Context7: `claude mcp add --scope user --transport http
+   > context7 https://mcp.context7.com/mcp`).
+3. Dentro de Claude Code escribí `/mcp`, elegí `etendo-go` y presioná **Authenticate**.
+4. Se abre el navegador para iniciar sesión en Etendo — aceptá los permisos.
+
+### Tab: Cursor
+Confirmado contra la doc oficial (cursor.com/docs/mcp/install-links) — deep link resuelto:
+
+0. **Botón "Instalar en Cursor"** (deep link, un solo clic):
+   ```
+   cursor://anysphere.cursor-deeplink/mcp/install?name=etendo-go&config=<BASE64>
+   ```
+   Donde `<BASE64>` es `base64(JSON.stringify({ url: "{mcpUrl}" }))`. **A diferencia de VS Code, acá
+   el config va en base64, no URL-encoded plano** — y como `{mcpUrl}` cambia según el entorno
+   (local/experimental/producción), el base64 **no puede ser un valor fijo hardcodeado**: hay que
+   calcularlo en el cliente con `btoa(JSON.stringify({ url: detectMcpUrl() }))` al renderizar el
+   botón, igual que ya se hace con `{mcpUrl}` en el resto de las tabs.
+   Cursor ofrece 3 estilos de badge (enlace de texto, botón oscuro, botón claro) vía su propio
+   generador — el detalle visual exacto de esos badges no está documentado públicamente, así que se
+   arma un botón propio (mismo estilo que el de VS Code) apuntando a esta URL.
+   **Esto resuelve el punto pendiente de "formato exacto del deep link" para Cursor.**
+1. Manual: agregá esto a `~/.cursor/mcp.json` (o `.cursor/mcp.json` del proyecto):
+   ```json
+   {
+     "mcpServers": {
+       "etendo-go": {
+         "url": "{mcpUrl}"
+       }
+     }
+   }
+   ```
+   También accesible desde la UI: **Cursor Settings → Tools & MCP → New MCP Server**.
+2. Cursor te redirige a Etendo para iniciar sesión y aprobar el acceso.
+3. Cuando el ícono del servidor se pone verde, ya está conectado.
+
+### Tab: VS Code
+Confirmado — VS Code resuelve tanto el botón de instalación como el config manual:
+
+0. **Botón "Instalar en VS Code"** (deep link, un solo clic):
+   ```
+   vscode:mcp/install?{"name":"etendo-go","type":"http","url":"{mcpUrl}"}
+   ```
+   (el JSON va URL-encoded en el `href` real; hay variante `vscode-insiders:` para quienes usan la
+   build Insiders). Botón estilo shields.io, ej.:
+   ```html
+   <a href="vscode:mcp/install?%7B%22name%22%3A%22etendo-go%22%2C%22type%22%3A%22http%22%2C%22url%22%3A%22{mcpUrl-encoded}%22%7D">
+     <img src="https://img.shields.io/badge/VS_Code-Install_Etendo_Go_MCP-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=ffffff" alt="Install in VS Code">
+   </a>
+   ```
+   **Esto resuelve el punto pendiente de "formato exacto del deep link" para VS Code** (Cursor
+   también quedó resuelto, ver su propia tab).
+1. Manual: agregá esto a `.vscode/mcp.json` del proyecto (o el mcp.json global de usuario):
+   ```json
+   {
+     "servers": {
+       "etendo-go": {
+         "type": "http",
+         "url": "{mcpUrl}"
+       }
+     }
+   }
+   ```
+2. Al abrir el proyecto, VS Code detecta el servidor y pide iniciar sesión — completá el login en
+   Etendo y aprobá el acceso.
+3. El servidor `etendo-go` va a aparecer disponible en el panel de Copilot Chat.
+
+### Tab: OpenAI Codex
+Confirmado — coincide con el formato oficial "Remote Server Connection" de Codex:
+1. Editá (o creá) el archivo `~/.codex/config.toml` y agregá:
+   ```toml
+   [mcp_servers.etendo-go]
+   url = "{mcpUrl}"
+   ```
+2. En la terminal ejecutá: `codex mcp login etendo-go`
+3. Se abre el navegador para iniciar sesión en Etendo y aprobá el acceso.
+4. Listo, ya podés usar Codex para leer o actualizar datos de Etendo.
+
+**Alternativa — pedile al agente que lo configure él mismo**: ver "Bloque de Prompt" abajo.
+
+### Tab: OpenCode
+1. Editá (o creá) el archivo de config de OpenCode (`opencode.json` / equivalente según su doc
+   vigente) y agregá el servidor `etendo-go` apuntando a `{mcpUrl}` con transporte HTTP.
+2. Autenticá siguiendo el flujo de login que abre OpenCode en el navegador.
+3. Aprobá el acceso — listo.
+
+**Alternativa — pedile al agente que lo configure él mismo**: ver "Bloque de Prompt" abajo.
+
+> Nota: el paso 1 de esta tab es el único con menor certeza sobre el nombre exacto del archivo/clave
+> de config — a confirmar contra la doc oficial de OpenCode al momento de implementar (mismo criterio
+> que con el deep link de Cursor/VS Code: no se fija en este plan un dato no verificado).
+
+### Tab: Google Antigravity
+1. Abrí (o creá) el archivo de config MCP de Antigravity y agregá:
+   ```json
+   {
+     "mcpServers": {
+       "etendo-go": {
+         "serverUrl": "{mcpUrl}"
+       }
+     }
+   }
+   ```
+   (nota: la clave es `serverUrl`, no `url` como en Cursor/Codex — confirmado contra el formato
+   "Remote Server Connection" de Antigravity).
+2. Guardá el archivo y reiniciá/recargá Antigravity si hace falta.
+3. Iniciá sesión en Etendo cuando se te pida y aprobá el acceso.
+4. Listo, el servidor `etendo-go` queda disponible para usar desde Antigravity.
+
+### Tab: ChatGPT (Web / Desktop) — ⚠️ A TESTEAR, no validado contra Etendo GO todavía
+
+> Basado en la doc oficial de OpenAI (Developer Mode, beta — planes Pro/Plus/Team/Enterprise/Edu),
+> pero **no se probó end-to-end contra el servidor MCP de Etendo GO**. El flujo OAuth de ChatGPT
+> podría comportarse distinto al de Claude/Cursor/VS Code — validar antes de dar esta tab por
+> definitiva.
+
+1. Activá el modo desarrollador: **Configuración → Apps → Configuración avanzada → Activar modo
+   desarrollador**.
+2. Creá la app: **Configuración → Apps → Crear app**, completando:
+   - **Nombre**: "Etendo"
+   - **Descripción**: algo breve, ej. "Consultar y actualizar información de Etendo"
+   - **URL del servidor MCP**: `{mcpUrl}`
+3. Aceptá el aviso de seguridad y completá la autorización OAuth (una sola vez).
+4. Para usarla: nuevo chat → ícono **"+"** → **Más** → seleccioná la app "Etendo" (o simplemente
+   escribí "usa etendo" en el mensaje).
+
+> **ChatGPT Desktop no requiere pasos aparte**: comparte las apps configuradas en la versión web —
+> alcanza con hacer los pasos de arriba una vez en chatgpt.com y ya quedan disponibles también en
+> la app de escritorio.
+
+### Tab: Otros (= contenido actual, sin cambios)
+Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-`4`) + el bloque con
+`{mcpUrl}`. Sirve como fallback para cualquier cliente no listado.
+
+## Preguntas abiertas (a resolver con el usuario)
+
+- [ ] Revisar el borrador de copy de arriba: ¿tono correcto? ¿algún paso de algún cliente
+      desactualizado (nombres de menú cambian seguido en estas apps)?
+- [x] **Sub-tabs de Claude Desktop (Personal / Organización) — UI y naming resueltos**:
+      - **UI**: sub-tabs anidadas — dentro del contenido de la tab "Claude Desktop" hay un segundo
+        nivel de tabs (`Personal | Organización`), reusando el mismo componente `Tabs`.
+      - **Naming**: Personal y Organización se tratan como si fueran dos "clientes" propios a
+        efectos de la regla `oauthConnect<Client>...`:
+        - Sub-tab labels: `oauthConnectTabClaudeDesktopPersonal` /
+          `oauthConnectTabClaudeDesktopOrg`.
+        - Pasos: `oauthConnectClaudeDesktopPersonalStep1..N` /
+          `oauthConnectClaudeDesktopOrgStep1..N` (incluye el bloque de pasos "para cada miembro del
+          equipo" dentro de Org, numerado a continuación de los pasos del owner).
+- [x] **Regla de naming i18n propuesta** (a validar/mejorar si hace falta que abarque más casos):
+      - Prefijo común `oauthConnect` para todo lo nuevo de esta página — separa este namespace del
+        de la pantalla de consentimiento OAuth (`oauthAuthorize*`, `oauthDeny`, `oauthApplication`,
+        etc.), que no se toca.
+      - **Label de la tab**: `oauthConnectTab<Client>` (ej. `oauthConnectTabClaudeDesktop`,
+        `oauthConnectTabClaudeCode`, `oauthConnectTabCursor`, `oauthConnectTabVsCode`,
+        `oauthConnectTabCodex`, `oauthConnectTabOther`).
+      - **Paso a paso**: `oauthConnect<Client>Step<N>` (ej. `oauthConnectClaudeDesktopStep1`..`4`,
+        `oauthConnectCursorStep1`..`4`) — mismo `<Client>` que la tab, número secuencial sin ceros
+        a la izquierda. Cada cliente puede tener una cantidad distinta de pasos.
+      - **Encabezado general de la página** (ya no específico de un cliente):
+        `oauthConnectHeading` / `oauthConnectSubheading`, reemplazando el actual
+        `tMenu('Connect with Claude')` + `oauthConnectLandingDesc` (que quedaban acoplados a
+        Claude). El label del recuadro de URL (`oauthMcpServerUrl`) se reutiliza sin cambios.
+      - **La tab "Otros" NO se renombra**: conserva las claves existentes tal cual
+        (`oauthStep1`-`4`, `oauthConnectLandingDesc` si se necesita algo de esa copy) para no
+        romper traducciones ya hechas — es la única excepción a la regla `oauthConnect<Client>*`.
+      - `<Client>` siempre en PascalCase y debe listarse en un solo lugar del código (un array/enum
+        de clientes soportados) para que agregar un cliente nuevo sea: 1 entrada en el enum + sus
+        claves `Step1..N` — sin tocar el resto del componente.
+      - Si en el futuro un cliente necesita algo más que pasos numerados (ej. un snippet con su
+        propia copy explicativa, o un bloque de troubleshooting), esa pieza se nombra
+        `oauthConnect<Client><Sufijo descriptivo>` (ej. `oauthConnectCodexTomlHint`) en vez de
+        forzarla dentro de `StepN` — mantiene la regla extensible sin romper el patrón base.
+- [ ] Definir el componente de tabs a reusar (¿ya existe un `Tabs` en `@/components/ui/`? revisar
+      antes de crear uno nuevo).
+- [ ] **Testear el flujo de ChatGPT (Web/Desktop) end-to-end contra Etendo GO** antes de dar esa tab
+      por definitiva — el copy está basado en doc oficial de OpenAI pero no validado con nuestro
+      servidor MCP real (posible diferencia en el flujo OAuth). Marcar la tab como beta/experimental
+      en la UI hasta confirmar.
+- [ ] **Confirmar el archivo/clave de config exacta de OpenCode** al momento de implementar (paso 1
+      de su tab, ver nota en esa sección) — mismo criterio: no se fija un dato no verificado.
+- [ ] Revisar el texto único del "Bloque de Prompt" (Codex/Claude Code/OpenCode): ¿alcanza como está
+      o conviene un texto por cliente si en la práctica alguno interpreta distinto el mismo pedido?
+
+## Próximos pasos
+
+- [ ] Usuario revisa/ajusta el borrador de copy de arriba.
+- [ ] Cerrado el copy, este plan pasa a Developer (Schema Forge Developer) para implementar el
+      selector + tabs en `AuthorizePage.jsx` (componente `ConnectionsLanding`), dar de alta las
+      claves i18n nuevas en `en_US.json` + `es_ES.json`, y seguir el pipeline normal
+      (DEV → REVIEW → QA → DOCS).

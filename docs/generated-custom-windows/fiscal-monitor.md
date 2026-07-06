@@ -104,6 +104,33 @@ Each tab maps to a dedicated NEO entity under spec `monitor-verifactu`:
 
 **Columns:** Invoice number · Issuer NIF · Type · CSV AEAT · Status pill · Error reason (`[codeError] errorReason`)
 
+### Error resolution (`VfSolveErrorModal`)
+
+Clicking the resolve button on a selected `IN` (Inválida) or `AE` (Parcialmente aceptada) row opens
+`VfSolveErrorModal.jsx`, which resolves the two Verifactu error states through **two different backend
+paths** — each depends on the underlying AD_Column type:
+
+| Row status | Frontend call | Underlying column | Backend handler | Sets |
+|---|---|---|---|---|
+| `IN` (Inválida) | `POST .../facturasInválidas/{id}/action/Correct_Invoice` | Button (AD_Reference `28`), linked to OBUIAPP process `com.etendoerp.verifactu.process.CorrectedInvoice` | `CorrectInvoiceHandler` (`correct-invoice-handler`) | `em_etvfac_corrected_inv = 'Y'` |
+| `AE` (Parcialmente aceptada) | `PUT .../facturasParcialmenteAceptadas/{id}` body `{isSubsanation:true}` | Plain YesNo checkbox | `MarkSubsanationHandler` (`mark-subsanation-handler`) | `em_etvfac_issubsanation = 'Y'` |
+
+Both entities are backed by the **view** `etvfac_inv_sent_status_v` (`ISVIEW=Y`), so a default-CRUD PUT
+against them returns `200` but silently writes nothing — this is why both actions need a dedicated
+`NeoHandler` wired via `ETGO_SF_ENTITY.JAVA_QUALIFIER`, instead of relying on NEO's generic CRUD/action
+bridge. `Correct_Invoice` additionally requires a **dedicated** handler (not the generic
+`NeoButtonActionHelper` OBUIAPP bridge) because the generic path enforces an `OBUIAPP_Process_Access`
+grant that was never configured for this process — `CorrectInvoiceHandler` bypasses that check the same
+way `SiiSendHandler`/`TbaiXmlgeneratorHandler` do for their own legacy buttons.
+
+**Gotcha (do not repeat):** the `JAVA_QUALIFIER` on `ETGO_SF_ENTITY` is a database value, not just an
+XML sourcedata value. Hand-editing `ETGO_SF_ENTITY.xml` and running `./gradlew export.database` does
+**nothing** for this — `export.database` reads DB → XML, not the other way around. To wire a new entity
+handler you MUST: (1) declare `entities.<name>.javaQualifier` in `artifacts/monitor-verifactu/decisions.json`,
+(2) run `node cli/src/resolve-curated.js --window monitor-verifactu --write` to refresh `contract.json`,
+(3) run `node cli/src/push-to-neo.js monitor-verifactu` to write it to the live DB, then (4) run
+`./gradlew export.database` in Etendo root to sync the XML sourcedata back to match.
+
 ## Status-pill click routing
 
 `StatusPill` in `FmPrimitives.jsx` supports three click modes:
