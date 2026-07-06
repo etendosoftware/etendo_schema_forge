@@ -98,12 +98,10 @@ describe('FmOverlays interactive coverage', () => {
 
     await user.selectOptions(screen.getByLabelText(/fm\.new_decl\.model/), '349');
     await user.selectOptions(screen.getByLabelText(/fm\.new_decl\.year/), '2025');
-    const periodInput = screen.getByLabelText(/fm\.new_decl\.period/);
-    await user.clear(periodInput);
-    await user.type(periodInput, 'M01');
+    await user.selectOptions(screen.getByLabelText(/fm\.new_decl\.period/), '01');
     await user.click(screen.getByText('fm.action.create'));
 
-    expect(onConfirm).toHaveBeenCalledWith({ model: '349', year: 2025, period: 'M01', status: 'draft' });
+    expect(onConfirm).toHaveBeenCalledWith({ model: '349', year: 2025, period: '01', status: 'draft' });
     expect(onClose).toHaveBeenCalled();
   });
 

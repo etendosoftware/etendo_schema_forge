@@ -211,6 +211,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
     const numVal = parseFloat(String(rawValue ?? '').replace(',', '.'));
     const value = isNaN(numVal) ? null : numVal;
     setManualOverrides(prev => ({ ...prev, [boxNum]: value }));
+    setLiveSummary(null); // stale after manual edit — liveBoxSummary takes over
     setLiveBoxes(prev => {
       const base = prev != null ? toBoxArray(prev) : toBoxArray(decl._precomputed?.boxes ?? decl.boxes);
       const filtered = base.filter(b => b.num !== boxNum);
@@ -288,8 +289,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, token, ap
   // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
   // are reflected in the accrued/deductible/result cards without a full recalculate.
   const boxGet = (num) => { const e = toBoxArray(liveBoxes).find(b => b.num === num); return e ? (e.value ?? 0) : null; };
-  const liveBoxSummary = liveBoxes ? { accrued: boxGet(27), deductible: boxGet(45), result: boxGet(46) } : null;
-  const summary = liveBoxSummary ?? liveSummary ?? decl.summary ?? {};
+  const kpi27 = boxGet(27); const kpi45 = boxGet(45); const kpi46 = boxGet(46);
+  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi46 !== null)
+    ? { accrued: kpi27, deductible: kpi45, result: kpi46 }
+    : null;
+  const summary = liveSummary ?? liveBoxSummary ?? decl.summary ?? {};
   const resultKind = decl.result?.kind ?? null;
 
   // Derive result sublabel from kind

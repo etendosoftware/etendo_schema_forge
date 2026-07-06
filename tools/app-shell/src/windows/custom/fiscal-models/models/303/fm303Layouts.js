@@ -460,7 +460,7 @@ export function getLayout303(year, period) {
 
   // Box 44 (prorrata definitiva) is only applicable in the last period of the fiscal year:
   // T4 (quarterly) or month 12 (monthly December). Hide it for all other periods.
-  const isLastPeriod = period === 'T4' || period === '12';
+  const isLastPeriod = period === 'T4' || period === '12' || period === 4 || period === 12 || period === '4';
   const filteredSections = isLastPeriod ? sections : sections.map(sec => {
     if (sec.id !== 'iva_deducible' || !sec.rows) return sec;
     return { ...sec, rows: sec.rows.filter(r => r.id !== 'prorrata_definitiva') };
