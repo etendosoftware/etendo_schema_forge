@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install install-e2e deploy clean help dev-local-core report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install bump-core-version install-e2e deploy clean help dev-local-core report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
 
@@ -368,6 +368,15 @@ uuid: ## Generate a new Etendo-format UUID (32 uppercase hex chars, no hyphens)
 install: ## Install all workspace dependencies and activate git hooks
 	npm install
 	git config core.hooksPath .githooks
+
+bump-core-version: ## Bump the schema_forge_core lockstep pin in all package.json + refresh lockfiles (VERSION=x.y.z)
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make bump-core-version VERSION=0.3.1"; exit 1; fi
+	node scripts/bump-core-version.mjs $(VERSION)
+	@echo "=== npm install (root workspace — installs + hoists app-shell deps) ==="
+	npm install
+	@echo "=== refresh tools/app-shell standalone lockfile (lock only, no nested node_modules) ==="
+	npm install --prefix tools/app-shell --legacy-peer-deps --package-lock-only
+	@echo "Done. Review the package.json + package-lock.json diffs before committing."
 
 # --- Deploy ---
 
