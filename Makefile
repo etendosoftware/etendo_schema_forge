@@ -150,16 +150,18 @@ SKIP_EXTRACT ?= 0
 CACHE_DB ?= 0
 FROM_CACHE ?= 0
 ONLY ?=
-SF_CACHE_PATH ?= cli/cache/ad-snapshot.json
+SF_CACHE_PATH ?= cli/cache/ad-snapshot
 
 regen: ## Re-run full pipeline for all active windows (HELP=1 or `make regen-help` for options)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s regen-help; exit 0; fi; \
 	REGEN_ARGS=""; \
-	CACHE_ENV=""; \
+	CACHE_ENV="SF_CACHE_PATH=$(SF_CACHE_PATH)"; \
 	if [ "$(PUSH_TO_NEO)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --push-to-neo"; fi; \
 	if [ "$(SKIP_EXTRACT)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --skip-extract"; fi; \
-	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --write-cache"; CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
-	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
+	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="$$REGEN_ARGS --write-cache"; \
+		if [ -z "$(ONLY)" ]; then CACHE_ENV="$$CACHE_ENV SF_CACHE_SWEEP=1"; fi; \
+	fi; \
+	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="$$CACHE_ENV SF_CACHE_MODE=read"; fi; \
 	if [ -n "$(ONLY)" ]; then REGEN_ARGS="$$REGEN_ARGS --only $(ONLY)"; fi; \
 	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS
 
@@ -186,6 +188,9 @@ regen-help: ## Show usage and examples for `make regen`
 	@echo "  - Window specs are the directory names under artifacts/ (kebab-case)."
 	@echo "  - For a single window, you can also run: $(SF) sf-resolve-curated --window <spec> --write"
 	@echo "  - CACHE_DB and FROM_CACHE are mutually exclusive."
+	@echo "  - The AD cache is one file per query under $(SF_CACHE_PATH)/<key>.json."
+	@echo "  - A full 'make regen CACHE_DB=1' (no ONLY=) also prunes orphan cache files (SF_CACHE_SWEEP=1);"
+	@echo "    scoped 'CACHE_DB=1 ONLY=<spec>' never sweeps, so it only refreshes that window's queries."
 
 # --- Push-to-NEO Delta Dump ---
 
@@ -229,8 +234,8 @@ process.stdout.write(r.windows.filter(w=>{\
 	  echo "No ONLY= given — running registry windows with decisions+contract ($$SPECS)"; \
 	fi; \
 	REGEN_ARGS="--only $$SPECS --skip-extract"; \
+	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="--only $$SPECS --write-cache"; fi; \
 	CACHE_ENV=""; \
-	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="--only $$SPECS --write-cache"; CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="--only $$SPECS"; CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS || exit $$?; \
 	FAIL=0; TOTAL_OK=0; TOTAL_FAIL=0; \
