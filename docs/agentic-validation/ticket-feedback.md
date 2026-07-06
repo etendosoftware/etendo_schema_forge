@@ -54,6 +54,14 @@
 - Highest-value field that was missing: **n/a — exemplary ticket** (clear scope, out-of-scope, acceptance criteria with evidence, design decisions pre-made).
 - Note to bot team: **This is the standard** — like ETP-4255. It reframed the symptom into a precise root cause, named every handler, listed prior stabilization work, and split scope vs out-of-scope. The only nit: when a "blocked spec" is actually a handler-backed/aggregate spec, say so explicitly (spec type + that its entities are handler-backed with no AD_Tab) so the misrouting nature is unambiguous from the ticket alone.
 
+### 2026-07-01 — ETP-4288 — `documentType` schema exposes `defaultExpression="0"` on sales-order/purchase-order — investigation + plan only
+- Tool/spec: `neo_schema` (entity `header`) on `sales-order`/`purchase-order`, contrasted with `neo_defaults` on the same entity.
+- Root-cause category: **code-bug** (category 1) — `McpToolRouterSupport.addDefaultExpression` (`mcp/McpToolRouterSupport.java:407-412`) echoes the raw `AD_Column.DefaultValue` with no handling of the legacy `"0"` FK sentinel, while the write path (`NeoDefaultsService.applyResolvedDefault` + `DocTypeResolver.resolveDefaultDocTypeId`) already special-cases it. **This corrects a prior misclassification** — the ticket was recorded as `upstream-config` in `mcp-ticket-knowledge.md` during Round 3 triage; tracing the code showed `defaultExpression` is computed live from `AD_Column`, with zero `decisions.json`/`ETGO_SF_FIELD`/generator involvement.
+- Time-to-locate: **fast** — the ticket named the exact field, both specs, the exact symptom string, and contrasted it against the correct `neo_defaults` behavior, which pointed straight at the two candidate files it suggested.
+- Missing rubric fields: **#3** (verbatim request/response) — the ticket describes the symptom in prose instead of pasting the actual `neo_schema` JSON for the `documentType` field; reconstructing it took one extra MCP round-trip (a single-field paste would have been cheap to include).
+- Highest-value field that was missing: #3 verbatim response, but only marginally — the ticket was otherwise close to exemplary.
+- Note to bot team: when you've already narrowed a bug to specific candidate files/services (this ticket named `NeoDefaultsService` and "how the schema reports defaultExpression" — both right in spirit), paste the verbatim tool output for the one field in question. That turns a good ticket into a same-pass-resolvable one.
+
 ---
 
 ## Batch Analysis — Round 3 (2026-06-19, 15 tickets, label `validacion-agentica`)

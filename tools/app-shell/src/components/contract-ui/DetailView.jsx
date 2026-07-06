@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock } from 'lucide-react';
+import { X, MoreVertical, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
 import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
 import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
 
@@ -93,7 +93,7 @@ function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // devtools console is open) and only place it beside the content once there
   // is room (lg+). A rigid side-by-side row would otherwise overlap the
   // header/lines when the panel can't shrink.
-  if (hasSidePanel) return 'flex flex-col lg:flex-row items-start gap-0';
+  if (hasSidePanel) return 'flex flex-col lg:flex-row items-stretch gap-0 min-h-full';
   if (linesLayout === 'inlineEditable') return 'flex flex-col';
   return '';
 }
@@ -165,7 +165,7 @@ function CollapsibleSection({ title, children }) {
  */
 function detailContentPadding(linesLayout, hasSidebar, variant, compact = false, paddingXOverride = null) {
   const isInline = linesLayout === 'inlineEditable';
-  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pl-6 pr-2';
+  if (hasSidebar) return (isInline || compact) ? 'px-2 pb-2' : 'pr-2';
   if (variant === 'panel') return isInline ? 'pr-6' : (paddingXOverride ?? 'px-6');
   return isInline ? '' : (paddingXOverride ?? 'px-6');
 }
@@ -1558,6 +1558,21 @@ export function mergeLineEdits(lineEdits, selectedLine) {
   return lineEdits && selectedLine ? { ...selectedLine, ...lineEdits } : selectedLine;
 }
 
+export function dispatchProcessAction(p, { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess }) {
+  if ((p.style === 'ghost-danger' || p.confirmModal) && processConfirmModal) { setConfirmProcess(p); }
+  else if (p.params?.some(param => !param.hidden)) { setParamDialogProcess(p); }
+  else { handleProcess?.(p); }
+}
+
+function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
+  if (!process || !Modal) return null;
+  return React.createElement(Modal, { process, onConfirm, onClose });
+}
+
+function resolveStatusPrefix(key, translate) {
+  return key ? translate(key) : undefined;
+}
+
 export function DetailView({
   entity,
   detailEntity,
@@ -1662,6 +1677,7 @@ export function DetailView({
   transformRecord = null,
   lockedAlert = null,
   selectorPriceCurrency = null,
+  processConfirmModal = null,
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -1902,6 +1918,7 @@ export function DetailView({
   const sqBtnSize = getSqBtnSize(toolbarButtonSize);
   const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
   const [showPrint, setShowPrint] = useState(false);
+  const [confirmProcess, setConfirmProcess] = useState(null);
   // showNotes state removed — notes panel is always visible in side-by-side layout
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Promise-based confirm for line/child deletions; replaces native window.confirm
@@ -2955,6 +2972,7 @@ export function DetailView({
               <DocumentStatusPill
                 status={data[statusField]}
                 enumLabels={statusEnumLabels}
+                prefix={resolveStatusPrefix(statusFieldLabel, ui)}
                 data-testid="DocumentStatusPill__fa3275" />
             )}
             {extraBadges.map(b => {
@@ -3212,6 +3230,7 @@ export function DetailView({
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
+                  const processCtx = { processConfirmModal, setConfirmProcess, setParamDialogProcess, handleProcess: hook.handleProcess };
                   return (
                     <Button
                       key={p.name}
@@ -3226,13 +3245,10 @@ export function DetailView({
                             return;
                           }
                         }
-                        if (p.params?.some(param => !param.hidden)) {
-                          setParamDialogProcess(p);
-                        } else {
-                          hook.handleProcess?.(p);
-                        }
+                        dispatchProcessAction(p, processCtx);
                       }}
                       data-testid="Button__fa3275">
+                      {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
                       {tMenu(p.label)}
                     </Button>
                   );
@@ -3287,6 +3303,13 @@ export function DetailView({
             setDetailParamDialogProcess(null);
           }}
           data-testid="ProcessParamDialog__fa3275" />
+
+        {renderProcessConfirmModal(
+          confirmProcess,
+          processConfirmModal,
+          async () => { await hook.handleProcess?.(confirmProcess); setConfirmProcess(null); },
+          () => setConfirmProcess(null),
+        )}
 
         {/* Scrollable content + optional sidebarContent (full-height independent column) */}
         <div className="flex-1 flex overflow-hidden">
@@ -4349,7 +4372,7 @@ export function DetailView({
                 </div>
                 {sidePanel && (
                   <div
-                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[280px] lg:border-l border-gray-200 pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
+                    className="w-full max-w-full shrink-0 self-stretch border-t lg:border-t-0 lg:w-[292px] lg:border-l border-gray-200 pt-3 lg:pt-0 pl-0 lg:pl-3 pr-0 lg:pr-3"
                     style={sidePanelStyle}
                   >
                     {renderSidePanel(sidePanel, data, recordId, token, apiBaseUrl, api, isNew)}
@@ -4635,6 +4658,9 @@ function populateIdentifierFields(api, result, detailEntity, catalogs) {
 }
 
 function getButtonClass(salesTheme, p, isPrimary) {
+  if (p.style === 'ghost-danger') {
+    return 'bg-white border-[#FBB1C4] text-[#D50B3E] hover:bg-[#FFF0F3]';
+  }
   if (salesTheme) {
     if (p.style === 'destructive') {
       return 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100';

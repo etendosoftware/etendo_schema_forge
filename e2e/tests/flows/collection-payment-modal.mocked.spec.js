@@ -98,9 +98,9 @@ test.describe('Collection/payment two-step modal (mocked)', () => {
     await expect(badge).toBeVisible({ timeout: 15_000 });
     await badge.click();
 
-    const history = page.getByTestId('cp-history-modal');
+    const history = page.getByTestId('InvoicePaymentHistoryModal__panel');
     await expect(history).toBeVisible();
-    await history.getByTestId('cp-add-payment').click();
+    await history.getByTestId('InvoicePaymentHistoryModal__add-btn').click();
 
     const modal = page.getByTestId('cp-new-payment-modal');
     await expect(modal).toBeVisible();
@@ -116,9 +116,9 @@ test.describe('Collection/payment two-step modal (mocked)', () => {
     await expect(confirmBtn).toBeEnabled({ timeout: 15_000 }); // waits for catalogs to load
     await confirmBtn.click();
 
-    const history = page.getByTestId('cp-history-modal');
+    const history = page.getByTestId('InvoicePaymentHistoryModal__panel');
     await expect(history).toBeVisible();
-    await expect(history.getByTestId(/^cp-movement-/)).toHaveCount(1);
+    await expect(history.getByTestId('InvoicePaymentHistoryModal__row')).toHaveCount(1);
     await expect(history.getByText(/Depositado|Deposited/i).first()).toBeVisible();
   });
 
@@ -131,9 +131,9 @@ test.describe('Collection/payment two-step modal (mocked)', () => {
     await expect(saveBtn).toBeEnabled({ timeout: 15_000 });
     await saveBtn.click();
 
-    const history = page.getByTestId('cp-history-modal');
+    const history = page.getByTestId('InvoicePaymentHistoryModal__panel');
     await expect(history).toBeVisible();
-    await expect(history.getByTestId(/^cp-movement-/)).toHaveCount(1);
+    await expect(history.getByTestId('InvoicePaymentHistoryModal__row')).toHaveCount(1);
     await expect(history.getByText(/Borrador|Draft/i).first()).toBeVisible();
   });
 });

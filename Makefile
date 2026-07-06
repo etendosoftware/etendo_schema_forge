@@ -1,6 +1,19 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration generate regen dev dev-mock build install install-e2e deploy clean help dev-local-core report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage menu-cache uuid xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help switch-to-es ensure-locale project-status
 
 export SF_ROOT := $(CURDIR)
+
+# --- CLI source resolution -------------------------------------------------
+# By default the pipeline runs the PUBLISHED CLI (@etendosoftware/schema-forge-cli)
+# via `npx`. Set LOCAL_CORE=1 to run the CLI from the sibling schema_forge_core
+# SOURCE instead (for developers who also work on the core tooling). Requires
+# schema_forge_core cloned as a sibling AND its deps installed (`npm install`
+# there). Unset LOCAL_CORE (servers, CI, functional-only devs) keeps the exact
+# published behaviour. See docs/repo-topology.md.
+ifeq ($(LOCAL_CORE),1)
+SF := ./cli/sf-local
+else
+SF := npx
+endif
 
 # --- Testing ---
 
@@ -75,16 +88,16 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 
 validate-pipeline: ## Validate pipeline completeness across all artifacts
-	npx sf-validate-pipeline --format=text
+	$(SF) sf-validate-pipeline --format=text
 
 method-budget: ## Ratchet guard: fail only if a tracked class grew past its method baseline
-	npx sf-method-budget
+	$(SF) sf-method-budget
 
 window-leak-budget: ## Ratchet guard: fail only if window-specific literals in contract-ui grew (use --list to enumerate)
-	npx sf-window-leak-budget
+	$(SF) sf-window-leak-budget
 
 quality-gate: ## Run Schema Forge quality gate for PR-affected windows
-	npx sf-quality-gate --pr-affected --baseline-ref origin/main --format md
+	$(SF) sf-quality-gate --pr-affected --baseline-ref origin/main --format md
 
 domain-boundary-check: ## Check changed files against monorepo intent/domain boundaries (BASE=<ref>, HEAD=<ref>)
 	@if [ -z "$(BASE)" ]; then \
@@ -96,7 +109,7 @@ domain-boundary-check: ## Check changed files against monorepo intent/domain bou
 	ARGS="--base $(BASE) --head $$HEAD_REF"; \
 	if [ -n "$(LABELS)" ]; then ARGS="$$ARGS --labels $(LABELS)"; fi; \
 	if [ -n "$(PR_BODY_FILE)" ]; then ARGS="$$ARGS --pr-body-file $(PR_BODY_FILE)"; fi; \
-	npx sf-domain-boundary-check $$ARGS
+	$(SF) sf-domain-boundary-check $$ARGS
 # --- E2E Testing (Playwright) ---
 
 # Parallel workers for E2E runs. Override to go faster: `make test-e2e-headless WORKERS=8`.
@@ -130,7 +143,7 @@ install-e2e: ## Install E2E dependencies + browsers
 # --- Code Generation ---
 
 generate: ## Generate frontend from Sales Order contract
-	npx sf-generate-frontend artifacts/sales-order/contract.json
+	$(SF) sf-generate-frontend artifacts/sales-order/contract.json
 
 PUSH_TO_NEO ?= 0
 SKIP_EXTRACT ?= 0
@@ -149,7 +162,7 @@ regen: ## Re-run full pipeline for all active windows (HELP=1 or `make regen-hel
 	if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	if [ -n "$(ONLY)" ]; then REGEN_ARGS="$$REGEN_ARGS --only $(ONLY)"; fi; \
-	env $$CACHE_ENV npx sf-regen-all $$REGEN_ARGS
+	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS
 
 regen-help: ## Show usage and examples for `make regen`
 	@echo "Usage: make regen [VAR=value ...]"
@@ -172,7 +185,7 @@ regen-help: ## Show usage and examples for `make regen`
 	@echo ""
 	@echo "Notes:"
 	@echo "  - Window specs are the directory names under artifacts/ (kebab-case)."
-	@echo "  - For a single window, you can also run: npx sf-resolve-curated --window <spec> --write"
+	@echo "  - For a single window, you can also run: $(SF) sf-resolve-curated --window <spec> --write"
 	@echo "  - CACHE_DB and FROM_CACHE are mutually exclusive."
 
 # --- Push-to-NEO Delta Dump ---
@@ -190,7 +203,7 @@ dump-delta: ## Dump the writes push-to-neo WOULD make for ONLY=<spec> (no DB wri
 	CACHE_ENV=""; \
 	if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
-	env $$CACHE_ENV npx sf-push-neo $(ONLY) --dump-delta artifacts/$(ONLY)/neo-delta.json $$DELTA_ARGS
+	env $$CACHE_ENV $(SF) sf-push-neo $(ONLY) --dump-delta artifacts/$(ONLY)/neo-delta.json $$DELTA_ARGS
 
 # --- Offline Regeneration Check (Slice 3) ---
 #
@@ -220,7 +233,7 @@ process.stdout.write(r.windows.filter(w=>{\
 	if [ "$(CACHE_DB)" = "1" ]; then REGEN_ARGS="--only $$SPECS --write-cache"; fi; \
 	CACHE_ENV=""; \
 	if [ "$(FROM_CACHE)" = "1" ]; then REGEN_ARGS="--only $$SPECS"; CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
-	env $$CACHE_ENV npx sf-regen-all $$REGEN_ARGS || exit $$?; \
+	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS || exit $$?; \
 	FAIL=0; TOTAL_OK=0; TOTAL_FAIL=0; \
 	for spec in $$(echo "$$SPECS" | tr ',' ' '); do \
 	  OUTDIR="$(REGEN_CHECK_OUT_ROOT)/$$spec"; \
@@ -230,17 +243,17 @@ process.stdout.write(r.windows.filter(w=>{\
 	  CACHE_ENV=""; \
 	  if [ "$(FROM_CACHE)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=read SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
 	  if [ "$(CACHE_DB)" = "1" ]; then CACHE_ENV="SF_CACHE_MODE=write SF_CACHE_PATH=$(SF_CACHE_PATH)"; fi; \
-	  env $$CACHE_ENV npx sf-push-neo $$spec \
+	  env $$CACHE_ENV $(SF) sf-push-neo $$spec \
 	    --dump-delta "$$OUTDIR/neo-delta.json" \
 	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" || { FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); continue; }; \
-	  npx sf-xml-apply-delta \
+	  $(SF) sf-xml-apply-delta \
 	    --prev-xml-dir "$(REGEN_CHECK_PREV_XML_DIR)" \
 	    --delta "$$OUTDIR/neo-delta.json" \
 	    --out-dir "$$OUTDIR/predicted/sourcedata" || { FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); continue; }; \
 	  cp "$(REGEN_CHECK_PREV_XML_DIR)/ETGO_SF_SPEC.xml"   "$$OUTDIR/prev/sourcedata/"; \
 	  cp "$(REGEN_CHECK_PREV_XML_DIR)/ETGO_SF_ENTITY.xml" "$$OUTDIR/prev/sourcedata/"; \
 	  cp "$(REGEN_CHECK_PREV_XML_DIR)/ETGO_SF_FIELD.xml"  "$$OUTDIR/prev/sourcedata/"; \
-	  if npx sf-xml-regeneration-check "$$OUTDIR/prev" "$$OUTDIR/predicted" --include-dir sourcedata; then \
+	  if $(SF) sf-xml-regeneration-check "$$OUTDIR/prev" "$$OUTDIR/predicted" --include-dir sourcedata; then \
 	    echo "  result: OK"; TOTAL_OK=$$((TOTAL_OK+1)); \
 	  else \
 	    echo "  result: DRIFT (see $$OUTDIR/)"; FAIL=1; TOTAL_FAIL=$$((TOTAL_FAIL+1)); \
@@ -333,17 +346,22 @@ sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow
 dev: ensure-locale ## Start app-shell dev server
 	cd tools/app-shell && npm run dev
 
+dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling)
+	@test -d ../schema_forge_core/packages/app-shell-core/src || { echo "ERROR: ../schema_forge_core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo, or use 'make dev' to run against the published package."; exit 1; }
+	@echo ">> LOCAL_CORE dev mode: app-shell-core resolves to ../schema_forge_core (published package bypassed)"
+	cd tools/app-shell && LOCAL_CORE=1 npm run dev
+
 dev-mock: ensure-locale ## Start app-shell dev server with mock data — required for E2E tests
 	cd tools/app-shell && npm run dev:mock
 
 build: ## Build app-shell for production
 	cd tools/app-shell && npm run build
-	npx sf-generate-reports-manifest
+	$(SF) sf-generate-reports-manifest
 
 # --- Setup ---
 
 menu-cache: ## Refresh the AD menu cache from the database
-	npx sf-menu-cache refresh
+	$(SF) sf-menu-cache refresh
 
 uuid: ## Generate a new Etendo-format UUID (32 uppercase hex chars, no hyphens)
 	@uuidgen | tr -d '-' | tr '[:lower:]' '[:upper:]'
@@ -393,7 +411,7 @@ report-stop: ## Stop jsreport Docker container
 	cd $(JSREPORT_COMPOSE_DIR) && docker compose -f com.etendoerp.go.yml down
 
 report-preview: ## Preview Business Partner listing report
-	npx sf-report-preview --artifact business-partner --report listing
+	$(SF) sf-report-preview --artifact business-partner --report listing
 
 # --- Static Analysis (SonarQube) ---
 
@@ -417,7 +435,7 @@ xml-regeneration-check: ## Compare original module XML vs export.database output
 		echo "Usage: make xml-regeneration-check ORIGINAL_DB_DIR=<path> EXPORTED_DB_DIR=<path>"; \
 		exit 1; \
 	fi
-	npx sf-xml-regeneration-check "$(ORIGINAL_DB_DIR)" "$(EXPORTED_DB_DIR)"
+	$(SF) sf-xml-regeneration-check "$(ORIGINAL_DB_DIR)" "$(EXPORTED_DB_DIR)"
 
 # --- Project Context Switching ---
 # Active locale is tracked in .active-locale (gitignored). Default: es.
@@ -455,7 +473,7 @@ help: ## Show this help
 	echo "\033[1mSchema Forge — Available targets\033[0m"; \
 	echo ""; \
 	awk '/^# ---/{gsub(/^# --- | ---$$/,"");printf "\033[1;33m%s\033[0m\n",$$0;next} \
-	     /^[a-zA-Z][a-zA-Z0-9_-]*:.*## /{n=index($$0,": ## ");if(n>0){printf "  \033[36m%-22s\033[0m %s\n",substr($$0,1,n-1),substr($$0,n+5)}}' Makefile; \
+	     /^[a-zA-Z][a-zA-Z0-9_-]*:.*## /{c=index($$0,":");h=index($$0,"## ");if(c>0&&h>0){printf "  \033[36m%-22s\033[0m %s\n",substr($$0,1,c-1),substr($$0,h+3)}}' Makefile; \
 	echo ""
 
 .DEFAULT_GOAL := help

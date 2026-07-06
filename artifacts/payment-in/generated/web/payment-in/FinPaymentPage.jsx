@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { ListView, DetailView } from '@/components/contract-ui';
-import { toast } from 'sonner';
-import FinPaymentTable from './FinPaymentTable';
+import FinPaymentTable from '../../../custom/PaymentHeaderTable';
 import FinPaymentForm from './FinPaymentForm';
 import RelatedDocuments from '../../../custom/RelatedDocuments';
-import { AttachmentsTab } from '@/components/attachments';
 import PaymentBottomPanel from '../../../custom/PaymentBottomPanel';
-import PaymentActivityToggle from '../../../custom/PaymentActivityToggle';
+import PaymentConciliadoBadge from '../../../custom/PaymentConciliadoBadge';
+import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
 import NewPaymentModal from '../../../custom/NewPaymentModal';
+import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
 import catalogs from './mockCatalogs';
 
 
@@ -30,14 +30,10 @@ const extraBadges = [
 
 // @sf-generated-start processes:finPayment
 const processes = [
-  { name: 'etblkpBulkposting', label: 'Bulk Posting', style: 'positive',
-    displayLogicRaw: "@Status@!'RPAE' & @Status@!'RPVOID' & @Processed@='Y' & @#ShowAcct@='Y'" },
-  { name: 'etprReactivatePayment', label: 'Advanced Reactivation', style: 'positive',
-    displayLogicRaw: "@Processed@='Y' & @Status@!'RPVOID'" },
-  { name: 'eTPRRemovePayment', label: 'Remove Payment', style: 'positive',
-    displayLogicRaw: "@Processed@='Y' & @Status@!'RPVOID'" },
-  { name: 'aPRMProcessPayment', label: 'Process Payment', style: 'positive', columnName: 'aPRMProcessPayment',
-    displayLogicRaw: "@status@='RPAP'" },
+  { name: 'Payment Process', label: 'processConfirm', style: 'positive', columnName: 'aPRMProcessPayment',
+    displayLogicRaw: "@status@ = 'RPAP'", confirmModal: true },
+  { name: 'etprReactivatePayment', label: 'processReactivate', style: 'ghost-danger', columnName: 'etprReactivatePayment',
+    displayLogicRaw: "@status@ != 'RPAP'" },
 ];
 // @sf-generated-end processes:finPayment
 
@@ -46,7 +42,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:finPayment
 
 // @sf-generated-start requiredHeaderFields:finPayment
-const requiredHeaderFields = ['etblkpAccountingstatus', 'etblkpBulkposting', 'etprReactivatePayment'];
+const requiredHeaderFields = [];
 // @sf-generated-end requiredHeaderFields:finPayment
 
 
@@ -265,18 +261,20 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        documentPreview={{ titlePrefix: 'Payment', pdfUrl: null }}
         hideDeleteWhenComplete
         customTabsAfterBottom
+        hidePrint
+        hideSaveStatuses={["RDNC","RPPC","RPR","RPVOID","PWNC"]}
+        toolbarBorderBottom
+        hideFormCard
         notesField="description"
-        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "FIN_Payment", config: {} } }]}
+        customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }]}
         bottomSection={PaymentBottomPanel}
-        topbarRight={PaymentActivityToggle}
-        menuActions={({ status }) => [
-          { key: 'reverse', label: 'Reverse Payment', destructive: true, visible: ["RPPC","RPR","RDNC"].includes(status), columnName: 'aPRMReversePayment',  }
-        ]}
-        requiredHeaderFields={requiredHeaderFields}
-        salesTheme
+        topbarExtra={PaymentConciliadoBadge}
+        sidePanel={PaymentDetailSidebar}
+        sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid #E8EAEF","padding":0}}
+        processConfirmModal={ReactivarConfirmModal}
+        statusEnumLabels={{"RPAP":"statusDraft","RPR":"cobroDepositado","RDNC":"cobroDepositado","RPPC":"cobroDepositado","PPM":"cobroDepositado","PWNC":"cobroDepositado"}}
         sendDocument
         {...props}
       />
@@ -294,6 +292,8 @@ export default function FinPaymentPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       dateFilterKey="paymentDate"
+      hidePrint
+      hideCreate
       rowQuickActions={{}}
       sendDocument
       {...props}

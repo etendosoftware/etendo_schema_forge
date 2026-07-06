@@ -128,7 +128,6 @@ export default function PurchaseInvoiceHeaderTable(props) {
           if (row.documentStatus !== 'CO') return <span className="text-muted-foreground">—</span>;
           if (isNcOrReturn(row)) {
             const outstandingAbs = Math.abs(outstanding);
-            const totalAbs = Math.abs(parseFloat(row.grandTotalAmount ?? 0));
             if (outstandingAbs < 0.001) {
               return (
                 <span style={{display:'inline-flex',alignItems:'center',gap:5,font:'500 12px/18px Inter',padding:'3px 10px',borderRadius:999,background:'#E2F7EA',color:'#17663A'}}>
@@ -136,15 +135,18 @@ export default function PurchaseInvoiceHeaderTable(props) {
                                   </span>
               );
             }
-            const isNoneApplied = totalAbs < 0.001 || outstandingAbs >= totalAbs * 0.99;
+            // A credit note / return always represents money owed back by the
+            // supplier, never money still owed to them — the label stays
+            // "Saldo a favor" for any remaining unused balance, however much
+            // of it has already been applied elsewhere.
             return (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setPaymentRow(row); }}
-                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:isNoneApplied?'#F5F3FF':'#FFF9EB',border:`1px solid ${isNoneApplied?'#DDD6FE':'#F2E2BC'}`,color:isNoneApplied?'#6D28D9':'#8A6E25',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
+                style={{display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'#F5F3FF',border:'1px solid #DDD6FE',color:'#6D28D9',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
-                <span style={{width:8,height:8,borderRadius:'50%',background:isNoneApplied?'#7C3AED':'#F59E0B',flexShrink:0,display:'inline-block'}}/>
-                {isNoneApplied ? 'Saldo a favor' : 'Pendiente'} · {formatAmount(outstandingAbs, currency)}
+                <span style={{width:8,height:8,borderRadius:'50%',background:'#7C3AED',flexShrink:0,display:'inline-block'}}/>
+                Saldo a favor · {formatAmount(outstandingAbs, currency)}
               </button>
             );
           }
@@ -187,7 +189,7 @@ export default function PurchaseInvoiceHeaderTable(props) {
           specName="purchase-invoice"
           apiBaseUrl={apiBaseUrl}
           onClose={() => setPaymentRow(null)}
-          onPaymentAdded={() => { setPaymentRow(null); props.onRefresh?.(); }}
+          onPaymentAdded={() => { setPaymentRow(null); props.onDataMutated?.(); }}
           data-testid="InvoicePaymentHistoryModal__6b7cdb" />
       )}
     </>

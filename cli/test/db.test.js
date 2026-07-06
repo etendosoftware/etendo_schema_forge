@@ -71,6 +71,11 @@ describe('resolveDbDefaults', () => {
       source: 'defaults',
     });
 
+    // Neutralize gradle.properties auto-discovery so the env-var fallback
+    // path is exercised deterministically (auto-discovery would otherwise
+    // find the Etendo root gradle.properties on dev machines).
+    process.env.ETENDO_GRADLE_PROPERTIES = '/missing/gradle.properties';
+
     assert.deepEqual(resolveDbDefaults(), {
       host: 'db.internal',
       port: 6543,
