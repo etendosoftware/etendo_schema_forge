@@ -616,7 +616,7 @@ function PopupSearchField(props) {
       <Label
         className="text-sm text-foreground font-medium"
         data-testid="Label__a8d626">
-        {props.label}{props.f.required ? <span className="text-red-500 ml-0.5">*</span> : ""}
+        {props.label}{(props.f.required || props.f.requiredVisual) ? <span className="text-red-500 ml-0.5">*</span> : ""}
       </Label>
       <PopupSearchInput
         field={props.f}
@@ -638,8 +638,13 @@ function getCheckboxStateClass(checked) {
       : 'bg-transparent';
 }
 
+// Callers of this helper (PopupSearchField's sibling paths, DependentFkField,
+// the lookup/search label) are only reached along the editable branch of their
+// wrapping renderers (the isReadOnly branch early-returns to a read-only
+// display before the label is built), so no explicit isReadOnly gate is needed
+// here — see labelMarker/requiredAsteriskIfEditable for the gated equivalents.
 function requiredAsterisk(f) {
-  return f.required ? <span className="text-red-500 ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) ? <span className="text-red-500 ml-0.5">*</span> : '';
 }
 
 /**
@@ -648,9 +653,12 @@ function requiredAsterisk(f) {
  * for the form (Figma list-modal style), a muted "(opcional)" suffix is shown.
  * Generic + opt-in: forms that don't pass `optionalSuffix` keep the old behaviour
  * (asterisk only). The suffix text comes from the i18n `optional` key.
+ * `f.requiredVisual` renders the same asterisk WITHOUT enforcing validation — for
+ * fields whose obligatoriness is conditional on another field and can't use a real
+ * `required: true`.
  */
 function labelMarker(f, isReadOnly, optionalSuffix, ui) {
-  if (f.required && !isReadOnly) return <span className="text-[#F53D6B] ml-0.5">*</span>;
+  if ((f.required || f.requiredVisual) && !isReadOnly) return <span className="text-[#F53D6B] ml-0.5">*</span>;
   if (optionalSuffix && !isReadOnly) {
     return <span className="ml-1 font-normal text-[#6C6C89]">({ui('optional')})</span>;
   }
@@ -686,7 +694,7 @@ function buildSearchSelectorUrl(apiBaseUrl, entity, f, apiSelectorEntry) {
 }
 
 function requiredAsteriskIfEditable(f, isReadOnly) {
-  return f.required && !isReadOnly ? <span className="text-red-500 ml-0.5">*</span> : '';
+  return (f.required || f.requiredVisual) && !isReadOnly ? <span className="text-red-500 ml-0.5">*</span> : '';
 }
 
 function getInputStateClass(isReadOnly) {

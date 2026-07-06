@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowUpRight } from 'lucide-react';
 import { useUI } from '@/i18n';
@@ -166,6 +166,19 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
     return () => window.removeEventListener('neo:processSuccess', handleProcessSuccess);
   }, [recordId, fetchLines]);
 
+  const totalAmortizationAmount = useMemo(
+    () => lines.reduce((sum, line) => sum + (Number(line.amortizationAmount) || 0), 0),
+    [lines],
+  );
+
+  // Compare against the expected amount to amortize with a small tolerance,
+  // since both values are floats. No expected value → never force the alert color.
+  const expectedAmortizationAmount = data?.depreciationAmt;
+  const amortizationTotalMismatch = expectedAmortizationAmount != null
+    && Math.abs(
+      Math.round(totalAmortizationAmount * 100) / 100 - Math.round(Number(expectedAmortizationAmount) * 100) / 100,
+    ) > 0.005;
+
   const renderBody = () => {
     if (loading) {
       return (
@@ -245,6 +258,21 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                 );
               })}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-border/50 font-semibold">
+                <td className="py-3 pr-2" style={{ width: 40 }} />
+                <td className="py-3 pr-4" />
+                <td className="py-3 pr-4" />
+                <td
+                  className={`py-3 pr-4 ${
+                    amortizationTotalMismatch ? 'text-red-500' : 'text-foreground'
+                  }`}
+                >
+                  {formatCurrency(orgCurrency, totalAmortizationAmount)}
+                </td>
+                <td className="py-3" />
+              </tr>
+            </tfoot>
           </table>
         </div>
     );
