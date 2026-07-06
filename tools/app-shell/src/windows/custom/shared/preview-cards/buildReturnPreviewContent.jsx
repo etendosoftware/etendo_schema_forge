@@ -2,12 +2,11 @@ import PreviewActionButtons, { makeStaticPreviewTabs } from '../PreviewActionBut
 import ReturnDocStatsPanel from './ReturnDocStatsPanel.jsx';
 
 export function buildReturnPreviewContent({
-  doc, openEmailModal, pdfBlob, handleDownload, modalRef,
+  doc, pdfBlob, handleDownload, modalRef,
   specs, partnerName, movementDate, token, apiBaseUrl, ui,
 }) {
   const actionButtons = (
     <PreviewActionButtons
-      onEmail={openEmailModal}
       onDownloadPdf={handleDownload}
       hasPdf={!!pdfBlob}
       triggerEdit={() => modalRef.current?.triggerEdit?.()}

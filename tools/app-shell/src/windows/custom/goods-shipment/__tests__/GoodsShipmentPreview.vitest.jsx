@@ -173,6 +173,24 @@ describe('GoodsShipmentPreview', () => {
     expect(screen.getByTestId('send-modal')).toBeInTheDocument();
   });
 
+  // ── ETP-4372 regression ──────────────────────────────────────────────────
+  // GoodsShipmentPreview previously did not render EmailsCard at all. The fix
+  // renders <EmailsCard onSend={openEmailModal} /> in the general tab. The real
+  // (un-mocked) EmailsCard exposes a "previewCardSendEmail" link.
+  it('ETP-4372: renders the EMAILS section with a send link in the general tab', () => {
+    renderGSPreview();
+    const link = screen.getByText('previewCardSendEmail');
+    expect(link).toBeInTheDocument();
+    expect(link.closest('[data-testid="tab-general"]')).toBeInTheDocument();
+  });
+
+  it('ETP-4372: clicking the EMAILS-section send link opens the SendDocumentModal', () => {
+    renderGSPreview();
+    expect(screen.queryByTestId('send-modal')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('previewCardSendEmail'));
+    expect(screen.getByTestId('send-modal')).toBeInTheDocument();
+  });
+
   it('download button is disabled when pdfBlob is null', () => {
     useShipmentPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
     renderGSPreview();

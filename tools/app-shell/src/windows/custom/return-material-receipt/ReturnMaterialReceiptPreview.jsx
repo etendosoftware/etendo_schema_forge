@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
-import { PreviewPdfPanel, usePreviewSendModal, ReceiptSendModal } from '../shared/PreviewActionButtons.jsx';
+import { PreviewPdfPanel } from '../shared/PreviewActionButtons.jsx';
 import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
@@ -12,8 +12,6 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
   const tMenu = useMenuLabel();
   const { locale } = useLocaleSwitch();
   const modalRef = useRef(null);
-
-  const sendModal = usePreviewSendModal();
 
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useReturnReceiptPdf(
     receipt?.id ?? null,
@@ -48,32 +46,20 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
   );
 
   const { actionButtons, tabs } = buildReturnPreviewContent({
-    doc: receipt, openEmailModal: sendModal.openEmailModal, pdfBlob, handleDownload, modalRef,
+    doc: receipt, pdfBlob, handleDownload, modalRef,
     specs, partnerName, movementDate, token, apiBaseUrl, ui,
   });
 
   return (
-    <>
-      <GenericPreviewModal
-        ref={modalRef}
-        title={`${windowLabel} ${receipt.documentNo}`}
-        subtitle={partnerName !== '—' ? `${ui('invoicePreviewClient')} ${partnerName}` : undefined}
-        leftPanel={leftPanel}
-        onClose={onClose}
-        onEdit={() => onEdit?.(receipt.id)}
-        tabs={tabs}
-        actionButtons={actionButtons}
-        data-testid="GenericPreviewModal__178845" />
-      <ReceiptSendModal
-        sendModal={sendModal}
-        documentType={windowLabel}
-        receipt={receipt}
-        partnerName={partnerName}
-        apiBaseUrl={apiBaseUrl}
-        token={token}
-        windowName="return-material-receipt"
-        pdfBlobUrl={pdfUrl}
-        data-testid="ReceiptSendModal__178845" />
-    </>
+    <GenericPreviewModal
+      ref={modalRef}
+      title={`${windowLabel} ${receipt.documentNo}`}
+      subtitle={partnerName !== '—' ? `${ui('invoicePreviewClient')} ${partnerName}` : undefined}
+      leftPanel={leftPanel}
+      onClose={onClose}
+      onEdit={() => onEdit?.(receipt.id)}
+      tabs={tabs}
+      actionButtons={actionButtons}
+      data-testid="GenericPreviewModal__178845" />
   );
 }

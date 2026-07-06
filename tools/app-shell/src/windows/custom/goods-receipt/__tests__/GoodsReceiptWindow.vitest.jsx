@@ -159,14 +159,15 @@ describe('GoodsReceiptWindow', () => {
     expect(screen.getByTestId('generated-app')).toBeInTheDocument();
   });
 
-  it('shows SendDocumentModal when the email row quick action is triggered', () => {
+  it('does NOT wire an email row quick action (out-of-scope window)', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     expect(screen.queryByTestId('send-modal')).not.toBeInTheDocument();
 
+    // The window no longer provides rowQuickActions.onEmail, so triggering the
+    // (mock) email action is a no-op and must not open a SendDocumentModal.
     fireEvent.click(screen.getByTestId('trigger-email'));
 
-    expect(screen.getByTestId('send-modal')).toBeInTheDocument();
-    expect(screen.getByTestId('send-modal').dataset.docNo).toBe('ALB-001');
+    expect(screen.queryByTestId('send-modal')).not.toBeInTheDocument();
   });
 
   // ── initialColumnFilters from URL ──────────────────────────────────────────

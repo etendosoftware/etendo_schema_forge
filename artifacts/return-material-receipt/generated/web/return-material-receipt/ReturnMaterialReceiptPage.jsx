@@ -319,7 +319,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        sendDocument
+        sendDocument={{"enabled":false}}
         {...props}
       />
       </>
@@ -337,7 +337,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
       dateFilterKey="movementDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument
+      sendDocument={{"enabled":false}}
       {...props}
     />
   );

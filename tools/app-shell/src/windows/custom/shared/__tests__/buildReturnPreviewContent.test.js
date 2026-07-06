@@ -34,8 +34,9 @@ describe('buildReturnPreviewContent', () => {
 
   // ── Function signature / destructured params ───────────────────────────────
 
-  it('accepts doc, openEmailModal, pdfBlob, handleDownload, modalRef params', () => {
-    assert.match(src, /doc, openEmailModal, pdfBlob, handleDownload, modalRef/);
+  it('accepts doc, pdfBlob, handleDownload, modalRef params', () => {
+    assert.match(src, /doc, pdfBlob, handleDownload, modalRef/);
+    assert.doesNotMatch(src, /openEmailModal/);
   });
 
   it('accepts specs, partnerName, movementDate, token, apiBaseUrl, ui params', () => {
@@ -54,8 +55,8 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /<PreviewActionButtons/);
   });
 
-  it('passes onEmail={openEmailModal} to PreviewActionButtons', () => {
-    assert.match(src, /onEmail=\{openEmailModal\}/);
+  it('does NOT pass onEmail to PreviewActionButtons (email removed)', () => {
+    assert.doesNotMatch(src, /onEmail=/);
   });
 
   it('passes hasPdf={!!pdfBlob} to PreviewActionButtons', () => {
