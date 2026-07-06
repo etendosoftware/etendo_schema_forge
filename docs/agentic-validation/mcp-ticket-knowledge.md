@@ -25,7 +25,7 @@ How a reported symptom usually maps to a real cause. The point: **not every "fai
 
 - **2026-06-23 — Round 3 (Juan Carlos, 2026-06-19, 15 tickets, label `validacion-agentica`) categorized (analysis only — NOT resolved):**
   - **code-bug (MCP/NEO Java):** ETP-4274 (neo_create ignores non-mandatory defaults — defaults/create asymmetry, `NeoDefaultsService.injectMandatoryDefaults:824-825`), ETP-4275 (no generic process-precondition validation), ETP-4285 (document actions not semantically exposed), ETP-4286 (neo_selectors lacks recordContext passthrough), ETP-4287 (GET-only entities not flagged in discovery), ETP-4284 (widgets not wrapped as `neo_widget`; were misrouted through CRUD), ETP-4255 (Jasper runtime must be removed; report callability metadata).
-  - **upstream-config (schema_forge decisions/generators):** ETP-4278 (empty `prompt` field on contacts/financial-account), ETP-4276 (assets conditional userRequired not declared), ETP-4254 (W-vs-R spec misclassification), ETP-4288 (`defaultExpression="0"` surfaced in schema).
+  - **upstream-config (schema_forge decisions/generators):** ETP-4278 (empty `prompt` field on contacts/financial-account), ETP-4276 (assets conditional userRequired not declared), ETP-4254 (W-vs-R spec misclassification).
   - **validator-side / agent-knowledge:** **ETP-4279** — the validating agent claimed FIN_Financial_Account has 2 types (read from `SeedReferenceDataStep.java`) instead of querying `neo_selectors` (3 types: B/C/CA). Pure bot defect, no product fix. Pattern: agents assuming enum/list cardinality from source/docs instead of runtime selectors.
   - **test-data / environment gap:** ETP-4289 — 6 specs (`return-from-customer`, `return-to-vendor`, `sii-config`, `sii-monitor`, `simple-g-l-journal`, `tbai-config`) unevaluable for lack of records.
   - **opaque / diagnostic gap:** ETP-4280 — Card financial-account create failed but the validator captured NO error message/HTTP status/body. The ticket is itself about the missing diagnostic. Canonical evidence for rubric #3/#4.
@@ -101,7 +101,7 @@ End-to-end wiring (all in `src/com/etendoerp/go/mcp/`):
 
 ## Misclassifications corrected
 
-- _None yet._
+- **2026-07-01 — ETP-4288 was mis-triaged as `upstream-config` (schema_forge decisions/generators) during Round 3 batch analysis; correct category is `code-bug` (MCP/NEO Java).** The `documentType` `defaultExpression="0"` reported by `neo_schema` is generated live from `AD_Column.DefaultValue` inside `McpToolRouterSupport.addDefaultExpression` (`mcp/McpToolRouterSupport.java:407-412`) — it has zero involvement from `decisions.json`/`ETGO_SF_FIELD`/generators, so `make regen` cannot fix it. The write path (`NeoDefaultsService.applyResolvedDefault` + `DocTypeResolver.resolveDefaultDocTypeId`, `schemaforge/NeoDefaultsService.java:973-984`) already special-cases the same `"0"` legacy FK sentinel — proof the schema-reporting path is simply missing the equivalent handling. **How to apply:** when a ticket's symptom is "schema/discover output shows a wrong/misleading value" for a field that also has a *working* counterpart in `neo_defaults`/`neo_create`, check whether the read path (`McpToolRouterSupport`, `ToolRegistry`) is just missing logic the write path (`NeoDefaultsService`, `DocTypeResolver`) already has — before assuming the contract/generator is the source. Full trace: `docs/plans/ETP-4288-documenttype-defaultexpression.md`.
 
 ---
 

@@ -157,4 +157,48 @@ describe('SelectorInput', () => {
     renderSelector({ selectorUrl: null });
     expect(screen.queryByText('loading')).toBeNull();
   });
+
+  // Regression for the "Cargando..." infinite-fetch bug: DetailView/EntityForm
+  // recreate `selectorContext` as a brand-new object on every render even when its
+  // content is unchanged. fetchPage — and the SelectContent ref callback that
+  // depends on it — must compare selectorContext by content, not by reference.
+  // Otherwise every parent re-render re-identifies the ref callback, which React
+  // detaches and reattaches (calling it again with the DOM node), re-running its
+  // "fetch + attach scroll listener" body on every render. In production this
+  // flooded the selector endpoint (1700+ requests in 15s) and left the dropdown
+  // stuck on "Cargando..." forever.
+  it('does not reattach the SelectContent ref when selectorContext is a new reference with the same content', () => {
+    const addEventListenerSpy = vi.spyOn(Element.prototype, 'addEventListener');
+
+    const { rerender } = renderSelector({ selectorUrl: '/api/header/selectors/C_BPartner_ID', selectorContext: {} });
+    // The mocked fetch resolves within the initial act() flush, so the ref
+    // callback legitimately reattaches once more when serverOptions settles from
+    // null to the loaded (empty) list — that transition is expected, not the bug.
+    const scrollAttachCountAfterMount = addEventListenerSpy.mock.calls.filter(([type]) => type === 'scroll').length;
+    expect(scrollAttachCountAfterMount).toBeGreaterThan(0);
+
+    // Re-render several times with a NEW object literal each time (same content:
+    // empty). A stable ref callback must NOT be detached/reattached by this.
+    for (let i = 0; i < 5; i++) {
+      rerender(
+        <SelectorInput
+          entityName="header"
+          field={defaultField}
+          value=""
+          displayValue=""
+          onChange={vi.fn()}
+          catalogs={{}}
+          resolvedLabel="Partner"
+          selectorUrl="/api/header/selectors/C_BPartner_ID"
+          selectorContext={{}}
+          token="test-token"
+        />,
+      );
+    }
+
+    const scrollAttachCountAfterRerenders = addEventListenerSpy.mock.calls.filter(([type]) => type === 'scroll').length;
+    expect(scrollAttachCountAfterRerenders).toBe(scrollAttachCountAfterMount);
+
+    addEventListenerSpy.mockRestore();
+  });
 });
