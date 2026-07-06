@@ -58,9 +58,15 @@ vi.mock('@/hooks/useWindowFilterPresets', () => ({
   useWindowFilterPresets: () => ({ presets: {}, savePreset: vi.fn(), deletePreset: vi.fn() }),
 }));
 
-// Mock ImportDialog
+// Mock ImportDialog — exposes onImported via a button so tests can simulate the real
+// component reporting { okCount, failedCount } without driving the full upload flow.
 vi.mock('@etendosoftware/app-shell-core/components/import/ImportDialog.jsx', () => ({
-  ImportDialog: ({ open }) => open ? <div data-testid="ImportDialog__mock" /> : null,
+  ImportDialog: ({ open, onImported }) => open ? (
+    <div data-testid="ImportDialog__mock">
+      <button type="button" data-testid="ImportDialog__mock-reportSuccess" onClick={() => onImported({ okCount: 2, failedCount: 0 })} />
+      <button type="button" data-testid="ImportDialog__mock-reportFailure" onClick={() => onImported({ okCount: 0, failedCount: 1 })} />
+    </div>
+  ) : null,
 }));
 
 import { ListView } from '../ListView.jsx';
@@ -94,5 +100,24 @@ describe('ListView — import button', () => {
     render(<ListView {...defaultProps} import={{ enabled: true, spec: 'contacts', fields: [] }} />);
     fireEvent.click(screen.getByTestId('ListView__importButton'));
     expect(screen.getByTestId('ImportDialog__mock')).toBeInTheDocument();
+  });
+
+  it('regression: keeps the dialog open when onImported reports a failure, so the review queue stays visible', () => {
+    // Root cause of a real report ("tengo 500 durante el import, no veo ningun error en
+    // pantalla"): this callback used to close the dialog unconditionally on every
+    // onImported call. Even a batch that failed outright still unmounted the whole
+    // dialog the instant it rendered the Result step's review queue, so the (correctly
+    // surfaced) server error message never had a chance to be seen on screen.
+    render(<ListView {...defaultProps} import={{ enabled: true, spec: 'contacts', fields: [] }} />);
+    fireEvent.click(screen.getByTestId('ListView__importButton'));
+    fireEvent.click(screen.getByTestId('ImportDialog__mock-reportFailure'));
+    expect(screen.getByTestId('ImportDialog__mock')).toBeInTheDocument();
+  });
+
+  it('closes the dialog when onImported reports zero failures (nothing left to review)', () => {
+    render(<ListView {...defaultProps} import={{ enabled: true, spec: 'contacts', fields: [] }} />);
+    fireEvent.click(screen.getByTestId('ListView__importButton'));
+    fireEvent.click(screen.getByTestId('ImportDialog__mock-reportSuccess'));
+    expect(screen.queryByTestId('ImportDialog__mock')).toBeNull();
   });
 });

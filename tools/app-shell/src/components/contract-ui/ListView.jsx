@@ -984,9 +984,16 @@ export function ListView({
             token={token}
             postBatch={runBatch}
             simSearchFn={simSearch}
-            onImported={() => {
-              setShowImportDialog(false);
+            onImported={({ failedCount }) => {
+              // Refresh unconditionally — some rows may have committed even when others
+              // failed. Only auto-close when there is nothing left to review: closing
+              // unconditionally (the original wiring) unmounted the dialog the instant it
+              // rendered the Result step's review queue, hiding every failed row's error
+              // message the moment it became visible — confirmed via a real browser run
+              // where a batch that failed outright showed nothing on screen at all, even
+              // after ImportDialog/sendRow were fixed to surface the real message.
               hook.refresh();
+              if (failedCount === 0) setShowImportDialog(false);
             }}
           />
         )}
