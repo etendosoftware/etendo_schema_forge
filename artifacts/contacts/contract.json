@@ -1,8 +1,8 @@
 {
   "version": "0.39.0",
   "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-07-06T16:18:37.381Z",
-  "checksum": "fe84bb549d90a302",
+  "updatedAt": "2026-07-06T17:50:49.736Z",
+  "checksum": "79319d1e7c487c8d",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -263,6 +263,7 @@
               "país"
             ],
             "label": "Country of Origin",
+            "matchEntity": "Country",
             "required": false,
             "type": "foreignKey",
             "reference": "Country"
@@ -4711,6 +4712,7 @@
               "país"
             ],
             "label": "Country of Origin",
+            "matchEntity": "Country",
             "required": false,
             "type": "foreignKey",
             "reference": "Country"

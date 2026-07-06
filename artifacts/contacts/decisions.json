@@ -127,7 +127,7 @@
         { "target": "address", "aliases": ["direccion", "dirección"], "label": "Address" },
         { "target": "city", "aliases": ["ciudad"], "label": "City" },
         { "target": "postal", "aliases": ["codigo postal", "código postal", "cp"], "label": "Postal Code" },
-        { "target": "country", "aliases": ["pais", "país"], "label": "Country" },
+        { "target": "country", "aliases": ["pais", "país"], "label": "Country", "matchEntity": "Country" },
         { "target": "region", "aliases": ["provincia", "region", "región"], "label": "Region" }
       ]
     }
