@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton.jsx';
 import { useEntity } from '@/hooks/useEntity';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useMenuLabel, useLabel, useUI } from '@/i18n';
-import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Eye, Copy, Upload } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -13,6 +13,9 @@ import ReportDrawer from './ReportDrawer.jsx';
 import DocumentPrintDrawer, { printDocuments } from './DocumentPrintDrawer.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
+import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
+import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
 import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
 import { trackSearchPerformed, trackWindowOpened } from '@/lib/productUsageTelemetry.js';
@@ -233,6 +236,7 @@ export function ListView({
   onExternalPreviewClose = null,
   hiddenColumns = [],
   listSortBy = null,
+  import: importConfig = null,
 }) {
   // Subset filters — radio-style, always one active, applied first.
   const [activeSubsetIndex, setActiveSubsetIndex] = useState(() => {
@@ -265,6 +269,9 @@ export function ListView({
   const [advancedFilter, setAdvancedFilter] = useState(initialAdvancedFilter);
 
   const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
+
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const { runBatch } = useBatch({ apiBaseUrl, token });
 
   const advancedFilterPart = useMemo(() => {
     const criteria = buildAdvancedFilterCriteria(advancedFilter, tableColumns);
@@ -788,6 +795,17 @@ export function ListView({
                   onRefresh={() => hook.refresh()}
                   label={ui('refresh')}
                   data-testid="RefreshButton__620cbc" />
+                {importConfig?.enabled && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-white"
+                    onClick={() => setShowImportDialog(true)}
+                    data-testid="ListView__importButton"
+                  >
+                    <Upload className="h-3.5 w-3.5" data-testid="Upload__ListViewImport" />
+                  </Button>
+                )}
                 {!(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
                     variant="outline"
@@ -957,6 +975,20 @@ export function ListView({
             sendPolicy={effectiveSendDocument}
             onClose={() => setEmailRow(null)}
             data-testid="SendDocumentModal__620cbc" />
+        )}
+        {importConfig?.enabled && showImportDialog && (
+          <ImportDialog
+            open={showImportDialog}
+            onOpenChange={setShowImportDialog}
+            config={importConfig}
+            token={token}
+            postBatch={runBatch}
+            simSearchFn={simSearch}
+            onImported={() => {
+              setShowImportDialog(false);
+              hook.refresh();
+            }}
+          />
         )}
       </div>
       {activePreviewRow && renderPreview?.({

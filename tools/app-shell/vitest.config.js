@@ -1,9 +1,29 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const LOCAL_CORE = process.env.LOCAL_CORE === '1';
+const CORE_REPO = process.env.SCHEMA_FORGE_CORE || resolve(__dirname, '../../../schema_forge_core');
+const CORE_APP_SHELL_SRC = resolve(CORE_REPO, 'packages/app-shell-core/src');
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: [
+      { find: '@generated', replacement: resolve(__dirname, '../../artifacts') },
+      { find: '@', replacement: resolve(__dirname, './src') },
+      ...(LOCAL_CORE ? [
+        { find: /^@etendosoftware\/app-shell-core$/, replacement: resolve(CORE_APP_SHELL_SRC, 'index.js') },
+        { find: /^@etendosoftware\/app-shell-core\/(.*)$/, replacement: resolve(CORE_APP_SHELL_SRC, '$1') },
+        { find: 'react-dom', replacement: resolve(__dirname, '../../node_modules/react-dom') },
+        { find: 'react', replacement: resolve(__dirname, '../../node_modules/react') },
+      ] : []),
+    ],
+  },
   test: {
     environment: 'jsdom',
     globals: true,
@@ -17,12 +37,12 @@ export default defineConfig({
     // own transform (the react() plugin above) instead.
     server: {
       deps: {
-        inline: ['@etendosoftware/app-shell-core', '@etendosoftware/etendo-go-core'],
+        inline: [
+          '@etendosoftware/app-shell-core',
+          '@etendosoftware/etendo-go-core',
+          ...(LOCAL_CORE ? ['react', 'react-dom'] : []),
+        ],
       },
-    },
-    alias: {
-      '@': resolve(__dirname, './src'),
-      '@generated': resolve(__dirname, '../../artifacts'),
     },
     coverage: {
       provider: 'v8',
