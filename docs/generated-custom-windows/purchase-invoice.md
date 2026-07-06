@@ -351,3 +351,65 @@ SII status pill (the only one of the three that applies to purchase invoices —
 stale pre-send value. The fix and full root-cause writeup live in
 [`sales-invoice.md` — "TBAI status staleness fix in invoice preview — ETP-4391"](sales-invoice.md#tbai-status-staleness-fix-in-invoice-preview--etp-4391);
 only the spec name and which of the three panels apply differ between the two windows.
+
+## Bank transfer (PIS) via Salt Edge — ETP-4406
+
+Purchase invoices can now be paid by a **real bank transfer** initiated inline from the
+"Añadir pago" modal (`NewPaymentEntryModal.jsx`), instead of only recording a manual payment.
+The transfer is handed off to the existing PSD2 / Salt Edge **PIS** (Payment Initiation Service)
+engine — this window contributes the glue, not a new integration.
+
+### Visibility gate (frontend)
+
+The PIS block (`data-testid="cp-pis-section"`) renders after the balance summary, before the
+footer, only when **all** hold (mirrors the backend's own eligibility check, so it is deliberately
+heuristic, not exhaustive):
+
+- direction is **payment out** (`dir === 'out'` — purchase invoice), and
+- the selected financial account is **PSD2-connected** (`psd2Connected`, sourced from the
+  enriched `invoiceAccounts` action — same `EM_PSD2_Connection_Status='CO'` check as
+  `FinancialAccountsPageHandler`), and
+- the payment method looks like a transfer (name contains "transfer"/"transferencia"), and
+- the account currency is **EUR** or **GBP** (`PIS_ELIGIBLE_CURRENCIES`).
+
+The block offers a **payment template** select (`cpPisTemplateLabel` — SEPA / DOMESTIC / FPS,
+from the AD "Template List for Bank Payments" ref-list, defaulting by currency: EUR→SEPA,
+GBP→FPS) and a **destination IBAN** select (`cpPisIbanLabel`, the supplier's
+`C_BP_BankAccount` IBANs, or a hand-typed one), plus an amber transfer summary and an SCA hint.
+The primary footer button changes to **"Continuar al banco"** (`cpPisConfirmButton`).
+
+### Confirm behavior
+
+On confirm with `pis: true`, the `registerPayment` action creates and links the `FIN_Payment`
+and **processes it to status `PPM`** ("Payment Made") — applied to the invoice but with **no
+`FIN_Finacc_Transaction` yet**. The bank transaction is created only once Salt Edge confirms
+execution, by the PSD2 module's own `PisPaymentCallback` → `PISTransactionUtils` (idempotent).
+To keep config and runtime aligned, connecting an account to PSD2 **from Etendo Go** clears the
+transfer method's **Automatic Withdrawn** flag (`FinancialAccountPsd2Handler`) — Payment OUT
+only; Automatic Deposit is left untouched, since PIS only initiates outbound transfers.
+
+The response carries `pisPaymentUrl` + `pisPaymentId`; the modal opens the Salt Edge SCA widget
+in a popup and polls the `pisPaymentStatus` action every ~3s. The popup returns to Etendo Go's
+own auto-closing SPA callback route (`financial-account/pis-callback`, `PisCallbackPage.jsx`),
+which posts a `pis-completed` message to the opener and closes itself — the user never sees the
+Classic-styled shared bank-auth result page. On `executed` the modal shows a success toast and
+refreshes; on failure/cancel it returns to an editable draft (the `cancelPisPayment` action
+reactivates + removes the unauthorized payment). The non-PIS path is byte-for-byte unchanged.
+
+### Payment history badge
+
+Payments that have a linked `PSD2_PIS_PAYMENT` row show a **"Realizado vía PSD2"** badge
+(`cpPisViaLabel`) in the history modal. The flag comes from a direct `OBCriteria<PisPayment>`
+query in the GO module (`PisPaymentService.hasLinkedPisPayment`), not a new PSD2-module method.
+
+### Where the code lives
+
+- Frontend: `NewPaymentEntryModal.jsx` (PIS block + polling), `PisCallbackPage.jsx` (callback route),
+  `InvoicePaymentHistoryModal.jsx` (badge). All `cpPis*` keys are in both `es_ES.json` / `en_US.json`.
+- Backend (`com.etendoerp.go`): `PaymentRegistrationService` (enriched `invoiceAccounts`, PIS branch
+  of the advanced register flow), `PisPaymentService` (`pisPaymentStatus`, `cancelPisPayment`,
+  `pisTemplates`, `pisSupplierAccounts`, `applyOverpaymentAndInitiatePis`), `PisPaymentBridge`
+  (composes the public PSD2 `GenerateBankPayment` with Etendo Go's own `return_to`).
+
+Scope v1: purchase invoices only, EUR (SEPA) / GBP (FPS). Out of scope: receipts, batch/multi-invoice
+PIS, other currencies, scheduled payments.
