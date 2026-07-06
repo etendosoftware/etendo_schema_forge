@@ -18774,6 +18774,7 @@
     "warehouseQtyOnHand": "Cantidad disponible",
     "warehouseStock": "Stock",
     "warehouseValuation": "Valoración",
+    "warehouseCost": "Coste",
     "warehouseStockDataTitle": "Datos de stock",
     "warehouseTotalValuation": "Valoración total",
     "warehouseValuationBadge": "Stock × coste actual",
