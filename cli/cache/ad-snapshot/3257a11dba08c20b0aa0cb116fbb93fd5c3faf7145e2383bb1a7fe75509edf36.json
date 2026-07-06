@@ -2,6 +2,7 @@
   "sql": "SELECT f.Name, f.DisplayLogic, f.DisplayLogic_Server, f.DisplayLogicGrid, c.ReadOnlyLogic, c.ColumnName FROM AD_Field f JOIN AD_Column c ON f.AD_Column_ID = c.AD_Column_ID JOIN AD_Tab t ON f.AD_Tab_ID = t.AD_Tab_ID WHERE t.AD_Window_ID = $1 AND (f.DisplayLogic IS NOT NULL OR c.ReadOnlyLogic IS NOT NULL) ORDER BY c.ColumnName, f.Name, f.AD_Field_ID",
   "versions": {
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
+      "checksum": "813b08901eed4f54693c4baeb6f8f2a2386d332a8d7691a9d7e7cb0c9ed53907",
       "params": [
         "144"
       ],
@@ -41,6 +42,7 @@
       ]
     },
     "1feda5e22cc22a1d4e3aac66d18b6389393ebc433e692b138a3feed155b5c6e1": {
+      "checksum": "dd1a7179dceea55e18247ef7e7b4c4b0def695b51459ebba08f07408ac5c9219",
       "params": [
         "137"
       ],
@@ -208,6 +210,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
+      "checksum": "c497a60ddd6fec7e938392791e198d34e1c333799848da2ef225a606a196d2ad",
       "params": [
         "123"
       ],
@@ -823,6 +826,7 @@
       ]
     },
     "2f39e9609e474ff1203aed0f3c2e2ac4d33f2eefb8a503de19acec318125e2dc": {
+      "checksum": "2e6f0b063a90f8f40061ed161085ec8ede5158cfdfec195fcabacb93c1478710",
       "params": [
         "170"
       ],
@@ -1078,6 +1082,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
+      "checksum": "167300050cd825eeb81c16ecb5438858e37c5df2b2ab276f41f08e867f743704",
       "params": [
         "143"
       ],
@@ -2277,6 +2282,7 @@
       ]
     },
     "329bb148af9a6baadc8cc6aa9df89e1dbde1f38927b1a7eb474a4e9522daff88": {
+      "checksum": "6198f84ceab05699388e8384ff66b2e547e672193700ca9e31127a5e53eae0ae",
       "params": [
         "800076"
       ],
@@ -2404,6 +2410,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
+      "checksum": "ec7d483cce209094311175e2b68b1f6d09d54004f757dbbe1b50dff002329510",
       "params": [
         "167"
       ],
@@ -3987,6 +3994,7 @@
       ]
     },
     "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
+      "checksum": "4c0fce1b5d8e4065315e1567d588ac45082566ec1399a1b68313adf0f2496c51",
       "params": [
         "6F8F913FA60F4CBD93DC1D3AA696E76E"
       ],
@@ -4466,6 +4474,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
+      "checksum": "30a759670ea6d650b03ce78517c8fd0d52daf454c6c49d787af3246ffde3c374",
       "params": [
         "183"
       ],
@@ -5865,6 +5874,7 @@
       ]
     },
     "4cdbb6a1d5f88ee0967c42ec50f1ebf974918f41cfdc927579046b33fad8d0bc": {
+      "checksum": "80f7ec2c3e8608b7f640d9606efc0f6f391c4478263a7e9683ecd0762e3b1da9",
       "params": [
         "800026"
       ],
@@ -6232,12 +6242,14 @@
       ]
     },
     "4e4b0d1c19b4dc9eb29dc45dd545b5060c06c718866acfa62c0cdf829eebc965": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
         "C327DE215AC945F69363905840118177"
       ],
       "rows": []
     },
     "56f5905a31ee709b32fe7db282011c768b57a04bfefc93302253d932b0d79f20": {
+      "checksum": "6c93672605337c18c86c521efa539d099d673aba367c0a443bd762f70f64245d",
       "params": [
         "141"
       ],
@@ -6309,6 +6321,7 @@
       ]
     },
     "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
+      "checksum": "67b891dad4d9679ff6a18ae9a88951429b73bfef13e0e31369ae5b0bbfd00ad1",
       "params": [
         "184"
       ],
@@ -7060,6 +7073,7 @@
       ]
     },
     "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
+      "checksum": "b4748c661a45bb543809da94f9630f082a54e79107db72ca05abc22322c41af8",
       "params": [
         "FEF76C3E0F104F06A89AAD15A4A4A35C"
       ],
@@ -7707,6 +7721,7 @@
       ]
     },
     "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
+      "checksum": "471c11c0c3138276a0b62294d8fef52c3e47ec55f4ffcf1be93dcde5c324dc80",
       "params": [
         "27A453FA86974745977672F1A8DCCEFF"
       ],
@@ -7730,6 +7745,7 @@
       ]
     },
     "7a7021f92d915e51e998b9560b17636c7f0484e0b332b42d81af899b72333123": {
+      "checksum": "392c8507f67dc3178c5c062b7fedc1294cd6182a99a80409e40c460769314c14",
       "params": [
         "118"
       ],
@@ -7841,6 +7857,7 @@
       ]
     },
     "815e23e49d7d45ef28d64a769100a5fa1e1aec24b8c6f25a101070342ebeaeb1": {
+      "checksum": "e9a86903f9afce3ff9c65c8ccf42522561cfd5bc6a8b1feced47f3ab6488ad81",
       "params": [
         "C50A8AEE6F044825B5EF54FAAE76826F"
       ],
@@ -8520,6 +8537,7 @@
       ]
     },
     "843359d6657fbb328422a0e2b76bc9bab643118230c1597e04e3917031b6cb1f": {
+      "checksum": "e2321c6483761e8ce89dad97f9e2f01991814cc22705685d5d53c838c8500b2c",
       "params": [
         "E547CE89D4C04429B6340FFA44E70716"
       ],
@@ -8991,6 +9009,7 @@
       ]
     },
     "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
+      "checksum": "a8f21821ef41173a55564789fa39c62cc76b2dd1be977f5a2b60e0bd45ed10b2",
       "params": [
         "125"
       ],
@@ -9182,6 +9201,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
+      "checksum": "56b8a49e72cfab388e27f80ee8f7e59390cb6420950f004881eae6616c7f1bf7",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -9949,6 +9969,7 @@
       ]
     },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
+      "checksum": "4c5d8833755f846b0ffdf0021bd9244264d2247c146f4238162dc0d2ef25db32",
       "params": [
         "273673D2ED914C399A6C51DB758BE0F9"
       ],
@@ -10364,6 +10385,7 @@
       ]
     },
     "b8f93f89d00e4397d71cd226a3704eee1045f69f9f26ff056c27d50de601db7e": {
+      "checksum": "22f6687c6ecdb8bf77040b3d8758a632979cea439639eb21ed6dc1a19f55b526",
       "params": [
         "B917E8A7B0864ACEA9D941E3B7494E53"
       ],
@@ -10883,6 +10905,7 @@
       ]
     },
     "bc1f176fd0a37e081c0035239df13fd8ae7e5d54086dc4ec03016c3c894c45f1": {
+      "checksum": "d18211dc64d2a51114dfc43f7ae5830127283ffda853b1d38ea0dc2aeba1a8fb",
       "params": [
         "C1D3A2A017AC4B82B9FEE6F4D2A0C55A"
       ],
@@ -10978,6 +11001,7 @@
       ]
     },
     "bf11b95a5cc3783d783796dc4000683f6dc92578ff1af8d116039bf87bade677": {
+      "checksum": "d7c860549b40e11b9684fa98b7c27dfd3fa3c67229f67bb724df4ab2d72a0b12",
       "params": [
         "F4675DAB02134762B66881DAE4672AD0"
       ],
@@ -11001,6 +11025,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
+      "checksum": "34402d61e4c230ada9b15e2a1d206a1cd0062d0b429bc08cf3db1b062e846164",
       "params": [
         "140"
       ],
@@ -11880,6 +11905,7 @@
       ]
     },
     "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
+      "checksum": "ea314959162320b5e79903aad446a42cdbed220ab3535adcd923ad391cd39f3f",
       "params": [
         "E66E701CCBA14B8BA480CBDE37C50D7A"
       ],
@@ -11919,6 +11945,7 @@
       ]
     },
     "d762ff016bca659cec9b3ea6091e7975b8e08865bfb35fdd621af88fa1f69d14": {
+      "checksum": "365187d202c336fa33bdc89172c59a7527f494b21fca190012ddc21b868ce766",
       "params": [
         "146"
       ],
@@ -11950,6 +11977,7 @@
       ]
     },
     "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
+      "checksum": "a181b48d5ea23246438c62a78dfad1394d607975632c43c18b729831e634f454",
       "params": [
         "108"
       ],
@@ -11981,6 +12009,7 @@
       ]
     },
     "db74276aff1dc1773fa3c1f1188863e1ae5906047451c707296b6d649243b515": {
+      "checksum": "5bbf90a344444730752e1cc643b32d544afde499a540808365be712fab52cced",
       "params": [
         "139"
       ],
@@ -12044,6 +12073,7 @@
       ]
     },
     "dc3625edf6e3b3ba3d373862af247d21be277872e900727c4a4025b968fa702b": {
+      "checksum": "80789a8846e6014e21a4b1fb9ba44498e88b7d644abf287d8ef3f592a45b4bd9",
       "params": [
         "FF808081330213E60133021822E40007"
       ],
@@ -12787,6 +12817,7 @@
       ]
     },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
+      "checksum": "8c367f54e7911716207c2b84fb2613d31865c7f7f45dbded62830dbf0cd2cf11",
       "params": [
         "123271B9AD60469BAE8A924841456B63"
       ],
@@ -13202,6 +13233,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
+      "checksum": "ec9246325d53f6ed6fa3a41030ecb33596efffa0c067e02feb31e1c3e832f998",
       "params": [
         "181"
       ],
@@ -14209,6 +14241,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
+      "checksum": "ae06d756d9d25507edabae9ec9c1796fd2b2861a443bbc888f6275f85ab75dba",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -15448,6 +15481,7 @@
       ]
     },
     "f059b24ecd20866b3f9f2bc8f3e5f8c6e2852af85784f3ade7eaa77668d467e5": {
+      "checksum": "035d4afcd5465bd35a1dfc4ab023d3b565cb36cae616099939034a2d9ffa6475",
       "params": [
         "168"
       ],
@@ -15687,12 +15721,14 @@
       ]
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
         "71F24BF89DE748B483BE87594747D6FB"
       ],
       "rows": []
     },
     "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
+      "checksum": "b3e8fde3f446ba728a3a6017becb5fadcf53b5e677804307175640366985b719",
       "params": [
         "169"
       ],
@@ -16348,6 +16384,7 @@
       ]
     },
     "f71bd40f8548d0778bbf8b687c5cca2566403c65eb5aecc67560cd0b92ebd3b0": {
+      "checksum": "ab55770f832dbf819d8a35a0a51eb7841c7e8d22d97f5661d3cb7b4ac13086ec",
       "params": [
         "252"
       ],
@@ -16427,12 +16464,14 @@
       ]
     },
     "f750141ebc99d41ec60eb871c5b5d9630d42737fc939771cef25ff208fc674df": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
         "138"
       ],
       "rows": []
     },
     "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
+      "checksum": "ae799f169495c760d5902815db63a42c0466b201738585def92305d106d26498",
       "params": [
         "800027"
       ],

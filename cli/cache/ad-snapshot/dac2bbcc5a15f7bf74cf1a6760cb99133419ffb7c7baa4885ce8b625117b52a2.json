@@ -2,6 +2,7 @@
   "sql": "SELECT f.Name, f.DisplayLogic, c.ReadOnlyLogic, c.ColumnName, t.Name AS tab_name, t.AD_Tab_ID AS tab_id, tbl.TableName AS table_name, tbl.AD_Table_ID AS table_id, c.AD_Column_ID AS column_id, f.AD_Field_ID AS field_id FROM AD_Field f JOIN AD_Column c ON f.AD_Column_ID = c.AD_Column_ID JOIN AD_Tab t ON f.AD_Tab_ID = t.AD_Tab_ID JOIN AD_Table tbl ON c.AD_Table_ID = tbl.AD_Table_ID WHERE t.AD_Window_ID = $1 AND (f.DisplayLogic IS NOT NULL OR c.ReadOnlyLogic IS NOT NULL) ORDER BY t.SeqNo, t.AD_Tab_ID, f.SeqNo, f.AD_Field_ID, c.AD_Column_ID",
   "versions": {
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
+      "checksum": "17463f0e68220754143f5030a303e98abc16c1b352d5723d78d018797ad34ac1",
       "params": [
         "144"
       ],
@@ -57,6 +58,7 @@
       ]
     },
     "1feda5e22cc22a1d4e3aac66d18b6389393ebc433e692b138a3feed155b5c6e1": {
+      "checksum": "39c7fd3ba5cde80911800124f065cefcd62daead35c0b18dd6130e5a80171549",
       "params": [
         "137"
       ],
@@ -304,6 +306,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
+      "checksum": "3882b1a82bb0e1de836c3f5c2adf223256e4cdaa08f2a9d050e557226212db8b",
       "params": [
         "123"
       ],
@@ -1223,6 +1226,7 @@
       ]
     },
     "2f39e9609e474ff1203aed0f3c2e2ac4d33f2eefb8a503de19acec318125e2dc": {
+      "checksum": "2164d1fd8852e28509587875a77106caaf7b6707ab7da9c177682dd3a0e5cc75",
       "params": [
         "170"
       ],
@@ -1602,6 +1606,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
+      "checksum": "800b8bfc7120b22cf7c1bda4147a9f10acc79a9f6f72708a57ca36b640e1dcbc",
       "params": [
         "143"
       ],
@@ -3397,6 +3402,7 @@
       ]
     },
     "329bb148af9a6baadc8cc6aa9df89e1dbde1f38927b1a7eb474a4e9522daff88": {
+      "checksum": "a42ae400db6131bd22e92b49aa20ce0e4b86643bb4010f3cabc74039f5f12463",
       "params": [
         "800076"
       ],
@@ -3584,6 +3590,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
+      "checksum": "176ae49721c46e0247cb6fdbdf23abff183fcc6a438f19ffb390db11aaf72e9e",
       "params": [
         "167"
       ],
@@ -5955,6 +5962,7 @@
       ]
     },
     "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
+      "checksum": "d6ace9255ae4c5b84e324c6aded3217da2cebae1607a1ab68b0088a69a7bc728",
       "params": [
         "6F8F913FA60F4CBD93DC1D3AA696E76E"
       ],
@@ -6670,6 +6678,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
+      "checksum": "4d84e07d963db3b03af6dfcc14b4c0fd2a21e52a4d6d98e0a1854b54fe89f70b",
       "params": [
         "183"
       ],
@@ -8765,6 +8774,7 @@
       ]
     },
     "4cdbb6a1d5f88ee0967c42ec50f1ebf974918f41cfdc927579046b33fad8d0bc": {
+      "checksum": "12351ca46c24cd9af0e1e634fa20d0f4a3d619d6ab6dc037f29dfb3ba67d2d2c",
       "params": [
         "800026"
       ],
@@ -9312,12 +9322,14 @@
       ]
     },
     "4e4b0d1c19b4dc9eb29dc45dd545b5060c06c718866acfa62c0cdf829eebc965": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
         "C327DE215AC945F69363905840118177"
       ],
       "rows": []
     },
     "56f5905a31ee709b32fe7db282011c768b57a04bfefc93302253d932b0d79f20": {
+      "checksum": "5bdf3ff9980f0ae8d8c629f40b6df0610c00f5224c1883cc64a3a6bb2f01acae",
       "params": [
         "141"
       ],
@@ -9421,6 +9433,7 @@
       ]
     },
     "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
+      "checksum": "4b601c0753b94fed50f806b8da91e2de5147c946d88e4ee99ac7550e91758a50",
       "params": [
         "184"
       ],
@@ -10544,6 +10557,7 @@
       ]
     },
     "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
+      "checksum": "ab6bde9be6501cccbf7e30944d94e14af28651ec3ea34886e681ecc498e15d48",
       "params": [
         "FEF76C3E0F104F06A89AAD15A4A4A35C"
       ],
@@ -11511,6 +11525,7 @@
       ]
     },
     "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
+      "checksum": "5c94a1e6ae576efa004407bfcfeac2229f979b9954de24c6e346b7a3eda5fe7d",
       "params": [
         "27A453FA86974745977672F1A8DCCEFF"
       ],
@@ -11542,6 +11557,7 @@
       ]
     },
     "7a7021f92d915e51e998b9560b17636c7f0484e0b332b42d81af899b72333123": {
+      "checksum": "7e09135195fdbb3a208d4210ac668f09bccb26e98ae33aa9cb0607877a04c25f",
       "params": [
         "118"
       ],
@@ -11705,6 +11721,7 @@
       ]
     },
     "815e23e49d7d45ef28d64a769100a5fa1e1aec24b8c6f25a101070342ebeaeb1": {
+      "checksum": "1821b5b1432bb86d6c5fea70964d892993313b6eab12b3d6e78c14f32627414e",
       "params": [
         "C50A8AEE6F044825B5EF54FAAE76826F"
       ],
@@ -12720,6 +12737,7 @@
       ]
     },
     "843359d6657fbb328422a0e2b76bc9bab643118230c1597e04e3917031b6cb1f": {
+      "checksum": "c14ea6e2f69971e56e4f85d63c41cc6f61674a895df921cc0dc92c0e28e6d800",
       "params": [
         "E547CE89D4C04429B6340FFA44E70716"
       ],
@@ -13423,6 +13441,7 @@
       ]
     },
     "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
+      "checksum": "c115e9f9973e577c0ead94dc8e6ead2589a181626a5164d1cb29b30f68ddf6ff",
       "params": [
         "125"
       ],
@@ -13706,6 +13725,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
+      "checksum": "109ded36d2b1dd891d298b0b3d863aca42432a358f9668f7e144bba919ad9c12",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -14853,6 +14873,7 @@
       ]
     },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
+      "checksum": "c77bcbe07ad003bb88771e87e5b6c931bc6267980db59225d6ee44b9d2d352f0",
       "params": [
         "273673D2ED914C399A6C51DB758BE0F9"
       ],
@@ -15472,6 +15493,7 @@
       ]
     },
     "b8f93f89d00e4397d71cd226a3704eee1045f69f9f26ff056c27d50de601db7e": {
+      "checksum": "47b67d1e9ec98cc92c1c73f252778a654301acb399410289dc54be867a8540f8",
       "params": [
         "B917E8A7B0864ACEA9D941E3B7494E53"
       ],
@@ -16247,6 +16269,7 @@
       ]
     },
     "bc1f176fd0a37e081c0035239df13fd8ae7e5d54086dc4ec03016c3c894c45f1": {
+      "checksum": "becf00a087e3d0c1b77fb7c7af79516ba5bd7b95986e4b09137c4a1456e69da7",
       "params": [
         "C1D3A2A017AC4B82B9FEE6F4D2A0C55A"
       ],
@@ -16386,6 +16409,7 @@
       ]
     },
     "bf11b95a5cc3783d783796dc4000683f6dc92578ff1af8d116039bf87bade677": {
+      "checksum": "cf9516ea3057ff4b51d3ed046d482686fa777470ed577dbeefa7396ee2628ba1",
       "params": [
         "F4675DAB02134762B66881DAE4672AD0"
       ],
@@ -16417,6 +16441,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
+      "checksum": "7f69962ddbba79f43d003d1c3bdc06e8fda19e28a06ca49946b056d937315d6c",
       "params": [
         "140"
       ],
@@ -17732,6 +17757,7 @@
       ]
     },
     "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
+      "checksum": "ab993470e853f4bf6d505a5ad96871e1d831bce6a8a5201a3cf2f4887ad02df5",
       "params": [
         "E66E701CCBA14B8BA480CBDE37C50D7A"
       ],
@@ -17787,6 +17813,7 @@
       ]
     },
     "d762ff016bca659cec9b3ea6091e7975b8e08865bfb35fdd621af88fa1f69d14": {
+      "checksum": "3f14d97c01431bb6a165f35ac77e6fae7c9994d38b41c0807f59650c55106a2f",
       "params": [
         "146"
       ],
@@ -17830,6 +17857,7 @@
       ]
     },
     "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
+      "checksum": "1686fe93b142599b7dab9684df714bec2c710992708f937f2d6f2b2fa8a1a2e1",
       "params": [
         "108"
       ],
@@ -17873,6 +17901,7 @@
       ]
     },
     "db74276aff1dc1773fa3c1f1188863e1ae5906047451c707296b6d649243b515": {
+      "checksum": "a5afcdeacdfea3cdef73af9921b5ca2334631e4607426ef1db783de7fd214dbd",
       "params": [
         "139"
       ],
@@ -17964,6 +17993,7 @@
       ]
     },
     "dc3625edf6e3b3ba3d373862af247d21be277872e900727c4a4025b968fa702b": {
+      "checksum": "18fcd6cb6bbacafb555d70df4519b80aa6536d1809902e26ca228c3a6dc56383",
       "params": [
         "FF808081330213E60133021822E40007"
       ],
@@ -19075,6 +19105,7 @@
       ]
     },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
+      "checksum": "dfe2e8b3f0ad46f05f8f905d4342199eac185fb912b5b23bd2421ba77e54bef0",
       "params": [
         "123271B9AD60469BAE8A924841456B63"
       ],
@@ -19694,6 +19725,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
+      "checksum": "5aadb2b8cf88fbda5f4dd73299ffc11f877c0fae6a2ab1897ae6b2772b442d49",
       "params": [
         "181"
       ],
@@ -21201,6 +21233,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
+      "checksum": "684405511115288359e4a0b3ba956f56e546a3a3181ab6283388e5170d9df3cb",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -23056,6 +23089,7 @@
       ]
     },
     "f059b24ecd20866b3f9f2bc8f3e5f8c6e2852af85784f3ade7eaa77668d467e5": {
+      "checksum": "e7392567dfce29c43d9f7cdcf678e6cb333bd55a3ade4ae10328b8044e49bfbd",
       "params": [
         "168"
       ],
@@ -23411,12 +23445,14 @@
       ]
     },
     "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
         "71F24BF89DE748B483BE87594747D6FB"
       ],
       "rows": []
     },
     "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
+      "checksum": "04ecd214ad1107b721928af942d0107bad6adce09f7c5cd489278212a4d74e62",
       "params": [
         "169"
       ],
@@ -24396,6 +24432,7 @@
       ]
     },
     "f71bd40f8548d0778bbf8b687c5cca2566403c65eb5aecc67560cd0b92ebd3b0": {
+      "checksum": "30890461a65648ed46590daaefb6d2b3a1becdaf73b0fdc74d4e04e90ef5f900",
       "params": [
         "252"
       ],
@@ -24511,12 +24548,14 @@
       ]
     },
     "f750141ebc99d41ec60eb871c5b5d9630d42737fc939771cef25ff208fc674df": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "params": [
         "138"
       ],
       "rows": []
     },
     "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
+      "checksum": "d488ea35264497292eb93088793ed61a40c6ee1c133844810ae90582a7c2a0b5",
       "params": [
         "800027"
       ],
