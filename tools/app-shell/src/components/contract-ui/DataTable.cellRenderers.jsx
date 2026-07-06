@@ -3,7 +3,7 @@ import { StatusTag } from '@/components/ui/status-tag';
 import { Tag } from '@/components/ui/tag';
 import { formatAmount } from '@/lib/formatAmount.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
-import { getStatusDotColor, statusLabel } from '@/lib/statusBadge.js';
+import { getStatusDotColor, getStatusTone, statusLabel } from '@/lib/statusBadge.js';
 
 function getDateDotColor(dateValue) {
   if (!dateValue) return null;
@@ -148,7 +148,7 @@ export function renderStatusCell({ row, col, dictionary, ui }) {
       </span>
     );
   }
-  return <StatusTag status={raw} label={label} data-testid="StatusTag__eb5261" />;
+  return <StatusTag status={raw} label={label} tone={getStatusTone(raw)} data-testid="StatusTag__eb5261" />;
 }
 
 export function renderPercentCell({ row, col }) {
