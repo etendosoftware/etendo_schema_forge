@@ -9,6 +9,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A1 | Accounting | Posting fails — chart of accounts missing | *Initial Organization Setup* / SQL clone | — |
 | A1b | Accounting | Posting account codes are < 8 digits; ETP-4247 feature fails | Onboarding sampledata XML (`C_ELEMENTVALUE.xml`) — pad codes to 8 digits | ETP-4247 |
 | A2 | Accounting | "Account Not Defined" even with ledger present | *Initial Organization Setup* — auto-populate `*_acct` tables | — |
+| A3 | Accounting | Schema not predefined (Allow Negatives/Centrally Maintained=N); only 5 of 8 dimensions enabled (Cost Center/User1/User2 missing) | Onboarding sampledata XML (`C_ACCTSCHEMA.xml`, `C_ACCTSCHEMA_ELEMENT.xml`) — dataset-only, no new service | ETP-4245 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -125,6 +126,79 @@ WHERE  ad_client_id = :client_id
   AND  value ~ '^[0-9]+$'
   AND  LENGTH(value) < 8;
 ```
+
+---
+
+### A3 — Accounting schema not fully predefined; only 5 of 8 dimensions enabled (ETP-4245)
+
+**Symptom (Confluence Test Plan "Contabilidad | Test Plan", Group 10):**
+- **TC-38** expects the schema ("Esquema GO") to ship with Allow Negatives=Yes and Centrally Maintained=Yes. It shipped with both **`N`**.
+- **TC-40** expects all 8 accounting dimensions present on the schema's Dimensions tab: Organization + Account mandatory, and Project, Bus.Partner, Product, **Cost Center, User1, User2** enabled (non-mandatory). Only **5 of 8** existed — Cost Center (`CC`), User1 (`U1`), User2 (`U2`) were entirely absent from `C_ACCTSCHEMA_ELEMENT.xml`.
+
+**Root cause:** `referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` shipped `ALLOWNEGATIVE=N` / `ISCENTRALLYMAINTAINED=N`, and `C_ACCTSCHEMA_ELEMENT.xml` only ever carried 5 `<C_ACCTSCHEMA_ELEMENT>` rows (`OO`, `AC`, `PJ`, `BP`, `PR`) for schema `C06B100312FA48159DB36B9A4B461019` — `CC`/`U1`/`U2` were never authored, on any prior gap-remediation pass (A1/A2/B1/B2 never touched this table's row *content*, only its table-level inclusion in `OnboardingDatasetDefinition.INCLUDED_TABLES`, which was already correct). Verified live against GOClient (`localhost:5416/etendogoclean`) both via direct DB query and by reading the shipped XML — the two matched exactly (no drift between dataset and DB).
+
+**Why this is dataset-only (no `Onboarding*Service` needed):** both tables are already in `INCLUDED_TABLES`, and neither `OnboardingAccountingWiringService` nor any other onboarding code references specific `elementtype` values or `c_acctschema` flags — they flow straight from the imported XML with zero code involvement. This mirrors the ETP-4341 "dataset-only provisioning" pattern (payment methods/terms) documented in `onboarding-and-datafixes-map.md` §1. **Decision:** no new Java service; only edit the sampledata XML + bump the CUT.
+
+**Both fronts closed (2026-07-06):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260706T120000Z__R10-accounting-schema-dimensions.sql` — flips the flags and inserts the 3 missing `C_ACCTSCHEMA_ELEMENT` rows for existing tenants. Live-validated on GOClient: `WOULD_APPLY` (dry-run) → `APPLIED (4 rows)` (real run) → `SKIPPED_NOT_NEEDED — kept prior success state` (re-run, proving idempotency). |
+| **Preventive** | `C_ACCTSCHEMA.xml` (`ALLOWNEGATIVE`/`ISCENTRALLYMAINTAINED` → `Y`) + `C_ACCTSCHEMA_ELEMENT.xml` (+3 rows: `CC`/`Cost Center`/seqno 60, `U1`/`User 1`/seqno 70, `U2`/`User 2`/seqno 80, all non-mandatory/unbalanced/client-level, new UUIDs via `make uuid`); `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T12:00:00Z` in `OnboardingBaselineService.java`. Regression-guarded by two new tests in `OnboardingDatasetNormalizerTest.java` (`testNormalizerIncludesAllEightAccountingDimensions`, `testNormalizerAccountingSchemaIsPredefinedForPosting`). |
+
+**Naming collision note:** a sibling in-flight branch (`feat/bp-category-preventive`, ETP-4402) had already claimed the `R9` label (`20260701T120000Z__R9-bp-category-seed.sql`, not yet merged at the time of this fix) and bumped the same CUT constant to `2026-07-01T12:00:00Z`. This fix uses `R10` and `2026-07-06T12:00:00Z` to avoid an `@id`/CUT collision — **always check `git rev-list --all` across ALL local branches/worktrees for existing `Rn` labels before naming a new fix, not just your own branch's `sql/` directory**, since the shared dev DB may already have sibling-branch fixes applied. Expect (and correctly resolve, keeping the later timestamp) a merge conflict on the single `ONBOARDING_PROVISIONED_THROUGH` line when the two branches converge.
+
+**SQL fix (corrective guard — idempotent):**
+```sql
+-- @check
+SELECT 1
+FROM c_acctschema s
+WHERE s.ad_client_id = :client_id
+  AND (
+    s.allownegative = 'N'
+    OR s.iscentrallymaintained = 'N'
+    OR EXISTS (
+      SELECT 1 FROM (VALUES ('CC'), ('U1'), ('U2')) AS dim(elementtype)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM c_acctschema_element ae
+        WHERE ae.c_acctschema_id = s.c_acctschema_id AND ae.elementtype = dim.elementtype
+      )
+    )
+  )
+LIMIT 1;
+
+-- @apply
+UPDATE c_acctschema
+SET allownegative = 'Y', iscentrallymaintained = 'Y', updated = now(), updatedby = '0'
+WHERE ad_client_id = :client_id AND (allownegative = 'N' OR iscentrallymaintained = 'N');
+
+INSERT INTO c_acctschema_element (c_acctschema_element_id, isactive, created, createdby, updated,
+  ad_org_id, updatedby, c_acctschema_id, elementtype, name, seqno, c_element_id, ad_client_id,
+  ismandatory, isbalanced, org_id, c_elementvalue_id, m_product_id, c_bpartner_id, c_location_id,
+  c_salesregion_id, c_project_id, c_campaign_id, c_activity_id)
+SELECT get_uuid(), 'Y', now(), '0', now(), '0', '0',
+       s.c_acctschema_id, dim.elementtype, dim.name, dim.seqno, null, :client_id, 'N', 'N',
+       null, null, null, null, null, null, null, null, null
+FROM c_acctschema s
+CROSS JOIN (VALUES ('CC','Cost Center',60), ('U1','User 1',70), ('U2','User 2',80))
+  AS dim(elementtype, name, seqno)
+WHERE s.ad_client_id = :client_id
+  AND NOT EXISTS (
+    SELECT 1 FROM c_acctschema_element ae
+    WHERE ae.c_acctschema_id = s.c_acctschema_id AND ae.elementtype = dim.elementtype
+  );
+```
+
+**Verification of the OTHER Group-10 test cases against live GOClient (2026-07-06) — all pre-existing, no fix needed:**
+
+| TC | Result | Detail |
+|---|---|---|
+| **TC-39** (Tables tab) | ✅ Already correct | All 11 required tables (`C_Invoice`→`Invoice`, `FIN_Payment`, `FIN_BankStatement`, `FIN_Finacc_Transaction`, `FIN_Reconciliation`, `GL_Journal`→`FinancialMgmtGLJournal`, `M_InOut`→`MaterialMgmtShipmentInOut`, `M_Inventory`→`MaterialMgmtInventoryCount`, `M_MatchInv`→`ProcurementReceiptInvoiceMatch`, `M_Movement`→`MaterialMgmtInternalMovement`, `M_Production`→`MaterialMgmtProductionTransaction`) are `isactive='Y'` on `c_acctschema_table`. |
+| **TC-41** (Defaults tab) | ⚠️ Partial — flagged, NOT changed | Customer Receivable=43000 ✓, Vendor Payable=40000 ✓, Bank Asset=57200 ✓ all match. **Tax Credit ("VAT Receivable") = 47200, Tax Due ("VAT Payable") = 47700 — NOT 47000/47500 as stated in the test plan.** These are the standard Spanish PGC codes for ongoing input/output VAT (472 = IVA soportado, 477 = IVA repercutido); 4700/4750 are the period-END settlement accounts ("Hacienda deudora/acreedora por IVA"), a different concept. TC-43's real posted invoice confirms 47700 is the live, correctly-functioning value (see below) — this reads as a test-plan documentation discrepancy, not a system bug. **Deferred — out of scope for ETP-4245** (dimensions + schema-predefinition ask only); flag for product/accounting owner (see "Jorge's list" reference in the remediation plan) before changing any account-default mapping. |
+| **TC-42** (Product category accounts, "Bebidas") | ⚠️ Partial — flagged, NOT changed | Revenue=70000 ✓, Expense=60000 ✓ match. **Asset=35000 (Finished Goods), NOT 30000 (Merchandise) as stated.** This is a per-category business classification choice (is Bebidas manufactured or purchased merchandise?), not an onboarding-provisioning gap — deferred for the same reason as TC-41. |
+| **TC-43** (Posting) | ✅ Already correct | A completed+posted sales invoice with a Bebidas product (`documentno=10000016`) posts with zero "Account Not Defined" errors: debits `43000000` (Clientes), credits `70000000` (Ventas) + `47700000` (IVA repercutido), balanced (27.83 = 23.00 + 4.83). |
+
+See also: `docs/plans/onboarding-gaps-remediation-plan.md` §"Gap A3" for the full investigation notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable facts extracted from this pass.
 
 ---
 

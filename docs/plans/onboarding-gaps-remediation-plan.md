@@ -229,11 +229,79 @@ separate concern the research notes flag, not covered by either A2 front here.
 
 ---
 
+## Gap A3 — Accounting schema not fully predefined; only 5/8 dimensions (ETP-4245) — BOTH FRONTS DONE
+
+### Ticket ask (ETP-4245, §3.1/§3.3)
+Ship the accounting schema fully predefined out-of-the-box (EUR, allow-negatives, centralized;
+Dimensions/Tables-to-post/General-accounting/Defaults tabs all predefined) and enable 6 accounting
+dimensions (Cost Center, Project, Product, Third Party, User1, User2) for all document types by
+default, so the user only ever decides *visibility*, never *activation*.
+
+### Verified DB state (2026-07-06, GOClient `802509E12436405C86BA1FD5B1DF508C`, `localhost:5416/etendogoclean`)
+
+Cross-checked against the Confluence Test Plan "Contabilidad | Test Plan", Group 10 (TC-38…TC-43),
+by direct query — not by assuming the ETP-4215 plan's earlier "DONE" claims still hold (they held,
+except for this specific gap, which no prior pass had touched):
+
+| TC | Claim | DB reality (2026-07-06, before this fix) | Verdict |
+|---|---|---|---|
+| TC-38 | Currency=EUR, Allow Negatives=Yes, Centrally Maintained=Yes, active | `c_currency_id='102'` (=EUR, confirmed via `c_currency.iso_code`), `isactive='Y'`, but **`allownegative='N'`, `iscentrallymaintained='N'`** | ❌ **Real gap — fixed** |
+| TC-39 | 11 named tables active on the Tables tab | All 11 confirmed `isactive='Y'` on `c_acctschema_table` (joined `ad_table.name`: Invoice, FIN_Payment, FIN_BankStatement, FIN_Finacc_Transaction, FIN_Reconciliation, FinancialMgmtGLJournal, MaterialMgmtShipmentInOut, MaterialMgmtInventoryCount, ProcurementReceiptInvoiceMatch, MaterialMgmtInternalMovement, MaterialMgmtProductionTransaction) | ✅ Already correct — no fix |
+| TC-40 | 8 dimensions: OO+AC mandatory, PJ/BP/PR/CC/U1/U2 optional enabled | Only 5 rows existed in `c_acctschema_element` (`OO`,`AC`,`PJ`,`BP`,`PR`) — **`CC`/`U1`/`U2` entirely absent**, confirmed both in the live DB and in the shipped `C_ACCTSCHEMA_ELEMENT.xml` (identical — no drift) | ❌ **Real gap — fixed** |
+| TC-41 | Customer Receivable=43000, Vendor Payable=40000, Bank Asset=57200, VAT Receivable=47000, VAT Payable=47500 | `c_receivable_acct`→43000000 ✓, `v_liability_acct`→40000000 ✓, `b_asset_acct`→57200000 ✓; but `t_credit_acct` ("Tax Credit", the reclaimable-VAT account) → **47200000**, `t_due_acct` ("Tax Due", the payable-VAT account) → **47700000** — not 47000/47500 | ⚠️ Discrepancy — **deferred, see below** |
+| TC-42 | Bebidas category: Revenue=70000, Expense/COGS=60000, Asset=30000 | `p_revenue_acct`→70000000 ✓, `p_expense_acct`→60000000 ✓ (note: `p_cogs_acct`→99900000 is a different column, not what the TC means); `p_asset_acct`→**35000000** (Finished Goods), not 30000000 (Merchandise) | ⚠️ Discrepancy — **deferred, see below** |
+| TC-43 | Completed Bebidas sales invoice posts, zero "Account Not Defined", debits 43000/credits 70000 | Found real completed+posted invoice (`documentno=10000016`, `docstatus='CO'`, `posted='Y'`) with `fact_acct` rows: debit `43000000` 27.83, credit `70000000` 23.00 + `47700000` 4.83 (balanced, zero errors) | ✅ Already correct — no fix, and confirms 47700 (not 47500) is the live, working Tax Due account |
+
+**TC-41/TC-42 discrepancy — deliberately NOT fixed.** Both are specific account-code choices
+(which GL account represents "VAT Receivable"/"VAT Payable"; whether Bebidas is merchandise or
+finished goods), not an onboarding-*provisioning* gap — the fields ARE populated and DO work (TC-43
+proves it end-to-end with zero posting errors). Re-mapping them would be a business/chart-of-accounts
+content decision outside a tenant-remediation pass, and risks breaking the already-working TC-43
+flow if done without accounting sign-off. This is exactly the class of item flagged in the original
+task as "Jorge's list of extra default accounts" — assumed deferred/out of scope unless referenced
+elsewhere; no such reference was found. Flagged here for the accounting/product owner to confirm
+whether 47000/47500/30000 are truly required or whether the test plan itself needs correcting to
+match the standard Spanish PGC codes (472/477) already in use.
+
+### Decision: dataset-only fix, no new `Onboarding*Service`
+Both `C_ACCTSCHEMA` and `C_ACCTSCHEMA_ELEMENT` were already in `OnboardingDatasetDefinition.INCLUDED_TABLES`
+(from the A1 pass), and neither `OnboardingAccountingWiringService` nor any other onboarding class
+references specific `elementtype` values or the `allownegative`/`iscentrallymaintained` flags — grepped
+the whole module to confirm zero hits. So editing the shipped XML is sufficient for new tenants with
+**zero Java changes**, mirroring the ETP-4341 "dataset-only provisioning" precedent (payment methods/terms).
+This was reasoned explicitly rather than assumed, per the gap-closing workflow's requirement to decide
+whether a CUT bump needs new preventive code or is a pure content change.
+
+### Both fronts closed (2026-07-06)
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260706T120000Z__R10-accounting-schema-dimensions.sql` — `@check` fires if the schema has `allownegative='N'` OR `iscentrallymaintained='N'` OR is missing any of CC/U1/U2; `@apply` = one guarded `UPDATE c_acctschema` + one guarded `INSERT ... SELECT ... CROSS JOIN (VALUES ...)` for the 3 new elements (fresh `get_uuid()` PKs, no id-map token needed — no other row in the body references them). **Live-validated on GOClient**: dry-run → `WOULD_APPLY`; real run → `APPLIED (4 rows)`; re-run → `SKIPPED_NOT_NEEDED — kept prior success state` (no-downgrade guard proven). |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA.xml` (`ALLOWNEGATIVE`/`ISCENTRALLYMAINTAINED` → `Y`) + `C_ACCTSCHEMA_ELEMENT.xml` (+3 records: `CC`/"Cost Center"/seqno 60, `U1`/"User 1"/seqno 70, `U2`/"User 2"/seqno 80 — all `ISMANDATORY=N`, `ISBALANCED=N`, `AD_ORG_ID=0`, new UUIDs via `make uuid`). `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T12:00:00Z` in `OnboardingBaselineService.java`. Confirmed `CC`/`U1`/`U2` are valid `ad_ref_list` values (`ad_reference_id='181'`) already installed — no new reference needed. |
+| **Tests** | Corrective: live dry-run/apply/re-run cycle above (project convention — no DB-fixture unit-test infra exists for `.sql` content; every prior `Rn` fix was validated the same way). Preventive: two new JUnit tests in `OnboardingDatasetNormalizerTest.java` — `testNormalizerIncludesAllEightAccountingDimensions` (asserts all 8 element UUIDs + the 3 new `elementtype` values appear in the normalized dataset XML, with the pre-existing 5 asserted too as a regression guard) and `testNormalizerAccountingSchemaIsPredefinedForPosting` (asserts `<allownegative>Y</allownegative>` / `<iscentrallymaintained>Y</iscentrallymaintained>`). **Not executed in this session** — the module worktree (`modules/com.etendoerp.go/.worktrees/feat-etp-4245-dimensions`) is a separate directory from the Etendo root's `modules/com.etendoerp.go` that Gradle resolves, so a `./gradlew test` from Etendo root would test the wrong checkout; the tag-format assumption (`<allownegative>Y</allownegative>`, lowerCamelCase-no-CDATA) is anchored on an existing, presumably-passing test in the same file (`assertTrue(xml.contains("<adLanguage>es_ES</adLanguage>"))`). **Recommend running `./gradlew -p modules/com.etendoerp.go test --tests "*OnboardingDatasetNormalizerTest*"` against this branch before merge.** |
+
+### Naming-collision note (process learning)
+A sibling in-flight branch, `feat/bp-category-preventive` (ETP-4402, not yet merged at the time of
+this fix), had already claimed the `R9` label (`20260701T120000Z__R9-bp-category-seed.sql`, already
+`APPLIED` on the shared dev DB for GOClient) and bumped `ONBOARDING_PROVISIONED_THROUGH` to
+`2026-07-01T12:00:00Z` in its own copy of `OnboardingBaselineService.java`. This was **not visible**
+in either the `feat/etp-4245-dimensions` branch's `cli/src/data-fixes/sql/` directory or the main
+checkout's — only `git rev-list --all | xargs git ls-tree` across all local branches surfaced it,
+after the live `ETGO_DATA_FIX_HISTORY` ledger showed an `R9` row that didn't correspond to any file
+in this branch. **Rule going forward: before naming a new `Rn` fix, check `git rev-list --all` /
+`git branch -a` for the label AND cross-reference the live ledger — the shared dev DB routinely has
+fixes from sibling unmerged branches applied to it.** This fix uses `R10` / `2026-07-06T12:00:00Z`
+to avoid the collision; the two branches will conflict on the single `ONBOARDING_PROVISIONED_THROUGH`
+line when merged — resolve to the later timestamp (this one) so neither cutoff is lost.
+
+---
+
 ## Remaining gaps (queued — same two-front structure)
 
 | Gap | Area | Preventive front | Corrective front |
 |---|---|---|---|
 | A2 | `*_acct` tables (bp_group, product_category, bp_customer/vendor, product, **tax**) | ✅ `OnboardingAccountingWiringService.provisionEntityPostingAccounts` (post-import; 5 stmts mirror R1 step 11, `TAX_ACCT_SQL` reads system taxes `ad_client_id='0'`) — entity-creation hook for post-onboarding entities still open | ✅ `*_acct` in `R1-chart-of-accounts.sql` step 11; **`c_tax_acct` owned by standalone `R7-tax-accounts`** (2026-06-17) which joins the tenant's real schema(s) + system tax catalog, covering both no-schema (post-R1) and has-schema tenants. Dry-run validated 653 rows on SantiCorp |
+| A3 | Schema not predefined (allow negatives/centrally maintained=N); only 5/8 dimensions enabled — ETP-4245 | ✅ Dataset-only — `C_ACCTSCHEMA.xml` flags → `Y`/`Y`, `C_ACCTSCHEMA_ELEMENT.xml` +3 rows (CC/U1/U2); no new service needed | ✅ `R10-accounting-schema-dimensions.sql` — flags + 3 elements, `NOT EXISTS`-guarded; live-validated APPLIED/SKIPPED on GOClient |
 | B1 | `AD_ORG_TREE` empty | ✅ `OnboardingMarkOrgReadyService.provisionOrgTree` — defensive idempotent insert of the 2 rows on the DAL session connection after `AD_Org_Ready` (its own tree INSERT runs on a separate connection that can't see the just-flushed org → tree stayed empty) | ✅ `R1-chart-of-accounts.sql` step 12 (2 rows, `NOT EXISTS` guarded) |
 | C1 | period-control flags on `ad_org` | ✅ `OnboardingPeriodControlService` (`wirePeriodControl` step, after `wireAccounting`) | ✅ `UPDATE ad_org` in `R3-periodcontrol.sql` |
 | C2 | `c_periodcontrol` missing (**516** = 43 docbasetypes × 12 periods) | ✅ `C_PERIODCONTROL` added to `INCLUDED_TABLES` (auto-packaged via `prepareOnboardingSampledata`) | ✅ 516-row backfill in `R3-periodcontrol.sql` |
