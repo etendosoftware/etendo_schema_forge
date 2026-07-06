@@ -23,7 +23,18 @@ function pick(row, targets) {
 const DEFAULT_TAX_ID_KEY = '1';
 
 registerImportDescriptor('contacts', async (row, config) => {
-  const bpBody = { oBTIKTaxIDKey: DEFAULT_TAX_ID_KEY, ...pick(row, BP_TARGETS) };
+  const bpFields = pick(row, BP_TARGETS);
+  // C_BPartner.Value (DAL property `searchKey`) is `required: true` but `form: false` —
+  // hidden from every BusinessPartner create form, this one included (verified against
+  // artifacts/contacts/contract.json). There is no server-side default for it (confirmed:
+  // AD_Column has no defaultvalue and isusedsequence='N') — the manual "Nuevo contacto"
+  // flow only succeeds because useEntity.js's own createRecord path falls back to
+  // `payload.searchKey || source.name || payload.name` before ever calling
+  // POST /sws/neo/contacts/businessPartner. This composite descriptor builds /batch
+  // operations directly, bypassing useEntity.js entirely, so it must apply the same
+  // fallback itself — omitting it hits a raw `null value in column "value" ... violates
+  // not-null constraint` from Postgres (reproduced via a real import run).
+  const bpBody = { oBTIKTaxIDKey: DEFAULT_TAX_ID_KEY, ...bpFields, searchKey: bpFields.name };
   const bpOp = { id: 'bp', spec: config.spec, entity: 'businessPartner', body: bpBody };
   const ops = [bpOp];
 

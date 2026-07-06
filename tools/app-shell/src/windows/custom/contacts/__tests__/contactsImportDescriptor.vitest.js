@@ -55,4 +55,20 @@ describe('contacts import descriptor', () => {
       /country .* could not be resolved/i,
     );
   });
+
+  it('regression: defaults searchKey (C_BPartner.Value) to the row\'s name — required by the DB, hidden from every create form, no server-side default', async () => {
+    // Reproduced via a real import run: `null value in column "value" of relation
+    // "c_bpartner" violates not-null constraint`. Confirmed against
+    // artifacts/contacts/contract.json that searchKey has `required: true, form: false`
+    // (hidden from every BusinessPartner create form, this one included) and against the
+    // AD_Column config that there is no server-side default or sequence for it — the
+    // manual "Nuevo contacto" flow only succeeds because useEntity.js's own createRecord
+    // path applies this exact fallback before calling
+    // POST /sws/neo/contacts/businessPartner. This composite descriptor builds /batch
+    // operations directly, bypassing useEntity.js entirely, so it must replicate the
+    // same fallback itself.
+    const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    assert.equal(ops[0].body.searchKey, 'Acme Corp');
+  });
 });
