@@ -15,6 +15,7 @@ export default function ImportLinesModal({
   emptyMessageKey,
   noSearchResultsKey,
   allImportedMessageKey,
+  noCurrencyMatchMessageKey,
   successMessageKey,
   fetchDocuments,
   fetchLines,
@@ -37,15 +38,17 @@ export default function ImportLinesModal({
   const [search, setSearch] = useState('');
   const [lineQuantities, setLineQuantities] = useState({});
   const [eagerLoadingLines, setEagerLoadingLines] = useState(false);
+  const [excludedByCurrency, setExcludedByCurrency] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const { documents: docs, sharedContext: ctx } = await fetchDocuments({ base, headers, bpId, invoiceId });
+        const { documents: docs, sharedContext: ctx, excludedByCurrency: excluded } = await fetchDocuments({ base, headers, bpId, invoiceId });
         if (!cancelled) {
           setDocuments(docs || []);
           setSharedContext(ctx || {});
+          setExcludedByCurrency(!!excluded);
         }
       } catch { /* silent */ } finally { if (!cancelled) setLoading(false); }
     })();
@@ -214,7 +217,7 @@ export default function ImportLinesModal({
             if (filtered.length === 0) {
               let msg;
               if (documents.length === 0) {
-                msg = ui(emptyMessageKey);
+                msg = (excludedByCurrency && noCurrencyMatchMessageKey) ? ui(noCurrencyMatchMessageKey) : ui(emptyMessageKey);
               } else if (!search.trim() && allImportedMessageKey) {
                 msg = ui(allImportedMessageKey);
               } else {

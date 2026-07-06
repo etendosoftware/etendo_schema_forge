@@ -1601,6 +1601,11 @@ export function DetailView({
   detailLabel,
   detailTabIndex,
   titleField = 'documentNo',
+  // Name of the header field holding this document's primary date (e.g. "orderDate"
+  // for orders/quotations, "invoiceDate" for invoices). Used for exchange-rate lookups
+  // and other document-date-dependent logic. Defaults to "orderDate" for backward
+  // compatibility with windows that don't declare window.documentDateField.
+  documentDateField = 'orderDate',
   windowName,
   recordId,
   token,
@@ -2245,7 +2250,7 @@ export function DetailView({
   useEffect(() => {
     if (recordId === 'new') return;
     const docCurrencyId = hook.selected?.currency;
-    const orderDate = hook.selected?.orderDate;
+    const orderDate = hook.selected?.[documentDateField];
     if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
       return;
     }
@@ -2309,7 +2314,7 @@ export function DetailView({
       }
     })();
     return () => { cancelled = true; };
-  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.orderDate, apiBaseUrl, token]);
+  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.[documentDateField], apiBaseUrl, token, documentDateField]);
   // Guard: fire default callouts only once per new-record session
   const defaultCalloutsTriggeredRef = useRef(false);
   // Cache for tax rates fetched from the selector (keyed by tax ID).
@@ -2628,7 +2633,7 @@ export function DetailView({
     // Skipped when the new currency equals the org currency (no rate needed) and when
     // there is no previous currency yet (initial set, e.g. defaults).
     if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
-      const orderDate = hook.selected?.orderDate ?? hook.editing?.orderDate;
+      const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
       if (orderDate) {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
         (async () => {
@@ -2664,7 +2669,7 @@ export function DetailView({
 
     // Trigger callout — the backend returns empty if no callout is registered
     executeCallout(field, value, hook.editing);
-  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui]);
+  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
   // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
@@ -4581,6 +4586,14 @@ function applyProductCurrencyConversion(field, result, rowValues, lineConfig, ac
     if (result.standardPrice != null) result.standardPrice = convertedPrice;
     if (result.unitPrice != null) result.unitPrice = convertedPrice;
     if (result.listPrice != null) result.listPrice = convertedPrice;
+    // The earlier 'product' callout pass already latched result.lineNetAmount onto the
+    // UNCONVERTED price (see calculateLineNetAmount / deriveNetFromProductChange). Clear it
+    // here so computeLineGrossAmount's null-guard recomputes it from the converted price
+    // instead of silently skipping the sync (its guard only fires when lineNetAmount is
+    // null/0). Without this, lineNetAmount stays stale while grossAmount/grossField are
+    // correctly forced to the converted value — an inconsistent line that the backend
+    // persists using the stale net, producing a wrong (sometimes negative) tax total.
+    result.lineNetAmount = null;
     computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
       ...rowValues,
       ...result,
