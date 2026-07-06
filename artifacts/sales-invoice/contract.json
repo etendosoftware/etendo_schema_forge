@@ -1,8 +1,8 @@
 {
-  "version": "0.46.0",
+  "version": "0.47.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-02T18:07:17.725Z",
-  "checksum": "b8ac64cc61dda909",
+  "updatedAt": "2026-07-06T13:19:15.530Z",
+  "checksum": "0afb11783dd12e84",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -56,6 +56,7 @@
         }
       },
       "salesTheme": true,
+      "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "OutstandingAmt": "Pendiente de pago",
@@ -359,42 +360,42 @@
                 "value": "CL",
                 "name": "Closed",
                 "labels": {
-                  "es_ES": "Closed"
+                  "es_ES": "Cerrado"
                 }
               },
               {
                 "value": "CO",
                 "name": "Completed",
                 "labels": {
-                  "es_ES": "Completed"
+                  "es_ES": "Completado"
                 }
               },
               {
                 "value": "DR",
                 "name": "Draft",
                 "labels": {
-                  "es_ES": "Draft"
+                  "es_ES": "Borrador"
                 }
               },
               {
                 "value": "NA",
                 "name": "Not Accepted",
                 "labels": {
-                  "es_ES": "Not Accepted"
+                  "es_ES": "No aprobado"
                 }
               },
               {
                 "value": "WP",
                 "name": "Not Paid",
                 "labels": {
-                  "es_ES": "Not Paid"
+                  "es_ES": "Pendiente de Pago"
                 }
               },
               {
                 "value": "RE",
                 "name": "Re-Opened",
                 "labels": {
-                  "es_ES": "Re-Opened"
+                  "es_ES": "Reabierto"
                 }
               },
               {
@@ -408,21 +409,21 @@
                 "value": "IP",
                 "name": "Under Way",
                 "labels": {
-                  "es_ES": "Under Way"
+                  "es_ES": "En curso"
                 }
               },
               {
                 "value": "??",
                 "name": "Unknown",
                 "labels": {
-                  "es_ES": "Unknown"
+                  "es_ES": "Desconocido"
                 }
               },
               {
                 "value": "VO",
                 "name": "Voided",
                 "labels": {
-                  "es_ES": "Voided"
+                  "es_ES": "Anulado"
                 }
               }
             ],
@@ -1435,7 +1436,7 @@
             "section": "principal",
             "gridOrder": 6,
             "validationRule": {
-              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID=@AD_CLIENT_ID@ AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
               "cascadeParams": [
                 "DateInvoiced",
@@ -1942,6 +1943,7 @@
         }
       },
       "salesTheme": true,
+      "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "OutstandingAmt": "Pendiente de pago",

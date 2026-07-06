@@ -982,6 +982,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        documentDateField="invoiceDate"
         labelOverrides={labelOverrides}
         lineConfig={INVOICE_LINE_CONFIG}
         linesLayout="inlineEditable"

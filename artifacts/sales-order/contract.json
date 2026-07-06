@@ -1,8 +1,8 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-07-02T18:08:53.844Z",
-  "checksum": "60f4d1d6cb7cd7d6",
+  "updatedAt": "2026-07-06T13:19:15.554Z",
+  "checksum": "1c6dd74023a8d0a7",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -32,6 +32,7 @@
       ],
       "processOverrides": {},
       "salesTheme": true,
+      "documentDateField": "orderDate",
       "labelOverrides": {
         "es_ES": {
           "C_BPartner_ID": "Contacto",
@@ -294,21 +295,21 @@
                 "value": "AE",
                 "name": "Automatic Evaluation",
                 "labels": {
-                  "es_ES": "Automatic Evaluation"
+                  "es_ES": "Evaluación Automática"
                 }
               },
               {
                 "value": "CO",
                 "name": "Booked",
                 "labels": {
-                  "es_ES": "Booked"
+                  "es_ES": "Registrado"
                 }
               },
               {
                 "value": "CL",
                 "name": "Closed",
                 "labels": {
-                  "es_ES": "Closed"
+                  "es_ES": "Cerrado"
                 }
               },
               {
@@ -322,56 +323,56 @@
                 "value": "CA",
                 "name": "Closed - Order Created",
                 "labels": {
-                  "es_ES": "Closed - Order Created"
+                  "es_ES": "Cerrado - Pedido creado"
                 }
               },
               {
                 "value": "CJ",
                 "name": "Closed - Rejected",
                 "labels": {
-                  "es_ES": "Closed - Rejected"
+                  "es_ES": "Cerrado - Rechazado"
                 }
               },
               {
                 "value": "DR",
                 "name": "Draft",
                 "labels": {
-                  "es_ES": "Draft"
+                  "es_ES": "Borrador"
                 }
               },
               {
                 "value": "ME",
                 "name": "Manual Evaluation",
                 "labels": {
-                  "es_ES": "Manual Evaluation"
+                  "es_ES": "Evaluación Manual"
                 }
               },
               {
                 "value": "NA",
                 "name": "Not Accepted",
                 "labels": {
-                  "es_ES": "Not Accepted"
+                  "es_ES": "No aprobado"
                 }
               },
               {
                 "value": "NC",
                 "name": "Not Confirmed",
                 "labels": {
-                  "es_ES": "Not Confirmed"
+                  "es_ES": "No Confirmado"
                 }
               },
               {
                 "value": "WP",
                 "name": "Not Paid",
                 "labels": {
-                  "es_ES": "Not Paid"
+                  "es_ES": "Pendiente de Pago"
                 }
               },
               {
                 "value": "RE",
                 "name": "Re-Opened",
                 "labels": {
-                  "es_ES": "Re-Opened"
+                  "es_ES": "Reabierto"
                 }
               },
               {
@@ -385,28 +386,28 @@
                 "value": "UE",
                 "name": "Under Evaluation",
                 "labels": {
-                  "es_ES": "Under Evaluation"
+                  "es_ES": "Bajo evaluación"
                 }
               },
               {
                 "value": "IP",
                 "name": "Under Way",
                 "labels": {
-                  "es_ES": "Under Way"
+                  "es_ES": "En curso"
                 }
               },
               {
                 "value": "??",
                 "name": "Unknown",
                 "labels": {
-                  "es_ES": "Unknown"
+                  "es_ES": "Desconocido"
                 }
               },
               {
                 "value": "VO",
                 "name": "Voided",
                 "labels": {
-                  "es_ES": "Voided"
+                  "es_ES": "Anulado"
                 }
               }
             ],
@@ -767,7 +768,7 @@
             "section": "principal",
             "gridOrder": 6,
             "validationRule": {
-              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID=@AD_CLIENT_ID@ AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
+              "code": "C_TAX.VALIDFROM<=COALESCE(@DateInvoiced@,@DateOrdered@) AND (C_TAX.SOPOTYPE =(CASE WHEN @IsSOTrx@ = 'Y' THEN 'S' ELSE 'P' END) OR C_TAX.SOPOTYPE = 'B') AND C_TAX.AD_CLIENT_ID IN (@AD_CLIENT_ID@, '0') AND C_TAX.C_TAX_ID=(CASE WHEN @IsSOTrx@ = 'Y' AND EXISTS(SELECT 1 FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) THEN (SELECT C_TAX_ID FROM AD_ORGINFO WHERE ISTAXUNDEDUCTABLE='Y' AND AD_ORG_ID=@AD_ORG_ID@) ELSE C_TAX.C_TAX_ID END)",
               "contextParams": [],
               "cascadeParams": [
                 "DateInvoiced",
@@ -953,6 +954,7 @@
       ],
       "processOverrides": {},
       "salesTheme": true,
+      "documentDateField": "orderDate",
       "labelOverrides": {
         "es_ES": {
           "C_BPartner_ID": "Contacto",
