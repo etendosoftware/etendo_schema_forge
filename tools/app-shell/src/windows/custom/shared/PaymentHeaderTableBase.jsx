@@ -36,7 +36,10 @@ function buildColumns(dir, ui, locale) {
         const isDeposited = DEPOSITED_STATUSES.has(row.status || '');
         const amt = parseFloat(row.amount ?? 0);
         const curr = row['currency$_identifier'] || 'EUR';
-        const sign = amt > 0 ? (dir === 'in' ? '+ ' : '− ') : '';
+        let sign = '';
+        if (amt > 0) {
+          sign = dir === 'in' ? '+ ' : '− ';
+        }
         return (
           <span className="tabular-nums" style={{ color: isDeposited ? '#17663A' : '#121217', fontWeight: 600, whiteSpace: 'nowrap' }}>
             {sign}{fmtAmt(amt, curr)}
