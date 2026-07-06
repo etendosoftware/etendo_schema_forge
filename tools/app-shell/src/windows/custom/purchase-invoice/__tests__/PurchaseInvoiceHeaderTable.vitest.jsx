@@ -136,6 +136,27 @@ const MOCK_ROWS = [
     'transactionDocument$_identifier': 'SomeOtherDocType',
     aeatsiiEstado: null,
   },
+  // AP CreditMemo — mostly applied (ETP-4331 repro ratio: -25.30 total, only
+  // -2.30 left unused). Must show "Saldo a favor", never "Pendiente".
+  {
+    eTGODueDate: '2026-05-01',
+    outstandingAmount: '-2.30',
+    grandTotalAmount: '-25.30',
+    documentStatus: 'CO',
+    'currency$_identifier': 'GBP',
+    'transactionDocument$_identifier': 'AP CreditMemo',
+    aeatsiiEstado: null,
+  },
+  // Return Material — fully unapplied (nothing applied yet).
+  {
+    eTGODueDate: '2026-05-15',
+    outstandingAmount: '-27.60',
+    grandTotalAmount: '-27.60',
+    documentStatus: 'CO',
+    'currency$_identifier': 'CHF',
+    'transactionDocument$_identifier': 'Return Material Purchase Invoice',
+    aeatsiiEstado: null,
+  },
 ];
 
 vi.mock('@/components/contract-ui', () => ({
@@ -307,13 +328,27 @@ describe('PurchaseInvoiceHeaderTable', () => {
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
   });
 
-  it('calls onRefresh when payment is added and modal closes', () => {
-    const onRefresh = vi.fn();
-    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} onRefresh={onRefresh} />);
+  it('calls onDataMutated (ListView refresh contract) when payment is added and modal closes', () => {
+    const onDataMutated = vi.fn();
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} onDataMutated={onDataMutated} />);
     const outstandingCol = screen.getByTestId('col-render-outstandingAmount');
     fireEvent.click(outstandingCol.querySelector('button'));
     fireEvent.click(screen.getByText('Payment added'));
-    expect(onRefresh).toHaveBeenCalled();
+    expect(onDataMutated).toHaveBeenCalled();
+  });
+
+  it('does not blow up when only the stale onRefresh prop is passed (regression guard for ETP-4331)', () => {
+    // ListView never passes `onRefresh` — only `onDataMutated`. This test locks in
+    // that passing the old (bugged) prop name has no effect on the callback path,
+    // guarding against silently reintroducing the stale-list bug.
+    const onRefresh = vi.fn();
+    const onDataMutated = vi.fn();
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} onRefresh={onRefresh} onDataMutated={onDataMutated} />);
+    const outstandingCol = screen.getByTestId('col-render-outstandingAmount');
+    fireEvent.click(outstandingCol.querySelector('button'));
+    fireEvent.click(screen.getByText('Payment added'));
+    expect(onRefresh).not.toHaveBeenCalled();
+    expect(onDataMutated).toHaveBeenCalled();
   });
 });
 
@@ -412,5 +447,39 @@ describe('PurchaseInvoiceHeaderTable — column render branches (inline)', () =>
     if (!renderFn) return;
     const { container } = render(<>{renderFn(AP_INVOICE_ROW)}</>);
     expect(container.textContent).toContain('1000');
+  });
+});
+
+// ── ETP-4331: credit notes/returns always show "Saldo a favor", never "Pendiente" ──
+// Risk: a credit memo/return with most of its balance already applied elsewhere
+// (e.g. -25.30 total, -2.30 unused) must never regress to the amber "Pendiente"
+// badge — it always represents money owed BACK by the supplier.
+describe('PurchaseInvoiceHeaderTable — outstandingAmount credit-note/return badge (ETP-4331 bugfix)', () => {
+  it('mostly-applied credit memo shows "Saldo a favor", never "Pendiente" (bug repro)', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    const badge = screen.getByText(/Saldo a favor · 2\.3:GBP/);
+    expect(badge).toBeInTheDocument();
+    const outstandingCol = screen.getByTestId('col-render-outstandingAmount');
+    expect(outstandingCol.textContent).not.toMatch(/Pendiente/);
+  });
+
+  it('fully-unapplied return also shows "Saldo a favor" (regression guard)', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    expect(screen.getByText(/Saldo a favor · 27\.6:CHF/)).toBeInTheDocument();
+  });
+
+  it('fully-applied credit memo still shows the green "Aplicada" badge (unchanged)', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    // MOCK_ROWS AP CreditMemo row with outstandingAmount: '0' (USD).
+    expect(screen.getByText('Aplicada')).toBeInTheDocument();
+  });
+
+  it('regular AP invoice with partial payment still shows the amber pending badge, unaffected', () => {
+    render(<PurchaseInvoiceHeaderTable {...BASE_PROPS} />);
+    // MOCK_ROWS[0] — regular AP invoice, outstanding 500 EUR, non-credit type.
+    const pendingBadge = screen.getByText('500:EUR');
+    const pendingButton = pendingBadge.closest('button');
+    expect(pendingButton).toHaveAttribute('aria-label', 'addPago');
+    expect(pendingButton.textContent).not.toMatch(/Saldo a favor/);
   });
 });

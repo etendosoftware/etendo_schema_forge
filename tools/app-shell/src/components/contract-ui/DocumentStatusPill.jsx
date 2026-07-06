@@ -31,7 +31,7 @@ const PILL_STYLE = {
 
 const LABEL_STYLE = { padding: '0 4px' };
 
-export default function DocumentStatusPill({ status, label, enumLabels, tone: toneProp }) {
+export default function DocumentStatusPill({ status, label, enumLabels, tone: toneProp, prefix }) {
   const dictionary = useLocale();
   if (status == null) return null;
 
@@ -52,7 +52,9 @@ export default function DocumentStatusPill({ status, label, enumLabels, tone: to
         color={TONE_ICON_COLOR[tone]}
         aria-hidden="true"
         data-testid="Icon__1e4f01" /> : null}
-      <span style={LABEL_STYLE}>{text}</span>
+      <span style={LABEL_STYLE}>
+        {prefix ? <><strong style={{ fontWeight: 600 }}>{prefix}:</strong>{' '}</> : null}{text}
+      </span>
     </span>
   );
 }

@@ -30,7 +30,7 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock('@/windows/custom/shared/InvoicePaymentModal.jsx', () => ({
+vi.mock('@/windows/custom/shared/InvoicePaymentHistoryModal.jsx', () => ({
   default: (props) => (
     <div
       data-testid="payment-modal"

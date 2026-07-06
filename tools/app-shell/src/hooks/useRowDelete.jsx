@@ -17,8 +17,13 @@ import { extractErrorMessage } from '@/hooks/useEntity';
  *   - deleteDialog: JSX node the host must render once (e.g. before its modals/portals).
  *
  * On confirm: DELETE ${apiBaseUrl}/${entity}/${row.id} → toast + onSuccess refresh.
+ *
+ * `deleteFn` (optional): overrides the network call for windows where a plain DELETE
+ * isn't always the right request (e.g. a processed record needs a dedicated removal
+ * action instead). Receives the pending row, must throw on failure — the dialog keeps
+ * its shared copy/styling either way.
  */
-export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess }) {
+export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess, deleteFn }) {
   const ui = useUI();
   const [pending, setPending] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -37,24 +42,27 @@ export function useRowDelete({ apiBaseUrl, entity = 'header', token, onSuccess }
     if (!pending?.id || !apiBaseUrl) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${apiBaseUrl}/${entity}/${pending.id}`, {
-        method: 'DELETE',
-        headers: buildHeaders(token),
-      });
-      if (res.ok) {
-        toast.success(ui('recordDeleted'));
-        setPending(null);
-        onSuccess?.();
+      if (deleteFn) {
+        await deleteFn(pending);
       } else {
-        const msg = await extractErrorMessage(res, ui);
-        toast.error(msg || `${res.status} ${res.statusText}`);
+        const res = await fetch(`${apiBaseUrl}/${entity}/${pending.id}`, {
+          method: 'DELETE',
+          headers: buildHeaders(token),
+        });
+        if (!res.ok) {
+          const msg = await extractErrorMessage(res, ui);
+          throw new Error(msg || `${res.status} ${res.statusText}`);
+        }
       }
+      toast.success(ui('recordDeleted'));
+      setPending(null);
+      onSuccess?.();
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     } finally {
       setDeleting(false);
     }
-  }, [pending, apiBaseUrl, entity, token, onSuccess, ui]);
+  }, [pending, apiBaseUrl, entity, token, onSuccess, ui, deleteFn]);
 
   const deleteDialog = (
     <Dialog

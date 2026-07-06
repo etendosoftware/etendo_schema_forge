@@ -1,8 +1,8 @@
 {
   "version": "0.10.0",
   "generatedAt": "2026-05-04T17:02:25.021Z",
-  "updatedAt": "2026-06-26T12:27:56.100Z",
-  "checksum": "7bc3e6ba97f8f868",
+  "updatedAt": "2026-07-01T14:17:01.051Z",
+  "checksum": "1345b4eb72e08afd",
   "frontendContract": {
     "window": {
       "id": "F4675DAB02134762B66881DAE4672AD0",
@@ -741,7 +741,8 @@
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "correct-invoice-handler"
       }
     }
   },
@@ -1572,7 +1573,8 @@
             "visibility": "system",
             "required": false
           }
-        ]
+        ],
+        "javaQualifier": "correct-invoice-handler"
       }
     },
     "endpoints": [

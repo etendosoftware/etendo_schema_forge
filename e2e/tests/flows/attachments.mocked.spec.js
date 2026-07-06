@@ -158,7 +158,10 @@ async function openAttachmentsTab(page) {
 
 // ─── Suite A: Tab presence ─────────────────────────────────────────────────────
 
-test.describe('Suite A — Attachments tab presence (Payment In, mocked)', () => {
+// Payment In/Out set `attachments: false` in decisions.json (commit 5bd640b91) —
+// the attachments tab is intentionally disabled for these windows, so Suites
+// A-D (which drive the tab via gotoPayment) no longer apply.
+test.describe.skip('Suite A — Attachments tab presence (Payment In, mocked)', () => {
   test('A1: tab button is visible in the detail view', async ({ page }) => {
     await login(page);
     await installPaymentMocks(page, { items: [] });
@@ -196,7 +199,7 @@ test.describe('Suite A — Attachments tab presence (Payment In, mocked)', () =>
 
 // ─── Suite B: Upload ───────────────────────────────────────────────────────────
 
-test.describe('Suite B — Upload (mocked)', () => {
+test.describe.skip('Suite B — Upload (mocked)', () => {
   test('B1: uploading a valid PDF adds it to the attachments table', async ({ page }) => {
     await login(page);
     await installPaymentMocks(page, { items: [] });
@@ -298,7 +301,7 @@ test.describe('Suite B — Upload (mocked)', () => {
 
 // ─── Suite C: Delete ──────────────────────────────────────────────────────────
 
-test.describe('Suite C — Delete (mocked)', () => {
+test.describe.skip('Suite C — Delete (mocked)', () => {
   test('C1: confirming delete removes the row from the table', async ({ page }) => {
     await login(page);
     await installPaymentMocks(page, { items: [ATT_1] });
@@ -371,7 +374,7 @@ test.describe('Suite C — Delete (mocked)', () => {
 
 // ─── Suite D: Download ────────────────────────────────────────────────────────
 
-test.describe('Suite D — Download (mocked)', () => {
+test.describe.skip('Suite D — Download (mocked)', () => {
   test('D1: clicking download on a row calls the file download endpoint', async ({ page }) => {
     let downloadCalled = false;
     await login(page);

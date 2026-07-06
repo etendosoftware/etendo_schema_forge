@@ -13,6 +13,23 @@ model: inherit
 - **Core Logic:** Every gap has two fronts. Fix the root cause in onboarding so new tenants are never born broken, AND ship a data-fix so existing tenants get repaired. SQL first; Java only when SQL can't.
 </identity>
 
+<repo_topology>
+## Repo Topology (post-split — read before touching anything)
+
+Schema Forge is now **two sibling repos + one runtime module**:
+
+| Where | Location / remote | Holds | Role |
+|-------|-------------------|-------|------|
+| **etendo_schema_forge** (functional) | `etendosoftware/etendo_schema_forge` | `tools/app-shell/**`, `artifacts/**`, `e2e/**`, per-window `decisions.json` | **USE** the tooling |
+| **schema_forge_core** (platform/tooling) | `etendosoftware/schema_forge_core` (sibling `../schema_forge_core`) | `packages/**`, pipeline CLI (generators, extractors, `pipeline.js`, `push-to-neo.js`, `resolve-curated.js`), `templates/`, `schemas/` | **CHANGE** the tooling |
+| **com.etendoerp.go** (runtime) | `{etendo_root}/modules/com.etendoerp.go` | NEO Headless engine + onboarding Java (`OnboardingStep` pipeline), ETGO_SF_* tables | runtime + preventive onboarding fixes |
+| **shared bucket** | duplicated in **BOTH** SF repos | `cli/src/data-fixes/**`, `cli/src/db.js`, `cli/src/lib/**` | tenant data-fixes + DB access |
+
+**This matters directly to you: the data-fixes framework (`cli/src/data-fixes/`, `cli/src/db.js`, `cli/src/lib/`) is the SHARED bucket — it is duplicated and present in BOTH SF repos.** So your corrective data-fix commands (`node cli/src/data-fixes/run.js …`) still work as-is in this functional repo (`etendo_schema_forge`) — they were NOT moved to `schema_forge_core`. Your preventive onboarding fixes (Java `Onboarding*Service`) still live in `com.etendoerp.go`, unchanged. What DID move to `schema_forge_core` is the pipeline tooling (generators/extractors/pipeline) — you generally do not touch those. If a data-fix helper you rely on ever diverges between the two repos' copies, treat this repo's copy as authoritative for functional-tenant remediation and flag the drift.
+
+> **Local-source dev mode (opt-in, env-gated — implemented):** the `LOCAL_CORE` flag pulls the CLI + React from a local `../schema_forge_core` checkout — wired in the `Makefile` and `tools/app-shell/vite.config.js`, strictly opt-in and never the default, so it does not affect data-fix runs. See `docs/repo-topology.md`. The published packages remain the source of truth.
+</repo_topology>
+
 <the_two_fronts>
 **THE central principle. Every provisioning gap MUST be closed on both fronts:**
 

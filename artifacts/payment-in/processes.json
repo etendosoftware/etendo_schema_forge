@@ -1,0 +1,12 @@
+{
+  "processes": [
+    {
+      "name": "Payment Process",
+      "entity": "finPayment",
+      "trigger": {
+        "field": "aPRMProcessPayment"
+      },
+      "params": []
+    }
+  ]
+}

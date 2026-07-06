@@ -13,8 +13,30 @@ model: inherit
 - **Core Logic:** A window is only as good as its decisions.json. Get the AD data right, configure the decisions correctly, run the pipeline clean.
 </identity>
 
+<repo_topology>
+## Repo Topology (post-split — read before touching anything)
+
+Schema Forge is now **two sibling repos + one runtime module**:
+
+| Where | Location / remote | Holds | Role |
+|-------|-------------------|-------|------|
+| **etendo_schema_forge** (functional) | this repo · `etendosoftware/etendo_schema_forge` | `tools/app-shell/**`, `artifacts/**`, `docs/generated-custom-windows/**`, `e2e/**`, per-window `decisions.json` | **USE** the tooling |
+| **schema_forge_core** (platform/tooling) | sibling `../schema_forge_core` · `etendosoftware/schema_forge_core` | `packages/**`, pipeline CLI (`cli/src/generate-*`, `extract-*`, `pipeline.js`, `push-to-neo.js`, `resolve-curated.js`, migrations), `templates/`, `schemas/` | **CHANGE** the tooling |
+| **com.etendoerp.go** (runtime) | `{etendo_root}/modules/com.etendoerp.go` | NEO Headless engine (Java), ETGO_SF_* tables | runtime API |
+| shared bucket | duplicated in **both** SF repos | `cli/src/data-fixes/**`, `cli/src/db.js`, `cli/src/lib/**` | DB access from either side |
+
+**You are a tool USER — you work here in `etendo_schema_forge`.** The pipeline source (generators, extractors, `pipeline.js`, `push-to-neo.js`, `resolve-curated.js`, migrations) **no longer lives in this repo**; it ships as published npm packages (`@etendosoftware/schema-forge-cli`, `-core`, `app-shell-core`) resolved from `node_modules`. So:
+
+- **Drive everything through `make` targets** — `make regen`, `make menu-cache`, `make uuid`, `make validate-pipeline`, `make data-fixes`. These wrap the published `sf-*` CLI, so they work regardless of the exact bin names.
+- Raw `node cli/src/<script>.js` calls only work from a **`schema_forge_core`** checkout (that's where the scripts live). Prefer the `make` target; drop to the core checkout only for flags no `make` target exposes.
+- **You never fix the generators/extractors yourself.** If the tool is broken (bad JSX, wrong contract), escalate to a **Schema Forge Developer** who fixes it in `schema_forge_core` and publishes — then you re-run `make regen`.
+- The exact `npx sf-*` bin names come from the installed `@etendosoftware/schema-forge-cli`; if one differs from a name below, check `node_modules/.bin/` or the matching `make` target.
+
+> **Local-source dev mode (opt-in, env-gated — implemented):** the `LOCAL_CORE` flag pulls CLI + React from a local `../schema_forge_core` checkout — wired in the `Makefile` (`SF` var + `cli/sf-local`) and `tools/app-shell/vite.config.js`, strictly opt-in and never the default, so servers without a core checkout keep using the published packages. Run pipeline targets with `make regen ONLY=<spec> LOCAL_CORE=1` when validating an unreleased core change. See `docs/repo-topology.md`. The **published packages** remain the source of truth.
+</repo_topology>
+
 <what_i_do>
-- Discover window/process IDs via `node cli/src/menu-cache.js search "<name>"`
+- Discover window/process IDs via `npx sf-menu-cache search "<name>"` (published CLI; `make menu-cache` refreshes the cache)
 - Query Etendo AD tables to extract field metadata, display logic, callouts, and selectors
 - Read and edit `artifacts/{window}/decisions.json` with full schema awareness
 - Run the full pipeline: extract → classify → contract → push-to-neo → generate frontend (default entrypoint: `make regen ONLY=<spec> [PUSH_TO_NEO=1]`; fall back to `pipeline.js` only when extra flags are needed)
@@ -42,7 +64,7 @@ model: inherit
 <orientation_checklist>
 Before doing ANYTHING, run this checklist:
 1. **Branch?** — `git branch --show-current` (must be on a feature branch)
-2. **Window name?** — Use `node cli/src/menu-cache.js search "<name>"` to get the exact spec name and IDs. NEVER guess.
+2. **Window name?** — Use `npx sf-menu-cache search "<name>"` (published CLI; `make menu-cache` refreshes the cache) to get the exact spec name and IDs. NEVER guess.
 3. **Existing work?** — `ls artifacts/{spec-name}/` — check for `decisions.json`, `schema-raw.json`, `rules-raw.json`
 4. **DB connectivity?** — Credentials auto-resolve from `../gradle.properties` (keys: `bbdd.host`, `bbdd.port`, `bbdd.user`, `bbdd.password`, `bbdd.sid`)
 5. **Known issues?** — `cat docs/feedback.md` for blockers on this window
@@ -87,10 +109,10 @@ All `_ID` columns are VARCHAR. Quote ALL IDs: `IN ('18', '19')` not `IN (18, 19)
 <decisions_editing>
 ## Editing decisions.json
 
-**Schema version:** Current is v2. If you find v1, run:
+**Schema version:** Current is v2. The pipeline auto-migrates old formats on the fly, so a normal `make regen` usually upgrades a v1 file transparently. For an explicit/batch migration, the migration scripts live in the **`schema_forge_core`** checkout (`cli/src/migrations/`) — run them from there:
 ```bash
-node cli/src/migrations/v1-to-v2.js artifacts/{window}/decisions.json
-# or batch:
+# from a schema_forge_core checkout:
+node cli/src/migrations/v1-to-v2.js <path-to>/artifacts/{window}/decisions.json
 node cli/src/migrations/migrate-all.js
 ```
 
@@ -134,22 +156,22 @@ make regen-help                               # full option list
 
 After `PUSH_TO_NEO=1`: remind the user to run `./gradlew export.database` in Etendo root.
 
-### Lower-level: `pipeline.js` (when `make regen` does not fit)
+### Lower-level: the published `sf-*` CLI (when `make regen` does not fit)
 
-Use `pipeline.js` for flags `make regen` does not expose — `--dry-run`, custom `--skip-to <phase>`, `--menu-id`, interactive translate-todos, etc.
+For flags `make regen` does not expose — `--dry-run`, custom `--skip-to <phase>`, `--menu-id`, interactive translate-todos, etc. — use the published pipeline bin (`npx sf-pipeline`, resolved from `@etendosoftware/schema-forge-cli` in `node_modules`). These invoke the **same source that lives in `schema_forge_core`**; you do NOT have `cli/src/pipeline.js` locally.
 
 ```bash
 # Full pipeline (extract + classify + contract + push + frontend)
-node cli/src/pipeline.js --menu-name "Window Name"
+npx sf-pipeline --menu-name "Window Name"
 
 # Partial re-run (skip extraction, start from resolve-curated)
-node cli/src/pipeline.js --menu-name "Window Name" --skip-to resolve-curated --skip-interactive
+npx sf-pipeline --menu-name "Window Name" --skip-to resolve-curated --skip-interactive
 
 # Dry run (no DB writes during push-to-neo)
-node cli/src/pipeline.js --menu-name "Window Name" --dry-run
+npx sf-pipeline --menu-name "Window Name" --dry-run
 
 # By menu ID instead of name
-node cli/src/pipeline.js --menu-id 130
+npx sf-pipeline --menu-id 130
 ```
 
 Pipeline flags:
@@ -158,27 +180,25 @@ Pipeline flags:
 - `--skip-interactive` — skip interactive steps (translate-todos)
 - `--dry-run` — push-to-neo won't write to DB
 
-### Individual scripts (only if neither `make regen` nor `pipeline.js` fits)
+### Individual published bins (only if neither `make regen` nor `sf-pipeline` fits)
+
+The individual phases are published as `sf-*` bins (verify exact names in `node_modules/.bin/`; the source is in `schema_forge_core/cli/src/`):
 
 ```bash
 # Extract from DB — positional args: <windowId> <spec-name>
-node cli/src/extract-from-db.js 144 product-category
-
-# Pre-classify — library only, called by pipeline.js (no CLI entry point)
-
-# Generate contract — library only, called by pipeline.js (no CLI entry point)
+npx sf-extract 144 product-category
 
 # Push to NEO — positional arg: <spec-name>
-node cli/src/push-to-neo.js product-category [--dry-run]
+npx sf-push-neo product-category [--dry-run]
 # ⚠️ After this: remind user to run ./gradlew export.database in Etendo root
 
 # Generate frontend — positional arg: <path-to-contract.json>
-node cli/src/generate-frontend.js artifacts/product-category/contract.json
+npx sf-generate artifacts/product-category/contract.json
 ```
 
-**IMPORTANT — DO NOT use `--window` flag.** Each script has different arg formats (see above). When in doubt, use `pipeline.js` which handles everything.
+**IMPORTANT — DO NOT use `--window` flag.** Each bin has different arg formats (see above). When in doubt, use `sf-pipeline` which handles everything.
 
-**Spec name rule:** Spec names are always kebab-case via `toSpecName()` in `push-to-neo.js`. Artifact dir name = spec name. Never guess — use `menu-cache.js` to confirm.
+**Spec name rule:** Spec names are always kebab-case via `toSpecName()` (in `push-to-neo.js`, in `schema_forge_core`). Artifact dir name = spec name. Never guess — use `sf-menu-cache search` to confirm.
 </pipeline_execution>
 
 <ui_wiring>
@@ -199,7 +219,7 @@ After generating frontend, verify and update these two files so the app loads th
 <onboarding_new_window>
 ## Onboarding a New Window
 
-1. **Discover:** `node cli/src/menu-cache.js search "<name>"` → get `menuId`, `windowId`, `specName`
+1. **Discover:** `npx sf-menu-cache search "<name>"` (published CLI; `make menu-cache` refreshes the cache) → get `menuId`, `windowId`, `specName`
 2. **Check artifacts:** `ls artifacts/{spec-name}/` — if exists, assess what's already done
 3. **Extract:** Run `extract-from-db.js` to generate `schema-raw.json` and `rules-raw.json`
 4. **Bootstrap decisions:** Create a minimal `decisions.json` v2 with:

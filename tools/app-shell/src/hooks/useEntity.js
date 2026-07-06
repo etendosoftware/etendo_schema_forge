@@ -11,6 +11,9 @@ import {
     trackRecordCreated,
     trackRecordUpdated,
 } from '@/lib/productUsageTelemetry.js';
+import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
+import { isInvoiceSpec, isOrderSpec } from '@/lib/surveys/surveys.js';
+import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 
 function buildHeaders(token) {
     let locale = 'es_ES';
@@ -59,28 +62,32 @@ export function pickMessage(node) {
  * Extract a human-readable error message from a NEO Headless error response.
  */
 export async function extractErrorMessage(res, ui) {
+    // Declared outside the try block (and thus outside the `data = await res.json()`
+    // call that can throw for non-JSON bodies, e.g. an HTML error page) so the final
+    // fallback below — `translate('error', 'Error')` — stays in scope even when
+    // res.json() fails.
+    const translate = (key, fallback, params = {}) => {
+        if (typeof ui !== 'function') {
+            let text = fallback;
+            Object.keys(params).forEach((p) => {
+                text = text.replace(`{${p}}`, params[p]);
+            });
+            return text;
+        }
+
+        const translated = ui(key, params);
+        if (!translated || translated === key) {
+            let text = fallback;
+            Object.keys(params).forEach((p) => {
+                text = text.replace(`{${p}}`, params[p]);
+            });
+            return text;
+        }
+        return translated;
+    };
+
     try {
         const data = await res.json();
-
-        const translate = (key, fallback, params = {}) => {
-            if (typeof ui !== 'function') {
-                let text = fallback;
-                Object.keys(params).forEach((p) => {
-                    text = text.replace(`{${p}}`, params[p]);
-                });
-                return text;
-            }
-
-            const translated = ui(key, params);
-            if (!translated || translated === key) {
-                let text = fallback;
-                Object.keys(params).forEach((p) => {
-                    text = text.replace(`{${p}}`, params[p]);
-                });
-                return text;
-            }
-            return translated;
-        };
 
         const decodeHtml = (input) => {
             if (typeof input !== 'string') return '';
@@ -1059,6 +1066,13 @@ export function useEntity(entity, childEntity, {
             source: 'detail_view',
             operation: 'complete',
         });
+        if (isInvoiceSpec(specName)) {
+            incrementSurveyCounter('invoicing');
+            emitSurveyTrigger();
+        } else if (isOrderSpec(specName)) {
+            incrementSurveyCounter('order');
+            emitSurveyTrigger();
+        }
         refresh();
         // Fetch updated record and update selected state so the detail view reflects the new status
         try {
@@ -1090,9 +1104,9 @@ export function useEntity(entity, childEntity, {
                 body: JSON.stringify({ fieldValues }),
             });
             if (res.ok) {
-                const specificKey = `${process.name}Completed`;
+                const specificKey = `${process.columnName ?? process.name}Completed`;
                 const specificMsg = ui(specificKey);
-                const fallbackMsg = process.label ? `${process.label} completed` : 'Process completed';
+                const fallbackMsg = process.label ? `${ui(process.label) || process.label} completed` : 'Process completed';
                 toast.success(specificMsg !== specificKey ? specificMsg : fallbackMsg);
                 window.dispatchEvent(new CustomEvent('neo:processSuccess', {
                     detail: {
