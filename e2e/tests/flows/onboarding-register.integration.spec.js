@@ -42,7 +42,7 @@ test.describe('Onboarding — Register new user (integration)', () => {
   // Passes locally only because the local backend container happens to
   // already have it staged from an earlier/different build. Re-enable once
   // the com.etendoerp.go build wiring is fixed.
-  test.skip('registers a new user, selects Autónomo, and verifies greeting', async ({ page }) => {
+  test('registers a new user, selects Autónomo, and verifies greeting', async ({ page }) => {
     const suffix = uniqueSuffix();
     const userName = `E2E User ${suffix}`;
     const userEmail = `e2e-${suffix}@test-onboarding.com`;
