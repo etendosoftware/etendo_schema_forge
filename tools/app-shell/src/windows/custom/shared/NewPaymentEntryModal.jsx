@@ -1035,7 +1035,8 @@ export default function NewPaymentEntryModal({
                 accountNumber={pisAccountNumber}
                 onAccountNumberChange={setPisAccountNumber}
                 sortCode={pisSortCode}
-                onSortCodeChange={setPisSortCode} />
+                onSortCodeChange={setPisSortCode}
+                data-testid="PisTransferSection__7727b3" />
             </div>
           )}
 

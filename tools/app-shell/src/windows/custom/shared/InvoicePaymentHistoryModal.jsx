@@ -192,11 +192,11 @@ export default function InvoicePaymentHistoryModal({
               key={i}
               style={{ display: 'grid', gridTemplateColumns: GRID, gap: 12, padding: '11px 24px', borderBottom: '1px solid #F1F2F4', alignItems: 'center', opacity: 1 - i * 0.2 }}
             >
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-6 w-28 rounded-full" />
-              <Skeleton className="h-6 w-24 rounded-full" />
-              <Skeleton className="h-4 w-16 ml-auto" />
+              <Skeleton className="h-4 w-20" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-4 w-16" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-6 w-28 rounded-full" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-6 w-24 rounded-full" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-4 w-16 ml-auto" data-testid="Skeleton__b82d4f" />
             </div>
           ))}
         </div>
