@@ -1,8 +1,8 @@
 {
   "version": "0.9.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-06-26T12:27:59.013Z",
-  "checksum": "85d0ee73a20ee2cd",
+  "updatedAt": "2026-07-06T17:12:11.734Z",
+  "checksum": "62f9361897b2c14f",
   "frontendContract": {
     "window": {
       "id": "27A453FA86974745977672F1A8DCCEFF",
@@ -168,7 +168,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "javaQualifier": "verifactu-config-ready-handler"
       }
     }
   },
@@ -330,7 +331,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "verifactu-config-ready-handler"
       }
     },
     "endpoints": [
