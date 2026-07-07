@@ -668,8 +668,15 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         });
       }
     };
-    document.addEventListener('mousedown', handler, true);
-    return () => document.removeEventListener('mousedown', handler, true);
+    // Listen for `pointerdown` (not `mousedown`): elements that call
+    // preventDefault() on pointerdown — e.g. Radix SelectTrigger and the header
+    // selector controls — suppress the browser's compatibility mouse events for
+    // that interaction, so a `mousedown` listener would never fire on the FIRST
+    // click on such a control and the new line would silently not be saved.
+    // `pointerdown` itself is never suppressed. Mirrors the identical fix in
+    // InlineLinesPanel.jsx (flush-pending-edit-on-outside-pointerdown).
+    document.addEventListener('pointerdown', handler, true);
+    return () => document.removeEventListener('pointerdown', handler, true);
   }, [onCancel, submitLine]);
 
   // Wrap handleChange to also notify parent (for callout triggering)
