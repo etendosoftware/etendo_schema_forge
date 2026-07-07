@@ -2,22 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
-
-// Maps the raw AD_Account.AccountType code to its i18n label key. Shared by
-// buildTreeColumns() (filter dropdown) and AccountTreeRow (visible column).
-const ACCOUNT_TYPE_UI_KEYS = {
-  A: 'accountTypeAsset',
-  E: 'accountTypeExpense',
-  L: 'accountTypeLiability',
-  M: 'accountTypeMemo',
-  O: 'accountTypeOwnersEquity',
-  R: 'accountTypeRevenue',
-};
-
-function accountTypeLabel(ui, code) {
-  const key = ACCOUNT_TYPE_UI_KEYS[code];
-  return key ? ui(key) : (code ?? '');
-}
+import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
 
 function buildTreeColumns(ui) {
   return [

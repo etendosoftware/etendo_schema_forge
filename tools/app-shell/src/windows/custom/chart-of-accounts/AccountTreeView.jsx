@@ -2,22 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
-
-// Maps the raw AD_Account.AccountType code to its i18n label key. Shared by
-// buildTreeColumns() (filter dropdown) and AccountTreeRow (visible column).
-const ACCOUNT_TYPE_UI_KEYS = {
-  A: 'accountTypeAsset',
-  E: 'accountTypeExpense',
-  L: 'accountTypeLiability',
-  M: 'accountTypeMemo',
-  O: 'accountTypeOwnersEquity',
-  R: 'accountTypeRevenue',
-};
-
-function accountTypeLabel(ui, code) {
-  const key = ACCOUNT_TYPE_UI_KEYS[code];
-  return key ? ui(key) : (code ?? '');
-}
+import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
 
 function buildTreeColumns(ui) {
   return [
@@ -191,7 +176,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
             }}
             className="flex items-center justify-center w-4 h-4 text-[#6C6C89] hover:text-[#121217] transition-colors"
             aria-expanded={isExpanded}
-            aria-label={isExpanded ? 'Contraer' : 'Expandir'}
+            aria-label={isExpanded ? ui('collapse') : ui('expand')}
           >
             {isExpanded ? <ChevronDown size={13} data-testid="ChevronDown__acc34a" /> : <ChevronRight size={13} data-testid="ChevronRight__acc34a" />}
           </button>
@@ -221,7 +206,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
  *
  * Props it uses:
  *   data          — flat list of account records from NEO (with tree fields)
- *   onNavigate    — (id) => void — called when a row is clicked
+ *   onNavigate    — (item) => void — called when a non-virtual row is clicked (receives the full row object)
  *   onDataMutated — () => void  — called after a new sub-account is saved
  *   token         — JWT for API calls (forwarded to NewAccountModal)
  *   apiBaseUrl    — NEO base URL (forwarded to NewAccountModal)

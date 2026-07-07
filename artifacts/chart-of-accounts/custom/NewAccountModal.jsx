@@ -9,6 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog.jsx';
 import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeField';
+import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
 
 /**
  * NewAccountModal — quick create dialog for a new sub-account.
@@ -30,7 +31,9 @@ import AccountCodeField from '@generated/chart-of-accounts/custom/AccountCodeFie
  *     4-digit summary account in the available parent options.
  *   - Falls back to empty selection if nothing matches.
  *
- * POST body: { searchKey: <8-digit code>, name, accountType: "E" }
+ * POST body: { searchKey: <8-digit code>, name, accountType }
+ *   accountType — required (C_ElementValue.AccountType is mandatory in AD),
+ *   defaults to "E" (Expense), matching the AD column's default value.
  */
 
 const INPUT_CLS =
@@ -64,7 +67,10 @@ function deriveDefaultParentId(currentRecord, parentOptions) {
   return match ? match.id : '';
 }
 
-const EMPTY_FORM = { parentAccountId: '', name: '', searchKey: '' };
+// 'E' (Expense) mirrors the AD column's own default value for C_ElementValue.AccountType.
+const DEFAULT_ACCOUNT_TYPE = 'E';
+
+const EMPTY_FORM = { parentAccountId: '', name: '', searchKey: '', accountType: DEFAULT_ACCOUNT_TYPE };
 
 export default function NewAccountModal({
   isOpen,
@@ -134,7 +140,7 @@ export default function NewAccountModal({
     const defaultParentId = deriveDefaultParentId(currentRecord, parentOptions);
     const defaultParent = parentOptions.find((p) => p.id === defaultParentId);
     const prefix = defaultParent ? String(defaultParent.searchKey) : '';
-    setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix });
+    setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix, accountType: DEFAULT_ACCOUNT_TYPE });
     setErrors({});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentRecord]);
@@ -161,6 +167,11 @@ export default function NewAccountModal({
     setErrors((prev) => ({ ...prev, searchKey: undefined }));
   }, []);
 
+  const handleAccountTypeChange = useCallback((e) => {
+    setForm((prev) => ({ ...prev, accountType: e.target.value }));
+    setErrors((prev) => ({ ...prev, accountType: undefined }));
+  }, []);
+
   // Derive the record passed to AccountCodeField
   const accountCodeRecord = useMemo(() => {
     return {
@@ -174,6 +185,7 @@ export default function NewAccountModal({
     if (!form.parentAccountId) next.parentAccountId = ui('required');
     if (!form.name.trim()) next.name = ui('required');
     if (String(form.searchKey).length !== 8) next.searchKey = ui('codeExact8Digits');
+    if (!form.accountType) next.accountType = ui('required');
     setErrors(next);
     return Object.keys(next).length === 0;
   }, [form, ui]);
@@ -192,7 +204,7 @@ export default function NewAccountModal({
         body: JSON.stringify({
           searchKey: form.searchKey,
           name: form.name.trim(),
-          accountType: 'E',
+          accountType: form.accountType,
         }),
       });
 
@@ -305,6 +317,32 @@ export default function NewAccountModal({
             {errors.searchKey && (
               <p className={ERROR_CLS} role="alert">
                 {errors.searchKey}
+              </p>
+            )}
+          </div>
+
+          {/* ── Account Type ── */}
+          <div>
+            <label htmlFor="nam-account-type" className={FIELD_LABEL_CLS}>
+              {ui('accountTreeFilterType')}
+              <span className="ml-1 text-red-500 select-none">*</span>
+            </label>
+            <select
+              id="nam-account-type"
+              data-testid="new-account-modal-account-type"
+              className={SELECT_CLS}
+              value={form.accountType}
+              onChange={handleAccountTypeChange}
+            >
+              {Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => (
+                <option key={code} value={code}>
+                  {ui(uiKey)}
+                </option>
+              ))}
+            </select>
+            {errors.accountType && (
+              <p className={ERROR_CLS} role="alert">
+                {errors.accountType}
               </p>
             )}
           </div>

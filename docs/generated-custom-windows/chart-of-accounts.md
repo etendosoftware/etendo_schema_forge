@@ -31,7 +31,7 @@ Maintain the account master used by finance users and provide a quick, read-only
 ## Gap assessment
 - A chart-of-accounts screen often carries stricter accounting semantics such as deleting accounts with activity or account-type-specific behavior. Those rules are not visible in the current contract or generated UI, so they remain gaps or open ambiguities.
 - The presence of a `Parent Account` field suggests hierarchical setup, but the current evidence does not show how hierarchy depth, rollups, or parent eligibility are enforced.
-- The form treats `Account Type` as a plain text field in the generated UI. If the business expects a controlled value list or behavior that changes by account type, that is not visible here and should be treated as a gap.
+- The generated `AccountForm` still treats `Account Type` as a plain text field for existing records. The custom subaccount-creation modal (`NewAccountModal.jsx`), however, renders it as a required dropdown sourced from `ACCOUNT_TYPE_UI_KEYS`, defaulting to Expense (`E`) to match the AD column default.
 - `isActive` is exposed as read-only in the form. If finance users are expected to activate or deactivate accounts directly from this window, that capability is not clearly supported by the current generated surface.
 - The balance columns show useful review data, but no evidence here explains whether they are point-in-time totals, ledger-derived live balances, period-sensitive balances, or mock/demo placeholders outside real backend data.
 
