@@ -1,8 +1,7 @@
 {
-  "version": "0.39.0",
-  "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-06-19T12:52:46.818Z",
-  "contractChecksum": "09c0cb2e5f27cd51",
+  "version": "0.40.0",
+  "generatedAt": "2026-07-07T21:53:25.883Z",
+  "contractChecksum": "a8a9b4d38ac12f38",
   "apiPrediction": {
     "specName": "contacts",
     "baseUrl": "/sws/neo/contacts",
@@ -344,14 +343,6 @@
       },
       {
         "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/customerAccounting/selectors/accountingSchema"
-      },
-      {
-        "entity": "customerAccounting",
         "field": "customerReceivablesNo",
         "column": "C_Receivable_Acct",
         "reference": "ValidCombination",
@@ -422,14 +413,6 @@
         "reference": "BP_TaxCategory",
         "inputMode": "search",
         "url": "/sws/neo/contacts/vendorCreditor/selectors/taxCategory"
-      },
-      {
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/vendorAccounting/selectors/accountingSchema"
       },
       {
         "entity": "vendorAccounting",
@@ -738,9 +721,16 @@
             "defaultValue": "'1'"
           },
           "taxID": {},
+          "oBTIKVIESStatus": {
+            "readOnly": true
+          },
           "etgoWeb": {},
           "etgoEmail": {},
           "etgoPhone": {},
+          "etgoIsperson": {
+            "required": true,
+            "defaultValue": "N"
+          },
           "businessPartnerCategory": {
             "required": true,
             "defaultValue": "@SQL=SELECT MAX(C_BP_GROUP_ID) FROM C_BP_GROUP WHERE AD_ISORGINCLUDED(@AD_ORG_ID@, AD_ORG_ID, @#AD_CLIENT_ID@) <> -1 AND ISDEFAULT = 'Y' AND AD_CLIENT_ID = @#AD_CLIENT_ID@"
@@ -779,10 +769,6 @@
           "isCustomerConsent": {
             "defaultValue": "N"
           },
-          "etgoIsperson": {
-            "required": true,
-            "defaultValue": "N"
-          },
           "operator": {
             "defaultValue": "N"
           },
@@ -798,6 +784,9 @@
             "required": true,
             "defaultValue": "N"
           },
+          "eTGOLocation": {
+            "readOnly": true
+          },
           "account": {},
           "paymentMethod": {},
           "isSalesRepresentative": {
@@ -811,12 +800,6 @@
           "vendorBlocking": {
             "required": true,
             "defaultValue": "N"
-          },
-          "eTGOLocation": {
-            "readOnly": true
-          },
-          "oBTIKVIESStatus": {
-            "readOnly": true
           }
         }
       },
@@ -873,10 +856,6 @@
       },
       "customerAccounting": {
         "fields": {
-          "accountingSchema": {
-            "readOnly": true,
-            "required": true
-          },
           "customerReceivablesNo": {
             "required": true
           },
@@ -939,10 +918,6 @@
       },
       "vendorAccounting": {
         "fields": {
-          "accountingSchema": {
-            "readOnly": true,
-            "required": true
-          },
           "vendorLiability": {
             "required": true
           },
@@ -1144,13 +1119,13 @@
         "etgoFirstname",
         "etgoLastname",
         "oBTIKTaxIDKey",
+        "etgoIsperson",
         "businessPartnerCategory",
         "customer",
         "vendor",
         "employee",
         "setNewCurrency",
         "creditLimit",
-        "etgoIsperson",
         "customerBlocking",
         "isSalesRepresentative",
         "vendorBlocking"
@@ -1254,13 +1229,13 @@
           "etgoFirstname",
           "etgoLastname",
           "oBTIKTaxIDKey",
+          "etgoIsperson",
           "businessPartnerCategory",
           "customer",
           "vendor",
           "employee",
           "setNewCurrency",
           "creditLimit",
-          "etgoIsperson",
           "customerBlocking",
           "isSalesRepresentative",
           "vendorBlocking"
@@ -1271,5 +1246,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "73ffa3db9b0b06c4"
+  "checksum": "5f071bb50c23a960"
 }

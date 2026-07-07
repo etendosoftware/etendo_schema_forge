@@ -1,0 +1,1735 @@
+{
+  "sql": "SELECT ad_tab_id, name, ad_table_id, seqno FROM ad_tab WHERE ad_window_id = $1 AND isactive = 'Y' ORDER BY seqno, name, ad_tab_id",
+  "versions": {
+    "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
+      "checksum": "c747bacc60ee6fb5d14c8a0d43b5cb0b78b77789c345005d7450b5082533b6f4",
+      "params": [
+        "144"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "189",
+          "ad_table_id": "209",
+          "name": "Product Category",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "324",
+          "ad_table_id": "401",
+          "name": "Accounting",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "407",
+          "ad_table_id": "208",
+          "name": "Assigned Products",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "4C0CD564CC8841FF9D9C9C1963919DC2",
+          "ad_table_id": "BECA8E41F9D649409ACB087A350E2AF8",
+          "name": "Translation",
+          "seqno": "40"
+        }
+      ]
+    },
+    "1feda5e22cc22a1d4e3aac66d18b6389393ebc433e692b138a3feed155b5c6e1": {
+      "checksum": "5294a7e65c607d04816c75f2e365beeb7123a540179e432e2f85dcca81f2b681",
+      "params": [
+        "137"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "174",
+          "ad_table_id": "261",
+          "name": "Tax",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "800170",
+          "ad_table_id": "800150",
+          "name": "Tax Zone",
+          "seqno": "15"
+        },
+        {
+          "ad_tab_id": "458",
+          "ad_table_id": "546",
+          "name": "Translation",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "333",
+          "ad_table_id": "399",
+          "name": "Accounting",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "429C5DD46DB54306880452AA19C1B7C3",
+          "ad_table_id": "DEBEA5AE6AA249A6BBD4A78DCF3FEC9A",
+          "name": "Tax Parameter",
+          "seqno": "40"
+        }
+      ]
+    },
+    "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
+      "checksum": "c59937c2523a6eb70e954bb1015809accaaa780f122a19530dd1daf3e4e96447",
+      "params": [
+        "123"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "220",
+          "ad_table_id": "291",
+          "name": "Business Partner",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "223",
+          "ad_table_id": "291",
+          "name": "Customer",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "212",
+          "ad_table_id": "183",
+          "name": "Customer Accounting",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "934B47729F4F452392240DA5B5382B37",
+          "ad_table_id": "96BD8C92B37F4EDB8171345F33153C5E",
+          "name": "Intrastat Shipments",
+          "seqno": "35"
+        },
+        {
+          "ad_tab_id": "224",
+          "ad_table_id": "291",
+          "name": "Vendor/Creditor",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "213",
+          "ad_table_id": "185",
+          "name": "Vendor Accounting",
+          "seqno": "50"
+        },
+        {
+          "ad_tab_id": "2B0F06991C8741D4BB8DAAFA12AC4074",
+          "ad_table_id": "96BD8C92B37F4EDB8171345F33153C5E",
+          "name": "Intrastat Adquisitions",
+          "seqno": "55"
+        },
+        {
+          "ad_tab_id": "225",
+          "ad_table_id": "291",
+          "name": "Employee",
+          "seqno": "60"
+        },
+        {
+          "ad_tab_id": "214",
+          "ad_table_id": "184",
+          "name": "Employee Accounting",
+          "seqno": "70"
+        },
+        {
+          "ad_tab_id": "1005100000",
+          "ad_table_id": "1005100000",
+          "name": "Cost Salary Category",
+          "seqno": "75"
+        },
+        {
+          "ad_tab_id": "226",
+          "ad_table_id": "298",
+          "name": "Bank Account",
+          "seqno": "80"
+        },
+        {
+          "ad_tab_id": "2CFC584751FE40CEA405E491B9ADFB0E",
+          "ad_table_id": "93978A480C2846BEB6D50213AA24C814",
+          "name": "Document Type",
+          "seqno": "85"
+        },
+        {
+          "ad_tab_id": "222",
+          "ad_table_id": "293",
+          "name": "Location/Address",
+          "seqno": "90"
+        },
+        {
+          "ad_tab_id": "496",
+          "ad_table_id": "114",
+          "name": "Contact",
+          "seqno": "100"
+        },
+        {
+          "ad_tab_id": "800060",
+          "ad_table_id": "800046",
+          "name": "Basic Discount",
+          "seqno": "110"
+        }
+      ]
+    },
+    "2f39e9609e474ff1203aed0f3c2e2ac4d33f2eefb8a503de19acec318125e2dc": {
+      "checksum": "fcd2debdb8c2010aa049fb4ce41f5b4d18265c2389af4c6bdacd7a0e1bac38be",
+      "params": [
+        "170"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "259",
+          "ad_table_id": "323",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "260",
+          "ad_table_id": "324",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "21587C5E538E48758ED0C59B621DA91B",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "30"
+        }
+      ]
+    },
+    "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
+      "checksum": "898d7c3bd3b019df1409b0abcec219366806c3823ab1ffc1aea75ea8210271ed",
+      "params": [
+        "143"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "186",
+          "ad_table_id": "259",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "187",
+          "ad_table_id": "260",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "25C70617A7964B479BDA71197E7E88E9",
+          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
+          "name": "Line Tax",
+          "seqno": "27"
+        },
+        {
+          "ad_tab_id": "E8E006D3E8B64CB1A80C99EC1DEC2046",
+          "ad_table_id": "2DD801C1013F4E51B8C505F4760EDEA0",
+          "name": "Intrastat",
+          "seqno": "28"
+        },
+        {
+          "ad_tab_id": "38D83B9AB72D42F1BFED48911E49F6CD",
+          "ad_table_id": "8A36D18D1D164189B7C3AE892F310E11",
+          "name": "Reserved Stock",
+          "seqno": "28"
+        },
+        {
+          "ad_tab_id": "673F978C60704C4289893EE1691784F1",
+          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
+          "name": "Related Products",
+          "seqno": "29"
+        },
+        {
+          "ad_tab_id": "652123A308954FE8AA072DE90EE7C988",
+          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
+          "name": "Related Services",
+          "seqno": "29"
+        },
+        {
+          "ad_tab_id": "1011100000",
+          "ad_table_id": "1011100000",
+          "name": "Basic Discounts",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "236",
+          "ad_table_id": "314",
+          "name": "Tax",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "EB0E0C5A58344F7FA345097E7365CD22",
+          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
+          "name": "Payment Plan",
+          "seqno": "45"
+        },
+        {
+          "ad_tab_id": "B82C02920AA84E8DB57D553185BD2F06",
+          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
+          "name": "Payment Details",
+          "seqno": "46"
+        },
+        {
+          "ad_tab_id": "5A3B6D4D50444C94B2A2B99E6FD2FB0A",
+          "ad_table_id": "09DE692CB27A4EF38A9865D4CBCD298D",
+          "name": "Replacement Orders",
+          "seqno": "70"
+        }
+      ]
+    },
+    "329bb148af9a6baadc8cc6aa9df89e1dbde1f38927b1a7eb474a4e9522daff88": {
+      "checksum": "e48a0cd3a4bf27ae16148d5803aa42dfe2ad517de7509ac625f14b5ac4f2dda0",
+      "params": [
+        "800076"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "800202",
+          "ad_table_id": "800168",
+          "name": "Header",
+          "seqno": "0"
+        },
+        {
+          "ad_tab_id": "800203",
+          "ad_table_id": "800169",
+          "name": "Lines",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "3D893864B3BD4036B4CC143B45CD1FC5",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "20"
+        }
+      ]
+    },
+    "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
+      "checksum": "aed6c667c8e1cc249310fd032a9a8afb2cb75aeac7a0ae5154a0e6eb30c32b39",
+      "params": [
+        "167"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "263",
+          "ad_table_id": "318",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "270",
+          "ad_table_id": "333",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "5247D51755AA43F384EBC35006FC2329",
+          "ad_table_id": "2C75DEA0B5914305B4D789F76FCFD276",
+          "name": "Line Tax",
+          "seqno": "27"
+        },
+        {
+          "ad_tab_id": "ADD3200AA0D5477583E0566A1FF792FC",
+          "ad_table_id": "B3EB5A7771A94BD5AA5A91B014AA6514",
+          "name": "Intrastat",
+          "seqno": "28"
+        },
+        {
+          "ad_tab_id": "271",
+          "ad_table_id": "334",
+          "name": "Tax",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "9A8C1CEDE4734891AA2AE7CFE5C2244E",
+          "ad_table_id": "468BC822115146B8B67E82F671F570B3",
+          "name": "Cash VAT",
+          "seqno": "35"
+        },
+        {
+          "ad_tab_id": "800059",
+          "ad_table_id": "800045",
+          "name": "Basic Discounts",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "60825C9E68644DBC9C530DDCABE05A6E",
+          "ad_table_id": "CE9AFF5F51B846AEAB0B6CBF829092CD",
+          "name": "Payment Plan",
+          "seqno": "45"
+        },
+        {
+          "ad_tab_id": "F6C2283A21314407BBBB23FF14B85ED4",
+          "ad_table_id": "C0233061EA504EFEAB0483E836BBAF31",
+          "name": "Payment Details",
+          "seqno": "46"
+        },
+        {
+          "ad_tab_id": "28D602B576DF417AB289B4EC94BE2C17",
+          "ad_table_id": "43393FBD706A441D837C5CBA07D10ABE",
+          "name": "Reversed Invoices",
+          "seqno": "80"
+        },
+        {
+          "ad_tab_id": "FF808181308EA4230130901D313D00A5",
+          "ad_table_id": "FF808181308EA42301308FB5F7BC0049",
+          "name": "Exchange rates",
+          "seqno": "90"
+        },
+        {
+          "ad_tab_id": "A399D7976DD74832A0D56586E46D149A",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "100"
+        },
+        {
+          "ad_tab_id": "8836C291AA10433782585D66A4B9A6EC",
+          "ad_table_id": "9AA3B1645B7C4003AFE5C91099CEE222",
+          "name": "SII Data",
+          "seqno": "110"
+        },
+        {
+          "ad_tab_id": "6DDB513362284F058184F2956397A74D",
+          "ad_table_id": "4F0292A77EB2432AA56DCAADC0F4565B",
+          "name": "Verifactu",
+          "seqno": "110"
+        },
+        {
+          "ad_tab_id": "C729E1F2FDB443238BAE33E52C2F8B9F",
+          "ad_table_id": "CA28C1BA7831461E860E468010C92A08",
+          "name": "Ticketbai",
+          "seqno": "210"
+        },
+        {
+          "ad_tab_id": "36251A7440D442F891095F18EBA5CD05",
+          "ad_table_id": "CCB738906CF64F5A95918B1D1D899044",
+          "name": "Resultado Validación",
+          "seqno": "220"
+        }
+      ]
+    },
+    "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
+      "checksum": "f3cc5190ad74ae5f2798280a8f413ce5b2e9db39f790af4cafafd4047adc6ad4",
+      "params": [
+        "6F8F913FA60F4CBD93DC1D3AA696E76E"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "ad_table_id": "D1A97202E832470285C9B1EB026D54E2",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "809C66481863428C8D714F2018644CC6",
+          "ad_table_id": "C0233061EA504EFEAB0483E836BBAF31",
+          "name": "Lines",
+          "seqno": "25"
+        },
+        {
+          "ad_tab_id": "719D6C8507CA4B27886C0D8A7859B543",
+          "ad_table_id": "A0B24CBC42D34AB4AC0A45BF1480F94F",
+          "name": "Execution History",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "FF808181309036230130905C67210034",
+          "ad_table_id": "FF808181308EA42301308FB5F7BC0049",
+          "name": "Exchange rates",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "FF80818132AFC4050132AFC7F94A000A",
+          "ad_table_id": "FF80818132AF937F0132AF9E94FF0013",
+          "name": "Used Credit Source",
+          "seqno": "50"
+        },
+        {
+          "ad_tab_id": "38A56E62067242B39D3815E434D5BC48",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "60"
+        },
+        {
+          "ad_tab_id": "0A8FB7989CCE444A967AC1E218AA3586",
+          "ad_table_id": "96A56B61A35441E8877536646345EA6A",
+          "name": "Bank Payments",
+          "seqno": "70"
+        }
+      ]
+    },
+    "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
+      "checksum": "50d155d667f09f75e103f964d2c339181f33a0616422d7fd841c0a2da0bdac8a",
+      "params": [
+        "183"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "290",
+          "ad_table_id": "318",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "291",
+          "ad_table_id": "333",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "27456D8A387F4580B30EA784C63831BB",
+          "ad_table_id": "2C75DEA0B5914305B4D789F76FCFD276",
+          "name": "Line Tax",
+          "seqno": "27"
+        },
+        {
+          "ad_tab_id": "5EDC9769561142ED9DA1C45C35ED5EBA",
+          "ad_table_id": "B3EB5A7771A94BD5AA5A91B014AA6514",
+          "name": "Intrastat",
+          "seqno": "28"
+        },
+        {
+          "ad_tab_id": "292",
+          "ad_table_id": "334",
+          "name": "Tax",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "800211",
+          "ad_table_id": "800045",
+          "name": "Basic Discounts",
+          "seqno": "31"
+        },
+        {
+          "ad_tab_id": "A7DB5BF8D9A84BF8A69EF559A0AF2B16",
+          "ad_table_id": "468BC822115146B8B67E82F671F570B3",
+          "name": "Cash VAT",
+          "seqno": "31"
+        },
+        {
+          "ad_tab_id": "7A8D43541F8C49F1BD8A431A0041BF89",
+          "ad_table_id": "CE9AFF5F51B846AEAB0B6CBF829092CD",
+          "name": "Payment Plan",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "9817E22E2536417F8C9AEC8D5FA33E18",
+          "ad_table_id": "C0233061EA504EFEAB0483E836BBAF31",
+          "name": "Payment Details",
+          "seqno": "50"
+        },
+        {
+          "ad_tab_id": "3ED38B380CD849B38F0AC1B52F992C34",
+          "ad_table_id": "43393FBD706A441D837C5CBA07D10ABE",
+          "name": "Reversed Invoices",
+          "seqno": "80"
+        },
+        {
+          "ad_tab_id": "FF808181308EA4230130901AB2C60090",
+          "ad_table_id": "FF808181308EA42301308FB5F7BC0049",
+          "name": "Exchange rates",
+          "seqno": "90"
+        },
+        {
+          "ad_tab_id": "6EE02C9681A74406A129F1D96D022BA4",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "100"
+        },
+        {
+          "ad_tab_id": "D3F0A54DDB3B455FB94A296BDC7CA6CC",
+          "ad_table_id": "9AA3B1645B7C4003AFE5C91099CEE222",
+          "name": "SII Data",
+          "seqno": "110"
+        },
+        {
+          "ad_tab_id": "F51664D68DF4488BA29427C30E96F512",
+          "ad_table_id": "CA28C1BA7831461E860E468010C92A08",
+          "name": "Batuz",
+          "seqno": "120"
+        }
+      ]
+    },
+    "4cdbb6a1d5f88ee0967c42ec50f1ebf974918f41cfdc927579046b33fad8d0bc": {
+      "checksum": "3b8eede18e5ca79c668cb5d35b3bb84eb690c875ca66403365d020655a0fe04f",
+      "params": [
+        "800026"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "800076",
+          "ad_table_id": "800060",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "800077",
+          "ad_table_id": "800061",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "89F074E609E841A7ACD0D4A19B6AF476",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "50"
+        }
+      ]
+    },
+    "4e4b0d1c19b4dc9eb29dc45dd545b5060c06c718866acfa62c0cdf829eebc965": {
+      "checksum": "4c1b85e718d8f362c1902fac5378e5b389f18df28bb6fced2cdfc975da806181",
+      "params": [
+        "C327DE215AC945F69363905840118177"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "6E0100DFD42149C7A1BCCF452018B380",
+          "ad_table_id": "EFD368AAA05F421C9078E8997B986A1C",
+          "name": "Header",
+          "seqno": "10"
+        }
+      ]
+    },
+    "56f5905a31ee709b32fe7db282011c768b57a04bfefc93302253d932b0d79f20": {
+      "checksum": "fc99fb8942a6203e06450da7d328ba803b7cecf8069528759a2ead18b9d79a23",
+      "params": [
+        "141"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "184",
+          "ad_table_id": "113",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "233",
+          "ad_table_id": "303",
+          "name": "Translation",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "800074",
+          "ad_table_id": "800058",
+          "name": "Lines",
+          "seqno": "25"
+        }
+      ]
+    },
+    "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
+      "checksum": "ccbb4dd4d9e7f293f2523e7a1167c2c636f811822ddc18c306b5647c40cf39b8",
+      "params": [
+        "184"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "296",
+          "ad_table_id": "319",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "297",
+          "ad_table_id": "320",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "9F4A3E7CA4C849F99FAE824D48FDA474",
+          "ad_table_id": "8096299767924A34BA82A99FC4DC81B0",
+          "name": "Intrastat",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "B67386FF3EA94579BA9BA22353B5B897",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "50"
+        },
+        {
+          "ad_tab_id": "0F76B56EB2874C729ABE1665D5853E9D",
+          "ad_table_id": "55A984C314FD4C4FB5E7C32DE36BB07B",
+          "name": "Landed Cost",
+          "seqno": "60"
+        }
+      ]
+    },
+    "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
+      "checksum": "9bd606300b2a9c1a5755d880889b3493246312ea014f7c69e671d7174bb3f2ce",
+      "params": [
+        "FEF76C3E0F104F06A89AAD15A4A4A35C"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "C5EB7C63B9854BEA864AE23BB6CD21AF",
+          "ad_table_id": "F02B15A071D84E3BB614494A16EAD98F",
+          "name": "Organizations",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "F0401DBF746946E9B87079DC79B0C3C3",
+          "ad_table_id": "318",
+          "name": "Issued Invoices",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "CD39F01238784A7DA2770999BBFCDDEC",
+          "ad_table_id": "9AA3B1645B7C4003AFE5C91099CEE222",
+          "name": "Issued Invoices SII Data",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "14D478AADA054065819CF08AEB89CE56",
+          "ad_table_id": "318",
+          "name": "Received Invoices",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "351A260682AC4621A444F5BC60F6CB7A",
+          "ad_table_id": "9AA3B1645B7C4003AFE5C91099CEE222",
+          "name": "Received Invoices SII Data",
+          "seqno": "50"
+        },
+        {
+          "ad_tab_id": "33197653B33A4D2A8A4E04498CA3AFEE",
+          "ad_table_id": "E568F8E2FE974A6FBF74469A884C785F",
+          "name": "Cash Criterion Payments",
+          "seqno": "60"
+        },
+        {
+          "ad_tab_id": "ED9722C7FC144BBAA0A98BE9805E41F3",
+          "ad_table_id": "BBBB5A335BBB4EDEA343AA779A7690A8",
+          "name": "Payments SII Data",
+          "seqno": "70"
+        },
+        {
+          "ad_tab_id": "6913424CE02246B0AF7A4B49B27826E7",
+          "ad_table_id": "318",
+          "name": "Issued Invoices (previous period)",
+          "seqno": "80"
+        },
+        {
+          "ad_tab_id": "1808F575293442D9B5E477C7CBD1A294",
+          "ad_table_id": "9AA3B1645B7C4003AFE5C91099CEE222",
+          "name": "Issued Invoices (previous period) SII Data",
+          "seqno": "90"
+        },
+        {
+          "ad_tab_id": "D1AED839E3E14DF9A43200BF5FAFF390",
+          "ad_table_id": "318",
+          "name": "Received Invoices (previous period)",
+          "seqno": "100"
+        },
+        {
+          "ad_tab_id": "A23EDEC55B2A4832AE41B22DC4C40CBE",
+          "ad_table_id": "9AA3B1645B7C4003AFE5C91099CEE222",
+          "name": "Received Invoices (previous period) SII Data",
+          "seqno": "110"
+        }
+      ]
+    },
+    "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
+      "checksum": "f54e61fabbfc8dfb141e5807462457252322b3285ac986ba990d51fde329a55b",
+      "params": [
+        "27A453FA86974745977672F1A8DCCEFF"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "770365A1C4284F8FB41258955D15DF39",
+          "ad_table_id": "6046B7C2EC184CC6B9A09D1639539EEA",
+          "name": "Cabecera de Configuración Verifactu",
+          "seqno": "10"
+        }
+      ]
+    },
+    "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
+      "checksum": "b81562399e0338d237f21b218e139e1ba9f33cdb7aa9073a390c2766fe09ac80",
+      "params": [
+        "192"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "322",
+          "ad_table_id": "394",
+          "name": "Business Partner Category",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "323",
+          "ad_table_id": "395",
+          "name": "Accounting",
+          "seqno": "20"
+        }
+      ]
+    },
+    "7a7021f92d915e51e998b9560b17636c7f0484e0b332b42d81af899b72333123": {
+      "checksum": "9e36f590c857d0a991e67f46a428c7a278b9bda81d8b2255f27594ee4204ee80",
+      "params": [
+        "118"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "153",
+          "ad_table_id": "142",
+          "name": "Element",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "132",
+          "ad_table_id": "188",
+          "name": "Element Value",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "800019",
+          "ad_table_id": "800015",
+          "name": "Customized Elements",
+          "seqno": "25"
+        },
+        {
+          "ad_tab_id": "232",
+          "ad_table_id": "302",
+          "name": "Translation",
+          "seqno": "30"
+        }
+      ]
+    },
+    "815e23e49d7d45ef28d64a769100a5fa1e1aec24b8c6f25a101070342ebeaeb1": {
+      "checksum": "d7db912212006afa5e0b248c46cc94e0691bbe0194269e34bb80e9696858b553",
+      "params": [
+        "C50A8AEE6F044825B5EF54FAAE76826F"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
+          "ad_table_id": "259",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "387B6179438D4C4CB40769A77F4C304C",
+          "ad_table_id": "260",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "0F65E95AA2A14A53AE6DDA18B5009A97",
+          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
+          "name": "Line Tax",
+          "seqno": "27"
+        },
+        {
+          "ad_tab_id": "A0F74205D11848FAB0393A11B0CFB515",
+          "ad_table_id": "1011100000",
+          "name": "Basic Discounts",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "D173CDA24A0C431A94CEE845DC1E6290",
+          "ad_table_id": "314",
+          "name": "Tax",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "3D342267CAAE4CA5B191082E20F87660",
+          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
+          "name": "Payment Out Plan",
+          "seqno": "35"
+        },
+        {
+          "ad_tab_id": "FA619778CCD24476BD89873D139824BB",
+          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
+          "name": "Payment Out Details",
+          "seqno": "36"
+        }
+      ]
+    },
+    "843359d6657fbb328422a0e2b76bc9bab643118230c1597e04e3917031b6cb1f": {
+      "checksum": "37b5f91b1aea03d0872028df7f86d7548d2ba71ac8057b27428abe80e4854a51",
+      "params": [
+        "E547CE89D4C04429B6340FFA44E70716"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
+          "ad_table_id": "D1A97202E832470285C9B1EB026D54E2",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "34DA12C2E9E3424E9A853563BEFDE81F",
+          "ad_table_id": "C0233061EA504EFEAB0483E836BBAF31",
+          "name": "Lines",
+          "seqno": "25"
+        },
+        {
+          "ad_tab_id": "ABD19F77982D41F7A53F7A61948A137D",
+          "ad_table_id": "A0B24CBC42D34AB4AC0A45BF1480F94F",
+          "name": "Execution History",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "FF808181309036230130905A9AAC0025",
+          "ad_table_id": "FF808181308EA42301308FB5F7BC0049",
+          "name": "Exchange rates",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "FF80818132AF937F0132AFA84F97003A",
+          "ad_table_id": "FF80818132AF937F0132AF9E94FF0013",
+          "name": "Used Credit Source",
+          "seqno": "50"
+        },
+        {
+          "ad_tab_id": "7309F57E84264F6BB8F2A5E4A976ED93",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "60"
+        }
+      ]
+    },
+    "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
+      "checksum": "d8518c9dd94fe01927ca31f1bce235cce6740960c3cd8629e354731686cd4ea2",
+      "params": [
+        "125"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "199",
+          "ad_table_id": "265",
+          "name": "General Ledger Configuration",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "217",
+          "ad_table_id": "279",
+          "name": "Dimension",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "800041",
+          "ad_table_id": "800027",
+          "name": "Active Tables",
+          "seqno": "25"
+        },
+        {
+          "ad_tab_id": "1007400000",
+          "ad_table_id": "1007400000",
+          "name": "Documents",
+          "seqno": "27"
+        },
+        {
+          "ad_tab_id": "200",
+          "ad_table_id": "266",
+          "name": "General Accounts",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "252",
+          "ad_table_id": "315",
+          "name": "Defaults",
+          "seqno": "40"
+        }
+      ]
+    },
+    "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
+      "checksum": "6adfced4aea0f84028c2b073f21c4096d32a346213da05b0cca83acd98caa0e8",
+      "params": [
+        "6CB5B67ED33F47DFA334079D3EA2340E"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "F87F1EB7EB404F1F916EBAFAD1A0A334",
+          "ad_table_id": "259",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "E2F36B4352DA4CA8BE324DC428BEE358",
+          "ad_table_id": "260",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "2C9A8C451DD847FEA493A9CC08AF6822",
+          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
+          "name": "Line Tax",
+          "seqno": "27"
+        },
+        {
+          "ad_tab_id": "A4C162259A204149A3F8CBC9E6170127",
+          "ad_table_id": "1011100000",
+          "name": "Basic Discounts",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "62EB234861174F658093BA10DAFF81FA",
+          "ad_table_id": "314",
+          "name": "Tax",
+          "seqno": "40"
+        }
+      ]
+    },
+    "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
+      "checksum": "0ca4905051614e9c6cfd443b6c46a1465e94ccd4347730c6284550ebc534b0d9",
+      "params": [
+        "273673D2ED914C399A6C51DB758BE0F9"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "728DBD16A1F14A4D82335E37BA433E33",
+          "ad_table_id": "319",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "C9BD6AF9E06F4BE4B4799D09965481DC",
+          "ad_table_id": "320",
+          "name": "Lines",
+          "seqno": "20"
+        }
+      ]
+    },
+    "b8f93f89d00e4397d71cd226a3704eee1045f69f9f26ff056c27d50de601db7e": {
+      "checksum": "d921e53535c60341ddbf05246221746b7b67cebe8735afd4182d0c73ef156b22",
+      "params": [
+        "B917E8A7B0864ACEA9D941E3B7494E53"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "5A6F0ED7230C462BA4010653BA3F816A",
+          "ad_table_id": "224",
+          "name": "Header",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "7797C73348324DCBB7F17666F31C87A5",
+          "ad_table_id": "226",
+          "name": "Lines",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "21790166FE1A47A284F9EA6F68695ACE",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "65F36BB682174EC2B4C9DCA7F6164602",
+          "ad_table_id": "FF808181308EA42301308FB5F7BC0049",
+          "name": "Exchange rates",
+          "seqno": "50"
+        }
+      ]
+    },
+    "bc1f176fd0a37e081c0035239df13fd8ae7e5d54086dc4ec03016c3c894c45f1": {
+      "checksum": "28c108c3ae036f6d5b714f32037096e16bd06be0e03540f04821af0b9c3c50e1",
+      "params": [
+        "C1D3A2A017AC4B82B9FEE6F4D2A0C55A"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "EE6CD8915DFD4713B69DD356FE929436",
+          "ad_table_id": "F02B15A071D84E3BB614494A16EAD98F",
+          "name": "SII Configuration",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "5B4FA76773504B9B9740966F13487038",
+          "ad_table_id": "19BE34B023864ED9BA28F7ECD5E83179",
+          "name": "Log Hash",
+          "seqno": "20"
+        }
+      ]
+    },
+    "bf11b95a5cc3783d783796dc4000683f6dc92578ff1af8d116039bf87bade677": {
+      "checksum": "de4719710a79c86e7bafbcfc55d1187bbe81162f618a78fe868d83551e177cdc",
+      "params": [
+        "F4675DAB02134762B66881DAE4672AD0"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "89F4FF892CD7468DBF90DF9DA54C93DB",
+          "ad_table_id": "6046B7C2EC184CC6B9A09D1639539EEA",
+          "name": "Cabecera de Emisor",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "F26C18F5EF6C4DB5B94A97F36B45CF7B",
+          "ad_table_id": "AA95D0A48C074A6AADBFD1E36FCD46C4",
+          "name": "Facturas rechazadas",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "126EBD2F625344E1A22C11219217F551",
+          "ad_table_id": "AA95D0A48C074A6AADBFD1E36FCD46C4",
+          "name": "Facturas Parcialmente Aceptadas",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "9DE45A800ACB4FDB944B05B80D565543",
+          "ad_table_id": "AA95D0A48C074A6AADBFD1E36FCD46C4",
+          "name": "Facturas Aceptadas",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "6055C2356AEE43D4B1CEC16994DC3E5F",
+          "ad_table_id": "AA95D0A48C074A6AADBFD1E36FCD46C4",
+          "name": "Facturas Inválidas",
+          "seqno": "60"
+        }
+      ]
+    },
+    "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
+      "checksum": "f465ec0948ca008b291a3842423728d6463fc4d5b5d8675ebb94e8fb818d3325",
+      "params": [
+        "140"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "180",
+          "ad_table_id": "208",
+          "name": "Product",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "183",
+          "ad_table_id": "251",
+          "name": "Price",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "3595EBAC842D45FC95B96135C7799F0A",
+          "ad_table_id": "42FB6DA5B5574B5684F297608BDBCE0C",
+          "name": "Price Rule Version",
+          "seqno": "25"
+        },
+        {
+          "ad_tab_id": "210",
+          "ad_table_id": "273",
+          "name": "Accounting",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "317",
+          "ad_table_id": "383",
+          "name": "Bill of Materials",
+          "seqno": "31"
+        },
+        {
+          "ad_tab_id": "681796AC383440BA8212EC80431E89E9",
+          "ad_table_id": "88386FBE7A274F0EA414C989697B8680",
+          "name": "Costing Rule",
+          "seqno": "39"
+        },
+        {
+          "ad_tab_id": "800057",
+          "ad_table_id": "800043",
+          "name": "Costing",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "9175CE3AFD764112BDB6E0647EB67FDF",
+          "ad_table_id": "DFF0A9F7C26C457FA8735A09ACFD5971",
+          "name": "Average Cost Transactions",
+          "seqno": "45"
+        },
+        {
+          "ad_tab_id": "AA5ED8909C5C49E290B1FCEF7DAFFFEF",
+          "ad_table_id": "3D6BB7D6D0F74610B7FA67B2D8471028",
+          "name": "Transaction Adjustments",
+          "seqno": "47"
+        },
+        {
+          "ad_tab_id": "289",
+          "ad_table_id": "329",
+          "name": "Transactions",
+          "seqno": "50"
+        },
+        {
+          "ad_tab_id": "FED91FEB2A664C138C225C63E65598FC",
+          "ad_table_id": "3D6BB7D6D0F74610B7FA67B2D8471028",
+          "name": "Transaction Costs",
+          "seqno": "55"
+        },
+        {
+          "ad_tab_id": "239",
+          "ad_table_id": "210",
+          "name": "Purchasing",
+          "seqno": "60"
+        },
+        {
+          "ad_tab_id": "800241",
+          "ad_table_id": "800205",
+          "name": "Manufacturing",
+          "seqno": "75"
+        },
+        {
+          "ad_tab_id": "235",
+          "ad_table_id": "312",
+          "name": "Translation",
+          "seqno": "120"
+        },
+        {
+          "ad_tab_id": "769BB4BF6B0B4C39AD28E9A00D260F33",
+          "ad_table_id": "8E4A6598CA2747B6B0E7257C6F3DEB19",
+          "name": "Characteristics",
+          "seqno": "130"
+        },
+        {
+          "ad_tab_id": "77B382924865466E8333415AAA1263CC",
+          "ad_table_id": "0455C3C718354E8891C14FA50E4D0161",
+          "name": "Characteristic Configuration",
+          "seqno": "140"
+        },
+        {
+          "ad_tab_id": "20DD1153AC7448B19B844B25CF38F54C",
+          "ad_table_id": "800036",
+          "name": "Stock",
+          "seqno": "160"
+        },
+        {
+          "ad_tab_id": "710F849A838B4AC6B2AE7E47237F7F8F",
+          "ad_table_id": "6C4B972651E0443AAA1B13B7652E0CD5",
+          "name": "Unit Cost",
+          "seqno": "160"
+        },
+        {
+          "ad_tab_id": "A7977DEF565B42D28D668A5E78C2A816",
+          "ad_table_id": "F27592C9833B4F58919199CCB7742EDC",
+          "name": "Product Categories",
+          "seqno": "170"
+        },
+        {
+          "ad_tab_id": "FD12E781543C4CE99EF685A67A7D2142",
+          "ad_table_id": "42FB6DA5B5574B5684F297608BDBCE0C",
+          "name": "Category Price Rule Version",
+          "seqno": "175"
+        },
+        {
+          "ad_tab_id": "2E64079E1AE84FDFBC6F58E909F7F5BD",
+          "ad_table_id": "63FA2782CDF34716A6443706038ECE8B",
+          "name": "Products",
+          "seqno": "180"
+        },
+        {
+          "ad_tab_id": "994A26A418BB4E51AA9C42FE786E24A0",
+          "ad_table_id": "42FB6DA5B5574B5684F297608BDBCE0C",
+          "name": "Product Price Rule Version",
+          "seqno": "185"
+        },
+        {
+          "ad_tab_id": "A92960D20BB64BBB9C4E88FF58991D6F",
+          "ad_table_id": "339677E1B4854680A6BCCFBE5D6BE6B2",
+          "name": "Alternate UOM",
+          "seqno": "190"
+        },
+        {
+          "ad_tab_id": "3E0794D777C74CF5A4CFAAE43A851275",
+          "ad_table_id": "D4FAF9234FDF482593B22D6B82ADAE0C",
+          "name": "Modify Taxes Categories",
+          "seqno": "200"
+        },
+        {
+          "ad_tab_id": "B5C065F195034885A9BA93478206938A",
+          "ad_table_id": "8333B30639F442C2B68C5066E8F9B148",
+          "name": "Intrastat",
+          "seqno": "300"
+        }
+      ]
+    },
+    "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
+      "checksum": "3cc80127f141d1e880abe16ae1765283e16b557d8bfd392c5f5db0fa9c4a2d0f",
+      "params": [
+        "E66E701CCBA14B8BA480CBDE37C50D7A"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "E429CB8F5CDF4D8395B76D553E72A2D0",
+          "ad_table_id": "145",
+          "name": "Period Control",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "4AAC9E63C3B84B74AC4F35B5A1F8B54C",
+          "ad_table_id": "229",
+          "name": "Documents",
+          "seqno": "20"
+        }
+      ]
+    },
+    "d762ff016bca659cec9b3ea6091e7975b8e08865bfb35fdd621af88fa1f69d14": {
+      "checksum": "8d467171e0e5e1542ac280594a3cbf182d53b166abbea5ff326ab42057da11ff",
+      "params": [
+        "146"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "191",
+          "ad_table_id": "255",
+          "name": "Price List",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "238",
+          "ad_table_id": "295",
+          "name": "Price List Version",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "192",
+          "ad_table_id": "251",
+          "name": "Product Price",
+          "seqno": "30"
+        }
+      ]
+    },
+    "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
+      "checksum": "aefbe7f87baa1029f74753abd04564c521d332a4ecf93ec7a835dc9f9dbe6274",
+      "params": [
+        "108"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "118",
+          "ad_table_id": "114",
+          "name": "User",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "71EBF7DDE72C47768B487E79554E3649",
+          "ad_table_id": "3FE0DB8149C94236A636DE10ACC75991",
+          "name": "Rx Services Access",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "121",
+          "ad_table_id": "157",
+          "name": "User Roles",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "54995041F36C475AB3DBC5A03DEBDF58",
+          "ad_table_id": "841B4C4C286A4D8C81A051D2821885DF",
+          "name": "Token",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "9F5F8C2271F248FB856833C1D257CD03",
+          "ad_table_id": "1000500000",
+          "name": "Email Configuration",
+          "seqno": "40"
+        }
+      ]
+    },
+    "db74276aff1dc1773fa3c1f1188863e1ae5906047451c707296b6d649243b515": {
+      "checksum": "cd0d4c085d50efc1ffac680d9b7b6d2b8f03bf76fc27c78635f0f706c5fd9989",
+      "params": [
+        "139"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "177",
+          "ad_table_id": "190",
+          "name": "Warehouse",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "178",
+          "ad_table_id": "207",
+          "name": "Storage Bin",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "262",
+          "ad_table_id": "329",
+          "name": "Product Transactions",
+          "seqno": "50"
+        },
+        {
+          "ad_tab_id": "179",
+          "ad_table_id": "800036",
+          "name": "Bin Contents",
+          "seqno": "60"
+        },
+        {
+          "ad_tab_id": "209",
+          "ad_table_id": "191",
+          "name": "Accounting",
+          "seqno": "110"
+        }
+      ]
+    },
+    "dc3625edf6e3b3ba3d373862af247d21be277872e900727c4a4025b968fa702b": {
+      "checksum": "e9b075450d2651b204ca759b5d62abddc0bb8120b041b481c294cb17eef868d9",
+      "params": [
+        "FF808081330213E60133021822E40007"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
+          "ad_table_id": "259",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "ad_table_id": "260",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "AF4090093DAF1431E040007F010048A5",
+          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
+          "name": "Line Tax",
+          "seqno": "27"
+        },
+        {
+          "ad_tab_id": "7A6E25742CE4442D89E2D26E8B128C12",
+          "ad_table_id": "3099A57126F24DC6BAFF15EDBF2B969D",
+          "name": "Related Products",
+          "seqno": "28"
+        },
+        {
+          "ad_tab_id": "CC476480E70F4352A541DAC64ADEB922",
+          "ad_table_id": "15EAF61631484A11B6921AB05A342E8B",
+          "name": "Related Services",
+          "seqno": "28"
+        },
+        {
+          "ad_tab_id": "AF4090093DA61431E040007F010048A5",
+          "ad_table_id": "1011100000",
+          "name": "Basic Discounts",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "AF4090093D741431E040007F010048A5",
+          "ad_table_id": "314",
+          "name": "Tax",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "AF4090093DD21431E040007F010048A5",
+          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
+          "name": "Payment In Plan",
+          "seqno": "45"
+        },
+        {
+          "ad_tab_id": "AF4090093DB91431E040007F010048A5",
+          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
+          "name": "Payment In Details",
+          "seqno": "46"
+        }
+      ]
+    },
+    "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
+      "checksum": "8fb85c8034cfaeb5676b8bd9b9fbda4e68c1081bea49dcfbf2c93ede5c88c524",
+      "params": [
+        "123271B9AD60469BAE8A924841456B63"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "30576C6ABD12419F9D19D497216FC9B8",
+          "ad_table_id": "319",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "CF6D6C7B85EB473CB88E757E14D1D022",
+          "ad_table_id": "320",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "275327A580BF446DAA6502BFBCCDA20C",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "30"
+        }
+      ]
+    },
+    "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
+      "checksum": "4f0ab2952583565e167d4c3f077ca50bbc7a6866435873c44406f972f0770a96",
+      "params": [
+        "181"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "294",
+          "ad_table_id": "259",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "293",
+          "ad_table_id": "260",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "ADBD1719BFA14C97A32C7B6E8452D14F",
+          "ad_table_id": "E42DDB42FF0B4F82B1CF3C711B3F0DC0",
+          "name": "Line Tax",
+          "seqno": "27"
+        },
+        {
+          "ad_tab_id": "15AB548E781248DBBAE32A7646B98AF8",
+          "ad_table_id": "2DD801C1013F4E51B8C505F4760EDEA0",
+          "name": "Intrastat",
+          "seqno": "28"
+        },
+        {
+          "ad_tab_id": "64B971D786A646DC9656534AABB13FA9",
+          "ad_table_id": "D6079A4A6C2542678D9A50114367B967",
+          "name": "Prereserved Qty",
+          "seqno": "28"
+        },
+        {
+          "ad_tab_id": "1011100001",
+          "ad_table_id": "1011100000",
+          "name": "Basic Discounts",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "295",
+          "ad_table_id": "314",
+          "name": "Tax",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "FA57D75B1BBB4583B4A777008A29BF54",
+          "ad_table_id": "70E57DEA195843729FF303C9A71EBCA3",
+          "name": "Payment Plan",
+          "seqno": "35"
+        },
+        {
+          "ad_tab_id": "6707D7449A8D45DB851F608BA88329C8",
+          "ad_table_id": "DC63963AB3F1489BAAB5A9A7EFD1B407",
+          "name": "Payment Details",
+          "seqno": "36"
+        }
+      ]
+    },
+    "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
+      "checksum": "4331670ec0b04d2f6717d8e235dc31ef3cb30bfd0fa2b2edd745fc5de9d91800",
+      "params": [
+        "94EAA455D2644E04AB25D93BE5157B6D"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "ad_table_id": "B129E53BC0E747879F7BA17F0AECEC32",
+          "name": "Account",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "23691259D1BD4496BCC5F32645BCA4B9",
+          "ad_table_id": "4D8C3B3C31D1410DA046140C9F024D17",
+          "name": "Transaction",
+          "seqno": "22"
+        },
+        {
+          "ad_tab_id": "2A9BA5FDA0F8470D881F8EA9DEDCC598",
+          "ad_table_id": "1BAA61D216CB4A62838AA785658EE092",
+          "name": "Accounting History",
+          "seqno": "25"
+        },
+        {
+          "ad_tab_id": "FF808181309036230130905FCB450044",
+          "ad_table_id": "FF808181308EA42301308FB5F7BC0049",
+          "name": "Exchange rates",
+          "seqno": "25"
+        },
+        {
+          "ad_tab_id": "8391062D5C6A47EA94A83A304AD720BE",
+          "ad_table_id": "6F98C7AB59D3410CB828DB25D638DE2C",
+          "name": "Accounting Configuration",
+          "seqno": "27"
+        },
+        {
+          "ad_tab_id": "01F5E95D71544D428E1B9004B05D0298",
+          "ad_table_id": "AC389EBD8A774AAE8223A77F692983D8",
+          "name": "Payment Method",
+          "seqno": "29"
+        },
+        {
+          "ad_tab_id": "C56E698100314ABBBBD3A89626CA551C",
+          "ad_table_id": "D4C23A17190649E7B78F55A05AF3438C",
+          "name": "Imported Bank Statements",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "7F5E8E4C55914138A358F5087B532B59",
+          "ad_table_id": "84203CBEBDA349C38319C0E549751546",
+          "name": "Bank Statement Lines",
+          "seqno": "40"
+        },
+        {
+          "ad_tab_id": "FF8080813320657F0133209DE21B0042",
+          "ad_table_id": "B1B7075C46934F0A9FD4C4D0F1457B42",
+          "name": "Reconciliations",
+          "seqno": "55"
+        },
+        {
+          "ad_tab_id": "79DFBE24B39742AD877E3163643E619F",
+          "ad_table_id": "DE2121FA9DC34B2BB1264BB9F7406850",
+          "name": "Cleared items",
+          "seqno": "60"
+        },
+        {
+          "ad_tab_id": "FF80808130BB89090130BB9A3A2B0043",
+          "ad_table_id": "FF80808130BB89090130BB8E3D7E0012",
+          "name": "Accounting",
+          "seqno": "70"
+        },
+        {
+          "ad_tab_id": "8ABE333B31A741D78085934F86727B04",
+          "ad_table_id": "B9AC5C5889CA4A15B461C7D2F004677A",
+          "name": "Bank Connections",
+          "seqno": "80"
+        }
+      ]
+    },
+    "f059b24ecd20866b3f9f2bc8f3e5f8c6e2852af85784f3ade7eaa77668d467e5": {
+      "checksum": "a151c71cfc74bf3a020642550933680c1cbacdd38c3671f7d4817023d11cf98e",
+      "params": [
+        "168"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "255",
+          "ad_table_id": "321",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "256",
+          "ad_table_id": "322",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "93787F9E92BD433EA7FD0E61227BC126",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "30"
+        }
+      ]
+    },
+    "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
+      "checksum": "a3e23bd87096e4c211a88c896b977792d18417ac18aaa561d46cfc11cb82cd39",
+      "params": [
+        "71F24BF89DE748B483BE87594747D6FB"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "C5E90F2964F04186B5E433236AFB102F",
+          "ad_table_id": "CA28C1BA7831461E860E468010C92A08",
+          "name": "Sincronización",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "AA07A7E6FDEF4BDBB395015582EBDD2C",
+          "ad_table_id": "CCB738906CF64F5A95918B1D1D899044",
+          "name": "Resultado Validación",
+          "seqno": "20"
+        }
+      ]
+    },
+    "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
+      "checksum": "a57df5adbe64dd6c007ec4313a142ef512f2b12d6c147d945d2d312ef246e801",
+      "params": [
+        "169"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "257",
+          "ad_table_id": "319",
+          "name": "Header",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "258",
+          "ad_table_id": "320",
+          "name": "Lines",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "8B228674B3294540B0989733DA35BC48",
+          "ad_table_id": "8096299767924A34BA82A99FC4DC81B0",
+          "name": "Intrastat",
+          "seqno": "30"
+        },
+        {
+          "ad_tab_id": "C68533256F40484C89006BF00F669CD5",
+          "ad_table_id": "270",
+          "name": "Accounting",
+          "seqno": "50"
+        }
+      ]
+    },
+    "f71bd40f8548d0778bbf8b687c5cca2566403c65eb5aecc67560cd0b92ebd3b0": {
+      "checksum": "2ce256e885584182093a66f92819d0f5f93ffba01d746586ca7fdc92c959521b",
+      "params": [
+        "252"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "452",
+          "ad_table_id": "542",
+          "name": "Asset Category",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "800204",
+          "ad_table_id": "800171",
+          "name": "Accounting",
+          "seqno": "20"
+        }
+      ]
+    },
+    "f750141ebc99d41ec60eb871c5b5d9630d42737fc939771cef25ff208fc674df": {
+      "checksum": "9ab6061bc012ac74f0192fc38234ee34a82e3b155b685f21e3ebbbedd94039d6",
+      "params": [
+        "138"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "176",
+          "ad_table_id": "252",
+          "name": "Tax Category",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "284",
+          "ad_table_id": "348",
+          "name": "Translation",
+          "seqno": "20"
+        }
+      ]
+    },
+    "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
+      "checksum": "3c6ca6790902252ccdc03c0576b8ed5a2d9aef6d0e9f2806b80fde4be798cf80",
+      "params": [
+        "800027"
+      ],
+      "rows": [
+        {
+          "ad_tab_id": "800078",
+          "ad_table_id": "539",
+          "name": "Assets",
+          "seqno": "10"
+        },
+        {
+          "ad_tab_id": "800165",
+          "ad_table_id": "800061",
+          "name": "Asset Amortization",
+          "seqno": "20"
+        },
+        {
+          "ad_tab_id": "800190",
+          "ad_table_id": "800170",
+          "name": "Accounting",
+          "seqno": "30"
+        }
+      ]
+    }
+  }
+}

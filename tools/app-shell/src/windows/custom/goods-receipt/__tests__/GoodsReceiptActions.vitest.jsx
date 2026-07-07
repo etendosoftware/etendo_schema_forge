@@ -172,27 +172,24 @@ describe('GoodsReceiptActions', () => {
     });
   });
 
-  describe('Email button visibility', () => {
+  describe('Email access point is removed (out-of-scope window)', () => {
     it('does NOT render the email button when documentStatus is not CO', () => {
       renderActions({
         data: { ...defaultProps.data, documentStatus: 'DR' },
       });
-      // Email button is an SVG envelope icon wrapped in a button with title quickAction.email
       const emailBtn = screen.queryByTitle('quickAction.email');
       expect(emailBtn).not.toBeInTheDocument();
     });
 
-    it('renders the email button when documentStatus is CO', () => {
+    it('does NOT render the email button even when documentStatus is CO', () => {
       renderActions();
-      const emailBtn = screen.getByTitle('quickAction.email');
-      expect(emailBtn).toBeInTheDocument();
+      // The envelope/send access point was removed from this out-of-scope window.
+      expect(screen.queryByTitle('quickAction.email')).not.toBeInTheDocument();
     });
 
-    it('opens SendDocumentModal when email button is clicked', () => {
+    it('never opens a SendDocumentModal from this component', () => {
       renderActions();
-      const emailBtn = screen.getByTitle('quickAction.email');
-      fireEvent.click(emailBtn);
-      expect(screen.getByTestId('send-document-modal')).toBeInTheDocument();
+      expect(screen.queryByTestId('send-document-modal')).not.toBeInTheDocument();
     });
   });
 

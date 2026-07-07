@@ -3,6 +3,9 @@
   "window": {
     "category": "purchases",
     "name": "Return to Vendor Shipment",
+    "sendDocument": {
+      "enabled": false
+    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -50,6 +53,9 @@
         }
       ],
       "fields": {
+        "etblkpAccountingstatus": {
+          "visibility": "discarded"
+        },
         "movementDate": {
           "grid": true,
           "gridOrder": 1,
@@ -76,7 +82,7 @@
           "reference": "BusinessPartner",
           "selectorFilter": "isVendor=Y",
           "inputMode": "search",
-          "readOnlyLogic": null,
+          "readOnlyLogic": "@Processed@='Y'",
           "section": "principal",
           "seq": 1
         },
@@ -206,7 +212,11 @@
           "visibility": "discarded"
         },
         "invoiceStatus": {
-          "visibility": "discarded"
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 7,
+          "form": false,
+          "columnType": "percent"
         },
         "isnettingshipment": {
           "visibility": "discarded"

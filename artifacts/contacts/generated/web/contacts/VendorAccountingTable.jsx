@@ -3,7 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:vendorAccounting
 const columns = [
-
+  { key: 'vendorLiability', column: 'V_Liability_Acct', type: 'selector', labels: {"en_US":"Liability Account","es_ES":"Cuenta a Pagar"}, label: 'Vendor Liability', required: true },
+  { key: 'vendorPrepayment', column: 'V_Prepayment_Acct', type: 'selector', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, label: 'Vendor Prepayment' },
 ];
 // @sf-generated-end columns:vendorAccounting
 

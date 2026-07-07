@@ -59,6 +59,16 @@ const AMORTIZATION_LINE = {
   sEQNoAsset: 10,
 };
 
+const ASSET_ACCT_ROW = {
+  id: 'mock-asset-acct-001',
+  accountingSchema: 'gl-schema-001',
+  'accountingSchema$_identifier': 'Plan General Contable',
+  accumulatedDepreciation: 'gl-001',
+  'accumulatedDepreciation$_identifier': '2813000 Amortización acumulada de maquinaria',
+  depreciation: 'gl-002',
+  'depreciation$_identifier': '6810000 Dotación a la amortización de maquinaria',
+};
+
 // ---------------------------------------------------------------------------
 // Mock installer
 // ---------------------------------------------------------------------------
@@ -273,6 +283,11 @@ test.describe('Assets — AmortizationPlan row navigation', () => {
     await page.goto(`/assets/${ASSET_WITH_DEPRECIATION.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
+    // ETP-4402 mounted the "Accounting" (assetAcct) tab as the primary detail
+    // tab, so the Amortization Plan now lives in a non-default tab. Activate it
+    // before the row can be visible/clickable.
+    await page.getByTestId('tab-custom:amortizationPlan').click();
+
     // Locate the PeriodLink button inside the row (only the button navigates, not the whole row)
     const amortRow = page
       .locator('tr, [role="row"]')
@@ -286,5 +301,59 @@ test.describe('Assets — AmortizationPlan row navigation', () => {
       new RegExp(`/amortization/${AMORTIZATION_LINE.amortization}`),
       { timeout: 5_000 }
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 7 — Accounting tab (assetAcct) — ETP-4402
+// ---------------------------------------------------------------------------
+
+/**
+ * The `assetAcct` entity (A_Asset_Acct) was generated-but-unmounted until the
+ * ETP-4402 fix added it to `window.secondaryTabs` (see
+ * docs/generated-custom-windows/assets.md, "Fix orphaned Accounting tab").
+ *
+ * Unlike the other four ETP-4402 accounting entities, `accountingSchema` here
+ * IS a real user-fillable field on creation (`isupdateable='N'` only blocks
+ * PATCH after the row exists) — it becomes read-only once the mapping row is
+ * saved, but is present in `addLineFields.entry` for a brand-new row.
+ */
+test.describe('Assets — Accounting tab (assetAcct)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installMocks(page, {
+      detail: ASSET_WITH_DEPRECIATION,
+      assetAcct: [ASSET_ACCT_ROW],
+    });
+    await page.goto(`/assets/${ASSET_WITH_DEPRECIATION.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('Accounting tab shows General Ledger, Accumulated Depreciation, and Depreciation columns', async ({ page }) => {
+    const accountingTab = page.getByTestId('tab-assetAcct');
+    await expect(accountingTab).toBeVisible({ timeout: 10_000 });
+    await accountingTab.click();
+
+    await expect(page.getByTestId('column-header-accountingSchema')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('column-header-accumulatedDepreciation')).toBeVisible();
+    await expect(page.getByTestId('column-header-depreciation')).toBeVisible();
+
+    await expect(page.getByText('Plan General Contable')).toBeVisible();
+  });
+
+  test('Add Line exposes accountingSchema as an editable field for a brand-new mapping row', async ({ page }) => {
+    await page.getByTestId('tab-assetAcct').click();
+
+    const addBtn = page.getByTestId('action-add-line');
+    await expect(addBtn).toBeVisible({ timeout: 8_000 });
+    await addBtn.click();
+
+    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+
+    // Unlike tax / business-partner-category / product / contacts,
+    // accountingSchema IS editable here for a new row.
+    await expect(page.getByTestId('inline-add-field-accountingSchema')).toBeVisible();
+    await expect(page.getByTestId('inline-add-field-accumulatedDepreciation')).toBeVisible();
+    await expect(page.getByTestId('inline-add-field-depreciation')).toBeVisible();
   });
 });

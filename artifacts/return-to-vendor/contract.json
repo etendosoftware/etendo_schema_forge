@@ -1,8 +1,8 @@
 {
-  "version": "0.14.0",
+  "version": "0.15.0",
   "generatedAt": "2026-04-29T19:46:13.628Z",
-  "updatedAt": "2026-06-29T12:09:17.060Z",
-  "checksum": "034f5543bd50bf76",
+  "updatedAt": "2026-07-01T19:36:10.336Z",
+  "checksum": "a51bd3c0ec5874f5",
   "frontendContract": {
     "window": {
       "id": "C50A8AEE6F044825B5EF54FAAE76826F",
@@ -16,6 +16,10 @@
       },
       "dateFilterKey": "orderDate",
       "lineEntityConfig": "returnOrder",
+      "sendDocument": {
+        "enabled": true,
+        "allowEmail": true
+      },
       "layoutType": "default",
       "linesLayout": "inlineEditable"
     },
@@ -62,6 +66,30 @@
             "displayLogic": {
               "raw": "@Processed@='N'",
               "evaluable": true
+            }
+          },
+          {
+            "name": "documentNo",
+            "apiKey": "documentNo",
+            "column": "DocumentNo",
+            "label": "Document No.",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
+            },
+            "section": "principal",
+            "gridOrder": 1,
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y' | @DocStatus@='TMP'",
+              "evaluable": true,
+              "js": "record['processed'] === true || record['documentStatus'] === 'TMP'"
             }
           },
           {
@@ -635,6 +663,7 @@
           }
         ],
         "searchableFields": [
+          "documentNo",
           "businessPartner"
         ],
         "computedFields": [
@@ -643,6 +672,13 @@
             "derivation": {
               "type": "computed",
               "source": "CO"
+            }
+          },
+          {
+            "name": "documentNo",
+            "derivation": {
+              "type": "sequence",
+              "source": "documentType.sequence"
             }
           },
           {
@@ -1853,6 +1889,10 @@
       },
       "dateFilterKey": "orderDate",
       "lineEntityConfig": "returnOrder",
+      "sendDocument": {
+        "enabled": true,
+        "allowEmail": true
+      },
       "linesLayout": "inlineEditable"
     },
     "entities": {
@@ -1898,7 +1938,7 @@
             "apiKey": "documentNo",
             "column": "DocumentNo",
             "type": "string",
-            "visibility": "system",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -4128,6 +4168,7 @@
         "path": "/header",
         "entity": "header",
         "supportedFilters": [
+          "documentNo",
           "businessPartner"
         ]
       },
@@ -4352,6 +4393,7 @@
         "listUrl": "/sws/neo/return-to-vendor/header",
         "detailUrl": "/sws/neo/return-to-vendor/header/{id}",
         "supportedFilters": [
+          "documentNo",
           "businessPartner"
         ]
       },
@@ -5726,6 +5768,14 @@
         "description": "Field 'documentAction' should be present in header"
       },
       {
+        "id": "t-field-presence-header-documentNo",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-documentStatus",
         "category": "field-presence",
         "entity": "header",
@@ -6334,6 +6384,14 @@
         "description": "Field 'documentAction' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-documentNo",
+        "category": "field-type",
+        "entity": "header",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-documentStatus",
         "category": "field-type",
         "entity": "header",
@@ -6894,6 +6952,14 @@
         "description": "Read-only logic for 'costcenter' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-documentNo",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Read-only logic for 'documentNo' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-ndDimension",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -7132,6 +7198,14 @@
         "field": "costcenter",
         "runner": "node",
         "description": "Read-only logic for 'costcenter' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-documentNo",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Read-only logic for 'documentNo' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-ndDimension",
@@ -8552,6 +8626,14 @@
         "description": "Field 'businessPartner' should be a supported filter for header"
       },
       {
+        "id": "t-searchable-filters-header-documentNo",
+        "category": "searchable-filters",
+        "entity": "header",
+        "field": "documentNo",
+        "runner": "node",
+        "description": "Field 'documentNo' should be a supported filter for header"
+      },
+      {
         "id": "t-selector-endpoint-basicDiscounts-discount",
         "category": "selector-endpoint",
         "entity": "basicDiscounts",
@@ -9070,14 +9152,6 @@
         "field": "deliveryTerms",
         "runner": "node",
         "description": "System field 'deliveryTerms' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-documentNo",
-        "category": "system-field",
-        "entity": "header",
-        "field": "documentNo",
-        "runner": "node",
-        "description": "System field 'documentNo' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-documentType",
@@ -10450,25 +10524,25 @@
       }
     ],
     "summary": {
-      "total": 712,
+      "total": 716,
       "byCategory": {
         "action-endpoint": 24,
         "crud-flags": 7,
         "default-value-type": 16,
         "displaylogic-evaluable": 20,
         "displaylogic-valid": 20,
-        "field-presence": 76,
-        "field-type": 76,
-        "readonlylogic-evaluable": 30,
-        "readonlylogic-valid": 30,
+        "field-presence": 77,
+        "field-type": 77,
+        "readonlylogic-evaluable": 31,
+        "readonlylogic-valid": 31,
         "rule-declared": 174,
-        "searchable-filters": 1,
+        "searchable-filters": 2,
         "selector-endpoint": 30,
-        "system-field": 201,
+        "system-field": 200,
         "visibility": 7
       },
       "byRunner": {
-        "node": 712,
+        "node": 716,
         "junit": 0
       }
     }

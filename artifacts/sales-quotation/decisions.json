@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Quotation",
+    "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "salesTheme": true,
     "notesField": "description",

@@ -1,8 +1,8 @@
 {
-  "version": "0.39.0",
-  "generatedAt": "2026-05-06T15:52:09.982Z",
-  "updatedAt": "2026-07-06T19:42:33.538Z",
-  "checksum": "09c0cb2e5f27cd51",
+  "version": "0.40.0",
+  "generatedAt": "2026-07-07T21:53:25.883Z",
+  "updatedAt": "2026-07-07T22:04:13.845Z",
+  "checksum": "a8a9b4d38ac12f38",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -54,6 +54,28 @@
           "tabOrder": 3,
           "label": "Location",
           "customAddModal": "LocationEditorModal",
+          "requireSavedRecord": true
+        },
+        "customerAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 4,
+          "label": "Customer Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "customerReceivablesNo",
+            "customerPrepayment"
+          ],
+          "requireSavedRecord": true
+        },
+        "vendorAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 5,
+          "label": "Vendor Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "vendorLiability",
+            "vendorPrepayment"
+          ],
           "requireSavedRecord": true
         }
       },
@@ -449,6 +471,47 @@
             "section": "principal"
           },
           {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "label": "Estado VIES",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "enumValues": [
+              {
+                "value": "P",
+                "name": "Pendiente",
+                "labels": {
+                  "es_ES": "Pendiente"
+                }
+              },
+              {
+                "value": "V",
+                "name": "Válido",
+                "labels": {
+                  "es_ES": "Válido"
+                }
+              },
+              {
+                "value": "I",
+                "name": "No válido",
+                "labels": {
+                  "es_ES": "No válido"
+                }
+              }
+            ],
+            "section": "principal",
+            "displayLogic": {
+              "raw": "record.oBTIKTaxIDKey === '2'",
+              "evaluable": true,
+              "js": "record.oBTIKTaxIDKey === '2'"
+            }
+          },
+          {
             "name": "etgoWeb",
             "apiKey": "etgoWeb",
             "column": "EM_Etgo_Web",
@@ -486,6 +549,24 @@
             "grid": true,
             "form": true,
             "section": "principal"
+          },
+          {
+            "name": "etgoIsperson",
+            "apiKey": "etgoIsperson",
+            "column": "EM_Etgo_Isperson",
+            "label": "Is Person",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N"
           },
           {
             "name": "businessPartnerCategory",
@@ -740,24 +821,6 @@
             "defaultValue": "N"
           },
           {
-            "name": "etgoIsperson",
-            "apiKey": "etgoIsperson",
-            "column": "EM_Etgo_Isperson",
-            "label": "Is Person",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": false,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N"
-          },
-          {
             "name": "operator",
             "apiKey": "operator",
             "column": "Isworker",
@@ -849,6 +912,18 @@
               "evaluable": true,
               "js": "record.customer"
             }
+          },
+          {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "label": "em_etgo_location",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false
           },
           {
             "name": "account",
@@ -1060,59 +1135,6 @@
               "evaluable": true,
               "js": "record.vendor"
             }
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "label": "em_etgo_location",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "label": "Estado VIES",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "enumValues": [
-              {
-                "value": "P",
-                "name": "Pendiente",
-                "labels": {
-                  "es_ES": "Pendiente"
-                }
-              },
-              {
-                "value": "V",
-                "name": "Válido",
-                "labels": {
-                  "es_ES": "Válido"
-                }
-              },
-              {
-                "value": "I",
-                "name": "No válido",
-                "labels": {
-                  "es_ES": "No válido"
-                }
-              }
-            ],
-            "section": "principal",
-            "displayLogic": {
-              "raw": "record.oBTIKTaxIDKey === '2'",
-              "evaluable": true,
-              "js": "record.oBTIKTaxIDKey === '2'"
-            }
           }
         ],
         "searchableFields": [
@@ -1124,6 +1146,13 @@
             "derivation": {
               "type": "computed",
               "source": "'1'"
+            }
+          },
+          {
+            "name": "etgoIsperson",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           },
           {
@@ -1163,13 +1192,6 @@
           },
           {
             "name": "isCustomerConsent",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
-            "name": "etgoIsperson",
             "derivation": {
               "type": "computed",
               "source": "N"
@@ -1766,21 +1788,6 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "accountingSchema",
-            "apiKey": "accountingSchema",
-            "column": "C_AcctSchema_ID",
-            "label": "General Ledger",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "AcctSchema",
-            "inputMode": "selector"
-          },
-          {
             "name": "customerReceivablesNo",
             "apiKey": "customerReceivablesNo",
             "column": "C_Receivable_Acct",
@@ -1789,11 +1796,16 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Receivables Account",
+              "es_ES": "Cuenta a Cobrar"
+            }
           },
           {
             "name": "customerPrepayment",
@@ -1804,14 +1816,23 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Prepayment Account",
+              "es_ES": "Cuenta de Anticipos"
+            }
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "customerAccountingHandler",
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
+        ]
       },
       "intrastatShipments": {
         "tableName": "INTR_C_BPARTNER",
@@ -2737,21 +2758,6 @@
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "accountingSchema",
-            "apiKey": "accountingSchema",
-            "column": "C_AcctSchema_ID",
-            "label": "General Ledger",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "AcctSchema",
-            "inputMode": "selector"
-          },
-          {
             "name": "vendorLiability",
             "apiKey": "vendorLiability",
             "column": "V_Liability_Acct",
@@ -2760,11 +2766,16 @@
             "tsType": "string",
             "visibility": "editable",
             "required": true,
-            "grid": false,
+            "grid": true,
             "form": true,
             "sourceRequired": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Liability Account",
+              "es_ES": "Cuenta a Pagar"
+            }
           },
           {
             "name": "vendorPrepayment",
@@ -2775,14 +2786,23 @@
             "tsType": "string",
             "visibility": "editable",
             "required": false,
-            "grid": false,
+            "grid": true,
             "form": true,
             "reference": "ValidCombination",
-            "inputMode": "selector"
+            "inputMode": "selector",
+            "section": "principal",
+            "labels": {
+              "en_US": "Prepayment Account",
+              "es_ES": "Cuenta de Anticipos"
+            }
           }
         ],
         "searchableFields": [],
-        "computedFields": []
+        "computedFields": [],
+        "javaQualifier": "vendorAccountingHandler",
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
+        ]
       },
       "intrastatAdquisitions": {
         "tableName": "INTR_C_BPARTNER",
@@ -4507,6 +4527,28 @@
           "label": "Location",
           "customAddModal": "LocationEditorModal",
           "requireSavedRecord": true
+        },
+        "customerAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 4,
+          "label": "Customer Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "customerReceivablesNo",
+            "customerPrepayment"
+          ],
+          "requireSavedRecord": true
+        },
+        "vendorAccounting": {
+          "tabMode": "table-form",
+          "tabOrder": 5,
+          "label": "Vendor Accounting",
+          "addLineFields": [
+            "accountingSchema",
+            "vendorLiability",
+            "vendorPrepayment"
+          ],
+          "requireSavedRecord": true
         }
       },
       "detailEntity": null,
@@ -4798,6 +4840,14 @@
             "required": false
           },
           {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "etgoWeb",
             "apiKey": "etgoWeb",
             "column": "EM_Etgo_Web",
@@ -4827,6 +4877,14 @@
             "column": "AD_Org_ID",
             "type": "foreignKey",
             "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "etgoIsperson",
+            "apiKey": "etgoIsperson",
+            "column": "EM_Etgo_Isperson",
+            "type": "boolean",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -5078,14 +5136,6 @@
             "required": true
           },
           {
-            "name": "etgoIsperson",
-            "apiKey": "etgoIsperson",
-            "column": "EM_Etgo_Isperson",
-            "type": "boolean",
-            "visibility": "editable",
-            "required": true
-          },
-          {
             "name": "invoiceTerms",
             "apiKey": "invoiceTerms",
             "column": "InvoiceRule",
@@ -5299,6 +5349,14 @@
             "column": "EM_Aeatsii_Siikeylist",
             "type": "enum",
             "visibility": "system",
+            "required": false
+          },
+          {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "readOnly",
             "required": false
           },
           {
@@ -5620,22 +5678,6 @@
             "type": "boolean",
             "visibility": "editable",
             "required": true
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "type": "string",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": false
           }
         ],
         "javaQualifier": "businessPartnerHandler"
@@ -6134,6 +6176,14 @@
             "required": false
           },
           {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "etgoPhone",
             "apiKey": "etgoPhone",
             "column": "EM_Etgo_Phone",
@@ -6156,6 +6206,14 @@
             "type": "enum",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "tbaiIssimplifiedinv",
@@ -6524,22 +6582,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           }
         ]
       },
@@ -6553,7 +6595,7 @@
             "apiKey": "accountingSchema",
             "column": "C_AcctSchema_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -6613,6 +6655,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Customer_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -6643,16 +6693,9 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bp_Customer_Acct_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
           }
-        ]
+        ],
+        "javaQualifier": "customerAccountingHandler"
       },
       "intrastatShipments": {
         "tableName": "INTR_C_BPARTNER",
@@ -6740,6 +6783,14 @@
             "required": false
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Intr_C_Bpartner_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "country",
             "apiKey": "country",
             "column": "C_Country_ID",
@@ -6784,14 +6835,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "Intr_C_Bpartner_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -7243,6 +7286,14 @@
             "required": false
           },
           {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "etgoPhone",
             "apiKey": "etgoPhone",
             "column": "EM_Etgo_Phone",
@@ -7265,6 +7316,14 @@
             "type": "enum",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "tbaiIssimplifiedinv",
@@ -7681,22 +7740,6 @@
             "type": "string",
             "visibility": "system",
             "required": false
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           }
         ]
       },
@@ -7710,7 +7753,7 @@
             "apiKey": "accountingSchema",
             "column": "C_AcctSchema_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "system",
             "required": true
           },
           {
@@ -7778,6 +7821,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Vendor_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -7808,16 +7859,9 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bp_Vendor_Acct_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
           }
-        ]
+        ],
+        "javaQualifier": "vendorAccountingHandler"
       },
       "intrastatAdquisitions": {
         "tableName": "INTR_C_BPARTNER",
@@ -7905,6 +7949,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "Intr_C_Bpartner_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -7949,14 +8001,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "Intr_C_Bpartner_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -8280,6 +8324,14 @@
             "required": false
           },
           {
+            "name": "eTGOLocation",
+            "apiKey": "eTGOLocation",
+            "column": "em_etgo_location",
+            "type": "string",
+            "visibility": "system",
+            "required": false
+          },
+          {
             "name": "etgoPhone",
             "apiKey": "etgoPhone",
             "column": "EM_Etgo_Phone",
@@ -8302,6 +8354,14 @@
             "type": "enum",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "oBTIKVIESStatus",
+            "apiKey": "oBTIKVIESStatus",
+            "column": "EM_OBTIK_VIESStatus",
+            "type": "enum",
+            "visibility": "system",
+            "required": false
           },
           {
             "name": "tbaiIssimplifiedinv",
@@ -8846,22 +8906,6 @@
             "type": "boolean",
             "visibility": "system",
             "required": true
-          },
-          {
-            "name": "eTGOLocation",
-            "apiKey": "eTGOLocation",
-            "column": "em_etgo_location",
-            "type": "string",
-            "visibility": "system",
-            "required": false
-          },
-          {
-            "name": "oBTIKVIESStatus",
-            "apiKey": "oBTIKVIESStatus",
-            "column": "EM_OBTIK_VIESStatus",
-            "type": "enum",
-            "visibility": "system",
-            "required": false
           }
         ]
       },
@@ -9030,6 +9074,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Salcategory_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "createdBy",
             "apiKey": "createdBy",
             "column": "Createdby",
@@ -9050,14 +9102,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bp_Salcategory_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -9404,6 +9448,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bpartner_Doctype_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "creationDate",
             "apiKey": "creationDate",
             "column": "Created",
@@ -9432,14 +9484,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bpartner_Doctype_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -10058,6 +10102,14 @@
             "required": true
           },
           {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bpartner_Discount_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
             "name": "client",
             "apiKey": "client",
             "column": "AD_Client_ID",
@@ -10110,14 +10162,6 @@
             "apiKey": "updatedBy",
             "column": "Updatedby",
             "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Bpartner_Discount_ID",
-            "type": "id",
             "visibility": "system",
             "required": true
           }
@@ -10926,14 +10970,6 @@
       },
       {
         "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/customerAccounting/selectors/accountingSchema"
-      },
-      {
-        "entity": "customerAccounting",
         "field": "customerReceivablesNo",
         "column": "C_Receivable_Acct",
         "reference": "ValidCombination",
@@ -11004,14 +11040,6 @@
         "reference": "BP_TaxCategory",
         "inputMode": "search",
         "url": "/sws/neo/contacts/vendorCreditor/selectors/taxCategory"
-      },
-      {
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "column": "C_AcctSchema_ID",
-        "reference": "AcctSchema",
-        "inputMode": "selector",
-        "url": "/sws/neo/contacts/vendorAccounting/selectors/accountingSchema"
       },
       {
         "entity": "vendorAccounting",
@@ -13398,14 +13426,6 @@
         "description": "Field 'taxExempt' should be present in customer"
       },
       {
-        "id": "t-field-presence-customerAccounting-accountingSchema",
-        "category": "field-presence",
-        "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should be present in customerAccounting"
-      },
-      {
         "id": "t-field-presence-customerAccounting-customerPrepayment",
         "category": "field-presence",
         "entity": "customerAccounting",
@@ -13644,14 +13664,6 @@
         "field": "taxLocation",
         "runner": "node",
         "description": "Field 'taxLocation' should be present in locationAddress"
-      },
-      {
-        "id": "t-field-presence-vendorAccounting-accountingSchema",
-        "category": "field-presence",
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should be present in vendorAccounting"
       },
       {
         "id": "t-field-presence-vendorAccounting-vendorLiability",
@@ -14542,14 +14554,6 @@
         "description": "Field 'taxExempt' should have type 'boolean' in customer"
       },
       {
-        "id": "t-field-type-customerAccounting-accountingSchema",
-        "category": "field-type",
-        "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should have type 'string' in customerAccounting"
-      },
-      {
         "id": "t-field-type-customerAccounting-customerPrepayment",
         "category": "field-type",
         "entity": "customerAccounting",
@@ -14788,14 +14792,6 @@
         "field": "taxLocation",
         "runner": "node",
         "description": "Field 'taxLocation' should have type 'boolean' in locationAddress"
-      },
-      {
-        "id": "t-field-type-vendorAccounting-accountingSchema",
-        "category": "field-type",
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Field 'accountingSchema' should have type 'string' in vendorAccounting"
       },
       {
         "id": "t-field-type-vendorAccounting-vendorLiability",
@@ -15878,14 +15874,6 @@
         "description": "Selector endpoint for 'sOBPTaxCategory' in customer should exist"
       },
       {
-        "id": "t-selector-endpoint-customerAccounting-accountingSchema",
-        "category": "selector-endpoint",
-        "entity": "customerAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Selector endpoint for 'accountingSchema' in customerAccounting should exist"
-      },
-      {
         "id": "t-selector-endpoint-customerAccounting-customerPrepayment",
         "category": "selector-endpoint",
         "entity": "customerAccounting",
@@ -15956,14 +15944,6 @@
         "field": "locationAddress",
         "runner": "node",
         "description": "Selector endpoint for 'locationAddress' in locationAddress should exist"
-      },
-      {
-        "id": "t-selector-endpoint-vendorAccounting-accountingSchema",
-        "category": "selector-endpoint",
-        "entity": "vendorAccounting",
-        "field": "accountingSchema",
-        "runner": "node",
-        "description": "Selector endpoint for 'accountingSchema' in vendorAccounting should exist"
       },
       {
         "id": "t-selector-endpoint-vendorAccounting-vendorLiability",
@@ -17902,6 +17882,14 @@
         "description": "System field 'volumeOfSales' should exist in backend but not frontend for customer"
       },
       {
+        "id": "t-system-field-customerAccounting-accountingSchema",
+        "category": "system-field",
+        "entity": "customerAccounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for customerAccounting"
+      },
+      {
         "id": "t-system-field-customerAccounting-active",
         "category": "system-field",
         "entity": "customerAccounting",
@@ -19294,6 +19282,14 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for locationAddress"
       },
       {
+        "id": "t-system-field-vendorAccounting-accountingSchema",
+        "category": "system-field",
+        "entity": "vendorAccounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for vendorAccounting"
+      },
+      {
         "id": "t-system-field-vendorAccounting-active",
         "category": "system-field",
         "entity": "vendorAccounting",
@@ -20264,23 +20260,23 @@
       }
     ],
     "summary": {
-      "total": 1150,
+      "total": 1146,
       "byCategory": {
         "action-endpoint": 6,
         "crud-flags": 15,
         "default-value-type": 46,
         "displaylogic-evaluable": 58,
         "displaylogic-valid": 58,
-        "field-presence": 143,
-        "field-type": 143,
+        "field-presence": 141,
+        "field-type": 141,
         "rule-declared": 104,
         "searchable-filters": 4,
-        "selector-endpoint": 41,
-        "system-field": 517,
+        "selector-endpoint": 39,
+        "system-field": 519,
         "visibility": 15
       },
       "byRunner": {
-        "node": 1150,
+        "node": 1146,
         "junit": 0
       }
     }

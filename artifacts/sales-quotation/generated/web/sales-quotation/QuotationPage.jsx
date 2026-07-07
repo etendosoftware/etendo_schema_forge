@@ -477,6 +477,7 @@ export default function QuotationPage({ windowName, recordId, ...props }) {
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
+        documentDateField="orderDate"
         salesTheme
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"

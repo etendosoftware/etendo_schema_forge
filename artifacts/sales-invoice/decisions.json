@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Invoice",
+    "documentDateField": "invoiceDate",
     "salesTheme": true,
     "lineEntityConfig": "invoice",
     "relatedDocuments": true,
@@ -162,12 +163,18 @@
           "readOnlyLogic": "@Processed@='Y'"
         },
         "currency": {
-          "visibility": "readOnly",
+          "visibility": "editable",
           "grid": false,
-          "form": false,
-          "section": "summary",
+          "form": true,
+          "section": "principal",
           "reference": "Currency",
-          "inputMode": "selector"
+          "inputMode": "selector",
+          "readOnlyLogic": "@Processed@='Y'"
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
+          "form": false,
+          "grid": false
         },
         "description": {
           "form": false
