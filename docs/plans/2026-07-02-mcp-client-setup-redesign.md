@@ -60,11 +60,21 @@ Estado actual de esa página (`ConnectionsLanding`):
 
 ## Decisiones confirmadas
 
-- **Selector de cliente**: la página `ConnectionsLanding` debe mostrar un **selector** (tabs) con,
-  como mínimo: **Claude Desktop, Claude Code (CLI), Cursor, VS Code, OpenAI Codex, OpenCode,
-  ChatGPT (Web/Desktop), Google Antigravity**, más una pestaña **"Otros / genérico"** para cualquier
-  cliente MCP no listado explícitamente (con la URL + explicación mínima de qué es un servidor MCP
-  remoto, para que sirva de fallback).
+- **Selector de cliente**: la página `ConnectionsLanding` debe mostrar un **selector** (tabs) con:
+  **Claude Desktop, Claude Code (CLI), Cursor, VS Code, OpenAI Codex, OpenCode, Google Antigravity**,
+  más una pestaña **"Otros / genérico"** para cualquier cliente MCP no listado explícitamente (con la
+  URL + explicación mínima de qué es un servidor MCP remoto, para que sirva de fallback).
+  - **ChatGPT (Web/Desktop) queda FUERA de alcance de esta entrega** (decisión ronda 3, 2026-07-07):
+    de OpenAI solo entra Codex. La tab de ChatGPT no se implementa ahora; su borrador de copy se
+    conserva más abajo marcado como follow-up futuro (requiere validación OAuth end-to-end antes de
+    exponerse).
+- **Botón de copiar = componente genérico nuevo** (decisión ronda 3, 2026-07-07): NO existe un
+  componente compartido de copiar; el patrón (`navigator.clipboard.writeText` + toast + estado
+  `copied`) está duplicado en 5+ lugares (`OAuth2ClientDialog.jsx`, `AccountSummaryStrip.jsx`,
+  `EditAccountModal.jsx`, `accountColumns.jsx`, `OAuth2ClientsPage.jsx`). Dado que esta landing tiene
+  muchos bloques copiables (una URL/snippet/comando por tab + JSONs + prompt de agentes), el Developer
+  crea un `CopyButton`/`CopyBlock` genérico en `tools/app-shell/src/components/ui/` y lo usa en toda la
+  página. Migrar los 5 usos existentes es opcional y va en commit aparte para no ensuciar el scope.
 - **Audiencia: usuarios sin contexto técnico.** Esto es lo que más cambia el copy respecto al doc
   interno: nada de OAuth discovery, RFC 8414/9728, issuers ni audiencias. El público objetivo es,
   literalmente, "el gerente de una empresa que quiere conectar su asistente de IA a Etendo". Cada
@@ -358,6 +368,7 @@ Confirmado contra la doc oficial (opencode.ai/docs/mcp-servers, opencode.ai/docs
    global) — y agregá:
    ```json
    {
+     "$schema": "https://opencode.ai/config.json",
      "mcp": {
        "etendo-go": {
          "type": "remote",
@@ -367,12 +378,16 @@ Confirmado contra la doc oficial (opencode.ai/docs/mcp-servers, opencode.ai/docs
      }
    }
    ```
+   (nota: el top-level es `mcp` — no `mcpServers` como Cursor/Antigravity — y el tipo es `"remote"`.)
 2. OpenCode maneja el login automáticamente vía Dynamic Client Registration: al recibir un `401`
    del servidor dispara el flujo OAuth por su cuenta y abre el navegador.
-3. Aprobá el acceso — listo.
+3. Completá el login en Etendo y aprobá el acceso — listo, el servidor `etendo-go` queda disponible.
 
 **Alternativa — pedile al agente que lo configure él mismo**: ver "Bloque de Prompt" abajo.
-> que con el deep link de Cursor/VS Code: no se fija en este plan un dato no verificado).
+
+> Nota menor: el único dato a confirmar al implementar es el nombre exacto del comando de login CLI
+> (`opencode mcp auth <server>` / equivalente vigente) por si se quiere mencionar explícitamente; el
+> formato del archivo/clave de config ya está confirmado arriba.
 
 ### Tab: Google Antigravity
 1. Abrí (o creá) el archivo de config MCP de Antigravity y agregá:
@@ -391,12 +406,12 @@ Confirmado contra la doc oficial (opencode.ai/docs/mcp-servers, opencode.ai/docs
 3. Iniciá sesión en Etendo cuando se te pida y aprobá el acceso.
 4. Listo, el servidor `etendo-go` queda disponible para usar desde Antigravity.
 
-### Tab: ChatGPT (Web / Desktop) — ⚠️ A TESTEAR, no validado contra Etendo GO todavía
+### Tab: ChatGPT (Web / Desktop) — 🚫 FUERA DE ALCANCE (follow-up futuro)
 
-> Basado en la doc oficial de OpenAI (Developer Mode, beta — planes Pro/Plus/Team/Enterprise/Edu),
-> pero **no se probó end-to-end contra el servidor MCP de Etendo GO**. El flujo OAuth de ChatGPT
-> podría comportarse distinto al de Claude/Cursor/VS Code — validar antes de dar esta tab por
-> definitiva.
+> **Decisión ronda 3 (2026-07-07): esta tab NO se implementa en esta entrega.** El copy se conserva
+> abajo solo como referencia para un follow-up. Basado en la doc oficial de OpenAI (Developer Mode,
+> beta), pero **no se probó end-to-end contra el servidor MCP de Etendo GO** — el flujo OAuth de
+> ChatGPT podría comportarse distinto. No agregar la tab hasta validar contra nuestro servidor real.
 
 1. Activá el modo desarrollador: **Configuración → Apps → Configuración avanzada → Activar modo
    desarrollador**.
