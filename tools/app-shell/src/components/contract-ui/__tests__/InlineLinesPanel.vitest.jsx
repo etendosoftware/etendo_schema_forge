@@ -2,7 +2,7 @@
  * Integration test for InlineLinesPanel — renders the component in jsdom
  * with minimal mocks. No server, no DB, no browser needed.
  */
-import { render, screen, within, act } from '@testing-library/react';
+import { render, screen, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 import React, { createRef } from 'react';
@@ -387,6 +387,78 @@ describe('InlineLinesPanel', () => {
     const rowAfter = screen.getByTestId('line-row-L1');
     // In read mode, product renders as a span, not an input
     expect(within(rowAfter).queryAllByRole('textbox').length).toBe(0);
+  });
+
+  // ---------- ETP-4422: outside-click autosave must fire on the FIRST click ----------
+  //
+  // Regression coverage for the "autosave needs 2 clicks" bug. Root cause: Radix's
+  // SelectTrigger calls preventDefault() on its own pointerdown handler, which per the
+  // Pointer Events spec suppresses the browser's compatibility `mousedown` for that
+  // interaction. A `mousedown` outside-click listener therefore never runs on the first
+  // click on a trigger. Fix: listen for `pointerdown` in the CAPTURE phase on `document`,
+  // which fires before any bubble-phase handler on the clicked element (Radix's included)
+  // gets a chance to steal focus or call preventDefault() — so the row's pristine,
+  // still-focused input is available to blur (and hence autosave) synchronously.
+
+  it('autosaves the pending edit on the FIRST outside pointerdown, even when the ' +
+    'target cancels it and steals focus (simulates Radix SelectTrigger)', async () => {
+    const onUpdateRow = vi.fn().mockResolvedValue();
+    renderPanel({ onUpdateRow });
+    const row = screen.getByTestId('line-row-L1');
+    await act(async () => {
+      await userEvent.hover(row);
+    });
+    const actions = within(row).getByTestId('line-actions');
+    const editBtn = within(actions).getAllByRole('button')[0];
+    await act(async () => {
+      await userEvent.click(editBtn);
+    });
+
+    // Mid-edit: focus the row's input and change its value WITHOUT blurring yet —
+    // this is the pending edit whose autosave PATCH must not need a second click.
+    const productInput = within(row).getByTestId('field-product');
+    act(() => {
+      productInput.focus();
+    });
+    fireEvent.change(productInput, { target: { value: 'Changed Widget' } });
+    expect(document.activeElement).toBe(productInput);
+
+    // Simulate a Radix-style trigger rendered OUTSIDE the row: its own bubble-phase
+    // pointerdown handler calls preventDefault() AND steals focus to a decoy element —
+    // exactly what Radix's internal focus management does. If our fix used a plain
+    // bubble-phase (or `mousedown`) listener, it would observe `document.activeElement`
+    // AFTER this handler already ran (i.e. already stolen), so it would never find the
+    // row's input inside `editingRowEl` and would skip the blur — reproducing the bug.
+    const outsideTrigger = document.createElement('button');
+    document.body.appendChild(outsideTrigger);
+    const decoy = document.createElement('input');
+    document.body.appendChild(decoy);
+    outsideTrigger.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      decoy.focus();
+    });
+
+    await act(async () => {
+      outsideTrigger.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true }),
+      );
+      // Flush the deferred setTimeout(0) that commits setEditingRowId(null).
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // The autosave PATCH must have fired from the explicit blur() — on the first click.
+    expect(onUpdateRow).toHaveBeenCalledWith(
+      ROWS[0],
+      'product',
+      'Changed Widget',
+      expect.objectContaining({}),
+    );
+    // Row must have exited edit mode.
+    const rowAfter = screen.getByTestId('line-row-L1');
+    expect(within(rowAfter).queryAllByRole('textbox').length).toBe(0);
+
+    document.body.removeChild(outsideTrigger);
+    document.body.removeChild(decoy);
   });
 
   // ---------- NEW: additional coverage for uncovered InlineLinesPanel branches ----------

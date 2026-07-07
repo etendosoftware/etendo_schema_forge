@@ -386,12 +386,21 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       for (const sel of portalSelectors) {
         if (e.target.closest?.(sel)) return;
       }
-      // Radix's Select trigger calls preventDefault() on pointerdown to keep
-      // focus management under its own control, which suppresses the browser's
-      // natural focus-shift blur on the row's focused input/select. Without an
-      // explicit blur here, the pending edit's onCommit (and its autosave PATCH)
-      // doesn't fire until a SECOND click — when Radix's own deferred
-      // focus-into-listbox effect finally steals focus. Mirrors the blur() the
+      // Radix's Select trigger calls preventDefault() on its own pointerdown
+      // handler to keep focus management under its own control. Per the Pointer
+      // Events spec, canceling `pointerdown` for mouse input suppresses the
+      // browser's compatibility mouse events for that interaction — including
+      // `mousedown`. A `mousedown` listener here would therefore never fire on
+      // the FIRST click on the trigger (only on a second click, once Radix's own
+      // listbox interaction takes a different event path), which is why the
+      // pending edit's onCommit (and its autosave PATCH) used to need two clicks.
+      // Listening for `pointerdown` in the CAPTURE phase sidesteps this: capture
+      // runs on the way down the tree, before Radix's bubble-phase handler on the
+      // trigger element gets a chance to call preventDefault(), and `pointerdown`
+      // itself is never suppressed (only the compat mouse events that would
+      // normally follow it are). This guarantees the handler observes
+      // `document.activeElement` in its pristine, still-focused state on every
+      // interaction, including the very first click. Mirrors the blur() the
       // imperative flushPendingEdits() below already performs.
       if (typeof document !== 'undefined' && document.activeElement
           && editingRowEl.contains(document.activeElement)) {
@@ -402,8 +411,8 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
         setEditingRowId(null);
       }, 0);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler, { capture: true });
+    return () => document.removeEventListener('pointerdown', handler, { capture: true });
   }, [editingRowId]);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [pendingDelete, setPendingDelete] = useState(null);
