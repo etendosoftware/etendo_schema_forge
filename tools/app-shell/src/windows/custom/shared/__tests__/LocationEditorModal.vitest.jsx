@@ -118,6 +118,34 @@ describe('LocationEditorModal', () => {
     expect(screen.getByText('IsBillTo')).toBeInTheDocument();
   });
 
+  it('renders the shipping/invoicing checkboxes as the shared SquareCheckbox', () => {
+    renderModal();
+    const shipping = screen.getByTestId('SquareCheckbox__location-shipping');
+    const invoicing = screen.getByTestId('SquareCheckbox__location-invoicing');
+    expect(shipping.tagName).toBe('INPUT');
+    expect(shipping).toHaveAttribute('type', 'checkbox');
+    expect(invoicing).toHaveAttribute('type', 'checkbox');
+    // Both start from form.shipToAddress / invoiceToAddress (default true on a new location).
+    expect(shipping.checked).toBe(true);
+    expect(invoicing.checked).toBe(true);
+  });
+
+  it('toggling the shipping checkbox updates the form (shipToAddress → IsShipTo)', () => {
+    renderModal();
+    const shipping = screen.getByTestId('SquareCheckbox__location-shipping');
+    expect(shipping.checked).toBe(true);
+    fireEvent.click(shipping);
+    expect(shipping.checked).toBe(false);
+  });
+
+  it('toggling the invoicing checkbox updates the form (invoiceToAddress → IsBillTo)', () => {
+    renderModal();
+    const invoicing = screen.getByTestId('SquareCheckbox__location-invoicing');
+    expect(invoicing.checked).toBe(true);
+    fireEvent.click(invoicing);
+    expect(invoicing.checked).toBe(false);
+  });
+
   it('does not render remove location button', () => {
     renderModal({ rowId: 'loc-123' });
     expect(screen.queryByText('removeLocation')).not.toBeInTheDocument();

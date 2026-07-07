@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { EntityForm } from '@/components/contract-ui';
+import { PillToggle } from '@/components/PillToggle';
+import { SquareCheckbox } from '../shared/SquareCheckbox';
 import { ChevronDown, Tag } from 'lucide-react';
 import { useUI } from '@/i18n';
 
@@ -25,54 +27,20 @@ function resolveId(value) {
   return String(value);
 }
 
-// ─── Circular checkbox (Figma radio-button visual, independent toggle) ──────
+// ─── Blocking toggle (canonical PillToggle switch — ON = true = blocked) ─────
+// Same switch as the Assets "Depreciar" toggle. Label sits above the toggle to
+// stay aligned with the sibling payment-terms field in the same row.
 
-function CircularCheckbox({ label, checked, onChange }) {
-  return (
-    <label className="flex flex-row items-center gap-3 cursor-pointer select-none">
-      <div className="relative flex items-center justify-center w-6 h-6 shrink-0">
-        <div
-          className="w-[14.5px] h-[14.5px] rounded-full bg-white flex items-center justify-center transition-colors"
-          style={{
-            border: `1.5px solid ${checked ? '#121217' : '#D1D4DB'}`,
-            boxShadow: checked ? 'none' : '0px 1px 2px rgba(18,18,23,0.05)',
-          }}
-        >
-          {checked && (
-            <div className="w-2 h-2 rounded-full" style={{ background: '#121217' }} />
-          )}
-        </div>
-      </div>
-      <span className="text-sm font-medium text-[#121217]">{label}</span>
-      <input
-        type="checkbox"
-        checked={!!checked}
-        onChange={e => onChange(e.target.checked)}
-        className="sr-only"
-      />
-    </label>
-  );
-}
-
-// ─── Discount select ────────────────────────────────────────────────────────
-
-function YesNoRadio({ label, value, onChange }) {
-  const ui = useUI();
-  const isChecked = value === true || value === 'Y' || value === 'true';
+function BlockingToggle({ label, value, onCheckedChange }) {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-medium text-[#121217]">{label}</p>
-      <div className="flex items-center gap-5 h-10">
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input type="radio" checked={!isChecked} onChange={() => onChange(false)}
-            className="w-4 h-4 accent-[#121217] cursor-pointer" />
-          <span className="text-sm text-[#121217]">{ui('no')}</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input type="radio" checked={isChecked} onChange={() => onChange(true)}
-            className="w-4 h-4 accent-[#121217] cursor-pointer" />
-          <span className="text-sm text-[#121217]">{ui('yes')}</span>
-        </label>
+      <div className="flex items-center gap-3 h-10">
+        <PillToggle
+          checked={value}
+          onCheckedChange={onCheckedChange}
+          aria-label={label}
+          data-testid="PillToggle__7f0756" />
       </div>
     </div>
   );
@@ -281,11 +249,11 @@ export default function BillingPreferencesForm(props) {
         <>
           {/* ── Cliente ───────────────────────────────────────────────────── */}
           <div className="bg-[#F5F7F9] rounded-lg p-3 flex flex-col gap-3">
-            <CircularCheckbox
+            <SquareCheckbox
               label={ui('customer')}
               checked={!!data?.customer}
               onChange={(val) => onChange?.('customer', val)}
-              data-testid="CircularCheckbox__7f0756" />
+              data-testid="SquareCheckbox__7f0756-customer" />
             {data?.customer && (
               <>
                 <EntityForm
@@ -303,11 +271,11 @@ export default function BillingPreferencesForm(props) {
                       data-testid="EntityForm__7f0756" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <YesNoRadio
+                    <BlockingToggle
                       label={ui('customerBlockField')}
                       value={data?.customerBlocking}
-                      onChange={(val) => onChange?.('customerBlocking', val, 'Customer_Blocking')}
-                      data-testid="YesNoRadio__7f0756" />
+                      onCheckedChange={(next) => onChange?.('customerBlocking', next, 'Customer_Blocking')}
+                      data-testid="BlockingToggle__7f0756-customer" />
                   </div>
                 </div>
               </>
@@ -316,11 +284,11 @@ export default function BillingPreferencesForm(props) {
 
           {/* ── Proveedor ─────────────────────────────────────────────────── */}
           <div className="bg-[#F5F7F9] rounded-lg p-3 flex flex-col gap-3">
-            <CircularCheckbox
+            <SquareCheckbox
               label={ui('vendor')}
               checked={!!data?.vendor}
               onChange={(val) => onChange?.('vendor', val)}
-              data-testid="CircularCheckbox__7f0756" />
+              data-testid="SquareCheckbox__7f0756-vendor" />
             {data?.vendor && (
               <>
                 <EntityForm
@@ -338,11 +306,11 @@ export default function BillingPreferencesForm(props) {
                       data-testid="EntityForm__7f0756" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <YesNoRadio
+                    <BlockingToggle
                       label={ui('vendorBlockField')}
                       value={data?.vendorBlocking}
-                      onChange={(val) => onChange?.('vendorBlocking', val, 'Vendor_Blocking')}
-                      data-testid="YesNoRadio__7f0756" />
+                      onCheckedChange={(next) => onChange?.('vendorBlocking', next, 'Vendor_Blocking')}
+                      data-testid="BlockingToggle__7f0756-vendor" />
                   </div>
                 </div>
               </>

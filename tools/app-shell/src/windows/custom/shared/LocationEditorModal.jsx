@@ -3,6 +3,7 @@ import {X, Loader2, Search, ChevronDown, Check} from 'lucide-react';
 import {useUI, useLabel} from '@/i18n';
 import {useAuth} from '@/auth/AuthContext.jsx';
 import {toast} from 'sonner';
+import {SquareCheckbox} from './SquareCheckbox';
 
 const EMPTY_FORM = {
     address: '',
@@ -848,14 +849,16 @@ export default function LocationEditorModal({
 
                             {/* Checkboxes */}
                             <div style={{ display: 'flex', gap: 24, paddingTop: 4 }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer', userSelect: 'none' }}>
-                                    <input type="checkbox" checked={form.shipToAddress} onChange={e => setField('shipToAddress', e.target.checked)} style={{ width: 16, height: 16, accentColor: '#121217' }} />
-                                    {t('IsShipTo') || 'Shipping Address'}
-                                </label>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#121217', cursor: 'pointer', userSelect: 'none' }}>
-                                    <input type="checkbox" checked={form.invoiceToAddress} onChange={e => setField('invoiceToAddress', e.target.checked)} style={{ width: 16, height: 16, accentColor: '#121217' }} />
-                                    {t('IsBillTo') || 'Invoicing Address'}
-                                </label>
+                                <SquareCheckbox
+                                    label={t('IsShipTo') || 'Shipping Address'}
+                                    checked={form.shipToAddress}
+                                    onChange={val => setField('shipToAddress', val)}
+                                    data-testid="SquareCheckbox__location-shipping" />
+                                <SquareCheckbox
+                                    label={t('IsBillTo') || 'Invoicing Address'}
+                                    checked={form.invoiceToAddress}
+                                    onChange={val => setField('invoiceToAddress', val)}
+                                    data-testid="SquareCheckbox__location-invoicing" />
                             </div>
 
                         </div>

@@ -774,4 +774,258 @@ describe('useEntity', () => {
       expect(postCall[1].headers['Accept-Language']).toBe('es_ES');
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Email-format validation (additive to required-field validation)
+  // ---------------------------------------------------------------------------
+
+  describe('email-format validation', () => {
+    const EMAIL_FIELD = { key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'text' };
+
+    async function setupNewWithEmailField() {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ defaults: {} }) });
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      await act(async () => { await result.current.handleNew(); });
+      act(() => { result.current.registerFields([EMAIL_FIELD], 'form-1'); });
+      return result;
+    }
+
+    it('blocks the save and toasts (toast-only, NO inline error) for a non-empty invalid email', async () => {
+      const result = await setupNewWithEmailField();
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+      act(() => { result.current.handleChange('etgoEmail', 'not-an-email'); });
+
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+
+      expect(saved).toBeNull();
+      // Toast is the single signal — no inline fieldError under the email field.
+      expect(result.current.fieldErrors.etgoEmail).toBeUndefined();
+      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail');
+      // No POST was attempted.
+      expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(false);
+    });
+
+    it('does NOT error on an empty email (field is optional)', async () => {
+      const result = await setupNewWithEmailField();
+      act(() => { result.current.handleChange('etgoEmail', '   ') ; });
+      act(() => { result.current.handleChange('name', 'Acme'); });
+
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+
+      expect(result.current.fieldErrors.etgoEmail).toBeUndefined();
+      // Empty email does not block: a POST is attempted.
+      expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(true);
+    });
+
+    it('never populates an inline fieldError for an invalid email (toast-only), even across changes', async () => {
+      const result = await setupNewWithEmailField();
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+      // A blocked save toasts but must NOT set an inline error under the field.
+      act(() => { result.current.handleChange('etgoEmail', 'bad'); });
+      await act(async () => { await result.current.handleSave(); });
+      expect(result.current.fieldErrors.etgoEmail).toBeUndefined();
+      expect(result.current.fieldErrors).toEqual({});
+      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail');
+
+      // Still invalid after another change → still no inline error.
+      act(() => { result.current.handleChange('etgoEmail', 'still-bad'); });
+      expect(result.current.fieldErrors.etgoEmail).toBeUndefined();
+    });
+
+    it('saves fine with a valid email', async () => {
+      const savedRecord = { id: 'new-1', name: 'Acme', etgoEmail: 'user@example.com' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (String(url).includes('/defaults')) return { ok: true, json: async () => ({ defaults: {} }) };
+        if (opts?.method === 'POST') return { ok: true, json: async () => ({ response: { data: [savedRecord] } }) };
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      await act(async () => { await result.current.handleNew(); });
+      act(() => { result.current.registerFields([EMAIL_FIELD], 'form-1'); });
+      act(() => { result.current.handleChange('etgoEmail', 'user@example.com'); });
+
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+
+      expect(saved).toEqual(savedRecord);
+      expect(result.current.fieldErrors).toEqual({});
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Website-format validation (secure https URL — toast-only, mirrors email)
+  // ---------------------------------------------------------------------------
+
+  describe('website-format validation', () => {
+    const WEB_FIELD = { key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string' };
+
+    async function setupNewWithWebField() {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ defaults: {} }) });
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      await act(async () => { await result.current.handleNew(); });
+      act(() => { result.current.registerFields([WEB_FIELD], 'form-1'); });
+      return result;
+    }
+
+    it('blocks the save and toasts (toast-only, NO inline error) for a non-https website', async () => {
+      const result = await setupNewWithWebField();
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+      act(() => { result.current.handleChange('etgoWeb', 'http://insecure.com'); });
+
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+
+      expect(saved).toBeNull();
+      expect(result.current.fieldErrors.etgoWeb).toBeUndefined();
+      expect(toast.error).toHaveBeenCalledWith('websiteInsecureUrl');
+      expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(false);
+    });
+
+    it('does NOT error on an empty website (field is optional)', async () => {
+      const result = await setupNewWithWebField();
+      act(() => { result.current.handleChange('etgoWeb', '   '); });
+      act(() => { result.current.handleChange('name', 'Acme'); });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      expect(result.current.fieldErrors.etgoWeb).toBeUndefined();
+      expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(true);
+    });
+
+    it('saves fine with a secure https website', async () => {
+      const savedRecord = { id: 'new-1', name: 'Acme', etgoWeb: 'https://acme.com' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (String(url).includes('/defaults')) return { ok: true, json: async () => ({ defaults: {} }) };
+        if (opts?.method === 'POST') return { ok: true, json: async () => ({ response: { data: [savedRecord] } }) };
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      await act(async () => { await result.current.handleNew(); });
+      act(() => { result.current.registerFields([WEB_FIELD], 'form-1'); });
+      act(() => { result.current.handleChange('etgoWeb', 'https://acme.com'); });
+
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+
+      expect(saved).toEqual(savedRecord);
+      expect(result.current.fieldErrors).toEqual({});
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Phone-format validation (allowed charset — toast-only, mirrors email/website)
+  // ---------------------------------------------------------------------------
+
+  describe('phone-format validation', () => {
+    const PHONE_FIELD = { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string' };
+
+    async function setupNewWithPhoneField() {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ defaults: {} }) });
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      await act(async () => { await result.current.handleNew(); });
+      act(() => { result.current.registerFields([PHONE_FIELD], 'form-1'); });
+      return result;
+    }
+
+    it('blocks the save and toasts (toast-only, NO inline error) for an invalid phone', async () => {
+      const result = await setupNewWithPhoneField();
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+      act(() => { result.current.handleChange('etgoPhone', '600abc'); });
+
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+
+      expect(saved).toBeNull();
+      expect(result.current.fieldErrors.etgoPhone).toBeUndefined();
+      expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars');
+      expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(false);
+    });
+
+    it('does NOT error on an empty phone (field is optional)', async () => {
+      const result = await setupNewWithPhoneField();
+      act(() => { result.current.handleChange('etgoPhone', '   '); });
+      act(() => { result.current.handleChange('name', 'Acme'); });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      expect(result.current.fieldErrors.etgoPhone).toBeUndefined();
+      expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'POST')).toBe(true);
+    });
+
+    it('saves fine with a valid phone number', async () => {
+      const savedRecord = { id: 'new-1', name: 'Acme', etgoPhone: '+34 600 123 456' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (String(url).includes('/defaults')) return { ok: true, json: async () => ({ defaults: {} }) };
+        if (opts?.method === 'POST') return { ok: true, json: async () => ({ response: { data: [savedRecord] } }) };
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      await act(async () => { await result.current.handleNew(); });
+      act(() => { result.current.registerFields([PHONE_FIELD], 'form-1'); });
+      act(() => { result.current.handleChange('etgoPhone', '+34 600 123 456'); });
+
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+
+      expect(saved).toEqual(savedRecord);
+      expect(result.current.fieldErrors).toEqual({});
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Format validation is scoped to fields the user edited THIS session, so a
+  // legacy-invalid value on an existing record never blocks an unrelated edit.
+  // ---------------------------------------------------------------------------
+
+  describe('format validation scoping (existing records)', () => {
+    const NAME_FIELD = { key: 'name', column: 'Name', type: 'string' };
+    const PHONE_FIELD = { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string' };
+    const WEB_FIELD = { key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string' };
+
+    it('does NOT block a save when the user edits a DIFFERENT field, leaving a legacy-invalid phone/website untouched', async () => {
+      const patched = { id: 'BP1', name: 'New' };
+      globalThis.fetch.mockImplementation(async (url, opts) => {
+        if (opts?.method === 'PATCH') return { ok: true, json: async () => ({ response: { data: [patched] } }) };
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+      act(() => { result.current.registerFields([NAME_FIELD, PHONE_FIELD, WEB_FIELD], 'form-1'); });
+      // Existing record carrying legacy-invalid phone AND website (never touched here).
+      act(() => { result.current.handleSelect({ id: 'BP1', name: 'Old', etgoPhone: '+34 ext. 200', etgoWeb: 'www.legacy.com' }); });
+      // Edit an UNRELATED field.
+      act(() => { result.current.handleChange('name', 'New'); });
+
+      await act(async () => { await result.current.handleSave(); });
+
+      // Save proceeds — untouched legacy values are not re-validated.
+      expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'PATCH')).toBe(true);
+      expect(toast.error).not.toHaveBeenCalledWith('phoneInvalidChars');
+      expect(toast.error).not.toHaveBeenCalledWith('websiteInsecureUrl');
+    });
+
+    it('DOES block when the user edits the phone itself to an invalid value on an existing record', async () => {
+      globalThis.fetch.mockImplementation(async () => ({ ok: true, json: async () => ({ response: { data: [] } }) }));
+      const { result } = renderEntity('header', null, { skipListFetch: true });
+      const { toast } = await import('sonner');
+      toast.error.mockClear();
+      act(() => { result.current.registerFields([NAME_FIELD, PHONE_FIELD], 'form-1'); });
+      act(() => { result.current.handleSelect({ id: 'BP1', name: 'Old', etgoPhone: '+34 600 000 000' }); });
+      act(() => { result.current.handleChange('etgoPhone', '600abc'); });
+
+      let saved;
+      await act(async () => { saved = await result.current.handleSave(); });
+
+      expect(saved).toBeNull();
+      expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars');
+      expect(globalThis.fetch.mock.calls.some(c => c[1]?.method === 'PATCH')).toBe(false);
+    });
+  });
 });

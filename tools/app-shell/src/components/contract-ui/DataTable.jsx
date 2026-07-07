@@ -15,6 +15,7 @@ import { applyCalloutUpdates } from '@/lib/applyCalloutUpdates.js';
 import { columnMinWidthPx, columnFlex } from '@/lib/linesColumnWidth.js';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CELL_RENDERERS } from './DataTable.cellRenderers.jsx';
+import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 
 // Extracts grow flag and basis (px) from a columnFlex() shorthand string.
 function flexSpec(col, idx) {
@@ -246,6 +247,14 @@ function isBelowMin(f, valuesRef) {
   const v = valuesRef.current[f.key];
   if (v == null || v === '') return false;
   return !isNaN(Number(v)) && Number(v) < f.min;
+}
+
+// Format guard for the inline add-row (email + phone). Empty is valid (these
+// fields are optional — never made required); only a non-empty malformed value is
+// flagged. Returns the i18n error KEY (or null) via the shared format helpers.
+function getFieldFormatError(f, valuesRef) {
+  const v = valuesRef.current[f.key];
+  return getEmailFieldError(f, v) ?? getPhoneFieldError(f, v);
 }
 
 function buildSelectorUrl(apiBaseUrl, entity, field) {
@@ -557,6 +566,20 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
       setInvalidFields(new Set(belowMin.map(f => f.key)));
       toast.error(ui('fieldMinValueError'));
       const firstInvalid = belowMin[0];
+      const inputEl = document.querySelector(`[data-testid="field-${firstInvalid.key}"]`);
+      inputEl?.focus?.({ preventScroll: true });
+      return Promise.resolve(false);
+    }
+    // Format validation (email + phone) — mirrors the required/min checks: flag the
+    // cell (red border via invalidFields), toast the specific error, focus, and block
+    // the commit. Empty stays valid, so an untouched optional field never blocks the row.
+    const formatInvalid = fields
+      .map(f => ({ f, err: getFieldFormatError(f, valuesRef) }))
+      .filter(({ err }) => err !== null);
+    if (formatInvalid.length > 0) {
+      setInvalidFields(new Set(formatInvalid.map(({ f }) => f.key)));
+      toast.error(ui(formatInvalid[0].err));
+      const firstInvalid = formatInvalid[0].f;
       const inputEl = document.querySelector(`[data-testid="field-${firstInvalid.key}"]`);
       inputEl?.focus?.({ preventScroll: true });
       return Promise.resolve(false);

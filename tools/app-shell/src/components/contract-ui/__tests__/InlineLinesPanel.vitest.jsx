@@ -1332,4 +1332,149 @@ describe('InlineLinesPanel', () => {
       expect(combo).toHaveAttribute('data-exclude-id', '');
     });
   });
+
+  describe('email-format validation on inline cell edit', () => {
+    const EMAIL_COLUMNS = [
+      { key: 'name', label: 'Name', type: 'string', column: 'Name' },
+      { key: 'email', label: 'Email', type: 'string', column: 'Email' },
+    ];
+    const EMAIL_ROWS = [{ id: 'C1', name: 'Jane', email: 'jane@example.com' }];
+
+    async function enterEmailEdit(onUpdateRow) {
+      render(
+        <InlineLinesPanel
+          columns={EMAIL_COLUMNS}
+          data={EMAIL_ROWS}
+          entity="contact"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={onUpdateRow}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-C1');
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const editBtn = within(actions).getAllByRole('button')[0];
+      await act(async () => { await userEvent.click(editBtn); });
+      return row;
+    }
+
+    it('blocks the PATCH and toasts for a non-empty malformed email', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterEmailEdit(onUpdateRow);
+      const emailInput = within(row).getByTestId('field-email');
+      await act(async () => {
+        await userEvent.clear(emailInput);
+        await userEvent.type(emailInput, 'not-an-email');
+        emailInput.blur();
+      });
+      const { toast } = await import('sonner');
+      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail');
+      expect(onUpdateRow).not.toHaveBeenCalled();
+    });
+
+    it('commits a corrected valid email (clears the error, PATCHes)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterEmailEdit(onUpdateRow);
+      const emailInput = within(row).getByTestId('field-email');
+      await act(async () => {
+        await userEvent.clear(emailInput);
+        await userEvent.type(emailInput, 'new@example.com');
+        emailInput.blur();
+      });
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        EMAIL_ROWS[0], 'email', 'new@example.com', expect.objectContaining({ column: 'Email' }),
+      );
+    });
+
+    it('does not email-validate a non-email column (regression)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterEmailEdit(onUpdateRow);
+      const nameInput = within(row).getByTestId('field-name');
+      await act(async () => {
+        await userEvent.clear(nameInput);
+        await userEvent.type(nameInput, 'not-an-email');
+        nameInput.blur();
+      });
+      // The non-email 'name' column commits normally — no invalid-email block.
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        EMAIL_ROWS[0], 'name', 'not-an-email', expect.objectContaining({ column: 'Name' }),
+      );
+    });
+  });
+
+  describe('phone-format validation on inline cell edit', () => {
+    const PHONE_COLUMNS = [
+      { key: 'name', label: 'Name', type: 'string', column: 'Name' },
+      { key: 'phone', label: 'Phone', type: 'string', column: 'Phone' },
+    ];
+    const PHONE_ROWS = [{ id: 'C1', name: 'Jane', phone: '+34 600 123 456' }];
+
+    async function enterPhoneEdit(onUpdateRow) {
+      render(
+        <InlineLinesPanel
+          columns={PHONE_COLUMNS}
+          data={PHONE_ROWS}
+          entity="contact"
+          token="test"
+          apiBaseUrl="/api"
+          selectorContext={{}}
+          onSelectionChange={vi.fn()}
+          onUpdateRow={onUpdateRow}
+          onDeleteRow={vi.fn().mockResolvedValue()}
+        />,
+      );
+      const row = screen.getByTestId('line-row-C1');
+      await act(async () => { await userEvent.hover(row); });
+      const actions = within(row).getByTestId('line-actions');
+      const editBtn = within(actions).getAllByRole('button')[0];
+      await act(async () => { await userEvent.click(editBtn); });
+      return row;
+    }
+
+    it('blocks the PATCH and toasts for an invalid phone', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterPhoneEdit(onUpdateRow);
+      const phoneInput = within(row).getByTestId('field-phone');
+      await act(async () => {
+        await userEvent.clear(phoneInput);
+        await userEvent.type(phoneInput, '600abc');
+        phoneInput.blur();
+      });
+      const { toast } = await import('sonner');
+      expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars');
+      expect(onUpdateRow).not.toHaveBeenCalled();
+    });
+
+    it('commits a corrected valid phone (PATCHes)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterPhoneEdit(onUpdateRow);
+      const phoneInput = within(row).getByTestId('field-phone');
+      await act(async () => {
+        await userEvent.clear(phoneInput);
+        await userEvent.type(phoneInput, '600 111 222');
+        phoneInput.blur();
+      });
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        PHONE_ROWS[0], 'phone', '600 111 222', expect.objectContaining({ column: 'Phone' }),
+      );
+    });
+
+    it('does not phone-validate a non-phone column (regression)', async () => {
+      const onUpdateRow = vi.fn().mockResolvedValue();
+      const row = await enterPhoneEdit(onUpdateRow);
+      const nameInput = within(row).getByTestId('field-name');
+      await act(async () => {
+        await userEvent.clear(nameInput);
+        await userEvent.type(nameInput, 'abc def');
+        nameInput.blur();
+      });
+      expect(onUpdateRow).toHaveBeenCalledWith(
+        PHONE_ROWS[0], 'name', 'abc def', expect.objectContaining({ column: 'Name' }),
+      );
+    });
+  });
 });
