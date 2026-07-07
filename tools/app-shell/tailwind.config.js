@@ -1,3 +1,16 @@
+import { resolve } from 'node:path';
+
+// LOCAL_CORE dev mode (`make dev-local-core`): app-shell-core resolves to the
+// sibling ../schema_forge_core source (see vite.config.js/vitest.config.js),
+// so Tailwind must scan THAT source too, or any class introduced only in a
+// core-package file (nothing in the published node_modules copy below, nothing
+// in this app's own src/) silently never compiles — confirmed live: a
+// freshly-added `max-h-[70vh]` on an ImportDialog.jsx step wrapper rendered
+// with computed max-height "none" until swapped for an already-scanned value.
+const LOCAL_CORE = process.env.LOCAL_CORE === '1';
+const CORE_REPO = process.env.SCHEMA_FORGE_CORE || resolve(import.meta.dirname, '../../../schema_forge_core');
+const CORE_APP_SHELL_SRC_GLOB = resolve(CORE_REPO, 'packages/app-shell-core/src/**/*.{js,jsx}');
+
 /** @type {import('tailwindcss').Config} */
 export default {
     darkMode: ['class'],
@@ -16,6 +29,10 @@ export default {
     // Scan them too; otherwise Tailwind purges layout and auth-form utilities
     // after the core/functional package split.
     '../../node_modules/@etendosoftware/etendo-go-core/src/**/*.{js,jsx}',
+    // LOCAL_CORE only — scan the live sibling source in addition to (not
+    // instead of) the published copy above, so classes work under both dev
+    // profiles without needing a publish/reinstall cycle.
+    ...(LOCAL_CORE ? [CORE_APP_SHELL_SRC_GLOB] : []),
   ],
   theme: {
   	extend: {

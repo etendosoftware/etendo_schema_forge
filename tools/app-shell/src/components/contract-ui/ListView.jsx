@@ -15,6 +15,7 @@ import SendDocumentModal from './SendDocumentModal.jsx';
 import { ListFilterBar } from './ListFilterBar.jsx';
 import { ImportDialog } from '@etendosoftware/app-shell-core/components/import/ImportDialog.jsx';
 import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { ScrollPane } from '@etendosoftware/app-shell-core/components/ui/scroll-pane.jsx';
 import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
 import { buildAdvancedFilterCriteria } from '@/lib/gridQuery';
 import { useWindowFilterPresets } from '@/hooks/useWindowFilterPresets';
@@ -559,7 +560,6 @@ export function ListView({
   };
 
   const sortBtnRef = useRef(null);
-  const scrollRef = useRef(null);
 
   const isDefaultSort = isDefaultSortActive(hook, initialSortColumn, initialSortDirection);
 
@@ -605,12 +605,8 @@ export function ListView({
     setShowSortPopover(false);
   }, [hook.setSortColumn, hook.setSortDirection]);
 
-  const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200 && hook.hasMore && !hook.loadingMore) {
-      hook.loadMore();
-    }
+  const handleReachBottom = useCallback(() => {
+    if (hook.hasMore && !hook.loadingMore) hook.loadMore();
   }, [hook.hasMore, hook.loadingMore, hook.loadMore]);
 
   return (
@@ -882,7 +878,7 @@ export function ListView({
           )}
 
           {/* Table */}
-          <div ref={scrollRef} onScroll={handleScroll} className={`flex-1 overflow-auto ${tablePaddingX} ${tablePaddingBottom}`}>
+          <ScrollPane onReachBottom={handleReachBottom} className={`${tablePaddingX} ${tablePaddingBottom}`}>
             {hook.loading && hook.items.length === 0 ? (
               <div className="space-y-3">
                 <Skeleton className="h-10 w-full" data-testid="Skeleton__620cbc" />
@@ -935,7 +931,7 @@ export function ListView({
                 )}
               </div>
             )}
-          </div>
+          </ScrollPane>
         </div>
         <ReportDrawer
           open={showReport}
