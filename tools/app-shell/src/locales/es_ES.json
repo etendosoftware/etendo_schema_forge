@@ -20988,7 +20988,7 @@
     "glc.field.currency": "Moneda principal",
     "glc.accrual.accrual": "Devengo",
     "glc.accrual.cash": "Caja",
-    "glc.toggle.closedPeriods": "Asientos en periodos cerrados",
+    "glc.toggle.allowNegative": "Permitir negativos",
     "glc.unbacked.label": "Sin conexión a datos",
     "glc.unbacked.tooltip": "Este campo es una vista previa de diseño y todavía no se guarda.",
     "glc.readonly.fromOrgInfo": "Definido en la organización",

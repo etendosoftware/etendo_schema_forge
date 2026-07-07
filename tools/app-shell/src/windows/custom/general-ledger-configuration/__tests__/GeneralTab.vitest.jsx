@@ -28,24 +28,23 @@ function renderTab(overrides = {}) {
   return { setGeneralField };
 }
 
-describe('GeneralTab — inverted period toggle', () => {
-  it('shows the "closed periods" toggle OFF when automaticPeriodControl is true', () => {
-    renderTab({ general: { automaticPeriodControl: true } });
-    // Toggle reads the inverse of the raw AD value.
-    expect(screen.getByTestId('glc-toggle-closed-periods-switch')).not.toBeChecked();
+describe('GeneralTab — allow negative toggle', () => {
+  it('shows the "allow negative" toggle OFF when allowNegative is false', () => {
+    renderTab({ general: { allowNegative: false } });
+    expect(screen.getByTestId('glc-toggle-allow-negative-switch')).not.toBeChecked();
   });
 
-  it('shows the toggle ON when automaticPeriodControl is false', () => {
-    renderTab({ general: { automaticPeriodControl: false } });
-    expect(screen.getByTestId('glc-toggle-closed-periods-switch')).toBeChecked();
+  it('shows the toggle ON when allowNegative is true', () => {
+    renderTab({ general: { allowNegative: true } });
+    expect(screen.getByTestId('glc-toggle-allow-negative-switch')).toBeChecked();
   });
 
-  it('writes the inverted raw value when the toggle is turned ON', async () => {
+  it('writes the raw value directly when the toggle is turned ON', async () => {
     const user = userEvent.setup();
-    const { setGeneralField } = renderTab({ general: { automaticPeriodControl: true } });
-    await user.click(screen.getByTestId('glc-toggle-closed-periods-switch'));
-    // Toggle ON ⇒ allow closed periods ⇒ AutoPeriodControl = false.
-    expect(setGeneralField).toHaveBeenCalledWith('automaticPeriodControl', false);
+    const { setGeneralField } = renderTab({ general: { allowNegative: false } });
+    await user.click(screen.getByTestId('glc-toggle-allow-negative-switch'));
+    // Toggle ON ⇒ AllowNegative = true (direct binding, no inversion).
+    expect(setGeneralField).toHaveBeenCalledWith('allowNegative', true);
   });
 });
 

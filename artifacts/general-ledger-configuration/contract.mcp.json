@@ -1,8 +1,8 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-07T18:29:54.339Z",
-  "contractChecksum": "f6072b8d0d2a0863",
+  "updatedAt": "2026-07-07T19:23:48.530Z",
+  "contractChecksum": "2f98160e6139a75d",
   "apiPrediction": {
     "specName": "general-ledger-configuration",
     "baseUrl": "/sws/neo/general-ledger-configuration",
@@ -581,10 +581,13 @@
           "currency": {
             "required": true
           },
+          "allowNegative": {
+            "required": true,
+            "defaultValue": "N"
+          },
           "accrual": {
             "defaultValue": "Y"
-          },
-          "automaticPeriodControl": {}
+          }
         }
       },
       "Dimensiones": {
@@ -747,7 +750,8 @@
       "headerFields": [
         "name",
         "gAAP",
-        "currency"
+        "currency",
+        "allowNegative"
       ],
       "lineFields": [
         "active",
@@ -801,7 +805,8 @@
         "fields": [
           "name",
           "gAAP",
-          "currency"
+          "currency",
+          "allowNegative"
         ]
       }
     ],
@@ -809,5 +814,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "cd5bd6bcce75371f"
+  "checksum": "75fa0961cbd2bb03"
 }

@@ -41,12 +41,10 @@
           "required": true,
           "section": "calendar"
         },
-        "automaticPeriodControl": {
+        "automaticPeriodControl": {},
+        "allowNegative": {
           "visibility": "editable",
           "section": "policies"
-        },
-        "allowNegative": {
-          "visibility": "system"
         },
         "historyDays": {
           "visibility": "system"

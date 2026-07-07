@@ -86,13 +86,12 @@ describe('useGeneralLedgerConfig — seed + dirty diff', () => {
     expect(result.current.isDirty).toBe(false);
   });
 
-  it('round-trips the inverted automaticPeriodControl raw boolean into the dirty payload', () => {
+  it('round-trips the allowNegative raw boolean into the dirty payload', () => {
     const { result } = renderSeeded();
-    // The UI binds the "closed periods" toggle inverted; the hook stores the raw
-    // AD value. Seed is true → allowing closed periods writes false.
-    expect(GENERAL_SEED.automaticPeriodControl).toBe(true);
-    act(() => result.current.setGeneralField('automaticPeriodControl', false));
-    expect(result.current.dirty.general).toEqual({ automaticPeriodControl: false });
+    // The UI binds the "allow negative" toggle directly to the raw AD value.
+    expect(GENERAL_SEED.allowNegative).toBe(false);
+    act(() => result.current.setGeneralField('allowNegative', true));
+    expect(result.current.dirty.general).toEqual({ allowNegative: true });
   });
 
   it('reset() reverts all pending edits', () => {

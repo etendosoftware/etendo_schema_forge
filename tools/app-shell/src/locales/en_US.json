@@ -20674,7 +20674,7 @@
     "glc.field.currency": "Main currency",
     "glc.accrual.accrual": "Accrual",
     "glc.accrual.cash": "Cash",
-    "glc.toggle.closedPeriods": "Posting in closed periods",
+    "glc.toggle.allowNegative": "Allow negative",
     "glc.unbacked.label": "Not saved",
     "glc.unbacked.tooltip": "This field is a design preview and is not stored yet.",
     "glc.readonly.fromOrgInfo": "Defined on the organization",

@@ -40,7 +40,7 @@ Backed editable fields:
 - `Criterio contable` → `accrual`
 - `Descripción` → `description`
 - `Moneda principal` → `currency`
-- `Asientos en periodos cerrados` → inverse binding of `AutoPeriodControl`
+- `Allow negative` → direct binding of `Allownegative`
 
 Hidden-but-kept backend field:
 

@@ -170,9 +170,9 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     });
   });
 
-  test('inverted period toggle: turning "closed periods" ON maps to automaticPeriodControl=false', async ({ page }) => {
-    const toggle = page.getByTestId('glc-toggle-closed-periods-switch');
-    // Seed automaticPeriodControl=true ⇒ "closed periods" starts OFF.
+  test('allow negative toggle: turning it ON maps to allowNegative=true', async ({ page }) => {
+    const toggle = page.getByTestId('glc-toggle-allow-negative-switch');
+    // Seed allowNegative=false ⇒ toggle starts OFF.
     await expect(toggle).not.toBeChecked();
     await toggle.click();
     await expect(toggle).toBeChecked();
@@ -180,7 +180,7 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     await page.getByTestId('glc-save').click();
 
     await expect.poll(() => post.last).not.toBeNull();
-    expect(post.last.general).toMatchObject({ automaticPeriodControl: false });
+    expect(post.last.general).toMatchObject({ allowNegative: true });
   });
 
   test('dimensions: toggling an optional row marks dirty and POSTs the dimension change', async ({ page }) => {

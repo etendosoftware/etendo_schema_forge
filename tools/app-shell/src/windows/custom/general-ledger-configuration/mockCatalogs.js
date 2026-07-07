@@ -129,15 +129,13 @@ export const GAAP_OPTIONS = [
 ];
 
 // ── Seed record: General (C_AcctSchema, single row) ──────────────────────────
-// `automaticPeriodControl` is the RAW AD value (AutoPeriodControl). The "Asientos
-// en periodos cerrados" toggle is bound INVERTED in the UI (see GeneralTab).
 export const GENERAL_SEED = {
   name: 'Contabilidad España — EUR',
   gAAP: 'SA',
   accrual: true, // IsAccrual=true ⇒ Devengo
   description: '',
   currency: 'EUR',
-  automaticPeriodControl: true, // AutoPeriodControl=Y ⇒ posting in closed periods OFF
+  allowNegative: false, // Allownegative=N ⇒ toggle OFF
 };
 
 // Offline fallback for the read-only org-scoped values (fiscal calendar +

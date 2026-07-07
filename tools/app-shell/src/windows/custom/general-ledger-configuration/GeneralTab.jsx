@@ -9,7 +9,6 @@ import { CURRENCY_OPTIONS } from './mockCatalogs.js';
  * Field binding follows the LOCKED "Field data-binding treatment" table in
  * figma-spec.md:
  *  - editable: name, accrual (Devengo/Caja), description, currency
- *  - automaticPeriodControl toggle bound INVERTED (toggle ON ⇒ AutoPeriodControl=N)
  *  - read-only org-scoped: fiscal calendar, organization (sourced live by the
  *    aggregate handler from the org's calendar + name; mock seed is the fallback)
  */
@@ -20,9 +19,6 @@ export default function GeneralTab({ general, orgInfo, currencyOptions = CURRENC
     { value: 'true', name: ui('glc.accrual.accrual') },
     { value: 'false', name: ui('glc.accrual.cash') },
   ];
-
-  // "Asientos en periodos cerrados" = inverse of AutoPeriodControl.
-  const allowClosedPeriods = !general.automaticPeriodControl;
 
   return (
     <div className="px-1">
@@ -99,10 +95,10 @@ export default function GeneralTab({ general, orgInfo, currencyOptions = CURRENC
       >
         <div className="max-w-2xl">
           <ToggleRow
-            label={ui('glc.toggle.closedPeriods')}
-            checked={allowClosedPeriods}
-            onCheckedChange={(checked) => setGeneralField('automaticPeriodControl', !checked)}
-            data-testid="glc-toggle-closed-periods"
+            label={ui('glc.toggle.allowNegative')}
+            checked={Boolean(general.allowNegative)}
+            onCheckedChange={(checked) => setGeneralField('allowNegative', checked)}
+            data-testid="glc-toggle-allow-negative"
           />
         </div>
       </SectionShell>

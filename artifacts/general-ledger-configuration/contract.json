@@ -1,8 +1,8 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-07T18:29:54.339Z",
-  "checksum": "f6072b8d0d2a0863",
+  "updatedAt": "2026-07-07T19:23:48.530Z",
+  "checksum": "2f98160e6139a75d",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -153,6 +153,25 @@
             "section": "calendar"
           },
           {
+            "name": "allowNegative",
+            "apiKey": "allowNegative",
+            "column": "Allownegative",
+            "label": "Allow negative",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "section": "policies"
+          },
+          {
             "name": "accrual",
             "apiKey": "accrual",
             "column": "IsAccrual",
@@ -169,19 +188,6 @@
             },
             "defaultValue": "Y",
             "section": "identity"
-          },
-          {
-            "name": "automaticPeriodControl",
-            "apiKey": "automaticPeriodControl",
-            "column": "AutoPeriodControl",
-            "label": "Automatic Period Control",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "section": "policies"
           }
         ],
         "searchableFields": [],
@@ -198,6 +204,13 @@
             "derivation": {
               "type": "computed",
               "source": "OT"
+            }
+          },
+          {
+            "name": "allowNegative",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           },
           {
@@ -1498,7 +1511,7 @@
             "apiKey": "allowNegative",
             "column": "Allownegative",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1522,7 +1535,7 @@
             "apiKey": "automaticPeriodControl",
             "column": "AutoPeriodControl",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3431,6 +3444,14 @@
         "description": "Default value for 'accrual' in General should be a string"
       },
       {
+        "id": "t-default-value-type-General-allowNegative",
+        "category": "default-value-type",
+        "entity": "General",
+        "field": "allowNegative",
+        "runner": "node",
+        "description": "Default value for 'allowNegative' in General should be a string"
+      },
+      {
         "id": "t-default-value-type-General-gAAP",
         "category": "default-value-type",
         "entity": "General",
@@ -3879,12 +3900,12 @@
         "description": "Field 'accrual' should be present in General"
       },
       {
-        "id": "t-field-presence-General-automaticPeriodControl",
+        "id": "t-field-presence-General-allowNegative",
         "category": "field-presence",
         "entity": "General",
-        "field": "automaticPeriodControl",
+        "field": "allowNegative",
         "runner": "node",
-        "description": "Field 'automaticPeriodControl' should be present in General"
+        "description": "Field 'allowNegative' should be present in General"
       },
       {
         "id": "t-field-presence-General-currency",
@@ -4447,12 +4468,12 @@
         "description": "Field 'accrual' should have type 'boolean' in General"
       },
       {
-        "id": "t-field-type-General-automaticPeriodControl",
+        "id": "t-field-type-General-allowNegative",
         "category": "field-type",
         "entity": "General",
-        "field": "automaticPeriodControl",
+        "field": "allowNegative",
         "runner": "node",
-        "description": "Field 'automaticPeriodControl' should have type 'boolean' in General"
+        "description": "Field 'allowNegative' should have type 'boolean' in General"
       },
       {
         "id": "t-field-type-General-currency",
@@ -5694,20 +5715,20 @@
         "description": "System field 'active' should exist in backend but not frontend for General"
       },
       {
-        "id": "t-system-field-General-allowNegative",
-        "category": "system-field",
-        "entity": "General",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "System field 'allowNegative' should exist in backend but not frontend for General"
-      },
-      {
         "id": "t-system-field-General-assetPositive",
         "category": "system-field",
         "entity": "General",
         "field": "assetPositive",
         "runner": "node",
         "description": "System field 'assetPositive' should exist in backend but not frontend for General"
+      },
+      {
+        "id": "t-system-field-General-automaticPeriodControl",
+        "category": "system-field",
+        "entity": "General",
+        "field": "automaticPeriodControl",
+        "runner": "node",
+        "description": "System field 'automaticPeriodControl' should exist in backend but not frontend for General"
       },
       {
         "id": "t-system-field-General-centralMaintenance",
@@ -6243,11 +6264,11 @@
       }
     ],
     "summary": {
-      "total": 364,
+      "total": 365,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 4,
-        "default-value-type": 5,
+        "default-value-type": 6,
         "displaylogic-evaluable": 14,
         "displaylogic-valid": 14,
         "field-presence": 71,
@@ -6260,7 +6281,7 @@
         "visibility": 4
       },
       "byRunner": {
-        "node": 364,
+        "node": 365,
         "junit": 0
       }
     }
