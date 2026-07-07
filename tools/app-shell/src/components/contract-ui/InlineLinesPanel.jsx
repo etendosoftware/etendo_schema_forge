@@ -209,7 +209,7 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
 /**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
-function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid }) {
+function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid }) {
   const inputRef = useRef(null);
   useEffect(() => {
     // Only steal focus on initial mount when nothing else is focused. Cells re-mount
@@ -266,9 +266,6 @@ function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus
         <SelectTrigger
           ref={inputRef}
           data-testid={`field-${col.key}`}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') { e.preventDefault(); onCancel?.(); }
-          }}
           className="w-full h-7 text-sm bg-white focus:ring-2 focus:ring-primary"
         >
           <SelectValue data-testid="SelectValue__3b7ec2" />
@@ -312,10 +309,6 @@ function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus
         if (e.key === 'Enter') {
           e.preventDefault();
           e.currentTarget.blur();
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          onCancel?.();
         }
       }}
       className={editInputClassName(isNumeric, isInvalid)}
@@ -393,6 +386,17 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       for (const sel of portalSelectors) {
         if (e.target.closest?.(sel)) return;
       }
+      // Radix's Select trigger calls preventDefault() on pointerdown to keep
+      // focus management under its own control, which suppresses the browser's
+      // natural focus-shift blur on the row's focused input/select. Without an
+      // explicit blur here, the pending edit's onCommit (and its autosave PATCH)
+      // doesn't fire until a SECOND click — when Radix's own deferred
+      // focus-into-listbox effect finally steals focus. Mirrors the blur() the
+      // imperative flushPendingEdits() below already performs.
+      if (typeof document !== 'undefined' && document.activeElement
+          && editingRowEl.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
       setTimeout(() => {
         if (hasValidationErrorRef.current) return;
         setEditingRowId(null);
@@ -408,6 +412,13 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // Active in-flight edit. Holds the latest pending field commit so a global "Save"
   // can flush it via the imperative ref before the document save runs.
   const pendingEditRef = useRef(null);
+
+  // Set for one tick while an Escape-triggered cancel is in flight. Discarding
+  // the edit unmounts the focused control (React removes it from the DOM),
+  // and the browser fires a native `blur` on a focused node as it's removed —
+  // which would otherwise re-invoke commitField with the very value being
+  // discarded, silently re-saving it. commitField checks this ref and bails.
+  const cancelingEditRef = useRef(false);
 
   // Visible columns: respect col.hidden flag if set (mirrors DataTable behavior).
   const visibleColumns = useMemo(
@@ -478,6 +489,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
 
   const commitField = useCallback(async (row, col, value, extras = {}) => {
     if (isDocumentReadOnly) return;
+    if (cancelingEditRef.current) return;
     hasValidationErrorRef.current = false;
     setInvalidCell(null);
     const original = row[col.key];
@@ -552,6 +564,18 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     setFocusColIdx(isCellEditable(col) ? idx : null);
     setEditingRowId(row.id);
   }, [isDocumentReadOnly, onEditRow, onRowClick, editingRowId]);
+
+  // Centralized Escape-to-cancel handler. A single row-level `onKeyDown` (see
+  // the row wrapper below) bubbles here from ANY focused descendant control —
+  // plain Input, Select, LookupTrigger's button, InlineSearchCombo — so every
+  // cell type cancels uniformly instead of each one wiring its own Escape
+  // handler. The cancelingEditRef guard tells commitField to ignore the
+  // native `blur` the DOM fires on the discarded control as it unmounts.
+  const handleCancelEdit = useCallback(() => {
+    cancelingEditRef.current = true;
+    setEditingRowId(null);
+    setTimeout(() => { cancelingEditRef.current = false; }, 0);
+  }, []);
 
   const handleDeleteClick = useCallback(async (row) => {
     if (isDocumentReadOnly) return;
@@ -648,6 +672,15 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
+            onKeyDown={isEditing ? (e) => {
+              // Catch-all: bubbles here from any focused descendant control
+              // (Input, Select, LookupTrigger's button, InlineSearchCombo)
+              // so Escape cancels uniformly regardless of cell type.
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                handleCancelEdit();
+              }
+            } : undefined}
             onClick={onRowClick ? (e) => {
               // Don't fire when the click was on the checkbox / hover actions —
               // those have their own handlers and stopping propagation there
@@ -719,7 +752,6 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                       selectorContext={selectorContext}
                       isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
                       onCommit={(val, extras) => commitField(row, col, val, extras)}
-                      onCancel={() => setEditingRowId(null)}
                       data-testid="EditCell__3b7ec2" />
                   ) : (
                     <ReadCell

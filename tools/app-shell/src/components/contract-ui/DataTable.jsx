@@ -21,6 +21,20 @@ function flexSpec(col, idx) {
   const [g, , b] = columnFlex(col, idx).split(' ');
   return { grow: parseInt(g, 10), basis: parseInt(b, 10) };
 }
+
+// Reproduces flexbox's exact width formula for `flex-grow: 1` columns when
+// mirrored into an HTML `<table style="table-layout: fixed">` colgroup.
+// Flexbox distributes leftover space EQUALLY among growing items ON TOP OF
+// each item's own basis (own basis + leftover/N). But a width-less <col> in
+// a fixed-layout table splits the leftover space equally while IGNORING each
+// column's own basis — so two grow columns with different bases (e.g. 192px
+// vs 224px) render as EQUAL width in the table, even though the real flex
+// rows always keep them a fixed 32px apart. This calc() expression restores
+// that per-column basis so both layouts match pixel-for-pixel.
+function growColumnWidth(basisPx, fixedTotalPx, growCount) {
+  if (!growCount) return undefined;
+  return `calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px)`;
+}
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import RowQuickActions from './RowQuickActions.jsx';
@@ -1388,6 +1402,22 @@ export function DataTable({
     && !visibleColumns.some(c => c.type === 'amount');
   const ilpTrailing = hideHeader && linesLayout === 'inlineEditable';
 
+  // Precompute the flex specs once so the colgroup below can both build the
+  // fixed/grow <col> widths AND feed growColumnWidth() the totals it needs
+  // (sum of every fixed-width slot + count of growing columns) — see the
+  // colgroup comment for why growing columns can't just be left width-less.
+  const colFlexSpecs = hideHeader ? visibleColumns.map((col, colIdx) => flexSpec(col, colIdx)) : [];
+  const growCount = colFlexSpecs.filter((s) => s.grow > 0).length;
+  const fixedColsTotalPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0)
+    + (selectable ? 40 : 0)
+    + (!ilpTrailing && hoverRowActions ? 40 : 0)
+    + (!ilpTrailing && hoverRowActions && onDeleteRow ? 40 : 0)
+    + (!ilpTrailing && !hoverRowActions && legacyDeleteEnabled ? 40 : 0)
+    + (!ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled ? 40 : 0)
+    + (!ilpTrailing && quickActionsEnabled ? 40 : 0)
+    + (ilpHasNoAmountCol ? 160 : 0)
+    + (ilpTrailing ? 48 : 0);
+
   return (
     <div className="space-y-0">
       <div className={linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible'}>
@@ -1395,17 +1425,19 @@ export function DataTable({
           {/* When hideHeader is true (add-row-only mode), a <colgroup> drives column
               widths with the same fixed/auto split used by InlineLinesPanel's flex
               layout. Fixed-size columns (flex-grow: 0) get explicit pixel widths;
-              flexible columns (flex-grow: 1) get no width so the browser shares
-              remaining space equally — matching flex's equal-grow distribution.
+              flexible columns (flex-grow: 1) get a growColumnWidth() calc() that
+              reproduces flexbox's "own basis + leftover/N" formula — a plain
+              width-less <col> would instead split leftover space EQUALLY and lose
+              each column's own basis (see growColumnWidth() above).
               table-layout: fixed makes the browser honour those col widths exactly. */}
           {hideHeader && (
             <colgroup>
               {selectable && <col style={{ width: 40 }} />}
               {visibleColumns.map((col, colIdx) => {
-                const { grow, basis } = flexSpec(col, colIdx);
+                const { grow, basis } = colFlexSpecs[colIdx];
                 return grow === 0
                   ? <col key={col.key} style={{ width: basis }} />
-                  : <col key={col.key} />;
+                  : <col key={col.key} style={{ width: growColumnWidth(basis, fixedColsTotalPx, growCount) }} />;
               })}
               {/* In inlineEditable add-row mode (ilpTrailing), all row actions
                   live inside InlineLinesPanel's 160px action slot — never add
