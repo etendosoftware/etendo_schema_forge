@@ -441,6 +441,105 @@ export const priceRuleVersion = [
   }
 ];
 
+export const accounting = [
+  {
+    "id": "mock-accounting-001",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Laptop Pro 15",
+    "productRevenue": "Laptop Pro 15",
+    "productCOGS": "Laptop Pro 15",
+    "productId": "mock-product-001"
+  },
+  {
+    "id": "mock-accounting-002",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "USB-C Cable",
+    "productRevenue": "USB-C Cable",
+    "productCOGS": "USB-C Cable",
+    "productId": "mock-product-002"
+  },
+  {
+    "id": "mock-accounting-003",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Wireless Mouse",
+    "productRevenue": "Wireless Mouse",
+    "productCOGS": "Wireless Mouse",
+    "productId": "mock-product-003"
+  },
+  {
+    "id": "mock-accounting-004",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Mechanical Keyboard",
+    "productRevenue": "Mechanical Keyboard",
+    "productCOGS": "Mechanical Keyboard",
+    "productId": "mock-product-004"
+  },
+  {
+    "id": "mock-accounting-005",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Monitor 27\"",
+    "productRevenue": "Monitor 27\"",
+    "productCOGS": "Monitor 27\"",
+    "productId": "mock-product-005"
+  },
+  {
+    "id": "mock-accounting-006",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Webcam HD",
+    "productRevenue": "Webcam HD",
+    "productCOGS": "Webcam HD",
+    "productId": "mock-product-006"
+  },
+  {
+    "id": "mock-accounting-007",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Headset Pro",
+    "productRevenue": "Headset Pro",
+    "productCOGS": "Headset Pro",
+    "productId": "mock-product-007"
+  },
+  {
+    "id": "mock-accounting-008",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Docking Station",
+    "productRevenue": "Docking Station",
+    "productCOGS": "Docking Station",
+    "productId": "mock-product-008"
+  },
+  {
+    "id": "mock-accounting-009",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "SSD 1TB",
+    "productRevenue": "SSD 1TB",
+    "productCOGS": "SSD 1TB",
+    "productId": "mock-product-009"
+  },
+  {
+    "id": "mock-accounting-010",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "RAM 16GB",
+    "productRevenue": "RAM 16GB",
+    "productCOGS": "RAM 16GB",
+    "productId": "mock-product-010"
+  },
+  {
+    "id": "mock-accounting-011",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Power Supply 750W",
+    "productRevenue": "Power Supply 750W",
+    "productCOGS": "Power Supply 750W",
+    "productId": "mock-product-011"
+  },
+  {
+    "id": "mock-accounting-012",
+    "fixedAsset": "Sample fixedAsset",
+    "productExpense": "Network Switch",
+    "productRevenue": "Network Switch",
+    "productCOGS": "Network Switch",
+    "productId": "mock-product-012"
+  }
+];
+
 export const billOfMaterials = [
   {
     "id": "mock-billOfMaterials-001",

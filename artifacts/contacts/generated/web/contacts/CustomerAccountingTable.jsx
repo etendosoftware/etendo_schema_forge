@@ -3,7 +3,8 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:customerAccounting
 const columns = [
-
+  { key: 'customerReceivablesNo', column: 'C_Receivable_Acct', type: 'selector', labels: {"en_US":"Receivables Account","es_ES":"Cuenta a Cobrar"}, label: 'Customer Receivables No.', required: true },
+  { key: 'customerPrepayment', column: 'C_Prepayment_Acct', type: 'selector', labels: {"en_US":"Prepayment Account","es_ES":"Cuenta de Anticipos"}, label: 'Customer Prepayment' },
 ];
 // @sf-generated-end columns:customerAccounting
 

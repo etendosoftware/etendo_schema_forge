@@ -40,6 +40,10 @@ const INVOICE_HEADER = {
   priceList: 'pl-mock-001',
   grandTotalAmount: 0,
   summedLineAmount: 0,
+  // `currency` is a required header field; resolveCanAddLines checks the field
+  // value (not the $_identifier), so both must be set or canAddLine stays false
+  // and the empty-state import button never renders.
+  currency: 'eur-1',
   'currency$_identifier': 'EUR',
 };
 

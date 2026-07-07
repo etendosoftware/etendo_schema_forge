@@ -1,0 +1,2532 @@
+{
+  "sql": "SELECT ai.Name, ai.Code AS validation_code, t.Name AS tab_name, t.AD_Tab_ID, ai.AD_AuxiliarInput_ID FROM AD_AuxiliarInput ai JOIN AD_Tab t ON ai.AD_Tab_ID = t.AD_Tab_ID WHERE t.AD_Window_ID = $1 ORDER BY t.SeqNo, t.Name, t.AD_Tab_ID, ai.Name, ai.AD_AuxiliarInput_ID",
+  "versions": {
+    "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "144"
+      ],
+      "rows": []
+    },
+    "1feda5e22cc22a1d4e3aac66d18b6389393ebc433e692b138a3feed155b5c6e1": {
+      "checksum": "e6b7013cf37cb6bee4472555a6c455742f7c8f98d1990efc36dea41102fa948e",
+      "params": [
+        "137"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "08B7BB0043B9468D8511444BE57F0273",
+          "ad_tab_id": "174",
+          "name": "etvfac_has_conf_tax",
+          "tab_name": "Tax",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM etvfac_verifactu_config WHERE (AD_ORG_ID=AD_GET_ORG_LE_BU(@AD_ORG_ID@, 'LE') OR @AD_ORG_ID@='0'))"
+        },
+        {
+          "ad_auxiliarinput_id": "A3A627278ABA4B8E91360F8391114A3A",
+          "ad_tab_id": "174",
+          "name": "etvfac_type_igic",
+          "tab_name": "Tax",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM etvfac_verifactu_config WHERE TAX_Type='03')"
+        },
+        {
+          "ad_auxiliarinput_id": "E58CD9FEB8CA4630AA599C2DA13D0C89",
+          "ad_tab_id": "174",
+          "name": "etvfac_type_ipsi",
+          "tab_name": "Tax",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM etvfac_verifactu_config WHERE TAX_Type='02')"
+        },
+        {
+          "ad_auxiliarinput_id": "CDCCAA85731549CFAAD17B7F46BF8904",
+          "ad_tab_id": "174",
+          "name": "etvfac_type_iva",
+          "tab_name": "Tax",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM etvfac_verifactu_config WHERE TAX_Type='01')"
+        },
+        {
+          "ad_auxiliarinput_id": "C6FC2E0905E6426597DBAED01207DEF8",
+          "ad_tab_id": "333",
+          "name": "OBCVAT_isTaxCashVAT",
+          "tab_name": "Accounting",
+          "validation_code": "@SQL=SELECT ISCASHVAT FROM C_TAX WHERE C_Tax_ID=@C_Tax_ID@"
+        }
+      ]
+    },
+    "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
+      "checksum": "597a10fdba55ccd60a219212e958375177ec2f697efbb92439b2e67e44890198",
+      "params": [
+        "123"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "FF80808130B61AFB0130B62E904B000E",
+          "ad_tab_id": "223",
+          "name": "FIN_ISRECEIPT",
+          "tab_name": "Customer",
+          "validation_code": "Y"
+        },
+        {
+          "ad_auxiliarinput_id": "FF80808130B61AFB0130B62ECFD90010",
+          "ad_tab_id": "224",
+          "name": "FIN_ISRECEIPT",
+          "tab_name": "Vendor/Creditor",
+          "validation_code": "N"
+        },
+        {
+          "ad_auxiliarinput_id": "CF4458717FD243B0953351850E353F23",
+          "ad_tab_id": "226",
+          "name": "COUNTRYDEF",
+          "tab_name": "Bank Account",
+          "validation_code": "@SQL= select (case when (select count(l.c_bpartner_location_id) from c_bpartner_location l left join c_location loc on l.c_location_id=loc.c_location_id left join c_country co on loc.c_country_id=co.c_country_id left join c_bpartner bpa on l.c_bpartner_id=bpa.c_bpartner_id where l.isactive='Y' and bpa.c_bpartner_id=@C_BPARTNER_ID@) >0 then (select b.c_country_id from (select a.c_country_id, Row_Number() OVER (ORDER BY a.isdefault desc) as myrow from (select co.c_country_id, co.isDefault from c_bpartner_location bpl left join c_location loc on bpl.c_location_id=loc.c_location_id left join c_country co on loc.c_country_id=co.c_country_id left join c_bpartner bpa on bpl.c_bpartner_id=bpa.c_bpartner_id where bpl.isactive='Y' and bpa.c_bpartner_id=@C_BPARTNER_ID@) a ) b where myrow=1) else (select b.c_country_id from (select a.c_country_id, Row_Number() OVER (ORDER BY a.isdefault desc) as myrow from (select co.c_country_id, co.isDefault from c_country co where co.isDefault='Y') a) b where myrow=1) end) from c_bpartner where c_bpartner_id=@C_BPARTNER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "6BDE684AC58045218FAEB2A11221911B",
+          "ad_tab_id": "496",
+          "name": "isPortalRolePresent",
+          "tab_name": "Contact",
+          "validation_code": "@SQL=SELECT COUNT(*) FROM AD_ROLE WHERE ISPORTAL='Y'"
+        }
+      ]
+    },
+    "2f39e9609e474ff1203aed0f3c2e2ac4d33f2eefb8a503de19acec318125e2dc": {
+      "checksum": "d98fd4b0ad6dc966929691ba55d7803e0e966c4b1ec63c5255b295d4a5ae2a95",
+      "params": [
+        "170"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "E4A3C225FA09479DBCB33D4E15A410B8",
+          "ad_tab_id": "259",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "MMM"
+        },
+        {
+          "ad_auxiliarinput_id": "2E5B825F8A2F4430B33B083D89B23618",
+          "ad_tab_id": "260",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "0E03F64542694568B5C08A0E088A67F0",
+          "ad_tab_id": "260",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800002",
+          "ad_tab_id": "260",
+          "name": "HASSECONDUOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "BA412E2F1B42454095DC69F2077E07AB",
+          "ad_tab_id": "260",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM M_MOVEMENT\nWHERE M_MOVEMENT_ID = @M_MOVEMENT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "F5D52BE5281A4969946A5332D641DE93",
+          "ad_tab_id": "260",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM M_MOVEMENT WHERE M_MOVEMENT_ID = @M_MOVEMENT_ID@"
+        }
+      ]
+    },
+    "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
+      "checksum": "898da2a5545a8bc31e607cad6c5685f8f4f234ef8de40a9fc53ccb6567ae3eda",
+      "params": [
+        "143"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "A1ED6BE5E7394764B4ACCB8610D6D7EF",
+          "ad_tab_id": "186",
+          "name": "AEATSII_AcogidaSII4",
+          "tab_name": "Header",
+          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)"
+        },
+        {
+          "ad_auxiliarinput_id": "9FF4321DE0E5487B8A649A444F3F64BC",
+          "ad_tab_id": "186",
+          "name": "APRM_OrderIsPaid",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select case when ps.outstandingamt <> 0 then 'N' else 'Y' end\n          from fin_payment_scheduledetail fpsd\n              join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id\n              join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id\n              join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_order\n              join c_order co on co.c_order_id=ps.c_order_id\n                WHERE ps.c_order_id =@c_order_id@\n                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40\n                group by co.GrandTotal, ps.outstandingamt, ps.c_order_id"
+        },
+        {
+          "ad_auxiliarinput_id": "09BF7886BE7846C3B870F354B8301159",
+          "ad_tab_id": "186",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select coalesce(max(docbasetype), 'SOO') from c_doctype where c_doctype_id = @c_doctypetarget_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "6",
+          "ad_tab_id": "186",
+          "name": "ORDERTYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "D0DC4F3EC11B4F6D9457EF08B5AF54C5",
+          "ad_tab_id": "186",
+          "name": "PromotionsDefined",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select case when count(*) = 0 then 'N' else 'Y' end from m_offer where isactive='Y' and ad_client_id = @AD_Client_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "34E955EADE8843BD9A0342895CB8AAF0",
+          "ad_tab_id": "186",
+          "name": "showAddPayment",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select case when sum(fpsd.amount)=co.GrandTotal then 'N' else 'Y' end\n          from fin_payment_scheduledetail fpsd\n              join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id\n              join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id\n              join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_order\n              join c_order co on co.c_order_id=ps.c_order_id\n                WHERE ps.c_order_id =@c_order_id@\n                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40\n                group by co.GrandTotal"
+        },
+        {
+          "ad_auxiliarinput_id": "0A17DEEA6AE34D0AAF8D7D789BBEB16A",
+          "ad_tab_id": "187",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "377353A77F7A4876BE4F36592679CD4C",
+          "ad_tab_id": "187",
+          "name": "ATTRIBUTESETINSTANCIABLE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE count(*) WHEN 0 THEN 'N' ELSE 'Y' END) from M_ATTRIBUTESET mats join M_PRODUCT mp on mats.M_AttributeSet_ID=mp.M_AttributeSet_ID WHERE mp.M_PRODUCT_ID=@M_Product_ID@ and (mats.IsLot='Y' or mats.IsSerNo='Y' or mats.IsGuaranteeDate='Y')"
+        },
+        {
+          "ad_auxiliarinput_id": "4B4FADE3E6AC41F0827B3120AD6C3FAA",
+          "ad_tab_id": "187",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "39F11BEB43D7442F81AE2ECE5341550F",
+          "ad_tab_id": "187",
+          "name": "C_BPARTNER_ID",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT C_BPARTNER_ID FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "2F68ED80A1824966845A6CED4A2B5B45",
+          "ad_tab_id": "187",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=select coalesce(max(dt.docbasetype), 'SOO') from c_order ord join c_doctype dt on (ord.c_doctypetarget_id = dt.c_doctype_id)\nwhere ord.c_order_id = @c_order_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "F77560579B7E4105A0C8455FCFB1B333",
+          "ad_tab_id": "187",
+          "name": "GROSSPRICE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "67C474B1ACCB4442BC5C0CC1B8CFA727",
+          "ad_tab_id": "187",
+          "name": "HASRELATEDSERVICE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM C_ORDERLINE_SERVICERELATION WHERE C_ORDERLINE_RELATED_ID =  @C_ORDERLINE_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "800010",
+          "ad_tab_id": "187",
+          "name": "HASSECONDUOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "BBFAC7EEB599451388E60BA877C89809",
+          "ad_tab_id": "187",
+          "name": "isBOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT isBOM FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "9C4726AC432E4C5A81A21436D4062611",
+          "ad_tab_id": "187",
+          "name": "ISLINKEDTOPRODUCT",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ISLINKEDTOPRODUCT FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "E4536B2BCBDB4469A130B3BD4D7DEB53",
+          "ad_tab_id": "187",
+          "name": "isQuantityVariable",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ISQUANTITYVARIABLE FROM M_PRODUCT where M_PRODUCT_ID = @M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "CF00CC6BA5F747CBB77CA682833A22FE",
+          "ad_tab_id": "187",
+          "name": "IsStocked",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT IsStocked FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "DED55CC8E7EB48899AB8779A3C8233BD",
+          "ad_tab_id": "187",
+          "name": "LINKEDTOPRODUCT",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN PRODUCTTYPE = 'S' AND ISLINKEDTOPRODUCT = 'Y' THEN 'Y' ELSE 'N' END FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "2DED276495BD4544AA805CDF95409734",
+          "ad_tab_id": "187",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF45754650034D1695FB584866C04DC5",
+          "ad_tab_id": "187",
+          "name": "Posted",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT POSTED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "3ACE8CFB656847998D9236DAA1D66E49",
+          "ad_tab_id": "187",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "6FF318BC6B214568AF629A157CD8E84C",
+          "ad_tab_id": "187",
+          "name": "PRODUCTTYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PRODUCTTYPE FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "81E735D7FA45476498395FDD9AB982ED",
+          "ad_tab_id": "187",
+          "name": "UsesAlternate",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(C_TAX_ID)>0 THEN 'Y' ELSE 'N' END AS ISUSED FROM C_TAX WHERE C_TAX_ISMEMBER(@C_TAX_ID@, C_TAX_ID)=1 AND BASEAMOUNT IN ('TBA', 'TBATAX')"
+        },
+        {
+          "ad_auxiliarinput_id": "28ED26740131436AB863EACF9AB45C3B",
+          "ad_tab_id": "800222",
+          "name": "GROSSPRICE",
+          "tab_name": "Discounts and Promotions",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "3752F4D586254CA0BAA6CE2AA8E6137F",
+          "ad_tab_id": "83F933AC3F5B427F9A04C9DB0257F26E",
+          "name": "DOCBASETYPE",
+          "tab_name": "Accounting dimension",
+          "validation_code": "@SQL=select coalesce(max(dt.docbasetype), 'SOO') from c_orderline_acctdimension olacct \n                           join c_orderline ol on (olacct.c_orderline_id=ol.c_orderline_id)\n                           join c_order ord on (ol.c_order_id=ord.c_order_id)\n                           join c_doctype dt on (ord.c_doctypetarget_id = dt.c_doctype_id)\n                          where ord.c_order_id = @c_order_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "86D5129018F44FC7AB5B936246DCDE6C",
+          "ad_tab_id": "E8E006D3E8B64CB1A80C99EC1DEC2046",
+          "name": "INTR_ORDER",
+          "tab_name": "Intrastat",
+          "validation_code": "@SQL=SELECT processed FROM C_ORDER WHERE C_ORDER_ID IN (SELECT C_ORDER_ID FROM C_ORDERLINE WHERE C_ORDERLINE_ID=@C_Orderline_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "0FBA548D909C4F80A7028583A4A5BE45",
+          "ad_tab_id": "1011100000",
+          "name": "Processed",
+          "tab_name": "Basic Discounts",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "A937C82DEBEF4A5A998C89372C02915A",
+          "ad_tab_id": "236",
+          "name": "Processed",
+          "tab_name": "Tax",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        }
+      ]
+    },
+    "329bb148af9a6baadc8cc6aa9df89e1dbde1f38927b1a7eb474a4e9522daff88": {
+      "checksum": "e4b390b9858f1c0dd5a0ec4b482653f75059973932082153fb82ba9e167b76ad",
+      "params": [
+        "800076"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "93B167F1358F4D7E8767FF56D97CF924",
+          "ad_tab_id": "800202",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "MIC"
+        },
+        {
+          "ad_auxiliarinput_id": "B6286BA3CA2C46399621277A75BA7569",
+          "ad_tab_id": "800203",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "02C232776AB84E3A9E37F823074A1534",
+          "ad_tab_id": "800203",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800041",
+          "ad_tab_id": "800203",
+          "name": "HASSECONDUOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'"
+        }
+      ]
+    },
+    "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
+      "checksum": "a774d083acdbe2a6eeeeddc734a5f3e9d860d249b8bea24886e7de9f9d1abd13",
+      "params": [
+        "167"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "4ACD34CF4322488AA30DF68F992BD674",
+          "ad_tab_id": "263",
+          "name": "AEATSII_AcogidaSII",
+          "tab_name": "Header",
+          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)"
+        },
+        {
+          "ad_auxiliarinput_id": "7A6DD0A1AF304BE288BBFBE305EA1227",
+          "ad_tab_id": "263",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select coalesce(max(docbasetype), 'ARI') from c_doctype where c_doctype_id = @c_doctypetarget_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "D08C1AC6607442B98AC1B69BD70ADFC2",
+          "ad_tab_id": "263",
+          "name": "etvfac_has_configuration",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM etvfac_verifactu_config WHERE AD_ORG_ID=AD_GET_ORG_LE_BU(@AD_ORG_ID@, 'LE'))"
+        },
+        {
+          "ad_auxiliarinput_id": "532E581CC1A54077B0371B589592F83F",
+          "ad_tab_id": "263",
+          "name": "ETVFAC_VoidInvoice",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (\n    SELECT 1 \n    FROM c_invoice_reverse \n    WHERE c_invoice_id = @C_INVOICE_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "34E27119A7B74205B025002E9CD5074F",
+          "ad_tab_id": "263",
+          "name": "HAS_C_INVOICELINES",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select 'Y' from dual where exists (select 1 from c_invoiceline where c_invoice_id = @C_INVOICE_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "2FD1AE5689D342FF94A2704690CEE517",
+          "ad_tab_id": "263",
+          "name": "IsReversalDocument",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select isreversal\nfrom c_doctype where c_doctype_id = @c_doctypetarget_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "1459AA66723E4905BE05C09DC757DA6E",
+          "ad_tab_id": "263",
+          "name": "PromotionsDefined",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select case when count(*) = 0 then 'N' else 'Y' end from m_offer where isactive='Y' and ad_client_id = @AD_Client_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FFA925AAC4BB49D5A67C05DAD16EFA32",
+          "ad_tab_id": "263",
+          "name": "showAddPayment",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select case when sum(fpsd.amount)=ci.GrandTotal then 'N' else 'Y' end \n          from fin_payment_scheduledetail fpsd\n              join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id\n              join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id\n              join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_invoice\n              join c_invoice ci on ci.c_invoice_id=ps.c_invoice_id\n                WHERE ps.c_invoice_id =@c_invoice_id@\n                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40\n                group by ci.GrandTotal"
+        },
+        {
+          "ad_auxiliarinput_id": "56FF454186D144C49379FFF03A9CDF08",
+          "ad_tab_id": "263",
+          "name": "TBAI_ExistConfigAndIsAvailable",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM tbai_config conf WHERE TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate AND ad_isorgincluded(@AD_Org_ID@, conf.ad_org_id, @AD_Client_ID@) <> -1 AND conf.isactive = 'Y') THEN 1 ELSE 0 END AS exists_result FROM DUAL"
+        },
+        {
+          "ad_auxiliarinput_id": "13AD344CF09247798B56CC524A9D7E0F",
+          "ad_tab_id": "263",
+          "name": "TBAI_ExistTBAIConfig",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM tbai_config conf WHERE ad_isorgincluded(@AD_Org_ID@, conf.ad_org_id, @AD_Client_ID@) <> -1 AND conf.isactive = 'Y') THEN 1 ELSE 0 END AS result FROM dual"
+        },
+        {
+          "ad_auxiliarinput_id": "BDEF0643CE1542D2B32F8DB5EF6A77C0",
+          "ad_tab_id": "263",
+          "name": "TBAI_isReturn",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT ISRETURN FROM C_DocType WHERE C_DocType_ID = @C_DocTypeTarget_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "3D25A2F046D7453588DF280E73454BBA",
+          "ad_tab_id": "263",
+          "name": "TBAI_VoidedInvoiceSended",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM c_invoice_reverse ri INNER JOIN c_invoice i ON i.c_invoice_id = ri.reversed_c_invoice_id AND i.em_tbai_issent = 'Y' WHERE ri.c_invoice_id = @C_Invoice_ID@) THEN 1 ELSE 0 END AS exists_result FROM DUAL"
+        },
+        {
+          "ad_auxiliarinput_id": "B54EEEFACAD4427ABE5F88D0C27524B5",
+          "ad_tab_id": "263",
+          "name": "VoidAutomaticallyCreated",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT COUNT(*) FROM C_INVOICE_REVERSE WHERE C_INVOICE_ID=@C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "637CCFE37ADD45B5810D3490DF33CF2E",
+          "ad_tab_id": "270",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "51568B79156646C8966F49F82EE51CB7",
+          "ad_tab_id": "270",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800027",
+          "ad_tab_id": "270",
+          "name": "C_BPARTNER_ID",
+          "tab_name": "Lines",
+          "validation_code": "@C_BPARTNER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "B727417F9385474AB816BA585B1DAD74",
+          "ad_tab_id": "270",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=select coalesce(max(dt.docbasetype), 'ARI') from c_invoice inv join c_doctype dt on (inv.c_doctypetarget_id = dt.c_doctype_id)\nwhere inv.c_invoice_id = @c_invoice_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "E852BFC21B4C468C9E3F22901A6ED75C",
+          "ad_tab_id": "270",
+          "name": "GROSSPRICE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800004",
+          "ad_tab_id": "270",
+          "name": "HASSECONDUOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "3EE2062DF62F4E948FD9786D21AF2D0C",
+          "ad_tab_id": "270",
+          "name": "isBOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT isBOM FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "467629226B744AD5A9D5CEBD284C29E4",
+          "ad_tab_id": "270",
+          "name": "IsStocked",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT IsStocked FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "231D1034C3D2450C969AEFCA7B680A8E",
+          "ad_tab_id": "270",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_INVOICE\nWHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "571778C5E2AD4A13BDD7DD15A4DA470E",
+          "ad_tab_id": "270",
+          "name": "Posted",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT POSTED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "4D9613116EAA46A585AEDB75237D5140",
+          "ad_tab_id": "270",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "1F06154C94734F81A968E51738CC7B62",
+          "ad_tab_id": "270",
+          "name": "UsesAlternate",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(C_TAX_ID)>0 THEN 'Y' ELSE 'N' END AS ISUSED FROM C_TAX WHERE C_TAX_ISMEMBER(@C_TAX_ID@, C_TAX_ID)=1 AND BASEAMOUNT IN ('TBA', 'TBATAX')"
+        },
+        {
+          "ad_auxiliarinput_id": "C4934BED71CC42089883DFD554B060B8",
+          "ad_tab_id": "800223",
+          "name": "GROSSPRICE",
+          "tab_name": "Discounts and Promotions",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "396DA37927A34D009819599FB5F5F8B0",
+          "ad_tab_id": "22B201B931E540EDA0B6630B50E3B8D3",
+          "name": "DOCBASETYPE",
+          "tab_name": "Accounting dimension",
+          "validation_code": "@SQL=select coalesce(max(dt.docbasetype), 'ARI') from c_invoiceline_acctdimension ilacct \n                           join c_invoiceline il on (ilacct.c_invoiceline_id=il.c_invoiceline_id)\n                           join c_invoice inv on (il.c_invoice_id=inv.c_invoice_id)\n                           join c_doctype dt on (inv.c_doctypetarget_id = dt.c_doctype_id)\n\t\t\t where inv.c_invoice_id = @c_invoice_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "27055EE6FA73436F94B51E5D08E06D12",
+          "ad_tab_id": "ADD3200AA0D5477583E0566A1FF792FC",
+          "name": "INTR_INVOICE",
+          "tab_name": "Intrastat",
+          "validation_code": "@SQL=SELECT processed FROM C_INVOICE WHERE C_INVOICE_ID IN (SELECT C_INVOICE_ID FROM C_INVOICELINE WHERE C_INVOICELINE_ID=@C_Invoiceline_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "8EABF3F382CD41B5B5E459A771F0E9C5",
+          "ad_tab_id": "271",
+          "name": "Processed",
+          "tab_name": "Tax",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "69B122EAEF3B42398D27D5FF0F44AD40",
+          "ad_tab_id": "800059",
+          "name": "Processed",
+          "tab_name": "Basic Discounts",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "B87967F7CAA34EDE9E81E5737A4330F0",
+          "ad_tab_id": "F6C2283A21314407BBBB23FF14B85ED4",
+          "name": "IsReceipt",
+          "tab_name": "Payment Details",
+          "validation_code": "Y"
+        },
+        {
+          "ad_auxiliarinput_id": "01379E71C9E342A28AD3A60B5D499362",
+          "ad_tab_id": "28D602B576DF417AB289B4EC94BE2C17",
+          "name": "Processed",
+          "tab_name": "Reversed Invoices",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF80818130F526CB0130F5A7BC430006",
+          "ad_tab_id": "FF808181308EA4230130901D313D00A5",
+          "name": "HASREVERSEDINVOICESO",
+          "tab_name": "Exchange rates",
+          "validation_code": "@SQL=SELECT 'Y' \nFROM DUAL \nWHERE EXISTS (SELECT 1 FROM C_INVOICE_REVERSE WHERE C_INVOICE_ID = @C_Invoice_ID@ )\nAND EXISTS (SELECT 1 FROM C_CONVERSION_RATE_DOCUMENT WHERE C_INVOICE_ID = (SELECT REVERSED_C_INVOICE_ID\n                                                                               FROM C_INVOICE_REVERSE\n                                                                               WHERE C_INVOICE_ID = @C_Invoice_ID@) )"
+        }
+      ]
+    },
+    "497d22250e1d13c84623c8e047b7548d1f6599add1a21bdae45ea1c26363026e": {
+      "checksum": "5233bc023cc0812cc27ad48961239daefdbda11955061d1ebf83ff3c51eed2fb",
+      "params": [
+        "6F8F913FA60F4CBD93DC1D3AA696E76E"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "2394571515C643119770FD8A5DCBC1C5",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "APP"
+        },
+        {
+          "ad_auxiliarinput_id": "40289DEF2E1E98E4012E1EE6C6CD002E",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "FinancialAccountCurrencyId",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "BB2C006C5ADE411D95E5F62141A706E1",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "FIN_ISRECEIPT",
+          "tab_name": "Header",
+          "validation_code": "N"
+        },
+        {
+          "ad_auxiliarinput_id": "FF8080812E26BF58012E27DC86DE016C",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "IsMultiCurrencyEnabled",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT (CASE count(*) WHEN 0 THEN 'N' ELSE 'Y' END) from fin_finacc_paymentmethod \nwhere fin_financial_account_id = @FIN_Financial_Account_ID@\nand fin_paymentmethod_id = @FIN_PaymentMethod_ID@ and isactive='Y'\nand payout_allow ='Y' and payout_ismulticurrency='Y'\n\n"
+        },
+        {
+          "ad_auxiliarinput_id": "8F5507C7CDB5438E9CE05940222F52D6",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "PSD2_ClientHasApiKey",
+          "tab_name": "Header",
+          "validation_code": "@SQL= select 1 from AD_Client where AD_Client_ID = @#AD_CLIENT_ID@ AND em_psd2_api_key is not null"
+        },
+        {
+          "ad_auxiliarinput_id": "B0C1D2E3F4A5B6C7D8E9F0A1B2C3D4E5",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "PSD2_FAIsBank",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN fa.TYPE = 'B' THEN 1 ELSE 0 END FROM FIN_Payment p INNER JOIN FIN_Financial_Account fa ON fa.FIN_Financial_Account_ID = p.FIN_Financial_Account_ID WHERE p.FIN_Payment_ID = @FIN_Payment_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FDA6A486EA1445A98D04C10AEB90B338",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "PSD2_HasFinTransaction",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT count(1) FROM FIN_Finacc_Transaction WHERE FIN_Payment_ID = @FIN_Payment_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "94358051C6724C4CB982DA7E1C087821",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "PSD2_HasPayments",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select count(1) from PSD2_pis_payment where FIN_Payment_id =@FIN_Payment_ID@ and status not in ('failed','initiated_info_required', 'initiated','requested')"
+        },
+        {
+          "ad_auxiliarinput_id": "F8A9B0C1D2E3F4A5B6C7D8E9F0A1B2C3",
+          "ad_tab_id": "F7A52FDAAA0346EFA07D53C125B40404",
+          "name": "PSD2_PMIsBankTransfer",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN COALESCE((SELECT fapm.EM_PSD2_Is_Bank_Transfer FROM FIN_FinAcc_PaymentMethod fapm WHERE fapm.FIN_Financial_Account_ID = p.FIN_Financial_Account_ID AND fapm.FIN_PaymentMethod_ID = p.FIN_PaymentMethod_ID), pm.EM_PSD2_Is_Bank_Transfer) = 'Y' THEN 1 ELSE 0 END FROM FIN_Payment p INNER JOIN FIN_PaymentMethod pm ON pm.FIN_PaymentMethod_ID = p.FIN_PaymentMethod_ID WHERE p.FIN_Payment_ID = @FIN_Payment_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "98D77843C0C04B84974A07ABE13BBFF3",
+          "ad_tab_id": "07F009753DA647C2AF38697BA9F1B1A0",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines (Old)",
+          "validation_code": "APP"
+        },
+        {
+          "ad_auxiliarinput_id": "57C6F047656D4BB2B7D987BFA8C028B8",
+          "ad_tab_id": "809C66481863428C8D714F2018644CC6",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "APP"
+        }
+      ]
+    },
+    "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
+      "checksum": "d5e27d65e51366aaff28013d0b03df57dd0607203a0376cc2d967e5770a21043",
+      "params": [
+        "183"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "6A6FE98A9D8F40C58F7265D3D124054C",
+          "ad_tab_id": "290",
+          "name": "AEATSII_AcogidaSII2",
+          "tab_name": "Header",
+          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)"
+        },
+        {
+          "ad_auxiliarinput_id": "2CEB169F0BBD4923B98F905CA3B96501",
+          "ad_tab_id": "290",
+          "name": "AEATSII_InSIIAndPostedInvoices",
+          "tab_name": "Header",
+          "validation_code": "@SQL=(SELECT COALESCE((CASE WHEN (SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)) = 'N' THEN 'Y' ELSE (SELECT conf.posted_invoices FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)) END),'Y') FROM dual)"
+        },
+        {
+          "ad_auxiliarinput_id": "2EECDD832E0E4F01B551D9B1B7CDBB65",
+          "ad_tab_id": "290",
+          "name": "AEATSII_PreSII_Invoice",
+          "tab_name": "Header",
+          "validation_code": "@SQL=(SELECT (CASE WHEN to_date(to_char((SELECT i.dateacct from c_invoice i where i.c_invoice_id = @C_Invoice_ID@),'YYYY-MM-DD'),'YYYY-MM-DD') < to_date(to_char((SELECT conf.insiisystemdate FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'YYYY-MM-DD'),'YYYY-MM-DD') THEN 'Y' ELSE 'N' END) FROM dual)"
+        },
+        {
+          "ad_auxiliarinput_id": "68CD2AFDCEAB45ADB0690B33067B7940",
+          "ad_tab_id": "290",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select coalesce(max(docbasetype), 'API') from c_doctype where c_doctype_id = @c_doctypetarget_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "AF1F32AFD6794C6C9C3C2EC82DC2F92A",
+          "ad_tab_id": "290",
+          "name": "HAS_C_INVOICELINES",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select 'Y' from dual where exists (select 1 from c_invoiceline where c_invoice_id = @C_INVOICE_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "5D10E446E9ED4DB7B94A83792C9F42CC",
+          "ad_tab_id": "290",
+          "name": "IsReversalDocument",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select isreversal\nfrom c_doctype where c_doctype_id = @c_doctypetarget_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "8E9F0A1B2C3D4E0050002D3E4F5A6B7C",
+          "ad_tab_id": "290",
+          "name": "PSD2_ClientHasApiKey",
+          "tab_name": "Header",
+          "validation_code": "@SQL= select 1 from AD_Client where AD_Client_ID = @#AD_CLIENT_ID@ AND em_psd2_api_key is not null"
+        },
+        {
+          "ad_auxiliarinput_id": "9F0A1B2C3D4E5F11600003E4F5A6B7C8",
+          "ad_tab_id": "290",
+          "name": "PSD2_HasEligiblePayment",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT count(1) FROM FIN_Payment p INNER JOIN FIN_Payment_Detail pd ON pd.FIN_Payment_ID = p.FIN_Payment_ID INNER JOIN FIN_Payment_ScheduleDetail psd ON psd.FIN_Payment_Detail_ID = pd.FIN_Payment_Detail_ID INNER JOIN FIN_Payment_Schedule ps ON ps.FIN_Payment_Schedule_ID = psd.FIN_Payment_Schedule_Invoice INNER JOIN FIN_Financial_Account fa ON fa.FIN_Financial_Account_ID = p.FIN_Financial_Account_ID INNER JOIN FIN_PaymentMethod pm ON pm.FIN_PaymentMethod_ID = p.FIN_PaymentMethod_ID WHERE ps.C_Invoice_ID = @C_Invoice_ID@ AND p.status = 'PPM' AND fa.TYPE = 'B' AND COALESCE((SELECT fapm.EM_PSD2_Is_Bank_Transfer FROM FIN_FinAcc_PaymentMethod fapm WHERE fapm.FIN_Financial_Account_ID = p.FIN_Financial_Account_ID AND fapm.FIN_PaymentMethod_ID = p.FIN_PaymentMethod_ID), pm.EM_PSD2_Is_Bank_Transfer) = 'Y' AND (SELECT count(1) FROM PSD2_pis_payment pip WHERE pip.FIN_Payment_ID = p.FIN_Payment_ID AND pip.status NOT IN ('failed','initiated_info_required','initiated','requested')) = 0 AND (SELECT count(1) FROM FIN_Finacc_Transaction fft WHERE fft.FIN_Payment_ID = p.FIN_Payment_ID) = 0"
+        },
+        {
+          "ad_auxiliarinput_id": "9E5EF28335254D948E30BAF9BF41B3A7",
+          "ad_tab_id": "290",
+          "name": "showAddPayment",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select case when sum(fpsd.amount)=ci.GrandTotal then 'N' else 'Y' end \n          from fin_payment_scheduledetail fpsd\n                 join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id\n                join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id\n                join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_invoice\n                join c_invoice ci on ci.c_invoice_id=ps.c_invoice_id\n                WHERE ps.c_invoice_id =@c_invoice_id@\n                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40\n                group by ci.GrandTotal"
+        },
+        {
+          "ad_auxiliarinput_id": "0A78BB1B10804FA39E9365B3C610BA74",
+          "ad_tab_id": "290",
+          "name": "TBAI_ExistConfigAndIsAvailable",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT CASE WHEN EXISTS (SELECT 1 FROM tbai_config conf WHERE TO_TIMESTAMP(@DateInvoiced@, 'DD-MM-YYYY') >= conf.tbaisystemdate AND ad_isorgincluded(@AD_Org_ID@, conf.ad_org_id, @AD_Client_ID@) <> -1 AND conf.isactive = 'Y') THEN 1 ELSE 0 END AS exists_result FROM DUAL"
+        },
+        {
+          "ad_auxiliarinput_id": "7E3FB488115E46C5937FDF8A73D36098",
+          "ad_tab_id": "290",
+          "name": "VoidAutomaticallyCreated",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT COUNT(*) FROM C_INVOICE_REVERSE WHERE C_INVOICE_ID=@C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "F9684776014A4118AE4EE0596CA2B2A2",
+          "ad_tab_id": "291",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "494740D6BFAF41F5B3F8863473924301",
+          "ad_tab_id": "291",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800026",
+          "ad_tab_id": "291",
+          "name": "C_BPARTNER_ID",
+          "tab_name": "Lines",
+          "validation_code": "@C_BPARTNER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "861880FCEE6846A1B6BF4E129EDAF3DD",
+          "ad_tab_id": "291",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=select coalesce(max(dt.docbasetype), 'API') from c_invoice inv join c_doctype dt on (inv.c_doctypetarget_id = dt.c_doctype_id)\nwhere inv.c_invoice_id = @c_invoice_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "A30BE76CF53B4365A97DA2B13D23EB5D",
+          "ad_tab_id": "291",
+          "name": "GROSSPRICE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800003",
+          "ad_tab_id": "291",
+          "name": "HASSECONDUOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "162BEBF77E8D419ABDAD4E87A5C17430",
+          "ad_tab_id": "291",
+          "name": "isBOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT isBOM FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "CDD35787A8094C5180971D4F8EB83DDC",
+          "ad_tab_id": "291",
+          "name": "IsStocked",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT IsStocked FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "7545008A9CB045EAAF5B21BA319BF307",
+          "ad_tab_id": "291",
+          "name": "LC_MATCHED",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN MAX(LINENETAMT) - SUM(COALESCE(M_LC_MATCHED.AMT_INVOICE_CURRENCY, M_LC_MATCHED.amount))=0 THEN 'Y' ELSE 'N' END FROM M_LC_COST, M_LC_MATCHED, C_INVOICELINE WHERE M_LC_COST.ISMATCHED = 'Y' AND M_LC_COST.M_LC_COST_ID = M_LC_MATCHED.M_LC_COST_ID AND C_INVOICELINE.C_INVOICELINE_ID = M_LC_MATCHED.C_INVOICELINE_ID AND M_LC_MATCHED.C_INVOICELINE_ID = @C_InvoiceLine_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "E0A2BB772E284F459DCE5CCE23A7149B",
+          "ad_tab_id": "291",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_INVOICE\nWHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FDD08C93EDE54CD88C52DDFE14FCC157",
+          "ad_tab_id": "291",
+          "name": "Posted",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT POSTED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "80BB79DBFEAA45CAB10F60A9DD388780",
+          "ad_tab_id": "291",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "9D4E828236844F559BA70E02BD07DED0",
+          "ad_tab_id": "291",
+          "name": "UsesAlternate",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(C_TAX_ID)>0 THEN 'Y' ELSE 'N' END AS ISUSED FROM C_TAX WHERE C_TAX_ISMEMBER(@C_TAX_ID@, C_TAX_ID)=1 AND BASEAMOUNT IN ('TBA', 'TBATAX')"
+        },
+        {
+          "ad_auxiliarinput_id": "894FC1183C7344E7848CB211F90B65D5",
+          "ad_tab_id": "800224",
+          "name": "GROSSPRICE",
+          "tab_name": "Discounts and Promotions",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "AA975618F944438699DAAB7A2C6175B2",
+          "ad_tab_id": "5EDC9769561142ED9DA1C45C35ED5EBA",
+          "name": "INTR_INVOICE",
+          "tab_name": "Intrastat",
+          "validation_code": "@SQL=SELECT processed FROM C_INVOICE WHERE C_INVOICE_ID IN (SELECT C_INVOICE_ID FROM C_INVOICELINE WHERE C_INVOICELINE_ID=@C_Invoiceline_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "5ADFF5F71D0A4DC3B2449AD32F15AA29",
+          "ad_tab_id": "292",
+          "name": "AEATSII_Multidua",
+          "tab_name": "Tax",
+          "validation_code": "@SQL=(SELECT i.em_aeatsii_multi_dua FROM c_invoice i WHERE i.c_invoice_id = @C_Invoice_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "9B8DEEF369014E938A73D766890AE941",
+          "ad_tab_id": "292",
+          "name": "Processed",
+          "tab_name": "Tax",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "87EA26BD00A04638B556D52621D46131",
+          "ad_tab_id": "800211",
+          "name": "Processed",
+          "tab_name": "Basic Discounts",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "47EA41253EA841C0BF2437B5677F0BDE",
+          "ad_tab_id": "9817E22E2536417F8C9AEC8D5FA33E18",
+          "name": "IsReceipt",
+          "tab_name": "Payment Details",
+          "validation_code": "N"
+        },
+        {
+          "ad_auxiliarinput_id": "A412F95F9E004EFFA9E636ED2162A255",
+          "ad_tab_id": "3ED38B380CD849B38F0AC1B52F992C34",
+          "name": "Processed",
+          "tab_name": "Reversed Invoices",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_INVOICE WHERE C_INVOICE_ID = @C_INVOICE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF80818130F526CB0130F5A6BCC70003",
+          "ad_tab_id": "FF808181308EA4230130901AB2C60090",
+          "name": "HASREVERSEDINVOICEPO",
+          "tab_name": "Exchange rates",
+          "validation_code": "@SQL=SELECT 'Y' \nFROM DUAL \nWHERE EXISTS (SELECT 1 FROM C_INVOICE_REVERSE WHERE C_INVOICE_ID = @C_Invoice_ID@ )\nAND EXISTS (SELECT 1 FROM C_CONVERSION_RATE_DOCUMENT WHERE C_INVOICE_ID = (SELECT REVERSED_C_INVOICE_ID\n                                                                               FROM C_INVOICE_REVERSE\n                                                                               WHERE C_INVOICE_ID = @C_Invoice_ID@))"
+        }
+      ]
+    },
+    "4cdbb6a1d5f88ee0967c42ec50f1ebf974918f41cfdc927579046b33fad8d0bc": {
+      "checksum": "fab542f85e994569af4fbcb0fa33c08ef25a7f11ce51be0a418118e39baad553",
+      "params": [
+        "800026"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "AED56730A1F94658982D1E1E5FA06FDC",
+          "ad_tab_id": "800076",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "AMZ"
+        },
+        {
+          "ad_auxiliarinput_id": "0F3BE3F4353D49C08AE84C7786095A6C",
+          "ad_tab_id": "800077",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "AMZ"
+        },
+        {
+          "ad_auxiliarinput_id": "81F20929B521444FBBA8ACC4A9B4BDAA",
+          "ad_tab_id": "800077",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM A_AMORTIZATION\nWHERE A_AMORTIZATION_ID = @A_AMORTIZATION_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "C35DA2D62DA94A9D9651386D5112070A",
+          "ad_tab_id": "800077",
+          "name": "Posted",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT POSTED FROM A_AMORTIZATION WHERE A_AMORTIZATION_ID = @A_AMORTIZATION_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "60A4A6C6CCCD4101A1FF072BEEB624A3",
+          "ad_tab_id": "800077",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM A_AMORTIZATION WHERE A_AMORTIZATION_ID = @A_AMORTIZATION_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "7F88B6C626F547289DEF589F46EDB699",
+          "ad_tab_id": "7ADAB637F5CA4D1E9D24CF67843EF882",
+          "name": "DOCBASETYPE",
+          "tab_name": "Accounting dimension",
+          "validation_code": "AMZ"
+        },
+        {
+          "ad_auxiliarinput_id": "A00393E2985B483DA01D3442B182AF80",
+          "ad_tab_id": "7ADAB637F5CA4D1E9D24CF67843EF882",
+          "name": "DOCBASETYPE",
+          "tab_name": "Accounting dimension",
+          "validation_code": "AMZ"
+        }
+      ]
+    },
+    "4e4b0d1c19b4dc9eb29dc45dd545b5060c06c718866acfa62c0cdf829eebc965": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "C327DE215AC945F69363905840118177"
+      ],
+      "rows": []
+    },
+    "56f5905a31ee709b32fe7db282011c768b57a04bfefc93302253d932b0d79f20": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "141"
+      ],
+      "rows": []
+    },
+    "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
+      "checksum": "cce118e386950a56108b2d2faa3be00e55a94b6cb95eae89e30c200e296141db",
+      "params": [
+        "184"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "343D4CF5B66246348ECF5F82D201E9C6",
+          "ad_tab_id": "296",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select max(docbasetype) from c_doctype where c_doctype_id = @c_doctype_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "9655D5D7E29B4B2C80DF63CBB011148D",
+          "ad_tab_id": "296",
+          "name": "HAS_M_INOUTLINES",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select 'Y' from dual where exists (select 1 from m_inoutline where m_inout_id = @M_INOUT_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "800013",
+          "ad_tab_id": "296",
+          "name": "ISLOGISTICAUX",
+          "tab_name": "Header",
+          "validation_code": "N"
+        },
+        {
+          "ad_auxiliarinput_id": "52BCE83D589C498B9803D32847553A8D",
+          "ad_tab_id": "297",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "B1CA1E7F4D9547F7B0317146C1742F88",
+          "ad_tab_id": "297",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800022",
+          "ad_tab_id": "297",
+          "name": "C_BPARTNER_ID",
+          "tab_name": "Lines",
+          "validation_code": "@C_BPARTNER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "A39F6F19458F478B9B5A87209655A784",
+          "ad_tab_id": "297",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=select max(dt.docbasetype) from m_inout io join c_doctype dt on (io.c_doctype_id = dt.c_doctype_id)\nwhere io.m_inout_id = @m_inout_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "800005",
+          "ad_tab_id": "297",
+          "name": "HASSECONDUOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "24824516BC4A40CB8E81F52301EF5F8E",
+          "ad_tab_id": "297",
+          "name": "isBOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT isBOM FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "0AD5488DC1E74A3997B8D9D6C5E16841",
+          "ad_tab_id": "297",
+          "name": "IsStocked",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT IsStocked FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "6DDE5291DEB245BAB84FFD042AE66D4C",
+          "ad_tab_id": "297",
+          "name": "M_Warehouse_ID",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_Warehouse_ID FROM M_INOUT WHERE M_INOUT_ID = @M_INOUT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "8CE0EE9876AB46108C71DC94FE330EA4",
+          "ad_tab_id": "297",
+          "name": "OnHandLocatorDefault",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_LOCATOR_ID FROM M_LOCATOR WHERE ISACTIVE='Y' AND M_WAREHOUSE_ID = (SELECT M_WAREHOUSE_ID FROM M_INOUT WHERE M_INOUT_ID = @M_INOUT_ID@) ORDER BY M_LOCATOR.ISDEFAULT DESC"
+        },
+        {
+          "ad_auxiliarinput_id": "F1B30F5F741C4709B745AB64E249F6F9",
+          "ad_tab_id": "297",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM M_INOUT\nWHERE M_INOUT_ID = @M_INOUT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "44C89F429E0E42F7961A634D61F34E0A",
+          "ad_tab_id": "297",
+          "name": "Posted",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT POSTED FROM M_INOUT WHERE M_INOUT_ID = @M_INOUT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "56653DE396CD4C2DBF54D7FA526656D3",
+          "ad_tab_id": "297",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM M_INOUT WHERE M_INOUT_ID = @M_INOUT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "16C9848A3132450F9359535ADC4AAC99",
+          "ad_tab_id": "9F4A3E7CA4C849F99FAE824D48FDA474",
+          "name": "INTR_MINOUT",
+          "tab_name": "Intrastat",
+          "validation_code": "@SQL=SELECT processed FROM M_INOUT WHERE M_INOUT_ID IN (SELECT M_INOUT_ID FROM M_INOUTLINE WHERE M_INOUTLINE_ID=@M_Inoutline_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "FD2E6059D8E54E37AC2E32C9320369D7",
+          "ad_tab_id": "CBC8BFA997564DBFB9567755EE83C4A9",
+          "name": "DOCBASETYPE",
+          "tab_name": "Accounting dimension",
+          "validation_code": "@SQL=select max(dt.docbasetype) from m_inoutline_acctdimension iolacct \n                           join m_inoutline iol on (iolacct.m_inoutline_id=iol.m_inoutline_id)\n                           join m_inout io on (iol.m_inout_id=io.m_inout_id)\n                           join c_doctype dt on (io.c_doctype_id = dt.c_doctype_id)\n                           where io.m_inout_id = @m_inout_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "D0A19017CE354E62883A1404058DA667",
+          "ad_tab_id": "0F76B56EB2874C729ABE1665D5853E9D",
+          "name": "HeaderStatus",
+          "tab_name": "Landed Cost",
+          "validation_code": "@SQL=SELECT DOCSTATUS FROM M_INOUT WHERE M_INOUT_ID = @M_INOUT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "EA70BF17DED940EBBFD475DEDF3F2082",
+          "ad_tab_id": "0F76B56EB2874C729ABE1665D5853E9D",
+          "name": "LCC_Account_ID",
+          "tab_name": "Landed Cost",
+          "validation_code": "@SQL=SELECT ACCOUNT_ID FROM M_LC_TYPE WHERE M_LC_TYPE_ID = @M_LC_TYPE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "0BCC3A6A9F944599906844269EE11B37",
+          "ad_tab_id": "0F76B56EB2874C729ABE1665D5853E9D",
+          "name": "LCC_Product_ID",
+          "tab_name": "Landed Cost",
+          "validation_code": "@SQL=SELECT M_PRODUCT_ID FROM M_LC_TYPE WHERE M_LC_TYPE_ID = @M_LC_TYPE_ID@"
+        }
+      ]
+    },
+    "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "FEF76C3E0F104F06A89AAD15A4A4A35C"
+      ],
+      "rows": []
+    },
+    "675461360c94bf1fe8bbe3121d5b8aeec6025503b503da010fa3adf22f7c1e92": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "27A453FA86974745977672F1A8DCCEFF"
+      ],
+      "rows": []
+    },
+    "7a3f9d7a689e84e5d068b46c04ad4a3a05634954d924672e2d18f287019437e0": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "192"
+      ],
+      "rows": []
+    },
+    "7a7021f92d915e51e998b9560b17636c7f0484e0b332b42d81af899b72333123": {
+      "checksum": "b8ffbbfd94edd5c9a265560ee0d16cd71e5d769e3a4e5ea3f449d81f1cd4081c",
+      "params": [
+        "118"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "CEFA857994F14AD4878E490EB46349C6",
+          "ad_tab_id": "132",
+          "name": "AdvancedAccountConfiguration",
+          "tab_name": "Element Value",
+          "validation_code": "@SQL=select 'Y' from c_element where  exists (select 1 from c_acctschema_element, c_acctschema  where c_acctschema_element.c_acctschema_id = c_acctschema.c_acctschema_id and c_acctschema_element.c_element_id = c_element.c_element_id and c_acctschema_element.isactive='Y' and c_acctschema.isactive='Y' and c_acctschema.iscentrallymaintained = 'N') and c_element_id = @C_ELEMENT_ID@"
+        }
+      ]
+    },
+    "815e23e49d7d45ef28d64a769100a5fa1e1aec24b8c6f25a101070342ebeaeb1": {
+      "checksum": "5bb0a5477ed8bb7fcfdf2722f0e4838fbb94ff66bd7a748b1cacdd759afd42f1",
+      "params": [
+        "C50A8AEE6F044825B5EF54FAAE76826F"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "A5153957017944A08E6A504455417843",
+          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "POO"
+        },
+        {
+          "ad_auxiliarinput_id": "D8E241A6762D4BB48CB3172F447D6306",
+          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
+          "name": "GROSSPRICE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "899F094C236E4AF5B513A7CAD103F6F6",
+          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
+          "name": "isReturnMaterial",
+          "tab_name": "Header",
+          "validation_code": "Y"
+        },
+        {
+          "ad_auxiliarinput_id": "5AAE4963790D4418AE8A4E37F7FEA891",
+          "ad_tab_id": "5A5CCFC8359B4D79BA705DC487FE8173",
+          "name": "orphanlinesnumber",
+          "tab_name": "Header",
+          "validation_code": "@SQL= select count(c_orderline_id) from c_orderline ol where ol.c_order_id = @c_order_id@  and ol.m_inoutline_id is null"
+        },
+        {
+          "ad_auxiliarinput_id": "CB11DE3DAD9D40B4A404A8E6DFF6F8EC",
+          "ad_tab_id": "387B6179438D4C4CB40769A77F4C304C",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "POO"
+        },
+        {
+          "ad_auxiliarinput_id": "42599C834F074611AF7AF4B638D73342",
+          "ad_tab_id": "387B6179438D4C4CB40769A77F4C304C",
+          "name": "GROSSPRICE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "81794550492E4699947B45AD551AC7BB",
+          "ad_tab_id": "387B6179438D4C4CB40769A77F4C304C",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@"
+        }
+      ]
+    },
+    "843359d6657fbb328422a0e2b76bc9bab643118230c1597e04e3917031b6cb1f": {
+      "checksum": "153f19af802807fb3f198d9a511ea848eedca84faea945e4b6467e1499cd98e5",
+      "params": [
+        "E547CE89D4C04429B6340FFA44E70716"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "580450E783674E3B8C03B76B49613CF2",
+          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "ARR"
+        },
+        {
+          "ad_auxiliarinput_id": "FF8080812E26BF58012E2772F0B2003B",
+          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
+          "name": "FinancialAccountCurrencyId",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT C_CURRENCY_ID FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID=@FIN_FINANCIAL_ACCOUNT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "78C534BFE24E45779C5F0B874C5B00E9",
+          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
+          "name": "FIN_ISRECEIPT",
+          "tab_name": "Header",
+          "validation_code": "Y"
+        },
+        {
+          "ad_auxiliarinput_id": "FF8080812E26BF58012E27DDC44E0170",
+          "ad_tab_id": "C4B6506838E14A349D6717D6856F1B56",
+          "name": "IsMultiCurrencyEnabled",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT (CASE count(*) WHEN 0 THEN 'N' ELSE 'Y' END) from fin_finacc_paymentmethod \nwhere fin_financial_account_id ='@FIN_Financial_Account_ID@\nand fin_paymentmethod_id = @FIN_PaymentMethod_ID@ and isactive='Y'\nand payin_allow ='Y' and payin_ismulticurrency='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "74994DC54FFC41FB8AE8B42302E19410",
+          "ad_tab_id": "173B46EC4F91406E9B68DCF6464BB308",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines (Old)",
+          "validation_code": "ARR"
+        },
+        {
+          "ad_auxiliarinput_id": "9B3FBCD97DCE4611A67532F8611161F0",
+          "ad_tab_id": "34DA12C2E9E3424E9A853563BEFDE81F",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "ARR"
+        }
+      ]
+    },
+    "8b543deb8e44e185e72cf9d4fc98b17a1b417138b8b2e25b139459d68e0bc945": {
+      "checksum": "8ac3b2a74d9bcd55d1e82d3daf8b0c6ebd5fb188b8114c94bcdec6751c51da10",
+      "params": [
+        "125"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "FB4C3FF138DD4B2AB582E7BFBEF5CA7F",
+          "ad_tab_id": "1007400000",
+          "name": "AD_Table_ID",
+          "tab_name": "Documents",
+          "validation_code": "@SQL=select ad_table_id from c_acctschema_table where c_acctschema_table_id=@C_Acctschema_Table_ID@"
+        }
+      ]
+    },
+    "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
+      "checksum": "c02b709d69d7c77fe28829ebece7dd8cd937d1e0951a2f403279da6e39959fda",
+      "params": [
+        "6CB5B67ED33F47DFA334079D3EA2340E"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "056333746538425CB0718F8AF9E458E5",
+          "ad_tab_id": "F87F1EB7EB404F1F916EBAFAD1A0A334",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select max(docbasetype) from c_doctype where c_doctype_id = @c_doctypetarget_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "8282A027544447EE82CD9D6CA8113525",
+          "ad_tab_id": "F87F1EB7EB404F1F916EBAFAD1A0A334",
+          "name": "isQuotation",
+          "tab_name": "Header",
+          "validation_code": "Y"
+        },
+        {
+          "ad_auxiliarinput_id": "C3B5F768C9144A2599A0B6749B3CF38F",
+          "ad_tab_id": "E2F36B4352DA4CA8BE324DC428BEE358",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=select max(dt.docbasetype) from c_order ord join c_doctype dt on (ord.c_doctypetarget_id = dt.c_doctype_id)\nwhere ord.c_order_id = @c_order_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "4A31AF0B23CB47E8BBB0B587B1523CC1",
+          "ad_tab_id": "E2F36B4352DA4CA8BE324DC428BEE358",
+          "name": "GROSSPRICE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "F2AA43AC88F74E4CBC17E111F0FA34C2",
+          "ad_tab_id": "E2F36B4352DA4CA8BE324DC428BEE358",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@"
+        }
+      ]
+    },
+    "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
+      "checksum": "0f36663f49346c08071b7a03aab4acb7dd46f71be3f5496337c524a90f9f2833",
+      "params": [
+        "273673D2ED914C399A6C51DB758BE0F9"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "323203DAE86B4C3C863F41066F84F8D7",
+          "ad_tab_id": "728DBD16A1F14A4D82335E37BA433E33",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "MMR"
+        },
+        {
+          "ad_auxiliarinput_id": "5EE498F6C1484535A77A8CE36D96C77B",
+          "ad_tab_id": "728DBD16A1F14A4D82335E37BA433E33",
+          "name": "isReturnMaterial",
+          "tab_name": "Header",
+          "validation_code": "Y"
+        },
+        {
+          "ad_auxiliarinput_id": "6A9EA0D5165148B9B23E2CB13AAB1A34",
+          "ad_tab_id": "C9BD6AF9E06F4BE4B4799D09965481DC",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "MMR"
+        },
+        {
+          "ad_auxiliarinput_id": "369007717EFF412EAF4A55A2DF60CD92",
+          "ad_tab_id": "C9BD6AF9E06F4BE4B4799D09965481DC",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM M_INOUT\nWHERE M_INOUT_ID = @M_INOUT_ID@"
+        }
+      ]
+    },
+    "b8f93f89d00e4397d71cd226a3704eee1045f69f9f26ff056c27d50de601db7e": {
+      "checksum": "215d367ad3ac0a5268f0e1f19fd6542fe4b25e45c525ace98027f76c569fd6eb",
+      "params": [
+        "B917E8A7B0864ACEA9D941E3B7494E53"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "FB60FE86511640A5A0CDE3CEF9BD2FAB",
+          "ad_tab_id": "5A6F0ED7230C462BA4010653BA3F816A",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "GLJ"
+        },
+        {
+          "ad_auxiliarinput_id": "64361E0DD8C74E448A0C3C3F1987B8C1",
+          "ad_tab_id": "5A6F0ED7230C462BA4010653BA3F816A",
+          "name": "generalLedgerCurrency",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select c_currency_id from C_AcctSchema where C_AcctSchema_id=@c_acctschema_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "6CDC3757FB5042D4B1DFFF53074687F6",
+          "ad_tab_id": "5A6F0ED7230C462BA4010653BA3F816A",
+          "name": "HeaderDateAcct",
+          "tab_name": "Header",
+          "validation_code": "@#Date@"
+        },
+        {
+          "ad_auxiliarinput_id": "11F547AAB1824D9E84B5D29A0EE20151",
+          "ad_tab_id": "5A6F0ED7230C462BA4010653BA3F816A",
+          "name": "HeaderDateDoc",
+          "tab_name": "Header",
+          "validation_code": "@#Date@"
+        },
+        {
+          "ad_auxiliarinput_id": "90544A08E5854BDDB3CCE9773715DB96",
+          "ad_tab_id": "5A6F0ED7230C462BA4010653BA3F816A",
+          "name": "Journal_Org",
+          "tab_name": "Header",
+          "validation_code": "@AD_Org_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "D2EE7808955A4C278C82204A8B7C8CDF",
+          "ad_tab_id": "5A6F0ED7230C462BA4010653BA3F816A",
+          "name": "Parent_AD_Org",
+          "tab_name": "Header",
+          "validation_code": "@#AD_Org_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "4903D39504D74135B86501E36BEB8EC1",
+          "ad_tab_id": "7797C73348324DCBB7F17666F31C87A5",
+          "name": "DESCRIPTION1",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT DESCRIPTION FROM GL_JOURNAL WHERE GL_JOURNAL_ID=@GL_JOURNAL_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "84F7B0BB35814D4DBC674F44358F8B43",
+          "ad_tab_id": "7797C73348324DCBB7F17666F31C87A5",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "GLJ"
+        }
+      ]
+    },
+    "bc1f176fd0a37e081c0035239df13fd8ae7e5d54086dc4ec03016c3c894c45f1": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "C1D3A2A017AC4B82B9FEE6F4D2A0C55A"
+      ],
+      "rows": []
+    },
+    "bf11b95a5cc3783d783796dc4000683f6dc92578ff1af8d116039bf87bade677": {
+      "checksum": "09f8df0df133153d94d1e35d2973d4ca5a572aa16246b621e4f0e1de4dca81e2",
+      "params": [
+        "F4675DAB02134762B66881DAE4672AD0"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "9DA3BA2A501245A4845B77E473A8C11F",
+          "ad_tab_id": "6055C2356AEE43D4B1CEC16994DC3E5F",
+          "name": "etvfac_corrected_invoice",
+          "tab_name": "Facturas Inválidas",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM etvfac_inv_sent_status_v JOIN C_INVOICE ON C_INVOICE.C_INVOICE_ID = etvfac_inv_sent_status_v.C_INVOICE_ID WHERE etvfac_inv_sent_status_v_id = @etvfac_inv_sent_status_v_id@ and C_INVOICE.EM_Etvfac_Is_Gen_Manual='N' and c_invoice.EM_Etvfac_Senttoverifac='N' and c_invoice.EM_Etvfac_Corrected_Inv='N')"
+        }
+      ]
+    },
+    "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
+      "checksum": "45247d7bfe6f6edf4b44790af1bb725840fa26f9c3ba7bbd6883bd40d31bec6c",
+      "params": [
+        "140"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "E63B6F9E7F2849D8837B8CD083A35597",
+          "ad_tab_id": "180",
+          "name": "HasInvariants",
+          "tab_name": "Product",
+          "validation_code": "@SQL=select  (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL from m_product_ch where m_product_id=@M_Product_ID@ and isvariant='N'"
+        },
+        {
+          "ad_auxiliarinput_id": "800028",
+          "ad_tab_id": "180",
+          "name": "ISSOTRXTAB",
+          "tab_name": "Product",
+          "validation_code": "Y"
+        },
+        {
+          "ad_auxiliarinput_id": "09ACDC893CC845AFB7E29E1F2B66C23F",
+          "ad_tab_id": "180",
+          "name": "M_WAREHOUSE_ID",
+          "tab_name": "Product",
+          "validation_code": "''"
+        },
+        {
+          "ad_auxiliarinput_id": "7ECBB56AFCA640F1A5E91DC78741A0C2",
+          "ad_tab_id": "180",
+          "name": "Product_Org",
+          "tab_name": "Product",
+          "validation_code": "@AD_Org_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "311FF34B6C9A40DAA123A90701A28404",
+          "ad_tab_id": "183",
+          "name": "IsTaxIncludedInPriceList",
+          "tab_name": "Price",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = ( select m_pricelist_id from m_pricelist_version where m_pricelist_version_id = @M_PriceList_Version_ID@ )"
+        },
+        {
+          "ad_auxiliarinput_id": "E8459A62A91F4BD4A0F3B30B97F4C185",
+          "ad_tab_id": "800057",
+          "name": "Parent_AD_Org",
+          "tab_name": "Costing",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM M_PRODUCT\nWHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "ABF388A018954C4BAF851DCA371167E5",
+          "ad_tab_id": "289",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Transactions",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "BB7571E667114EB3A5FCB3425B6007F4",
+          "ad_tab_id": "289",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Transactions",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "88AE8FF625774A1B85829C9F8428F3FF",
+          "ad_tab_id": "239",
+          "name": "IsSOTrx",
+          "tab_name": "Purchasing",
+          "validation_code": "N"
+        },
+        {
+          "ad_auxiliarinput_id": "5A4ABAFCF4E948DC98097649BBC38F7D",
+          "ad_tab_id": "A92960D20BB64BBB9C4E88FF58991D6F",
+          "name": "EXISTS_CONVERSION",
+          "tab_name": "Alternate UOM",
+          "validation_code": "@SQL=SELECT 'Y' FROM dual WHERE EXISTS (SELECT 1 FROM c_uom_conversion WHERE c_uom_id = @C_UOM_ID@ AND c_uom_to_id = (SELECT c_uom_id FROM m_product WHERE m_product_id = @M_PRODUCT_ID@)) OR EXISTS (SELECT 1 FROM c_uom_conversion WHERE c_uom_id = (SELECT c_uom_id FROM m_product WHERE m_product_id = @M_PRODUCT_ID@) AND c_uom_to_id = @C_UOM_ID@)"
+        }
+      ]
+    },
+    "d67bca5b6815232345e00e0f78f20fe5ba76646c8bd3e7633600e05b394cbb7c": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "E66E701CCBA14B8BA480CBDE37C50D7A"
+      ],
+      "rows": []
+    },
+    "d762ff016bca659cec9b3ea6091e7975b8e08865bfb35fdd621af88fa1f69d14": {
+      "checksum": "020e6b11c5ffa3185ccdbb4ea2805ff70b5d5502782ef07241ced00ebe8dd27f",
+      "params": [
+        "146"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "C441F89C599549A7B69321E975DB0D4E",
+          "ad_tab_id": "192",
+          "name": "IsSOTrx",
+          "tab_name": "Product Price",
+          "validation_code": "N"
+        },
+        {
+          "ad_auxiliarinput_id": "6DD1F4E5833C453988901A926575130D",
+          "ad_tab_id": "192",
+          "name": "numberOfAlgorithms",
+          "tab_name": "Product Price",
+          "validation_code": "@SQL=select count(*) from ad_ref_list where ad_reference_id = '5B988E35236D404B8210801472E363CE'"
+        }
+      ]
+    },
+    "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "108"
+      ],
+      "rows": []
+    },
+    "db74276aff1dc1773fa3c1f1188863e1ae5906047451c707296b6d649243b515": {
+      "checksum": "7a787161c3b9406d71762d43d1b07a5325079eb6e34b85e5aacc4aadb2d46c2c",
+      "params": [
+        "139"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "59A80385C31048AEBFED1D3B8E90DB62",
+          "ad_tab_id": "262",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Product Transactions",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "E1DE8CDF77324033B2C21CE99DCB7A59",
+          "ad_tab_id": "262",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Product Transactions",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "9EC3A191A6D84253A26520E4849B73EF",
+          "ad_tab_id": "179",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Bin Contents",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "A241041B0E6E402EB8D22417AFA623B9",
+          "ad_tab_id": "179",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Bin Contents",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        }
+      ]
+    },
+    "dc3625edf6e3b3ba3d373862af247d21be277872e900727c4a4025b968fa702b": {
+      "checksum": "74fbc6318ce93cbcd6879909aaf258eac351e3353885afb628bc1e0110c4a28c",
+      "params": [
+        "FF808081330213E60133021822E40007"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "1B9CB458E11D48F3B8B48B4BA8051ACB",
+          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "SOO"
+        },
+        {
+          "ad_auxiliarinput_id": "FF8080813302598D01330269965E0016",
+          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
+          "name": "isReturnMaterial",
+          "tab_name": "Header",
+          "validation_code": "Y"
+        },
+        {
+          "ad_auxiliarinput_id": "2D63067CABB647F08A0EBE14281A4DB8",
+          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
+          "name": "ORDERTYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "15881B450C7B49BE863EB74EA921E3A1",
+          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
+          "name": "OriginalOrderInvoiced",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT count(*)\nFROM c_orderline ol\n     JOIN m_inoutline il ON ol.m_inoutline_id = il.m_inoutline_id\n     JOIN c_orderline ol2 ON il.c_orderline_id = ol2.c_orderline_id AND ol2.qtyinvoiced != 0\nAND ol.c_order_id = @C_Order_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "66407108B92F49CBB40135E149FC3B46",
+          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
+          "name": "orphanlinesnumber",
+          "tab_name": "Header",
+          "validation_code": "@SQL= select count(c_orderline_id) from c_orderline ol where ol.c_order_id = @c_order_id@  and ol.m_inoutline_id is null"
+        },
+        {
+          "ad_auxiliarinput_id": "73DECB6E080A4D44AD634276A3C895DE",
+          "ad_tab_id": "AF4090093CFF1431E040007F010048A5",
+          "name": "PendingToInvoice",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT (sum(abs(qtyordered)) - sum(abs(qtyinvoiced))) FROM c_orderline WHERE c_order_id = @C_Order_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF808081333532150133359445FD009D",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF808081333532150133359866C200AA",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "246613E973C240C584E821D02A64AB16",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "SOO"
+        },
+        {
+          "ad_auxiliarinput_id": "64B5403DA08E44018D9D1DE253AE087D",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "GROSSPRICE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "1DA03AB4BC0641FB80801C36DC4A6F3D",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "HASRELATEDPRODUCTS",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM C_ORDERLINE_SERVICERELATION WHERE C_ORDERLINE_ID =  @C_ORDERLINE_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "A00CCBF0466D45C2B69906329F3D7643",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "HASRELATEDSERVICE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM C_ORDERLINE_SERVICERELATION WHERE C_ORDERLINE_RELATED_ID =  @C_ORDERLINE_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "DFF46A578028408197B00C18152A35EC",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "LINKEDTOPRODUCT",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN PRODUCTTYPE = 'S' AND ISLINKEDTOPRODUCT = 'Y' THEN 'Y' ELSE 'N' END FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "673BD8C168B649618C4A5CB466CD7913",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF8080813335321501333594EB1400A0",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF808081333532150133359310990098",
+          "ad_tab_id": "AF4090093D471431E040007F010048A5",
+          "name": "UsesAlternate",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(C_TAX_ID)>0 THEN 'Y' ELSE 'N' END AS ISUSED FROM C_TAX WHERE C_TAX_ISMEMBER(@C_TAX_ID@, C_TAX_ID)=1 AND BASEAMOUNT IN ('TBA', 'TBATAX')"
+        },
+        {
+          "ad_auxiliarinput_id": "FF8080813335321501333595D5E400A4",
+          "ad_tab_id": "AF4090093DAF1431E040007F010048A5",
+          "name": "Processed",
+          "tab_name": "Line Tax",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FF808081333532150133359556A600A2",
+          "ad_tab_id": "AF4090093DA61431E040007F010048A5",
+          "name": "Processed",
+          "tab_name": "Basic Discounts",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        }
+      ]
+    },
+    "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
+      "checksum": "e7d6bde4507dc9ff5f2cc720ddcdacccdc57e64b117b0df0a2ca405947d12b19",
+      "params": [
+        "123271B9AD60469BAE8A924841456B63"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "F34F254F5F224DD68916C7AA5285299B",
+          "ad_tab_id": "30576C6ABD12419F9D19D497216FC9B8",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "MMS"
+        },
+        {
+          "ad_auxiliarinput_id": "88456D448EDB4201A844A201D9552D1A",
+          "ad_tab_id": "30576C6ABD12419F9D19D497216FC9B8",
+          "name": "isReturnMaterial",
+          "tab_name": "Header",
+          "validation_code": "Y"
+        },
+        {
+          "ad_auxiliarinput_id": "3C83C6D91C664F6A96AE0530C75277A9",
+          "ad_tab_id": "30576C6ABD12419F9D19D497216FC9B8",
+          "name": "ReturnLocator",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT m_returnlocator_id FROM m_warehouse WHERE m_warehouse_id = @M_Warehouse_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "F67494AD9D9F43758A90021292822EF4",
+          "ad_tab_id": "CF6D6C7B85EB473CB88E757E14D1D022",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "MMS"
+        },
+        {
+          "ad_auxiliarinput_id": "C65E8DD7FF6647BA90ECD2AEFF1975A8",
+          "ad_tab_id": "CF6D6C7B85EB473CB88E757E14D1D022",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM M_INOUT\nWHERE M_INOUT_ID = @M_INOUT_ID@"
+        }
+      ]
+    },
+    "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
+      "checksum": "5ba92422c6f1be4eadd29bbd8f1f068380315ec58dd409ec107138405f155c34",
+      "params": [
+        "181"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "480EC4ACADF142C0B08EB65B540334C3",
+          "ad_tab_id": "294",
+          "name": "AEATSII_AcogidaSII3",
+          "tab_name": "Header",
+          "validation_code": "@SQL=(SELECT COALESCE((SELECT conf.insiisystem FROM aeatsii_config conf WHERE conf.ad_org_id = (SELECT AD_GET_ORG_LE_BU(@AD_Org_ID@,'LE') FROM dual)),'N') FROM dual)"
+        },
+        {
+          "ad_auxiliarinput_id": "874CCFB2FE7B40D79D2B0AE27951853F",
+          "ad_tab_id": "294",
+          "name": "APRM_OrderIsPaid",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select case when ps.outstandingamt <> 0 then 'N' else 'Y' end\n          from fin_payment_scheduledetail fpsd\n              join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id\n              join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id\n              join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_order\n              join c_order co on co.c_order_id=ps.c_order_id\n                WHERE ps.c_order_id =@c_order_id@\n                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40\n                group by co.GrandTotal, ps.outstandingamt, ps.c_order_id"
+        },
+        {
+          "ad_auxiliarinput_id": "17F5DEA4A5254BDDA77560A7D67667B6",
+          "ad_tab_id": "294",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select coalesce(max(docbasetype), 'POO') from c_doctype where c_doctype_id = @c_doctypetarget_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "8AC3DEA201BA4818B22F7EFCD19AE77E",
+          "ad_tab_id": "294",
+          "name": "ETPR_OrderHasPayments",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT 'Y' \nFROM dual \nWHERE EXISTS \n(SELECT 1 FROM fin_payment_sched_ord_v p WHERE p.numberofpayments > 0 AND p.c_order_id = @C_Order_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "8",
+          "ad_tab_id": "294",
+          "name": "ORDERTYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT DOCSUBTYPESO FROM C_DOCTYPE WHERE C_DOCTYPE_ID = @C_DOCTYPETARGET_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "6C7D8E9F0A1B2C883007B1C2D3E4F5A6",
+          "ad_tab_id": "294",
+          "name": "PSD2_ClientHasApiKey",
+          "tab_name": "Header",
+          "validation_code": "@SQL= select 1 from AD_Client where AD_Client_ID = @#AD_CLIENT_ID@ AND em_psd2_api_key is not null"
+        },
+        {
+          "ad_auxiliarinput_id": "7D8E9F0A1B2C3D9940001C2D3E4F5A6B",
+          "ad_tab_id": "294",
+          "name": "PSD2_HasEligiblePayment",
+          "tab_name": "Header",
+          "validation_code": "@SQL=SELECT count(1) FROM FIN_Payment p INNER JOIN FIN_Payment_Detail pd ON pd.FIN_Payment_ID = p.FIN_Payment_ID INNER JOIN FIN_Payment_ScheduleDetail psd ON psd.FIN_Payment_Detail_ID = pd.FIN_Payment_Detail_ID INNER JOIN FIN_Payment_Schedule ps ON ps.FIN_Payment_Schedule_ID = psd.FIN_Payment_Schedule_Order INNER JOIN FIN_Financial_Account fa ON fa.FIN_Financial_Account_ID = p.FIN_Financial_Account_ID INNER JOIN FIN_PaymentMethod pm ON pm.FIN_PaymentMethod_ID = p.FIN_PaymentMethod_ID WHERE ps.C_Order_ID = @C_Order_ID@ AND p.status = 'PPM' AND fa.TYPE = 'B' AND COALESCE((SELECT fapm.EM_PSD2_Is_Bank_Transfer FROM FIN_FinAcc_PaymentMethod fapm WHERE fapm.FIN_Financial_Account_ID = p.FIN_Financial_Account_ID AND fapm.FIN_PaymentMethod_ID = p.FIN_PaymentMethod_ID), pm.EM_PSD2_Is_Bank_Transfer) = 'Y' AND (SELECT count(1) FROM PSD2_pis_payment pip WHERE pip.FIN_Payment_ID = p.FIN_Payment_ID AND pip.status NOT IN ('failed','initiated_info_required','initiated','requested')) = 0 AND (SELECT count(1) FROM FIN_Finacc_Transaction fft WHERE fft.FIN_Payment_ID = p.FIN_Payment_ID) = 0"
+        },
+        {
+          "ad_auxiliarinput_id": "A53F5DC798974EBD9707C988B0C72D63",
+          "ad_tab_id": "294",
+          "name": "showAddPayment",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select case when sum(fpsd.amount)=co.GrandTotal then 'N' else 'Y' end\n          from fin_payment_scheduledetail fpsd\n              join fin_payment_detail fpd on fpsd.fin_payment_detail_id=fpd.fin_payment_detail_id\n              join fin_payment fp on fpd.fin_payment_id=fp.fin_payment_id\n              join fin_payment_schedule ps ON ps.fin_payment_schedule_id = fpsd.fin_payment_schedule_order\n              join c_order co on co.c_order_id=ps.c_order_id\n                WHERE ps.c_order_id =@c_order_id@\n                and to_number(aprm_seqnumberpaymentstatus(fp.status)) >= 40\n                group by co.GrandTotal"
+        },
+        {
+          "ad_auxiliarinput_id": "2B0D9093C42A41E3AB05FEF0A64DBEA5",
+          "ad_tab_id": "293",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "44F99FD664A64A9683694FE63672BD55",
+          "ad_tab_id": "293",
+          "name": "ATTRIBUTESETINSTANCIABLE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE count(*) WHEN 0 THEN 'N' ELSE 'Y' END) from M_ATTRIBUTESET mats join M_PRODUCT mp on mats.M_AttributeSet_ID=mp.M_AttributeSet_ID WHERE mp.M_PRODUCT_ID=@M_Product_ID@ and (mats.IsLot='Y' or mats.IsSerNo='Y' or mats.IsGuaranteeDate='Y')"
+        },
+        {
+          "ad_auxiliarinput_id": "10444AA4DB1D49D7A621F1EF47787122",
+          "ad_tab_id": "293",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "9E0F5BB107EE463B8E4F18395952D8F2",
+          "ad_tab_id": "293",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=select coalesce(max(dt.docbasetype), 'POO') from c_order ord join c_doctype dt on (ord.c_doctypetarget_id = dt.c_doctype_id)\nwhere ord.c_order_id = @c_order_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "E0DB11E8D0384B29A64B251E2262A541",
+          "ad_tab_id": "293",
+          "name": "GROSSPRICE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800000",
+          "ad_tab_id": "293",
+          "name": "HASSECONDUOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "54B597A45774438696EC38DB00010B67",
+          "ad_tab_id": "293",
+          "name": "isBOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT isBOM FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "F12E4458B64640EC9200B936D58337ED",
+          "ad_tab_id": "293",
+          "name": "isQuantityVariable",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ISQUANTITYVARIABLE FROM M_PRODUCT where M_PRODUCT_ID = @M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "9039E3F1B99F4D76855A89FA73B4F05F",
+          "ad_tab_id": "293",
+          "name": "IsStocked",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT IsStocked FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "E3CF65D49DB84E488645E425A7C7C0B2",
+          "ad_tab_id": "293",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM C_ORDER\nWHERE C_ORDER_ID = @C_ORDER_ID@\n"
+        },
+        {
+          "ad_auxiliarinput_id": "EACCFCC1A36E4D379187291CF600E8FF",
+          "ad_tab_id": "293",
+          "name": "Posted",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT POSTED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "1F6072F3CE0F43F6AF71874398914072",
+          "ad_tab_id": "293",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "3648B8ACFDE44EF4A649B7933D9DBD97",
+          "ad_tab_id": "293",
+          "name": "UsesAlternate",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(C_TAX_ID)>0 THEN 'Y' ELSE 'N' END AS ISUSED FROM C_TAX WHERE C_TAX_ISMEMBER(@C_TAX_ID@, C_TAX_ID)=1 AND BASEAMOUNT IN ('TBA', 'TBATAX')"
+        },
+        {
+          "ad_auxiliarinput_id": "0AE259D1B97E482BB593775EA3E73F57",
+          "ad_tab_id": "800221",
+          "name": "GROSSPRICE",
+          "tab_name": "Discounts and Promotions",
+          "validation_code": "@SQL=SELECT istaxincluded from m_pricelist where m_pricelist_id = @M_PRICELIST_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "29AB487A0544464C8498B3A9D2201BE3",
+          "ad_tab_id": "4CA5324BD037430B8E682B41C1DAA8CC",
+          "name": "DOCBASETYPE",
+          "tab_name": "Accounting dimension",
+          "validation_code": "@SQL=select coalesce(max(dt.docbasetype), 'POO') from c_orderline_acctdimension olacct \n                           join c_orderline ol on (olacct.c_orderline_id=ol.c_orderline_id)\n                           join c_order ord on (ol.c_order_id=ord.c_order_id)\n                           join c_doctype dt on (ord.c_doctypetarget_id = dt.c_doctype_id)\n                          where ord.c_order_id = @c_order_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "38C135BEDE884D4E8374651C27A5089B",
+          "ad_tab_id": "15AB548E781248DBBAE32A7646B98AF8",
+          "name": "INTR_ORDER",
+          "tab_name": "Intrastat",
+          "validation_code": "@SQL=SELECT processed FROM C_ORDER WHERE C_ORDER_ID IN (SELECT C_ORDER_ID FROM C_ORDERLINE WHERE C_ORDERLINE_ID=@C_Orderline_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "07F4F6379C2F4FFFB18F3FCB00257C87",
+          "ad_tab_id": "1011100001",
+          "name": "Processed",
+          "tab_name": "Basic Discounts",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "CD8A66ED2EDB465B8772C87D936D6831",
+          "ad_tab_id": "295",
+          "name": "Processed",
+          "tab_name": "Tax",
+          "validation_code": "@SQL=SELECT PROCESSED FROM C_ORDER WHERE C_ORDER_ID = @C_ORDER_ID@"
+        }
+      ]
+    },
+    "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
+      "checksum": "57df016482c9b37e88cc5f8dd064c3c8d348b8617fead857463b72cc7e7f9b29",
+      "params": [
+        "94EAA455D2644E04AB25D93BE5157B6D"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "7B7890725A7C4C06BBD98CBBFB325D39",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_AY",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'AY'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype)  query"
+        },
+        {
+          "ad_auxiliarinput_id": "EBFF532722F5438BAACA625CE5E69A41",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_BP",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'BP'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype)  query"
+        },
+        {
+          "ad_auxiliarinput_id": "D453894F70014B078F7DE07DFD7A112F",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_BP_FAT_H",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select COALESCE((select show_in_header \n\t\t\tfrom AD_Client_AcctDimension \n\t\t\twhere ad_client_id = @ad_client_id@\n\t\t\tand docbasetype = 'FAT' \n\t\t\tand dimension = 'BP')\n\t\t, c.bpartner_acctdim_header)\nfrom ad_client c\nwhere c.ad_client_id = @ad_client_id@\nand c.bpartner_acctdim_isenable = 'Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "4A555D695EE84BD08225721AF0DB4660",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_CC",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'CC'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype)  query"
+        },
+        {
+          "ad_auxiliarinput_id": "311BE34CB1684926877B28AFE1939C26",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_CC_FAT_H",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select COALESCE((select show_in_header \n\t\t\tfrom AD_Client_AcctDimension \n\t\t\twhere ad_client_id = @ad_client_id@\n\t\t\tand docbasetype = 'FAT' \n\t\t\tand dimension = 'CC')\n\t\t, c.costcenter_acctdim_header)\nfrom ad_client c\nwhere c.ad_client_id = @ad_client_id@\nand c.costcenter_acctdim_isenable = 'Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "E396BAA4096A4AA0ABA0CEC0A52BF983",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_MC",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'MC'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype) query"
+        },
+        {
+          "ad_auxiliarinput_id": "5BB2952CE3234414A146E35032539257",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_OO",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'OO'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype)  query"
+        },
+        {
+          "ad_auxiliarinput_id": "1453726EFC4B4E2898296BB44A7172ED",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_OO_FAT_H",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select COALESCE((select show_in_header \n\t\t\tfrom AD_Client_AcctDimension \n\t\t\twhere ad_client_id = @ad_client_id@\n\t\t\tand docbasetype = 'FAT' \n\t\t\tand dimension = 'OO')\n\t\t, c.org_acctdim_header)\nfrom ad_client c\nwhere c.ad_client_id = @ad_client_id@\nand c.org_acctdim_isenable = 'Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "0389829094184BC4A99B307868F278EE",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_PJ",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'PJ'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype)  query"
+        },
+        {
+          "ad_auxiliarinput_id": "1022B3987A6B481C85968D79658DA6C6",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_PJ_FAT_H",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select COALESCE((select show_in_header \n\t\t\tfrom AD_Client_AcctDimension \n\t\t\twhere ad_client_id = @ad_client_id@\n\t\t\tand docbasetype = 'FAT' \n\t\t\tand dimension = 'PJ')\n\t\t, c.project_acctdim_header)\nfrom ad_client c\nwhere c.ad_client_id = @ad_client_id@\nand c.project_acctdim_isenable = 'Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "5BF658979C8C4F29949B1542FD065423",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_PR",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'PR'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype) query"
+        },
+        {
+          "ad_auxiliarinput_id": "58585C6A8EFE4E0EBD3DFF8746206EAF",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_PR_FAT_H",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select COALESCE((select show_in_header \n\t\t\tfrom AD_Client_AcctDimension \n\t\t\twhere ad_client_id = @ad_client_id@\n\t\t\tand docbasetype = 'FAT' \n\t\t\tand dimension = 'PR')\n\t\t, c.product_acctdim_header)\nfrom ad_client c\nwhere c.ad_client_id = @ad_client_id@\nand c.org_acctdim_isenable = 'Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "154056E8BD07443E9760F8C76FA9533F",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_SR",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'SR'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype)  query"
+        },
+        {
+          "ad_auxiliarinput_id": "5AA02067B7A046B39F6C1D0D5072CC9F",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_U1",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'U1'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype)  query"
+        },
+        {
+          "ad_auxiliarinput_id": "07608CACCACF4A398D8FB4869CE70571",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_U1_FAT_H",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select COALESCE((select show_in_header \n\t\t\tfrom AD_Client_AcctDimension \n\t\t\twhere ad_client_id = @ad_client_id@\n\t\t\tand docbasetype = 'FAT' \n\t\t\tand dimension = 'U1')\n\t\t, c.user1_acctdim_header)\nfrom ad_client c\nwhere c.ad_client_id = @ad_client_id@\nand c.user1_acctdim_isenable = 'Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "AA110F79CC9C4DD8B51EBBB234E3AD1B",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_U2",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select case when query.elementtype is not null then 'Y' else 'N' end from\n(select elementtype, min(ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id)) as orglevel\nfrom C_AcctSchema_Element\nwhere ad_client_id = @ad_client_id@\nand elementtype = 'U2'\nand ad_isorgincluded (@ad_org_id@, ad_org_id ,ad_client_id) <> -1\ngroup by elementtype)  query"
+        },
+        {
+          "ad_auxiliarinput_id": "7B711DEB519143C4A8C97E6C05300E07",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$Element_U2_FAT_H",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select COALESCE((select show_in_header \n\t\t\tfrom AD_Client_AcctDimension \n\t\t\twhere ad_client_id = @ad_client_id@\n\t\t\tand docbasetype = 'FAT' \n\t\t\tand dimension = 'U2')\n\t\t, c.user2_acctdim_header)\nfrom ad_client c\nwhere c.ad_client_id = @ad_client_id@\nand c.user2_acctdim_isenable = 'Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "DA4CDAF77BAF42118049D8DA9A6FF05B",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "$IsAcctDimCentrally",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select acctdim_centrally_maintained from AD_Client where ad_client_id = @AD_Client_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "1FF62A68BA95425CA76E4317DD195C62",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "DRAFTRECONCILIATION",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select coalesce(fin_reconciliation_id,'') from fin_reconciliation where fin_financial_account_id = @FIN_Financial_Account_ID@ and processed = 'N'"
+        },
+        {
+          "ad_auxiliarinput_id": "A72A59A036BB47B09105AC5C3361C99C",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "HasTransaction",
+          "tab_name": "Account",
+          "validation_code": "@SQL=SELECT count(*) FROM aprm_finacc_transaction_v inner join fin_finacc_transaction ON aprm_finacc_transaction_v.aprm_finacc_transaction_v_id = fin_finacc_transaction.fin_finacc_transaction_id WHERE aprm_finacc_transaction_v.fin_financial_account_id=@fin_financial_account_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "4FD70C86888041D695C59CFA792BBCC6",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "LASTRECON",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select fin_reconciliation_id from fin_reconciliation where created = (\nselect max(created)\nfrom fin_reconciliation \nwhere fin_financial_account_id = @FIN_Financial_Account_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "AA809FC0806343DD8700AC5B05A6B408",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "PSD2_ClientHasApiKey",
+          "tab_name": "Account",
+          "validation_code": "@SQL= select 1 from AD_Client where AD_Client_ID = @#AD_CLIENT_ID@ AND em_psd2_api_key is not null"
+        },
+        {
+          "ad_auxiliarinput_id": "CB8F6D794AB742CD8EE521368233C144",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "PSD2_HasActiveConnections",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select count(1) from psd2_finacc_connection where fin_financial_account_id=@Fin_Financial_Account_ID@ and connection_status='AC' and handles_transactions='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "7790141951114D66893C293E5C1B323B",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "PSD2_HasConecctions",
+          "tab_name": "Account",
+          "validation_code": "@SQL=SELECT COUNT(1) FROM PSD2_Finacc_Connection WHERE FIN_Financial_Account_ID=@FIN_Financial_Account_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "FCBC64F5B63B4F038ACB500B71AE620F",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "PSD2_HasConnections",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select count(1) from psd2_finacc_connection where fin_financial_account_id=@Fin_Financial_Account_ID@ and handles_transactions='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "D6A24EBF51AC738924D6A24EBF51AC73",
+          "ad_tab_id": "2845D761A8394468BD3BA4710AA888D4",
+          "name": "PSD2_HasInactiveConnections",
+          "tab_name": "Account",
+          "validation_code": "@SQL=select count(1) from psd2_finacc_connection where fin_financial_account_id=@Fin_Financial_Account_ID@ and connection_status='IN'"
+        },
+        {
+          "ad_auxiliarinput_id": "5697505A5B024A7BBA63BC5234251BD0",
+          "ad_tab_id": "23691259D1BD4496BCC5F32645BCA4B9",
+          "name": "DOCBASETYPE",
+          "tab_name": "Transaction",
+          "validation_code": "FAT"
+        },
+        {
+          "ad_auxiliarinput_id": "DCA04CBCB2454C7690E5F131326F06EF",
+          "ad_tab_id": "23691259D1BD4496BCC5F32645BCA4B9",
+          "name": "IsSOTrx",
+          "tab_name": "Transaction",
+          "validation_code": "@SQL=select case when t.fin_payment_id is not null then case when p.isreceipt = 'Y' then 'Y' else 'N' end else case when t.trxtype = 'BPW' then 'N' else 'Y' end end from fin_finacc_transaction t left join fin_payment p on t.fin_payment_id = p.fin_payment_id where t.fin_finacc_transaction_id = @fin_finacc_transaction_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "0E3BC489C55F423BAB4B45F144DFFAF1",
+          "ad_tab_id": "23691259D1BD4496BCC5F32645BCA4B9",
+          "name": "Parent_AD_Org",
+          "tab_name": "Transaction",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM FIN_Financial_Account\nWHERE FIN_Financial_Account_ID = @FIN_Financial_Account_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "D6A7851C9B4745BD8DC91E429A7A0B19",
+          "ad_tab_id": "2A9BA5FDA0F8470D881F8EA9DEDCC598",
+          "name": "DOCBASETYPE",
+          "tab_name": "Accounting History",
+          "validation_code": "FAT"
+        },
+        {
+          "ad_auxiliarinput_id": "52AAC076AFF84DB58F19D32FBCE8F678",
+          "ad_tab_id": "8391062D5C6A47EA94A83A304AD720BE",
+          "name": "isBank",
+          "tab_name": "Accounting Configuration",
+          "validation_code": "@SQL=SELECT CASE WHEN TYPE='B' THEN 'Y' ELSE 'N' END FROM FIN_FINANCIAL_ACCOUNT WHERE FIN_FINANCIAL_ACCOUNT_ID = @FIN_FINANCIAL_ACCOUNT_ID@\n"
+        },
+        {
+          "ad_auxiliarinput_id": "B1C25B989C164EDFB7F9B26CB799DDAA",
+          "ad_tab_id": "C56E698100314ABBBBD3A89626CA551C",
+          "name": "APRM_ISRECONCILED",
+          "tab_name": "Imported Bank Statements",
+          "validation_code": "@SQL=SELECT 1 FROM DUAL WHERE EXISTS (SELECT 1 FROM FIN_BANKSTATEMENTLINE WHERE FIN_FINACC_TRANSACTION_ID IS NOT NULL AND FIN_BANKSTATEMENT_ID = @FIN_BankStatement_ID@) OR EXISTS (SELECT 1 FROM FIN_BANKSTATEMENTLINE, FIN_BANKSTATEMENT  WHERE DATETRX > (SELECT MAX(DATETRX) FROM FIN_BANKSTATEMENTLINE WHERE FIN_BANKSTATEMENT_ID = @FIN_BankStatement_ID@) AND  FIN_BANKSTATEMENT.FIN_BANKSTATEMENT_ID = FIN_BANKSTATEMENTLINE.FIN_BANKSTATEMENT_ID AND FIN_BANKSTATEMENT.FIN_FINANCIAL_ACCOUNT_ID = @FIN_Financial_Account_ID@) "
+        },
+        {
+          "ad_auxiliarinput_id": "9D630C9E4C734361BFB09B153EEE3BCB",
+          "ad_tab_id": "7F5E8E4C55914138A358F5087B532B59",
+          "name": "APRM_BSProcessed",
+          "tab_name": "Bank Statement Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM FIN_BankStatement WHERE FIN_BankStatement_ID = @FIN_Bankstatement_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "29B80A89DBA84293A75434979C655101",
+          "ad_tab_id": "FF8080813320657F0133209DE21B0042",
+          "name": "APRM_LASTREC",
+          "tab_name": "Reconciliations",
+          "validation_code": "@SQL=select fin_reconciliation_id from fin_reconciliation where created = (\nselect max(created)\nfrom fin_reconciliation \nwhere fin_financial_account_id = @FIN_Financial_Account_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "1A2E348DAE25486595C39CCAE8C67A38",
+          "ad_tab_id": "FF8080813320657F0133209DE21B0042",
+          "name": "ETPR_IsManualRecon",
+          "tab_name": "Reconciliations",
+          "validation_code": "@SQL=SELECT \n\tCASE\n\t\tWHEN (fa.fin_matching_algorithm_id IS NULL)\n \t\tTHEN 'Y'\n \t\tELSE 'N'\n \tEND\n FROM fin_financial_account fa\n WHERE fa.fin_financial_account_id=@FIN_Financial_Account_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "21943DF0B89F4AE3AF14A9C06F1181C2",
+          "ad_tab_id": "FF8080813320657F0133209DE21B0042",
+          "name": "Forced_Table_ID",
+          "tab_name": "Reconciliations",
+          "validation_code": "@AD_TABLE_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "1570DEA796EC4EE0A9AB562BC2E14C66",
+          "ad_tab_id": "FF8080813320657F0133209DE21B0042",
+          "name": "ISMANUAL",
+          "tab_name": "Reconciliations",
+          "validation_code": "@SQL=select case when  max(fin_reconciliation_id) is  null then 'N' else 'Y' end\nfrom fin_reconciliation\nwhere fin_reconciliation_id = @FIN_RECONCILIATION_ID@\nand processed = 'Y'\nand not exists (select 1 from fin_finacc_transaction, fin_bankstatementline\n\t\t\t\t\t\t\t\twhere fin_finacc_transaction.fin_reconciliation_id = fin_reconciliation.fin_reconciliation_id\n\t\t\t\t\t\t\t\tand fin_finacc_transaction.fin_finacc_transaction_id = fin_bankstatementline.fin_finacc_transaction_id)"
+        },
+        {
+          "ad_auxiliarinput_id": "ED969CB603E24D5EBB26282C6B994566",
+          "ad_tab_id": "79DFBE24B39742AD877E3163643E619F",
+          "name": "DOCBASETYPE",
+          "tab_name": "Cleared items",
+          "validation_code": "REC"
+        },
+        {
+          "ad_auxiliarinput_id": "D08EBACB459849488F49089EA28F96D9",
+          "ad_tab_id": "79DFBE24B39742AD877E3163643E619F",
+          "name": "IsSOTrx",
+          "tab_name": "Cleared items",
+          "validation_code": "@SQL=SELECT COALESCE(ISRECEIPT,'Y') AS ISRECEIPT FROM FIN_PAYMENT WHERE FIN_PAYMENT_ID = @FIN_PAYMENT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "4FA457B12B4E411FA662D4D97A53B2E1",
+          "ad_tab_id": "FF80808130BB89090130BB9A3A2B0043",
+          "name": "DOCBASETYPE",
+          "tab_name": "Accounting",
+          "validation_code": "FAT"
+        }
+      ]
+    },
+    "f059b24ecd20866b3f9f2bc8f3e5f8c6e2852af85784f3ade7eaa77668d467e5": {
+      "checksum": "f5339d833b1038e60bed8eeb968c63342c9c478ce016a87e27d07fad039af08b",
+      "params": [
+        "168"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "2DF052AE330E41B696992505DD0B0B80",
+          "ad_tab_id": "255",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "MMI"
+        },
+        {
+          "ad_auxiliarinput_id": "9452A73B80BF4AD8AE1BCBC04D196000",
+          "ad_tab_id": "256",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "1FEA6AF375714E1A962C67E094001342",
+          "ad_tab_id": "256",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800007",
+          "ad_tab_id": "256",
+          "name": "HASSECONDUOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "102534378B87400791404542846CA8AE",
+          "ad_tab_id": "256",
+          "name": "M_Warehouse_ID",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_Warehouse_ID FROM M_INVENTORY WHERE M_INVENTORY_ID = @M_INVENTORY_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "BA87D1D6117546C1A140E54D583AA55C",
+          "ad_tab_id": "256",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM M_INVENTORY\nWHERE M_INVENTORY_ID = @M_INVENTORY_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "A0BD1D62278F4068AEA07E1CBF0D840E",
+          "ad_tab_id": "256",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM M_INVENTORY WHERE M_INVENTORY_ID = @M_INVENTORY_ID@"
+        }
+      ]
+    },
+    "f580e813ff8670c80a14ff6eade856a95ce0d0f578526fc32592db9cba3c7f76": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "71F24BF89DE748B483BE87594747D6FB"
+      ],
+      "rows": []
+    },
+    "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
+      "checksum": "61d58ffed9e67a06dab2c91646c57ae78f3aca76e4e76edb2dcb178fe5865b9f",
+      "params": [
+        "169"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "3E769128EA274A8480EBB341E05468AF",
+          "ad_tab_id": "257",
+          "name": "DOCBASETYPE",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select max(docbasetype) from c_doctype where c_doctype_id = @c_doctype_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "97AB64E23F264957BA14C2DAA29DBD80",
+          "ad_tab_id": "257",
+          "name": "HAS_M_INOUTLINES",
+          "tab_name": "Header",
+          "validation_code": "@SQL=select 'Y' from dual where exists (select 1 from m_inoutline where m_inout_id = @M_INOUT_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "800016",
+          "ad_tab_id": "257",
+          "name": "ISLOGISTICAUX",
+          "tab_name": "Header",
+          "validation_code": "N"
+        },
+        {
+          "ad_auxiliarinput_id": "DE561A006F4247DFA68E13C955437EF5",
+          "ad_tab_id": "258",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "8EE1AE595E1E462BBFE568C0C27BEAC0",
+          "ad_tab_id": "258",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "800021",
+          "ad_tab_id": "258",
+          "name": "C_BPARTNER_ID",
+          "tab_name": "Lines",
+          "validation_code": "@C_BPARTNER_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "3C85410D6A9549C99BC60258CBD809BD",
+          "ad_tab_id": "258",
+          "name": "DOCBASETYPE",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=select max(dt.docbasetype) from m_inout io join c_doctype dt on (io.c_doctype_id = dt.c_doctype_id)\nwhere io.m_inout_id = @m_inout_id@"
+        },
+        {
+          "ad_auxiliarinput_id": "800009",
+          "ad_tab_id": "258",
+          "name": "HASSECONDUOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT (CASE COUNT(*) WHEN 0 THEN 0 ELSE 1 END) AS TOTAL FROM M_PRODUCT_UOM WHERE M_PRODUCT_ID=@M_Product_ID@ AND ISACTIVE='Y'"
+        },
+        {
+          "ad_auxiliarinput_id": "AA79289FD0CB4B69BFB31FC8A8C076EB",
+          "ad_tab_id": "258",
+          "name": "isBOM",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT isBOM FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "1FC6075EA994422F8CF3B041621F374D",
+          "ad_tab_id": "258",
+          "name": "IsStocked",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT IsStocked FROM M_PRODUCT WHERE M_PRODUCT_ID = @M_PRODUCT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "3BC05D242CF749FBAC016CAF3071EAB0",
+          "ad_tab_id": "258",
+          "name": "M_Warehouse_ID",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_Warehouse_ID FROM M_INOUT WHERE M_INOUT_ID = @M_INOUT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "4E3EE7A38AF3414FB89B496F9F4E8263",
+          "ad_tab_id": "258",
+          "name": "OnHandLocatorDefault",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT M_LOCATOR_ID FROM M_LOCATOR WHERE ISACTIVE='Y' AND M_WAREHOUSE_ID = (SELECT M_WAREHOUSE_ID FROM M_INOUT WHERE M_INOUT_ID = @M_INOUT_ID@) ORDER BY M_LOCATOR.ISDEFAULT DESC"
+        },
+        {
+          "ad_auxiliarinput_id": "E5295F791A5840A2B28868ED6A7634D3",
+          "ad_tab_id": "258",
+          "name": "Parent_AD_Org",
+          "tab_name": "Lines",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM M_INOUT\nWHERE M_INOUT_ID = @M_INOUT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "A9B8EA3C15E14EFB901131BF4DFFF687",
+          "ad_tab_id": "258",
+          "name": "Posted",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT POSTED FROM M_INOUT WHERE M_INOUT_ID = @M_INOUT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "B4A64414F61A4901A24A5B968FEE309A",
+          "ad_tab_id": "258",
+          "name": "Processed",
+          "tab_name": "Lines",
+          "validation_code": "@SQL=SELECT PROCESSED FROM M_INOUT WHERE M_INOUT_ID = @M_INOUT_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "F82925062FF448939A299EB007F93869",
+          "ad_tab_id": "8B228674B3294540B0989733DA35BC48",
+          "name": "INTR_MINOUT",
+          "tab_name": "Intrastat",
+          "validation_code": "@SQL=SELECT processed FROM M_INOUT WHERE M_INOUT_ID IN (SELECT M_INOUT_ID FROM M_INOUTLINE WHERE M_INOUTLINE_ID=@M_Inoutline_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "E9AF82914D5A4DCDA7035021FAB62627",
+          "ad_tab_id": "17FC33D4711A4DD492A14A5D7626D5F7",
+          "name": "DOCBASETYPE",
+          "tab_name": "Accounting dimension",
+          "validation_code": "@SQL=select max(dt.docbasetype) from m_inoutline_acctdimension iolacct \n                           join m_inoutline iol on (iolacct.m_inoutline_id=iol.m_inoutline_id)\n                           join m_inout io on (iol.m_inout_id=io.m_inout_id)\n                           join c_doctype dt on (io.c_doctype_id = dt.c_doctype_id)\n                           where io.m_inout_id = @m_inout_id@"
+        }
+      ]
+    },
+    "f71bd40f8548d0778bbf8b687c5cca2566403c65eb5aecc67560cd0b92ebd3b0": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "252"
+      ],
+      "rows": []
+    },
+    "f750141ebc99d41ec60eb871c5b5d9630d42737fc939771cef25ff208fc674df": {
+      "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "params": [
+        "138"
+      ],
+      "rows": []
+    },
+    "f96633ac204ea54d299e732b9b90d118784f1968476b98b9d9df3e7c10b7da59": {
+      "checksum": "9efd67df5d4f50413cc59f1fa085a15d24cdb3796cc6b09f5827e0102666171f",
+      "params": [
+        "800027"
+      ],
+      "rows": [
+        {
+          "ad_auxiliarinput_id": "0C9EAE5805B14C159CE74DAF015A12C9",
+          "ad_tab_id": "800078",
+          "name": "ATTRIBUTESET",
+          "tab_name": "Assets",
+          "validation_code": "@SQL=SELECT M_ATTRIBUTESET_ID FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "42236E76CCB2491B8B2E5BCDA4E83624",
+          "ad_tab_id": "800078",
+          "name": "ATTRSETVALUETYPE",
+          "tab_name": "Assets",
+          "validation_code": "@SQL=SELECT ATTRSETVALUETYPE FROM M_PRODUCT WHERE M_PRODUCT_ID=@M_Product_ID@"
+        },
+        {
+          "ad_auxiliarinput_id": "AD306651FEC841DF9D01E831482C6A09",
+          "ad_tab_id": "800078",
+          "name": "existAmortizationLines",
+          "tab_name": "Assets",
+          "validation_code": "@SQL=select 'Y' from dual where exists (select 1 from a_amortizationline where a_amortizationline.a_asset_id  = @A_Asset_ID@)"
+        },
+        {
+          "ad_auxiliarinput_id": "7B987F93D3E34211B3D05EB1719D378C",
+          "ad_tab_id": "800165",
+          "name": "Parent_AD_Org",
+          "tab_name": "Asset Amortization",
+          "validation_code": "@SQL= SELECT AD_ORG_ID\nFROM A_ASSET\nWHERE A_ASSET_ID = @A_ASSET_ID@"
+        }
+      ]
+    }
+  }
+}

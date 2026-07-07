@@ -7,6 +7,7 @@ import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
+import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,11 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
+
+  // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
+  // so the form-view topbar Send modal shows the document instead of the
+  // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
+  const { pdfUrl, loading: pdfLoading } = useOrderPdf(recordId, apiBaseUrl, token);
 
 
   // draftMode confirm button (DetailView) dispatches this event to open the confirm modal
@@ -198,7 +204,9 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
         </button>
       )}
       {cloneButton}
-      {isDraft && <SendDocumentButton
+      {/* ETP-4372 — form-view Send envelope must stay available once the order
+          is confirmed (CO), not only in Draft. Mirrors purchase-order. */}
+      {(isDraft || isCompleted) && <SendDocumentButton
         onClick={() => setShowSend(true)}
         data-testid="SendDocumentButton__18d1f0" />}
       {clonePortal}
@@ -226,7 +234,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           data-testid="CreateDocsModal__18d1f0" />,
         document.body,
       )}
-      {isDraft && showSend && createPortal(
+      {(isDraft || isCompleted) && showSend && createPortal(
         <SendDocumentModal
           documentType={tMenu('Sales Order')}
           documentNo={data?.documentNo}
@@ -236,6 +244,8 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           documentId={recordId}
           windowName="sales-order"
           token={token}
+          pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           onClose={() => setShowSend(false)}
           data-testid="SendDocumentModal__18d1f0" />,
         document.body,

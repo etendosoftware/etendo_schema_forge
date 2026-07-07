@@ -50,6 +50,7 @@ async function loadAllMockData() {
   const modules = await Promise.all([
     import('@generated/sales-order/custom/mockData.js'),
     import('@generated/business-partner/generated/web/business-partner/mockData.js'),
+    import('@generated/business-partner-category/generated/web/business-partner-category/mockData.js'),
     import('@generated/warehouse/generated/web/warehouse/mockData.js'),
     import('@generated/price-list/generated/web/price-list/mockData.js'),
     import('@generated/payment-term/generated/web/payment-term/mockData.js'),
@@ -95,7 +96,6 @@ async function loadAllMockData() {
     import('@generated/asset-group/generated/web/asset-group/mockData.js'),
     import('@generated/general-ledger-configuration/generated/web/general-ledger-configuration/mockData.js'),
     import('@generated/tax-category/generated/web/tax-category/mockData.js'),
-    import('@generated/asset-group/generated/web/asset-group/mockData.js'),
   ]);
 
   const merged = {};

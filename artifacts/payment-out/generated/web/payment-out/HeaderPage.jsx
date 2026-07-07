@@ -5,6 +5,7 @@ import HeaderForm from './HeaderForm';
 import PaymentOutBottomPanel from '../../../custom/PaymentOutBottomPanel';
 import PaymentConciliadoBadge from '../../../custom/PaymentConciliadoBadge';
 import PaymentDetailSidebar from '../../../custom/PaymentDetailSidebar';
+import ReactivarConfirmModal from '../../../custom/ReactivarConfirmModal';
 import catalogs from './mockCatalogs';
 
 
@@ -28,7 +29,7 @@ const extraBadges = [
 // @sf-generated-start processes:header
 const processes = [
   { name: 'Payment Process', label: 'processConfirm', style: 'positive', columnName: 'aPRMProcessPayment',
-    displayLogicRaw: "@status@ = 'RPAP'" },
+    displayLogicRaw: "@status@ = 'RPAP'", confirmModal: true },
   { name: 'etprReactivatePayment', label: 'processReactivate', style: 'ghost-danger', columnName: 'etprReactivatePayment',
     displayLogicRaw: "@status@ != 'RPAP'" },
 ];
@@ -441,7 +442,9 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
         topbarExtra={PaymentConciliadoBadge}
         sidePanel={PaymentDetailSidebar}
         sidePanelStyle={{"order":-1,"borderLeft":"none","borderRight":"1px solid #E8EAEF","padding":0}}
+        processConfirmModal={ReactivarConfirmModal}
         statusEnumLabels={{"RPAP":"statusDraft","RPR":"pagoDepositado","RDNC":"pagoDepositado","RPPC":"pagoDepositado","PPM":"pagoDepositado","PWNC":"pagoDepositado"}}
+        statusFieldLabel="statusColumnLabel"
         sendDocument
         {...props}
       />
