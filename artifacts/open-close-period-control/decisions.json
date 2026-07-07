@@ -17,6 +17,9 @@
         "component": "GoToFiscalCalendarModal"
       }
     ],
+    "listKpiCards": {
+      "customComponent": "GoToFiscalCalendarButton"
+    },
     "statusEnumLabels": {
       "O": "All Opened",
       "N": "All Never Opened",

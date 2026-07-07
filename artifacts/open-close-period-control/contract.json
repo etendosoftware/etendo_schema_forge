@@ -1,8 +1,8 @@
 {
   "version": "0.5.0",
   "generatedAt": "2026-06-25T12:12:33.694Z",
-  "updatedAt": "2026-07-07T11:25:22.483Z",
-  "checksum": "c44ee38b47bb8dda",
+  "updatedAt": "2026-07-07T12:43:22.544Z",
+  "checksum": "a68b9a0c35c35073",
   "frontendContract": {
     "window": {
       "id": "E66E701CCBA14B8BA480CBDE37C50D7A",
@@ -50,6 +50,9 @@
       },
       "detailEntity": "documents",
       "listSortBy": "periodNo asc",
+      "listKpiCards": {
+        "customComponent": "GoToFiscalCalendarButton"
+      },
       "labelOverrides": {
         "es_ES": {
           "Name": "Período",
@@ -812,6 +815,9 @@
       },
       "detailEntity": "documents",
       "listSortBy": "periodNo asc",
+      "listKpiCards": {
+        "customComponent": "GoToFiscalCalendarButton"
+      },
       "labelOverrides": {
         "es_ES": {
           "Name": "Período",

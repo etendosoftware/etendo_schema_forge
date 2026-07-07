@@ -5,6 +5,7 @@ import PeriodControlTable from './PeriodControlTable';
 import PeriodControlForm from './PeriodControlForm';
 import DocumentsTable from './DocumentsTable';
 import DocumentsForm from './DocumentsForm';
+import GoToFiscalCalendarButton from '../../../custom/GoToFiscalCalendarButton';
 import { AttachmentsTab } from '@/components/attachments';
 import GoToFiscalCalendarModal from '../../../custom/GoToFiscalCalendarModal';
 import catalogs from './mockCatalogs';
@@ -225,6 +226,7 @@ export default function PeriodControlPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      headerContent={(p) => <GoToFiscalCalendarButton {...p} />}
       hidePrint
       hideCreate
       labelOverrides={labelOverrides}
