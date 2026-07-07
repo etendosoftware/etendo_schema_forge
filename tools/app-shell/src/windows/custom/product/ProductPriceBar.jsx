@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Loader2, Minus, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
+import { InlineCreateModal } from '@/components/contract-ui/InlineCreateModal.jsx';
+import { buildCreateUrl } from '@/components/contract-ui/InlineCreateSelector.jsx';
 import { useUI } from '@/i18n';
 
 function parseBoolean(value) {
@@ -144,7 +147,13 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
   const [savingId, setSavingId] = useState(null);
   const [adding, setAdding] = useState(false);
   const [lazyOptions, setLazyOptions] = useState([]);
-  const [lazyLoading, setLazyLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createInitialName, setCreateInitialName] = useState('');
+  // Draft prices for the add-tariff row (mirrors the Figma: the new row shows the
+  // unit/list price steppers alongside the selector, committed on tariff selection).
+  const [draftUnitPrice, setDraftUnitPrice] = useState(0);
+  const [draftListPrice, setDraftListPrice] = useState(0);
+  const addRowRef = useRef(null);
 
   const priceSelector = useMemo(() => (
     api?.selectors?.find(sel => sel.entity === 'price' && (sel.field === 'priceListVersion' || sel.column === 'M_PriceList_Version_ID'))
@@ -190,7 +199,6 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     if (!apiBaseUrl || !token) return undefined;
 
     let aborted = false;
-    setLazyLoading(true);
     fetch(`${apiBaseUrl}/price/selectors/${selectorColumn}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -204,11 +212,44 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
         }));
         setLazyOptions(options);
       })
-      .catch(() => { if (!aborted) setLazyOptions([]); })
-      .finally(() => { if (!aborted) setLazyLoading(false); });
+      .catch(() => { if (!aborted) setLazyOptions([]); });
 
     return () => { aborted = true; };
   }, [adding, eagerOptions, lazyOptions.length, apiBaseUrl, token, selectorColumn]);
+
+  // Reset the draft prices whenever we leave "adding" mode (cancel, Escape, outside
+  // click, section toggle, or a successful add), so reopening starts clean.
+  useEffect(() => {
+    if (!adding) {
+      setDraftUnitPrice(0);
+      setDraftListPrice(0);
+    }
+  }, [adding]);
+
+  // While adding, allow leaving the mode without picking a tariff: press Escape or
+  // click anywhere outside the selector (and its portaled dropdown). Skipped while the
+  // create-tariff modal is open — there Escape/clicks belong to the modal.
+  useEffect(() => {
+    if (!adding) return undefined;
+    const onKeyDown = e => {
+      if (e.key === 'Escape' && !createOpen) setAdding(false);
+    };
+    const onPointerDown = e => {
+      if (createOpen) return;
+      const target = e.target;
+      if (addRowRef.current?.contains(target)) return;
+      // The options list is portaled to document.body, outside addRowRef.
+      const panel = document.querySelector('[data-testid="options-priceListVersion"]');
+      if (panel?.contains(target)) return;
+      setAdding(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onPointerDown);
+    };
+  }, [adding, createOpen]);
 
   const hasRows = Array.isArray(priceRows) && priceRows.length > 0;
   const saleRows = hasRows ? priceRows.filter(r => getSalesFlagFromRow(r) === true) : [];
@@ -234,6 +275,13 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
       return matchesSection && id && !presentIds.has(String(id));
     });
   }, [effectiveOptions, priceRows, isSales]);
+
+  // Normalize to the { id, name } shape CreatableSearchSelect expects.
+  const selectOptions = useMemo(() => (
+    availableOptions
+      .map(opt => ({ id: extractReferenceId(opt.id), name: opt.name || opt.label || extractReferenceId(opt.id) }))
+      .filter(o => o.id)
+  ), [availableOptions]);
 
   const patchField = useCallback(async (row, field, value) => {
     const current = String(row[field] ?? '');
@@ -273,9 +321,11 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
     }
   }, [apiBaseUrl, token, ui, refreshPrices]);
 
-  const handleAdd = useCallback(async (plvId) => {
+  const handleAdd = useCallback(async (plvId, unitPrice = 0, listPrice = 0) => {
     if (!plvId) return;
     setSavingId('new');
+    const unit = Number(unitPrice) || 0;
+    const list = Number(listPrice) || 0;
     try {
       const res = await fetch(`${apiBaseUrl}/price`, {
         method: 'POST',
@@ -284,20 +334,60 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
           parentId: recordId,
           product: recordId,
           priceListVersion: plvId,
-          standardPrice: '0',
-          listPrice: '0',
-          priceLimit: '0',
+          standardPrice: String(unit),
+          listPrice: String(list),
+          priceLimit: String(list || unit),
         }),
       });
       if (!res.ok) throw new Error(await extractErrorMessage(res));
       setAdding(false);
+      setDraftUnitPrice(0);
+      setDraftListPrice(0);
       await refreshPrices();
+      toast.success(ui('priceTariffAdded'));
     } catch (err) {
       toast.error(err?.message || ui('priceUnableToSave'));
     } finally {
       setSavingId(null);
     }
   }, [apiBaseUrl, token, recordId, ui, refreshPrices]);
+
+  // CreatableSearchSelect asks us to open a creation UI. We link the new tariff to
+  // the product ourselves (see submitCreateTariff), so we don't need its `onCreated`
+  // callback — the select unmounts as soon as handleAdd closes "adding" mode anyway.
+  // Calling both onCreated (which re-fires our onChange -> handleAdd) AND handleAdd
+  // directly would double-POST /price and hit the (PriceListVersion, Product) unique
+  // constraint, so onCreated is intentionally left untouched.
+  const handleCreateRequest = useCallback((query) => {
+    setCreateInitialName(query || '');
+    setCreateOpen(true);
+  }, []);
+
+  // Create a new tariff (price list) with just a name. Currency is inherited from
+  // the organization (injected by PriceListHeaderHandler); sales vs. purchase is
+  // inferred from the active section; the remaining flags default to false. The
+  // header handler auto-creates the hidden price list version and returns its id,
+  // which we then link to the product via handleAdd.
+  const submitCreateTariff = useCallback(async (name) => {
+    const res = await fetch(buildCreateUrl(apiBaseUrl, 'price-list', 'priceList'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        name,
+        salesPriceList: isSales,
+        costBasedPriceList: false,
+        priceIncludesTax: false,
+        default: false,
+      }),
+    });
+    if (!res.ok) throw new Error(await extractErrorMessage(res));
+    const json = await res.json();
+    const rec = json?.response?.data?.[0] ?? json?.response?.data ?? json?.data ?? json;
+    const versionId = extractReferenceId(rec?.priceListVersion);
+    if (!versionId) throw new Error(ui('priceUnableToSave'));
+    setCreateOpen(false);
+    await handleAdd(versionId, draftUnitPrice, draftListPrice);
+  }, [apiBaseUrl, token, isSales, ui, handleAdd, draftUnitPrice, draftListPrice]);
 
   if (!recordId) {
     return (
@@ -357,6 +447,15 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
           <div className="text-sm text-gray-400">{ui('priceNoLists')}</div>
         )}
 
+        {/* Column headers — rendered once, not repeated per row */}
+        {(sectionRows.length > 0 || adding) && (
+          <div className="flex flex-row gap-5">
+            <div className="w-[300px] shrink-0"><FieldLabel>{ui('priceColName')}</FieldLabel></div>
+            <div className="w-[201px] shrink-0"><FieldLabel>{ui('priceColUnitPrice')}</FieldLabel></div>
+            <div className="w-[201px] shrink-0"><FieldLabel>{ui('priceColListPrice')}</FieldLabel></div>
+          </div>
+        )}
+
         {sectionRows.map(row => {
           const name = row['priceListVersion$_identifier'] || row['priceList$_identifier'] || '';
           const saving = savingId === row.id;
@@ -365,18 +464,16 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
             <div key={row.id} className="flex flex-col gap-1 group/row">
               <div className="flex flex-row items-end gap-5">
                 {/* Name */}
-                <div className="flex flex-col gap-2 w-[300px] shrink-0">
-                  <FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColName')}</FieldLabel>
+                <div className="w-[300px] shrink-0">
                   <input
                     type="text"
                     readOnly
                     value={name}
-                    className="h-10 px-3 text-sm text-[#121217] bg-white border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] outline-none truncate"
+                    className="h-10 w-full px-3 text-sm text-[#121217] bg-white border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] outline-none truncate"
                   />
                 </div>
                 {/* Unit price */}
-                <div className="flex flex-col gap-2 w-[201px] shrink-0">
-                  <FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColUnitPrice')}</FieldLabel>
+                <div className="w-[201px] shrink-0">
                   <PriceStepper
                     value={row.standardPrice}
                     prefix={currencySymbol}
@@ -385,8 +482,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                     data-testid="PriceStepper__d76b90" />
                 </div>
                 {/* List price */}
-                <div className="flex flex-col gap-2 w-[201px] shrink-0">
-                  <FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColListPrice')}</FieldLabel>
+                <div className="w-[201px] shrink-0">
                   <PriceStepper
                     value={row.listPrice}
                     prefix={currencySymbol}
@@ -412,27 +508,68 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
           );
         })}
 
-        {/* Add-tariff selector row */}
+        {/* Add-tariff row — pick/create a tariff and set its prices, mirroring the saved rows */}
         {adding && (
-          <div className="flex flex-col gap-2 w-[300px]">
-            <FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColName')}</FieldLabel>
-            <select
-              autoFocus
-              disabled={savingId === 'new' || (lazyLoading && availableOptions.length === 0)}
-              defaultValue=""
-              onChange={e => handleAdd(e.target.value)}
-              className="h-10 px-3 text-sm text-[#121217] bg-white border border-[#D1D4DB] rounded-lg shadow-[0px_1px_2px_rgba(18,18,23,0.05)] outline-none focus:border-[#121217] disabled:opacity-60"
-            >
-              <option value="" disabled>
-                {lazyLoading && availableOptions.length === 0 ? ui('loadingPricing') : ui('priceSelectVersion')}
-              </option>
-              {availableOptions.map(opt => {
-                const id = extractReferenceId(opt.id);
-                return <option key={id} value={id}>{opt.name || opt.label || id}</option>;
-              })}
-            </select>
+          <div ref={addRowRef} className="flex flex-row items-end gap-5" data-testid="price-add-tariff-row">
+            {/* Name selector — white at rest, whole box greys uniformly on hover (Figma).
+                The color lives on the root box so the input + chevron (transparent) match it,
+                instead of only the input greying (the product-window rule targets input:hover). */}
+            <div className="w-[300px] shrink-0 rounded-lg [&>div]:!bg-white [&>div:hover]:!bg-[#F5F7F9]">
+              <CreatableSearchSelect
+                key={selectOptions.map(o => o.id).join(',')}
+                field={{ key: 'priceListVersion', id: 'priceListVersion', required: false }}
+                value=""
+                displayValue=""
+                onChange={id => { if (id) handleAdd(id, draftUnitPrice, draftListPrice); }}
+                resolvedLabel={ui('priceColName')}
+                staticOptions={selectOptions}
+                createLabel={ui('priceCreateTariff')}
+                onCreateRequest={handleCreateRequest}
+                preferDown
+              />
+            </div>
+            {/* Unit price */}
+            <div className="w-[201px] shrink-0">
+              <PriceStepper
+                value={draftUnitPrice}
+                prefix={currencySymbol}
+                disabled={savingId === 'new'}
+                onCommit={setDraftUnitPrice}
+                data-testid="PriceStepper__d76b90" />
+            </div>
+            {/* List price */}
+            <div className="w-[201px] shrink-0">
+              <PriceStepper
+                value={draftListPrice}
+                prefix={currencySymbol}
+                disabled={savingId === 'new'}
+                onCommit={setDraftListPrice}
+                data-testid="PriceStepper__d76b90" />
+            </div>
+            {/* Cancel add */}
+            <div className="flex items-center h-10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setAdding(false)}
+                disabled={savingId === 'new'}
+                title={ui('cancel')}
+                data-testid="price-add-cancel"
+                className="w-8 h-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:text-red-700 hover:bg-red-50 disabled:opacity-40 transition-all"
+              >
+                <Trash2 className="h-5 w-5" data-testid="Trash2__d76b90" />
+              </button>
+            </div>
           </div>
         )}
+
+        <InlineCreateModal
+          open={createOpen}
+          title={ui('priceCreateTariffTitle')}
+          namePlaceholder={ui('priceTariffNamePlaceholder')}
+          initialName={createInitialName}
+          onCancel={() => setCreateOpen(false)}
+          onSubmit={submitCreateTariff}
+        />
 
         {/* Add new tariff link */}
         {!adding && (

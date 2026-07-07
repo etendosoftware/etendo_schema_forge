@@ -9,15 +9,26 @@ import { login } from '../helpers/auth.js';
  *
  *   Suite A — Create flow (product with zero M_ProductPrice rows)
  *     The tab renders two section toggles (Venta / Compra) and an
- *     "+ Agregar tarifa" button. Clicking the button shows an inline <select>
- *     populated by a lazy fetch to /price/selectors/M_PriceList_Version_ID
- *     (filtered by salesPriceList flag for the active section). Selecting an
- *     option immediately fires a POST — no dialog, no "Guardar cambios".
+ *     "+ Añadir nueva tarifa" button (`price-add-tariff`). Clicking it shows an
+ *     inline `CreatableSearchSelect` (text input `field-priceListVersion`).
+ *     Focusing the input opens the dropdown, populated by a lazy fetch to
+ *     /price/selectors/M_PriceList_Version_ID (filtered by salesPriceList for
+ *     the active section). Selecting an existing option
+ *     (`option-priceListVersion-<id>`) immediately fires a POST /price — no
+ *     dialog, no "Guardar cambios".
  *
  *   Suite B — Lazy fetch filtered to purchase section
- *     Switching to the Compra toggle and clicking "+ Agregar tarifa" triggers
- *     the lazy fetch. The resulting <select> only offers purchase-flagged
- *     versions (salesPriceList=false). Sales-flagged versions are filtered out.
+ *     Switching to the Compra toggle and opening the selector triggers the lazy
+ *     fetch. The dropdown only offers purchase-flagged versions
+ *     (salesPriceList=false). Sales-flagged versions are filtered out.
+ *
+ *   Suite C — Inline create-tariff flow
+ *     The dropdown exposes a create action (`action-create-priceListVersion`).
+ *     Clicking it opens the `InlineCreateModal` (`inline-create-modal`); typing
+ *     a name and submitting POSTs a new price list to the spec-swapped
+ *     /price-list/priceList endpoint (currency injected by the backend), reads
+ *     back the auto-created `priceListVersion`, links it via POST /price, and the
+ *     new row appears in the active section.
  *
  * Mock mode only: routes are installed AFTER login() so they win over the
  * generic /sws/** catch-all (Playwright LIFO route matching).
@@ -119,102 +130,96 @@ async function mockSelector(page, calls) {
   });
 }
 
-// mockPriceDefaults is kept as a no-op helper for backwards compatibility;
-// the current ProductPriceBar no longer fetches /price/defaults.
-async function mockPriceDefaults(_page) {}
+/**
+ * Install the /price catch-all: list GET (`/price?parentId=`) returns the
+ * (mutable) rows array, POST /price appends a synthetic saved row so the next
+ * list GET reflects it. `postBodies` captures each create body.
+ */
+function installPriceRoute(page, state) {
+  return page.route('**/sws/neo/product/price**', async (route) => {
+    const req = route.request();
+    const url = req.url();
+    const method = req.method();
+
+    if (/\/price\/selectors\//.test(url)) return route.fallback();
+    if (/\/price\/defaults/.test(url)) return route.fallback();
+
+    if (method === 'GET' && !/\/price\/[^/?]+/.test(url)) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: { data: state.rows, totalRows: state.rows.length },
+        }),
+      });
+      return;
+    }
+
+    if (method === 'POST' && !/\/price\/[^/?]+/.test(url)) {
+      const body = req.postData() ? JSON.parse(req.postData()) : {};
+      state.postBodies.push(body);
+
+      const isSales = String(body.priceListVersion) === 'plv-sale';
+      const newRow = {
+        id: `price-new-${state.postBodies.length}`,
+        product: body.product,
+        priceListVersion: body.priceListVersion,
+        'priceListVersion$_identifier': isSales ? PLV_SALE.label : PLV_PURCHASE.label,
+        'priceListVersion$salesPriceList': isSales,
+        'priceListVersion$default': true,
+        'priceListVersion$validFromDate': '2026-01-01',
+        standardPrice: body.standardPrice,
+        listPrice: body.listPrice,
+        priceLimit: body.priceLimit,
+      };
+      state.rows = [...state.rows, newRow];
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, response: { data: [{ id: newRow.id }] } }),
+      });
+      return;
+    }
+
+    return route.fallback();
+  });
+}
 
 // ── Suite A — Create flow ────────────────────────────────────────────────────
 
 test.describe('Product pricing — create flow (no existing rows)', () => {
-  let postBodies;
+  let state;
   let selectorCalls;
-  let priceListRows;
 
   test.beforeEach(async ({ page }) => {
-    postBodies = [];
+    state = { rows: [], postBodies: [] };
     selectorCalls = [];
-    priceListRows = []; // start empty so the create flow is triggered
 
     await login(page);
 
-    // Catch-all for /price endpoints — list GET + POST + per-id PATCH/DELETE.
-    // Installed AFTER login() so it wins over the generic catch-all.
-    await page.route('**/sws/neo/product/price**', async (route) => {
-      const req = route.request();
-      const url = req.url();
-      const method = req.method();
-
-      // Selector and defaults endpoints handled by dedicated mocks below.
-      if (/\/price\/selectors\//.test(url)) return route.fallback();
-      if (/\/price\/defaults/.test(url)) return route.fallback();
-
-      // List GET: `/price?parentId=...`
-      if (method === 'GET' && !/\/price\/[^/?]+/.test(url)) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            response: { data: priceListRows, totalRows: priceListRows.length },
-          }),
-        });
-        return;
-      }
-
-      // POST `/price` — create new row.
-      if (method === 'POST' && !/\/price\/[^/?]+/.test(url)) {
-        const body = req.postData() ? JSON.parse(req.postData()) : {};
-        postBodies.push(body);
-
-        // Build a saved row that mirrors what the next list GET should return.
-        const isSales = String(body.priceListVersion) === 'plv-sale';
-        const newRow = {
-          id: `price-new-${postBodies.length}`,
-          product: body.product,
-          priceListVersion: body.priceListVersion,
-          'priceListVersion$_identifier': isSales ? PLV_SALE.label : PLV_PURCHASE.label,
-          'priceListVersion$salesPriceList': isSales,
-          // Fields required by ProductSalePriceCell / ProductPurchasePriceCell (list view)
-          'priceListVersion$default': true,
-          'priceListVersion$validFromDate': '2026-01-01',
-          standardPrice: body.standardPrice,
-          listPrice: body.listPrice,
-          priceLimit: body.priceLimit,
-        };
-        priceListRows = [...priceListRows, newRow];
-
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ ok: true, response: { data: [{ id: newRow.id }] } }),
-        });
-        return;
-      }
-
-      return route.fallback();
-    });
-
+    await installPriceRoute(page, state);
     await mockSelector(page, selectorCalls);
-    await mockPriceDefaults(page);
     await mockProductDetail(page, PRODUCT_NO_PRICES);
 
     await page.goto(`/product/${PRODUCT_NO_PRICES.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('empty state shows section toggle and add button; clicking add reveals version selector filtered to sales', async ({ page }) => {
+  test('empty state shows section toggle and add button; opening the selector lists sales options only', async ({ page }) => {
     // The Venta section title is rendered on the right column.
     await expect(
       page.getByText(/sales price lists|listas de precios de venta/i),
     ).toBeVisible({ timeout: 10_000 });
 
     // Both section toggles are visible in the left column.
-    await expect(page.locator('[data-testid="price-tab-sales"]')).toBeVisible({ timeout: 5_000 });
-    await expect(page.locator('[data-testid="price-tab-purchase"]')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('price-tab-sales')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('price-tab-purchase')).toBeVisible({ timeout: 5_000 });
 
-    // "+ Agregar tarifa" button is visible.
-    await expect(page.locator('[data-testid="price-add-tariff"]')).toBeVisible({ timeout: 5_000 });
+    // Add-tariff button is visible.
+    await expect(page.getByTestId('price-add-tariff')).toBeVisible({ timeout: 5_000 });
 
-    // Set up the lazy-fetch promise before clicking so we can assert it fired.
+    // Lazy fetch fires as soon as adding=true — arm the waiter before clicking.
     const selectorRequestPromise = page.waitForRequest(
       (req) =>
         req.method() === 'GET' &&
@@ -222,37 +227,32 @@ test.describe('Product pricing — create flow (no existing rows)', () => {
       { timeout: 10_000 },
     );
 
-    // Click "+ Agregar tarifa" — triggers lazy fetch, shows inline <select>.
-    await page.locator('[data-testid="price-add-tariff"]').click();
+    await page.getByTestId('price-add-tariff').click();
 
-    // Inline select appears (not inside a dialog).
-    const addSelect = page.locator('select');
-    await expect(addSelect).toBeVisible({ timeout: 10_000 });
+    // Inline creatable selector appears (text input, not a native <select>).
+    const input = page.getByTestId('field-priceListVersion');
+    await expect(input).toBeVisible({ timeout: 10_000 });
 
-    // Lazy fetch must have fired.
     await selectorRequestPromise;
 
+    // Focus opens the dropdown with the section-filtered options.
+    await input.click();
+
     // Sales-flagged option is offered for the active Venta section.
-    await expect(
-      addSelect.locator('option', { hasText: 'Lista venta 2026' }),
-    ).toHaveCount(1, { timeout: 10_000 });
+    await expect(page.getByTestId('option-priceListVersion-plv-sale')).toBeVisible({ timeout: 10_000 });
 
     // Purchase-flagged option is NOT offered (filtered out for Venta section).
-    await expect(
-      addSelect.locator('option', { hasText: 'Lista compra 2026' }),
-    ).toHaveCount(0);
+    await expect(page.getByTestId('option-priceListVersion-plv-purchase')).toHaveCount(0);
   });
 
   test('selecting a sales version fires one POST immediately and rerenders the row', async ({ page }) => {
-    // Click "+ Agregar tarifa" and wait for the inline select to appear.
-    await page.locator('[data-testid="price-add-tariff"]').click();
+    await page.getByTestId('price-add-tariff').click();
+    await page.getByTestId('field-priceListVersion').click();
 
-    const addSelect = page.locator('select');
-    await expect(
-      addSelect.locator('option', { hasText: 'Lista venta 2026' }),
-    ).toHaveCount(1, { timeout: 10_000 });
+    const option = page.getByTestId('option-priceListVersion-plv-sale');
+    await expect(option).toBeVisible({ timeout: 10_000 });
 
-    // Set up POST intercept BEFORE selecting so we don't miss the request.
+    // Arm the POST waiter BEFORE selecting so we don't miss the request.
     const postPromise = page.waitForRequest(
       (req) =>
         req.method() === 'POST' &&
@@ -261,7 +261,7 @@ test.describe('Product pricing — create flow (no existing rows)', () => {
     );
 
     // Selecting fires POST immediately — no "Guardar cambios" button needed.
-    await addSelect.selectOption({ label: 'Lista venta 2026' });
+    await option.click();
 
     await postPromise;
 
@@ -269,21 +269,21 @@ test.describe('Product pricing — create flow (no existing rows)', () => {
     await expect(page.locator('input[value="Lista venta 2026"]')).toBeVisible({ timeout: 10_000 });
 
     // Exactly one POST was made.
-    expect(postBodies).toHaveLength(1);
+    expect(state.postBodies).toHaveLength(1);
 
-    const sentBody = postBodies[0];
+    const sentBody = state.postBodies[0];
     expect(sentBody.priceListVersion).toBe('plv-sale');
     expect(sentBody.product).toBe(PRODUCT_NO_PRICES.id);
 
     // Switch to Compra — no rows there.
-    await page.locator('[data-testid="price-tab-purchase"]').click();
+    await page.getByTestId('price-tab-purchase').click();
     await expect(page.locator('input[value="Lista compra 2026"]')).toHaveCount(0);
   });
 });
 
-// ── Suite B — Edit dialog with lazy-loaded options ───────────────────────────
+// ── Suite B — Purchase section lazy fetch ────────────────────────────────────
 
-test.describe('Product pricing — edit dialog populates dropdown from lazy fetch', () => {
+test.describe('Product pricing — selector populates dropdown from lazy fetch (purchase)', () => {
   let selectorCalls;
 
   test.beforeEach(async ({ page }) => {
@@ -291,7 +291,7 @@ test.describe('Product pricing — edit dialog populates dropdown from lazy fetc
 
     await login(page);
 
-    // Return ONE existing sales row so the footer shows "Edit pricing".
+    // Return ONE existing sales row so the sales section is populated.
     await page.route('**/sws/neo/product/price**', async (route) => {
       const req = route.request();
       const url = req.url();
@@ -315,27 +315,26 @@ test.describe('Product pricing — edit dialog populates dropdown from lazy fetc
     });
 
     await mockSelector(page, selectorCalls);
-    await mockPriceDefaults(page);
     await mockProductDetail(page, PRODUCT_WITH_SALES_PRICE);
 
     await page.goto(`/product/${PRODUCT_WITH_SALES_PRICE.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('switching to Compra toggle and clicking add triggers lazy fetch filtered to purchase options', async ({ page }) => {
+  test('switching to Compra and opening the selector triggers lazy fetch filtered to purchase options', async ({ page }) => {
     // Existing sales row should already be visible in the Venta section (readonly input).
     await expect(page.locator('input[value="Lista venta 2026"]')).toBeVisible({ timeout: 10_000 });
 
     // Switch to the Compra section via its toggle button.
-    await page.locator('[data-testid="price-tab-purchase"]').click();
+    await page.getByTestId('price-tab-purchase').click();
 
     // Section title switches to purchase.
     await expect(
       page.getByText(/purchase price lists|listas de precios de compra/i),
     ).toBeVisible({ timeout: 5_000 });
 
-    // Set up the selector fetch promise BEFORE clicking add, because the lazy
-    // fetch fires as soon as adding=true.
+    // Arm the selector fetch waiter BEFORE clicking add — the lazy fetch fires
+    // as soon as adding=true.
     const selectorRequestPromise = page.waitForRequest(
       (req) =>
         req.method() === 'GET' &&
@@ -343,25 +342,91 @@ test.describe('Product pricing — edit dialog populates dropdown from lazy fetc
       { timeout: 10_000 },
     );
 
-    // Click "+ Agregar tarifa" in the Compra section.
-    await page.locator('[data-testid="price-add-tariff"]').click();
+    await page.getByTestId('price-add-tariff').click();
 
-    // Inline select appears — no dialog.
-    const purchaseSelect = page.locator('select');
-    await expect(purchaseSelect).toBeVisible({ timeout: 10_000 });
+    // Inline creatable selector appears — no dialog.
+    const input = page.getByTestId('field-priceListVersion');
+    await expect(input).toBeVisible({ timeout: 10_000 });
 
-    // Lazy fetch fired.
     await selectorRequestPromise;
     expect(selectorCalls.length).toBeGreaterThanOrEqual(1);
 
-    // After fetch, purchase-flagged option is available.
-    await expect(
-      purchaseSelect.locator('option', { hasText: 'Lista compra 2026' }),
-    ).toHaveCount(1, { timeout: 10_000 });
+    // Open the dropdown.
+    await input.click();
 
-    // Sales-flagged option is NOT offered (filtered for Compra section).
-    await expect(
-      purchaseSelect.locator('option', { hasText: 'Lista venta 2026' }),
-    ).toHaveCount(0);
+    // Purchase-flagged option is available.
+    await expect(page.getByTestId('option-priceListVersion-plv-purchase')).toBeVisible({ timeout: 10_000 });
+
+    // Sales-flagged option is NOT offered (already present + filtered for Compra section).
+    await expect(page.getByTestId('option-priceListVersion-plv-sale')).toHaveCount(0);
+  });
+});
+
+// ── Suite C — Inline create tariff ───────────────────────────────────────────
+
+test.describe('Product pricing — inline create tariff', () => {
+  let state;
+  let createBodies;
+
+  test.beforeEach(async ({ page }) => {
+    state = { rows: [], postBodies: [] };
+    createBodies = [];
+
+    await login(page);
+
+    // Spec-swapped price-list create endpoint: apiBaseUrl `/sws/neo/product`
+    // has its last segment replaced → `/sws/neo/price-list/priceList`.
+    await page.route('**/sws/neo/price-list/priceList**', async (route) => {
+      const req = route.request();
+      if (req.method() !== 'POST') return route.fallback();
+      createBodies.push(req.postData() ? JSON.parse(req.postData()) : {});
+      // Go auto-creates exactly one hidden version with the same name; return its id.
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: { data: [{ id: 'PL-NEW', priceListVersion: 'plv-sale' }] },
+        }),
+      });
+    });
+
+    await installPriceRoute(page, state);
+    await mockSelector(page, []);
+    await mockProductDetail(page, PRODUCT_NO_PRICES);
+
+    await page.goto(`/product/${PRODUCT_NO_PRICES.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('creating a tariff by name POSTs a price list then links it and shows the new row', async ({ page }) => {
+    await expect(page.getByTestId('price-add-tariff')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('price-add-tariff').click();
+
+    // Open the dropdown, then trigger the inline create action.
+    await page.getByTestId('field-priceListVersion').click();
+    const createAction = page.getByTestId('action-create-priceListVersion');
+    await expect(createAction).toBeVisible({ timeout: 10_000 });
+    await createAction.click();
+
+    // Name-only modal opens.
+    await expect(page.getByTestId('inline-create-modal')).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('inline-create-name').fill('Tarifa nueva');
+    await page.getByTestId('inline-create-submit').click();
+
+    // The new price row appears in the (sales) section after create + link + refresh.
+    await expect(page.locator('input[value="Lista venta 2026"]')).toBeVisible({ timeout: 10_000 });
+
+    // The price list was created with the sales flag and NO currency (backend injects it).
+    expect(createBodies).toHaveLength(1);
+    expect(createBodies[0].name).toBe('Tarifa nueva');
+    expect(createBodies[0].salesPriceList).toBe(true);
+    expect(createBodies[0].costBasedPriceList).toBe(false);
+    expect(createBodies[0].priceIncludesTax).toBe(false);
+    expect(createBodies[0].default).toBe(false);
+    expect(createBodies[0]).not.toHaveProperty('currency');
+
+    // The returned auto-created version was linked to the product via POST /price.
+    expect(state.postBodies.some((b) => b.priceListVersion === 'plv-sale')).toBe(true);
+    expect(state.postBodies.every((b) => b.product === PRODUCT_NO_PRICES.id)).toBe(true);
   });
 });
