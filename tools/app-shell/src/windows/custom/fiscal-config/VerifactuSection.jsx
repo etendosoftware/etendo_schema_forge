@@ -1,7 +1,6 @@
 import { useState, forwardRef, useImperativeHandle } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { useUI } from '@/i18n';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -87,48 +86,37 @@ const VerifactuSection = forwardRef(function VerifactuSection({ record, apiBaseU
         leftContent={
           <div className="flex flex-col gap-1">
             <span className="text-sm font-semibold text-[#121217]">VERI*FACTU</span>
-            {isLocked && (
-              <Badge variant="default" data-testid="Badge__e30816">{ui('fiscal.verifactu.locked.badge')}</Badge>
-            )}
           </div>
         }
         data-testid="SectionRow__e30816">
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4 items-end">
-            <div className="space-y-1">
-              <Label data-testid="Label__e30816">{ui('fiscal.verifactu.field.tax')}</Label>
-              {isLocked ? (
-                <Input
-                  value={getVerifactuTaxTypeLabel(form.tAXType)}
-                  disabled
-                  data-testid="Input__e30816" />
-              ) : (
-                <select
-                  value={form.tAXType}
-                  onChange={e => set('tAXType', e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                >
-                  <option value="">{ui('fiscal.verifactu.field.selectTax')}</option>
-                  {VERIFACTU_TAX_TYPE_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-            <div className="flex items-center gap-2 pb-1">
-              <Switch
-                checked={isEtendoTrue(form.defaultQR)}
-                onCheckedChange={v => set('defaultQR', v ? 'Y' : 'N')}
-                disabled={isLocked}
-                data-testid="Switch__e30816" />
-              <span className="text-sm text-[#121217]">{ui('fiscal.verifactu.field.qr')}</span>
-            </div>
+        <div className="grid grid-cols-3 gap-4 items-end">
+          <div className="space-y-1">
+            <Label data-testid="Label__e30816">{ui('fiscal.verifactu.field.tax')}</Label>
+            {isLocked ? (
+              <Input
+                value={getVerifactuTaxTypeLabel(form.tAXType)}
+                disabled
+                data-testid="Input__e30816" />
+            ) : (
+              <select
+                value={form.tAXType}
+                onChange={e => set('tAXType', e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+              >
+                <option value="">{ui('fiscal.verifactu.field.selectTax')}</option>
+                {VERIFACTU_TAX_TYPE_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            )}
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-1">
-              <Label data-testid="Label__e30816">{ui('fiscal.verifactu.field.enrollDate')}</Label>
-              <Input value={record?.inVfactuSystem ?? ''} disabled data-testid="Input__e30816" />
-            </div>
+          <div className="flex items-center gap-2 pb-1">
+            <Switch
+              checked={isEtendoTrue(form.defaultQR)}
+              onCheckedChange={v => set('defaultQR', v ? 'Y' : 'N')}
+              disabled={isLocked}
+              data-testid="Switch__e30816" />
+            <span className="text-sm text-[#121217]">{ui('fiscal.verifactu.field.qr')}</span>
           </div>
         </div>
       </SectionRow>

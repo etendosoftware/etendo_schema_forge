@@ -246,20 +246,20 @@ Every process must declare >=3 edge cases. Every kept rule must have a behaviora
 
 ## Pipeline Validation
 
-`cli/src/validate-pipeline.js` enforces consistency across the artifact pipeline (decisions → contract → generated → registry). Runs without DB access. Defined rules: F1–F10, full table in `docs/pipeline-validator-reference.md`.
+`sf-validate-pipeline` (the `@etendosoftware/schema-forge-cli` bin, published from `schema_forge_core` — see `docs/repo-topology.md`) enforces consistency across the artifact pipeline (decisions → contract → generated → registry). Runs without DB access. Defined rules: F1–F10, full table in `docs/pipeline-validator-reference.md`. The validator's source no longer lives in this repo post-split; this repo only consumes the published bin (or the `LOCAL_CORE` dispatcher, per the two dev profiles).
 
 **Three integration points:**
-- **Manual:** `make validate-pipeline` (whole repo) or `node cli/src/validate-pipeline.js --scope=<window>` (single window)
+- **Manual:** `make validate-pipeline` (whole repo, published bin) or `npx sf-validate-pipeline --scope=<window>` (single window). Core developers running from local source (`LOCAL_CORE=1`, see `docs/repo-topology.md`) use `./cli/sf-local sf-validate-pipeline --scope=<window>` instead.
 - **Pre-commit:** `make install` activates `.githooks/pre-commit` — runs only on staged artifact/generator/registry files
-- **CI:** `.github/workflows/pipeline-validate.yml` runs in shadow mode (annotates, doesn't block) until P3 backfill lands
+- **CI:** `.github/workflows/pipeline-validate.yml` runs `npx sf-validate-pipeline` in shadow mode (annotates, doesn't block) until P3 backfill lands
 
 **Bypass:** `git commit --no-verify` (WIP only — never on epic-branch PRs).
 
-**Adding a new rule (F11+):** implement in `cli/src/validate-pipeline.js`, add fixture under `cli/test/fixtures/pipeline-validator/`, add tests in `cli/test/validate-pipeline.test.js`, AND update the rules table in `docs/pipeline-validator-reference.md`. The reference doc is canonical — if a rule is not documented there, it doesn't exist.
+**Adding a new rule (F11+):** implemented in the `schema_forge_core` repo (`cli/src/validate-pipeline.js`, fixtures under `cli/test/fixtures/pipeline-validator/`, tests in `cli/test/validate-pipeline.test.js`) — publish + bump the package per `docs/repo-topology.md`. AND update the rules table in this repo's `docs/pipeline-validator-reference.md`. The reference doc is canonical — if a rule is not documented there, it doesn't exist.
 
 **Pipeline phases that touch the validator:**
-- DEV: any change to `decisions.json` or `generated/` must keep `validate-pipeline.js` clean for that artifact
-- REVIEW: Alex must run `node cli/src/validate-pipeline.js --scope=<windows-touched-by-PR>` and confirm 0 violations
+- DEV: any change to `decisions.json` or `generated/` must keep `sf-validate-pipeline` clean for that artifact
+- REVIEW: Alex must run `npx sf-validate-pipeline --scope=<windows-touched-by-PR>` and confirm 0 violations
 
 ## Static Analysis (SonarQube)
 
