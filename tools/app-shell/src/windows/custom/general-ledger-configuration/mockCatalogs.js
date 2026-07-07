@@ -229,20 +229,6 @@ export const DIMENSIONS_SEED = [
   { id: 'dim-sr', labelKey: 'glc.dim.salesRegion', active: false, mandatory: false, caption: 'Opcional · Ventas y compras' },
 ];
 
-// ── Seed records: Documentos (C_AcctSchema_Table_DocType, read-only) ─────────
-// `accountId` → ACCOUNT_OPTIONS (badge), or `journalKey` → plain journal label
-// (no code badge). Status is always "Mapeado" in the mock.
-export const DOCUMENTS_SEED = [
-  { id: 'doc-arc', typeKey: 'glc.doc.salesInvoice', accountId: 'acc-700' },
-  { id: 'doc-api', typeKey: 'glc.doc.purchaseInvoice', accountId: 'acc-600' },
-  { id: 'doc-arn', typeKey: 'glc.doc.salesCreditMemo', accountId: 'acc-708' },
-  { id: 'doc-apn', typeKey: 'glc.doc.purchaseCreditMemo', accountId: 'acc-608' },
-  { id: 'doc-arr', typeKey: 'glc.doc.receipt', accountId: 'acc-572' },
-  { id: 'doc-app', typeKey: 'glc.doc.payment', accountId: 'acc-572' },
-  { id: 'doc-glj', typeKey: 'glc.doc.manualJournal', journalKey: 'glc.doc.generalJournal' },
-  { id: 'doc-amz', typeKey: 'glc.doc.depreciation', accountId: 'acc-681' },
-];
-
 // ── Seed record: Cuentas generales (C_AcctSchema_GL, single row) ─────────────
 export const GENERAL_ACCOUNTS_SEED = {
   suspenseBalancingUse: false,
@@ -257,13 +243,10 @@ export const GENERAL_ACCOUNTS_SEED = {
   createClosing: true,
 };
 
-export const accountById = (id) => ACCOUNT_OPTIONS.find((a) => a.id === id) ?? null;
-
 export const GLC_SEED_PAYLOAD = {
   general: GENERAL_SEED,
   defaults: DEFAULTS_SEED,
   dimensions: DIMENSIONS_SEED,
-  documents: DOCUMENTS_SEED,
   orgInfo: ORG_INFO_SEED,
   generalAccounts: GENERAL_ACCOUNTS_SEED,
   catalogs: {
@@ -272,7 +255,5 @@ export const GLC_SEED_PAYLOAD = {
   },
   meta: {
     source: 'mock',
-    documentsBacked: false,
-    documentsNote: 'Document mappings are not backed in the current dataset.',
   },
 };

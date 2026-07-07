@@ -46,11 +46,6 @@ vi.mock('../DefaultsTab.jsx', () => ({
 vi.mock('../DimensionsTab.jsx', () => ({
   default: () => <div data-testid="dimensions-tab" />,
 }));
-vi.mock('../DocumentsTab.jsx', () => ({
-  default: (props) => (
-    <div data-testid="documents-tab" data-backed={String(props.documentsBacked)}>{props.documentsNote}</div>
-  ),
-}));
 vi.mock('../GeneralAccountsTab.jsx', () => ({
   default: () => <div data-testid="general-accounts-tab" />,
 }));
@@ -75,9 +70,8 @@ function makeHook(overrides = {}) {
     general: { name: 'GL', currency: 'EUR' },
     defaults: { bankAsset: 'acct-1' },
     dimensions: [],
-    documents: [{ id: 'd1' }, { id: 'd2' }],
     orgInfo: {},
-    meta: { documentsBacked: true, documentsNote: 'note-key' },
+    meta: { source: 'mock' },
     catalogs: { currencies: [], accounts: [] },
     generalAccounts: { active: true },
     setGeneralField: vi.fn(),
@@ -114,12 +108,6 @@ describe('GeneralLedgerConfigPage — initial render', () => {
     renderPage();
     expect(screen.getByTestId('glc-save')).toHaveTextContent('saveChanges');
   });
-
-  it('shows the documents-tab badge count from documents.length', () => {
-    renderPage();
-    // Documents tab is the 4th tab; badge shows count 2.
-    expect(screen.getByText('glc.tab.documents:2')).toBeInTheDocument();
-  });
 });
 
 describe('GeneralLedgerConfigPage — organization-required note', () => {
@@ -147,15 +135,6 @@ describe('GeneralLedgerConfigPage — tab switching', () => {
     renderPage();
     fireEvent.click(screen.getByText('glc.tab.dimensions'));
     expect(screen.getByTestId('dimensions-tab')).toBeInTheDocument();
-  });
-
-  it('switches to the Documents tab and passes backed meta through', () => {
-    renderPage();
-    fireEvent.click(screen.getByText('glc.tab.documents:2'));
-    const docs = screen.getByTestId('documents-tab');
-    expect(docs).toBeInTheDocument();
-    expect(docs).toHaveAttribute('data-backed', 'true');
-    expect(docs).toHaveTextContent('note-key');
   });
 
   it('switches to the General Accounts tab', () => {

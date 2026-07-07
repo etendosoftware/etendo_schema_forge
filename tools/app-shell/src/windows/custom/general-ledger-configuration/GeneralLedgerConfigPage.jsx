@@ -8,7 +8,6 @@ import TabBar from './TabBar.jsx';
 import GeneralTab from './GeneralTab.jsx';
 import DefaultsTab from './DefaultsTab.jsx';
 import DimensionsTab from './DimensionsTab.jsx';
-import DocumentsTab from './DocumentsTab.jsx';
 import GeneralAccountsTab from './GeneralAccountsTab.jsx';
 import { useGeneralLedgerConfig } from './useGeneralLedgerConfig.js';
 import { DEFAULTS_GROUPS } from './mockCatalogs.js';
@@ -18,8 +17,8 @@ const REQUIRED_DEFAULTS = DEFAULTS_GROUPS.flatMap((g) => g.fields.filter((f) => 
 
 /**
  * General Ledger Configuration (AD window 125, "Configuración contable").
- * layoutType: custom — fiscal-config pattern. 5 tabs: General · Valores por
- * defecto · Dimensiones · Documentos · Cuentas generales.
+ * layoutType: custom — fiscal-config pattern. 4 tabs: General · Valores por
+ * defecto · Dimensiones · Cuentas generales.
  *
  * Backend is greenfield (no NEO spec yet); data comes from mockCatalogs and the
  * save handler is a Phase 3 stub (see useGeneralLedgerConfig.save()).
@@ -28,7 +27,7 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
   const ui = useUI();
   const { selectedOrg } = useAuth();
   const {
-    general, defaults, dimensions, documents, orgInfo, meta,
+    general, defaults, dimensions, orgInfo,
     catalogs, generalAccounts,
     setGeneralField, setDefaultField, setDimensionField, setGeneralAccountsField,
     isDirty, save, loading,
@@ -81,9 +80,8 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
     { label: ui('glc.tab.general') },
     { label: ui('glc.tab.defaults') },
     { label: ui('glc.tab.dimensions') },
-    { label: ui('glc.tab.documents'), badge: documents.length },
     { label: ui('glc.tab.generalAccounts') },
-  ]), [ui, documents.length]);
+  ]), [ui]);
 
   return (
     <div className="relative h-full flex flex-col overflow-hidden">
@@ -135,13 +133,6 @@ export default function GeneralLedgerConfigPage({ apiBaseUrl }) {
               data-testid="DimensionsTab__79cd86" />
           )}
           {activeTab === 3 && (
-            <DocumentsTab
-              documents={documents}
-              documentsBacked={Boolean(meta.documentsBacked)}
-              documentsNote={meta.documentsNote}
-              data-testid="DocumentsTab__79cd86" />
-          )}
-          {activeTab === 4 && (
             <GeneralAccountsTab
               generalAccounts={generalAccounts}
               accountOptions={catalogs.accounts}

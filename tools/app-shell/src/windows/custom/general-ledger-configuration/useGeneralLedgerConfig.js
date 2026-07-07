@@ -9,8 +9,7 @@ import {
 /**
  * State + dirty-tracking + save boundary for the General Ledger Configuration
  * window. Editable entities: General (single record), Defaults (single record),
- * Dimensions (list of {active, mandatory} per row). Documents is read-only and
- * not tracked here.
+ * Dimensions (list of {active, mandatory} per row).
  *
  * At runtime the aggregate is loaded via GET and `save()` POSTs the dirty fields
  * per entity; both are handled transactionally by GeneralLedgerConfigurationHandler
@@ -26,7 +25,6 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
   const [general, setGeneral] = useState(seed.general);
   const [defaults, setDefaults] = useState(seed.defaults);
   const [dimensions, setDimensions] = useState(seed.dimensions);
-  const [documents, setDocuments] = useState(seed.documents);
   const [orgInfo, setOrgInfo] = useState(seed.orgInfo);
   const [catalogs, setCatalogs] = useState(seed.catalogs);
   const [generalAccounts, setGeneralAccounts] = useState(seed.generalAccounts);
@@ -45,7 +43,6 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
     general: payload?.general ?? seed.general,
     defaults: payload?.defaults ?? seed.defaults,
     dimensions: Array.isArray(payload?.dimensions) ? payload.dimensions : seed.dimensions,
-    documents: Array.isArray(payload?.documents) ? payload.documents : seed.documents,
     orgInfo: payload?.orgInfo ?? seed.orgInfo,
     catalogs: {
       accounts: Array.isArray(payload?.catalogs?.accounts) ? payload.catalogs.accounts : seed.catalogs.accounts,
@@ -60,7 +57,6 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
       setGeneral(seed.general);
       setDefaults(seed.defaults);
       setDimensions(seed.dimensions);
-      setDocuments(seed.documents);
       setOrgInfo(seed.orgInfo);
       setCatalogs(seed.catalogs);
       setGeneralAccounts(seed.generalAccounts);
@@ -84,7 +80,6 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
       setGeneral(payload.general);
       setDefaults(payload.defaults);
       setDimensions(payload.dimensions);
-      setDocuments(payload.documents);
       setOrgInfo(payload.orgInfo);
       setCatalogs(payload.catalogs);
       setGeneralAccounts(payload.generalAccounts);
@@ -100,7 +95,6 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
       setGeneral(seed.general);
       setDefaults(seed.defaults);
       setDimensions(seed.dimensions);
-      setDocuments(seed.documents);
       setOrgInfo(seed.orgInfo);
       setCatalogs(seed.catalogs);
       setGeneralAccounts(seed.generalAccounts);
@@ -219,7 +213,6 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
     setGeneral(saved.general);
     setDefaults(saved.defaults);
     setDimensions(saved.dimensions);
-    setDocuments(saved.documents);
     setOrgInfo(saved.orgInfo);
     setCatalogs(saved.catalogs);
     setGeneralAccounts(saved.generalAccounts);
@@ -237,7 +230,6 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
     general,
     defaults,
     dimensions,
-    documents,
     orgInfo,
     catalogs,
     generalAccounts,

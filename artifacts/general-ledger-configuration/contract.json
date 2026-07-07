@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.6.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-07T17:00:42.231Z",
-  "checksum": "8b94b7c0b68fcb94",
+  "updatedAt": "2026-07-07T18:29:54.339Z",
+  "checksum": "f6072b8d0d2a0863",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -625,403 +625,6 @@
             "derivation": {
               "type": "computed",
               "source": "true"
-            }
-          }
-        ]
-      },
-      "Documentos": {
-        "tableName": "C_AcctSchema_Table_DocType",
-        "tabId": "1007400000",
-        "tabName": "Documents",
-        "uiPattern": "STD",
-        "fields": [
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "label": "Active",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "Y"
-            },
-            "defaultValue": "Y",
-            "gridOrder": 4
-          },
-          {
-            "name": "documentCategory",
-            "apiKey": "documentCategory",
-            "column": "Docbasetype",
-            "label": "Document Category",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "enumValues": [
-              {
-                "value": "---",
-                "name": "** New **",
-                "labels": {
-                  "es_ES": "** Nuevo **"
-                }
-              },
-              {
-                "value": "APC",
-                "name": "AP Credit Memo",
-                "labels": {
-                  "es_ES": "AP Nota de crédito"
-                }
-              },
-              {
-                "value": "API",
-                "name": "AP Invoice",
-                "labels": {
-                  "es_ES": "AP factura"
-                }
-              },
-              {
-                "value": "APP",
-                "name": "AP Payment",
-                "labels": {
-                  "es_ES": "AP pago"
-                }
-              },
-              {
-                "value": "APPP",
-                "name": "AP Payment Proposal",
-                "labels": {
-                  "es_ES": "AP Propuesta de pago"
-                }
-              },
-              {
-                "value": "ARC",
-                "name": "AR Credit Memo",
-                "labels": {
-                  "es_ES": "AR Nota de crédito"
-                }
-              },
-              {
-                "value": "ARI",
-                "name": "AR Invoice",
-                "labels": {
-                  "es_ES": "AR factura"
-                }
-              },
-              {
-                "value": "ARF",
-                "name": "AR Pro Forma Invoice",
-                "labels": {
-                  "es_ES": "AR Pro forma factura"
-                }
-              },
-              {
-                "value": "ARR",
-                "name": "AR Receipt",
-                "labels": {
-                  "es_ES": "AR Recibo"
-                }
-              },
-              {
-                "value": "ARRP",
-                "name": "AR Receivable Proposal",
-                "labels": {
-                  "es_ES": "AR Propuesta de Cobro"
-                }
-              },
-              {
-                "value": "ARI_RM",
-                "name": "AR Return Material Invoice",
-                "labels": {
-                  "es_ES": "AR factura de devolución de material"
-                }
-              },
-              {
-                "value": "AMZ",
-                "name": "Amortization",
-                "labels": {
-                  "es_ES": "Amortización"
-                }
-              },
-              {
-                "value": "CMB",
-                "name": "Bank Statement",
-                "labels": {
-                  "es_ES": "Extracto bancario"
-                }
-              },
-              {
-                "value": "BSF",
-                "name": "Bank Statement File",
-                "labels": {
-                  "es_ES": "Fichero de extracto bancario"
-                }
-              },
-              {
-                "value": "CMC",
-                "name": "Cash Journal",
-                "labels": {
-                  "es_ES": "Diario de caja"
-                }
-              },
-              {
-                "value": "CAD",
-                "name": "Cost Adjustment",
-                "labels": {
-                  "es_ES": "Ajuste de Costes"
-                }
-              },
-              {
-                "value": "DPM",
-                "name": "Debt Payment Management",
-                "labels": {
-                  "es_ES": "Gestión de efectos"
-                }
-              },
-              {
-                "value": "DDB",
-                "name": "Doubtful Debt",
-                "labels": {
-                  "es_ES": "Dudoso cobro"
-                }
-              },
-              {
-                "value": "FAT",
-                "name": "Financial Account Transaction",
-                "labels": {
-                  "es_ES": "Transacciones de la cuenta financiera"
-                }
-              },
-              {
-                "value": "GLD",
-                "name": "GL Document",
-                "labels": {
-                  "es_ES": "Documento libro mayor"
-                }
-              },
-              {
-                "value": "GLJ",
-                "name": "GL Journal",
-                "labels": {
-                  "es_ES": "Diario"
-                }
-              },
-              {
-                "value": "IAU",
-                "name": "Inventory Amount Update",
-                "labels": {
-                  "es_ES": "Actualización Valor Inventario"
-                }
-              },
-              {
-                "value": "LDC",
-                "name": "Landed Cost",
-                "labels": {
-                  "es_ES": "Landed Cost"
-                }
-              },
-              {
-                "value": "LCC",
-                "name": "Landed Cost Cost",
-                "labels": {
-                  "es_ES": "Coste Landed Cost"
-                }
-              },
-              {
-                "value": "OBCVAT_MS",
-                "name": "Manual Cash VAT Settlement",
-                "labels": {
-                  "es_ES": "Manual Cash VAT Settlement"
-                }
-              },
-              {
-                "value": "MXI",
-                "name": "Match Invoice",
-                "labels": {
-                  "es_ES": "Factura comprobada"
-                }
-              },
-              {
-                "value": "MXP",
-                "name": "Match PO",
-                "labels": {
-                  "es_ES": "Pedido de compra comprobado"
-                }
-              },
-              {
-                "value": "MMS",
-                "name": "Material Delivery",
-                "labels": {
-                  "es_ES": "Entrega material"
-                }
-              },
-              {
-                "value": "MIC",
-                "name": "Material Internal Consumption",
-                "labels": {
-                  "es_ES": "Consumo Interno de Material"
-                }
-              },
-              {
-                "value": "MMM",
-                "name": "Material Movement",
-                "labels": {
-                  "es_ES": "Movimiento de almacén"
-                }
-              },
-              {
-                "value": "MMI",
-                "name": "Material Physical Inventory",
-                "labels": {
-                  "es_ES": "Inventario físico"
-                }
-              },
-              {
-                "value": "MMP",
-                "name": "Material Production",
-                "labels": {
-                  "es_ES": "Producción"
-                }
-              },
-              {
-                "value": "MMR",
-                "name": "Material Receipt",
-                "labels": {
-                  "es_ES": "Recibo material"
-                }
-              },
-              {
-                "value": "CMA",
-                "name": "Payment Allocation",
-                "labels": {
-                  "es_ES": "Asignación de pagos"
-                }
-              },
-              {
-                "value": "PPR",
-                "name": "Payment proposal",
-                "labels": {
-                  "es_ES": "Propuesta de pago"
-                }
-              },
-              {
-                "value": "PJI",
-                "name": "Project Issue",
-                "labels": {
-                  "es_ES": "Asunto de proyecto"
-                }
-              },
-              {
-                "value": "POO",
-                "name": "Purchase Order",
-                "labels": {
-                  "es_ES": "Pedido de compra"
-                }
-              },
-              {
-                "value": "POR",
-                "name": "Purchase Requisition",
-                "labels": {
-                  "es_ES": "Pre-pedido compra"
-                }
-              },
-              {
-                "value": "REC",
-                "name": "Reconciliation",
-                "labels": {
-                  "es_ES": "Conciliación"
-                }
-              },
-              {
-                "value": "SOO",
-                "name": "Sales Order",
-                "labels": {
-                  "es_ES": "Pedido venta"
-                }
-              },
-              {
-                "value": "STT",
-                "name": "Settlement",
-                "labels": {
-                  "es_ES": "Liquidación"
-                }
-              },
-              {
-                "value": "STM",
-                "name": "Settlement manual",
-                "labels": {
-                  "es_ES": "Liquidación manual"
-                }
-              },
-              {
-                "value": "WRE",
-                "name": "Work Requirement",
-                "labels": {
-                  "es_ES": "Orden de fabricación"
-                }
-              }
-            ],
-            "gridOrder": 1,
-            "validationRule": {
-              "code": "Value IN (SELECT DOCBASETYPE FROM C_DOCTYPE, C_ACCTSCHEMA_TABLE WHERE C_DOCTYPE.AD_TABLE_ID = C_ACCTSCHEMA_TABLE.AD_TABLE_ID AND C_ACCTSCHEMA_TABLE.C_ACCTSCHEMA_TABLE_ID = @C_Acctschema_Table_ID@)",
-              "contextParams": [],
-              "cascadeParams": [
-                "C_Acctschema_Table_ID"
-              ]
-            }
-          },
-          {
-            "name": "allowNegative",
-            "apiKey": "allowNegative",
-            "column": "AllowNegative",
-            "label": "Allow negative",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "gridOrder": 3
-          },
-          {
-            "name": "aDCreatefactTemplateID",
-            "apiKey": "aDCreatefactTemplateID",
-            "column": "AD_Createfact_Template_ID",
-            "label": "Accounting Template",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "reference": "Createfact_Template",
-            "inputMode": "selector",
-            "gridOrder": 2,
-            "validationRule": {
-              "code": "AD_CreateFact_Template.AD_Table_ID=@AD_Table_ID@",
-              "contextParams": [],
-              "cascadeParams": [
-                "AD_Table_ID"
-              ]
-            }
-          }
-        ],
-        "searchableFields": [],
-        "computedFields": [
-          {
-            "name": "active",
-            "derivation": {
-              "type": "computed",
-              "source": "Y"
             }
           }
         ]
@@ -2268,109 +1871,6 @@
           }
         ]
       },
-      "Documentos": {
-        "tableName": "C_AcctSchema_Table_DocType",
-        "tabId": "1007400000",
-        "tabName": "Documents",
-        "fields": [
-          {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "type": "boolean",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "documentCategory",
-            "apiKey": "documentCategory",
-            "column": "Docbasetype",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "allowNegative",
-            "apiKey": "allowNegative",
-            "column": "AllowNegative",
-            "type": "boolean",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "aDCreatefactTemplateID",
-            "apiKey": "aDCreatefactTemplateID",
-            "column": "AD_Createfact_Template_ID",
-            "type": "foreignKey",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "acctschemaTable",
-            "apiKey": "acctschemaTable",
-            "column": "C_Acctschema_Table_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "client",
-            "apiKey": "client",
-            "column": "AD_Client_ID",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "id",
-            "apiKey": "id",
-            "column": "C_Acctschema_Table_Doctype_ID",
-            "type": "id",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "creationDate",
-            "apiKey": "creationDate",
-            "column": "Created",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "createdBy",
-            "apiKey": "createdBy",
-            "column": "Createdby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updated",
-            "apiKey": "updated",
-            "column": "Updated",
-            "type": "dateTime",
-            "visibility": "system",
-            "required": true
-          },
-          {
-            "name": "updatedBy",
-            "apiKey": "updatedBy",
-            "column": "Updatedby",
-            "type": "foreignKey",
-            "visibility": "system",
-            "required": true
-          }
-        ]
-      },
       "Cuentas generales": {
         "tableName": "C_AcctSchema_GL",
         "tabId": "200",
@@ -3281,36 +2781,6 @@
       },
       {
         "method": "GET",
-        "path": "/Documentos",
-        "entity": "Documentos",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
-        "path": "/Documentos/:id",
-        "entity": "Documentos",
-        "supportedFilters": []
-      },
-      {
-        "method": "POST",
-        "path": "/Documentos",
-        "entity": "Documentos",
-        "supportedFilters": []
-      },
-      {
-        "method": "PUT",
-        "path": "/Documentos/:id",
-        "entity": "Documentos",
-        "supportedFilters": []
-      },
-      {
-        "method": "DELETE",
-        "path": "/Documentos/:id",
-        "entity": "Documentos",
-        "supportedFilters": []
-      },
-      {
-        "method": "GET",
         "path": "/Cuentas generales",
         "entity": "Cuentas generales",
         "supportedFilters": []
@@ -3396,17 +2866,6 @@
         "delete": true,
         "listUrl": "/sws/neo/general-ledger-configuration/Dimensiones",
         "detailUrl": "/sws/neo/general-ledger-configuration/Dimensiones/{id}",
-        "supportedFilters": []
-      },
-      "Documentos": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/general-ledger-configuration/Documentos",
-        "detailUrl": "/sws/neo/general-ledger-configuration/Documentos/{id}",
         "supportedFilters": []
       },
       "Cuentas generales": {
@@ -3528,14 +2987,6 @@
         "reference": "Activity",
         "inputMode": "selector",
         "url": "/sws/neo/general-ledger-configuration/Dimensiones/selectors/activity"
-      },
-      {
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "column": "AD_Createfact_Template_ID",
-        "reference": "Createfact_Template",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Documentos/selectors/aDCreatefactTemplateID"
       },
       {
         "entity": "Cuentas generales",
@@ -3942,13 +3393,6 @@
         "description": "CRUD flags for 'Dimensiones' should all be booleans"
       },
       {
-        "id": "t-crud-flags-Documentos",
-        "category": "crud-flags",
-        "entity": "Documentos",
-        "runner": "node",
-        "description": "CRUD flags for 'Documentos' should all be booleans"
-      },
-      {
         "id": "t-crud-flags-General",
         "category": "crud-flags",
         "entity": "General",
@@ -3977,14 +3421,6 @@
         "field": "sequenceNumber",
         "runner": "node",
         "description": "Default value for 'sequenceNumber' in Dimensiones should be a string"
-      },
-      {
-        "id": "t-default-value-type-Documentos-active",
-        "category": "default-value-type",
-        "entity": "Documentos",
-        "field": "active",
-        "runner": "node",
-        "description": "Default value for 'active' in Documentos should be a string"
       },
       {
         "id": "t-default-value-type-General-accrual",
@@ -4433,38 +3869,6 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should be present in Dimensiones"
-      },
-      {
-        "id": "t-field-presence-Documentos-active",
-        "category": "field-presence",
-        "entity": "Documentos",
-        "field": "active",
-        "runner": "node",
-        "description": "Field 'active' should be present in Documentos"
-      },
-      {
-        "id": "t-field-presence-Documentos-aDCreatefactTemplateID",
-        "category": "field-presence",
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "runner": "node",
-        "description": "Field 'aDCreatefactTemplateID' should be present in Documentos"
-      },
-      {
-        "id": "t-field-presence-Documentos-allowNegative",
-        "category": "field-presence",
-        "entity": "Documentos",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Field 'allowNegative' should be present in Documentos"
-      },
-      {
-        "id": "t-field-presence-Documentos-documentCategory",
-        "category": "field-presence",
-        "entity": "Documentos",
-        "field": "documentCategory",
-        "runner": "node",
-        "description": "Field 'documentCategory' should be present in Documentos"
       },
       {
         "id": "t-field-presence-General-accrual",
@@ -5033,38 +4437,6 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should have type 'string' in Dimensiones"
-      },
-      {
-        "id": "t-field-type-Documentos-active",
-        "category": "field-type",
-        "entity": "Documentos",
-        "field": "active",
-        "runner": "node",
-        "description": "Field 'active' should have type 'boolean' in Documentos"
-      },
-      {
-        "id": "t-field-type-Documentos-aDCreatefactTemplateID",
-        "category": "field-type",
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "runner": "node",
-        "description": "Field 'aDCreatefactTemplateID' should have type 'string' in Documentos"
-      },
-      {
-        "id": "t-field-type-Documentos-allowNegative",
-        "category": "field-type",
-        "entity": "Documentos",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Field 'allowNegative' should have type 'boolean' in Documentos"
-      },
-      {
-        "id": "t-field-type-Documentos-documentCategory",
-        "category": "field-type",
-        "entity": "Documentos",
-        "field": "documentCategory",
-        "runner": "node",
-        "description": "Field 'documentCategory' should have type 'string' in Documentos"
       },
       {
         "id": "t-field-type-General-accrual",
@@ -5818,14 +5190,6 @@
         "description": "Selector endpoint for 'trxOrganization' in Dimensiones should exist"
       },
       {
-        "id": "t-selector-endpoint-Documentos-aDCreatefactTemplateID",
-        "category": "selector-endpoint",
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "runner": "node",
-        "description": "Selector endpoint for 'aDCreatefactTemplateID' in Documentos should exist"
-      },
-      {
         "id": "t-selector-endpoint-General-currency",
         "category": "selector-endpoint",
         "entity": "General",
@@ -6320,70 +5684,6 @@
         "field": "updatedBy",
         "runner": "node",
         "description": "System field 'updatedBy' should exist in backend but not frontend for Dimensiones"
-      },
-      {
-        "id": "t-system-field-Documentos-acctschemaTable",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "acctschemaTable",
-        "runner": "node",
-        "description": "System field 'acctschemaTable' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-client",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-createdBy",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-creationDate",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-id",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-organization",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-updated",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-updatedBy",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for Documentos"
       },
       {
         "id": "t-system-field-General-active",
@@ -6928,13 +6228,6 @@
         "description": "Entity 'Dimensiones' should only expose visible fields in frontend"
       },
       {
-        "id": "t-visibility-Documentos",
-        "category": "visibility",
-        "entity": "Documentos",
-        "runner": "node",
-        "description": "Entity 'Documentos' should only expose visible fields in frontend"
-      },
-      {
         "id": "t-visibility-General",
         "category": "visibility",
         "entity": "General",
@@ -6950,24 +6243,24 @@
       }
     ],
     "summary": {
-      "total": 384,
+      "total": 364,
       "byCategory": {
         "action-endpoint": 1,
-        "crud-flags": 5,
-        "default-value-type": 6,
+        "crud-flags": 4,
+        "default-value-type": 5,
         "displaylogic-evaluable": 14,
         "displaylogic-valid": 14,
-        "field-presence": 75,
-        "field-type": 75,
+        "field-presence": 71,
+        "field-type": 71,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 33,
-        "selector-endpoint": 57,
-        "system-field": 95,
-        "visibility": 5
+        "selector-endpoint": 56,
+        "system-field": 87,
+        "visibility": 4
       },
       "byRunner": {
-        "node": 384,
+        "node": 364,
         "junit": 0
       }
     }

@@ -5,13 +5,14 @@
 
 ## Intent
 
-Expose the accounting schema setup as a focused 5-tab custom window aligned to the approved Figma, not the earlier Claude design. The window concentrates the day-to-day schema configuration surface into:
+Expose the accounting schema setup as a focused 4-tab custom window aligned to the approved Figma, not the earlier Claude design. The window concentrates the day-to-day schema configuration surface into:
 
 - **General**
 - **Valores por defecto**
 - **Dimensiones**
-- **Documentos**
 - **Cuentas generales**
+
+> **ETP-4452 cleanup:** the earlier "Documentos" tab was removed. It only ever rendered hardcoded mock seed rows (`buildDocumentSeeds()` in the Java handler / `DOCUMENTS_SEED` in `mockCatalogs.js`) with no real backend read/write path, and had been documented as a placeholder pending a product decision that never happened. It is no longer part of this window.
 
 The current frontend is production-shaped but still backed by local mock data because the NEO spec for window `125` is greenfield. Save currently clears dirty state locally; real multi-entity persistence belongs to the Phase-3 backend work.
 
@@ -94,17 +95,6 @@ Editable toggle list over `C_AcctSchema_Element` rows.
 - Mandatory dimensions are visible but cannot be deactivated from this UI.
 - The backing `AcctSchemaElement` query does **not** filter on `IsActive` (`setFilterOnActive(false)`, ETP-4452) — deactivating a dimension and saving keeps the row visible (unchecked) on the very next reload instead of making it disappear.
 
-### Documentos
-
-Read-only mapping table.
-
-- Column 1: document type
-- Column 2: account badge or plain journal label
-- Column 3: green `Mapeado` status chip
-- No inline editing
-
-The tab badge shows the current mock count (`8`).
-
 ### Cuentas generales
 
 The `C_AcctSchema_GL` row (AD window `125`, tab `200` "General Accounts"), added in ETP-4452. Three sections:
@@ -140,7 +130,7 @@ After the backend wiring lands, remember the Etendo step:
 ## Manual Verification
 
 1. Start the app and open `/general-ledger-configuration`.
-2. Confirm the tab order and labels match the Figma: `General`, `Valores por defecto`, `Dimensiones`, `Documentos`, `Cuentas generales`.
+2. Confirm the tab order and labels match the Figma: `General`, `Valores por defecto`, `Dimensiones`, `Cuentas generales`.
 3. On **General**, verify the first row renders as 4 columns on wide screens: name, organization, accounting criteria. `gAAP` (Esquema contable) is intentionally not shown — it is set at schema creation time and is not editable from this form.
 4. Confirm `Organización` and `Calendario fiscal` are read-only and show the muted `AD_OrgInfo` origin hint.
 5. Confirm the 4 unbacked controls are visibly marked but not styled like blocking errors.
@@ -148,8 +138,7 @@ After the backend wiring lands, remember the Etendo step:
 7. Clear a required field (`Nombre del esquema` or `Moneda principal`) and confirm inline required validation appears on save.
 8. On **Valores por defecto**, confirm all 9 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`, `Otras cuentas` — 39 fields total) and required account selectors show the required marker (20 fields, up from the previous 6). Confirm `paymentSelection` no longer renders at all, `disposalGain`/`disposalLoss` render under `Otras cuentas` (not `Activos`, and with no info-icon hint — that mechanism was retired), and that none of the 10 AD-inactive fields (see list above) render at all.
 9. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear.
-10. On **Documentos**, confirm there are no editable controls and every row shows `Mapeado`.
-11. On **Cuentas generales**, confirm the three sections render and both toggle+account pairs (suspense balancing, currency balancing) behave independently.
+10. On **Cuentas generales**, confirm the three sections render and both toggle+account pairs (suspense balancing, currency balancing) behave independently.
 
 ## Test Design
 
@@ -158,7 +147,7 @@ The Confluence Group 11 checklist is obsolete for this story because the checkli
 Core acceptance coverage should include at least these scenarios:
 
 1. **Tab shell fidelity**
-   Confirm the route loads, the 5 tabs render in order, the save button starts disabled, and the Documentos badge shows the expected count.
+   Confirm the route loads, the 4 tabs render in order, and the save button starts disabled.
 2. **Dirty state and validation**
    Editing a backed field enables save; missing required fields block save and focus the user back on the first failing tab.
 3. **Backed vs unbacked behavior**
@@ -166,10 +155,8 @@ Core acceptance coverage should include at least these scenarios:
 4. **Defaults grouping**
    All nine account groups render and the required selectors (`Cuenta a cobrar`, `Cuenta a pagar`, `IVA repercutido`, `IVA soportado`, plus the required bank accounts) validate correctly.
 5. **Dimensions toggles**
-   Toggling `IsActive` rows updates dirty state without affecting the read-only Documentos tab, and a deactivated dimension survives the next reload (does not disappear).
-6. **Document mappings**
-   The table stays informational only, with correct status chips and account/journal rendering.
-7. **General accounts round trip**
+   Toggling `IsActive` rows updates dirty state, and a deactivated dimension survives the next reload (does not disappear).
+6. **General accounts round trip**
    The three `Cuentas generales` sections load and save independently of the other tabs.
 
 Current automated coverage:
@@ -180,5 +167,5 @@ Current automated coverage:
 Recommended next automated additions once backend/save work starts:
 
 1. Mocked behavioral Playwright coverage for validation and dirty-state save.
-2. Component-level tests for `Field`, `DocumentsTab`, and the inverted `AutoPeriodControl` toggle binding.
+2. Component-level tests for `Field` and the inverted `AutoPeriodControl` toggle binding.
 3. Integration coverage for the real multi-entity save contract once the NEO handler exists.

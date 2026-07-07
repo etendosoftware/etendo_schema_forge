@@ -287,32 +287,10 @@
         }
       }
     },
-    "documents": {
-      "name": "Documentos",
-      "fields": {
-        "documentCategory": {
-          "visibility": "readOnly",
-          "grid": true,
-          "gridOrder": 1
-        },
-        "aDCreatefactTemplateID": {
-          "visibility": "readOnly",
-          "grid": true,
-          "gridOrder": 2
-        },
-        "allowNegative": {
-          "visibility": "readOnly",
-          "grid": true,
-          "gridOrder": 3
-        },
-        "active": {
-          "visibility": "readOnly",
-          "grid": true,
-          "gridOrder": 4
-        }
-      }
-    },
     "activeTables": {
+      "exclude": true
+    },
+    "documents": {
       "exclude": true
     },
     "generalAccounts": {

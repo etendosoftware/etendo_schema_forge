@@ -4,8 +4,6 @@ import GeneralTable from './GeneralTable';
 import GeneralForm from './GeneralForm';
 import DimensionesTable from './DimensionesTable';
 import DimensionesForm from './DimensionesForm';
-import DocumentosTable from './DocumentosTable';
-import DocumentosForm from './DocumentosForm';
 import catalogs from './mockCatalogs';
 
 
@@ -90,17 +88,6 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/general-ledger-configuration/Dimensiones",
       "detailUrl": "/sws/neo/general-ledger-configuration/Dimensiones/{id}",
-      "supportedFilters": []
-    },
-    "Documentos": {
-      "get": true,
-      "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
-      "listUrl": "/sws/neo/general-ledger-configuration/Documentos",
-      "detailUrl": "/sws/neo/general-ledger-configuration/Documentos/{id}",
       "supportedFilters": []
     },
     "Cuentas generales": {
@@ -222,14 +209,6 @@ export const api = {
       "reference": "Activity",
       "inputMode": "selector",
       "url": "/sws/neo/general-ledger-configuration/Dimensiones/selectors/activity"
-    },
-    {
-      "entity": "Documentos",
-      "field": "aDCreatefactTemplateID",
-      "column": "AD_Createfact_Template_ID",
-      "reference": "Createfact_Template",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Documentos/selectors/aDCreatefactTemplateID"
     },
     {
       "entity": "Cuentas generales",
@@ -635,9 +614,6 @@ export default function GeneralPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
-        secondaryTabs={[
-          { key: 'Documentos', label: 'Documents', Table: DocumentosTable, Form: DocumentosForm },
-        ]}
         requiredHeaderFields={requiredHeaderFields}
         {...props}
       />

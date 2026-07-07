@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.6.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-07T17:00:42.231Z",
-  "contractChecksum": "8b94b7c0b68fcb94",
+  "updatedAt": "2026-07-07T18:29:54.339Z",
+  "contractChecksum": "f6072b8d0d2a0863",
   "apiPrediction": {
     "specName": "general-ledger-configuration",
     "baseUrl": "/sws/neo/general-ledger-configuration",
@@ -27,17 +27,6 @@
         "delete": true,
         "listUrl": "/sws/neo/general-ledger-configuration/Dimensiones",
         "detailUrl": "/sws/neo/general-ledger-configuration/Dimensiones/{id}",
-        "supportedFilters": []
-      },
-      "Documentos": {
-        "get": true,
-        "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
-        "listUrl": "/sws/neo/general-ledger-configuration/Documentos",
-        "detailUrl": "/sws/neo/general-ledger-configuration/Documentos/{id}",
         "supportedFilters": []
       },
       "Cuentas generales": {
@@ -159,14 +148,6 @@
         "reference": "Activity",
         "inputMode": "selector",
         "url": "/sws/neo/general-ledger-configuration/Dimensiones/selectors/activity"
-      },
-      {
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "column": "AD_Createfact_Template_ID",
-        "reference": "Createfact_Template",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Documentos/selectors/aDCreatefactTemplateID"
       },
       {
         "entity": "Cuentas generales",
@@ -646,26 +627,6 @@
           "activity": {}
         }
       },
-      "Documentos": {
-        "fields": {
-          "active": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "Y"
-          },
-          "documentCategory": {
-            "readOnly": true,
-            "required": true
-          },
-          "allowNegative": {
-            "readOnly": true,
-            "required": true
-          },
-          "aDCreatefactTemplateID": {
-            "readOnly": true
-          }
-        }
-      },
       "Cuentas generales": {
         "fields": {
           "suspenseBalancingUse": {
@@ -848,5 +809,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "32f2af4ebdd2cd60"
+  "checksum": "cd5bd6bcce75371f"
 }

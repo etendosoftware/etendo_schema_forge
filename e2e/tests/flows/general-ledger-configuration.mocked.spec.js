@@ -15,13 +15,13 @@ import { login } from '../helpers/auth.js';
  * never fetches on mount.
  *
  * It switches to each of the 4 tabs (General · Valores por defecto · Dimensiones ·
- * Documentos), waits for that tab's content to render, runs a light sanity check
- * (no pixel/layout fidelity assertion — a human compares the PNGs to the Figma),
- * and writes a full-page screenshot per tab to e2e/test-results/.
+ * Cuentas generales), waits for that tab's content to render, runs a light sanity
+ * check (no pixel/layout fidelity assertion — a human compares the PNGs to the
+ * Figma), and writes a full-page screenshot per tab to e2e/test-results/.
  *
  * Selectors used are the stable data-testids already emitted by the window:
  *   glc-tab-0..3, glc-save, glc-section-identity, glc-defaults-group-*,
- *   glc-section-dimensions, glc-doc-*.
+ *   glc-section-dimensions, glc-section-suspense.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,7 @@ const TABS = [
   { index: 0, file: 'glc-01-general.png',     anchor: (p) => p.getByTestId('glc-section-identity') },
   { index: 1, file: 'glc-02-valores.png',     anchor: (p) => p.locator('[data-testid^="glc-defaults-group-"]').first() },
   { index: 2, file: 'glc-03-dimensiones.png', anchor: (p) => p.getByTestId('glc-section-dimensions') },
-  { index: 3, file: 'glc-04-documentos.png',  anchor: (p) => p.locator('[data-testid^="glc-doc-"]').first() },
+  { index: 3, file: 'glc-04-cuentas-generales.png', anchor: (p) => p.getByTestId('glc-section-suspense') },
 ];
 
 test.describe('General Ledger Configuration — visual capture (mocked)', () => {
@@ -129,14 +129,12 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     await expect(page.getByTestId('glc-tab-0')).toBeVisible({ timeout: 15_000 });
   });
 
-  test('renders the 4 tabs in order with the documents count badge and a disabled save', async ({ page }) => {
+  test('renders the 4 tabs in order with a disabled save', async ({ page }) => {
     for (let i = 0; i < 4; i++) {
       await expect(page.getByTestId(`glc-tab-${i}`)).toBeVisible();
     }
     // Pristine form → save disabled.
     await expect(page.getByTestId('glc-save')).toBeDisabled();
-    // Documentos badge shows the seed count (8).
-    await expect(page.getByTestId('glc-tab-3')).toContainText('8');
   });
 
   test('navigates across all 4 tabs', async ({ page }) => {
@@ -150,7 +148,7 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     await expect(page.getByTestId('glc-section-dimensions')).toBeVisible();
 
     await page.getByTestId('glc-tab-3').click();
-    await expect(page.locator('[data-testid^="glc-doc-"]').first()).toBeVisible();
+    await expect(page.getByTestId('glc-section-suspense')).toBeVisible();
   });
 
   test('editing a General field flips dirty state, enables save, and POSTs the dirty payload', async ({ page }) => {
@@ -234,19 +232,5 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     const calendar = page.getByTestId('glc-field-calendar');
     await expect(calendar).toBeVisible();
     await expect(calendar.getByRole('textbox')).toHaveCount(0);
-  });
-
-  test('Documentos tab is read-only with "Mapeado" chips and no edit controls', async ({ page }) => {
-    await page.getByTestId('glc-tab-3').click();
-    const rows = page.locator('[data-testid^="glc-doc-"]');
-    await expect(rows.first()).toBeVisible();
-    await expect(rows).toHaveCount(8);
-
-    // Every row shows a green "Mapeado" status chip.
-    await expect(page.getByText(/mapeado/i).first()).toBeVisible();
-    // No switches, inputs or comboboxes in the read-only table.
-    const panel = page.getByTestId('DocumentsTab__79cd86');
-    await expect(panel.getByRole('switch')).toHaveCount(0);
-    await expect(panel.getByRole('textbox')).toHaveCount(0);
   });
 });
