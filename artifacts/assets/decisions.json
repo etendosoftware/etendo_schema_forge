@@ -69,7 +69,18 @@
         ]
       }
     },
-    "secondaryTabs": {},
+    "secondaryTabs": {
+      "assetAcct": {
+        "tabOrder": 1,
+        "label": "Accounting",
+        "addLineFields": [
+          "accountingSchema",
+          "accumulatedDepreciation",
+          "depreciation"
+        ],
+        "requireSavedRecord": true
+      }
+    },
     "detailEntity": null,
     "customPanelTabs": [
       {

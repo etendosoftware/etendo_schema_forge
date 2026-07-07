@@ -97,7 +97,10 @@ describe('CreatableSearchSelect', () => {
   });
 
   it('renders the create action pinned at the top of the dropdown', () => {
-    assert.match(src, /createLabel && onCreateRequest/);
+    // Extracted into the CreateAction sub-component (cognitive-complexity refactor) —
+    // same gating condition (createLabel present AND onCreateRequest present), now
+    // expressed as an early-return guard instead of an inline && chain.
+    assert.match(src, /!createLabel \|\| !onCreateRequest/);
     assert.match(src, /handleCreate/);
   });
 

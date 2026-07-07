@@ -3,6 +3,7 @@ import { useUI, useMenuLabel } from '@/i18n';
 import InvoicePaymentHistoryModal from '@/windows/custom/shared/InvoicePaymentHistoryModal.jsx';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import SendToSifButton from './SendToSifButton';
+import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { getArSubtype } from './invoiceSubtype';
 
 function fmt(val, curr) {
@@ -66,6 +67,13 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
+
+  // ETP-4372 — source the same client-rendered PDF the InvoicePreview panel uses
+  // so the form-view topbar Send modal shows the document instead of the
+  // "PDF not configured" fallback. Hook is called unconditionally at top level
+  // (before the early returns below) to respect the rules of hooks. Keyed on the
+  // same id the modal passes as documentId (data?.id).
+  const { pdfUrl, loading: pdfLoading } = useInvoicePdf(data?.id ?? null, apiBaseUrl, token);
 
   const currency = data?.['currency$_identifier'] || '';
   const grandTotal = data?.grandTotalAmount ?? 0;
@@ -214,6 +222,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
             documentId={data?.id}
             windowName="sales-invoice"
             token={token}
+            pdfBlobUrl={pdfUrl}
+            pdfBlobLoading={pdfLoading}
             onClose={() => setShowSendModal(false)}
           />
         )}
@@ -342,6 +352,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           documentId={data?.id}
           windowName="sales-invoice"
           token={token}
+          pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           onClose={() => setShowSendModal(false)}
         />
       )}

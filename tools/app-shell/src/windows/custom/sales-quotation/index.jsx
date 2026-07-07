@@ -1,9 +1,11 @@
 import { useMemo, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { XCircle } from 'lucide-react';
-import { useUI, useLocale } from '@/i18n';
+import { useUI, useLocale, useMenuLabel } from '@/i18n';
 import { useNavigate } from 'react-router-dom';
 import { useRowDelete } from '@/hooks/useRowDelete';
+import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
+import { useQuotationPdf } from '../shared/useQuotationPdf.js';
 import GeneratedApp from '@generated/sales-quotation/generated/web/sales-quotation/index.jsx';
 import QuotationTable from '@generated/sales-quotation/generated/web/sales-quotation/QuotationTable';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
@@ -90,7 +92,17 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
+  const tMenu = useMenuLabel();
   const { effectiveRecord, clearSavedRecord } = useSavedPreviewRecord();
+
+  // ETP-4372 — row-hover email envelope opens SendDocumentModal with a PDF preview.
+  const { onEmail: onRowEmail, emailModalPortal } = useRowEmailModal({
+    usePdf: useQuotationPdf,
+    apiBaseUrl,
+    token,
+    windowName,
+    documentType: tMenu('Sales Quotation'),
+  });
 
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
@@ -125,9 +137,10 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
     documentPreview: true,
     onEdit:   (row) => navigate(`/${windowName}/${row.id}`),
     onClone:  (row) => setCloneTargets([row]),
+    onEmail:  onRowEmail,
     onDelete: requestDelete,
     menuActions: customMenuActions,
-  }), [navigate, windowName, requestDelete]);
+  }), [navigate, windowName, requestDelete, onRowEmail]);
 
   if (recordId) {
     return (
@@ -176,6 +189,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
           data-testid="CloneOrderModal__bc8637" />,
         document.body,
       )}
+      {emailModalPortal}
     </>
   );
 }

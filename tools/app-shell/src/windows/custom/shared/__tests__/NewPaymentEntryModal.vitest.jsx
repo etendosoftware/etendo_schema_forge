@@ -30,7 +30,7 @@ vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: () => (...args) => mockApiFetch(...args),
 }));
 
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import NewPaymentEntryModal from '../NewPaymentEntryModal.jsx';
 
@@ -61,6 +61,47 @@ function buildApiFetch(cfg = {}) {
   } = cfg;
 
   return vi.fn(async (path) => {
+    if (path.includes('invoiceAccounts')) return jsonRes({ items: accounts });
+    if (path.includes('invoicePaymentMethods')) return jsonRes({ items: methods });
+    if (path.includes('invoiceCreditSources')) return jsonRes({ items: sources });
+    if (path.includes('paymentPlan')) return jsonRes({ response: { data: plan } });
+    if (path.includes('registerPayment')) return jsonRes(register, registerOk);
+    return jsonRes({});
+  });
+}
+
+/**
+ * Build an apiFetch mock for PIS-eligible scenarios (ETP-4406): a
+ * psd2Connected account, a transfer-like payment method, and a supplier
+ * IBAN list — plus overrides for the registerPayment response and the
+ * pisPaymentStatus sequence returned across successive polls.
+ */
+function buildPisApiFetch(cfg = {}) {
+  const {
+    accounts = [{ id: 'acc-1', label: 'Banco PIS', psd2Connected: true, maskedPan: '****1234' }],
+    methods = [{ id: 'm-1', label: 'Transferencia' }],
+    sources = [],
+    plan = [{ finPaymentScheduleID: 'sched-1', outstandingAmount: '1000' }],
+    pisAccounts = [{ id: 'ES76 0049 1500 05 2310168863', name: 'Cuenta principal', iban: 'ES76 0049 1500 05 2310168863', default: true }],
+    pisTemplates = [
+      { value: 'SEPA', label: 'Single Euro Payments Area (SEPA)' },
+      { value: 'DOMESTIC', label: 'DOMESTIC' },
+      { value: 'FPS', label: 'Faster Payment' },
+    ],
+    register = { response: { data: { id: 'pay-1' } } },
+    registerOk = true,
+    pisStatusSequence = ['executed'],
+  } = cfg;
+  let pisStatusCallIndex = 0;
+
+  return vi.fn(async (path) => {
+    if (path.includes('pisSupplierAccounts')) return jsonRes({ items: pisAccounts });
+    if (path.includes('pisTemplates')) return jsonRes({ items: pisTemplates });
+    if (path.includes('pisPaymentStatus')) {
+      const status = pisStatusSequence[Math.min(pisStatusCallIndex, pisStatusSequence.length - 1)];
+      pisStatusCallIndex += 1;
+      return jsonRes({ status });
+    }
     if (path.includes('invoiceAccounts')) return jsonRes({ items: accounts });
     if (path.includes('invoicePaymentMethods')) return jsonRes({ items: methods });
     if (path.includes('invoiceCreditSources')) return jsonRes({ items: sources });
@@ -1082,6 +1123,349 @@ describe('NewPaymentEntryModal', () => {
       await waitFor(() => expect(screen.getByTestId('options-account')).toBeInTheDocument());
       expect(screen.getByTestId('option-account-acc-1')).toBeInTheDocument();
       expect(screen.getByTestId('option-account-acc-2')).toBeInTheDocument();
+    });
+  });
+
+  // ETP-4406: Salt Edge PIS bank transfer block for purchase-invoice payments.
+  describe('PIS bank transfer (ETP-4406)', () => {
+    let openSpy;
+
+    beforeEach(() => {
+      openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      openSpy.mockRestore();
+    });
+
+    describe('visibility gate', () => {
+      it('shows the PIS block when the account is PSD2-connected, the method is a transfer, dir is "out", and the currency is EUR', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        expect(await screen.findByTestId('cp-pis-section')).toBeInTheDocument();
+        expect(screen.getByText('cpPisTitle')).toBeInTheDocument();
+      });
+
+      it('hides the PIS block for a receipt (dir "in"), even with an otherwise-eligible account/method/currency', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({ dir: 'in' });
+        await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+        expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
+      });
+
+      it('hides the PIS block when the selected account is not PSD2-connected', async () => {
+        mockApiFetch = buildPisApiFetch({
+          accounts: [{ id: 'acc-1', label: 'Banco Clásico', psd2Connected: false }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+        expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
+      });
+
+      it('hides the PIS block when the resolved payment method is not a transfer', async () => {
+        mockApiFetch = buildPisApiFetch({
+          methods: [{ id: 'm-1', label: 'Efectivo' }],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+        expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
+      });
+
+      it('hides the PIS block when the invoice currency is not EUR or GBP', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({
+          dir: 'out', specName: 'purchase-invoice',
+          invoiceData: { ...INVOICE, 'currency$_identifier': 'USD' },
+        });
+        await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+        expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('confirm request body', () => {
+      it('sends pis:true only on Confirmar when the block is active, leaving Guardar (draft) unchanged', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        fireEvent.click(screen.getByTestId('cp-save-draft'));
+        await waitFor(() => {
+          const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+          expect(call).toBeTruthy();
+          const body = JSON.parse(call[1].body);
+          expect(body.process).toBe('draft');
+          expect(body.pis).toBeUndefined();
+        });
+      });
+
+      it('sends pis:true plus the SEPA template + creditor IBAN on Confirmar (EUR default)', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+
+        await waitFor(() => {
+          const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+          expect(call).toBeTruthy();
+          const body = JSON.parse(call[1].body);
+          expect(body.process).toBe('confirm');
+          expect(body.pis).toBe(true);
+          // EUR invoice defaults the template to SEPA and preselects the supplier's IBAN.
+          expect(body.pisTemplate).toBe('SEPA');
+          expect(body.pisCreditorIban).toBe('ES76 0049 1500 05 2310168863');
+        });
+      });
+
+      it('does not send a pis field at all on the regular (non-PIS) confirm path — regression guard', async () => {
+        // Default buildApiFetch() account has no psd2Connected flag -> block never renders.
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+        expect(screen.queryByTestId('cp-pis-section')).not.toBeInTheDocument();
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+
+        await waitFor(() => {
+          const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+          expect(call).toBeTruthy();
+          const body = JSON.parse(call[1].body);
+          expect(body).not.toHaveProperty('pis');
+        });
+      });
+    });
+
+    describe('template-driven creditor fields', () => {
+      // CreatableSearchSelect derives its own testids from field.key, so IBAN/template presence
+      // is asserted via their <label> text (the useUI mock echoes the key); the BBAN/sort-code/
+      // account-number plain inputs expose explicit data-testids.
+      it('shows only the IBAN field for the default SEPA template (EUR invoice)', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        expect(await screen.findByText('cpPisIbanLabel', { selector: 'label' })).toBeInTheDocument();
+        expect(screen.queryByTestId('cp-pis-bban')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('cp-pis-sort-code')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('cp-pis-account-number')).not.toBeInTheDocument();
+      });
+
+      it('shows sort code + account number (and hides IBAN) for the FPS template (GBP invoice)', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({
+          dir: 'out', specName: 'purchase-invoice',
+          invoiceData: { ...INVOICE, 'currency$_identifier': 'GBP' },
+        });
+        await screen.findByTestId('cp-pis-section');
+
+        expect(await screen.findByTestId('cp-pis-sort-code')).toBeInTheDocument();
+        expect(screen.getByTestId('cp-pis-account-number')).toBeInTheDocument();
+        expect(screen.queryByText('cpPisIbanLabel', { selector: 'label' })).not.toBeInTheDocument();
+      });
+
+      it('keeps Confirmar disabled for FPS until sort code + account number are filled, then sends them', async () => {
+        mockApiFetch = buildPisApiFetch();
+        renderModal({
+          dir: 'out', specName: 'purchase-invoice',
+          invoiceData: { ...INVOICE, 'currency$_identifier': 'GBP' },
+        });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        const sortCode = await screen.findByTestId('cp-pis-sort-code');
+        // Both FPS fields empty -> confirm blocked.
+        await waitFor(() => expect(confirm).toBeDisabled());
+
+        fireEvent.change(sortCode, { target: { value: '123456' } });
+        fireEvent.change(screen.getByTestId('cp-pis-account-number'), { target: { value: '12345678' } });
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+
+        fireEvent.click(confirm);
+        await waitFor(() => {
+          const call = mockApiFetch.mock.calls.find(c => c[0].includes('registerPayment'));
+          expect(call).toBeTruthy();
+          const body = JSON.parse(call[1].body);
+          expect(body.pisTemplate).toBe('FPS');
+          expect(body.pisCreditorSortCode).toBe('123456');
+          expect(body.pisCreditorAccountNumber).toBe('12345678');
+          expect(body.pisCreditorIban).toBeUndefined();
+        });
+      });
+    });
+
+    describe('SCA widget + status polling', () => {
+      // Real timers on purpose: the component's poll interval is a plain
+      // `setTimeout(..., 3000)`, and fake timers deadlock against Testing
+      // Library's own `waitFor`/`findBy*` (which also poll via `setTimeout`).
+      // These three tests wait out the real 3s interval instead, with a
+      // per-test timeout generous enough for two polls.
+
+      it('opens the Salt Edge widget and calls onSaved("deposited") once polling reaches "executed"', async () => {
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['authorizing', 'executed'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+        // Opened as a popup window (named target + window features), not a browser tab.
+        expect(openSpy).toHaveBeenCalledWith(
+          'https://saltedge.example/widget/abc',
+          'saltEdgePisWidget',
+          expect.stringContaining('popup=yes'));
+        expect(screen.getByText('cpPisStatusRequested')).toBeInTheDocument();
+
+        // First poll (~3s) -> "authorizing".
+        await waitFor(() => expect(screen.getByText('cpPisStatusAuthorizing')).toBeInTheDocument(),
+          { timeout: 4500 });
+
+        // Second poll (~3s) -> "executed", which resolves the wait and calls onSaved.
+        await waitFor(() => expect(props.onSaved).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'pay-1' }), 'deposited'), { timeout: 4500 });
+        expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
+      }, 12000);
+
+      it('shows an inline error and does not call onSaved when polling reaches a terminal non-executed status', async () => {
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['failed'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        await waitFor(() => expect(screen.getByText('cpPisFailedError')).toBeInTheDocument(),
+          { timeout: 4500 });
+        expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
+        expect(props.onSaved).not.toHaveBeenCalled();
+      }, 8000);
+
+      it('lets the user cancel the wait and return to the editable form', async () => {
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['authorizing'],
+        });
+        renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('cp-pis-cancel-wait'));
+        expect(screen.queryByTestId('cp-pis-waiting')).not.toBeInTheDocument();
+        expect(screen.getByTestId('cp-confirm')).toBeInTheDocument();
+      });
+
+      it('undoes the PPM payment on cancel — posts cancelPisPayment and refreshes via onSaved', async () => {
+        mockApiFetch = buildPisApiFetch({
+          register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+          pisStatusSequence: ['authorizing'],
+        });
+        const { props } = renderModal({ dir: 'out', specName: 'purchase-invoice' });
+        await screen.findByTestId('cp-pis-section');
+
+        const confirm = screen.getByTestId('cp-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        fireEvent.click(confirm);
+        expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('cp-pis-cancel-wait'));
+
+        // Reactivate + delete is delegated to the backend, keyed by the local PIS payment id.
+        await waitFor(() => {
+          const call = mockApiFetch.mock.calls.find(c => c[0].includes('cancelPisPayment'));
+          expect(call).toBeTruthy();
+          expect(JSON.parse(call[1].body).pisPaymentId).toBe('pis-1');
+        });
+        // The invoice/history is refreshed so the undone payment no longer shows as paid.
+        await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
+      });
+
+      // Regression coverage for the pisReturnedRef fix: the popup now auto-closes on its own
+      // once PisCallbackPage.jsx posts back `{ type: 'pis-completed' }`, so a closed popup must
+      // no longer be treated as "the user bailed out early" once that message was received.
+      describe('popup auto-close after pis-completed postMessage', () => {
+        it('does not show the "window closed" warning when the popup closes after a pis-completed message', async () => {
+          const fakePopup = { closed: false, close: vi.fn() };
+          openSpy.mockImplementation(() => fakePopup);
+          mockApiFetch = buildPisApiFetch({
+            register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+            pisStatusSequence: ['authorizing', 'authorizing', 'authorizing'],
+          });
+          renderModal({ dir: 'out', specName: 'purchase-invoice' });
+          await screen.findByTestId('cp-pis-section');
+
+          const confirm = screen.getByTestId('cp-confirm');
+          await waitFor(() => expect(confirm).not.toBeDisabled());
+          fireEvent.click(confirm);
+          expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+          // The bank auth completes: PisCallbackPage posts back to the opener, then the popup
+          // auto-closes itself — both happen before the next ~3s poll tick fires.
+          act(() => {
+            window.dispatchEvent(new MessageEvent('message', {
+              data: { type: 'pis-completed', paymentId: 'pis-1' },
+              origin: window.location.origin,
+            }));
+          });
+          fakePopup.closed = true;
+
+          // Wait past the poll tick that runs the "is the popup closed" heuristic — asserted via
+          // a second pisPaymentStatus call, since the closed-check runs synchronously before it.
+          await waitFor(() => {
+            const calls = mockApiFetch.mock.calls.filter(c => c[0].includes('pisPaymentStatus'));
+            expect(calls.length).toBeGreaterThanOrEqual(2);
+          }, { timeout: 8000 });
+
+          expect(screen.queryByTestId('cp-pis-reopen')).not.toBeInTheDocument();
+          expect(screen.queryByText('cpPisWindowClosed')).not.toBeInTheDocument();
+          expect(screen.getByText('cpPisStatusAuthorizing')).toBeInTheDocument();
+        }, 12000);
+
+        it('still shows the "window closed" warning + reopen button when the popup closes without a pis-completed message', async () => {
+          const fakePopup = { closed: false, close: vi.fn() };
+          openSpy.mockImplementation(() => fakePopup);
+          mockApiFetch = buildPisApiFetch({
+            register: { response: { data: { id: 'pay-1', pisPaymentUrl: 'https://saltedge.example/widget/abc', pisPaymentId: 'pis-1' } } },
+            pisStatusSequence: ['authorizing', 'authorizing', 'authorizing'],
+          });
+          renderModal({ dir: 'out', specName: 'purchase-invoice' });
+          await screen.findByTestId('cp-pis-section');
+
+          const confirm = screen.getByTestId('cp-confirm');
+          await waitFor(() => expect(confirm).not.toBeDisabled());
+          fireEvent.click(confirm);
+          expect(await screen.findByTestId('cp-pis-waiting')).toBeInTheDocument();
+
+          // The user closes the Salt Edge window early — no pis-completed message ever arrives.
+          fakePopup.closed = true;
+
+          expect(await screen.findByTestId('cp-pis-reopen', {}, { timeout: 4500 })).toBeInTheDocument();
+          expect(screen.getByText('cpPisWindowClosed')).toBeInTheDocument();
+
+          // Reopening opens a fresh popup and clears the warning.
+          fireEvent.click(screen.getByTestId('cp-pis-reopen'));
+          expect(openSpy).toHaveBeenCalledWith(
+            'https://saltedge.example/widget/abc',
+            'saltEdgePisWidget',
+            expect.stringContaining('popup=yes'));
+          expect(screen.queryByTestId('cp-pis-reopen')).not.toBeInTheDocument();
+        }, 8000);
+      });
     });
   });
 });

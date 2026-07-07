@@ -10,11 +10,23 @@
     "linesLayout": "inlineEditable",
     "customComponents": {
       "bottomSection": "ReturnToVendorBottomPanel"
+    },
+    "sendDocument": {
+      "enabled": true,
+      "allowEmail": true
     }
   },
   "entities": {
     "header": {
       "fields": {
+        "documentNo": {
+          "visibility": "readOnly",
+          "grid": true,
+          "gridOrder": 1,
+          "searchable": true,
+          "inputMode": "text",
+          "section": "principal"
+        },
         "businessPartner": {
           "grid": true,
           "searchable": true,

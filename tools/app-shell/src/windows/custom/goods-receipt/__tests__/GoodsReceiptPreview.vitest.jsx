@@ -142,8 +142,8 @@ vi.mock('@/components/related-documents/constants.jsx', () => ({
   STATUS_KEYS: {},
 }));
 
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import GoodsReceiptPreview from '../GoodsReceiptPreview.jsx';
 
 const defaultReceipt = {
@@ -199,48 +199,29 @@ describe('GoodsReceiptPreview', () => {
     expect(title).toContain('ALB-COMP-001');
   });
 
-  describe('Send (email) button visibility', () => {
+  describe('Send (email) access point is removed (out-of-scope window)', () => {
     it('does NOT render the send button when documentStatus is DR', () => {
       renderPreview({ receipt: { ...defaultReceipt, documentStatus: 'DR' } });
       expect(screen.queryByTestId('icon-mail')).not.toBeInTheDocument();
     });
 
-    it('renders the send button when documentStatus is CO', () => {
+    it('does NOT render the send button even when documentStatus is CO', () => {
       renderPreview({ receipt: { ...defaultReceipt, documentStatus: 'CO' } });
-      expect(screen.getByTestId('icon-mail')).toBeInTheDocument();
+      // The "Enviar"/send Mail button was removed from this preview.
+      expect(screen.queryByTestId('icon-mail')).not.toBeInTheDocument();
     });
-  });
 
-  it('shows send modal when email button is clicked', () => {
-    renderPreview();
-    expect(screen.queryByTestId('send-modal')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('icon-mail').closest('button'));
-    expect(screen.getByTestId('send-modal')).toBeInTheDocument();
-  });
+    it('never renders a send modal', () => {
+      renderPreview();
+      expect(screen.queryByTestId('send-modal')).not.toBeInTheDocument();
+    });
 
-  it('onFileChange in attachmentConfig updates pdfBlobUrl passed to SendDocumentModal', () => {
-    renderPreview();
-
-    // Open send modal first
-    fireEvent.click(screen.getByTestId('icon-mail').closest('button'));
-    expect(screen.getByTestId('send-modal')).toBeInTheDocument();
-    expect(screen.getByTestId('send-modal').dataset.pdfUrl).toBeFalsy();
-
-    // Close the modal so we can re-render cleanly with the file change simulation
-    fireEvent.click(screen.getByTestId('send-modal-close'));
-  });
-
-  it('attachmentConfig.onFileChange callback is wired up and triggers a state update', () => {
-    renderPreview();
-
-    // Simulate the GenericPreviewModal calling attachmentConfig.onFileChange
-    const simulateBtn = screen.getByTestId('simulate-file-change');
-    fireEvent.click(simulateBtn);
-
-    // Open the send modal; pdfBlobUrl should now reflect the stored file
-    fireEvent.click(screen.getByTestId('icon-mail').closest('button'));
-    expect(screen.getByTestId('send-modal')).toBeInTheDocument();
-    expect(screen.getByTestId('send-modal').dataset.pdfUrl).toBe('blob:test-url');
+    it('does not wire an onFileChange handler into attachmentConfig', () => {
+      // attachmentConfig.onFileChange only fed the (now removed) send modal,
+      // so the GenericPreviewModal mock never renders the simulate button.
+      renderPreview();
+      expect(screen.queryByTestId('simulate-file-change')).not.toBeInTheDocument();
+    });
   });
 
   it('renders 3 tabs: general, messages, history', () => {
@@ -274,26 +255,6 @@ describe('Purchase order navigation', () => {
       receipt: { ...defaultReceipt, salesOrder: null, 'salesOrder$_identifier': null },
     });
     expect(screen.queryByText('PO-001')).not.toBeInTheDocument();
-  });
-});
-
-// ── closeEmailModal ───────────────────────────────────────────────────────────
-
-describe('closeEmailModal', () => {
-  afterEach(() => vi.useRealTimers());
-
-  it('hides the send modal after the 280 ms exit animation', async () => {
-    vi.useFakeTimers();
-    renderPreview();
-
-    fireEvent.click(screen.getByTestId('icon-mail').closest('button'));
-    expect(screen.getByTestId('send-modal')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('send-modal-close'));
-    expect(screen.getByTestId('send-modal')).toBeInTheDocument();
-
-    await act(async () => { vi.runAllTimers(); });
-    expect(screen.queryByTestId('send-modal')).not.toBeInTheDocument();
   });
 });
 
