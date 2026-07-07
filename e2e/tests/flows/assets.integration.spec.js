@@ -6,7 +6,7 @@ import { login } from '../helpers/auth.js';
  *
  * Consolidated real-mode suite. Requires:
  *   - Etendo up (dev proxy → ETENDO_URL), E2E_USE_MOCK=0, E2E_PASSWORD set.
- *   - An existing asset category named "Otros".
+ *   - An existing asset category named "Genérico".
  *
  * Cases covered:
  *   - Case 1: create a non-depreciable asset — required validation, save, find.
@@ -39,11 +39,11 @@ async function openNewAsset(page) {
   await expect(page.getByTestId('detail-view')).toBeVisible();
 }
 
-/** Pick the real "Otros" category in the Grupo activo selector. */
+/** Pick the real "Genérico" category in the Grupo activo selector. */
 async function selectGrupoActivoOtros(page) {
   await page.getByTestId('field-assetCategory').click();
-  await page.getByRole('option', { name: 'Otros', exact: true }).click();
-  await expect(page.getByTestId('field-assetCategory')).toContainText('Otros');
+  await page.getByRole('option', { name: 'Genérico', exact: true }).click();
+  await expect(page.getByTestId('field-assetCategory')).toContainText('Genérico');
 }
 
 /** Click "Guardar" and wait for the asset PATCH/PUT to actually land, so the
@@ -113,10 +113,10 @@ async function saveThenProcess(page, expectRe) {
 }
 
 /**
- * Apply the conditional filter Nombre Es <name> AND Grupo activo Es Otros,
+ * Apply the conditional filter Nombre Es <name> AND Grupo activo Es Genérico,
  * and assert the list narrows to exactly the created asset.
  */
-/** Build and apply the conditional filter Nombre Es <name> AND Grupo activo Es Otros. */
+/** Build and apply the conditional filter Nombre Es <name> AND Grupo activo Es Genérico. */
 async function applyNameAndGrupoFilter(page, name) {
   await page.getByTestId('filter-advanced').click();
   const panel = page.getByRole('dialog');
@@ -129,14 +129,14 @@ async function applyNameAndGrupoFilter(page, name) {
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('textbox').first().fill(name);
 
-  // Condition 2 — Grupo activo Es Otros (FK value = IdentifierMultiPicker).
+  // Condition 2 — Grupo activo Es Genérico (FK value = IdentifierMultiPicker).
   await panel.getByRole('button', { name: 'Añadir condición' }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();
   await page.getByRole('option', { name: /Grupo activo|Asset Category|Categor/i }).click();
   await panel.locator('[role="combobox"]', { hasText: 'Seleccionar condición' }).first().click();
   await page.getByRole('option', { name: 'Es', exact: true }).click();
   await panel.getByRole('button', { name: 'Seleccionar valor' }).click();
-  await page.getByRole('button', { name: 'Otros', exact: true }).click();
+  await page.getByRole('button', { name: 'Genérico', exact: true }).click();
   await page.keyboard.press('Escape');
 
   await panel.getByRole('button', { name: 'Aplicar' }).click();
