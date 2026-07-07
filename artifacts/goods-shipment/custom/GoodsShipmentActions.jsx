@@ -7,7 +7,7 @@ import ReturnWizard from './ReturnWizard';
 import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
 import GoodsShipmentConfirmModal from './GoodsShipmentConfirmModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
-import { generateShipmentPdf, getShipmentPdfLabels } from '@/windows/custom/goods-shipment/useShipmentPdf';
+import { generateShipmentPdf, getShipmentPdfLabels, useShipmentPdf } from '@/windows/custom/goods-shipment/useShipmentPdf';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 
@@ -38,6 +38,12 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
+
+  // ETP-4372 — source the same client-rendered delivery-note PDF the
+  // GoodsShipmentPreview panel uses so the form-view topbar Send modal shows the
+  // document instead of the "PDF not configured" fallback. Hook is called
+  // unconditionally at top level (rules of hooks).
+  const { pdfUrl: shipmentPdfUrl, loading: shipmentPdfLoading } = useShipmentPdf(recordId, apiBaseUrl, token);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -334,6 +340,8 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           documentId={recordId}
           windowName="goods-shipment"
           token={token}
+          pdfBlobUrl={shipmentPdfUrl}
+          pdfBlobLoading={shipmentPdfLoading}
           onClose={() => setShowSend(false)}
         />,
         document.body,

@@ -1,0 +1,160 @@
+{
+  "$schema": "decisions-v2",
+  "window": {
+    "category": "contact",
+    "name": "Business Partner Category",
+    "detailEntity": "accounting",
+    "linesLayout": "inlineEditable",
+    "formCardPadding": "p-2",
+    "toolbarPaddingX": "px-2",
+    "tabsBarPaddingX": "px-2",
+    "formScrollPaddingX": "px-2",
+    "noHeaderBorder": true,
+    "toolbarBorderBottom": true,
+    "whiteFormBackground": true,
+    "autoSaveOnBlur": true,
+    "hidePrint": true,
+    "hideLink": true,
+    "listbarPaddingX": "px-2",
+    "tablePaddingX": "px-2",
+    "maxDetailLines": 1
+  },
+  "entities": {
+    "businessPartnerCategory": {
+      "fields": {
+        "searchKey": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 1
+        },
+        "name": {
+          "grid": true,
+          "searchable": true,
+          "section": "principal",
+          "seq": 2
+        },
+        "description": {
+          "type": "textarea",
+          "section": "principal",
+          "seq": 3,
+          "span": 2,
+          "rows": 1
+        },
+        "default": {
+          "section": "principal",
+          "seq": 4
+        }
+      }
+    },
+    "accounting": {
+      "javaQualifier": "businessPartnerCategoryAccountingHandler",
+      "fields": {
+        "accountingSchema": { "visibility": "system", "addLineFromSibling": true },
+        "customerReceivablesNo": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 1
+        },
+        "customerPrepayment": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 2
+        },
+        "vendorLiability": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 3
+        },
+        "vendorPrepayment": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 4
+        },
+        "writeoff": {
+          "visibility": "editable",
+          "grid": true,
+          "grow": true,
+          "seq": 5
+        },
+        "writeoffRevAcct": {
+          "visibility": "editable",
+          "seq": 6
+        },
+        "nonInvoicedReceipts": {
+          "visibility": "editable",
+          "seq": 7
+        },
+        "nonInvoicedReceivables": {
+          "visibility": "editable",
+          "seq": 8
+        },
+        "nonInvoicedRevenues": {
+          "visibility": "editable",
+          "seq": 9
+        },
+        "paymentDiscountExpense": {
+          "visibility": "editable",
+          "seq": 10
+        },
+        "paymentDiscountRevenue": {
+          "visibility": "editable",
+          "seq": 11
+        },
+        "doubtfulDebtAccount": {
+          "visibility": "editable",
+          "seq": 12
+        },
+        "badDebtExpenseAccount": {
+          "visibility": "editable",
+          "seq": 13
+        },
+        "badDebtRevenueAccount": {
+          "visibility": "editable",
+          "seq": 14
+        },
+        "allowanceForDoubtfulDebtAccount": {
+          "visibility": "editable",
+          "seq": 15
+        },
+        "unearnedRevenue": {
+          "visibility": "editable",
+          "seq": 16
+        },
+        "unrealizedGainsAcct": {
+          "visibility": "editable",
+          "seq": 17
+        },
+        "unrealizedLossesAcct": {
+          "visibility": "editable",
+          "seq": 18
+        },
+        "realizedGainAcct": {
+          "visibility": "editable",
+          "seq": 19
+        },
+        "realizedLossAcct": {
+          "visibility": "editable",
+          "seq": 20
+        },
+        "vendorServiceLiability": {
+          "visibility": "editable",
+          "seq": 21
+        },
+        "processNow": {
+          "visibility": "discarded"
+        },
+        "status": {
+          "visibility": "discarded"
+        }
+      }
+    }
+  },
+  "rules": {},
+  "discardPatterns": ["EM_*"],
+  "version": 2
+}

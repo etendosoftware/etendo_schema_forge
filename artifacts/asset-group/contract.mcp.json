@@ -2,7 +2,7 @@
   "version": "0.9.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
   "updatedAt": "2026-06-29T18:56:13.744Z",
-  "contractChecksum": "256550c56ea48e6b",
+  "contractChecksum": "6ab52b7bec26b4d4",
   "apiPrediction": {
     "specName": "asset-group",
     "baseUrl": "/sws/neo/asset-group",

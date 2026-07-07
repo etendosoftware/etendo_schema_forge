@@ -4,8 +4,8 @@
     "category": "sales",
     "name": "Returns",
     "lineEntityConfig": "returnOrder",
-    "documentPreview": {
-      "titlePrefix": "Return"
+    "sendDocument": {
+      "enabled": false
     },
     "notesField": "description",
     "relatedDocuments": true,

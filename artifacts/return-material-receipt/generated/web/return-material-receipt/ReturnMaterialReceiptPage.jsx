@@ -17,9 +17,8 @@ const breadcrumb = 'Sales / Return Material Receipt';
 // @sf-generated-start summary:returnMaterialReceipt
 const summary = [
   { key: 'documentNo', column: 'DocumentNo', type: 'string' },
-  { key: 'sourceShipmentDocNo', column: 'sourceShipmentDocNo', type: 'string' },
-  { key: 'etblkpAccountingstatus', column: 'EM_Etblkp_Accountingstatus', type: 'status' },
   { key: 'etblkpBulkposting', column: 'EM_Etblkp_Bulkposting', type: 'string' },
+  { key: 'sourceShipmentDocNo', column: 'sourceShipmentDocNo', type: 'string' },
 ];
 
 const statusField = 'documentStatus';
@@ -43,7 +42,7 @@ const draftMode = null;
 // @sf-generated-end draftMode:returnMaterialReceipt
 
 // @sf-generated-start requiredHeaderFields:returnMaterialReceipt
-const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', 'warehouse', 'partnerAddress', 'etblkpAccountingstatus', 'etblkpBulkposting'];
+const requiredHeaderFields = ['documentNo', 'movementDate', 'businessPartner', 'warehouse', 'partnerAddress', 'etblkpBulkposting'];
 // @sf-generated-end requiredHeaderFields:returnMaterialReceipt
 
 // @sf-generated-start addLineFields:returnMaterialReceiptLine
@@ -192,10 +191,10 @@ export const api = {
     },
     {
       "entity": "returnMaterialReceipt",
-      "field": "sendMaterials",
-      "column": "RM_Shipment_Pickedit",
-      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
-      "processId": "4AD70293357245AB96E59C2CDB43A35D",
+      "field": "etblkpBulkposting",
+      "column": "EM_Etblkp_Bulkposting",
+      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/etblkpBulkposting",
+      "processId": "57496FB9CF9E4E8F847224017941570E",
       "processType": "obuiapp"
     },
     {
@@ -216,6 +215,14 @@ export const api = {
     },
     {
       "entity": "returnMaterialReceipt",
+      "field": "sendMaterials",
+      "column": "RM_Shipment_Pickedit",
+      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
+      "processId": "4AD70293357245AB96E59C2CDB43A35D",
+      "processType": "obuiapp"
+    },
+    {
+      "entity": "returnMaterialReceipt",
       "field": "invoicefromshipment",
       "column": "Invoicefromshipment",
       "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/invoicefromshipment",
@@ -229,14 +236,6 @@ export const api = {
       "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/processGoodsJava",
       "processId": "49DEE812BF0545269781FCEBF2235924",
       "processType": "classic"
-    },
-    {
-      "entity": "returnMaterialReceipt",
-      "field": "etblkpBulkposting",
-      "column": "EM_Etblkp_Bulkposting",
-      "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/etblkpBulkposting",
-      "processId": "57496FB9CF9E4E8F847224017941570E",
-      "processType": "obuiapp"
     },
     {
       "entity": "returnMaterialReceiptLine",
@@ -319,7 +318,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         linesLayout="inlineEditable"
-        sendDocument
+        sendDocument={{"enabled":false}}
         {...props}
       />
       </>
@@ -337,7 +336,7 @@ export default function ReturnMaterialReceiptPage({ windowName, recordId, ...pro
       dateFilterKey="movementDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument
+      sendDocument={{"enabled":false}}
       {...props}
     />
   );

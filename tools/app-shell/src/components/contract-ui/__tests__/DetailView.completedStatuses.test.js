@@ -14,16 +14,36 @@ const src = readFileSync(join(__dirname, '..', 'DetailView.jsx'), 'utf8');
  * `processed === 'Y'` alone triggers the lock — which broke sales-quotation
  * during Under Evaluation (UE), where Etendo flips processed to Y but the
  * pair must remain visible until the user confirms or rejects.
+ *
+ * ETP-4268 follow-up: the array branch used to always read
+ * `_headerData?.documentStatus`, ignoring a window's configured
+ * `statusField` (decisions.json → window.statusField). This broke
+ * goods-movements, whose status lives in a boolean `processed` field, not
+ * `documentStatus` — the "Procesar" button never hid because
+ * `completedStatuses` never matched. The fix resolves the compared value via
+ * `_headerData?.[statusField || 'documentStatus']` and normalizes
+ * boolean-ish values (true/'Y' -> 'true', false/'N' -> 'false') before the
+ * `.includes(...)` check, so windows can declare completedStatuses as string
+ * literals regardless of whether their status field is an enum or a boolean
+ * flag. See DetailView.draftModeStatusField.vitest.jsx for the behavioral
+ * coverage of this fix.
  */
 describe('DetailView — draftMode.completedStatuses (ETP-3873 regression)', () => {
   it('reads draftMode.completedStatuses as an array branch', () => {
     assert.match(src, /Array\.isArray\(\s*draftMode\.completedStatuses\s*\)/);
   });
 
-  it('matches against the live documentStatus when the array is declared', () => {
+  it('resolves the compared value from statusField, falling back to documentStatus (ETP-4268)', () => {
     assert.match(
       src,
-      /draftMode\.completedStatuses\.includes\(\s*_headerData\?\.documentStatus\s*\)/,
+      /_headerData\?\.\[\s*statusField\s*\|\|\s*['"]documentStatus['"]\s*\]/,
+    );
+  });
+
+  it('normalizes the resolved value through normalizeStatusValue before matching the array (ETP-4268)', () => {
+    assert.match(
+      src,
+      /draftMode\.completedStatuses\.includes\(\s*normalizeStatusValue\(\s*statusValue\s*\)\s*\)/,
     );
   });
 

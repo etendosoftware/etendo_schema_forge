@@ -92,6 +92,26 @@ const PRODUCT_WITH_SALES_PRICE = {
   '_identifier': 'Product with existing sales price',
 };
 
+const PRODUCT_FOR_ACCOUNTING = {
+  ...PRODUCT_NO_PRICES,
+  id: 'PROD-ACCT-1',
+  searchKey: 'PROD-ACCT-1',
+  name: 'Product with accounting row',
+  '_identifier': 'Product with accounting row',
+};
+
+const ACCOUNTING_ROW = {
+  id: 'prod-acct-001',
+  fixedAsset: 'gl-001',
+  'fixedAsset$_identifier': '2130000 Maquinaria',
+  productExpense: 'gl-002',
+  'productExpense$_identifier': '6000000 Compras de mercaderías',
+  productRevenue: 'gl-003',
+  'productRevenue$_identifier': '7000000 Ventas de mercaderías',
+  productCOGS: 'gl-004',
+  'productCOGS$_identifier': '6100000 Variación de existencias',
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
@@ -186,6 +206,26 @@ function installPriceRoute(page, state) {
   });
 }
 
+/**
+ * Install the `accounting` child-entity mock (M_Product_Acct) for the
+ * Accounting secondary tab added in ETP-4402.
+ */
+async function mockProductAccounting(page, rows) {
+  await page.route('**/sws/neo/product/accounting**', async (route) => {
+    const req = route.request();
+    const url = req.url();
+
+    if (/\/accounting\/selectors\//.test(url)) return route.fallback();
+    if (req.method() !== 'GET') return route.fallback();
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: rows, totalRows: rows.length } }),
+    });
+  });
+}
+
 // ── Suite A — Create flow ────────────────────────────────────────────────────
 
 test.describe('Product pricing — create flow (no existing rows)', () => {
@@ -204,6 +244,9 @@ test.describe('Product pricing — create flow (no existing rows)', () => {
 
     await page.goto(`/product/${PRODUCT_NO_PRICES.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    // ETP-4402 made "Accounting" (Contabilidad) the default detail tab; the
+    // pricing UI now lives in the non-default "Precio" tab (customTab 'pricing').
+    await page.getByTestId('tab-custom:pricing').click();
   });
 
   test('empty state shows section toggle and add button; opening the selector lists sales options only', async ({ page }) => {
@@ -319,6 +362,9 @@ test.describe('Product pricing — selector populates dropdown from lazy fetch (
 
     await page.goto(`/product/${PRODUCT_WITH_SALES_PRICE.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    // ETP-4402 made "Accounting" (Contabilidad) the default detail tab; the
+    // pricing UI now lives in the non-default "Precio" tab (customTab 'pricing').
+    await page.getByTestId('tab-custom:pricing').click();
   });
 
   test('switching to Compra and opening the selector triggers lazy fetch filtered to purchase options', async ({ page }) => {
@@ -428,5 +474,67 @@ test.describe('Product pricing — inline create tariff', () => {
     // The returned auto-created version was linked to the product via POST /price.
     expect(state.postBodies.some((b) => b.priceListVersion === 'plv-sale')).toBe(true);
     expect(state.postBodies.every((b) => b.product === PRODUCT_NO_PRICES.id)).toBe(true);
+  });
+});
+
+// ── Suite C — Accounting tab (ETP-4402) ──────────────────────────────────────
+
+test.describe('Product Accounting tab — mocked', () => {
+  /**
+   * ETP-4402 wired the `accounting` entity (M_Product_Acct) into the unified
+   * secondary tab strip (Accounting, Price, Attachments — in that order) via
+   * `window.secondaryTabs.accounting`, using the classic grid+form layout
+   * (not inlineEditable). Covers the previously-untested surface:
+   *
+   *   - The Accounting tab (`tab-accounting`) is present and shows the
+   *     Fixed Asset / Product Expense / Product Revenue / Product COGS
+   *     GL account columns.
+   *   - `accountingSchema` never renders as a column or an add-line field for
+   *     a row added when a sibling already exists — `addLineFromSibling`
+   *     copies it client-side from the previous row, and `ProductAccountingHandler`
+   *     auto-fills it server-side on POST when absent (covering the very
+   *     first row, which has no sibling to copy from).
+   */
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await mockProductAccounting(page, [ACCOUNTING_ROW]);
+    await mockProductDetail(page, PRODUCT_FOR_ACCOUNTING);
+
+    await page.goto(`/product/${PRODUCT_FOR_ACCOUNTING.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('Accounting tab shows the four GL account columns; accountingSchema is absent', async ({ page }) => {
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 10_000 });
+
+    const accountingTab = page.getByTestId('tab-accounting');
+    await expect(accountingTab).toBeVisible({ timeout: 10_000 });
+    await accountingTab.click();
+
+    await expect(page.getByTestId('column-header-fixedAsset')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('column-header-productExpense')).toBeVisible();
+    await expect(page.getByTestId('column-header-productRevenue')).toBeVisible();
+    await expect(page.getByTestId('column-header-productCOGS')).toBeVisible();
+
+    await expect(page.getByTestId('column-header-accountingSchema')).toHaveCount(0);
+
+    await expect(page.getByText('6000000 Compras de mercaderías')).toBeVisible();
+  });
+
+  test('Add Line exposes the four GL account fields; accountingSchema is never editable', async ({ page }) => {
+    await page.getByTestId('tab-accounting').click();
+
+    const addBtn = page.getByTestId('action-add-line');
+    await expect(addBtn).toBeVisible({ timeout: 8_000 });
+    await addBtn.click();
+
+    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('inline-add-field-fixedAsset')).toBeVisible();
+    await expect(page.getByTestId('inline-add-field-productExpense')).toBeVisible();
+    await expect(page.getByTestId('inline-add-field-productRevenue')).toBeVisible();
+    await expect(page.getByTestId('inline-add-field-productCOGS')).toBeVisible();
+
+    await expect(page.getByTestId('inline-add-field-accountingSchema')).toHaveCount(0);
   });
 });

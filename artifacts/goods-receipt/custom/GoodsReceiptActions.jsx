@@ -2,9 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useUI, useMenuLabel } from '@/i18n';
+import { useUI } from '@/i18n';
 import ConfirmGoodsReceiptModal from './ConfirmGoodsReceiptModal';
-import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { usePreviewAttachment } from '@/windows/custom/shared/usePreviewAttachment.js';
 import PurchaseReturnWizard from './PurchaseReturnWizard';
@@ -15,12 +14,10 @@ import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceCon
 
 export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl }) {
   const ui = useUI();
-  const tMenu = useMenuLabel();
   const navigate = useNavigate();
   const [showConfirm, setShowConfirm] = useState(false);
   const [showInvoiceConfirm, setShowInvoiceConfirm] = useState(false);
   const [showClone, setShowClone] = useState(false);
-  const [showSend, setShowSend] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [returnLines, setReturnLines] = useState([]);
   const [returnedDoc, setReturnedDoc] = useState(null);
@@ -245,39 +242,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl 
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
         </a>
-      )}
-
-      {isCompleted && (
-        <button
-          type="button"
-          onClick={() => setShowSend(true)}
-          title={ui('quickAction.email')}
-          style={sqBtn}
-          onMouseEnter={e => { e.currentTarget.style.background = '#F1F5F9'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#FFFFFF'; }}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-            <polyline points="22,6 12,13 2,6"/>
-          </svg>
-        </button>
-      )}
-
-      {showSend && createPortal(
-        <SendDocumentModal
-          documentType={tMenu('Goods Receipt')}
-          documentNo={data?.documentNo}
-          bpName={data?.['businessPartner$_identifier']}
-          bPartnerId={data?.businessPartner}
-          apiBaseUrl={apiBaseUrl}
-          documentId={recordId}
-          windowName="goods-receipt"
-          token={token}
-          pdfBlobUrl={previewAttachment.storedFile?.objectUrl}
-          pdfBlobLoading={false}
-          onClose={() => setShowSend(false)}
-        />,
-        document.body,
       )}
 
       <PurchaseReturnWizard

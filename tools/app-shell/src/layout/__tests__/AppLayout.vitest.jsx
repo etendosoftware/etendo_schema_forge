@@ -52,6 +52,18 @@ vi.mock('@/components/CurrentWindowContext', () => ({
   CurrentWindowProvider: ({ children }) => <div>{children}</div>,
 }));
 
+vi.mock('@/components/support/SupportChatContext.jsx', () => ({
+  SupportChatProvider: ({ children }) => <div data-testid="support-chat-provider">{children}</div>,
+  useSupportChat: () => ({
+    state: { isOpen: false, unreadCount: 0 },
+    actions: { open: vi.fn(), close: vi.fn() },
+  }),
+}));
+
+vi.mock('@/components/support/SupportChatWidget.jsx', () => ({
+  SupportChatWidget: () => <div data-testid="support-chat-widget">SupportChatWidget</div>,
+}));
+
 import AppLayout from '../AppLayout.jsx';
 
 describe('AppLayout — normal mode', () => {

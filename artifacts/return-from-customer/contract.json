@@ -1,17 +1,14 @@
 {
   "version": "0.10.0",
   "generatedAt": "2026-04-29T19:46:12.773Z",
-  "updatedAt": "2026-06-29T12:09:16.843Z",
-  "checksum": "165aaea670dfa29e",
+  "updatedAt": "2026-07-01T18:47:16.179Z",
+  "checksum": "fc5b3c46e906e948",
   "frontendContract": {
     "window": {
       "id": "FF808081330213E60133021822E40007",
       "name": "Returns",
       "primaryEntity": "customerReturn",
       "category": "sales",
-      "documentPreview": {
-        "titlePrefix": "Return"
-      },
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
@@ -26,6 +23,9 @@
       },
       "dateFilterKey": "orderDate",
       "lineEntityConfig": "returnOrder",
+      "sendDocument": {
+        "enabled": false
+      },
       "layoutType": "default",
       "linesLayout": "inlineEditable"
     },
@@ -752,9 +752,6 @@
       "name": "Returns",
       "primaryEntity": "customerReturn",
       "category": "sales",
-      "documentPreview": {
-        "titlePrefix": "Return"
-      },
       "notesField": "description",
       "relatedDocuments": true,
       "hideDeleteWhenComplete": true,
@@ -769,6 +766,9 @@
       },
       "dateFilterKey": "orderDate",
       "lineEntityConfig": "returnOrder",
+      "sendDocument": {
+        "enabled": false
+      },
       "linesLayout": "inlineEditable"
     },
     "entities": {
