@@ -4,10 +4,11 @@ import SectionShell from './SectionShell.jsx';
 import { ACCOUNT_OPTIONS, DEFAULTS_GROUPS } from './mockCatalogs.js';
 
 /**
- * Valores por defecto tab — 4 labeled groups (Tesorería y banco · Clientes y
- * proveedores · Impuestos · Otras cuentas) of AccountBadgeSelect controls. The
- * "Otras cuentas" group is the approved 4th group exposing the product/warehouse/
- * asset/project *_Acct defaults not shown in the Figma mock.
+ * Valores por defecto tab — labeled groups (Tesorería y banco · Contactos ·
+ * Impuestos · Producto · Proyecto · Almacén · Banco) of AccountBadgeSelect
+ * controls, driven by `DEFAULTS_GROUPS`. The Producto/Proyecto/Almacén/Banco
+ * groups expose the product/warehouse/asset/project/bank *_Acct defaults not
+ * shown in the original Figma mock.
  */
 export default function DefaultsTab({ defaults, accountOptions = ACCOUNT_OPTIONS, setDefaultField, errors = {} }) {
   const ui = useUI();

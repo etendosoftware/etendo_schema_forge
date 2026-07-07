@@ -123,9 +123,9 @@ export const DEFAULTS_SEED = {
   taxDue: 'acc-477',
   taxCredit: 'acc-472',
   taxExpense: 'acc-631',
-  // Otras cuentas
   tDueTransAcct: 'acc-4770',
   tCreditTransAcct: 'acc-4720',
+  // Producto
   fixedAsset: 'acc-213',
   productExpense: 'acc-600',
   productDeferredExpense: 'acc-480',
@@ -135,13 +135,26 @@ export const DEFAULTS_SEED = {
   invoicePriceVariance: 'acc-602',
   productRevenueReturn: 'acc-708',
   productCOGSReturn: 'acc-608',
-  warehouseDifferences: 'acc-659',
-  inventoryRevaluation: 'acc-298',
-  workInProgress: 'acc-340',
   depreciation: 'acc-681',
   accumulatedDepreciation: 'acc-281',
   disposalGain: 'acc-771',
   disposalLoss: 'acc-671',
+  // Proyecto
+  projectAsset: null,
+  // Almacén
+  warehouseDifferences: 'acc-659',
+  inventoryRevaluation: 'acc-298',
+  workInProgress: 'acc-340',
+  // Banco
+  bankInterestRevenue: null,
+  bankInterestExpense: null,
+  bankUnidentifiedReceipts: null,
+  unallocatedCash: null,
+  bankSettlementGain: null,
+  bankSettlementLoss: null,
+  cashBookExpense: null,
+  cashBookReceipt: null,
+  paymentSelection: null,
 };
 
 // Field → i18n-label-key + required, grouped by section. Drives the Defaults tab.
@@ -181,13 +194,13 @@ export const DEFAULTS_GROUPS = [
       { key: 'taxDue', required: true },
       { key: 'taxCredit', required: true },
       { key: 'taxExpense', required: false },
+      { key: 'tDueTransAcct', required: false },
+      { key: 'tCreditTransAcct', required: false },
     ],
   },
   {
-    section: 'other',
+    section: 'product',
     fields: [
-      { key: 'tDueTransAcct', required: false },
-      { key: 'tCreditTransAcct', required: false },
       { key: 'fixedAsset', required: false },
       { key: 'productExpense', required: false },
       { key: 'productDeferredExpense', required: false },
@@ -197,13 +210,38 @@ export const DEFAULTS_GROUPS = [
       { key: 'invoicePriceVariance', required: false },
       { key: 'productRevenueReturn', required: false },
       { key: 'productCOGSReturn', required: false },
-      { key: 'warehouseDifferences', required: false },
-      { key: 'inventoryRevaluation', required: false },
-      { key: 'workInProgress', required: false },
       { key: 'depreciation', required: false },
       { key: 'accumulatedDepreciation', required: false },
       { key: 'disposalGain', required: false },
       { key: 'disposalLoss', required: false },
+    ],
+  },
+  {
+    section: 'project',
+    fields: [
+      { key: 'projectAsset', required: false },
+    ],
+  },
+  {
+    section: 'warehouse',
+    fields: [
+      { key: 'warehouseDifferences', required: false },
+      { key: 'inventoryRevaluation', required: false },
+      { key: 'workInProgress', required: false },
+    ],
+  },
+  {
+    section: 'bank',
+    fields: [
+      { key: 'bankInterestRevenue', required: false },
+      { key: 'bankInterestExpense', required: false },
+      { key: 'bankUnidentifiedReceipts', required: false },
+      { key: 'unallocatedCash', required: false },
+      { key: 'bankSettlementGain', required: false },
+      { key: 'bankSettlementLoss', required: false },
+      { key: 'cashBookExpense', required: false },
+      { key: 'cashBookReceipt', required: false },
+      { key: 'paymentSelection', required: false },
     ],
   },
 ];
@@ -234,6 +272,20 @@ export const DOCUMENTS_SEED = [
   { id: 'doc-amz', typeKey: 'glc.doc.depreciation', accountId: 'acc-681' },
 ];
 
+// ── Seed record: Cuentas generales (C_AcctSchema_GL, single row) ─────────────
+export const GENERAL_ACCOUNTS_SEED = {
+  suspenseBalancingUse: false,
+  suspenseBalancing: null,
+  suspenseErrorUse: false,
+  currencyBalancingUse: false,
+  currencyBalancingAcct: null,
+  retainedEarning: null,
+  incomeSummary: null,
+  cFSOrderAccount: null,
+  active: true,
+  createClosing: true,
+};
+
 export const accountById = (id) => ACCOUNT_OPTIONS.find((a) => a.id === id) ?? null;
 
 export const GLC_SEED_PAYLOAD = {
@@ -242,6 +294,7 @@ export const GLC_SEED_PAYLOAD = {
   dimensions: DIMENSIONS_SEED,
   documents: DOCUMENTS_SEED,
   orgInfo: ORG_INFO_SEED,
+  generalAccounts: GENERAL_ACCOUNTS_SEED,
   catalogs: {
     accounts: ACCOUNT_OPTIONS,
     currencies: CURRENCY_OPTIONS,

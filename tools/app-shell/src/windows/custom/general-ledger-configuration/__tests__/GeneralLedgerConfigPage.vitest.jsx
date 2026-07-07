@@ -51,6 +51,9 @@ vi.mock('../DocumentsTab.jsx', () => ({
     <div data-testid="documents-tab" data-backed={String(props.documentsBacked)}>{props.documentsNote}</div>
   ),
 }));
+vi.mock('../GeneralAccountsTab.jsx', () => ({
+  default: () => <div data-testid="general-accounts-tab" />,
+}));
 
 vi.mock('@/components/ui/button', () => ({
   Button: ({ children, onClick, disabled, className, ...rest }) => (
@@ -76,9 +79,11 @@ function makeHook(overrides = {}) {
     orgInfo: {},
     meta: { documentsBacked: true, documentsNote: 'note-key' },
     catalogs: { currencies: [], accounts: [] },
+    generalAccounts: { active: true },
     setGeneralField: vi.fn(),
     setDefaultField: vi.fn(),
     setDimensionField: vi.fn(),
+    setGeneralAccountsField: vi.fn(),
     isDirty: true,
     save: vi.fn().mockResolvedValue(undefined),
     loading: false,
@@ -151,6 +156,13 @@ describe('GeneralLedgerConfigPage — tab switching', () => {
     expect(docs).toBeInTheDocument();
     expect(docs).toHaveAttribute('data-backed', 'true');
     expect(docs).toHaveTextContent('note-key');
+  });
+
+  it('switches to the General Accounts tab', () => {
+    renderPage();
+    fireEvent.click(screen.getByText('glc.tab.generalAccounts'));
+    expect(screen.getByTestId('general-accounts-tab')).toBeInTheDocument();
+    expect(screen.queryByTestId('general-tab')).not.toBeInTheDocument();
   });
 });
 

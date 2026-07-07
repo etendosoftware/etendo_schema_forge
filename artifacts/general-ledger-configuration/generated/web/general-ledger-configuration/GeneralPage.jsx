@@ -103,6 +103,17 @@ export const api = {
       "detailUrl": "/sws/neo/general-ledger-configuration/Documentos/{id}",
       "supportedFilters": []
     },
+    "Cuentas generales": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/general-ledger-configuration/Cuentas generales",
+      "detailUrl": "/sws/neo/general-ledger-configuration/Cuentas generales/{id}",
+      "supportedFilters": []
+    },
     "Valores por defecto": {
       "get": true,
       "getById": true,
@@ -219,6 +230,46 @@ export const api = {
       "reference": "Createfact_Template",
       "inputMode": "selector",
       "url": "/sws/neo/general-ledger-configuration/Documentos/selectors/aDCreatefactTemplateID"
+    },
+    {
+      "entity": "Cuentas generales",
+      "field": "suspenseBalancing",
+      "column": "SuspenseBalancing_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/suspenseBalancing"
+    },
+    {
+      "entity": "Cuentas generales",
+      "field": "retainedEarning",
+      "column": "RetainedEarning_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/retainedEarning"
+    },
+    {
+      "entity": "Cuentas generales",
+      "field": "incomeSummary",
+      "column": "IncomeSummary_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/incomeSummary"
+    },
+    {
+      "entity": "Cuentas generales",
+      "field": "currencyBalancingAcct",
+      "column": "CurrencyBalancing_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/currencyBalancingAcct"
+    },
+    {
+      "entity": "Cuentas generales",
+      "field": "cFSOrderAccount",
+      "column": "CFS_Order_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/cFSOrderAccount"
     },
     {
       "entity": "Valores por defecto",
@@ -502,11 +553,35 @@ export const api = {
     },
     {
       "entity": "Valores por defecto",
+      "field": "cashBookExpense",
+      "column": "CB_Expense_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/cashBookExpense"
+    },
+    {
+      "entity": "Valores por defecto",
+      "field": "cashBookReceipt",
+      "column": "CB_Receipt_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/cashBookReceipt"
+    },
+    {
+      "entity": "Valores por defecto",
       "field": "depreciation",
       "column": "A_Depreciation_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
       "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/depreciation"
+    },
+    {
+      "entity": "Valores por defecto",
+      "field": "paymentSelection",
+      "column": "B_PaymentSelect_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/paymentSelection"
     },
     {
       "entity": "Valores por defecto",
@@ -518,11 +593,67 @@ export const api = {
     },
     {
       "entity": "Valores por defecto",
+      "field": "projectAsset",
+      "column": "PJ_Asset_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/projectAsset"
+    },
+    {
+      "entity": "Valores por defecto",
       "field": "taxExpense",
       "column": "T_Expense_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
       "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/taxExpense"
+    },
+    {
+      "entity": "Valores por defecto",
+      "field": "bankInterestRevenue",
+      "column": "B_InterestRev_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankInterestRevenue"
+    },
+    {
+      "entity": "Valores por defecto",
+      "field": "bankInterestExpense",
+      "column": "B_InterestExp_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankInterestExpense"
+    },
+    {
+      "entity": "Valores por defecto",
+      "field": "bankUnidentifiedReceipts",
+      "column": "B_Unidentified_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankUnidentifiedReceipts"
+    },
+    {
+      "entity": "Valores por defecto",
+      "field": "bankSettlementGain",
+      "column": "B_SettlementGain_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankSettlementGain"
+    },
+    {
+      "entity": "Valores por defecto",
+      "field": "unallocatedCash",
+      "column": "B_UnallocatedCash_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/unallocatedCash"
+    },
+    {
+      "entity": "Valores por defecto",
+      "field": "bankSettlementLoss",
+      "column": "B_SettlementLoss_Acct",
+      "reference": "ValidCombination",
+      "inputMode": "selector",
+      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankSettlementLoss"
     },
     {
       "entity": "Valores por defecto",

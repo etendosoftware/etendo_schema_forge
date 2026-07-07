@@ -29,6 +29,7 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
   const [documents, setDocuments] = useState(seed.documents);
   const [orgInfo, setOrgInfo] = useState(seed.orgInfo);
   const [catalogs, setCatalogs] = useState(seed.catalogs);
+  const [generalAccounts, setGeneralAccounts] = useState(seed.generalAccounts);
   const [meta, setMeta] = useState(seed.meta);
   const [loading, setLoading] = useState(false);
 
@@ -37,6 +38,7 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
     general: seed.general,
     defaults: seed.defaults,
     dimensions: seed.dimensions,
+    generalAccounts: seed.generalAccounts,
   });
 
   const mapPayload = useCallback((payload) => ({
@@ -49,6 +51,7 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
       accounts: Array.isArray(payload?.catalogs?.accounts) ? payload.catalogs.accounts : seed.catalogs.accounts,
       currencies: Array.isArray(payload?.catalogs?.currencies) ? payload.catalogs.currencies : seed.catalogs.currencies,
     },
+    generalAccounts: payload?.generalAccounts ?? seed.generalAccounts,
     meta: { ...seed.meta, ...(payload?.meta ?? {}) },
   }), [seed]);
 
@@ -60,8 +63,14 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
       setDocuments(seed.documents);
       setOrgInfo(seed.orgInfo);
       setCatalogs(seed.catalogs);
+      setGeneralAccounts(seed.generalAccounts);
       setMeta(seed.meta);
-      setBaseline({ general: seed.general, defaults: seed.defaults, dimensions: seed.dimensions });
+      setBaseline({
+        general: seed.general,
+        defaults: seed.defaults,
+        dimensions: seed.dimensions,
+        generalAccounts: seed.generalAccounts,
+      });
       return;
     }
 
@@ -78,8 +87,14 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
       setDocuments(payload.documents);
       setOrgInfo(payload.orgInfo);
       setCatalogs(payload.catalogs);
+      setGeneralAccounts(payload.generalAccounts);
       setMeta(payload.meta);
-      setBaseline({ general: payload.general, defaults: payload.defaults, dimensions: payload.dimensions });
+      setBaseline({
+        general: payload.general,
+        defaults: payload.defaults,
+        dimensions: payload.dimensions,
+        generalAccounts: payload.generalAccounts,
+      });
     } catch (error) {
       console.warn('[general-ledger-configuration] aggregate load failed, using mock fallback:', error.message);
       setGeneral(seed.general);
@@ -88,8 +103,14 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
       setDocuments(seed.documents);
       setOrgInfo(seed.orgInfo);
       setCatalogs(seed.catalogs);
+      setGeneralAccounts(seed.generalAccounts);
       setMeta(seed.meta);
-      setBaseline({ general: seed.general, defaults: seed.defaults, dimensions: seed.dimensions });
+      setBaseline({
+        general: seed.general,
+        defaults: seed.defaults,
+        dimensions: seed.dimensions,
+        generalAccounts: seed.generalAccounts,
+      });
     } finally {
       setLoading(false);
     }
@@ -109,6 +130,10 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
 
   const setDimensionField = useCallback((id, field, value) => {
     setDimensions((rows) => rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  }, []);
+
+  const setGeneralAccountsField = useCallback((field, value) => {
+    setGeneralAccounts((g) => ({ ...g, [field]: value }));
   }, []);
 
   // ── Dirty diff per entity ──────────────────────────────────────────────────
@@ -140,15 +165,25 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
     return out;
   }, [dimensions, baseline.dimensions]);
 
+  const dirtyGeneralAccounts = useMemo(() => {
+    const out = {};
+    for (const k of Object.keys(generalAccounts)) {
+      if (generalAccounts[k] !== baseline.generalAccounts[k]) out[k] = generalAccounts[k];
+    }
+    return out;
+  }, [generalAccounts, baseline.generalAccounts]);
+
   const isDirty =
     Object.keys(dirtyGeneral).length > 0 ||
     Object.keys(dirtyDefaults).length > 0 ||
-    dirtyDimensions.length > 0;
+    dirtyDimensions.length > 0 ||
+    Object.keys(dirtyGeneralAccounts).length > 0;
 
   const reset = useCallback(() => {
     setGeneral(baseline.general);
     setDefaults(baseline.defaults);
     setDimensions(baseline.dimensions);
+    setGeneralAccounts(baseline.generalAccounts);
   }, [baseline]);
 
   const save = useCallback(async () => {
@@ -157,6 +192,7 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
         general: dirtyGeneral,
         defaults: dirtyDefaults,
         dimensions: dirtyDimensions,
+        generalAccounts: dirtyGeneralAccounts,
       };
     }
 
@@ -164,6 +200,7 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
       general: dirtyGeneral,
       defaults: dirtyDefaults,
       dimensions: dirtyDimensions,
+      generalAccounts: dirtyGeneralAccounts,
       selectedOrgId: selectedOrg.id,
     };
 
@@ -185,10 +222,16 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
     setDocuments(saved.documents);
     setOrgInfo(saved.orgInfo);
     setCatalogs(saved.catalogs);
+    setGeneralAccounts(saved.generalAccounts);
     setMeta(saved.meta);
-    setBaseline({ general: saved.general, defaults: saved.defaults, dimensions: saved.dimensions });
+    setBaseline({
+      general: saved.general,
+      defaults: saved.defaults,
+      dimensions: saved.dimensions,
+      generalAccounts: saved.generalAccounts,
+    });
     return saved;
-  }, [selectedOrg?.id, dirtyGeneral, dirtyDefaults, dirtyDimensions, apiFetch, mapPayload]);
+  }, [selectedOrg?.id, dirtyGeneral, dirtyDefaults, dirtyDimensions, dirtyGeneralAccounts, apiFetch, mapPayload]);
 
   return {
     general,
@@ -197,13 +240,20 @@ export function useGeneralLedgerConfig(apiBaseUrl) {
     documents,
     orgInfo,
     catalogs,
+    generalAccounts,
     meta,
     loading,
     setGeneralField,
     setDefaultField,
     setDimensionField,
+    setGeneralAccountsField,
     isDirty,
-    dirty: { general: dirtyGeneral, defaults: dirtyDefaults, dimensions: dirtyDimensions },
+    dirty: {
+      general: dirtyGeneral,
+      defaults: dirtyDefaults,
+      dimensions: dirtyDimensions,
+      generalAccounts: dirtyGeneralAccounts,
+    },
     reset,
     save,
     apiFetch,

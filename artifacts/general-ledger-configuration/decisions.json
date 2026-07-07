@@ -69,25 +69,38 @@
         "taxDue": { "visibility": "editable", "section": "taxes" },
         "taxCredit": { "visibility": "editable", "section": "taxes" },
         "taxExpense": { "visibility": "editable", "section": "taxes" },
+        "tDueTransAcct": { "visibility": "editable", "section": "taxes" },
+        "tCreditTransAcct": { "visibility": "editable", "section": "taxes" },
 
-        "tDueTransAcct": { "visibility": "editable", "section": "other" },
-        "tCreditTransAcct": { "visibility": "editable", "section": "other" },
-        "fixedAsset": { "visibility": "editable", "section": "other" },
-        "productExpense": { "visibility": "editable", "section": "other" },
-        "productDeferredExpense": { "visibility": "editable", "section": "other" },
-        "productRevenue": { "visibility": "editable", "section": "other" },
-        "productDeferredRevenue": { "visibility": "editable", "section": "other" },
-        "productCOGS": { "visibility": "editable", "section": "other" },
-        "invoicePriceVariance": { "visibility": "editable", "section": "other" },
-        "productRevenueReturn": { "visibility": "editable", "section": "other" },
-        "productCOGSReturn": { "visibility": "editable", "section": "other" },
-        "warehouseDifferences": { "visibility": "editable", "section": "other" },
-        "inventoryRevaluation": { "visibility": "editable", "section": "other" },
-        "workInProgress": { "visibility": "editable", "section": "other" },
-        "depreciation": { "visibility": "editable", "section": "other" },
-        "accumulatedDepreciation": { "visibility": "editable", "section": "other" },
-        "disposalGain": { "visibility": "editable", "section": "other" },
-        "disposalLoss": { "visibility": "editable", "section": "other" }
+        "fixedAsset": { "visibility": "editable", "section": "product" },
+        "productExpense": { "visibility": "editable", "section": "product" },
+        "productDeferredExpense": { "visibility": "editable", "section": "product" },
+        "productRevenue": { "visibility": "editable", "section": "product" },
+        "productDeferredRevenue": { "visibility": "editable", "section": "product" },
+        "productCOGS": { "visibility": "editable", "section": "product" },
+        "invoicePriceVariance": { "visibility": "editable", "section": "product" },
+        "productRevenueReturn": { "visibility": "editable", "section": "product" },
+        "productCOGSReturn": { "visibility": "editable", "section": "product" },
+        "depreciation": { "visibility": "editable", "section": "product" },
+        "accumulatedDepreciation": { "visibility": "editable", "section": "product" },
+        "disposalGain": { "visibility": "editable", "section": "product" },
+        "disposalLoss": { "visibility": "editable", "section": "product" },
+
+        "projectAsset": { "visibility": "editable", "section": "project" },
+
+        "warehouseDifferences": { "visibility": "editable", "section": "warehouse" },
+        "inventoryRevaluation": { "visibility": "editable", "section": "warehouse" },
+        "workInProgress": { "visibility": "editable", "section": "warehouse" },
+
+        "bankInterestRevenue": { "visibility": "editable", "section": "bank" },
+        "bankInterestExpense": { "visibility": "editable", "section": "bank" },
+        "bankUnidentifiedReceipts": { "visibility": "editable", "section": "bank" },
+        "unallocatedCash": { "visibility": "editable", "section": "bank" },
+        "bankSettlementGain": { "visibility": "editable", "section": "bank" },
+        "bankSettlementLoss": { "visibility": "editable", "section": "bank" },
+        "cashBookExpense": { "visibility": "editable", "section": "bank" },
+        "cashBookReceipt": { "visibility": "editable", "section": "bank" },
+        "paymentSelection": { "visibility": "editable", "section": "bank" }
       }
     },
 
@@ -124,6 +137,29 @@
     },
 
     "activeTables": { "exclude": true },
-    "generalAccounts": { "exclude": true }
+
+    "generalAccounts": {
+      "name": "Cuentas generales",
+      "fields": {
+        "suspenseBalancingUse": { "visibility": "editable", "section": "suspense" },
+        "suspenseBalancing": { "visibility": "editable", "section": "suspense" },
+        "suspenseErrorUse": { "visibility": "editable", "section": "suspense" },
+        "suspenseError": { "visibility": "discarded" },
+
+        "currencyBalancingUse": { "visibility": "editable", "section": "currencyBalancing" },
+        "currencyBalancingAcct": { "visibility": "editable", "section": "currencyBalancing" },
+
+        "retainedEarning": { "visibility": "editable", "section": "closing" },
+        "incomeSummary": { "visibility": "editable", "section": "closing" },
+        "cFSOrderAccount": { "visibility": "editable", "section": "closing" },
+        "createClosing": { "visibility": "editable", "section": "closing" },
+
+        "active": { "visibility": "system" },
+
+        "dueToIntercompany": { "visibility": "discarded" },
+        "dueFromIntercompany": { "visibility": "discarded" },
+        "pPVOffset": { "visibility": "discarded" }
+      }
+    }
   }
 }
