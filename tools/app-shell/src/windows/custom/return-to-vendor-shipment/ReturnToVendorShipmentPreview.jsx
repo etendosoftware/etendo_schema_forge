@@ -2,8 +2,7 @@ import { useRef } from 'react';
 import { useUI, useMenuLabel, useLocaleSwitch } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
 import GenericPreviewModal from '../shared/GenericPreviewModal.jsx';
-import { PreviewPdfPanel, usePreviewSendModal } from '../shared/PreviewActionButtons.jsx';
-import SendDocumentModal from '@/components/contract-ui/SendDocumentModal.jsx';
+import { PreviewPdfPanel } from '../shared/PreviewActionButtons.jsx';
 import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
@@ -13,8 +12,6 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   const tMenu = useMenuLabel();
   const { locale } = useLocaleSwitch();
   const modalRef = useRef(null);
-
-  const { showSendModal, sendModalClosing, openEmailModal, closeEmailModal } = usePreviewSendModal();
 
   const { pdfUrl, pdfBlob, loading: pdfLoading, error: pdfError } = useReturnToVendorPdf(
     shipment?.id ?? null,
@@ -49,37 +46,20 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   );
 
   const { actionButtons, tabs } = buildReturnPreviewContent({
-    doc: shipment, openEmailModal, pdfBlob, handleDownload, modalRef,
+    doc: shipment, pdfBlob, handleDownload, modalRef,
     specs, partnerName, movementDate, token, apiBaseUrl, ui,
   });
 
   return (
-    <>
-      <GenericPreviewModal
-        ref={modalRef}
-        title={`${windowLabel} ${shipment.documentNo}`}
-        subtitle={partnerName !== '—' ? `${ui('returnToVendorPreviewVendor')} ${partnerName}` : undefined}
-        leftPanel={leftPanel}
-        onClose={onClose}
-        onEdit={() => onEdit?.(shipment.id)}
-        tabs={tabs}
-        actionButtons={actionButtons}
-        data-testid="GenericPreviewModal__93f029" />
-      {showSendModal && (
-        <SendDocumentModal
-          documentType={windowLabel}
-          documentNo={shipment.documentNo}
-          bpName={partnerName}
-          bPartnerId={shipment.businessPartner}
-          apiBaseUrl={apiBaseUrl}
-          documentId={shipment.id}
-          windowName="return-to-vendor-shipment"
-          token={token}
-          pdfBlobUrl={pdfUrl}
-          isClosing={sendModalClosing}
-          onClose={closeEmailModal}
-          data-testid="SendDocumentModal__93f029" />
-      )}
-    </>
+    <GenericPreviewModal
+      ref={modalRef}
+      title={`${windowLabel} ${shipment.documentNo}`}
+      subtitle={partnerName !== '—' ? `${ui('returnToVendorPreviewVendor')} ${partnerName}` : undefined}
+      leftPanel={leftPanel}
+      onClose={onClose}
+      onEdit={() => onEdit?.(shipment.id)}
+      tabs={tabs}
+      actionButtons={actionButtons}
+      data-testid="GenericPreviewModal__93f029" />
   );
 }

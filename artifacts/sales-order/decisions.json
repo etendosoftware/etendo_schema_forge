@@ -3,6 +3,7 @@
   "window": {
     "category": "sales",
     "name": "Sales Order",
+    "documentDateField": "orderDate",
     "selectorPriceCurrency": "org",
     "salesTheme": true,
     "notesField": "description",
@@ -126,11 +127,12 @@
             "field": "businessPartner",
             "filterKey": "C_BPartner_ID"
           },
-          "section": "principal"
+          "section": "principal",
+          "seq": 4
         },
         "priceList": {
           "section": "principal",
-          "order": 11
+          "seq": 6
         },
         "paymentMethod": {
           "reference": "PaymentMethod",
@@ -262,7 +264,7 @@
           "grid": false,
           "form": true,
           "section": "principal",
-          "order": 10,
+          "seq": 5,
           "readOnlyLogic": "@Processed@='Y'",
           "derivation": null
         },

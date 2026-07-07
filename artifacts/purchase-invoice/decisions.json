@@ -3,6 +3,7 @@
   "window": {
     "category": "purchases",
     "name": "Purchase Invoice",
+    "documentDateField": "invoiceDate",
     "sendDocument": {
       "allowEmail": false
     },
@@ -161,7 +162,14 @@
         },
         "currency": {
           "visibility": "editable",
-          "section": "other",
+          "section": "principal",
+          "form": true,
+          "grid": false,
+          "seq": 65,
+          "readOnlyLogic": "@Processed@='Y'"
+        },
+        "eTGOCurrencyRate": {
+          "visibility": "editable",
           "form": false,
           "grid": false
         },

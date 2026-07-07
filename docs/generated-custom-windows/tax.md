@@ -15,6 +15,7 @@ From the current generated form and decisions, the visible window allows a user 
 - set a valid-from date
 - choose whether document-level or line-level amounts drive tax calculation
 - choose the base amount definition, including line net amount, line net amount plus tax, tax amount, alternative base amount, or alternative base plus tax
+- open the **Accounting** tab and maintain the Tax Due and Tax Credit GL accounts for each accounting schema the tax rate is posted under
 
 The list also lets users scan existing definitions quickly by showing the rate as a colored percentage tag and the applicability as `Sales` / `Purchase` tags. When the tax applies to both flows, the list shows both tags side by side rather than a single `Both` badge. The rate tag has three visual states: a positive rate (e.g. 21) renders as a green `+21 %` tag; a zero rate renders as a neutral gray `0 %` tag; a negative rate (e.g. withholdings at −10) renders as a red `−10 %` tag.
 
@@ -22,20 +23,24 @@ The list also lets users scan existing definitions quickly by showing the rate a
 - **Route:** `/tax` and `/tax/:recordId`.
 - **Visibility:** visible from the `System` section in `tools/app-shell/src/menu.json`.
 - **Implementation type:** generated window loaded through `tools/app-shell/src/windows/registry.js`.
-- **Window shape:** single-entity window with no child entities and no declared process endpoints in the generated index.
+- **Window shape:** `tax` is the header entity; `accounting` (`C_Tax_Acct`) is the detail (child) entity, rendered with the standard `linesLayout: "classic"` add-line grid — one row per accounting schema, with Tax Due and Tax Credit as editable selector columns.
+- No declared process endpoints in the generated index.
 - **Screen chrome:** the generated detail view hides print and the generic More menu.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 
 ## Reactive behavior and dependencies
-This is a standalone definition window. No parent/child behavior is visible in the current evidence.
-
 The visible dependencies are limited to selector semantics and list rendering:
 - `Applicable To` changes the intended business scope of the tax record between `Both`, `Sales Tax`, and `Purchase Tax`.
 - `Doc Tax Amount` changes whether tax is conceptually based on document-level or line-level amounts.
 - `Base Amount` changes which monetary base downstream calculations should use.
 - The merged decisions intentionally keep `Description` discarded and `Active` hidden from the visible form, so the current user-facing form is limited to the six main fields above.
 
-No dependent selector behavior, automatic defaulting between these fields, status-driven actions, or visible total/discount/tax recalculation logic is shown in the current window code. Any downstream reaction happens outside this definition screen.
+No dependent selector behavior, automatic defaulting between these fields, status-driven actions, or visible total/discount/tax recalculation logic is shown in the current window code beyond the Accounting tab described below. Any other downstream reaction happens outside this definition screen.
+
+**Accounting tab (`accounting` entity):**
+- `accountingSchema` (`C_AcctSchema_ID`) is hidden from the form (`visibility: "system"`). On the first accounting row for a tax record, `TaxAccountingHandler` (a `NeoHandler` in `com.etendoerp.go`) auto-fills it with the client's default active `AcctSchema` when the field is absent from the POST body. On subsequent rows, `addLineFromSibling` copies the value from an existing sibling row instead.
+- `Tax Due` (`T_Due_Acct`) and `Tax Credit` (`T_Credit_Acct`) are the two editable GL account selectors exposed per row.
+- `Tax Expense`, `Tax Liability`, `Tax Receivables`, `Tax Due Transitory`, and `Tax Credit Transitory` are discarded — they cover non-recoverable tax, deferred-tax, and Cash-VAT-transitory scenarios that are out of scope for the simplified UI.
 
 ## Gap assessment
 - The window captures tax-definition inputs, but the current evidence does not show where or how those choices are enforced in sales or purchase documents.
@@ -54,6 +59,9 @@ No dependent selector behavior, automatic defaulting between these fields, statu
 8. Confirm the visible form does not show `Description`, and that print / generic More actions are not present.
 9. Save a change and reopen the record to confirm the updated definition persists.
 10. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
+11. Open the **Accounting** tab on a tax record with no existing accounting rows and add a new line without touching the (hidden) accounting schema field. Confirm the row saves successfully — `TaxAccountingHandler` should auto-fill `accountingSchema` server-side.
+12. Add a second accounting row and confirm it inherits `accountingSchema` from the first (sibling) row rather than requiring the handler default again.
+13. Confirm only `Tax Due` and `Tax Credit` selectors are editable on each accounting row, and that Tax Expense, Tax Liability, Tax Receivables, and the two transitory accounts are not shown.
 
 ## Automated evidence
 - `origin/develop` commit `15a2288a` added the tax-table cell helpers that drive the current badge/tag rendering.
@@ -62,6 +70,10 @@ No dependent selector behavior, automatic defaulting between these fields, statu
 - `origin/develop:artifacts/tax/generated/web/tax/TaxForm.jsx` defines the six visible form fields and the selector options for applicability, document-tax amount, and base amount.
 - `origin/develop:artifacts/tax/generated/web/tax/index.jsx` confirms the route, standalone generated layout, breadcrumb, and the hidden print/More controls.
 - The generated `TaxPage.jsx` includes `AttachmentsTab` in its `customTabs` prop, wired to the `C_Tax` AD table.
+- `artifacts/tax/decisions.json` sets `window.detailEntity: "accounting"` and configures the `accounting` entity fields, including `javaQualifier: "taxAccountingHandler"`.
+- `artifacts/tax/contract.json` exposes `accounting` (table `C_Tax_Acct`, tab `333`) as a detail entity with `accountingSchema` as `visibility: "system"` and `Tax Due` / `Tax Credit` as the two editable fields.
+- `artifacts/tax/generated/web/tax/TaxPage.jsx` declares `addLineFields` for the `accounting` entity: `taxDue`/`taxCredit` as entry fields and `accountingSchema` in `hidden` with `fromSibling: 'accountingSchema'`.
+- `com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/TaxAccountingHandler.java` — new `NeoHandler` (`@Named("taxAccountingHandler")`) that auto-fills `accountingSchema` with the client's default active `AcctSchema` on POST when the field is absent from the request body.
 ## Field name overrides — ETP-4016
 
 Two fields use a `name` override in `decisions.json` because their AD display name diverges from the DAL property name that NEO Headless returns in GET responses:
@@ -80,3 +92,14 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 - LinesTable template updated in ETP-3908 to include the inline-editable add-row alignment fix. This window uses `linesLayout: "classic"` so the new template branch is dead code here — no behavioral change.
 
 - **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.
+
+## Accounting tab onboarded — ETP-4402
+
+The `accounting` entity (`C_Tax_Acct`, tab `333`) was un-excluded and classified, closing the same accounting-schema-defaulting gap already fixed for `product`, `product-category`, `assets`, `contacts`, and `business-partner-category` in this ticket.
+
+- `window.detailEntity` changed from `null` to `"accounting"` — the Accounting tab is now the primary detail entity, rendered as a classic add-line grid (one row per accounting schema).
+- `accountingSchema` is `visibility: "system"` with `addLineFromSibling: true` — hidden from the form; the first row is auto-filled server-side (see below), later rows copy the value from an existing sibling row.
+- `taxDue` and `taxCredit` are the two editable, required GL account selectors (`grid: true`, `grow: true`).
+- `taxExpense`, `taxLiability`, and `taxReceivables` were already discarded by the raw extractor's default classification (not displayed in AD by default); `taxDueTransitory` and `taxCreditTransitory` were explicitly discarded here — both are Cash-VAT-only transitory accounts, out of scope for the simplified UI.
+- `javaQualifier: "taxAccountingHandler"` registers `TaxAccountingHandler` (`com.etendoerp.go`), a `NeoHandler` that auto-fills `accountingSchema` with the client's default active `AcctSchema` on POST when the field is absent from the request body — mirrors `ProductCategoryAccountingHandler` exactly.
+- Regenerated via `make regen ONLY=tax`; `node cli/src/validate-pipeline.js --scope=tax` reports 0 violations.

@@ -10,6 +10,9 @@ import GoodsShipmentPage from '@generated/goods-shipment/generated/web/goods-shi
 import GoodsShipmentTable from '@generated/goods-shipment/generated/web/goods-shipment/GoodsShipmentTable';
 import BulkInvoiceFromShipment from '@generated/goods-shipment/custom/BulkInvoiceFromShipment';
 import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import { useMenuLabel } from '@/i18n';
+import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
+import { useShipmentPdf } from './useShipmentPdf';
 import GoodsShipmentPreview from './GoodsShipmentPreview';
 
 const LABEL_OVERRIDES = {
@@ -56,12 +59,22 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
 
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const tMenu = useMenuLabel();
 
   const { requestDelete, deleteDialog } = useRowDelete({
     apiBaseUrl,
     entity: 'goodsShipment',
     token,
     onSuccess: () => setRefreshKey(k => k + 1),
+  });
+
+  // ETP-4372 — row-hover email envelope opens SendDocumentModal with a PDF preview.
+  const { onEmail: onRowEmail, emailModalPortal } = useRowEmailModal({
+    usePdf: useShipmentPdf,
+    apiBaseUrl,
+    token,
+    windowName,
+    documentType: tMenu('Goods Shipment'),
   });
 
   const { headers, createContactCtxValue, contactPortal } =
@@ -80,8 +93,9 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
     },
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onClone: (row) => setCloneTargets([row]),
+    onEmail: onRowEmail,
     onDelete: requestDelete,
-  }), [navigate, windowName, requestDelete]);
+  }), [navigate, windowName, requestDelete, onRowEmail]);
 
   if (recordId) {
     return (
@@ -141,6 +155,7 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
           data-testid="CloneOrderModal__9851c7" />,
         document.body,
       )}
+      {emailModalPortal}
     </>
   );
 }

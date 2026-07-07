@@ -167,28 +167,29 @@ describe('FinancialAccountsPage — PSD2 sync action', () => {
 });
 
 describe('FinancialAccountsPage — PSD2 disconnect action', () => {
-  it('does nothing when the user cancels the confirm', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+  it('opens a styled confirm dialog and does not disconnect until confirmed', async () => {
     renderPage([ACC]);
     await tableProps.onPsd2Action('disconnect', ACC);
+    // The action only opens the confirm dialog; nothing is disconnected yet.
+    await screen.findByText('financeAccountsPsd2DisconnectAction');
     expect(mockDisconnect).not.toHaveBeenCalled();
   });
 
-  it('disconnects and reloads on confirm', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('disconnects and reloads when the dialog is confirmed', async () => {
     mockDisconnect.mockResolvedValue(undefined);
     renderPage([ACC]);
     await tableProps.onPsd2Action('disconnect', ACC);
-    expect(mockDisconnect).toHaveBeenCalledWith('acc-1');
+    fireEvent.click(await screen.findByText('financeAccountsPsd2DisconnectAction'));
+    await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('acc-1'));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2DisconnectDone'));
     expect(mockReload).toHaveBeenCalled();
   });
 
   it('shows an error toast when disconnect throws', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mockDisconnect.mockRejectedValue(new Error('fail'));
     renderPage([ACC]);
     await tableProps.onPsd2Action('disconnect', ACC);
+    fireEvent.click(await screen.findByText('financeAccountsPsd2DisconnectAction'));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('fail'));
   });
 });
