@@ -40,7 +40,7 @@
           "visibility": "editable"
         },
         "inVfactuSystem": {
-          "visibility": "readOnly"
+          "visibility": "discarded"
         },
         "client": {
           "visibility": "system",
