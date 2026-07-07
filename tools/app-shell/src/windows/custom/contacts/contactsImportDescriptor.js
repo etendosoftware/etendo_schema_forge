@@ -53,12 +53,30 @@ registerImportDescriptor('contacts', async (row, config) => {
       // NOT NULL geography column (verified: c_region_id is nullable) — the row still
       // imports, just without a region on its location.
     }
+    // `locationAddress` (contacts spec) routes through the custom ContactsLocationAddressHandler
+    // NeoHandler (verified: ETGO_SF_ENTITY.Java_Qualifier = 'contactsLocationAddressHandler'),
+    // which creates C_Location + C_BPartner_Location atomically from a DIFFERENT, flattened
+    // field set than the generic entity's own contract fields (name/phone/shipToAddress/...) —
+    // `addressLine1`/`addressLine2`/`cityName`/`postalCode`, not `address1`/`city`/`postal` (the
+    // names LocationEditorModal.jsx, the known-working manual flow, actually sends). Reproduced
+    // via a real import run: the wrong field names meant the address data never reached the
+    // handler's own body-reading code, leaving `name` unset (only rescued by the handler's own
+    // "." fallback) — a computed display name here matches LocationEditorModal.jsx's own
+    // convention instead of relying on that fallback.
+    const locationName = [row.city, row.address].filter(Boolean).join(', ') || 'Location';
     ops.push({
       id: 'location',
       spec: config.spec,
       entity: 'locationAddress',
       parentRef: 'bp',
-      body: { address1: row.address, city: row.city, postal: row.postal, country: countryResult.id, ...(regionId ? { region: regionId } : {}) },
+      body: {
+        name: locationName,
+        addressLine1: row.address,
+        cityName: row.city,
+        postalCode: row.postal,
+        country: countryResult.id,
+        ...(regionId ? { region: regionId } : {}),
+      },
     });
   }
 

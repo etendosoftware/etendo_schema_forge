@@ -24,10 +24,38 @@ describe('contacts import descriptor', () => {
     assert.equal(bp.body.oBTIKTaxIDKey, '1');
     assert.equal(location.entity, 'locationAddress');
     assert.equal(location.parentRef, bp.id);
+    // `locationAddress` (contacts spec) routes through ContactsLocationAddressHandler,
+    // which reads addressLine1/cityName/postalCode — NOT address1/city/postal, the
+    // generic entity's own (unrelated) contract field names. Sending the wrong names
+    // meant the handler silently created an address with no data at all (reproduced via
+    // a real import run: a raw Postgres NOT NULL violation on c_bpartner_location.name).
+    assert.equal(location.body.addressLine1, 'Av. Siempreviva 742');
+    assert.equal(location.body.cityName, 'Springfield');
+    assert.equal(location.body.postalCode, '1000');
     assert.equal(location.body.country, 'C-AR');
     assert.equal(location.body.region, 'R-1');
     assert.equal(contact.entity, 'contact');
     assert.equal(contact.parentRef, bp.id);
+  });
+
+  it('regression: computes a human-readable location name (city, address) instead of relying on the handler\'s "." fallback', async () => {
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-AR', name: 'Argentina' });
+    const row = { ...baseRow, region: undefined };
+    const ops = await buildOperations(row, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.equal(location.body.name, 'Springfield, Av. Siempreviva 742');
+  });
+
+  it('regression: falls back to "Location" as the name when the row has a country but no city/address text', async () => {
+    const resolveCountry = vi.fn().mockResolvedValue({ status: 'auto-resolved', id: 'C-AR', name: 'Argentina' });
+    const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com', country: 'Argentina' };
+    const ops = await buildOperations(row, {
+      spec: 'contacts', descriptorName: 'contacts', token: 't', resolveCountryFn: resolveCountry,
+    });
+    const location = ops.find((op) => op.entity === 'locationAddress');
+    assert.equal(location.body.name, 'Location');
   });
 
   it('omits the location op entirely when no address fields are present on the row', async () => {
