@@ -20,6 +20,7 @@ import {
   ConfigDrawer,
   DrillDownPanel,
   FileGenModal,
+  FileGenModal303,
   IncidentTray,
   NewDeclModal,
   PresentModal,
@@ -160,6 +161,43 @@ describe('FmOverlays interactive coverage', () => {
     expect(screen.getByText('T1 2026 → T3 2026')).toBeInTheDocument();
     fireEvent.click(screen.getByText('fm.action.close'));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('FileGenModal303: renders with default filename, edits it, and confirms', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const decl = { model: '303', year: 2026, period: 'T2' };
+    render(<FileGenModal303 decl={decl} onConfirm={onConfirm} onClose={onClose} />);
+
+    expect(screen.getByText('fm.filegen303.title')).toBeInTheDocument();
+    const input = screen.getByRole('textbox');
+    expect(input.value).toBe('303_T2_2026.txt');
+
+    await user.clear(input);
+    await user.type(input, 'custom.303');
+    await user.click(screen.getByText('fm.filegen.generate'));
+
+    expect(onConfirm).toHaveBeenCalledWith({ filename: 'custom.303' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('FileGenModal303: passes undefined filename when input is blank, cancel closes without confirm', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    render(<FileGenModal303 decl={{ model: '303', year: 2026, period: 'T1' }} onConfirm={onConfirm} onClose={onClose} />);
+
+    const input = screen.getByRole('textbox');
+    await user.clear(input);
+    await user.click(screen.getByText('fm.filegen.generate'));
+    expect(onConfirm).toHaveBeenCalledWith({ filename: undefined });
+
+    onConfirm.mockClear();
+    onClose.mockClear();
+    await user.click(screen.getByText('fm.action.cancel'));
+    expect(onClose).toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it('renders drilldown content and closes', async () => {
