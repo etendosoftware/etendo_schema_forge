@@ -878,7 +878,10 @@ export function ListView({
           )}
 
           {/* Table */}
-          <ScrollPane onReachBottom={handleReachBottom} className={`${tablePaddingX} ${tablePaddingBottom}`}>
+          <ScrollPane
+            onReachBottom={handleReachBottom}
+            className={`${tablePaddingX} ${tablePaddingBottom}`}
+            data-testid="ScrollPane__620cbc">
             {hook.loading && hook.items.length === 0 ? (
               <div className="space-y-3">
                 <Skeleton className="h-10 w-full" data-testid="Skeleton__620cbc" />
@@ -991,7 +994,7 @@ export function ListView({
               hook.refresh();
               if (failedCount === 0) setShowImportDialog(false);
             }}
-          />
+            data-testid="ImportDialog__620cbc" />
         )}
       </div>
       {activePreviewRow && renderPreview?.({
