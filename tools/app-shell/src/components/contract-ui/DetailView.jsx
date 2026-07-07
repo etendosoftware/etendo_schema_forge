@@ -3307,8 +3307,11 @@ export function DetailView({
                   );
                 })}
 
-              {/* Detail entity process buttons — visible when child rows are selected or a single line is clicked */}
-              {!isNew && detailProcesses.length > 0 && (selectedChildRows.length > 0 || selectedLine) && detailProcesses
+              {/* Detail entity process buttons — visible only for the single-line-click case.
+                  The multi-row (selectedChildRows) case is rendered exclusively by the bulk
+                  action bar above the lines table (see isDetailBulkBarVisible) to avoid
+                  rendering these buttons twice. */}
+              {!isNew && detailProcesses.length > 0 && selectedChildRows.length === 0 && selectedLine && detailProcesses
                 .map(p => {
                   const isPrimary = p.style === 'positive';
                   const btnClass = getButtonClass(salesTheme, p, isPrimary);
@@ -3669,6 +3672,7 @@ export function DetailView({
                                             }
                                           }}
                                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border border-primary text-primary hover:bg-primary/10 disabled:opacity-50 transition-colors"
+                                          data-testid="Button__detail-process"
                                         >
                                           {executingDetailProcess ? ui('loading') : (tMenu(p.label) || p.label)}
                                         </button>

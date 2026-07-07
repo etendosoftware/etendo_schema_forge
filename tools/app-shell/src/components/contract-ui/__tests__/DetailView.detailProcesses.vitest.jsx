@@ -214,9 +214,13 @@ import { DetailView } from '../DetailView.jsx';
 /**
  * MockTable stores the onSelectionChange callback so tests can trigger
  * selectedChildRows state updates.  The "Select Row" button simulates a
- * user clicking a row in the line table, setting selectedChildRows = [L1].
+ * user checking a row's checkbox in the line table (bulk selection),
+ * setting selectedChildRows = [L1]. The "Click Row" button simulates a
+ * user clicking directly on a row (opens the detail sidebar), setting
+ * selectedLine = L1 via onRowClick — an independent state from
+ * selectedChildRows (ETP-4452).
  */
-const MockTable = ({ onSelectionChange }) => (
+const MockTable = ({ onSelectionChange, onRowClick }) => (
   <div data-testid="mock-table">
     <button
       data-testid="trigger-selection"
@@ -224,12 +228,24 @@ const MockTable = ({ onSelectionChange }) => (
     >
       Select Row
     </button>
+    <button
+      data-testid="trigger-row-click"
+      onClick={() => onRowClick?.({ id: 'L1', product: 'P1' })}
+    >
+      Click Row
+    </button>
   </div>
 );
 
 const MockForm = ({ data }) => (
   <div data-testid="mock-form">
     <span>{data?.documentNo}</span>
+  </div>
+);
+
+const MockDetailForm = ({ data }) => (
+  <div data-testid="mock-detail-form">
+    <span>{data?.id}</span>
   </div>
 );
 
@@ -428,5 +444,53 @@ describe('DetailView — detailProcesses (ETP-4248)', () => {
     expect(screen.queryByTestId('process-param-dialog')).not.toBeInTheDocument();
     // Fetch must not have been called
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  // Regression tests (ETP-4452) ————————————————————————————————————————————
+  // detailProcesses buttons were rendered twice: once in the top action-bar
+  // (gated on selectedChildRows.length > 0 || selectedLine) and once in the
+  // bulk action bar above the lines table (gated on
+  // isDetailBulkBarVisible, which only checks selectedChildRows). Both were
+  // reachable simultaneously when child rows were bulk-selected via
+  // checkbox, producing duplicate buttons (e.g. "Open Document" / "Close
+  // Document" on the Periods window). The fix restricts the top action-bar
+  // rendering to the single-row (selectedLine) case only.
+  describe('duplicate button regression (ETP-4452)', () => {
+    it('renders exactly one process button when child rows are bulk-selected', async () => {
+      const user = userEvent.setup();
+      renderDetailView({
+        detailProcesses: [{ name: 'processA', label: 'Process A', params: [] }],
+        DetailForm: MockDetailForm,
+      });
+
+      await user.click(screen.getByTestId('trigger-selection'));
+
+      expect(screen.getAllByTestId('Button__detail-process')).toHaveLength(1);
+    });
+
+    it('renders exactly one process button when a single line is clicked (no bulk selection)', async () => {
+      const user = userEvent.setup();
+      renderDetailView({
+        detailProcesses: [{ name: 'processA', label: 'Process A', params: [] }],
+        DetailForm: MockDetailForm,
+      });
+
+      await user.click(screen.getByTestId('trigger-row-click'));
+
+      expect(screen.getAllByTestId('Button__detail-process')).toHaveLength(1);
+    });
+
+    it('shows only the bulk-bar button (not the top action-bar one) once bulk selection is active, even if a line was previously clicked', async () => {
+      const user = userEvent.setup();
+      renderDetailView({
+        detailProcesses: [{ name: 'processA', label: 'Process A', params: [] }],
+        DetailForm: MockDetailForm,
+      });
+
+      await user.click(screen.getByTestId('trigger-row-click'));
+      await user.click(screen.getByTestId('trigger-selection'));
+
+      expect(screen.getAllByTestId('Button__detail-process')).toHaveLength(1);
+    });
   });
 });

@@ -44,6 +44,7 @@
       }
     },
     "transaction": {
+      "javaQualifier": "document-posting",
       "fields": {
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 2 },
