@@ -66,22 +66,23 @@ Those controls must stay visually subtle but clearly marked as not connected to 
 
 ### Valores por defecto
 
-Editable account selectors grouped into 8 sections (`DEFAULTS_GROUPS` in `mockCatalogs.js`), 40 fields total. Section boundaries mirror `AD_FieldGroup` on `AD_Field` for window `125` / tab `252` (`C_AcctSchema_Default`), queried directly from the DB rather than guessed from column-name prefixes — an earlier pass had misgrouped `Work In Progress` under `Almacén` and `Cash Book Expense/Receipt` under `Banco`, which this fixes:
+Editable account selectors, **derived at module-load time from `contract.json`** (`buildDefaultsGroups()` in `mockCatalogs.js`, consuming `frontendContract.entities['Valores por defecto'].fields`) rather than hand-typed. `contract.json` is produced by the standard Schema Forge pipeline (`extract-from-db.js` → `decisions.json` → `resolve-curated.js` → `generate-contract.js`) from real AD metadata — `AD_Field.IsActive`, `IsDisplayed`, `AD_FieldGroup`, `AD_Column.IsMandatory` — so activating/deactivating a field, or changing its required-ness, now takes effect via `make regen ONLY=general-ledger-configuration` instead of a hand-edit. Full design: `docs/superpowers/specs/2026-07-07-glc-defaults-ad-driven-grouping-design.md`.
 
-1. `Banco` (AD group "Bank": bank asset/in-transit/expense/revaluation, plus the ungrouped-in-AD `B_*` interest, unidentified receipts, settlement gain/loss, unallocated cash, and payment selection fields kept alongside their `Bank`-prefixed siblings)
-2. `Diario` (AD group "Cash Journal": cash book asset/differences/expense/receipt, cash transfer)
-3. `Contactos` (AD group "Business Partner" — labeled "Contactos" per product decision rather than the AD group name; formerly "Clientes y proveedores"/`receivablesPayables`, renamed key to `contacts`)
-4. `Impuestos` (AD group "Tax", plus the ungrouped-in-AD `taxExpense`)
-5. `Producto` (AD group "Product": revenue/expense/COGS/fixed asset accounts — depreciation and disposal accounts moved out to `Activos`)
-6. `Activos` (AD group "Assets": `depreciation`, `accumulatedDepreciation`, plus the ungrouped-in-AD `disposalGain`/`disposalLoss` kept alongside them)
-7. `Proyecto` (AD group "Project": `workInProgress`, plus the ungrouped-in-AD `projectAsset` kept alongside it)
-8. `Almacén` (AD group "Warehouse": warehouse differences, inventory revaluation)
+Current state: **9 groups, 39 fields**:
 
-Groups 1-2 and 4-8 are intentional even though most are not shown in the Figma screenshot: they expose the real `C_AcctSchema_Default` account set that would otherwise be hidden. ETP-4246/ETP-4452 progressively split the original single "Otras cuentas" catch-all group into these dedicated groups and added the previously-unmapped fields to `DEFAULT_FIELD_MAPPINGS` (`GeneralLedgerConfigurationHandler.java`).
+1. `Banco` (AD group "Bank") — 5 fields
+2. `Diario` (AD group "Cash Journal") — 3 fields
+3. `Contactos` (AD group "Business Partner", labeled "Contactos" per product decision) — 11 fields
+4. `Impuestos` (AD group "Tax") — 4 fields
+5. `Producto` (AD group "Product") — 9 fields
+6. `Activos` (AD group "Assets": `depreciation`, `accumulatedDepreciation` only) — 2 fields
+7. `Proyecto` (AD group "Project": `workInProgress`) — 1 field
+8. `Almacén` (AD group "Warehouse") — 2 fields
+9. `Otras cuentas` — the catch-all for any editable field with no curated `section` in `decisions.json`. Currently: `disposalGain`, `disposalLoss` (both Active+Displayed in AD but with no AD Field Group).
 
-**10 fields are omitted entirely because `AD_Field.IsActive = 'N'`** on tab `252` (confirmed via direct DB query): `bankInterestRevenue`, `bankInterestExpense`, `bankUnidentifiedReceipts`, `unallocatedCash`, `bankSettlementGain`, `bankSettlementLoss`, `cashBookExpense`, `cashBookReceipt`, `projectAsset`, `taxExpense`. This is what caused the original GO/Classic field-count mismatch (GO showed 12 in "Banco" vs Classic's 5) — Classic never renders inactive fields either. The backend's `DEFAULT_FIELD_MAPPINGS` still maps their DB columns (harmless — the UI simply never sends/shows them, so existing DB values are untouched), but they are removed from `DEFAULTS_GROUPS` (`mockCatalogs.js`) entirely, not just hidden behind a flag. Regression-tested in `DefaultsTab.i18n.vitest.jsx` ("inactive AD fields are never rendered").
+A field's label prefers its curated `glc.acct.<apiKey>` i18n key; if none exists yet (e.g. a brand-new AD field nobody has translated), it falls back to the field's raw AD English name (`resolveFieldLabel()` in `mockCatalogs.js`) rather than rendering a raw i18n key.
 
-**3 remaining fields have no `AD_FieldGroup` but ARE active** (`paymentSelection` in `Banco`, `disposalGain`/`disposalLoss` in `Activos`) — kept next to their closest AD-grouped sibling since AD gives no better signal, flagged `noFieldGroupInAD: true`, and rendered with a `NoFieldGroupHint` (info icon + tooltip, `data-testid="glc-no-fieldgroup-hint"`) next to their label — a placeholder asking the product owner to confirm where each should actually live. This is not a bug; do not "fix" it by silently removing the hint or reshuffling these fields without a product decision. Note Classic's grouped tab view also does not render these 3 (it appears to only render fields that have both `IsActive = Y` AND a non-null `AD_FieldGroup`) — GO deliberately shows them anyway, with the hint, rather than hiding real backed data.
+**Fields intentionally excluded** (`AD_Field.IsActive = 'N'` or `IsDisplayed = 'N'` on tab `252`): `bankInterestRevenue`, `bankInterestExpense`, `bankUnidentifiedReceipts`, `unallocatedCash`, `bankSettlementGain`, `bankSettlementLoss`, `cashBookExpense`, `cashBookReceipt`, `projectAsset`, `taxExpense` (all inactive), plus `paymentSelection` (`IsDisplayed='N'`) — 11 fields total, matching Classic exactly. The backend's `DEFAULT_FIELD_MAPPINGS` (Java) still maps their DB columns; excluding them here is display-only.
 
 ### Dimensiones
 
@@ -145,7 +146,7 @@ After the backend wiring lands, remember the Etendo step:
 5. Confirm the 4 unbacked controls are visibly marked but not styled like blocking errors.
 6. Edit `Nombre del esquema` and confirm `Guardar cambios` enables.
 7. Clear a required field (`Nombre del esquema` or `Moneda principal`) and confirm inline required validation appears on save.
-8. On **Valores por defecto**, confirm all 8 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`) and required account selectors show the required marker. Confirm the 3 remaining fields with no AD Field Group (`paymentSelection`, `disposalGain`, `disposalLoss`) show the info-icon placeholder hint next to their label, and that none of the 10 AD-inactive fields (see list above) render at all.
+8. On **Valores por defecto**, confirm all 9 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`, `Otras cuentas` — 39 fields total) and required account selectors show the required marker (20 fields, up from the previous 6). Confirm `paymentSelection` no longer renders at all, `disposalGain`/`disposalLoss` render under `Otras cuentas` (not `Activos`, and with no info-icon hint — that mechanism was retired), and that none of the 10 AD-inactive fields (see list above) render at all.
 9. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear.
 10. On **Documentos**, confirm there are no editable controls and every row shows `Mapeado`.
 11. On **Cuentas generales**, confirm the three sections render and both toggle+account pairs (suspense balancing, currency balancing) behave independently.
@@ -163,7 +164,7 @@ Core acceptance coverage should include at least these scenarios:
 3. **Backed vs unbacked behavior**
    Backed fields are interactive, `AD_OrgInfo` fields are read-only, and the 4 placeholder controls never pretend to persist.
 4. **Defaults grouping**
-   All eight account groups render and the required selectors (`Cuenta a cobrar`, `Cuenta a pagar`, `IVA repercutido`, `IVA soportado`, plus the required bank accounts) validate correctly.
+   All nine account groups render and the required selectors (`Cuenta a cobrar`, `Cuenta a pagar`, `IVA repercutido`, `IVA soportado`, plus the required bank accounts) validate correctly.
 5. **Dimensions toggles**
    Toggling `IsActive` rows updates dirty state without affecting the read-only Documentos tab, and a deactivated dimension survives the next reload (does not disappear).
 6. **Document mappings**
