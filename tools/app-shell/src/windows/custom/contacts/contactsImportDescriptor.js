@@ -11,6 +11,11 @@ function pick(row, targets) {
   return body;
 }
 
+// Mirrors useEntity.js's derivePersonName exactly (the known-working manual create flow).
+function derivePersonName(firstName, lastName) {
+  return [firstName, lastName].filter(Boolean).join(' ').trim();
+}
+
 // EM_OBTIK_Tax_ID_Key (AD_Column) is mandatory with a configured DB default of '1', but
 // the /batch create pipeline's own default-injection fails to apply it (server error
 // references an unserialized `CachedSet` instead of the field's real value list — a
@@ -80,6 +85,19 @@ registerImportDescriptor('contacts', async (row, config) => {
     });
   }
 
-  ops.push({ id: 'contact', spec: config.spec, entity: 'contact', parentRef: 'bp', body: pick(row, CONTACT_TARGETS) });
+  // AD_User.Name (DAL property `name`) is `required: true` but `form: false` — hidden
+  // from every Contact create form, this one included (verified against
+  // artifacts/contacts/contract.json) — same pattern as businessPartner's searchKey
+  // above. useEntity.js's applyContactNameDefaults derives it from firstName+lastName
+  // when omitted; this CSV's contact-level firstName/lastName columns are frequently
+  // blank (the row's real name lives in the BP-level etgoFirstname/etgoLastname
+  // instead), so that alone isn't enough — falls back further to the BP's own name,
+  // mirroring searchKey's fallback. Omitting it hits a raw
+  // `null value in column "name" of relation "ad_user" ... violates not-null
+  // constraint` from Postgres (reproduced via a real import run).
+  const contactFields = pick(row, CONTACT_TARGETS);
+  const contactName = derivePersonName(contactFields.firstName ?? row.etgoFirstname, contactFields.lastName ?? row.etgoLastname)
+    || bpBody.name;
+  ops.push({ id: 'contact', spec: config.spec, entity: 'contact', parentRef: 'bp', body: { name: contactName, ...contactFields } });
   return ops;
 });

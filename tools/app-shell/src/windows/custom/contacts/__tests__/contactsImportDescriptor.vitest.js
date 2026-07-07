@@ -36,6 +36,37 @@ describe('contacts import descriptor', () => {
     assert.equal(location.body.region, 'R-1');
     assert.equal(contact.entity, 'contact');
     assert.equal(contact.parentRef, bp.id);
+    // baseRow has no contact-level firstName/lastName, only BP-level
+    // etgoFirstname/etgoLastname ('Lucia'/'Fernandez') — falls back to those.
+    assert.equal(contact.body.name, 'Lucia Fernandez');
+  });
+
+  it('regression: derives contact.name (AD_User.Name) from the contact-level firstName/lastName when both are present, mirroring useEntity.js\'s applyContactNameDefaults', async () => {
+    const row = { name: 'Acme Corp', etgoFirstname: 'Lucia', etgoLastname: 'Fernandez', etgoEmail: 'lucia@x.com', firstName: 'Andres', lastName: 'Rojaz' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    const contact = ops.find((op) => op.entity === 'contact');
+    assert.equal(contact.body.name, 'Andres Rojaz');
+  });
+
+  it('regression: falls back to the BP-level etgoFirstname/etgoLastname when the contact-level firstName/lastName are blank', async () => {
+    // Reproduced via a real import run: `null value in column "name" of relation
+    // "ad_user" violates not-null constraint`. Confirmed against
+    // artifacts/contacts/contract.json that contact.name has `required: true,
+    // form: false` — same pattern as businessPartner.searchKey. The CSV's
+    // contact-level firstName/lastName columns are frequently blank (the row's real
+    // name lives in etgoFirstname/etgoLastname instead), so useEntity.js's own
+    // firstName+lastName-only derivation isn't enough on its own here.
+    const row = { name: 'Acme Corp', etgoFirstname: 'Andrés', etgoLastname: 'Rojaz', etgoEmail: 'lucia@x.com' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    const contact = ops.find((op) => op.entity === 'contact');
+    assert.equal(contact.body.name, 'Andrés Rojaz');
+  });
+
+  it('regression: falls back all the way to the BusinessPartner\'s own name when no person name is available at all', async () => {
+    const row = { name: 'Acme Corp', etgoEmail: 'lucia@x.com' };
+    const ops = await buildOperations(row, { spec: 'contacts', descriptorName: 'contacts', token: 't' });
+    const contact = ops.find((op) => op.entity === 'contact');
+    assert.equal(contact.body.name, 'Acme Corp');
   });
 
   it('regression: computes a human-readable location name (city, address) instead of relying on the handler\'s "." fallback', async () => {
