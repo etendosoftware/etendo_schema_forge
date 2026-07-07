@@ -21,6 +21,20 @@ function flexSpec(col, idx) {
   const [g, , b] = columnFlex(col, idx).split(' ');
   return { grow: parseInt(g, 10), basis: parseInt(b, 10) };
 }
+
+// Reproduces flexbox's exact width formula for `flex-grow: 1` columns when
+// mirrored into an HTML `<table style="table-layout: fixed">` colgroup.
+// Flexbox distributes leftover space EQUALLY among growing items ON TOP OF
+// each item's own basis (own basis + leftover/N). But a width-less <col> in
+// a fixed-layout table splits the leftover space equally while IGNORING each
+// column's own basis — so two grow columns with different bases (e.g. 192px
+// vs 224px) render as EQUAL width in the table, even though the real flex
+// rows always keep them a fixed 32px apart. This calc() expression restores
+// that per-column basis so both layouts match pixel-for-pixel.
+function growColumnWidth(basisPx, fixedTotalPx, growCount) {
+  if (!growCount) return undefined;
+  return `calc((100% - ${fixedTotalPx}px) / ${growCount} + ${basisPx}px)`;
+}
 import { SelectorInput } from './SelectorInput.jsx';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
 import RowQuickActions from './RowQuickActions.jsx';
@@ -654,8 +668,15 @@ const InlineAddRow = forwardRef(function InlineAddRow({ columns, fields, onAdd, 
         });
       }
     };
-    document.addEventListener('mousedown', handler, true);
-    return () => document.removeEventListener('mousedown', handler, true);
+    // Listen for `pointerdown` (not `mousedown`): elements that call
+    // preventDefault() on pointerdown — e.g. Radix SelectTrigger and the header
+    // selector controls — suppress the browser's compatibility mouse events for
+    // that interaction, so a `mousedown` listener would never fire on the FIRST
+    // click on such a control and the new line would silently not be saved.
+    // `pointerdown` itself is never suppressed. Mirrors the identical fix in
+    // InlineLinesPanel.jsx (flush-pending-edit-on-outside-pointerdown).
+    document.addEventListener('pointerdown', handler, true);
+    return () => document.removeEventListener('pointerdown', handler, true);
   }, [onCancel, submitLine]);
 
   // Wrap handleChange to also notify parent (for callout triggering)
@@ -1117,6 +1138,431 @@ function getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selec
   ].filter(Boolean).join(' ');
 }
 
+// Sums the pixel widths reserved in the fixed-layout <colgroup> for the
+// selection checkbox column and every row-action slot (hover actions, legacy
+// delete/clone, quick actions), mirroring the 40px/48px/160px slots rendered
+// by InlineLinesPanel and the row-action cells in the table body. Extracted
+// from a single chained sum of ternaries so each conditional slot keeps its
+// own branch instead of adding flat complexity to the caller.
+function computeActionColsWidthPx({
+  selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+  onCloneRow, quickActionsEnabled, ilpHasNoAmountCol,
+}) {
+  const showHoverActions = !ilpTrailing && hoverRowActions;
+  const showHoverDelete = showHoverActions && onDeleteRow;
+  const showLegacyDelete = !ilpTrailing && !hoverRowActions && legacyDeleteEnabled;
+  const showLegacyClone = !ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled;
+  const showQuickActions = !ilpTrailing && quickActionsEnabled;
+
+  return oneIfTrue(selectable) * 40
+    + oneIfTrue(showHoverActions) * 40
+    + oneIfTrue(showHoverDelete) * 40
+    + oneIfTrue(showLegacyDelete) * 40
+    + oneIfTrue(showLegacyClone) * 40
+    + oneIfTrue(showQuickActions) * 40
+    + oneIfTrue(ilpHasNoAmountCol) * 160
+    + oneIfTrue(ilpTrailing) * 48;
+}
+
+/**
+ * Renders the <colgroup> that drives column widths in add-row-only mode
+ * (hideHeader=true), mirroring InlineLinesPanel's flex layout with fixed
+ * pixel widths for flex-grow:0 columns and calc()-based widths (via
+ * growColumnWidth) for flex-grow:1 columns — see growColumnWidth() above for
+ * why grow columns can't be left width-less. Returns null when the table
+ * renders its own header instead (table-layout: fixed then drives widths via
+ * the real <TableHead> cells). Extracted from DataTable's render body so this
+ * mode's branching doesn't add nesting to the parent's complexity.
+ */
+function renderLinesColgroup({
+  hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
+  ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
+  quickActionsEnabled, ilpHasNoAmountCol,
+}) {
+  if (!hideHeader) return null;
+  return (
+    <colgroup>
+      {selectable && <col style={{ width: 40 }} />}
+      {visibleColumns.map((col, colIdx) => {
+        const { grow, basis } = colFlexSpecs[colIdx];
+        return grow === 0
+          ? <col key={col.key} style={{ width: basis }} />
+          : <col key={col.key} style={{ width: growColumnWidth(basis, fixedColsTotalPx, growCount) }} />;
+      })}
+      {/* In inlineEditable add-row mode (ilpTrailing), all row actions live
+          inside InlineLinesPanel's 160px action slot — never add separate
+          action cols here or the flex columns shrink by 40px. */}
+      {!ilpTrailing && hoverRowActions && <col style={{ width: 40 }} />}
+      {!ilpTrailing && hoverRowActions && onDeleteRow && <col style={{ width: 40 }} />}
+      {!ilpTrailing && !hoverRowActions && legacyDeleteEnabled && <col style={{ width: 40 }} />}
+      {!ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled && <col style={{ width: 40 }} />}
+      {!ilpTrailing && quickActionsEnabled && <col style={{ width: 40 }} />}
+      {ilpHasNoAmountCol && <col style={{ width: 160 }} />}
+      {ilpTrailing && <col style={{ width: 48 }} />}
+    </colgroup>
+  );
+}
+
+/**
+ * Renders a single sortable column header cell, including the sort-direction
+ * arrow. Extracted from the `visibleColumns.map(...)` callback in DataTable's
+ * header row so its onSort/isSorted branching lives in its own function.
+ */
+function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t }) {
+  const colLabel = resolveColumnLabel(col, locale, t);
+  const isSorted = sortColumn === col.key;
+  const isSortable = col.sortable !== false;
+  const headStyle = linesLayout === 'inlineEditable'
+    ? { minWidth: columnMinWidthPx(col, colIdx) }
+    : undefined;
+  const sortArrowClass = NUMERIC_FIELD_TYPES.has(col.type)
+    ? 'left-0 -translate-x-full pr-0.5'
+    : 'right-0 translate-x-full pl-0.5';
+  return (
+    <TableHead
+      key={col.key}
+      data-testid={`column-header-${col.key}`}
+      className={['align-middle', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : ''].filter(Boolean).join(' ')}
+      style={headStyle}
+    >
+      {onSort && isSortable ? (
+        <button
+          type="button"
+          className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
+          onClick={() => onSort(col.key)}
+        >
+          {colLabel}
+          {isSorted && (
+            <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
+          )}
+        </button>
+      ) : (
+        <span className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
+          {colLabel}
+          {isSorted && (
+            <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
+          )}
+        </span>
+      )}
+    </TableHead>
+  );
+}
+
+// Shared delete-click handler for both the hover-actions delete button and
+// the legacy delete button: marks the row as "deleting" for the spinner,
+// awaits the caller's onDeleteRow, then always clears the flag. Extracted
+// so the try/finally bookkeeping isn't duplicated (and doesn't add nested
+// complexity) in each button's onClick in TableDataRow.
+async function handleDeleteRowClick(row, onDeleteRow, setDeletingRows) {
+  const deleteKey = row.id;
+  setDeletingRows(prev => ({ ...prev, [deleteKey]: true }));
+  try {
+    await onDeleteRow(row);
+  } finally {
+    setDeletingRows(prev => {
+      const next = { ...prev };
+      delete next[deleteKey];
+      return next;
+    });
+  }
+}
+
+/**
+ * Renders a single data row: the selection checkbox, visible-column cells,
+ * row-action cells (hover edit/delete, or legacy delete/clone), and the
+ * quick-actions overlay cell. Extracted from the `filteredData.map(...)` body
+ * that used to live inside `DataTable` so per-row branching does not nest
+ * inside — and inflate — the parent component's cognitive complexity.
+ */
+function TableDataRow({
+  row,
+  idx,
+  selectable,
+  isRowSelectable,
+  isChecked,
+  toggleRow,
+  visibleColumns,
+  trailingHoverColumn,
+  renderCellValue,
+  onRowClick,
+  onNavigate,
+  selectedRowBg,
+  selectedId,
+  selectedRowId,
+  editingRowId,
+  handleRowActivation,
+  hoverRowActions,
+  onSaveRow,
+  onCancelEdit,
+  onEditRow,
+  onDeleteRow,
+  deletingRows,
+  setDeletingRows,
+  ui,
+  legacyDeleteEnabled,
+  onCloneRow,
+  quickActionsEnabled,
+  rowQuickActions,
+  entity,
+  apiBaseUrl,
+  token,
+}) {
+  const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
+  const rowDisabled = isRowSelectable && !isRowSelectable(row);
+
+  return (
+    <TableRow
+      role="row"
+      data-testid={`row-${row.id ?? idx}`}
+      data-row-status={row.documentStatus}
+      onClick={() => {
+        if (editingRowId === row.id) return;
+        handleRowActivation(row, idx);
+      }}
+      className={getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine)}
+    >
+      {selectable && (
+        <TableCell
+          className="w-10 px-3"
+          onClick={(e) => e.stopPropagation()}
+          data-testid="TableCell__eb5261">
+          <Checkbox
+            checked={isChecked}
+            disabled={rowDisabled}
+            onChange={(e) => toggleRow(e, row)}
+            onClick={(e) => e.stopPropagation()}
+            data-testid="Checkbox__eb5261" />
+        </TableCell>
+      )}
+      {visibleColumns.map(col => {
+        const isTrailingHover = trailingHoverColumn != null && col === trailingHoverColumn;
+        return (
+          <TableCell
+            key={col.key}
+            data-testid={`cell-${row.id ?? idx}-${col.key}`}
+            data-value={row[col.key] ?? ''}
+            className={['text-sm', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right tabular-nums' : ''].filter(Boolean).join(' ')}
+          >
+            {isTrailingHover ? (
+              <span className="block transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
+                {renderCellValue(row, col)}
+              </span>
+            ) : (
+              renderCellValue(row, col)
+            )}
+          </TableCell>
+        );
+      })}
+      {hoverRowActions ? (
+        <>
+          <TableCell
+            className="w-10 px-2"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="TableCell__eb5261">
+            {editingRowId === row.id ? (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onSaveRow?.(); }}
+                className="h-8 w-8 flex items-center justify-center rounded-full text-[#17663A] hover:bg-[#EEFBF4] transition-all"
+                aria-label={ui('save')}
+              >
+                <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onEditRow) { onEditRow(row); }
+                  else { handleRowActivation(row, idx); }
+                }}
+                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
+                aria-label={ui('edit')}
+              >
+                <Pencil className="h-5 w-5" aria-hidden="true" data-testid="Pencil__eb5261" />
+              </button>
+            )}
+          </TableCell>
+          {onDeleteRow && (
+            <TableCell
+              className="w-10 px-2"
+              onClick={(e) => e.stopPropagation()}
+              data-testid="TableCell__eb5261">
+              {editingRowId === row.id ? (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onCancelEdit?.(); }}
+                  className="h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
+                  aria-label={ui('cancel')}
+                >
+                  <X className="h-5 w-5" aria-hidden="true" data-testid="X__eb5261" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!!deletingRows[row.id]}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await handleDeleteRowClick(row, onDeleteRow, setDeletingRows);
+                  }}
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:bg-[#FEF0F4] transition-all"
+                  aria-label={ui('deleteRowTooltip')}
+                  data-testid={`row-delete-${row.id}`}
+                >
+                  {deletingRows[row.id]
+                    ? <Loader2
+                    className="h-5 w-5 animate-spin"
+                    aria-hidden="true"
+                    data-testid="Loader2__eb5261" />
+                    : <Trash2 className="h-5 w-5" aria-hidden="true" data-testid="Trash2__eb5261" />}
+                </button>
+              )}
+            </TableCell>
+          )}
+        </>
+      ) : (
+        <>
+          {legacyDeleteEnabled && (
+            <TableCell
+              className="w-10 px-2"
+              onClick={(e) => e.stopPropagation()}
+              data-testid="TableCell__eb5261">
+              <button
+                type="button"
+                disabled={!!deletingRows[row.id]}
+                onClick={async () => {
+                  await handleDeleteRowClick(row, onDeleteRow, setDeletingRows);
+                }}
+                className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title={ui('deleteRowTooltip')}
+                aria-label={ui('deleteRowTooltip')}
+                data-testid={`row-delete-${row.id}`}
+              >
+                {deletingRows[row.id] ? <Loader2
+                  className="h-3.5 w-3.5 animate-spin"
+                  aria-hidden="true"
+                  data-testid="Loader2__eb5261" /> : <Trash2 className="h-3.5 w-3.5" aria-hidden="true" data-testid="Trash2__eb5261" />}
+              </button>
+            </TableCell>
+          )}
+          {onCloneRow && !quickActionsEnabled && (
+            <TableCell
+              className="w-10 px-2"
+              onClick={(e) => e.stopPropagation()}
+              data-testid="TableCell__eb5261">
+              <div className="relative group/clonebtn flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => onCloneRow(row)}
+                  className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-white text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
+                  style={{ width: 26, height: 26 }}
+                  aria-label={ui('cloneOrderBtn')}
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__eb5261" />
+                </button>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
+                  {ui('cloneOrderBtn')}
+                </div>
+              </div>
+            </TableCell>
+          )}
+        </>
+      )}
+      {quickActionsEnabled && (
+        <TableCell
+          className="w-10 px-2 relative"
+          onClick={(e) => e.stopPropagation()}
+          data-testid="TableCell__eb5261">
+          <RowQuickActions
+            row={row}
+            entity={entity}
+            apiBaseUrl={apiBaseUrl}
+            token={token}
+            documentPreview={rowQuickActions.documentPreview}
+            sendDocument={rowQuickActions.sendDocument}
+            menuActions={rowQuickActions.menuActions}
+            hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
+            statusField={rowQuickActions.statusField}
+            onEdit={rowQuickActions.onEdit}
+            onClone={rowQuickActions.onClone}
+            onEmail={rowQuickActions.onEmail}
+            onDelete={rowQuickActions.onDelete}
+            onMenuActionExecuted={rowQuickActions.onMenuActionExecuted}
+            actionsConfig={rowQuickActions.actions}
+            data-testid="RowQuickActions__eb5261" />
+        </TableCell>
+      )}
+    </TableRow>
+  );
+}
+
+/**
+ * Renders the table body content: the shared empty-state row when there is
+ * no data (and no active add-row), otherwise one `TableDataRow` per visible
+ * record. Extracted so the empty/rows branch and the per-row nesting it used
+ * to wrap don't count against DataTable's own cognitive complexity.
+ */
+function renderTableRows({
+  hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
+  ...rowProps
+}) {
+  if (hideDataRows) return null;
+  if (filteredData.length === 0 && !addRow?.active) {
+    return (
+      <TableRow data-empty-state="" data-testid="TableRow__eb5261">
+        <TableCell colSpan={colSpan} className="p-0" data-testid="TableCell__eb5261">
+          <EmptyState
+            hasFilter={hasActiveFilter}
+            totalCount={data.length}
+            data-testid="EmptyState__eb5261" />
+        </TableCell>
+      </TableRow>
+    );
+  }
+  return filteredData.map((row, idx) => (
+    <TableDataRow
+      key={row.id ?? idx}
+      row={row}
+      idx={idx}
+      isChecked={selectedRows.has(row.id)}
+      {...rowProps}
+      data-testid="TableDataRow__eb5261"
+    />
+  ));
+}
+
+/**
+ * Renders the footer row showing per-column totals (currently only `amount`
+ * columns) plus the matching row-action spacer cells. Returns null when
+ * there is nothing to total or the caller opted out via `showFooterTotals`.
+ * Extracted so its column-mapping branches don't nest inside DataTable.
+ */
+function renderFooterRow({
+  totals, showFooterTotals, selectable, visibleColumns, filteredData,
+  hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
+}) {
+  if (!totals || !showFooterTotals) return null;
+  return (
+    <TableFooter data-testid="TableFooter__eb5261">
+      <TableRow className="font-medium" data-testid="TableRow__eb5261">
+        {selectable && <TableCell data-testid="TableCell__eb5261" />}
+        {visibleColumns.map((col) => (
+          <TableCell
+            key={col.key}
+            className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}
+            data-testid="TableCell__eb5261">
+            {col.type === 'amount'
+              ? formatAmount(totals[col.key], filteredData[0]?.['currency$_identifier'])
+              : ''}
+          </TableCell>
+        ))}
+        {renderRowActionFooterCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
+        {quickActionsEnabled && <TableCell data-testid="TableCell__eb5261" />}
+      </TableRow>
+    </TableFooter>
+  );
+}
+
 /**
  * Generic data table driven by column/filter declarations.
  *
@@ -1388,37 +1834,29 @@ export function DataTable({
     && !visibleColumns.some(c => c.type === 'amount');
   const ilpTrailing = hideHeader && linesLayout === 'inlineEditable';
 
+  // Precompute the flex specs once so the colgroup below can both build the
+  // fixed/grow <col> widths AND feed growColumnWidth() the totals it needs
+  // (sum of every fixed-width slot + count of growing columns) — see the
+  // colgroup comment for why growing columns can't just be left width-less.
+  const colFlexSpecs = hideHeader ? visibleColumns.map((col, colIdx) => flexSpec(col, colIdx)) : [];
+  const growCount = colFlexSpecs.filter((s) => s.grow > 0).length;
+  const fixedColsBasisPx = colFlexSpecs.filter((s) => s.grow === 0).reduce((sum, s) => sum + s.basis, 0);
+  const fixedColsTotalPx = fixedColsBasisPx + computeActionColsWidthPx({
+    selectable, ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled,
+    onCloneRow, quickActionsEnabled, ilpHasNoAmountCol,
+  });
+
   return (
     <div className="space-y-0">
       <div className={linesLayout === 'inlineEditable' ? '[&>div]:!overflow-visible' : 'overflow-x-auto overflow-y-visible'}>
         <Table style={getTableContainerStyle(hideHeader)} data-testid="Table__eb5261">
           {/* When hideHeader is true (add-row-only mode), a <colgroup> drives column
-              widths with the same fixed/auto split used by InlineLinesPanel's flex
-              layout. Fixed-size columns (flex-grow: 0) get explicit pixel widths;
-              flexible columns (flex-grow: 1) get no width so the browser shares
-              remaining space equally — matching flex's equal-grow distribution.
-              table-layout: fixed makes the browser honour those col widths exactly. */}
-          {hideHeader && (
-            <colgroup>
-              {selectable && <col style={{ width: 40 }} />}
-              {visibleColumns.map((col, colIdx) => {
-                const { grow, basis } = flexSpec(col, colIdx);
-                return grow === 0
-                  ? <col key={col.key} style={{ width: basis }} />
-                  : <col key={col.key} />;
-              })}
-              {/* In inlineEditable add-row mode (ilpTrailing), all row actions
-                  live inside InlineLinesPanel's 160px action slot — never add
-                  separate action cols here or the flex columns shrink by 40px. */}
-              {!ilpTrailing && hoverRowActions && <col style={{ width: 40 }} />}
-              {!ilpTrailing && hoverRowActions && onDeleteRow && <col style={{ width: 40 }} />}
-              {!ilpTrailing && !hoverRowActions && legacyDeleteEnabled && <col style={{ width: 40 }} />}
-              {!ilpTrailing && !hoverRowActions && onCloneRow && !quickActionsEnabled && <col style={{ width: 40 }} />}
-              {!ilpTrailing && quickActionsEnabled && <col style={{ width: 40 }} />}
-              {ilpHasNoAmountCol && <col style={{ width: 160 }} />}
-              {ilpTrailing && <col style={{ width: 48 }} />}
-            </colgroup>
-          )}
+              widths — see renderLinesColgroup() above for the full rationale. */}
+          {renderLinesColgroup({
+            hideHeader, selectable, visibleColumns, colFlexSpecs, fixedColsTotalPx, growCount,
+            ilpTrailing, hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow,
+            quickActionsEnabled, ilpHasNoAmountCol,
+          })}
           <TableHeader
             className={linesLayout === 'inlineEditable' ? 'sticky top-0 z-20 bg-white' : ''}
             aria-hidden={hideHeader || undefined}
@@ -1438,272 +1876,20 @@ export function DataTable({
                     data-testid="Checkbox__eb5261" />
                 </TableHead>
               )}
-              {visibleColumns.map((col, colIdx) => {
-                const colLabel = resolveColumnLabel(col, locale, t);
-                const isSorted = sortColumn === col.key;
-                const isSortable = col.sortable !== false;
-                const headStyle = linesLayout === 'inlineEditable'
-                  ? { minWidth: columnMinWidthPx(col, colIdx) }
-                  : undefined;
-                const sortArrowClass = NUMERIC_FIELD_TYPES.has(col.type)
-                  ? 'left-0 -translate-x-full pr-0.5'
-                  : 'right-0 translate-x-full pl-0.5';
-                return (
-                  <TableHead
-                    key={col.key}
-                    data-testid={`column-header-${col.key}`}
-                    className={['align-middle', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : ''].filter(Boolean).join(' ')}
-                    style={headStyle}
-                  >
-                    {onSort && isSortable ? (
-                      <button
-                        type="button"
-                        className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right' : 'text-left'}`}
-                        onClick={() => onSort(col.key)}
-                      >
-                        {colLabel}
-                        {isSorted && (
-                          <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
-                        )}
-                      </button>
-                    ) : (
-                      <span className={`relative inline-block text-xs leading-4 font-semibold text-text-primary tracking-normal${NUMERIC_FIELD_TYPES.has(col.type) ? ' text-right' : ''}`}>
-                        {colLabel}
-                        {isSorted && (
-                          <span className={`absolute top-1/2 -translate-y-1/2 text-primary/70 pointer-events-none ${sortArrowClass}`}>{sortDirection === 'asc' ? '\u25B2' : '\u25BC'}</span>
-                        )}
-                      </span>
-                    )}
-                  </TableHead>
-                );
-              })}
+              {visibleColumns.map((col, colIdx) => renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort, linesLayout, locale, t }))}
               {renderRowActionHeaderCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
               {quickActionsEnabled && <TableHead className="w-10 px-2" aria-hidden="true" data-testid="TableHead__eb5261" />}
             </TableRow>
           </TableHeader>
           <TableBody data-testid="TableBody__eb5261">
-            {!hideDataRows && (filteredData.length === 0 && !addRow?.active ? (
-              <TableRow data-empty-state="" data-testid="TableRow__eb5261">
-                <TableCell colSpan={colSpan} className="p-0" data-testid="TableCell__eb5261">
-                  <EmptyState
-                    hasFilter={hasActiveFilter}
-                    totalCount={data.length}
-                    data-testid="EmptyState__eb5261" />
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredData.map((row, idx) => {
-                const isChecked = selectedRows.has(row.id);
-                const isSelectedLine = selectedRowId != null && row.id === selectedRowId;
-                return (
-                  <TableRow
-                    key={row.id ?? idx}
-                    role="row"
-                    data-testid={`row-${row.id ?? idx}`}
-                    data-row-status={row.documentStatus}
-                    onClick={() => {
-                      if (editingRowId === row.id) return;
-                      handleRowActivation(row, idx);
-                    }}
-                    className={getRowClassName(onRowClick, onNavigate, isChecked, selectedRowBg, selectedId, row, isSelectedLine)}
-                  >
-                    {selectable && (() => {
-                      const rowDisabled = isRowSelectable && !isRowSelectable(row);
-                      return (
-                        <TableCell
-                          className="w-10 px-3"
-                          onClick={(e) => e.stopPropagation()}
-                          data-testid="TableCell__eb5261">
-                          <Checkbox
-                            checked={isChecked}
-                            disabled={rowDisabled}
-                            onChange={(e) => toggleRow(e, row)}
-                            onClick={(e) => e.stopPropagation()}
-                            data-testid="Checkbox__eb5261" />
-                        </TableCell>
-                      );
-                    })()}
-                    {visibleColumns.map(col => {
-                      const isTrailingHover = trailingHoverColumn != null && col === trailingHoverColumn;
-                      return (
-                        <TableCell
-                          key={col.key}
-                          data-testid={`cell-${row.id ?? idx}-${col.key}`}
-                          data-value={row[col.key] ?? ''}
-                          className={['text-sm', NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right tabular-nums' : ''].filter(Boolean).join(' ')}
-                        >
-                          {isTrailingHover ? (
-                            <span className="block transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0">
-                              {renderCellValue(row, col)}
-                            </span>
-                          ) : (
-                            renderCellValue(row, col)
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                    {hoverRowActions ? (
-                      <>
-                        <TableCell
-                          className="w-10 px-2"
-                          onClick={(e) => e.stopPropagation()}
-                          data-testid="TableCell__eb5261">
-                          {editingRowId === row.id ? (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); onSaveRow?.(); }}
-                              className="h-8 w-8 flex items-center justify-center rounded-full text-[#17663A] hover:bg-[#EEFBF4] transition-all"
-                              aria-label={ui('save')}
-                            >
-                              <Check className="h-5 w-5" aria-hidden="true" data-testid="Check__eb5261" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onEditRow) { onEditRow(row); }
-                                else { handleRowActivation(row, idx); }
-                              }}
-                              className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
-                              aria-label={ui('edit')}
-                            >
-                              <Pencil className="h-5 w-5" aria-hidden="true" data-testid="Pencil__eb5261" />
-                            </button>
-                          )}
-                        </TableCell>
-                        {onDeleteRow && (
-                          <TableCell
-                            className="w-10 px-2"
-                            onClick={(e) => e.stopPropagation()}
-                            data-testid="TableCell__eb5261">
-                            {editingRowId === row.id ? (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); onCancelEdit?.(); }}
-                                className="h-8 w-8 flex items-center justify-center rounded-full text-[#828FA3] hover:bg-[#F5F7F9] transition-all"
-                                aria-label={ui('cancel')}
-                              >
-                                <X className="h-5 w-5" aria-hidden="true" data-testid="X__eb5261" />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={!!deletingRows[row.id]}
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const deleteKey = row.id;
-                                  setDeletingRows(prev => ({ ...prev, [deleteKey]: true }));
-                                  try { await onDeleteRow(row); }
-                                  finally {
-                                    setDeletingRows(prev => {
-                                      const next = { ...prev };
-                                      delete next[deleteKey];
-                                      return next;
-                                    });
-                                  }
-                                }}
-                                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 h-8 w-8 flex items-center justify-center rounded-full text-[#D50B3E] hover:bg-[#FEF0F4] transition-all"
-                                aria-label={ui('deleteRowTooltip')}
-                                data-testid={`row-delete-${row.id}`}
-                              >
-                                {deletingRows[row.id]
-                                  ? <Loader2
-                                  className="h-5 w-5 animate-spin"
-                                  aria-hidden="true"
-                                  data-testid="Loader2__eb5261" />
-                                  : <Trash2 className="h-5 w-5" aria-hidden="true" data-testid="Trash2__eb5261" />}
-                              </button>
-                            )}
-                          </TableCell>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        {legacyDeleteEnabled && (
-                          <TableCell
-                            className="w-10 px-2"
-                            onClick={(e) => e.stopPropagation()}
-                            data-testid="TableCell__eb5261">
-                            <button
-                              type="button"
-                              disabled={!!deletingRows[row.id]}
-                              onClick={async () => {
-                                const deleteKey = row.id;
-                                setDeletingRows(prev => ({ ...prev, [deleteKey]: true }));
-                                try {
-                                  await onDeleteRow(row);
-                                } finally {
-                                  setDeletingRows(prev => {
-                                    const next = { ...prev };
-                                    delete next[deleteKey];
-                                    return next;
-                                  });
-                                }
-                              }}
-                              className="h-7 w-7 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                              title={ui('deleteRowTooltip')}
-                              aria-label={ui('deleteRowTooltip')}
-                              data-testid={`row-delete-${row.id}`}
-                            >
-                              {deletingRows[row.id] ? <Loader2
-                                className="h-3.5 w-3.5 animate-spin"
-                                aria-hidden="true"
-                                data-testid="Loader2__eb5261" /> : <Trash2 className="h-3.5 w-3.5" aria-hidden="true" data-testid="Trash2__eb5261" />}
-                            </button>
-                          </TableCell>
-                        )}
-                        {onCloneRow && !quickActionsEnabled && (
-                          <TableCell
-                            className="w-10 px-2"
-                            onClick={(e) => e.stopPropagation()}
-                            data-testid="TableCell__eb5261">
-                            <div className="relative group/clonebtn flex items-center justify-center">
-                              <button
-                                type="button"
-                                onClick={() => onCloneRow(row)}
-                                className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 flex items-center justify-center rounded border border-border bg-white text-muted-foreground hover:text-foreground hover:border-border/80 transition-all"
-                                style={{ width: 26, height: 26 }}
-                                aria-label={ui('cloneOrderBtn')}
-                              >
-                                <Copy className="h-3.5 w-3.5" aria-hidden="true" data-testid="Copy__eb5261" />
-                              </button>
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 text-xs font-medium text-white bg-gray-800 rounded whitespace-nowrap opacity-0 group-hover/clonebtn:opacity-100 pointer-events-none transition-opacity z-10">
-                                {ui('cloneOrderBtn')}
-                              </div>
-                            </div>
-                          </TableCell>
-                        )}
-                      </>
-                    )}
-                    {quickActionsEnabled && (
-                      <TableCell
-                        className="w-10 px-2 relative"
-                        onClick={(e) => e.stopPropagation()}
-                        data-testid="TableCell__eb5261">
-                        <RowQuickActions
-                          row={row}
-                          entity={entity}
-                          apiBaseUrl={apiBaseUrl}
-                          token={token}
-                          documentPreview={rowQuickActions.documentPreview}
-                          sendDocument={rowQuickActions.sendDocument}
-                          menuActions={rowQuickActions.menuActions}
-                          hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
-                          statusField={rowQuickActions.statusField}
-                          onEdit={rowQuickActions.onEdit}
-                          onClone={rowQuickActions.onClone}
-                          onEmail={rowQuickActions.onEmail}
-                          onDelete={rowQuickActions.onDelete}
-                          onMenuActionExecuted={rowQuickActions.onMenuActionExecuted}
-                          actionsConfig={rowQuickActions.actions}
-                          data-testid="RowQuickActions__eb5261" />
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })
-            ))}
+            {renderTableRows({
+              hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
+              selectable, isRowSelectable, toggleRow, visibleColumns, trailingHoverColumn,
+              renderCellValue, onRowClick, onNavigate, selectedRowBg, selectedId, selectedRowId,
+              editingRowId, handleRowActivation, hoverRowActions, onSaveRow, onCancelEdit,
+              onEditRow, onDeleteRow, deletingRows, setDeletingRows, ui, legacyDeleteEnabled,
+              onCloneRow, quickActionsEnabled, rowQuickActions, entity, apiBaseUrl, token,
+            })}
             {addRow?.active && (
               <InlineAddRow
                 ref={addRow.ref}
@@ -1733,25 +1919,10 @@ export function DataTable({
                 data-testid="InlineAddRow__eb5261" />
             )}
           </TableBody>
-          {totals && showFooterTotals && (
-            <TableFooter data-testid="TableFooter__eb5261">
-              <TableRow className="font-medium" data-testid="TableRow__eb5261">
-                {selectable && <TableCell data-testid="TableCell__eb5261" />}
-                {visibleColumns.map((col, idx) => (
-                  <TableCell
-                    key={col.key}
-                    className={col.type === 'amount' ? 'tabular-nums text-right font-semibold' : ''}
-                    data-testid="TableCell__eb5261">
-                    {col.type === 'amount'
-                      ? formatAmount(totals[col.key], filteredData[0]?.['currency$_identifier'])
-                      : ''}
-                  </TableCell>
-                ))}
-                {renderRowActionFooterCells(hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled)}
-                {quickActionsEnabled && <TableCell data-testid="TableCell__eb5261" />}
-              </TableRow>
-            </TableFooter>
-          )}
+          {renderFooterRow({
+            totals, showFooterTotals, selectable, visibleColumns, filteredData,
+            hoverRowActions, onDeleteRow, legacyDeleteEnabled, onCloneRow, quickActionsEnabled,
+          })}
         </Table>
       </div>
       {addRow?.active && (
