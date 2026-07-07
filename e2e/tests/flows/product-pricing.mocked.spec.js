@@ -442,6 +442,9 @@ test.describe('Product pricing — inline create tariff', () => {
 
     await page.goto(`/product/${PRODUCT_NO_PRICES.id}`);
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    // ETP-4402 made "Accounting" (Contabilidad) the default detail tab; the
+    // pricing UI now lives in the non-default "Precio" tab (customTab 'pricing').
+    await page.getByTestId('tab-custom:pricing').click();
   });
 
   test('creating a tariff by name POSTs a price list then links it and shows the new row', async ({ page }) => {
