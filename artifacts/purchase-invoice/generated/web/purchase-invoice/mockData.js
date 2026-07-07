@@ -51,7 +51,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 99.44,
     "eTGODueDate": "2026-01-15",
-    "eTGODeliveryStatus": "DR"
+    "eTGODeliveryStatus": "DR",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-002",
@@ -103,7 +104,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 96.94,
     "eTGODueDate": "2026-01-16",
-    "eTGODeliveryStatus": "CO"
+    "eTGODeliveryStatus": "CO",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-003",
@@ -155,7 +157,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 12.48,
     "eTGODueDate": "2026-01-17",
-    "eTGODeliveryStatus": "VO"
+    "eTGODeliveryStatus": "VO",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-004",
@@ -207,7 +210,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 96.31,
     "eTGODueDate": "2026-01-18",
-    "eTGODeliveryStatus": "IP"
+    "eTGODeliveryStatus": "IP",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-005",
@@ -259,7 +263,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 31.27,
     "eTGODueDate": "2026-01-19",
-    "eTGODeliveryStatus": "DR"
+    "eTGODeliveryStatus": "DR",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-006",
@@ -311,7 +316,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 76.52,
     "eTGODueDate": "2026-01-20",
-    "eTGODeliveryStatus": "CO"
+    "eTGODeliveryStatus": "CO",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-007",
@@ -363,7 +369,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 2.66,
     "eTGODueDate": "2026-01-21",
-    "eTGODeliveryStatus": "VO"
+    "eTGODeliveryStatus": "VO",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-008",
@@ -415,7 +422,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 10.03,
     "eTGODueDate": "2026-01-22",
-    "eTGODeliveryStatus": "IP"
+    "eTGODeliveryStatus": "IP",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-009",
@@ -467,7 +475,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 93.97,
     "eTGODueDate": "2026-01-23",
-    "eTGODeliveryStatus": "DR"
+    "eTGODeliveryStatus": "DR",
+    "eTGOCurrencyRate": "GBP"
   },
   {
     "id": "mock-header-010",
@@ -519,7 +528,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 1.1,
     "eTGODueDate": "2026-01-24",
-    "eTGODeliveryStatus": "CO"
+    "eTGODeliveryStatus": "CO",
+    "eTGOCurrencyRate": "USD"
   },
   {
     "id": "mock-header-011",
@@ -571,7 +581,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 79.99,
     "eTGODueDate": "2026-01-25",
-    "eTGODeliveryStatus": "VO"
+    "eTGODeliveryStatus": "VO",
+    "eTGOCurrencyRate": "EUR"
   },
   {
     "id": "mock-header-012",
@@ -623,7 +634,8 @@ export const header = [
     "etvfacSentToVerifac": "Sample etvfacSentToVerifac",
     "etgoTotalDiscount": 53.61,
     "eTGODueDate": "2026-01-26",
-    "eTGODeliveryStatus": "IP"
+    "eTGODeliveryStatus": "IP",
+    "eTGOCurrencyRate": "GBP"
   }
 ];
 

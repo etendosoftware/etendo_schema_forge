@@ -10,7 +10,9 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
+import { useMenuLabel } from '@/i18n';
 import { useOrderWindow } from '../shared/useOrderWindow.jsx';
+import { usePurchaseOrderPdf } from '../shared/usePurchaseOrderPdf.js';
 
 const LIST_COLUMNS = [
   { key: 'orderDate', column: 'DateOrdered', type: 'date', label: 'Order Date', dot: false },
@@ -76,6 +78,7 @@ function CustomHeaderTable(props) {
 export default function PurchaseOrderWindow(props) {
   const { recordId, windowName, token, apiBaseUrl } = props;
   const [cloneTargets, setCloneTargets] = useState(null);
+  const tMenu = useMenuLabel();
 
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
@@ -85,6 +88,7 @@ export default function PurchaseOrderWindow(props) {
     renderPreview, rowQuickActions,
     effectiveRecord, clearSavedRecord,
     deleteDialog, confirmPortal, confirmResultPortal, manageLauncher,
+    emailModalPortal,
   } = useOrderWindow({
     windowName, token, apiBaseUrl,
     specName: 'purchase-order',
@@ -96,6 +100,8 @@ export default function PurchaseOrderWindow(props) {
     ConfirmResultModal: PoConfirmResultModal,
     ManageDocsLauncher: PoManageDocsLauncher,
     setCloneTargets,
+    usePdf: usePurchaseOrderPdf,
+    documentType: tMenu('Purchase Order'),
   });
 
   if (recordId) {
@@ -145,6 +151,7 @@ export default function PurchaseOrderWindow(props) {
       {confirmPortal}
       {manageLauncher}
       {confirmResultPortal}
+      {emailModalPortal}
     </>
   );
 }

@@ -101,6 +101,7 @@ This folder is the entry point for documentation that describes how generated an
 | [payment-term.md](payment-term.md) | Generated payment-term maintenance window |
 | [tax.md](tax.md) | Generated tax-rate maintenance window |
 | [tax-category.md](tax-category.md) | Generated tax-category catalog window (groups tax rates; ETP-4249) |
+| [business-partner-category.md](business-partner-category.md) | Generated business-partner-category master/detail flow (accounting tab pending `businessPartnerCategoryAccountingHandler`; ETP-4402) |
 | [user.md](user.md) | Generated user window with roles child surface and defaults dependencies |
 | [fiscal-config.md](fiscal-config.md) | Custom fiscal configuration window — onboarding wizard (SII/TBAI/Verifactu) and ongoing config maintenance |
 | [fiscal-models.md](fiscal-models.md) | Custom fiscal models window — declaration list and per-model detail pages (303, 349) with auto-compute and file generation |

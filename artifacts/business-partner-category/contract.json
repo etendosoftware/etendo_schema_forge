@@ -1,0 +1,1946 @@
+{
+  "version": "0.2.0",
+  "generatedAt": "2026-07-01T17:11:14.893Z",
+  "updatedAt": "2026-07-01T17:12:24.383Z",
+  "checksum": "b0c899733fdc2169",
+  "frontendContract": {
+    "window": {
+      "id": "192",
+      "name": "Business Partner Category",
+      "primaryEntity": "businessPartnerCategory",
+      "category": "contact",
+      "hidePrint": true,
+      "hideLink": true,
+      "detailEntity": "accounting",
+      "noHeaderBorder": true,
+      "toolbarBorderBottom": true,
+      "whiteFormBackground": true,
+      "formCardPadding": "p-2",
+      "formScrollPaddingX": "px-2",
+      "tabsBarPaddingX": "px-2",
+      "toolbarPaddingX": "px-2",
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2",
+      "layoutType": "default",
+      "linesLayout": "inlineEditable",
+      "autoSaveOnBlur": true,
+      "maxDetailLines": 1
+    },
+    "entities": {
+      "businessPartnerCategory": {
+        "tableName": "C_BP_Group",
+        "tabId": "322",
+        "tabName": "Business Partner Category",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "label": "Search Key",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal",
+            "seq": 1
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "label": "Name",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal",
+            "seq": 2
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "label": "Description",
+            "type": "textarea",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "section": "principal",
+            "seq": 3,
+            "span": 2,
+            "rows": 1,
+            "explicitType": true
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "label": "Default",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "section": "principal",
+            "seq": 4
+          }
+        ],
+        "searchableFields": [
+          "searchKey",
+          "name"
+        ],
+        "computedFields": []
+      },
+      "accounting": {
+        "tableName": "C_BP_Group_Acct",
+        "tabId": "323",
+        "tabName": "Accounting",
+        "uiPattern": "STD",
+        "fields": [
+          {
+            "name": "customerReceivablesNo",
+            "apiKey": "customerReceivablesNo",
+            "column": "C_Receivable_Acct",
+            "label": "Customer Receivables No.",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 1,
+            "grow": true
+          },
+          {
+            "name": "customerPrepayment",
+            "apiKey": "customerPrepayment",
+            "column": "C_Prepayment_Acct",
+            "label": "Customer Prepayment",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 2,
+            "grow": true
+          },
+          {
+            "name": "writeoff",
+            "apiKey": "writeoff",
+            "column": "WriteOff_Acct",
+            "label": "Write-off",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 5,
+            "grow": true
+          },
+          {
+            "name": "writeoffRevAcct",
+            "apiKey": "writeoffRevAcct",
+            "column": "Writeoff_Rev_Acct",
+            "label": "Write-off Revenue",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 6
+          },
+          {
+            "name": "vendorLiability",
+            "apiKey": "vendorLiability",
+            "column": "V_Liability_Acct",
+            "label": "Vendor Liability",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": true,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 3,
+            "grow": true
+          },
+          {
+            "name": "vendorPrepayment",
+            "apiKey": "vendorPrepayment",
+            "column": "V_Prepayment_Acct",
+            "label": "Vendor Prepayment",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": true,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 4,
+            "grow": true
+          },
+          {
+            "name": "nonInvoicedReceipts",
+            "apiKey": "nonInvoicedReceipts",
+            "column": "NotInvoicedReceipts_Acct",
+            "label": "Non-Invoiced Receipts",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 7
+          },
+          {
+            "name": "nonInvoicedReceivables",
+            "apiKey": "nonInvoicedReceivables",
+            "column": "NotInvoicedReceivables_Acct",
+            "label": "Non-Invoiced Receivables",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 8
+          },
+          {
+            "name": "nonInvoicedRevenues",
+            "apiKey": "nonInvoicedRevenues",
+            "column": "NotInvoicedRevenue_Acct",
+            "label": "Non-Invoiced Revenues",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 9
+          },
+          {
+            "name": "paymentDiscountExpense",
+            "apiKey": "paymentDiscountExpense",
+            "column": "PayDiscount_Exp_Acct",
+            "label": "Payment Discount Expense",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 10
+          },
+          {
+            "name": "paymentDiscountRevenue",
+            "apiKey": "paymentDiscountRevenue",
+            "column": "PayDiscount_Rev_Acct",
+            "label": "Payment Discount Revenue",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 11
+          },
+          {
+            "name": "realizedGainAcct",
+            "apiKey": "realizedGainAcct",
+            "column": "RealizedGain_Acct",
+            "label": "Realized Gain Acct",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 19
+          },
+          {
+            "name": "realizedLossAcct",
+            "apiKey": "realizedLossAcct",
+            "column": "RealizedLoss_Acct",
+            "label": "Realized Loss Acct",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 20
+          },
+          {
+            "name": "unearnedRevenue",
+            "apiKey": "unearnedRevenue",
+            "column": "UnEarnedRevenue_Acct",
+            "label": "Unearned Revenue",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 16
+          },
+          {
+            "name": "unrealizedGainsAcct",
+            "apiKey": "unrealizedGainsAcct",
+            "column": "UnrealizedGain_Acct",
+            "label": "Unrealized Gains Acct.",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 17
+          },
+          {
+            "name": "unrealizedLossesAcct",
+            "apiKey": "unrealizedLossesAcct",
+            "column": "UnrealizedLoss_Acct",
+            "label": "Unrealized Losses Acct.",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 18
+          },
+          {
+            "name": "vendorServiceLiability",
+            "apiKey": "vendorServiceLiability",
+            "column": "V_Liability_Services_Acct",
+            "label": "Vendor Service Liability",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 21
+          },
+          {
+            "name": "doubtfulDebtAccount",
+            "apiKey": "doubtfulDebtAccount",
+            "column": "Doubtfuldebt_Acct",
+            "label": "Doubtful Debt Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 12
+          },
+          {
+            "name": "badDebtExpenseAccount",
+            "apiKey": "badDebtExpenseAccount",
+            "column": "BadDebtExpense_Acct",
+            "label": "Bad Debt Expense Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 13
+          },
+          {
+            "name": "badDebtRevenueAccount",
+            "apiKey": "badDebtRevenueAccount",
+            "column": "Baddebtrevenue_Acct",
+            "label": "Bad Debt Revenue Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 14
+          },
+          {
+            "name": "allowanceForDoubtfulDebtAccount",
+            "apiKey": "allowanceForDoubtfulDebtAccount",
+            "column": "AllowanceForDoubtful_Acct",
+            "label": "Allowance For Doubtful Debt Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "seq": 15
+          }
+        ],
+        "searchableFields": [],
+        "computedFields": [],
+        "javaQualifier": "businessPartnerCategoryAccountingHandler",
+        "addLineHiddenFromSibling": [
+          "accountingSchema"
+        ]
+      }
+    }
+  },
+  "backendContract": {
+    "window": {
+      "id": "192",
+      "name": "Business Partner Category",
+      "primaryEntity": "businessPartnerCategory",
+      "category": "contact",
+      "hidePrint": true,
+      "hideLink": true,
+      "detailEntity": "accounting",
+      "noHeaderBorder": true,
+      "toolbarBorderBottom": true,
+      "whiteFormBackground": true,
+      "formCardPadding": "p-2",
+      "formScrollPaddingX": "px-2",
+      "tabsBarPaddingX": "px-2",
+      "toolbarPaddingX": "px-2",
+      "listbarPaddingX": "px-2",
+      "tablePaddingX": "px-2",
+      "linesLayout": "inlineEditable",
+      "autoSaveOnBlur": true,
+      "maxDetailLines": 1
+    },
+    "entities": {
+      "businessPartnerCategory": {
+        "tableName": "C_BP_Group",
+        "tabId": "322",
+        "tabName": "Business Partner Category",
+        "fields": [
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_BP_Group_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "searchKey",
+            "apiKey": "searchKey",
+            "column": "Value",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "name",
+            "apiKey": "name",
+            "column": "Name",
+            "type": "string",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "description",
+            "apiKey": "description",
+            "column": "Description",
+            "type": "textarea",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "default",
+            "apiKey": "default",
+            "column": "IsDefault",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ]
+      },
+      "accounting": {
+        "tableName": "C_BP_Group_Acct",
+        "tabId": "323",
+        "tabName": "Accounting",
+        "fields": [
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "customerReceivablesNo",
+            "apiKey": "customerReceivablesNo",
+            "column": "C_Receivable_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "customerPrepayment",
+            "apiKey": "customerPrepayment",
+            "column": "C_Prepayment_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "writeoff",
+            "apiKey": "writeoff",
+            "column": "WriteOff_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "writeoffRevAcct",
+            "apiKey": "writeoffRevAcct",
+            "column": "Writeoff_Rev_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "vendorLiability",
+            "apiKey": "vendorLiability",
+            "column": "V_Liability_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "vendorPrepayment",
+            "apiKey": "vendorPrepayment",
+            "column": "V_Prepayment_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "nonInvoicedReceipts",
+            "apiKey": "nonInvoicedReceipts",
+            "column": "NotInvoicedReceipts_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "processNow",
+            "apiKey": "processNow",
+            "column": "Processing",
+            "type": "button",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "status",
+            "apiKey": "status",
+            "column": "Status",
+            "type": "enum",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "nonInvoicedReceivables",
+            "apiKey": "nonInvoicedReceivables",
+            "column": "NotInvoicedReceivables_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "nonInvoicedRevenues",
+            "apiKey": "nonInvoicedRevenues",
+            "column": "NotInvoicedRevenue_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "paymentDiscountExpense",
+            "apiKey": "paymentDiscountExpense",
+            "column": "PayDiscount_Exp_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "paymentDiscountRevenue",
+            "apiKey": "paymentDiscountRevenue",
+            "column": "PayDiscount_Rev_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "realizedGainAcct",
+            "apiKey": "realizedGainAcct",
+            "column": "RealizedGain_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "realizedLossAcct",
+            "apiKey": "realizedLossAcct",
+            "column": "RealizedLoss_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "unearnedRevenue",
+            "apiKey": "unearnedRevenue",
+            "column": "UnEarnedRevenue_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "unrealizedGainsAcct",
+            "apiKey": "unrealizedGainsAcct",
+            "column": "UnrealizedGain_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "unrealizedLossesAcct",
+            "apiKey": "unrealizedLossesAcct",
+            "column": "UnrealizedLoss_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "vendorServiceLiability",
+            "apiKey": "vendorServiceLiability",
+            "column": "V_Liability_Services_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "doubtfulDebtAccount",
+            "apiKey": "doubtfulDebtAccount",
+            "column": "Doubtfuldebt_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "badDebtExpenseAccount",
+            "apiKey": "badDebtExpenseAccount",
+            "column": "BadDebtExpense_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "badDebtRevenueAccount",
+            "apiKey": "badDebtRevenueAccount",
+            "column": "Baddebtrevenue_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "allowanceForDoubtfulDebtAccount",
+            "apiKey": "allowanceForDoubtfulDebtAccount",
+            "column": "AllowanceForDoubtful_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "client",
+            "apiKey": "client",
+            "column": "AD_Client_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "businessPartnerCategory",
+            "apiKey": "businessPartnerCategory",
+            "column": "C_BP_Group_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "id",
+            "apiKey": "id",
+            "column": "C_Bp_Group_Acct_ID",
+            "type": "id",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "creationDate",
+            "apiKey": "creationDate",
+            "column": "Created",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "createdBy",
+            "apiKey": "createdBy",
+            "column": "CreatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updated",
+            "apiKey": "updated",
+            "column": "Updated",
+            "type": "dateTime",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "updatedBy",
+            "apiKey": "updatedBy",
+            "column": "UpdatedBy",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          }
+        ],
+        "javaQualifier": "businessPartnerCategoryAccountingHandler"
+      }
+    },
+    "endpoints": [
+      {
+        "method": "GET",
+        "path": "/businessPartnerCategory",
+        "entity": "businessPartnerCategory",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      },
+      {
+        "method": "GET",
+        "path": "/businessPartnerCategory/:id",
+        "entity": "businessPartnerCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/businessPartnerCategory",
+        "entity": "businessPartnerCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/businessPartnerCategory/:id",
+        "entity": "businessPartnerCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/businessPartnerCategory/:id",
+        "entity": "businessPartnerCategory",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "GET",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "POST",
+        "path": "/accounting",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "PUT",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      },
+      {
+        "method": "DELETE",
+        "path": "/accounting/:id",
+        "entity": "accounting",
+        "supportedFilters": []
+      }
+    ],
+    "processEndpoints": []
+  },
+  "apiPrediction": {
+    "specName": "business-partner-category",
+    "baseUrl": "/sws/neo/business-partner-category",
+    "crud": {
+      "businessPartnerCategory": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/business-partner-category/businessPartnerCategory",
+        "detailUrl": "/sws/neo/business-partner-category/businessPartnerCategory/{id}",
+        "supportedFilters": [
+          "searchKey",
+          "name"
+        ]
+      },
+      "accounting": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/business-partner-category/accounting",
+        "detailUrl": "/sws/neo/business-partner-category/accounting/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "accounting",
+        "field": "customerReceivablesNo",
+        "column": "C_Receivable_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/customerReceivablesNo"
+      },
+      {
+        "entity": "accounting",
+        "field": "customerPrepayment",
+        "column": "C_Prepayment_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/customerPrepayment"
+      },
+      {
+        "entity": "accounting",
+        "field": "writeoff",
+        "column": "WriteOff_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/writeoff"
+      },
+      {
+        "entity": "accounting",
+        "field": "writeoffRevAcct",
+        "column": "Writeoff_Rev_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/writeoffRevAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "vendorLiability",
+        "column": "V_Liability_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/vendorLiability"
+      },
+      {
+        "entity": "accounting",
+        "field": "vendorPrepayment",
+        "column": "V_Prepayment_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/vendorPrepayment"
+      },
+      {
+        "entity": "accounting",
+        "field": "nonInvoicedReceipts",
+        "column": "NotInvoicedReceipts_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/nonInvoicedReceipts"
+      },
+      {
+        "entity": "accounting",
+        "field": "nonInvoicedReceivables",
+        "column": "NotInvoicedReceivables_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/nonInvoicedReceivables"
+      },
+      {
+        "entity": "accounting",
+        "field": "nonInvoicedRevenues",
+        "column": "NotInvoicedRevenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/nonInvoicedRevenues"
+      },
+      {
+        "entity": "accounting",
+        "field": "paymentDiscountExpense",
+        "column": "PayDiscount_Exp_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/paymentDiscountExpense"
+      },
+      {
+        "entity": "accounting",
+        "field": "paymentDiscountRevenue",
+        "column": "PayDiscount_Rev_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/paymentDiscountRevenue"
+      },
+      {
+        "entity": "accounting",
+        "field": "realizedGainAcct",
+        "column": "RealizedGain_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/realizedGainAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "realizedLossAcct",
+        "column": "RealizedLoss_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/realizedLossAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "unearnedRevenue",
+        "column": "UnEarnedRevenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/unearnedRevenue"
+      },
+      {
+        "entity": "accounting",
+        "field": "unrealizedGainsAcct",
+        "column": "UnrealizedGain_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/unrealizedGainsAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "unrealizedLossesAcct",
+        "column": "UnrealizedLoss_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/unrealizedLossesAcct"
+      },
+      {
+        "entity": "accounting",
+        "field": "vendorServiceLiability",
+        "column": "V_Liability_Services_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/vendorServiceLiability"
+      },
+      {
+        "entity": "accounting",
+        "field": "doubtfulDebtAccount",
+        "column": "Doubtfuldebt_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/doubtfulDebtAccount"
+      },
+      {
+        "entity": "accounting",
+        "field": "badDebtExpenseAccount",
+        "column": "BadDebtExpense_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/badDebtExpenseAccount"
+      },
+      {
+        "entity": "accounting",
+        "field": "badDebtRevenueAccount",
+        "column": "Baddebtrevenue_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/badDebtRevenueAccount"
+      },
+      {
+        "entity": "accounting",
+        "field": "allowanceForDoubtfulDebtAccount",
+        "column": "AllowanceForDoubtful_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/business-partner-category/accounting/selectors/allowanceForDoubtfulDebtAccount"
+      }
+    ],
+    "actions": [
+      {
+        "entity": "accounting",
+        "field": "processNow",
+        "column": "Processing",
+        "url": "/sws/neo/business-partner-category/accounting/{id}/action/processNow",
+        "processId": "112",
+        "processType": "classic"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "contact"
+    }
+  },
+  "testManifest": {
+    "tests": [
+      {
+        "id": "t-action-endpoint-accounting-processNow",
+        "category": "action-endpoint",
+        "entity": "accounting",
+        "field": "processNow",
+        "runner": "node",
+        "description": "Action endpoint for 'processNow' in accounting should exist"
+      },
+      {
+        "id": "t-crud-flags-accounting",
+        "category": "crud-flags",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "CRUD flags for 'accounting' should all be booleans"
+      },
+      {
+        "id": "t-crud-flags-businessPartnerCategory",
+        "category": "crud-flags",
+        "entity": "businessPartnerCategory",
+        "runner": "node",
+        "description": "CRUD flags for 'businessPartnerCategory' should all be booleans"
+      },
+      {
+        "id": "t-field-presence-accounting-allowanceForDoubtfulDebtAccount",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "allowanceForDoubtfulDebtAccount",
+        "runner": "node",
+        "description": "Field 'allowanceForDoubtfulDebtAccount' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-badDebtExpenseAccount",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "badDebtExpenseAccount",
+        "runner": "node",
+        "description": "Field 'badDebtExpenseAccount' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-badDebtRevenueAccount",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "badDebtRevenueAccount",
+        "runner": "node",
+        "description": "Field 'badDebtRevenueAccount' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-customerPrepayment",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "customerPrepayment",
+        "runner": "node",
+        "description": "Field 'customerPrepayment' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-customerReceivablesNo",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "customerReceivablesNo",
+        "runner": "node",
+        "description": "Field 'customerReceivablesNo' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-doubtfulDebtAccount",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "doubtfulDebtAccount",
+        "runner": "node",
+        "description": "Field 'doubtfulDebtAccount' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-nonInvoicedReceipts",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "nonInvoicedReceipts",
+        "runner": "node",
+        "description": "Field 'nonInvoicedReceipts' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-nonInvoicedReceivables",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "nonInvoicedReceivables",
+        "runner": "node",
+        "description": "Field 'nonInvoicedReceivables' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-nonInvoicedRevenues",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "nonInvoicedRevenues",
+        "runner": "node",
+        "description": "Field 'nonInvoicedRevenues' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-paymentDiscountExpense",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "paymentDiscountExpense",
+        "runner": "node",
+        "description": "Field 'paymentDiscountExpense' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-paymentDiscountRevenue",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "paymentDiscountRevenue",
+        "runner": "node",
+        "description": "Field 'paymentDiscountRevenue' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-realizedGainAcct",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "realizedGainAcct",
+        "runner": "node",
+        "description": "Field 'realizedGainAcct' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-realizedLossAcct",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "realizedLossAcct",
+        "runner": "node",
+        "description": "Field 'realizedLossAcct' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-unearnedRevenue",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "unearnedRevenue",
+        "runner": "node",
+        "description": "Field 'unearnedRevenue' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-unrealizedGainsAcct",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "unrealizedGainsAcct",
+        "runner": "node",
+        "description": "Field 'unrealizedGainsAcct' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-unrealizedLossesAcct",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "unrealizedLossesAcct",
+        "runner": "node",
+        "description": "Field 'unrealizedLossesAcct' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-vendorLiability",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "vendorLiability",
+        "runner": "node",
+        "description": "Field 'vendorLiability' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-vendorPrepayment",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "vendorPrepayment",
+        "runner": "node",
+        "description": "Field 'vendorPrepayment' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-vendorServiceLiability",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "vendorServiceLiability",
+        "runner": "node",
+        "description": "Field 'vendorServiceLiability' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-writeoff",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "writeoff",
+        "runner": "node",
+        "description": "Field 'writeoff' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-accounting-writeoffRevAcct",
+        "category": "field-presence",
+        "entity": "accounting",
+        "field": "writeoffRevAcct",
+        "runner": "node",
+        "description": "Field 'writeoffRevAcct' should be present in accounting"
+      },
+      {
+        "id": "t-field-presence-businessPartnerCategory-default",
+        "category": "field-presence",
+        "entity": "businessPartnerCategory",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should be present in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-presence-businessPartnerCategory-description",
+        "category": "field-presence",
+        "entity": "businessPartnerCategory",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should be present in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-presence-businessPartnerCategory-name",
+        "category": "field-presence",
+        "entity": "businessPartnerCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be present in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-presence-businessPartnerCategory-searchKey",
+        "category": "field-presence",
+        "entity": "businessPartnerCategory",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be present in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-type-accounting-allowanceForDoubtfulDebtAccount",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "allowanceForDoubtfulDebtAccount",
+        "runner": "node",
+        "description": "Field 'allowanceForDoubtfulDebtAccount' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-badDebtExpenseAccount",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "badDebtExpenseAccount",
+        "runner": "node",
+        "description": "Field 'badDebtExpenseAccount' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-badDebtRevenueAccount",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "badDebtRevenueAccount",
+        "runner": "node",
+        "description": "Field 'badDebtRevenueAccount' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-customerPrepayment",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "customerPrepayment",
+        "runner": "node",
+        "description": "Field 'customerPrepayment' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-customerReceivablesNo",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "customerReceivablesNo",
+        "runner": "node",
+        "description": "Field 'customerReceivablesNo' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-doubtfulDebtAccount",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "doubtfulDebtAccount",
+        "runner": "node",
+        "description": "Field 'doubtfulDebtAccount' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-nonInvoicedReceipts",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "nonInvoicedReceipts",
+        "runner": "node",
+        "description": "Field 'nonInvoicedReceipts' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-nonInvoicedReceivables",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "nonInvoicedReceivables",
+        "runner": "node",
+        "description": "Field 'nonInvoicedReceivables' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-nonInvoicedRevenues",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "nonInvoicedRevenues",
+        "runner": "node",
+        "description": "Field 'nonInvoicedRevenues' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-paymentDiscountExpense",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "paymentDiscountExpense",
+        "runner": "node",
+        "description": "Field 'paymentDiscountExpense' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-paymentDiscountRevenue",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "paymentDiscountRevenue",
+        "runner": "node",
+        "description": "Field 'paymentDiscountRevenue' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-realizedGainAcct",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "realizedGainAcct",
+        "runner": "node",
+        "description": "Field 'realizedGainAcct' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-realizedLossAcct",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "realizedLossAcct",
+        "runner": "node",
+        "description": "Field 'realizedLossAcct' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-unearnedRevenue",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "unearnedRevenue",
+        "runner": "node",
+        "description": "Field 'unearnedRevenue' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-unrealizedGainsAcct",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "unrealizedGainsAcct",
+        "runner": "node",
+        "description": "Field 'unrealizedGainsAcct' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-unrealizedLossesAcct",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "unrealizedLossesAcct",
+        "runner": "node",
+        "description": "Field 'unrealizedLossesAcct' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-vendorLiability",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "vendorLiability",
+        "runner": "node",
+        "description": "Field 'vendorLiability' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-vendorPrepayment",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "vendorPrepayment",
+        "runner": "node",
+        "description": "Field 'vendorPrepayment' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-vendorServiceLiability",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "vendorServiceLiability",
+        "runner": "node",
+        "description": "Field 'vendorServiceLiability' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-writeoff",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "writeoff",
+        "runner": "node",
+        "description": "Field 'writeoff' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-accounting-writeoffRevAcct",
+        "category": "field-type",
+        "entity": "accounting",
+        "field": "writeoffRevAcct",
+        "runner": "node",
+        "description": "Field 'writeoffRevAcct' should have type 'string' in accounting"
+      },
+      {
+        "id": "t-field-type-businessPartnerCategory-default",
+        "category": "field-type",
+        "entity": "businessPartnerCategory",
+        "field": "default",
+        "runner": "node",
+        "description": "Field 'default' should have type 'boolean' in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-type-businessPartnerCategory-description",
+        "category": "field-type",
+        "entity": "businessPartnerCategory",
+        "field": "description",
+        "runner": "node",
+        "description": "Field 'description' should have type 'string' in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-type-businessPartnerCategory-name",
+        "category": "field-type",
+        "entity": "businessPartnerCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should have type 'string' in businessPartnerCategory"
+      },
+      {
+        "id": "t-field-type-businessPartnerCategory-searchKey",
+        "category": "field-type",
+        "entity": "businessPartnerCategory",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should have type 'string' in businessPartnerCategory"
+      },
+      {
+        "id": "t-rule-declared-Copy-Accounts",
+        "category": "rule-declared",
+        "rule": "Copy Accounts",
+        "runner": "node",
+        "description": "Rule 'Copy Accounts' (process) should be declared"
+      },
+      {
+        "id": "t-searchable-filters-businessPartnerCategory-name",
+        "category": "searchable-filters",
+        "entity": "businessPartnerCategory",
+        "field": "name",
+        "runner": "node",
+        "description": "Field 'name' should be a supported filter for businessPartnerCategory"
+      },
+      {
+        "id": "t-searchable-filters-businessPartnerCategory-searchKey",
+        "category": "searchable-filters",
+        "entity": "businessPartnerCategory",
+        "field": "searchKey",
+        "runner": "node",
+        "description": "Field 'searchKey' should be a supported filter for businessPartnerCategory"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-allowanceForDoubtfulDebtAccount",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "allowanceForDoubtfulDebtAccount",
+        "runner": "node",
+        "description": "Selector endpoint for 'allowanceForDoubtfulDebtAccount' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-badDebtExpenseAccount",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "badDebtExpenseAccount",
+        "runner": "node",
+        "description": "Selector endpoint for 'badDebtExpenseAccount' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-badDebtRevenueAccount",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "badDebtRevenueAccount",
+        "runner": "node",
+        "description": "Selector endpoint for 'badDebtRevenueAccount' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-customerPrepayment",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "customerPrepayment",
+        "runner": "node",
+        "description": "Selector endpoint for 'customerPrepayment' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-customerReceivablesNo",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "customerReceivablesNo",
+        "runner": "node",
+        "description": "Selector endpoint for 'customerReceivablesNo' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-doubtfulDebtAccount",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "doubtfulDebtAccount",
+        "runner": "node",
+        "description": "Selector endpoint for 'doubtfulDebtAccount' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-nonInvoicedReceipts",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "nonInvoicedReceipts",
+        "runner": "node",
+        "description": "Selector endpoint for 'nonInvoicedReceipts' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-nonInvoicedReceivables",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "nonInvoicedReceivables",
+        "runner": "node",
+        "description": "Selector endpoint for 'nonInvoicedReceivables' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-nonInvoicedRevenues",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "nonInvoicedRevenues",
+        "runner": "node",
+        "description": "Selector endpoint for 'nonInvoicedRevenues' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-paymentDiscountExpense",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "paymentDiscountExpense",
+        "runner": "node",
+        "description": "Selector endpoint for 'paymentDiscountExpense' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-paymentDiscountRevenue",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "paymentDiscountRevenue",
+        "runner": "node",
+        "description": "Selector endpoint for 'paymentDiscountRevenue' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-realizedGainAcct",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "realizedGainAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'realizedGainAcct' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-realizedLossAcct",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "realizedLossAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'realizedLossAcct' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-unearnedRevenue",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "unearnedRevenue",
+        "runner": "node",
+        "description": "Selector endpoint for 'unearnedRevenue' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-unrealizedGainsAcct",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "unrealizedGainsAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'unrealizedGainsAcct' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-unrealizedLossesAcct",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "unrealizedLossesAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'unrealizedLossesAcct' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-vendorLiability",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "vendorLiability",
+        "runner": "node",
+        "description": "Selector endpoint for 'vendorLiability' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-vendorPrepayment",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "vendorPrepayment",
+        "runner": "node",
+        "description": "Selector endpoint for 'vendorPrepayment' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-vendorServiceLiability",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "vendorServiceLiability",
+        "runner": "node",
+        "description": "Selector endpoint for 'vendorServiceLiability' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-writeoff",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "writeoff",
+        "runner": "node",
+        "description": "Selector endpoint for 'writeoff' in accounting should exist"
+      },
+      {
+        "id": "t-selector-endpoint-accounting-writeoffRevAcct",
+        "category": "selector-endpoint",
+        "entity": "accounting",
+        "field": "writeoffRevAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'writeoffRevAcct' in accounting should exist"
+      },
+      {
+        "id": "t-system-field-accounting-accountingSchema",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-active",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-businessPartnerCategory",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "businessPartnerCategory",
+        "runner": "node",
+        "description": "System field 'businessPartnerCategory' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-client",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-createdBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-creationDate",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-id",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-organization",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-processNow",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "processNow",
+        "runner": "node",
+        "description": "System field 'processNow' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-status",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "status",
+        "runner": "node",
+        "description": "System field 'status' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updated",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-accounting-updatedBy",
+        "category": "system-field",
+        "entity": "accounting",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for accounting"
+      },
+      {
+        "id": "t-system-field-businessPartnerCategory-active",
+        "category": "system-field",
+        "entity": "businessPartnerCategory",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for businessPartnerCategory"
+      },
+      {
+        "id": "t-system-field-businessPartnerCategory-client",
+        "category": "system-field",
+        "entity": "businessPartnerCategory",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for businessPartnerCategory"
+      },
+      {
+        "id": "t-system-field-businessPartnerCategory-createdBy",
+        "category": "system-field",
+        "entity": "businessPartnerCategory",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for businessPartnerCategory"
+      },
+      {
+        "id": "t-system-field-businessPartnerCategory-creationDate",
+        "category": "system-field",
+        "entity": "businessPartnerCategory",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for businessPartnerCategory"
+      },
+      {
+        "id": "t-system-field-businessPartnerCategory-id",
+        "category": "system-field",
+        "entity": "businessPartnerCategory",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for businessPartnerCategory"
+      },
+      {
+        "id": "t-system-field-businessPartnerCategory-organization",
+        "category": "system-field",
+        "entity": "businessPartnerCategory",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for businessPartnerCategory"
+      },
+      {
+        "id": "t-system-field-businessPartnerCategory-updated",
+        "category": "system-field",
+        "entity": "businessPartnerCategory",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for businessPartnerCategory"
+      },
+      {
+        "id": "t-system-field-businessPartnerCategory-updatedBy",
+        "category": "system-field",
+        "entity": "businessPartnerCategory",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for businessPartnerCategory"
+      },
+      {
+        "id": "t-visibility-accounting",
+        "category": "visibility",
+        "entity": "accounting",
+        "runner": "node",
+        "description": "Entity 'accounting' should only expose visible fields in frontend"
+      },
+      {
+        "id": "t-visibility-businessPartnerCategory",
+        "category": "visibility",
+        "entity": "businessPartnerCategory",
+        "runner": "node",
+        "description": "Entity 'businessPartnerCategory' should only expose visible fields in frontend"
+      }
+    ],
+    "summary": {
+      "total": 99,
+      "byCategory": {
+        "action-endpoint": 1,
+        "crud-flags": 2,
+        "field-presence": 25,
+        "field-type": 25,
+        "rule-declared": 1,
+        "searchable-filters": 2,
+        "selector-endpoint": 21,
+        "system-field": 20,
+        "visibility": 2
+      },
+      "byRunner": {
+        "node": 99,
+        "junit": 0
+      }
+    }
+  }
+}

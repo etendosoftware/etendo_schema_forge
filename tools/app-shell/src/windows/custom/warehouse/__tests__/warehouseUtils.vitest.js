@@ -150,4 +150,51 @@ describe('aggregateProducts', () => {
       expect(aggregateProducts(rows)[0].label).toBe('p1');
     });
   });
+
+  describe('cost field (etgoCost)', () => {
+    it('takes cost from etgoCost on a single-bin product', () => {
+      const rows = [
+        { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 10, etgoValuation: 100, etgoCost: 10 },
+      ];
+      const result = aggregateProducts(rows);
+      expect(result[0].cost).toBe(10);
+    });
+
+    it('does NOT sum cost across duplicate product rows (unlike qty and valuation)', () => {
+      const rows = [
+        { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 10, etgoValuation: 100, etgoCost: 10 },
+        { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 5, etgoValuation: 50, etgoCost: 10 },
+      ];
+      const result = aggregateProducts(rows);
+      expect(result).toHaveLength(1);
+      expect(result[0].qty).toBe(15);
+      expect(result[0].valuation).toBe(150);
+      // cost stays the single unit cost from the first insert, not 20
+      expect(result[0].cost).toBe(10);
+    });
+
+    it('keeps cost from the first row even if a later duplicate row has a different etgoCost value', () => {
+      const rows = [
+        { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 10, etgoValuation: 100, etgoCost: 10 },
+        { product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 5, etgoValuation: 50, etgoCost: 999 },
+      ];
+      const result = aggregateProducts(rows);
+      expect(result[0].cost).toBe(10);
+    });
+
+    it('treats missing etgoCost as 0', () => {
+      const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 1, etgoValuation: 5 }];
+      expect(aggregateProducts(rows)[0].cost).toBe(0);
+    });
+
+    it('treats non-numeric etgoCost as 0', () => {
+      const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 1, etgoValuation: 5, etgoCost: 'n/a' }];
+      expect(aggregateProducts(rows)[0].cost).toBe(0);
+    });
+
+    it('coerces numeric string etgoCost', () => {
+      const rows = [{ product: 'p1', 'product$_identifier': 'Widget', uOM: 'u1', quantityOnHand: 1, etgoValuation: 5, etgoCost: '25' }];
+      expect(aggregateProducts(rows)[0].cost).toBe(25);
+    });
+  });
 });

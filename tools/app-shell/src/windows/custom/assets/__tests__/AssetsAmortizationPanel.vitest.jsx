@@ -86,7 +86,8 @@ describe('AssetsAmortizationPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('25.00%')).toBeInTheDocument();
     });
-    expect(screen.getByText('EUR 1000')).toBeInTheDocument();
+    // Single line -> row amount and footer total both render "EUR 1000".
+    expect(screen.getAllByText('EUR 1000')).toHaveLength(2);
     // Column headers
     expect(screen.getByText('assetsPeriod')).toBeInTheDocument();
     expect(screen.getByText('assetsPercentage')).toBeInTheDocument();
@@ -167,7 +168,8 @@ describe('AssetsAmortizationPanel', () => {
     });
     const { container } = render(<AssetsAmortizationPanel {...BASE_PROPS} />);
     await waitFor(() => {
-      expect(screen.getByText('EUR 100')).toBeInTheDocument();
+      // Single line -> row amount and footer total both render "EUR 100".
+      expect(screen.getAllByText('EUR 100')).toHaveLength(2);
     });
     // The percentage cell should show a dash
     const tds = container.querySelectorAll('td');
@@ -185,7 +187,8 @@ describe('AssetsAmortizationPanel', () => {
     });
     const { container } = render(<AssetsAmortizationPanel {...BASE_PROPS} />);
     await waitFor(() => {
-      expect(screen.getByText('EUR 100')).toBeInTheDocument();
+      // Single line -> row amount and footer total both render "EUR 100".
+      expect(screen.getAllByText('EUR 100')).toHaveLength(2);
     });
     const tds = container.querySelectorAll('td');
     const periodCell = tds[1]; // tds[0] is checkbox
@@ -240,7 +243,8 @@ describe('AssetsAmortizationPanel', () => {
     });
     render(<AssetsAmortizationPanel {...BASE_PROPS} />);
     await waitFor(() => {
-      expect(screen.getByText('EUR 42')).toBeInTheDocument();
+      // Single line -> row amount and footer total both render "EUR 42".
+      expect(screen.getAllByText('EUR 42')).toHaveLength(2);
     });
   });
 
@@ -716,5 +720,151 @@ describe('AssetsAmortizationPanel — neo:processSuccess refetch', () => {
     );
     await new Promise((r) => setTimeout(r, 50));
     expect(globalThis.fetch.mock.calls.length).toBe(before);
+  });
+});
+
+describe('AssetsAmortizationPanel — amortization total footer (ETP-4336)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Footer layout is: [checkbox spacer, empty, empty, total, status spacer].
+  function getFooterTotalCell(container) {
+    const tfoot = container.querySelector('tfoot');
+    if (!tfoot) return null;
+    return tfoot.querySelectorAll('td')[3] ?? null;
+  }
+
+  it('shows the summed total amount in the footer', async () => {
+    const lines = [
+      { id: 'l1', amortizationAmount: 1000 },
+      { id: 'l2', amortizationAmount: 1000 },
+    ];
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: lines } }),
+    });
+    const { container } = render(
+      <AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1' }} />
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    const totalCell = getFooterTotalCell(container);
+    expect(totalCell).not.toBeNull();
+    // formatCurrency is mocked as `${cur} ${val}` — assert the numeric portion
+    // directly rather than any locale-specific formatting.
+    expect(totalCell.textContent).toBe('EUR 2000');
+  });
+
+  it('flags the footer total with the alert class when it does not match data.depreciationAmt', async () => {
+    const lines = [
+      { id: 'l1', amortizationAmount: 1000 },
+      { id: 'l2', amortizationAmount: 1000 },
+    ];
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: lines } }),
+    });
+    const { container } = render(
+      <AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1', depreciationAmt: 1500 }} />
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    const totalCell = getFooterTotalCell(container);
+    expect(totalCell.className).toContain('text-red-500');
+    expect(totalCell.className).not.toContain('text-foreground');
+  });
+
+  it('does not flag the footer total when it matches data.depreciationAmt', async () => {
+    const lines = [
+      { id: 'l1', amortizationAmount: 1000 },
+      { id: 'l2', amortizationAmount: 1000 },
+    ];
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: lines } }),
+    });
+    const { container } = render(
+      <AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1', depreciationAmt: 2000 }} />
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    const totalCell = getFooterTotalCell(container);
+    expect(totalCell.className).toContain('text-foreground');
+    expect(totalCell.className).not.toContain('text-red-500');
+  });
+
+  it('tolerates floating-point rounding noise within 0.005 without flagging the total', async () => {
+    // 0.1 + 0.2 === 0.30000000000000004 as a JS float; the component rounds
+    // both sides to cents before comparing, so this must NOT be flagged.
+    const lines = [
+      { id: 'l1', amortizationAmount: 0.1 },
+      { id: 'l2', amortizationAmount: 0.2 },
+    ];
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: lines } }),
+    });
+    const { container } = render(
+      <AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1', depreciationAmt: 0.3 }} />
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    const totalCell = getFooterTotalCell(container);
+    expect(totalCell.className).toContain('text-foreground');
+    expect(totalCell.className).not.toContain('text-red-500');
+  });
+
+  it('does not flag the total when data.depreciationAmt is null or undefined', async () => {
+    const lines = [
+      { id: 'l1', amortizationAmount: 1000 },
+      { id: 'l2', amortizationAmount: 1000 },
+    ];
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: lines } }),
+    });
+    const { container, rerender } = render(
+      <AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1', depreciationAmt: null }} />
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('Checkbox__amort-row-l1')).toBeInTheDocument();
+    });
+
+    let totalCell = getFooterTotalCell(container);
+    expect(totalCell.className).toContain('text-foreground');
+    expect(totalCell.className).not.toContain('text-red-500');
+
+    rerender(<AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1' }} />);
+    totalCell = getFooterTotalCell(container);
+    expect(totalCell.className).toContain('text-foreground');
+    expect(totalCell.className).not.toContain('text-red-500');
+  });
+
+  it('does not render a footer/total row when there are no lines', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ response: { data: [] } }),
+    });
+    const { container } = render(
+      <AssetsAmortizationPanel {...BASE_PROPS} data={{ id: 'asset-1', depreciationAmt: 500 }} />
+    );
+    await waitFor(() => {
+      expect(screen.getByText('assetsNoAmortizationLines')).toBeInTheDocument();
+    });
+    expect(container.querySelector('tfoot')).toBeNull();
   });
 });

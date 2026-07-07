@@ -148,7 +148,8 @@ matches by `@Named` value — no servlet restart needed (just compile + deploy).
 > bean; it just defaults to `@Dependent`, which is **not** proxied — so its real class carries the
 > `@Named` annotation and the lookup matches. This bit ETP-4244 (GL Journal): the handler was
 > deployed but `@ApplicationScoped` made it undiscoverable, so completion fell through to the
-> broken default dispatch.
+> broken default dispatch. See §4 "Pre-hook: Intercept Completion to Preserve Classic Hooks/Extension
+> Points" for the general shape of the fix this handler implements.
 
 Place handlers in: `src/com/etendoerp/go/schemaforge/handlers/` (one class per window/entity).
 
@@ -359,6 +360,73 @@ public NeoResponse afterHandle(NeoContext ctx) {
   return null;
 }
 ```
+
+### Pre-hook: Intercept Completion to Preserve Classic Hooks/Extension Points
+
+**Trigger condition:** suspect this problem whenever a document's `DocAction` column is backed by
+an AD_Process that NEO's generic classic-process dispatch cannot correctly invoke. This shows up in
+two ways:
+- The process **NPEs** under NEO's contextless dispatch, because the Java class it runs expects a
+  fully-populated `ProcessContext` that NEO never builds (GL Journal / `FIN_AddPaymentFromJournal`,
+  ETP-4244).
+- The process is a **raw DB procedure with no `JavaClassName`**, so NEO's dispatch calls the
+  procedure directly and silently skips the Java wrapper Classic UI uses — and with it, any
+  CDI-based extension point that wrapper invokes (AP/AR Invoice / `ProcessInvoiceUtil` →
+  `ProcessInvoiceHook`, ETP-4388).
+
+In both cases the symptom is the same: completing the document through NEO "works" (the row's
+`DocStatus` changes) but side effects that Classic UI performs on completion are missing.
+
+**General shape of the fix** — a `NeoHandler.handle()` pre-hook that:
+1. Detects the completion request: CRUD `PATCH`/`PUT` with `documentAction=CO` in the body, OR an
+   ACTION endpoint (`fieldName == "documentAction"`) with `fieldValues.documentAction=CO`.
+2. Builds `VariablesSecureApp`/`ConnectionProvider` via
+   `NeoDefaultsService.buildVariablesSecureApp(context.getObContext())` and
+   `new DalConnectionProvider(false)`.
+3. Obtains the real classic-code entry point — **the mechanism varies with what kind of class it
+   is**, not just `ProcessBundle`:
+   - `ProcessBundle`-based process class (e.g. `FIN_AddPaymentFromJournal`, invoked as
+     `new FIN_AddPaymentFromJournal().execute(bundle)`) — see
+     `GlJournalHeaderHandler#completeJournal`.
+   - Plain CDI-injected utility class (e.g. `ProcessInvoiceUtil`, invoked as
+     `processInvoiceUtil.process(...)`) obtained via
+     `WeldUtils.getInstanceFromStaticBeanManager(ProcessInvoiceUtil.class)` — see
+     `AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded`. Do not assume `ProcessBundle` is the
+     only route; a class with its own `@Inject` fields needs a Weld-managed instance instead.
+4. Translates the classic result (`OBError` / `ProcessBundle.getResult()`) via
+   `NeoProcessService.translateClassicResult(...)`.
+5. Short-circuits `handle()` by returning that `NeoResponse` — the default dispatch never runs.
+
+```java
+@Override
+public NeoResponse handle(NeoContext ctx) {
+  if (isCompleteAction(ctx)) {
+    return completeMyDocument(ctx); // builds vars/conn, runs the classic entry point,
+                                     // translates the result, returns it
+  }
+  return null;
+}
+```
+
+> **⚠️ If the classic entry point has its own CDI-injected extension-point collection, you MUST
+> obtain it through Weld.** `ProcessInvoiceUtil` has an `@Inject @Any Instance<ProcessInvoiceHook>
+> hooks` field that is only populated when the instance itself is CDI-managed.
+> `new ProcessInvoiceUtil()` would leave `hooks` empty and silently skip every hook — reproducing
+> the exact bug this pattern fixes, just moved one layer down. Always resolve such classes via
+> `WeldUtils.getInstanceFromStaticBeanManager(...)`, never `new`.
+
+> **⚠️ Ordering: run the completion intercept AFTER other pre-completion side effects, not before.**
+> If `handle()` already has other steps that must mutate the document before it completes (e.g.
+> `AbstractOrderHeaderHandler.applyTotalDiscountBeforeComplete` recalculating a discount line), the
+> completion-intercepting call must come after them. Short-circuiting `handle()` early returns
+> straight to the caller, so any side-effecting step queued after it silently never runs. This exact
+> ordering bug was caught in ETP-4388's review cycle — `completeInvoiceIfNeeded` must be called after
+> `validateLineQtyBeforeComplete` and after `applyTotalDiscountBeforeComplete` in both
+> `SalesInvoiceHeaderHandler` and `PurchaseInvoiceHeaderHandler`.
+
+Real implementations: `GlJournalHeaderHandler#completeJournal` (ETP-4244),
+`AbstractInvoiceHeaderHandler#completeInvoiceIfNeeded` (ETP-4388, shared by
+`SalesInvoiceHeaderHandler` and `PurchaseInvoiceHeaderHandler`).
 
 ---
 

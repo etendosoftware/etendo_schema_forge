@@ -1,8 +1,8 @@
 {
-  "version": "0.41.0",
+  "version": "0.47.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-06-29T19:54:37.986Z",
-  "checksum": "361ed75db4f720a4",
+  "updatedAt": "2026-07-06T13:19:15.530Z",
+  "checksum": "0afb11783dd12e84",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -56,6 +56,7 @@
         }
       },
       "salesTheme": true,
+      "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "OutstandingAmt": "Pendiente de pago",
@@ -465,10 +466,10 @@
             "label": "Currency",
             "type": "foreignKey",
             "tsType": "string",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": false,
-            "form": false,
+            "form": true,
             "sourceRequired": true,
             "derivation": {
               "type": "fromConfig",
@@ -477,7 +478,12 @@
             "reference": "Currency",
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
-            "section": "summary"
+            "section": "principal",
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
           },
           {
             "name": "paymentComplete",
@@ -1132,6 +1138,18 @@
               "evaluable": true,
               "js": "!!record.id"
             }
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "label": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false
           }
         ],
         "searchableFields": [
@@ -1925,6 +1943,7 @@
         }
       },
       "salesTheme": true,
+      "documentDateField": "invoiceDate",
       "labelOverrides": {
         "es_ES": {
           "OutstandingAmt": "Pendiente de pago",
@@ -2085,7 +2104,7 @@
             "apiKey": "currency",
             "column": "C_Currency_ID",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -3287,6 +3306,14 @@
             "type": "foreignKey",
             "visibility": "editable",
             "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "editable",
+            "required": false
           }
         ],
         "javaQualifier": "salesInvoiceHeaderHandler"
@@ -5652,6 +5679,14 @@
         "description": "Field 'documentStatus' should be present in header"
       },
       {
+        "id": "t-field-presence-header-eTGOCurrencyRate",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-eTGODeliveryStatus",
         "category": "field-presence",
         "entity": "header",
@@ -6140,6 +6175,14 @@
         "description": "Field 'documentStatus' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-eTGOCurrencyRate",
+        "category": "field-type",
+        "entity": "header",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "Field 'eTGOCurrencyRate' should have type 'string' in header"
+      },
+      {
         "id": "t-field-type-header-eTGODeliveryStatus",
         "category": "field-type",
         "entity": "header",
@@ -6580,6 +6623,14 @@
         "description": "Read-only logic for 'businessPartner' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-currency",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-documentNo",
         "category": "readonlylogic-evaluable",
         "entity": "header",
@@ -6810,6 +6861,14 @@
         "field": "businessPartner",
         "runner": "node",
         "description": "Read-only logic for 'businessPartner' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-currency",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "currency",
+        "runner": "node",
+        "description": "Read-only logic for 'currency' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-documentNo",
@@ -8833,17 +8892,17 @@
       }
     ],
     "summary": {
-      "total": 513,
+      "total": 517,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 4,
         "default-value-type": 23,
         "displaylogic-evaluable": 21,
         "displaylogic-valid": 21,
-        "field-presence": 61,
-        "field-type": 61,
-        "readonlylogic-evaluable": 29,
-        "readonlylogic-valid": 29,
+        "field-presence": 62,
+        "field-type": 62,
+        "readonlylogic-evaluable": 30,
+        "readonlylogic-valid": 30,
         "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 16,
@@ -8851,7 +8910,7 @@
         "visibility": 4
       },
       "byRunner": {
-        "node": 513,
+        "node": 517,
         "junit": 0
       }
     }
