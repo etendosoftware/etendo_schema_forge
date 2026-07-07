@@ -3,6 +3,22 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
 
+// Maps the raw AD_Account.AccountType code to its i18n label key. Shared by
+// buildTreeColumns() (filter dropdown) and AccountTreeRow (visible column).
+const ACCOUNT_TYPE_UI_KEYS = {
+  A: 'accountTypeAsset',
+  E: 'accountTypeExpense',
+  L: 'accountTypeLiability',
+  M: 'accountTypeMemo',
+  O: 'accountTypeOwnersEquity',
+  R: 'accountTypeRevenue',
+};
+
+function accountTypeLabel(ui, code) {
+  const key = ACCOUNT_TYPE_UI_KEYS[code];
+  return key ? ui(key) : (code ?? '');
+}
+
 function buildTreeColumns(ui) {
   return [
     {
@@ -26,14 +42,9 @@ function buildTreeColumns(ui) {
       type: 'enum',
       label: ui('accountTreeFilterType'),
       required: true,
-      enumLabels: {
-        A: ui('accountTypeAsset'),
-        E: ui('accountTypeExpense'),
-        L: ui('accountTypeLiability'),
-        M: ui('accountTypeMemo'),
-        O: ui('accountTypeOwnersEquity'),
-        R: ui('accountTypeRevenue'),
-      },
+      enumLabels: Object.fromEntries(
+        Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => [code, ui(uiKey)]),
+      ),
     },
     {
       key: 'active',
@@ -78,7 +89,7 @@ function buildTreeColumns(ui) {
  *
  * The flat list from the NEO API must include fields injected by the
  * chart-of-accounts NeoHandler:
- *   id, searchKey, name, ytdDebit, ytdCredit, ytdBalance,
+ *   id, searchKey, name, accountType,
  *   parentId, depth, hasChildren, summaryLevel
  *
  * Defaults: levels 0 and 1 expanded, deeper nodes collapsed.
@@ -86,17 +97,6 @@ function buildTreeColumns(ui) {
  * "New Sub-account" is always available. If a row is selected, NewAccountModal
  * auto-populates the parent from that row; otherwise the selector starts empty.
  */
-
-const FMT = new Intl.NumberFormat('es', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-  useGrouping: true,
-});
-
-function fmtNum(n) {
-  if (n == null) return '—';
-  return FMT.format(Number(n));
-}
 
 /**
  * Groups the flat list of subaccounts by parentCode4, creating virtual group header
@@ -124,16 +124,10 @@ function buildGroupedTree(items) {
           isVirtual: true,
           depth: 0,
           hasChildren: true,
-          ytdDebit: 0,
-          ytdCredit: 0,
-          ytdBalance: 0,
           children: [],
         });
       }
       const group = groupMap.get(code);
-      group.ytdDebit += Number(item.ytdDebit ?? 0);
-      group.ytdCredit += Number(item.ytdCredit ?? 0);
-      group.ytdBalance += Number(item.ytdBalance ?? 0);
       group.children.push({ ...item, depth: 1 });
     }
   }
@@ -166,10 +160,9 @@ function flattenVisible(nodes, expanded) {
   return result;
 }
 
-function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick }) {
+function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui }) {
   const isSummary = item.summaryLevel === 'Y';
   const indent = (item.depth ?? 0) * 16;
-  const balance = Number(item.ytdBalance ?? 0);
 
   return (
     <div
@@ -215,24 +208,9 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick }) 
       {/* Account name — fills remaining space */}
       <span className="flex-1 min-w-0 truncate">{item.name}</span>
 
-      {/* YTD Debit */}
-      <span className="shrink-0 w-28 text-right tabular-nums text-[#3C3C4D]">
-        {fmtNum(item.ytdDebit)}
-      </span>
-
-      {/* YTD Credit */}
-      <span className="shrink-0 w-28 text-right tabular-nums text-[#3C3C4D]">
-        {fmtNum(item.ytdCredit)}
-      </span>
-
-      {/* Net Balance — red when negative */}
-      <span
-        className={[
-          'shrink-0 w-28 text-right tabular-nums',
-          balance < 0 ? 'text-red-600' : 'text-[#121217]',
-        ].join(' ')}
-      >
-        {fmtNum(item.ytdBalance)}
+      {/* Account type */}
+      <span className="shrink-0 w-40 truncate text-[#3C3C4D]">
+        {accountTypeLabel(ui, item.accountType)}
       </span>
     </div>
   );
@@ -398,14 +376,8 @@ export default function AccountTreeView({
             <span className="flex-1 min-w-0 text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
               {ui('name')}
             </span>
-            <span className="shrink-0 w-28 text-right text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
-              {ui('accountTreeDebit')}
-            </span>
-            <span className="shrink-0 w-28 text-right text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
-              {ui('accountTreeCredit')}
-            </span>
-            <span className="shrink-0 w-28 text-right text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
-              {ui('accountTreeBalance')}
+            <span className="shrink-0 w-40 text-xs font-medium text-[#6C6C89] uppercase tracking-wide">
+              {ui('accountTreeFilterType')}
             </span>
           </div>
 
@@ -419,6 +391,7 @@ export default function AccountTreeView({
                 isSelected={item.id === selectedId}
                 onToggle={handleToggle}
                 onRowClick={handleRowClick}
+                ui={ui}
                 data-testid="AccountTreeRow__acc34a"
               />
             ))}

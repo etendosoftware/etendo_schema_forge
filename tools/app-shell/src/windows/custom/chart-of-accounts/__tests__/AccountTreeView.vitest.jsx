@@ -38,37 +38,31 @@ const DATA = [
     id: 'acc-40000001',
     searchKey: '40000002',
     name: 'Sales EU',
+    accountType: 'R',
     parentCode4: '4000',
     parentCode4Name: 'Sales',
     summaryLevel: 'N',
     hasChildren: false,
-    ytdDebit: 100,
-    ytdCredit: 50,
-    ytdBalance: 50,
   },
   {
     id: 'acc-40000000',
     searchKey: '40000001',
     name: 'Sales US',
+    accountType: 'R',
     parentCode4: '4000',
     parentCode4Name: 'Sales',
     summaryLevel: 'N',
     hasChildren: false,
-    ytdDebit: 10,
-    ytdCredit: 5,
-    ytdBalance: -5,
   },
   {
     id: 'acc-50000001',
     searchKey: '50000001',
     name: 'Purchases US',
+    accountType: 'E',
     parentCode4: '5000',
     parentCode4Name: 'Purchases',
     summaryLevel: 'N',
     hasChildren: false,
-    ytdDebit: 0,
-    ytdCredit: 0,
-    ytdBalance: null,
   },
 ];
 
@@ -111,11 +105,24 @@ describe('AccountTreeView', () => {
     expect(idxUS).toBeLessThan(idxEU);
   });
 
-  it('aggregates child balances onto the group header', () => {
+  it('shows only SearchKey, Name and Account Type — no Debit/Credit/Balance', () => {
     render(<AccountTreeView {...defaultProps} />);
-    const group = screen.getByTestId('account-tree-row-group-4000');
-    // 50 + (-5) = 45, formatted es-style with grouping
-    expect(within(group).getByText('45,00')).toBeInTheDocument();
+    const row = screen.getByTestId('account-tree-row-acc-40000001');
+    expect(row.textContent).toContain('40000002');
+    expect(row.textContent).toContain('Sales EU');
+    expect(row.textContent).toContain('accountTypeRevenue');
+    expect(screen.queryByText('accountTreeDebit')).not.toBeInTheDocument();
+    expect(screen.queryByText('accountTreeCredit')).not.toBeInTheDocument();
+    expect(screen.queryByText('accountTreeBalance')).not.toBeInTheDocument();
+  });
+
+  it('renders the Account Type label for each leaf row', () => {
+    render(<AccountTreeView {...defaultProps} />);
+    const revenueRow = screen.getByTestId('account-tree-row-acc-40000000');
+    expect(within(revenueRow).getByText('accountTypeRevenue')).toBeInTheDocument();
+
+    const expenseRow = screen.getByTestId('account-tree-row-acc-50000001');
+    expect(within(expenseRow).getByText('accountTypeExpense')).toBeInTheDocument();
   });
 
   it('collapsing a group hides its children without affecting other groups', () => {
@@ -172,32 +179,19 @@ describe('AccountTreeView', () => {
     expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument();
   });
 
-  it('formats null balances as an em dash and negative balances distinctly', () => {
-    render(<AccountTreeView {...defaultProps} />);
-    const negativeRow = screen.getByTestId('account-tree-row-acc-40000000');
-    expect(negativeRow.textContent).toContain('-5,00');
-
-    const nullBalanceRow = screen.getByTestId('account-tree-row-acc-50000001');
-    expect(nullBalanceRow.textContent).toContain('—');
-  });
-
-  it('renders a dash for null amount values on every amount column', () => {
+  it('renders an unmapped or missing account type without crashing', () => {
     const data = [
       {
         id: 'acc-x',
         searchKey: '99000001',
-        name: 'No amounts',
+        name: 'No type',
         parentCode4: '9900',
         parentCode4Name: 'Otros',
         summaryLevel: 'N',
-        ytdDebit: null,
-        ytdCredit: null,
-        ytdBalance: null,
       },
     ];
     render(<AccountTreeView {...defaultProps} data={data} />);
-    const row = screen.getByTestId('account-tree-row-acc-x');
-    expect(within(row).getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('account-tree-row-acc-x')).toBeInTheDocument();
   });
 
   it('calls onColumnsReady with the tree column definitions', () => {

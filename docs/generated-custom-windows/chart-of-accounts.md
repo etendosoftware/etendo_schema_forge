@@ -37,7 +37,7 @@ Maintain the account master used by finance users and provide a quick, read-only
 
 ## Manual verification
 1. Open `/chart-of-accounts` from the Finance menu and confirm the list loads through the generated window route.
-2. Confirm the table shows Code, Name, Account Type, Parent Account, Debit, Credit, Balance, and active-state visibility.
+2. Confirm the table shows only SearchKey, Name, and Account Type — Debit, Credit, and Balance are no longer rendered as visible columns.
 3. Search by Code, Name, and Account Type.
 4. Create an account and confirm the editable fields are limited to Code, Name, Account Type, and optional Parent Account.
 5. Open an existing account at `/chart-of-accounts/:recordId` and confirm the detail view matches the same maintenance scope.
