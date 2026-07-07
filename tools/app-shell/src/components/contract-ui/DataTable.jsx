@@ -1526,6 +1526,7 @@ function renderTableRows({
       idx={idx}
       isChecked={selectedRows.has(row.id)}
       {...rowProps}
+      data-testid="TableDataRow__eb5261"
     />
   ));
 }
