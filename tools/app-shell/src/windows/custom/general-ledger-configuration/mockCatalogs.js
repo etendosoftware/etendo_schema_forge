@@ -209,22 +209,47 @@ export const DEFAULTS_SEED = {
 };
 
 // Field → i18n-label-key + required, grouped by section. Drives the Defaults tab.
+// Section boundaries mirror AD_FieldGroup on AD_Field for window 125 / tab 252
+// (C_AcctSchema_Default), queried directly from the DB (ETP-4452 follow-up —
+// the previous product/project/warehouse/bank split was guessed by column
+// prefix, not the real AD grouping, e.g. it put Work In Progress under
+// Warehouse and Cash Book Expense/Receipt under Bank instead of Cash Journal).
+//
+// Fields with `AD_Field.IsActive = 'N'` are OMITTED entirely (10 of them:
+// bankInterestRevenue/Expense, bankUnidentifiedReceipts, unallocatedCash,
+// bankSettlementGain/Loss, cashBookExpense/Receipt, projectAsset, taxExpense)
+// — Classic never renders them either, which is what made the GO/Classic
+// field-count mismatch look confusing (ETP-4452 follow-up). The backend's
+// `DEFAULT_FIELD_MAPPINGS` still maps their DB columns; omitting them here
+// only means the UI never sends/shows them, existing DB values are untouched.
+//
+// Fields with no AD_FieldGroup but still Active (`disposalGain/Loss`,
+// `paymentSelection`) are kept next to their closest AD-grouped sibling since
+// AD gives no better signal, and flagged `noFieldGroupInAD: true` so
+// `DefaultsTab.jsx` renders `NoFieldGroupHint` next to them — a placeholder
+// asking the product owner to confirm where each one should actually live.
 export const DEFAULTS_GROUPS = [
   {
-    section: 'treasury',
+    section: 'bank',
     fields: [
       { key: 'bankAsset', required: true },
       { key: 'bankInTransit', required: true },
       { key: 'bankExpense', required: false },
       { key: 'bankRevaluationGain', required: false },
       { key: 'bankRevaluationLoss', required: false },
+      { key: 'paymentSelection', required: false, noFieldGroupInAD: true },
+    ],
+  },
+  {
+    section: 'diario',
+    fields: [
       { key: 'cashBookAsset', required: false },
       { key: 'cashBookDifferences', required: false },
       { key: 'cashTransfer', required: false },
     ],
   },
   {
-    section: 'receivablesPayables',
+    section: 'contacts',
     fields: [
       { key: 'customerReceivablesNo', required: true },
       { key: 'vendorLiability', required: true },
@@ -244,7 +269,6 @@ export const DEFAULTS_GROUPS = [
     fields: [
       { key: 'taxDue', required: true },
       { key: 'taxCredit', required: true },
-      { key: 'taxExpense', required: false },
       { key: 'tDueTransAcct', required: false },
       { key: 'tCreditTransAcct', required: false },
     ],
@@ -261,16 +285,21 @@ export const DEFAULTS_GROUPS = [
       { key: 'invoicePriceVariance', required: false },
       { key: 'productRevenueReturn', required: false },
       { key: 'productCOGSReturn', required: false },
+    ],
+  },
+  {
+    section: 'assets',
+    fields: [
       { key: 'depreciation', required: false },
       { key: 'accumulatedDepreciation', required: false },
-      { key: 'disposalGain', required: false },
-      { key: 'disposalLoss', required: false },
+      { key: 'disposalGain', required: false, noFieldGroupInAD: true },
+      { key: 'disposalLoss', required: false, noFieldGroupInAD: true },
     ],
   },
   {
     section: 'project',
     fields: [
-      { key: 'projectAsset', required: false },
+      { key: 'workInProgress', required: false },
     ],
   },
   {
@@ -278,21 +307,6 @@ export const DEFAULTS_GROUPS = [
     fields: [
       { key: 'warehouseDifferences', required: false },
       { key: 'inventoryRevaluation', required: false },
-      { key: 'workInProgress', required: false },
-    ],
-  },
-  {
-    section: 'bank',
-    fields: [
-      { key: 'bankInterestRevenue', required: false },
-      { key: 'bankInterestExpense', required: false },
-      { key: 'bankUnidentifiedReceipts', required: false },
-      { key: 'unallocatedCash', required: false },
-      { key: 'bankSettlementGain', required: false },
-      { key: 'bankSettlementLoss', required: false },
-      { key: 'cashBookExpense', required: false },
-      { key: 'cashBookReceipt', required: false },
-      { key: 'paymentSelection', required: false },
     ],
   },
 ];

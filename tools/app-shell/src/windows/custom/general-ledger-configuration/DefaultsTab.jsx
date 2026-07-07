@@ -1,14 +1,18 @@
 import { useUI } from '@/i18n';
 import { AccountBadgeSelect } from '@/components/contract-ui';
 import SectionShell from './SectionShell.jsx';
+import NoFieldGroupHint from './NoFieldGroupHint.jsx';
 import { ACCOUNT_OPTIONS, DEFAULTS_GROUPS } from './mockCatalogs.js';
 
 /**
- * Valores por defecto tab — labeled groups (Tesorería y banco · Contactos ·
- * Impuestos · Producto · Proyecto · Almacén · Banco) of AccountBadgeSelect
- * controls, driven by `DEFAULTS_GROUPS`. The Producto/Proyecto/Almacén/Banco
- * groups expose the product/warehouse/asset/project/bank *_Acct defaults not
- * shown in the original Figma mock.
+ * Valores por defecto tab — labeled groups (Banco · Diario · Contactos ·
+ * Impuestos · Producto · Activos · Proyecto · Almacén) of AccountBadgeSelect
+ * controls, driven by `DEFAULTS_GROUPS`. Section boundaries mirror AD_FieldGroup
+ * on window 125 / tab 252 (see the comment above `DEFAULTS_GROUPS` in
+ * `mockCatalogs.js`). Producto/Activos/Proyecto/Almacén/Diario expose
+ * product/warehouse/asset/project/cash-journal `*_Acct` defaults not shown in
+ * the original Figma mock. Fields flagged `noFieldGroupInAD` render
+ * `NoFieldGroupHint` — a placeholder pending a product decision on grouping.
  */
 export default function DefaultsTab({ defaults, accountOptions = ACCOUNT_OPTIONS, setDefaultField, errors = {} }) {
   const ui = useUI();
@@ -29,6 +33,7 @@ export default function DefaultsTab({ defaults, accountOptions = ACCOUNT_OPTIONS
                 key={f.key}
                 label={ui(`glc.acct.${f.key}`)}
                 required={f.required}
+                labelHint={f.noFieldGroupInAD ? <NoFieldGroupHint /> : null}
                 value={defaults[f.key]}
                 options={accountOptions}
                 onChange={(id) => setDefaultField(f.key, id)}
