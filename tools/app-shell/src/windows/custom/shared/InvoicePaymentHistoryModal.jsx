@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { MoneyAmount } from '@/components/ui/money-amount';
+import { Skeleton } from '@/components/ui/skeleton';
 import NewPaymentEntryModal from './NewPaymentEntryModal.jsx';
 
 function fmtDate(raw) {
@@ -52,19 +53,6 @@ function PaymentStateTag({ status, processed, isSales, ui }) {
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#A9A9BC', flexShrink: 0 }} />
       {ui('draft')}
     </span>
-  );
-}
-
-function RowDirBadge({ isIn, size = 30 }) {
-  const bg = isIn ? '#E2F7EA' : '#FDE2E9';
-  const color = isIn ? '#17663A' : '#C5234A';
-  const half = Math.round(size * 0.5);
-  return (
-    <div style={{ width: size, height: size, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
-      {isIn
-        ? <svg width={half} height={half} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><polyline points="19 12 12 19 5 12"/></svg>
-        : <svg width={half} height={half} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/></svg>}
-    </div>
   );
 }
 
@@ -188,8 +176,30 @@ export default function InvoicePaymentHistoryModal({
   let historyBody;
   if (loading) {
     historyBody = (
-      <div style={{ textAlign: 'center', padding: '36px 0', color: '#9CA3AF', fontSize: 13 }}>
-        {ui('loading')}
+      <div data-testid="InvoicePaymentHistoryModal__skeleton">
+        {/* Column headers (static labels — no need to skeleton them) */}
+        <div style={{ display: 'grid', gridTemplateColumns: GRID, gap: 12, padding: '8px 24px', borderBottom: '1px solid #E8EAEF' }}>
+          <div style={HCELL}>{ui('documentNo')}</div>
+          <div style={HCELL}>{ui('date')}</div>
+          <div style={HCELL}>{ui('paymentMethodCol')}</div>
+          <div style={HCELL}>{ui('statusLabel')}</div>
+          <div style={HCELL}>{ui('amount')}</div>
+        </div>
+        {/* Ghost rows matching the real row's shape/columns */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              style={{ display: 'grid', gridTemplateColumns: GRID, gap: 12, padding: '11px 24px', borderBottom: '1px solid #F1F2F4', alignItems: 'center', opacity: 1 - i * 0.2 }}
+            >
+              <Skeleton className="h-4 w-20" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-4 w-16" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-6 w-28 rounded-full" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-6 w-24 rounded-full" data-testid="Skeleton__b82d4f" />
+              <Skeleton className="h-4 w-16 ml-auto" data-testid="Skeleton__b82d4f" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   } else if (payments.length === 0) {
@@ -198,7 +208,15 @@ export default function InvoicePaymentHistoryModal({
         style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '36px 20px', gap: 10 }}
         data-testid="InvoicePaymentHistoryModal__empty"
       >
-        <RowDirBadge isIn={isSales} size={48} data-testid="RowDirBadge__b82d4f" />
+        {/* Neutral document icon — the empty state has no direction, so no in/out arrow. */}
+        <div style={{ width: 48, height: 48, borderRadius: 8, background: '#F1F2F4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#828FA3', flexShrink: 0 }}>
+          <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="16" y2="17" />
+          </svg>
+        </div>
         <p style={{ fontSize: 13, color: '#6B7280', textAlign: 'center', margin: 0 }}>
           {isSales ? ui('noCobroYet') : ui('noPagoYet')}
         </p>
@@ -248,6 +266,18 @@ export default function InvoicePaymentHistoryModal({
                     isSales={isSales}
                     ui={ui}
                     data-testid="PaymentStateTag__b82d4f" />
+                  {p.viaPis && (
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, marginLeft: 6, fontSize: 11, color: '#1D4ED8' }}
+                      data-testid="InvoicePaymentHistoryModal__viaPis"
+                    >
+                      <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5z" />
+                        <path d="m9 12 2 2 4-4" />
+                      </svg>
+                      {ui('cpPisViaLabel')}
+                    </div>
+                  )}
                 </div>
                 <div className="tabular-nums" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, color: isSales ? '#17663A' : '#C5234A', whiteSpace: 'nowrap' }}>
                   {amtSign}<MoneyAmount value={p.amount} currency={currency} tone="neutral" className={isSales ? 'text-[#17663A]' : 'text-[#C5234A]'} data-testid="MoneyAmount__cp-history-row" />

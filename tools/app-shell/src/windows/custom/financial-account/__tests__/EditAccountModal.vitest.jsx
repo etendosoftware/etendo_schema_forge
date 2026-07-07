@@ -301,32 +301,34 @@ describe('EditAccountModal', () => {
       const user = userEvent.setup();
       const onSaved = vi.fn();
       const onClose = vi.fn();
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       renderModal({ account: CONNECTED_ACCOUNT, onSaved, onClose });
       await screen.findByTestId('psd2-edit-sync');
+      // Footer button opens the styled confirm dialog; its action button performs the disconnect.
       await user.click(screen.getByText('financeAccountsMenuDisconnect'));
+      await user.click(await screen.findByText('financeAccountsPsd2DisconnectAction'));
       await waitFor(() => expect(disconnect).toHaveBeenCalledWith('acc-9'));
       await waitFor(() => expect(onSaved).toHaveBeenCalled());
       expect(onClose).toHaveBeenCalled();
       expect(toastSuccess).toHaveBeenCalledWith('financeAccountsPsd2DisconnectDone');
     });
 
-    it('does not disconnect when the confirm is cancelled', async () => {
+    it('does not disconnect until the confirm dialog action is clicked', async () => {
       const user = userEvent.setup();
-      vi.spyOn(window, 'confirm').mockReturnValue(false);
       renderModal({ account: CONNECTED_ACCOUNT });
       await screen.findByTestId('psd2-edit-sync');
       await user.click(screen.getByText('financeAccountsMenuDisconnect'));
+      // The styled confirm dialog is shown; disconnect must not run until its action is confirmed.
+      await screen.findByText('financeAccountsPsd2DisconnectAction');
       expect(disconnect).not.toHaveBeenCalled();
     });
 
     it('toasts an error when disconnect fails', async () => {
       const user = userEvent.setup();
-      vi.spyOn(window, 'confirm').mockReturnValue(true);
       disconnect.mockRejectedValue(new Error('disc-fail'));
       renderModal({ account: CONNECTED_ACCOUNT });
       await screen.findByTestId('psd2-edit-sync');
       await user.click(screen.getByText('financeAccountsMenuDisconnect'));
+      await user.click(await screen.findByText('financeAccountsPsd2DisconnectAction'));
       await waitFor(() => expect(toastError).toHaveBeenCalledWith('disc-fail'));
     });
 

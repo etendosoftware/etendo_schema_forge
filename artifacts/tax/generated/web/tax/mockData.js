@@ -110,3 +110,78 @@ export const tax = [
     "validFrom": "2026-01-26"
   }
 ];
+
+export const accounting = [
+  {
+    "id": "mock-accounting-001",
+    "taxDue": "VAT 21%",
+    "taxCredit": "VAT 21%",
+    "taxId": "mock-tax-001"
+  },
+  {
+    "id": "mock-accounting-002",
+    "taxDue": "VAT 10%",
+    "taxCredit": "VAT 10%",
+    "taxId": "mock-tax-002"
+  },
+  {
+    "id": "mock-accounting-003",
+    "taxDue": "VAT 0%",
+    "taxCredit": "VAT 0%",
+    "taxId": "mock-tax-003"
+  },
+  {
+    "id": "mock-accounting-004",
+    "taxDue": "Sales Tax 8.5%",
+    "taxCredit": "Sales Tax 8.5%",
+    "taxId": "mock-tax-004"
+  },
+  {
+    "id": "mock-accounting-005",
+    "taxDue": "Exempt",
+    "taxCredit": "Exempt",
+    "taxId": "mock-tax-005"
+  },
+  {
+    "id": "mock-accounting-006",
+    "taxDue": "Reduced Rate 5%",
+    "taxCredit": "Reduced Rate 5%",
+    "taxId": "mock-tax-006"
+  },
+  {
+    "id": "mock-accounting-007",
+    "taxDue": "Standard Rate 20%",
+    "taxCredit": "Standard Rate 20%",
+    "taxId": "mock-tax-007"
+  },
+  {
+    "id": "mock-accounting-008",
+    "taxDue": "VAT 21%",
+    "taxCredit": "VAT 21%",
+    "taxId": "mock-tax-008"
+  },
+  {
+    "id": "mock-accounting-009",
+    "taxDue": "VAT 10%",
+    "taxCredit": "VAT 10%",
+    "taxId": "mock-tax-009"
+  },
+  {
+    "id": "mock-accounting-010",
+    "taxDue": "VAT 0%",
+    "taxCredit": "VAT 0%",
+    "taxId": "mock-tax-010"
+  },
+  {
+    "id": "mock-accounting-011",
+    "taxDue": "Sales Tax 8.5%",
+    "taxCredit": "Sales Tax 8.5%",
+    "taxId": "mock-tax-011"
+  },
+  {
+    "id": "mock-accounting-012",
+    "taxDue": "Exempt",
+    "taxCredit": "Exempt",
+    "taxId": "mock-tax-012"
+  }
+];

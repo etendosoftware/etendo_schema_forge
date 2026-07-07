@@ -11,9 +11,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Acme Corp",
     "documentStatus": "DR",
     "trackingNo": "RE-00001",
-    "sourceShipmentDocNo": "RE-00001",
-    "etblkpAccountingstatus": "DR",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00001"
   },
   {
     "id": "mock-returnMaterialReceipt-002",
@@ -25,9 +25,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "TechFlow Inc",
     "documentStatus": "CO",
     "trackingNo": "RE-00002",
-    "sourceShipmentDocNo": "RE-00002",
-    "etblkpAccountingstatus": "CO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00002"
   },
   {
     "id": "mock-returnMaterialReceipt-003",
@@ -39,9 +39,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Global Trade Ltd",
     "documentStatus": "VO",
     "trackingNo": "RE-00003",
-    "sourceShipmentDocNo": "RE-00003",
-    "etblkpAccountingstatus": "VO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00003"
   },
   {
     "id": "mock-returnMaterialReceipt-004",
@@ -53,9 +53,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Summit Industries",
     "documentStatus": "IP",
     "trackingNo": "RE-00004",
-    "sourceShipmentDocNo": "RE-00004",
-    "etblkpAccountingstatus": "IP",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00004"
   },
   {
     "id": "mock-returnMaterialReceipt-005",
@@ -67,9 +67,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Pacific Partners",
     "documentStatus": "DR",
     "trackingNo": "RE-00005",
-    "sourceShipmentDocNo": "RE-00005",
-    "etblkpAccountingstatus": "DR",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00005"
   },
   {
     "id": "mock-returnMaterialReceipt-006",
@@ -81,9 +81,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Alpine Solutions",
     "documentStatus": "CO",
     "trackingNo": "RE-00006",
-    "sourceShipmentDocNo": "RE-00006",
-    "etblkpAccountingstatus": "CO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00006"
   },
   {
     "id": "mock-returnMaterialReceipt-007",
@@ -95,9 +95,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Meridian Group",
     "documentStatus": "VO",
     "trackingNo": "RE-00007",
-    "sourceShipmentDocNo": "RE-00007",
-    "etblkpAccountingstatus": "VO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00007"
   },
   {
     "id": "mock-returnMaterialReceipt-008",
@@ -109,9 +109,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Vertex Systems",
     "documentStatus": "IP",
     "trackingNo": "RE-00008",
-    "sourceShipmentDocNo": "RE-00008",
-    "etblkpAccountingstatus": "IP",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00008"
   },
   {
     "id": "mock-returnMaterialReceipt-009",
@@ -123,9 +123,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Atlas Manufacturing",
     "documentStatus": "DR",
     "trackingNo": "RE-00009",
-    "sourceShipmentDocNo": "RE-00009",
-    "etblkpAccountingstatus": "DR",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "DR",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00009"
   },
   {
     "id": "mock-returnMaterialReceipt-010",
@@ -137,9 +137,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Nova Enterprises",
     "documentStatus": "CO",
     "trackingNo": "RE-00010",
-    "sourceShipmentDocNo": "RE-00010",
-    "etblkpAccountingstatus": "CO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "CO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00010"
   },
   {
     "id": "mock-returnMaterialReceipt-011",
@@ -151,9 +151,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Pinnacle Services",
     "documentStatus": "VO",
     "trackingNo": "RE-00011",
-    "sourceShipmentDocNo": "RE-00011",
-    "etblkpAccountingstatus": "VO",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "VO",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00011"
   },
   {
     "id": "mock-returnMaterialReceipt-012",
@@ -165,9 +165,9 @@ export const returnMaterialReceipt = [
     "partnerAddress": "Horizon Labs",
     "documentStatus": "IP",
     "trackingNo": "RE-00012",
-    "sourceShipmentDocNo": "RE-00012",
-    "etblkpAccountingstatus": "IP",
-    "etblkpBulkposting": "Sample etblkpBulkposting"
+    "invoiceStatus": "IP",
+    "etblkpBulkposting": "Sample etblkpBulkposting",
+    "sourceShipmentDocNo": "RE-00012"
   }
 ];
 

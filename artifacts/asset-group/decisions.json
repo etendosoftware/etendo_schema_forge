@@ -8,7 +8,13 @@
     "noHeaderBorder": true,
     "hidePrint": true,
     "hideLink": true,
-    "customListIcons": true
+    "customListIcons": true,
+    "secondaryTabs": {
+      "accounting": {
+        "tabOrder": 1,
+        "label": "Accounting"
+      }
+    }
   },
   "entities": {
     "assetCategory": {

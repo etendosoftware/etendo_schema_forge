@@ -6,6 +6,7 @@ import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
+import { usePurchaseOrderPdf } from '@/windows/custom/shared/usePurchaseOrderPdf.js';
 import { trackTransactionPosted, trackDocumentCreated } from '@/lib/observability/health-events.js';
 
 export { ConfirmResultModal as PoConfirmResultModal };
@@ -57,6 +58,11 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   }), [token]);
+
+  // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
+  // so the form-view topbar Send modal shows the document instead of the
+  // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
+  const { pdfUrl, loading: pdfLoading } = usePurchaseOrderPdf(recordId, apiBaseUrl, token);
 
   // draftMode confirm button (DetailView) dispatches this event to open the confirm modal
   useEffect(() => {
@@ -223,6 +229,8 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
           documentId={recordId}
           windowName="purchase-order"
           token={token}
+          pdfBlobUrl={pdfUrl}
+          pdfBlobLoading={pdfLoading}
           onClose={() => setShowSend(false)}
           data-testid="SendDocumentModal__8b5323" />,
         document.body,

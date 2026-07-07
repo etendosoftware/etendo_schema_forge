@@ -288,4 +288,57 @@ describe('ImportLinesModal', () => {
     fireEvent.click(screen.getByText('\u00d7'));
     expect(props.onClose).toHaveBeenCalled();
   });
+
+  // ETP-4029 \u2014 currency-filter empty state. When fetchDocuments reports
+  // excludedByCurrency: true (all bp/status candidates existed but were
+  // removed by the currency filter) AND the caller passed
+  // noCurrencyMatchMessageKey, the empty state must show that message instead
+  // of the generic emptyMessageKey.
+  describe('currency-filter empty state (excludedByCurrency)', () => {
+    it('shows noCurrencyMatchMessageKey when excludedByCurrency is true and the prop is provided', async () => {
+      renderModal({
+        noCurrencyMatchMessageKey: 'noOrdersMatchCurrency',
+        fetchDocuments: vi.fn().mockResolvedValue({ documents: [], sharedContext: {}, excludedByCurrency: true }),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('noOrdersMatchCurrency')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('noOrdersFound')).not.toBeInTheDocument();
+    });
+
+    it('falls back to emptyMessageKey when excludedByCurrency is true but noCurrencyMatchMessageKey is not provided', async () => {
+      renderModal({
+        noCurrencyMatchMessageKey: undefined,
+        fetchDocuments: vi.fn().mockResolvedValue({ documents: [], sharedContext: {}, excludedByCurrency: true }),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('noOrdersFound')).toBeInTheDocument();
+      });
+    });
+
+    it('falls back to emptyMessageKey when excludedByCurrency is false, even if noCurrencyMatchMessageKey is provided', async () => {
+      renderModal({
+        noCurrencyMatchMessageKey: 'noOrdersMatchCurrency',
+        fetchDocuments: vi.fn().mockResolvedValue({ documents: [], sharedContext: {}, excludedByCurrency: false }),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('noOrdersFound')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('noOrdersMatchCurrency')).not.toBeInTheDocument();
+    });
+
+    it('falls back to emptyMessageKey when excludedByCurrency is omitted entirely (legacy fetchDocuments shape)', async () => {
+      renderModal({
+        noCurrencyMatchMessageKey: 'noOrdersMatchCurrency',
+        fetchDocuments: vi.fn().mockResolvedValue({ documents: [], sharedContext: {} }),
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('noOrdersFound')).toBeInTheDocument();
+      });
+    });
+  });
 });

@@ -8,6 +8,8 @@ import { CommandPalette } from '@/components/CommandPalette.jsx';
 import { CopilotProvider } from '@/components/CopilotContext';
 import { CopilotWidget } from '@/components/CopilotWidget';
 import { CurrentWindowProvider } from '@/components/CurrentWindowContext';
+import { SupportChatProvider, useSupportChat } from '@/components/support/SupportChatContext.jsx';
+import { SupportChatWidget } from '@/components/support/SupportChatWidget.jsx';
 
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
@@ -17,6 +19,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
   const { expanded, toggle } = useSidebar();
   const meta = usePageMeta();
   const marginLeft = expanded ? EXPANDED_W : COLLAPSED_W;
+  const { state: supportState, actions: supportActions } = useSupportChat();
 
   return (
     <>
@@ -25,7 +28,10 @@ function AppLayoutInner({ menuGroups, embedded }) {
           menuGroups={menuGroups}
           expanded={expanded}
           onToggle={toggle}
+          onHelpClick={supportState.isOpen ? supportActions.close : supportActions.open}
+          unreadCount={supportState.unreadCount}
           data-testid="SideMenu__488148" />
+
       )}
       <div
         className="flex h-screen flex-col transition-[margin-left] duration-200 ease-in-out bg-page-bg"
@@ -66,6 +72,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
       </div>
       {!embedded && <CommandPalette data-testid="CommandPalette__488148" />}
       {!embedded && <CopilotWidget hideTrigger data-testid="CopilotWidget__488148" />}
+      {!embedded && <SupportChatWidget data-testid="SupportChatWidget__488148" />}
     </>
   );
 }
@@ -77,16 +84,18 @@ export default function AppLayout({ menuGroups }) {
   return (
     <CurrentWindowProvider data-testid="CurrentWindowProvider__488148">
       <CopilotProvider data-testid="CopilotProvider__488148">
-        <FavoritesProvider data-testid="FavoritesProvider__488148">
-          <SidebarProvider data-testid="SidebarProvider__488148">
-            <PageMetaProvider data-testid="PageMetaProvider__488148">
-              <AppLayoutInner
-                menuGroups={menuGroups}
-                embedded={embedded}
-                data-testid="AppLayoutInner__488148" />
-            </PageMetaProvider>
-          </SidebarProvider>
-        </FavoritesProvider>
+        <SupportChatProvider data-testid="SupportChatProvider__488148">
+          <FavoritesProvider data-testid="FavoritesProvider__488148">
+            <SidebarProvider data-testid="SidebarProvider__488148">
+              <PageMetaProvider data-testid="PageMetaProvider__488148">
+                <AppLayoutInner
+                  menuGroups={menuGroups}
+                  embedded={embedded}
+                  data-testid="AppLayoutInner__488148" />
+              </PageMetaProvider>
+            </SidebarProvider>
+          </FavoritesProvider>
+        </SupportChatProvider>
       </CopilotProvider>
     </CurrentWindowProvider>
   );
