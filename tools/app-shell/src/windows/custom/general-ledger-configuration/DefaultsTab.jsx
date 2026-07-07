@@ -1,21 +1,19 @@
-import { useUI } from '@/i18n';
+import { useUI, useLocale } from '@/i18n';
 import { AccountBadgeSelect } from '@/components/contract-ui';
 import SectionShell from './SectionShell.jsx';
-import NoFieldGroupHint from './NoFieldGroupHint.jsx';
-import { ACCOUNT_OPTIONS, DEFAULTS_GROUPS } from './mockCatalogs.js';
+import { ACCOUNT_OPTIONS, DEFAULTS_GROUPS, resolveFieldLabel } from './mockCatalogs.js';
 
 /**
- * Valores por defecto tab — labeled groups (Banco · Diario · Contactos ·
- * Impuestos · Producto · Activos · Proyecto · Almacén) of AccountBadgeSelect
- * controls, driven by `DEFAULTS_GROUPS`. Section boundaries mirror AD_FieldGroup
- * on window 125 / tab 252 (see the comment above `DEFAULTS_GROUPS` in
- * `mockCatalogs.js`). Producto/Activos/Proyecto/Almacén/Diario expose
- * product/warehouse/asset/project/cash-journal `*_Acct` defaults not shown in
- * the original Figma mock. Fields flagged `noFieldGroupInAD` render
- * `NoFieldGroupHint` — a placeholder pending a product decision on grouping.
+ * Valores por defecto tab — labeled groups of AccountBadgeSelect controls,
+ * driven by `DEFAULTS_GROUPS`, which is DERIVED from `contract.json` (see
+ * `buildDefaultsGroups` in `mockCatalogs.js`) rather than hand-typed. A field
+ * with no curated `glc.acct.<key>` translation falls back to its raw AD
+ * label via `resolveFieldLabel`. See
+ * docs/superpowers/specs/2026-07-07-glc-defaults-ad-driven-grouping-design.md.
  */
 export default function DefaultsTab({ defaults, accountOptions = ACCOUNT_OPTIONS, setDefaultField, errors = {} }) {
   const ui = useUI();
+  const dictionary = useLocale();
 
   return (
     <div className="px-1">
@@ -31,9 +29,8 @@ export default function DefaultsTab({ defaults, accountOptions = ACCOUNT_OPTIONS
             {group.fields.map((f) => (
               <AccountBadgeSelect
                 key={f.key}
-                label={ui(`glc.acct.${f.key}`)}
+                label={resolveFieldLabel(dictionary, f.key, f.fallbackLabel)}
                 required={f.required}
-                labelHint={f.noFieldGroupInAD ? <NoFieldGroupHint /> : null}
                 value={defaults[f.key]}
                 options={accountOptions}
                 onChange={(id) => setDefaultField(f.key, id)}

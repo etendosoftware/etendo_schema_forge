@@ -10,6 +10,8 @@
  * contract.json) so swapping the data source is mechanical.
  */
 
+import contract from '@generated/general-ledger-configuration/contract.json';
+
 // Fixed display order for the Defaults tab's account-selector groups. 'other'
 // is the catch-all for any editable field with no curated `section` in
 // decisions.json (currently: disposalGain, disposalLoss — see
@@ -208,108 +210,12 @@ export const DEFAULTS_SEED = {
   paymentSelection: null,
 };
 
-// Field → i18n-label-key + required, grouped by section. Drives the Defaults tab.
-// Section boundaries mirror AD_FieldGroup on AD_Field for window 125 / tab 252
-// (C_AcctSchema_Default), queried directly from the DB (ETP-4452 follow-up —
-// the previous product/project/warehouse/bank split was guessed by column
-// prefix, not the real AD grouping, e.g. it put Work In Progress under
-// Warehouse and Cash Book Expense/Receipt under Bank instead of Cash Journal).
-//
-// Fields with `AD_Field.IsActive = 'N'` are OMITTED entirely (10 of them:
-// bankInterestRevenue/Expense, bankUnidentifiedReceipts, unallocatedCash,
-// bankSettlementGain/Loss, cashBookExpense/Receipt, projectAsset, taxExpense)
-// — Classic never renders them either, which is what made the GO/Classic
-// field-count mismatch look confusing (ETP-4452 follow-up). The backend's
-// `DEFAULT_FIELD_MAPPINGS` still maps their DB columns; omitting them here
-// only means the UI never sends/shows them, existing DB values are untouched.
-//
-// Fields with no AD_FieldGroup but still Active (`disposalGain/Loss`,
-// `paymentSelection`) are kept next to their closest AD-grouped sibling since
-// AD gives no better signal, and flagged `noFieldGroupInAD: true` so
-// `DefaultsTab.jsx` renders `NoFieldGroupHint` next to them — a placeholder
-// asking the product owner to confirm where each one should actually live.
-export const DEFAULTS_GROUPS = [
-  {
-    section: 'bank',
-    fields: [
-      { key: 'bankAsset', required: true },
-      { key: 'bankInTransit', required: true },
-      { key: 'bankExpense', required: false },
-      { key: 'bankRevaluationGain', required: false },
-      { key: 'bankRevaluationLoss', required: false },
-      { key: 'paymentSelection', required: false, noFieldGroupInAD: true },
-    ],
-  },
-  {
-    section: 'diario',
-    fields: [
-      { key: 'cashBookAsset', required: false },
-      { key: 'cashBookDifferences', required: false },
-      { key: 'cashTransfer', required: false },
-    ],
-  },
-  {
-    section: 'contacts',
-    fields: [
-      { key: 'customerReceivablesNo', required: true },
-      { key: 'vendorLiability', required: true },
-      { key: 'customerPrepayment', required: false },
-      { key: 'vendorPrepayment', required: false },
-      { key: 'writeoff', required: false },
-      { key: 'writeoffRevenue', required: false },
-      { key: 'nonInvoicedReceipts', required: false },
-      { key: 'doubtfulDebtAccount', required: false },
-      { key: 'badDebtExpenseAccount', required: false },
-      { key: 'badDebtRevenueAccount', required: false },
-      { key: 'allowanceForDoubtfulDebtAccount', required: false },
-    ],
-  },
-  {
-    section: 'taxes',
-    fields: [
-      { key: 'taxDue', required: true },
-      { key: 'taxCredit', required: true },
-      { key: 'tDueTransAcct', required: false },
-      { key: 'tCreditTransAcct', required: false },
-    ],
-  },
-  {
-    section: 'product',
-    fields: [
-      { key: 'fixedAsset', required: false },
-      { key: 'productExpense', required: false },
-      { key: 'productDeferredExpense', required: false },
-      { key: 'productRevenue', required: false },
-      { key: 'productDeferredRevenue', required: false },
-      { key: 'productCOGS', required: false },
-      { key: 'invoicePriceVariance', required: false },
-      { key: 'productRevenueReturn', required: false },
-      { key: 'productCOGSReturn', required: false },
-    ],
-  },
-  {
-    section: 'assets',
-    fields: [
-      { key: 'depreciation', required: false },
-      { key: 'accumulatedDepreciation', required: false },
-      { key: 'disposalGain', required: false, noFieldGroupInAD: true },
-      { key: 'disposalLoss', required: false, noFieldGroupInAD: true },
-    ],
-  },
-  {
-    section: 'project',
-    fields: [
-      { key: 'workInProgress', required: false },
-    ],
-  },
-  {
-    section: 'warehouse',
-    fields: [
-      { key: 'warehouseDifferences', required: false },
-      { key: 'inventoryRevaluation', required: false },
-    ],
-  },
-];
+// DEFAULTS_GROUPS is derived from contract.json, not hand-typed — see
+// buildDefaultsGroups() above and
+// docs/superpowers/specs/2026-07-07-glc-defaults-ad-driven-grouping-design.md.
+export const DEFAULTS_GROUPS = buildDefaultsGroups(
+  contract.frontendContract.entities['Valores por defecto'].fields,
+);
 
 // ── Seed records: Dimensiones (C_AcctSchema_Element, one row per dimension) ───
 // `active` = IsActive toggle; `mandatory` = IsMandatory; `scope` = i18n key for
