@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { EntityForm } from '@/components/contract-ui';
 import { PillToggle } from '@/components/PillToggle';
 import { SquareCheckbox } from '../shared/SquareCheckbox';
@@ -88,22 +88,48 @@ export default function BillingPreferencesForm(props) {
 
   const paymentMethodId = resolveId(data?.paymentMethod);
   const pOPaymentMethodId = resolveId(data?.pOPaymentMethod);
-  const selectorContext = useMemo(() => {
+  const baseSelectorContext = useMemo(() => {
     const ctx = {};
     if (organizationId) ctx.AD_Org_ID = organizationId;
     if (clientId) ctx.AD_Client_ID = clientId;
     if (bpId) ctx.parentId = bpId;
-    // SQL validation rules on FIN/PO_Financial_Account_ID resolve @Fin_Paymentmethod_ID@
-    // and @PO_Paymentmethod_ID@ from the request context.
+    return ctx;
+  }, [organizationId, clientId, bpId]);
+
+  // Customer and vendor account selectors must filter INDEPENDENTLY: each side carries only its
+  // own payment method. If both Fin_Paymentmethod_ID and PO_Paymentmethod_ID were sent together,
+  // the backend policy (which reads Fin_Paymentmethod_ID first) would filter the vendor account by
+  // the customer's method. FIN_ISRECEIPT also drives the payment-method selector's own direction
+  // filter: 'Y' = incoming (customer pays us), 'N' = outgoing (we pay vendor).
+  const customerSelectorContext = useMemo(() => {
+    const ctx = { ...baseSelectorContext, FIN_ISRECEIPT: 'Y' };
     if (paymentMethodId) ctx.Fin_Paymentmethod_ID = paymentMethodId;
+    return ctx;
+  }, [baseSelectorContext, paymentMethodId]);
+  const vendorSelectorContext = useMemo(() => {
+    const ctx = { ...baseSelectorContext, FIN_ISRECEIPT: 'N' };
     if (pOPaymentMethodId) ctx.PO_Paymentmethod_ID = pOPaymentMethodId;
     return ctx;
-  }, [organizationId, clientId, bpId, paymentMethodId, pOPaymentMethodId]);
+  }, [baseSelectorContext, pOPaymentMethodId]);
 
-  // FIN_Paymentmethod_ID validationRule uses @FIN_ISRECEIPT@ to filter by direction:
-  // 'Y' = incoming (customer pays us), 'N' = outgoing (we pay vendor).
-  const customerSelectorContext = useMemo(() => ({ ...selectorContext, FIN_ISRECEIPT: 'Y' }), [selectorContext]);
-  const vendorSelectorContext   = useMemo(() => ({ ...selectorContext, FIN_ISRECEIPT: 'N' }), [selectorContext]);
+  // Clearing the account is a user-triggered side effect of changing the payment method: the
+  // account list is filtered by the method (see the FIN_Financial_Account selector policy), so the
+  // previously selected account may no longer be a valid option. Wrapping onChange fires only on
+  // user edits, never on initial hydration, so a compatible saved pair survives when the record loads.
+  const handleCustomerChange = useCallback((key, value, ...rest) => {
+    onChange?.(key, value, ...rest);
+    if (key === 'paymentMethod') {
+      onChange?.('account', null);
+      onChange?.('account$_identifier', null);
+    }
+  }, [onChange]);
+  const handleVendorChange = useCallback((key, value, ...rest) => {
+    onChange?.(key, value, ...rest);
+    if (key === 'pOPaymentMethod') {
+      onChange?.('pOFinancialAccount', null);
+      onChange?.('pOFinancialAccount$_identifier', null);
+    }
+  }, [onChange]);
   // Available discount catalog
   const [discountOptions, setDiscountOptions] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -258,6 +284,7 @@ export default function BillingPreferencesForm(props) {
               <>
                 <EntityForm
                   {...props}
+                  onChange={handleCustomerChange}
                   fields={customerTopBillingFields}
                   selectorContext={customerSelectorContext}
                   data-testid="EntityForm__7f0756" />
@@ -293,6 +320,7 @@ export default function BillingPreferencesForm(props) {
               <>
                 <EntityForm
                   {...props}
+                  onChange={handleVendorChange}
                   fields={vendorTopBillingFields}
                   selectorContext={vendorSelectorContext}
                   data-testid="EntityForm__7f0756" />
