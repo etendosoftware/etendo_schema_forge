@@ -16,7 +16,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   const invoicedLinesFilter = encodeURIComponent(
     JSON.stringify([{ fieldName: 'mInoutlineId', operator: 'notNull' }]),
   );
-  const [returnRes, invLinesRes, invoicedLinesRes] = await Promise.all([
+  const [returnRes, invLinesRes, invoicedLinesRes, headerRes] = await Promise.all([
     fetch(
       `${base}/return-from-customer/customerReturn?_startRow=0&_endRow=500&_sortBy=orderDate desc`,
       { headers },
@@ -26,7 +26,13 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
       `${base}/sales-invoice/lines?criteria=${invoicedLinesFilter}&_startRow=0&_endRow=2000`,
       { headers },
     ),
+    fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
   ]);
+
+  let invoiceCurrency = null;
+  if (headerRes.ok) {
+    invoiceCurrency = (await headerRes.json())?.response?.data?.[0]?.currency || null;
+  }
 
   // Lines already used in the current invoice
   const alreadyImportedReturnLines = new Set();
@@ -59,6 +65,31 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     return { documents: [], sharedContext: { alreadyImportedReturnLines } };
   }
 
+  // Returns have no currency of their own (M_InOut has no C_Currency_ID column) —
+  // resolve it via the linked sales order. Returns with no linked order can't be
+  // compared, so they're never excluded by this filter.
+  let excludedByCurrency = false;
+  if (invoiceCurrency) {
+    const orderIds = [...new Set(candidateReturns.filter(r => r.salesOrder).map(r => r.salesOrder))];
+    const orderCurrencyMap = {};
+    await Promise.all(orderIds.map(async (id) => {
+      try {
+        const r = await fetch(`${base}/sales-order/header/${id}`, { headers });
+        if (r.ok) {
+          const o = (await r.json())?.response?.data?.[0];
+          if (o) orderCurrencyMap[id] = o.currency;
+        }
+      } catch { /* ignore — treat as unresolved, don't exclude */ }
+    }));
+    const beforeCurrencyCount = candidateReturns.length;
+    candidateReturns = candidateReturns.filter(r => !r.salesOrder || orderCurrencyMap[r.salesOrder] === invoiceCurrency);
+    excludedByCurrency = candidateReturns.length === 0 && beforeCurrencyCount > 0;
+  }
+
+  if (candidateReturns.length === 0) {
+    return { documents: [], sharedContext: { alreadyImportedReturnLines }, excludedByCurrency };
+  }
+
   // Fetch lines for each return in parallel to check if any line is still available
   const returnLinesResults = await Promise.all(
     candidateReturns.map(ret =>
@@ -79,7 +110,7 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
     return lines.some(l => !invoicedElsewhere.has(l.id));
   });
 
-  return { documents, sharedContext: { alreadyImportedReturnLines } };
+  return { documents, sharedContext: { alreadyImportedReturnLines }, excludedByCurrency };
 };
 
 const fetchLines = async ({ base, headers, docId, sharedContext }) => {
@@ -133,6 +164,7 @@ export default function ImportFromReturnShipmentModal(props) {
       searchPlaceholderKey="searchReturnShipment"
       emptyMessageKey="noReturnShipmentsForCustomer"
       noSearchResultsKey="noReturnShipmentsMatchSearch"
+      noCurrencyMatchMessageKey="noReturnShipmentsMatchCurrency"
       successMessageKey="linesImportedFromReturnShipment"
       showPriceColumns={false}
       fetchDocuments={fetchDocuments}

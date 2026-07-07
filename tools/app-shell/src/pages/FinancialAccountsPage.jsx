@@ -15,6 +15,7 @@ import {
 import { NewAccountWizard } from '@/windows/custom/financial-account/NewAccountWizard.jsx';
 import { EditAccountModal } from '@/windows/custom/financial-account/EditAccountModal.jsx';
 import { ArchiveAccountDialog } from '@/windows/custom/financial-account/ArchiveAccountDialog.jsx';
+import { ConfirmDialog } from '@/components/OAuth2ClientDialog';
 import { Psd2ConnectFlowUI } from '@/windows/custom/financial-account/Psd2ConnectFlowUI.jsx';
 import { FundsTransferModal } from '@/windows/custom/financial-account/FundsTransferModal.jsx';
 
@@ -49,6 +50,8 @@ export default function FinancialAccountsPage() {
   const [editAccount, setEditAccount] = useState(null);
   const [archiveTarget, setArchiveTarget] = useState(null);
   const [transferSource, setTransferSource] = useState(null);
+  const [disconnectTarget, setDisconnectTarget] = useState(null);
+  const [disconnecting, setDisconnecting] = useState(false);
   const { sync, disconnect } = usePsd2Actions();
   const psd2Flow = usePsd2ConnectFlow({ onDone: reload });
 
@@ -75,15 +78,24 @@ export default function FinancialAccountsPage() {
       return;
     }
     if (action === 'disconnect') {
-      // eslint-disable-next-line no-alert
-      if (!window.confirm(ui('financeAccountsPsd2DisconnectConfirm'))) return;
-      try {
-        await disconnect(account.id);
-        toast.success(ui('financeAccountsPsd2DisconnectDone'));
-        reload();
-      } catch (err) {
-        toast.error(err.message || ui('financeAccountsPsd2DisconnectError'));
-      }
+      // Styled confirmation dialog (matches the app's other confirm modals) instead of the
+      // native window.confirm.
+      setDisconnectTarget(account);
+    }
+  };
+
+  const handleConfirmDisconnect = async () => {
+    if (!disconnectTarget) return;
+    setDisconnecting(true);
+    try {
+      await disconnect(disconnectTarget.id);
+      toast.success(ui('financeAccountsPsd2DisconnectDone'));
+      setDisconnectTarget(null);
+      reload();
+    } catch (err) {
+      toast.error(err.message || ui('financeAccountsPsd2DisconnectError'));
+    } finally {
+      setDisconnecting(false);
     }
   };
 
@@ -168,6 +180,17 @@ export default function FinancialAccountsPage() {
         onClose={() => setArchiveTarget(null)}
         onArchived={reload}
         data-testid="ArchiveAccountDialog__7c3fbc" />
+      <ConfirmDialog
+        open={!!disconnectTarget}
+        onOpenChange={(o) => { if (!o) setDisconnectTarget(null); }}
+        title={ui('financeAccountsMenuDisconnect')}
+        description={ui('financeAccountsPsd2DisconnectConfirm')}
+        confirmLabel={ui('financeAccountsPsd2DisconnectAction')}
+        cancelLabel={ui('cancel')}
+        variant="destructive"
+        loading={disconnecting}
+        onConfirm={handleConfirmDisconnect}
+        data-testid="DisconnectPsd2ConfirmDialog__7c3fbc" />
       <Psd2ConnectFlowUI flow={psd2Flow} data-testid="Psd2ConnectFlowUI__7c3fbc" />
       {transferSource ? (
         <FundsTransferModal

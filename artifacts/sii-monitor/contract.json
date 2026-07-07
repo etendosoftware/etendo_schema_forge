@@ -1,8 +1,8 @@
 {
-  "version": "0.6.0",
+  "version": "0.7.0",
   "generatedAt": "2026-05-04T17:00:26.053Z",
-  "updatedAt": "2026-06-29T12:09:18.376Z",
-  "checksum": "1121146d6eb6f0ea",
+  "updatedAt": "2026-07-06T15:34:12.021Z",
+  "checksum": "9ee7d8b0fd8eff68",
   "frontendContract": {
     "window": {
       "id": "FEF76C3E0F104F06A89AAD15A4A4A35C",
@@ -6246,6 +6246,14 @@
             "type": "button",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           }
         ]
       },
@@ -7700,6 +7708,14 @@
             "type": "button",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           }
         ]
       },
@@ -9472,6 +9488,14 @@
             "type": "button",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           }
         ]
       },
@@ -10926,6 +10950,14 @@
             "type": "button",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOCurrencyRate",
+            "apiKey": "eTGOCurrencyRate",
+            "column": "EM_ETGO_Currency_Rate",
+            "type": "string",
+            "visibility": "discarded",
+            "required": false
           }
         ]
       },
@@ -18911,6 +18943,14 @@
         "description": "System field 'etcopagCopilotFeedback' should exist in backend but not frontend for issuedInvoices"
       },
       {
+        "id": "t-system-field-issuedInvoices-eTGOCurrencyRate",
+        "category": "system-field",
+        "entity": "issuedInvoices",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "System field 'eTGOCurrencyRate' should exist in backend but not frontend for issuedInvoices"
+      },
+      {
         "id": "t-system-field-issuedInvoices-eTGODeliveryStatus",
         "category": "system-field",
         "entity": "issuedInvoices",
@@ -19749,6 +19789,14 @@
         "field": "etcopagCopilotFeedback",
         "runner": "node",
         "description": "System field 'etcopagCopilotFeedback' should exist in backend but not frontend for issuedInvoices(previousPeriod)"
+      },
+      {
+        "id": "t-system-field-issuedInvoices-previousPeriod-eTGOCurrencyRate",
+        "category": "system-field",
+        "entity": "issuedInvoices(previousPeriod)",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "System field 'eTGOCurrencyRate' should exist in backend but not frontend for issuedInvoices(previousPeriod)"
       },
       {
         "id": "t-system-field-issuedInvoices-previousPeriod-eTGODeliveryStatus",
@@ -21575,6 +21623,14 @@
         "description": "System field 'etcopagCopilotFeedback' should exist in backend but not frontend for receivedInvoices"
       },
       {
+        "id": "t-system-field-receivedInvoices-eTGOCurrencyRate",
+        "category": "system-field",
+        "entity": "receivedInvoices",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "System field 'eTGOCurrencyRate' should exist in backend but not frontend for receivedInvoices"
+      },
+      {
         "id": "t-system-field-receivedInvoices-eTGODeliveryStatus",
         "category": "system-field",
         "entity": "receivedInvoices",
@@ -22405,6 +22461,14 @@
         "field": "etcopagCopilotFeedback",
         "runner": "node",
         "description": "System field 'etcopagCopilotFeedback' should exist in backend but not frontend for receivedInvoices(previousPeriod)"
+      },
+      {
+        "id": "t-system-field-receivedInvoices-previousPeriod-eTGOCurrencyRate",
+        "category": "system-field",
+        "entity": "receivedInvoices(previousPeriod)",
+        "field": "eTGOCurrencyRate",
+        "runner": "node",
+        "description": "System field 'eTGOCurrencyRate' should exist in backend but not frontend for receivedInvoices(previousPeriod)"
       },
       {
         "id": "t-system-field-receivedInvoices-previousPeriod-eTGODeliveryStatus",
@@ -23645,7 +23709,7 @@
       }
     ],
     "summary": {
-      "total": 1402,
+      "total": 1406,
       "byCategory": {
         "action-endpoint": 93,
         "crud-flags": 11,
@@ -23658,11 +23722,11 @@
         "readonlylogic-valid": 59,
         "rule-declared": 91,
         "selector-endpoint": 28,
-        "system-field": 637,
+        "system-field": 641,
         "visibility": 11
       },
       "byRunner": {
-        "node": 1402,
+        "node": 1406,
         "junit": 0
       }
     }

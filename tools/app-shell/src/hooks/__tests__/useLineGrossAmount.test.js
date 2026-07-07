@@ -346,6 +346,73 @@ describe('computeLineGrossAmount — invoice config', () => {
 
 });
 
+// ─── computeLineGrossAmount — currency conversion recompute (ETP-4029) ───────
+// Mirrors DetailView.jsx's applyProductCurrencyConversion: on a 'product' field
+// change under an active currency conversion, the caller sets
+// result.lineNetAmount = null and result[priceField] = convertedPrice right
+// before calling computeLineGrossAmount, so the net amount is recomputed from
+// the CONVERTED price instead of the earlier callout pass's stale net (which
+// was latched onto the unconverted price).
+
+describe('computeLineGrossAmount — currency-conversion-triggered null lineNetAmount recompute', () => {
+  // applyProductCurrencyConversion re-invokes computeLineGrossAmount with
+  // `field = lineConfig.priceField` (NOT 'product') and `value = convertedPrice`,
+  // after resetting result.lineNetAmount to null. priceField is a clientSideField,
+  // so the sync guard at the top of computeLineGrossAmount fires and recomputes
+  // lineNetAmount from the converted price instead of leaving it stale.
+
+  it('re-invocation with priceField + reset lineNetAmount recomputes net/gross from the converted price (order config)', () => {
+    const cache = { [TAX_ID]: 21 };
+    // Post-conversion state set up by applyProductCurrencyConversion: listPrice
+    // already holds the CONVERTED price, and lineNetAmount was just reset to null.
+    const result = { tax: TAX_ID, lineNetAmount: null, listPrice: 55, grossAmount: null };
+    const rowValues = { orderedQuantity: 2, listPrice: 55, discount: 0 };
+
+    computeLineGrossAmount(ORDER_LINE_CONFIG.priceField, 55, result, { ...rowValues, ...result, listPrice: 55 }, cache, [], ORDER_LINE_CONFIG);
+
+    // Net recomputed from the converted price: 2 × 55 × 1 = 110 (no discount)
+    assert.equal(result.lineNetAmount, 110);
+    // Gross applies the tax factor: 110 × 1.21 = 133.1
+    assert.equal(result.grossAmount, 133.1);
+    assert.equal(result.lineGrossAmount, 133.1);
+  });
+
+  it('re-invocation recomputes for the invoice config too (listPrice trigger)', () => {
+    const cache = { [TAX_ID_10]: 10 };
+    const result = { tax: TAX_ID_10, lineNetAmount: null, listPrice: 40, grossAmount: null };
+    const rowValues = { invoicedQuantity: 3, listPrice: 40 };
+
+    computeLineGrossAmount(INVOICE_LINE_CONFIG.priceField, 40, result, { ...rowValues, ...result, listPrice: 40 }, cache, [], INVOICE_LINE_CONFIG);
+
+    // 3 × 40 × 1.10 = 132
+    assert.equal(result.lineNetAmount, 120);
+    assert.equal(result.grossAmount, 132);
+  });
+
+  it('would incorrectly skip the recompute if lineNetAmount were left stale (regression guard documenting the pre-fix bug)', () => {
+    // This test documents WHY the fix is necessary: if the caller forgot to
+    // reset lineNetAmount to null/0 after converting the price (the pre-fix
+    // behavior), the sync guard (`calloutResult.lineNetAmount == null || === 0`)
+    // would see a non-zero stale value and skip the resync entirely, leaving the
+    // net inconsistent with the newly converted price used for the gross.
+    const cache = { [TAX_ID]: 21 };
+    const staleResult = { tax: TAX_ID, lineNetAmount: 50, listPrice: 55, grossAmount: null };
+    const rowValues = { orderedQuantity: 2, listPrice: 55, discount: 0 };
+
+    computeLineGrossAmount(ORDER_LINE_CONFIG.priceField, 55, staleResult, { ...rowValues, ...staleResult, listPrice: 55 }, cache, [], ORDER_LINE_CONFIG);
+
+    // lineNetAmount sync is skipped because the stale value (50) is neither null nor 0 —
+    // it stays wrong even though the gross below is correctly derived from the local lineNet.
+    assert.equal(staleResult.lineNetAmount, 50);
+    // Gross is still computed correctly from the (locally derived) converted-price net,
+    // which is what produces the "inconsistent line" the fix comment warns about:
+    // grossAmount is right (133.1) but lineNetAmount is stale (50) — exactly the bug.
+    assert.equal(staleResult.grossAmount, 133.1);
+    assert.notEqual(staleResult.lineNetAmount, 110);
+  });
+
+});
+
 // ─── computeLineGrossAmount — lineNetAmount sync ──────────────────────────────
 // For client-side fields (qty, priceField, discount), lineNetAmount is kept in
 // sync when the callout didn't return it. Tax changes do not write lineNetAmount.

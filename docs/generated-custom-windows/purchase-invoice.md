@@ -28,7 +28,7 @@ Use this window to register supplier invoices, keep the payable document aligned
 
 ## Reactive behavior and dependencies
 
-- Header defaults are visible in the contract for invoice date and accounting date (`@#Date@`), document status (`DR`), currency, and zeroed payable amounts such as total paid and outstanding amount.
+- Header defaults are visible in the contract for invoice date and accounting date (`@#Date@`), document status (`DR`), currency, and zeroed payable amounts such as total paid and outstanding amount. Currency is editable on the header via the `CurrencyRatePicker` component (see "Currency and exchange rate — ETP-4029" below), not a read-only defaulted value.
 - The `date` field in `AddPaymentModal.jsx` (the "New payment" popup triggered from the invoice detail) uses the generic `DateField` component (`tools/app-shell/src/components/ui/date-field.jsx`) — Figma-aligned calendar popover with always-visible calendar icon, month/year picker, and Etendo yellow hover on filled-black elements. These defaults matter because a new payable document starts as draft and incomplete before lines and payment activity exist.
 - Partner address is a dependent selector filtered by the selected business partner. The business partner also drives header callouts, and the custom page blocks line creation until a business partner is present.
 - The purchase order reference is part of the header contract and is used by the custom related-documents surface to show the linked purchase order and to fetch related goods receipts for the same order. The related-documents component fetches the full purchase order record via `fetchById('purchase-order', 'header', ...)` so the chip renders the formatted title (`Order #<documentNo>`), the grand total amount with currency symbol, and the document status — matching the same visual style used by the sales-invoice related-documents chip. The supplier invoice reference (`orderReference`, DB column `POReference`, displayed as `Document No.` / `Nº documento`) is a free-text header field surfaced in the detail form so the user can reconcile the invoice against the supplier's own paper document; it stays editable after completion in this instance because AD metadata does not define a read-only rule for it.
@@ -125,6 +125,7 @@ Two new line-import flows are now available on draft purchase invoices when a bu
 - Already-imported lines (matched via `salesOrderLine` / `C_OrderLine_ID` on existing invoice lines) are grayed and labeled "Ya importado".
 - Each imported line is POSTed to `/purchase-invoice/lines` with `salesOrderLine`, `invoicedQuantity`, `unitPrice`, `listPrice`, `etgoDiscount`, `tax`, `uOM`, and `lineNo`.
 - `afterImport`: if every imported order shares the same non-zero `etgoTotalDiscount`, a PATCH updates the invoice header with that discount so the `DocumentTotalsPanel` reflects it immediately.
+- **Currency filter — ETP-4029:** the modal fetches the invoice's own header (`GET purchase-invoice/header/{id}`) and keeps only candidate orders whose `currency` matches the invoice's current header currency (purchase orders carry `currency` directly). Empty-state message when candidates exist but none match: `noPurchaseOrdersMatchCurrency`.
 
 **Import from Goods Receipt** (`artifacts/purchase-invoice/custom/ImportFromGoodsReceiptModal.jsx`):
 - Lists completed goods receipts (`documentStatus=CO`) for the same supplier with `invoiced !== true`.
@@ -133,6 +134,7 @@ Two new line-import flows are now available on draft purchase invoices when a bu
 - Already-imported lines are detected via `goodsShipmentLine` / `M_InOutLine_ID` on existing invoice lines.
 - The backing PO line (`salesOrderLine` on the receipt line) is looked up in `/purchase-order/lines/{id}` to carry the line-level discount into the invoice.
 - POST body: `goodsShipmentLine`, `salesOrderLine`, `invoicedQuantity`, `unitPrice`, `listPrice`, `etgoDiscount`, `tax`, `uOM`, `lineNo`.
+- **Currency filter — ETP-4029:** `M_InOut` (goods receipts) has no `C_Currency_ID` column, so currency is resolved through the receipt's linked purchase order; candidates whose linked order currency does not match the invoice's current header currency are excluded, and candidates with no linked order are never excluded. Empty-state message when candidates exist but none match: `noGoodsReceiptsMatchCurrency`. Both import modals share the `noCurrencyMatchMessageKey`/`excludedByCurrency` mechanism on the generic `ImportLinesModal.jsx`, and both re-read the invoice's current header currency on every fetch, so switching the header currency and reopening the modal re-filters immediately.
 
 **`PurchaseInvoiceBottomPanel.jsx`** was rewritten to wire both modals:
 - `PurchaseInvoiceLinesEmptyState`: shows "Importar desde envío" (receipt) and "Importar desde pedido" (order) buttons when `isDraft && canAddLine && bpId`. Receipt button is first (mirrors sales-invoice order).
@@ -151,6 +153,11 @@ Two new line-import flows are now available on draft purchase invoices when a bu
 **Automated evidence (ETP-3908)**:
 - `e2e/tests/flows/purchase-invoice-import-from-order.mocked.spec.js` — 4 mocked Playwright tests: single line (asserts POST body fields), multiple lines (asserts 2 POSTs), line-level discount (asserts `etgoDiscount: 15` in POST), order-level discount (asserts header PATCH with `etgoTotalDiscount: 15`).
 - `e2e/tests/flows/purchase-invoice-import-from-receipt.mocked.spec.js` — 3 mocked Playwright tests: single line with callout-resolved price (asserts `goodsShipmentLine` in POST), secondary label shows PO reference, already-imported lines show "ya importado" and are disabled.
+
+**Automated evidence (ETP-4029 — currency filter on import modals)**:
+- `artifacts/purchase-invoice/custom/__tests__/ImportFromPurchaseOrderModal.test.js` and `artifacts/purchase-invoice/custom/__tests__/ImportFromGoodsReceiptModal.test.js` provide source-level coverage for currency-match filtering (kept when currency matches, excluded on mismatch, never excluded when there is no linked order to compare against) and the correct `noCurrencyMatchMessageKey` per modal (`noPurchaseOrdersMatchCurrency` / `noGoodsReceiptsMatchCurrency`).
+- `tools/app-shell/src/components/contract-ui/__tests__/ImportLinesModal.vitest.jsx` covers the shared `noCurrencyMatchMessageKey` prop and `excludedByCurrency` state consumed by both modals.
+- `cli/test/etp4029-currency-filter-keys.test.js` is a dedicated i18n parity test asserting the 5 new currency-filter keys (including `noPurchaseOrdersMatchCurrency` and `noGoodsReceiptsMatchCurrency`) exist identically in both `en_US.json` and `es_ES.json`.
 
 **Automated evidence (ETP-3995)**:
 - `artifacts/purchase-invoice/decisions.json` — `window.extraTabs` declares the SIF tab (`key: 'sif'`, `labelKey: 'sifDataTabs.sectionTitle'`, `component: 'SifTab'`, `importFrom: '@/windows/custom/shared/SifTab.jsx'`).
@@ -219,6 +226,52 @@ Added `"hideDeleteWhenComplete": true` to `artifacts/purchase-invoice/decisions.
 ### Manual verification
 
 Open a completed purchase invoice (`✓ Completado` badge). Confirm the trash icon is **not** visible in the detail toolbar. Open a draft invoice and confirm the trash icon **is** visible.
+
+## Currency and exchange rate on the header — ETP-4029
+
+Purchase invoices carry the same currency/exchange-rate editing model already shipped for sales/purchase orders and quotations in ETP-4027: the invoice header currency is user-editable, a per-invoice rate override can be set, and that rate is kept in sync with the accounting-facing exchange-rate record as the invoice evolves. This is a header/business-logic layer distinct from (and a prerequisite for) the **Exchange Rates** secondary tab and completion guard documented in the "ETP-4030" section below.
+
+### Header currency field and `CurrencyRatePicker`
+
+- `header.currency` in `artifacts/purchase-invoice/decisions.json` is `visibility: "editable"`, `form: true`, `section: "principal"`, `readOnlyLogic: "@Processed@='Y'"` — editable while the invoice is draft, locked once completed. The field was already `editable` before ETP-4029, but hidden (`section: "other"`, `form: false`); ETP-4029 moved it into the visible principal section.
+- A new hidden field, `eTGOCurrencyRate` (`visibility: "editable"`, `form: false`, `grid: false`), stores the per-invoice exchange-rate override (`C_INVOICE.EM_ETGO_Currency_Rate`, `NUMERIC(20,12)`, nullable — the same column, shared with sales-invoice, since both live on `C_INVOICE`). It is writable by NEO but not rendered as its own form field; `CurrencyRatePicker` reads/writes it as part of the currency selection.
+- `tools/app-shell/src/components/contract-ui/EntityForm.jsx` renders the `CurrencyRatePicker` component (searchable currency selector with an inline rate editor, shared with sales-order/purchase-order/sales-quotation/sales-invoice) instead of the plain `SelectorInput` whenever the field's column is `C_Currency_ID`, the entity is `header`, and the current URL matches `/(sales-order|purchase-order|sales-quotation|sales-invoice|purchase-invoice)(\/|$)/`. Selecting a currency calls the `currencyOptions` header action to list currencies reachable from the org currency (with their rates) and PATCHes `currency`, `currency$_identifier`, and `eTGOCurrencyRate` together.
+- Unlike sales-invoice, `artifacts/purchase-invoice/decisions.json`'s `entities.lines` has no currency field declared at all (no `cCurrencyId` entry) — `C_InvoiceLine` has no `C_Currency_ID` column on either invoice direction, so there is nothing to expose or sync at the line level.
+
+**Known field-order gap (not yet fixed, confirmed against live code):** the ticket behind ETP-4029 calls for "Currency, then Price List" order in the header form. `priceList` in `artifacts/purchase-invoice/decisions.json` carries an explicit `"seq": 70`, while `currency` has no `seq` at all. The generator's form-field sort (`generate-frontend.js`) always places a field that has *any* `seq` value before one that has none, regardless of the seq number — so **Price List currently renders before Currency** on the purchase-invoice header, the opposite of the intended order. (Sales-invoice does not have this problem: neither field has a `seq` there, so the natural DB-extraction order in `contract.json` — which already puts `currency` before `priceList` — applies.) Fixing this requires either giving `currency` a lower explicit `seq` than `70`, or removing `priceList`'s `seq` so natural order takes over — the exact fix must be validated against `contract.json`'s field order before applying it.
+
+### Backend wiring
+
+- `CurrencyOptionsHandler` (`@Named("currencyOptionsHandler")`) resolves the org/client/date context needed to list currency options. For invoice specs (`context.getSpecName()` containing `"invoice"`) it loads via `Invoice.class` and uses `getInvoiceDate()`; for order specs it uses `Order.class` and `getOrderDate()` as before. `PurchaseInvoiceHeaderHandler` `@Inject`s `CurrencyOptionsHandler` and passes it into `NeoHeaderActionRouter.dispatch(...)`, exposing `GET /sws/neo/purchase-invoice/header/{id}/action/currencyOptions`.
+- `PurchaseInvoiceHeaderHandler` now implements `afterCallout()` (previously absent), calling `blockCalloutCurrencyUpdate` (strips any callout-pushed `currency` value so currency only ever changes by direct user selection) and `checkExchangeRateWarning` (appends a `WARNING` message when the user changes currency to one with no `C_Conversion_Rate` on the invoice date) — both implemented once on the shared `AbstractInvoiceHeaderHandler` base and called explicitly from the subclass, mirroring the order-side handlers from ETP-4027.
+- `PurchaseInvoiceHeaderHandler.afterHandle()` calls `AbstractInvoiceHeaderHandler.autoCreateOrUpdateConversionRateDocument(context)` unconditionally as its first line, on every successful header POST/PATCH/PUT — before its existing method-gated logic (e.g. `persistOriginInvoice`, which is POST/PUT-only). It upserts the `C_Conversion_Rate_Document` row for the invoice whenever the invoice currency differs from the org currency and an `eTGOCurrencyRate` override is set, recomputing `foreign_amount = grandTotalAmount × (1 / eTGOCurrencyRate)` each time. This keeps the exchange-rate record in sync as the invoice's total changes while lines are added or edited. `InvoiceLineHandler.afterHandle()` calls the same upsert (via its `String`-based overload, resolving the parent invoice ID from the line save) on every line POST/PATCH/PUT, so the rate document also stays current as lines are added one at a time rather than only on header save.
+
+### Rate inheritance when an invoice is created from an order
+
+`InvoiceFromOrderSupport.propagateOrderRateToInvoice(order, invoice)` — already responsible for creating the initial `C_Conversion_Rate_Document` row when an invoice is generated from a source order that has `EM_ETGO_Currency_Rate` set — now also copies the rate onto the invoice's own column: `invoice.setETGOCurrencyRate(rate)`. This single method is shared by both `CreateDraftInvoiceHandler` (sales, invoked from quotations and sales orders) and `CreatePurchaseInvoiceHandler.createFromOrder()` (purchase, invoked when creating a purchase invoice directly from a purchase order), so `currency`, `priceList`, and `eTGOCurrencyRate` are all inherited together on that path.
+
+**Confirmed gap — Goods Receipt → Purchase Invoice:** `CreatePurchaseInvoiceHandler.createFromReceipt()` (the path used when generating a purchase invoice from a goods receipt that itself carries a linked purchase order) copies `currency` and `priceList` from the linked order via the same `NeoCommercialDocumentFactory` method used by `createFromOrder()`, but it does **not** call `propagateOrderRateToInvoice(...)`. That call exists only in `createFromOrder()`. The net effect: an invoice created from a goods receipt linked to a non-org-currency purchase order gets the correct currency and price list, but not the exchange rate or the `C_Conversion_Rate_Document` row — the invoice is left as if the currency had just been set for the first time with no rate override, until the user opens `CurrencyRatePicker` and sets one manually. `createFromReceiptNoPo()` (a receipt with no linked order at all) is unaffected by this gap since there is no source rate to inherit in the first place — a newly created invoice without an inherited rate goes through the same unconditional `autoCreateOrUpdateConversionRateDocument` path as any other invoice once a rate is eventually set.
+
+### Manual verification
+
+1. Open a new purchase invoice and confirm the currency field renders as the searchable `CurrencyRatePicker` (not a plain dropdown), listing currencies reachable from the org currency with their rates. Note the current field-order gap: Tarifa currently renders before Moneda, the opposite of the intended order.
+2. Select a non-org currency with a defined `C_Conversion_Rate`: confirm no warning appears and the field commits normally.
+3. Select a non-org currency with no defined rate: confirm a warning message appears.
+4. Save the invoice, add a line, and confirm the invoice's Exchange Rates tab (ETP-4030 section below) reflects an updated `foreignAmount` as the grand total changes — without needing to touch the exchange-rate row directly.
+5. Create a purchase invoice directly from a completed purchase order that has a non-org currency and a set exchange rate; confirm the new invoice inherits currency, price list, and the same rate, and that a `C_Conversion_Rate_Document` row exists for it.
+6. Create a purchase invoice from a goods receipt that is linked to a non-org-currency purchase order; confirm currency and price list are inherited but be aware the exchange rate is **not** currently inherited on this path (known gap above) — the invoice will show no rate until one is set manually.
+
+### Automated evidence
+
+- `artifacts/purchase-invoice/decisions.json` — `header.currency` (editable/principal/`readOnlyLogic`) and `eTGOCurrencyRate` (editable, hidden) field declarations.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/CurrencyOptionsHandler.java` — branches on `context.getSpecName()` to resolve via `Invoice.class`/`getInvoiceDate()` for invoice specs vs `Order.class`/`getOrderDate()` for orders.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/AbstractInvoiceHeaderHandler.java` — shared `blockCalloutCurrencyUpdate`, `checkExchangeRateWarning`, and `autoCreateOrUpdateConversionRateDocument` (both the `NeoContext` and `String` overloads) methods, called explicitly from each invoice header subclass.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/PurchaseInvoiceHeaderHandler.java` — injects `CurrencyOptionsHandler` into `NeoHeaderActionRouter.dispatch(...)`; `afterCallout()` calls `blockCalloutCurrencyUpdate`/`checkExchangeRateWarning`; `afterHandle()` calls `autoCreateOrUpdateConversionRateDocument(context)` unconditionally before its existing method-gated logic (e.g. `persistOriginInvoice`).
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/InvoiceLineHandler.java` — calls the `String`-based `autoCreateOrUpdateConversionRateDocument` overload from `afterHandle()` on every line save.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/InvoiceFromOrderSupport.java` — `propagateOrderRateToInvoice()` sets `invoice.setETGOCurrencyRate(rate)` in addition to creating the `C_Conversion_Rate_Document` row; called from `CreatePurchaseInvoiceHandler.createFromOrder()` (not from `createFromReceipt()` — see the confirmed gap above) and from `CreateDraftInvoiceHandler` (sales).
+- `tools/app-shell/src/components/contract-ui/EntityForm.jsx` — `isCurrencyRateSelectorField()` includes `sales-invoice|purchase-invoice` in its URL match regex.
+- `tools/app-shell/src/windows/custom/shared/InvoicePreview.jsx` — dual-currency computation via `useDocumentCurrency`/`useCurrencyPrecision`, feeding the shared `SummaryCard` component (same mechanism documented in `sales-invoice.md`); covered by `InvoicePreview.vitest.jsx` (`describe('dual-currency via useDocumentCurrency (ETP-4029)')`).
+- `docs/plans/ETP-4029-currency-invoice.md` records the full implementation trace, including the Phase 7 gap analysis (the field-order fix needed on purchase-invoice, the BP-linked price-list fallback already working via the classic `SE_Invoice_BPartner` callout, and the receipt-path rate-inheritance gap detailed above).
 
 ## Exchange rates and completion currency guard — ETP-4030
 
@@ -298,3 +351,65 @@ SII status pill (the only one of the three that applies to purchase invoices —
 stale pre-send value. The fix and full root-cause writeup live in
 [`sales-invoice.md` — "TBAI status staleness fix in invoice preview — ETP-4391"](sales-invoice.md#tbai-status-staleness-fix-in-invoice-preview--etp-4391);
 only the spec name and which of the three panels apply differ between the two windows.
+
+## Bank transfer (PIS) via Salt Edge — ETP-4406
+
+Purchase invoices can now be paid by a **real bank transfer** initiated inline from the
+"Añadir pago" modal (`NewPaymentEntryModal.jsx`), instead of only recording a manual payment.
+The transfer is handed off to the existing PSD2 / Salt Edge **PIS** (Payment Initiation Service)
+engine — this window contributes the glue, not a new integration.
+
+### Visibility gate (frontend)
+
+The PIS block (`data-testid="cp-pis-section"`) renders after the balance summary, before the
+footer, only when **all** hold (mirrors the backend's own eligibility check, so it is deliberately
+heuristic, not exhaustive):
+
+- direction is **payment out** (`dir === 'out'` — purchase invoice), and
+- the selected financial account is **PSD2-connected** (`psd2Connected`, sourced from the
+  enriched `invoiceAccounts` action — same `EM_PSD2_Connection_Status='CO'` check as
+  `FinancialAccountsPageHandler`), and
+- the payment method looks like a transfer (name contains "transfer"/"transferencia"), and
+- the account currency is **EUR** or **GBP** (`PIS_ELIGIBLE_CURRENCIES`).
+
+The block offers a **payment template** select (`cpPisTemplateLabel` — SEPA / DOMESTIC / FPS,
+from the AD "Template List for Bank Payments" ref-list, defaulting by currency: EUR→SEPA,
+GBP→FPS) and a **destination IBAN** select (`cpPisIbanLabel`, the supplier's
+`C_BP_BankAccount` IBANs, or a hand-typed one), plus an amber transfer summary and an SCA hint.
+The primary footer button changes to **"Continuar al banco"** (`cpPisConfirmButton`).
+
+### Confirm behavior
+
+On confirm with `pis: true`, the `registerPayment` action creates and links the `FIN_Payment`
+and **processes it to status `PPM`** ("Payment Made") — applied to the invoice but with **no
+`FIN_Finacc_Transaction` yet**. The bank transaction is created only once Salt Edge confirms
+execution, by the PSD2 module's own `PisPaymentCallback` → `PISTransactionUtils` (idempotent).
+To keep config and runtime aligned, connecting an account to PSD2 **from Etendo Go** clears the
+transfer method's **Automatic Withdrawn** flag (`FinancialAccountPsd2Handler`) — Payment OUT
+only; Automatic Deposit is left untouched, since PIS only initiates outbound transfers.
+
+The response carries `pisPaymentUrl` + `pisPaymentId`; the modal opens the Salt Edge SCA widget
+in a popup and polls the `pisPaymentStatus` action every ~3s. The popup returns to Etendo Go's
+own auto-closing SPA callback route (`financial-account/pis-callback`, `PisCallbackPage.jsx`),
+which posts a `pis-completed` message to the opener and closes itself — the user never sees the
+Classic-styled shared bank-auth result page. On `executed` the modal shows a success toast and
+refreshes; on failure/cancel it returns to an editable draft (the `cancelPisPayment` action
+reactivates + removes the unauthorized payment). The non-PIS path is byte-for-byte unchanged.
+
+### Payment history badge
+
+Payments that have a linked `PSD2_PIS_PAYMENT` row show a **"Realizado vía PSD2"** badge
+(`cpPisViaLabel`) in the history modal. The flag comes from a direct `OBCriteria<PisPayment>`
+query in the GO module (`PisPaymentService.hasLinkedPisPayment`), not a new PSD2-module method.
+
+### Where the code lives
+
+- Frontend: `NewPaymentEntryModal.jsx` (PIS block + polling), `PisCallbackPage.jsx` (callback route),
+  `InvoicePaymentHistoryModal.jsx` (badge). All `cpPis*` keys are in both `es_ES.json` / `en_US.json`.
+- Backend (`com.etendoerp.go`): `PaymentRegistrationService` (enriched `invoiceAccounts`, PIS branch
+  of the advanced register flow), `PisPaymentService` (`pisPaymentStatus`, `cancelPisPayment`,
+  `pisTemplates`, `pisSupplierAccounts`, `applyOverpaymentAndInitiatePis`), `PisPaymentBridge`
+  (composes the public PSD2 `GenerateBankPayment` with Etendo Go's own `return_to`).
+
+Scope v1: purchase invoices only, EUR (SEPA) / GBP (FPS). Out of scope: receipts, batch/multi-invoice
+PIS, other currencies, scheduled payments.

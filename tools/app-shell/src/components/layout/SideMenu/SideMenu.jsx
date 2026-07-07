@@ -329,11 +329,137 @@ function ExpandedGroupSection({
   );
 }
 
+function UnreadBadge({ unreadCount, expanded }) {
+  if (unreadCount <= 0) return null;
+  const label = unreadCount > 9 ? '9+' : unreadCount;
+  if (expanded) {
+    return (
+      <span
+        className="flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-bold leading-none"
+        style={{ background: '#FFD400', color: '#121217' }}
+      >
+        {label}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold leading-none ring-2 ring-white"
+      style={{ background: '#FFD400', color: '#121217' }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function HelpEntryPoint({ expanded, onClick, unreadCount, ui }) {
+  if (!expanded) {
+    return (
+      <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
+          <button
+            type="button"
+            onClick={onClick}
+            aria-label={ui('helpAndSupport')}
+            className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Headphones className="h-5 w-5" data-testid="Headphones__247c75" />
+            <UnreadBadge
+              unreadCount={unreadCount}
+              expanded={false}
+              data-testid="UnreadBadge__247c75" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right" data-testid="TooltipContent__247c75">{ui('helpAndSupport')}</TooltipContent>
+      </Tooltip>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
+    >
+      <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Headphones className="h-4 w-4" data-testid="Headphones__247c75" />
+      </span>
+      <span className="flex-1 text-left truncate">{ui('helpAndSupport')}</span>
+      <UnreadBadge unreadCount={unreadCount} expanded data-testid="UnreadBadge__247c75" />
+      {unreadCount === 0 && (
+        <ChevronRight
+          className="h-4 w-4 shrink-0 text-muted-foreground"
+          data-testid="ChevronRight__247c75" />
+      )}
+    </button>
+  );
+}
+
+function ArtifactsLink({ expanded, isActive, tMenu }) {
+  if (!expanded) {
+    return (
+      <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
+          <NavLink
+            to="/artifacts"
+            className={cn(
+              'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
+              isActive ? 'text-foreground bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+            data-testid="NavLink__247c75">
+            <FileJson className="h-5 w-5" data-testid="FileJson__247c75" />
+          </NavLink>
+        </TooltipTrigger>
+        <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu('Artifacts')}</TooltipContent>
+      </Tooltip>
+    );
+  }
+  return (
+    <NavLink
+      to="/artifacts"
+      className={cn(
+        'flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors',
+        isActive ? 'text-foreground bg-muted' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+      )}
+      data-testid="NavLink__247c75">
+      <FileJson className="h-4 w-4" data-testid="FileJson__247c75" />
+      <span>{tMenu('Artifacts')}</span>
+    </NavLink>
+  );
+}
+
+function SideMenuFooter({ expanded, onHelpClick, unreadCount, ui, isArtifactsActive, tMenu }) {
+  return (
+    <div className={cn(
+      'flex flex-col shrink-0 pb-2',
+      expanded ? 'px-2 gap-1 pt-2' : 'px-2 gap-1'
+    )}>
+      <div className={cn('border-t border-[#E8EAEF] mb-1', expanded ? 'mx-[-8px]' : 'w-10')} />
+      <HelpEntryPoint
+        expanded={expanded}
+        onClick={onHelpClick}
+        unreadCount={unreadCount}
+        ui={ui}
+        data-testid="HelpEntryPoint__247c75" />
+      <div className={cn('flex items-center', expanded ? '' : 'justify-center')}>
+        <UserAvatarButton expanded={expanded} data-testid="UserAvatarButton__247c75" />
+      </div>
+      {import.meta.env.VITE_SHOW_ARTIFACTS === 'true' && (
+        <ArtifactsLink
+          expanded={expanded}
+          isActive={isArtifactsActive}
+          tMenu={tMenu}
+          data-testid="ArtifactsLink__247c75" />
+      )}
+    </div>
+  );
+}
+
 export default function SideMenu({
   menuGroups,
   expanded,
   onToggle,
   onHelpClick,
+  unreadCount = 0,
   logoSrc = '/favicon.png',
 }) {
   const { selectedOrg } = useAuth();
@@ -626,83 +752,14 @@ export default function SideMenu({
           })}
         </div>
 
-        {/* Pinned footer: Help + user */}
-        <div className={cn(
-          'flex flex-col shrink-0 pb-2',
-          expanded ? 'px-2 gap-1 pt-2' : 'px-2 gap-1'
-        )}>
-          <div className={cn('border-t border-[#E8EAEF] mb-1', expanded ? 'mx-[-8px]' : 'w-10')} />
-          {!expanded ? (
-            <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
-              <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
-                <button
-                  type="button"
-                  onClick={handleHelpClick}
-                  aria-label={ui('helpAndSupport')}
-                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-page-bg text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <Headphones className="h-5 w-5" data-testid="Headphones__247c75" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" data-testid="TooltipContent__247c75">{ui('helpAndSupport')}</TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              type="button"
-              onClick={handleHelpClick}
-              className="flex items-center gap-2.5 px-3 py-2 text-sm rounded-md text-foreground hover:bg-muted/50 transition-colors"
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <Headphones className="h-4 w-4" data-testid="Headphones__247c75" />
-              </span>
-              <span className="flex-1 text-left truncate">{ui('helpAndSupport')}</span>
-              <ChevronRight
-                className="h-4 w-4 shrink-0 text-muted-foreground"
-                data-testid="ChevronRight__247c75" />
-            </button>
-          )}
-
-          <div className={cn(
-            'flex items-center',
-            expanded ? '' : 'justify-center'
-          )}>
-            <UserAvatarButton expanded={expanded} data-testid="UserAvatarButton__247c75" />
-          </div>
-
-          {import.meta.env.VITE_SHOW_ARTIFACTS === 'true' && (
-            !expanded ? (
-              <Tooltip delayDuration={0} data-testid="Tooltip__247c75">
-                <TooltipTrigger asChild data-testid="TooltipTrigger__247c75">
-                  <NavLink
-                    to="/artifacts"
-                    className={cn(
-                      'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
-                      location.pathname.startsWith('/artifacts')
-                        ? 'text-foreground bg-muted'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                    data-testid="NavLink__247c75">
-                    <FileJson className="h-5 w-5" data-testid="FileJson__247c75" />
-                  </NavLink>
-                </TooltipTrigger>
-                <TooltipContent side="right" data-testid="TooltipContent__247c75">{tMenu('Artifacts')}</TooltipContent>
-              </Tooltip>
-            ) : (
-              <NavLink
-                to="/artifacts"
-                className={cn(
-                  'flex items-center gap-2.5 px-3 py-2 text-sm rounded-md transition-colors',
-                  location.pathname.startsWith('/artifacts')
-                    ? 'text-foreground bg-muted'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                )}
-                data-testid="NavLink__247c75">
-                <FileJson className="h-4 w-4" data-testid="FileJson__247c75" />
-                <span>{tMenu('Artifacts')}</span>
-              </NavLink>
-            )
-          )}
-        </div>
+        <SideMenuFooter
+          expanded={expanded}
+          onHelpClick={handleHelpClick}
+          unreadCount={unreadCount}
+          ui={ui}
+          isArtifactsActive={location.pathname.startsWith('/artifacts')}
+          tMenu={tMenu}
+          data-testid="SideMenuFooter__247c75" />
       </nav>
       <Dialog open={helpOpen} onOpenChange={setHelpOpen} data-testid="Dialog__247c75">
         <DialogContent data-testid="DialogContent__247c75">

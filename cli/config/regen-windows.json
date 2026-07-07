@@ -15,6 +15,11 @@
       "windowId": "800027"
     },
     {
+      "name": "business-partner-category",
+      "windowId": "192",
+      "menuName": "Business Partner Category"
+    },
+    {
       "name": "chart-of-accounts",
       "windowId": "118"
     },

@@ -1030,11 +1030,21 @@ function getSaveBtnCls(toolbarButtonSize) {
   return toolbarButtonSize === 'default' ? 'h-10 gap-2' : 'gap-1.5';
 }
 
-function getDraftModeCompleted(draftMode, _headerData, isProcessed) {
+// Normalizes boolean-ish status values (true/'Y' -> 'true', false/'N' -> 'false') so
+// windows whose statusField is a boolean flag (e.g. goods-movements' `processed`) can
+// declare completedStatuses as string literals, matching the precedent in statusBadge.js.
+function normalizeStatusValue(value) {
+  if (value === true || value === 'Y') return 'true';
+  if (value === false || value === 'N') return 'false';
+  return value;
+}
+
+function getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField) {
+  const statusValue = _headerData?.[statusField || 'documentStatus'];
   return Boolean(
       draftMode?.enabled && (
           Array.isArray(draftMode.completedStatuses)
-              ? draftMode.completedStatuses.includes(_headerData?.documentStatus)
+              ? draftMode.completedStatuses.includes(normalizeStatusValue(statusValue))
               : (isProcessed || _headerData?.documentStatus === 'CO')
       )
   );
@@ -1591,6 +1601,11 @@ export function DetailView({
   detailLabel,
   detailTabIndex,
   titleField = 'documentNo',
+  // Name of the header field holding this document's primary date (e.g. "orderDate"
+  // for orders/quotations, "invoiceDate" for invoices). Used for exchange-rate lookups
+  // and other document-date-dependent logic. Defaults to "orderDate" for backward
+  // compatibility with windows that don't declare window.documentDateField.
+  documentDateField = 'orderDate',
   windowName,
   recordId,
   token,
@@ -1704,15 +1719,20 @@ export function DetailView({
   // — the actions ref-controls the same modal so no functionality is lost.
   const getLineMenuActions = bottomSection?.lineMenuActions ?? null;
   const extraActionsRef = useRef(null);
-  // Static hooks for up to 4 secondary tabs (React rules forbid dynamic hook calls).
+  // Static hooks for up to 5 secondary tabs (React rules forbid dynamic hook calls).
   // Secondary hooks only consume child-level state (children, handleAddChild, handleDeleteChild,
   // handleSelect) — never the parent list. skipListFetch avoids refetching the parent entity
   // list once per hook (which would otherwise cause N+1 identical GETs on mount).
+  // Windows with fewer tabs pass a null entity key to the unused hooks (no-op fetch).
+  // NOTE: the contacts window has 5 secondary tabs (person, bank account, location,
+  // customer accounting, vendor accounting) — the 5th (index 4) needs its own hook or its
+  // rows never fetch. Bump this count in lockstep if a window ever exceeds 5.
   const secondaryHook0 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 0), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook1 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 1), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook2 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 2), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
   const secondaryHook3 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 3), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
-  const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3];
+  const secondaryHook4 = useEntity(entity, getSecondaryTabEntityKey(secondaryTabs, 4), { token, apiBaseUrl, skipListFetch: true, specName: windowName });
+  const secondaryHooks = [secondaryHook0, secondaryHook1, secondaryHook2, secondaryHook3, secondaryHook4];
   const parentRecordId = hook.selected?.id ?? recordId ?? hook.editing?.id ?? null;
   // "From" currency for secondary-tab inline add-rows. The parent document's
   // currency is a read-only column on those tabs (e.g. exchange rates), so the
@@ -1909,7 +1929,7 @@ export function DetailView({
   // values hide the Save/Confirm pair. This lets windows like sales-quotation keep the
   // pair visible during intermediate processed states (UE) while still hiding it in
   // terminal states (CA, ETGO_CI, CL, VO).
-  const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed);
+  const isDraftModeCompleted = getDraftModeCompleted(draftMode, _headerData, isProcessed, statusField);
   const sqBtnSize = getSqBtnSize(toolbarButtonSize);
   const saveBtnCls = getSaveBtnCls(toolbarButtonSize);
   const [showPrint, setShowPrint] = useState(false);
@@ -2235,7 +2255,7 @@ export function DetailView({
   useEffect(() => {
     if (recordId === 'new') return;
     const docCurrencyId = hook.selected?.currency;
-    const orderDate = hook.selected?.orderDate;
+    const orderDate = hook.selected?.[documentDateField];
     if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
       return;
     }
@@ -2299,7 +2319,7 @@ export function DetailView({
       }
     })();
     return () => { cancelled = true; };
-  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.orderDate, apiBaseUrl, token]);
+  }, [recordId, hook.selected?.currency, hook.selected?.eTGOCurrencyRate, hook.selected?.[documentDateField], apiBaseUrl, token, documentDateField]);
   // Guard: fire default callouts only once per new-record session
   const defaultCalloutsTriggeredRef = useRef(false);
   // Cache for tax rates fetched from the selector (keyed by tax ID).
@@ -2618,7 +2638,7 @@ export function DetailView({
     // Skipped when the new currency equals the org currency (no rate needed) and when
     // there is no previous currency yet (initial set, e.g. defaults).
     if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
-      const orderDate = hook.selected?.orderDate ?? hook.editing?.orderDate;
+      const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
       if (orderDate) {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
         (async () => {
@@ -2654,7 +2674,7 @@ export function DetailView({
 
     // Trigger callout — the backend returns empty if no callout is registered
     executeCallout(field, value, hook.editing);
-  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui]);
+  }, [hook.handleChange, hook.editing, hook.selected, executeCallout, apiBaseUrl, token, ui, documentDateField]);
 
   // Wrapped onChange that updates local form state and triggers the callout synchronously.
   // Fields opted into `field.calloutOn === 'blur'` defer their commit to blur via
@@ -4571,6 +4591,14 @@ function applyProductCurrencyConversion(field, result, rowValues, lineConfig, ac
     if (result.standardPrice != null) result.standardPrice = convertedPrice;
     if (result.unitPrice != null) result.unitPrice = convertedPrice;
     if (result.listPrice != null) result.listPrice = convertedPrice;
+    // The earlier 'product' callout pass already latched result.lineNetAmount onto the
+    // UNCONVERTED price (see calculateLineNetAmount / deriveNetFromProductChange). Clear it
+    // here so computeLineGrossAmount's null-guard recomputes it from the converted price
+    // instead of silently skipping the sync (its guard only fires when lineNetAmount is
+    // null/0). Without this, lineNetAmount stays stale while grossAmount/grossField are
+    // correctly forced to the converted value — an inconsistent line that the backend
+    // persists using the stale net, producing a wrong (sometimes negative) tax total.
+    result.lineNetAmount = null;
     computeLineGrossAmount(lineConfig.priceField, convertedPrice, result, {
       ...rowValues,
       ...result,

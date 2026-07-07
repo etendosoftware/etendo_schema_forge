@@ -1,8 +1,7 @@
 {
-  "version": "0.16.0",
-  "generatedAt": "2026-04-29T18:11:05.114Z",
-  "updatedAt": "2026-06-24T20:46:48.951Z",
-  "contractChecksum": "605712e12c57175f",
+  "version": "0.18.0",
+  "generatedAt": "2026-07-06T16:17:20.249Z",
+  "contractChecksum": "5a9f480f8a98cfc4",
   "apiPrediction": {
     "specName": "return-material-receipt",
     "baseUrl": "/sws/neo/return-material-receipt",
@@ -242,26 +241,43 @@
         "processType": "classic"
       },
       {
-        "name": "sendMaterials",
-        "actionType": "createFrom",
+        "name": "etblkpBulkposting",
+        "actionType": "documentAction",
         "entity": "returnMaterialReceipt",
-        "column": "RM_Shipment_Pickedit",
+        "column": "EM_Etblkp_Bulkposting",
         "requiresRecord": true,
         "method": "POST",
-        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
-        "parameters": [],
-        "preconditions": [],
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/etblkpBulkposting",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
         "effects": [
-          "Creates child or related records",
-          "May copy data from source document"
+          "Updates document status",
+          "May trigger workflow transitions"
         ],
-        "dryRunSupported": false,
+        "dryRunSupported": true,
         "edgeCases": [
-          "Source document has no valid lines to copy",
-          "Target entity already has linked records",
-          "Required reference data is missing (price list, warehouse, etc.)"
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
         ],
-        "processId": "4AD70293357245AB96E59C2CDB43A35D",
+        "processId": "57496FB9CF9E4E8F847224017941570E",
         "processType": "obuiapp"
       },
       {
@@ -310,6 +326,29 @@
         "processType": "classic"
       },
       {
+        "name": "sendMaterials",
+        "actionType": "createFrom",
+        "entity": "returnMaterialReceipt",
+        "column": "RM_Shipment_Pickedit",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/sendMaterials",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "4AD70293357245AB96E59C2CDB43A35D",
+        "processType": "obuiapp"
+      },
+      {
         "name": "invoicefromshipment",
         "actionType": "utilityAction",
         "entity": "returnMaterialReceipt",
@@ -352,46 +391,6 @@
         ],
         "processId": "49DEE812BF0545269781FCEBF2235924",
         "processType": "classic"
-      },
-      {
-        "name": "etblkpBulkposting",
-        "actionType": "documentAction",
-        "entity": "returnMaterialReceipt",
-        "column": "EM_Etblkp_Bulkposting",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/return-material-receipt/returnMaterialReceipt/{id}/action/etblkpBulkposting",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ],
-        "processId": "57496FB9CF9E4E8F847224017941570E",
-        "processType": "obuiapp"
       },
       {
         "name": "explode",
@@ -483,7 +482,7 @@
           },
           "businessPartner": {
             "required": true,
-            "readOnlyLogic": "@Processed@='Y' | @HAS_M_INOUTLINES@='Y'"
+            "readOnlyLogic": "@Processed@='Y'"
           },
           "description": {},
           "warehouse": {
@@ -500,18 +499,16 @@
             "defaultValue": "DR"
           },
           "trackingNo": {},
-          "sourceShipmentDocNo": {
+          "invoiceStatus": {
             "readOnly": true
-          },
-          "etblkpAccountingstatus": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
           },
           "etblkpBulkposting": {
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
+          },
+          "sourceShipmentDocNo": {
+            "readOnly": true
           }
         }
       },
@@ -590,9 +587,9 @@
       "createLinesFrom",
       "documentAction",
       "posted",
-      "sendMaterials",
+      "etblkpBulkposting",
       "generateTo",
-      "etblkpBulkposting"
+      "sendMaterials"
     ],
     "workflow": [
       "Create draft header with required fields",
@@ -632,5 +629,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "f8437f68271ec56d"
+  "checksum": "6982fa2f3d7b70ab"
 }

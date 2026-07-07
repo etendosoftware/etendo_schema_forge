@@ -1,8 +1,8 @@
 {
-  "version": "0.30.0",
+  "version": "0.35.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-06-29T12:09:16.715Z",
-  "checksum": "4eb0aebcfcc997cc",
+  "updatedAt": "2026-07-06T13:19:15.501Z",
+  "checksum": "903dc41f7fc5d4bd",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -25,6 +25,7 @@
       },
       "menuActions": [],
       "secondaryTabs": {},
+      "documentDateField": "orderDate",
       "labelOverrides": {
         "es_ES": {
           "C_BPartner_ID": "Contacto",
@@ -67,6 +68,7 @@
             "reference": "BusinessPartner",
             "inputMode": "search",
             "section": "principal",
+            "seq": 10,
             "gridOrder": 3,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SE_Order_BPartner"
@@ -94,6 +96,7 @@
               "source": "documentType.sequence"
             },
             "section": "principal",
+            "seq": 20,
             "gridOrder": 2,
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
@@ -119,6 +122,7 @@
             },
             "defaultValue": "@#Date@",
             "section": "principal",
+            "seq": 30,
             "gridOrder": 1,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_UpdateLinesDate"
@@ -148,6 +152,7 @@
               "filterKey": "C_BPartner_ID"
             },
             "section": "principal",
+            "seq": 40,
             "validationRule": {
               "code": "C_BPartner_Location.C_BPartner_ID=@C_BPartner_ID@ AND C_BPartner_Location.IsShipTo='Y' AND C_BPartner_Location.IsActive='Y'",
               "contextParams": [],
@@ -182,6 +187,7 @@
             },
             "defaultValue": "@#Date@",
             "section": "principal",
+            "seq": 50,
             "callout": {
               "className": "org.openbravo.erpCommon.ad_callouts.SL_Order_UpdateLinesDate"
             },
@@ -244,6 +250,7 @@
             "sourceRequired": true,
             "reference": "Warehouse",
             "inputMode": "selector",
+            "seq": 60,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -264,6 +271,7 @@
             "reference": "PaymentMethod",
             "inputMode": "selector",
             "section": "principal",
+            "seq": 70,
             "validationRule": {
               "code": "EXISTS (SELECT 1 FROM FIN_FinAcc_PaymentMethod fapm WHERE FIN_PaymentMethod.FIN_PaymentMethod_ID=fapm.FIN_PaymentMethod_ID\nAND fapm.Payin_Allow = (SELECT CASE WHEN '@IsSOTrx@'='Y' THEN 'Y' ELSE fapm.Payin_Allow END FROM DUAL)\nAND fapm.Payout_Allow = (SELECT CASE WHEN '@IsSOTrx@'='N' THEN 'Y' ELSE fapm.Payout_Allow END FROM DUAL))",
               "contextParams": [],
@@ -292,6 +300,7 @@
             "reference": "PaymentTerm",
             "inputMode": "selector",
             "section": "principal",
+            "seq": 80,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -313,6 +322,7 @@
             "reference": "PriceList",
             "inputMode": "selector",
             "section": "principal",
+            "seq": 100,
             "validationRule": {
               "code": "M_PriceList.issopricelist = @isSOTrx@",
               "contextParams": [],
@@ -514,6 +524,7 @@
             "inputMode": "selector",
             "defaultValue": "@C_Currency_ID@",
             "section": "principal",
+            "seq": 90,
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
@@ -2404,6 +2415,7 @@
       },
       "menuActions": [],
       "secondaryTabs": {},
+      "documentDateField": "orderDate",
       "labelOverrides": {
         "es_ES": {
           "C_BPartner_ID": "Contacto",

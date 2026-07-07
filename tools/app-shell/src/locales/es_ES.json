@@ -6808,6 +6808,38 @@
       "label": "Cuenta de pérdidas no realizadas",
       "description": "Cuenta de pérdidas no realizadas"
     },
+    "NotInvoicedReceivables_Acct": {
+      "label": "Cuenta pendiente no facturable",
+      "description": "Indica la cuenta usada para recibos que no han sido aún facturados."
+    },
+    "NotInvoicedRevenue_Acct": {
+      "label": "Ingresos (renta) no facturados",
+      "description": "Indica la cuenta usada para ingresos que no han sido aún facturados."
+    },
+    "PayDiscount_Exp_Acct": {
+      "label": "Gasto por descuento por pronto pago",
+      "description": "Indica la cuenta en la que se cargan los gastos por descuentos por pronto pago."
+    },
+    "PayDiscount_Rev_Acct": {
+      "label": "Ingresos por descuento por pronto pago",
+      "description": "Indica la cuenta en la que se cargan los ingresos por descuentos por pronto pago."
+    },
+    "RealizedGain_Acct": {
+      "label": "Cuenta de ganancia realizada",
+      "description": "Esta es la cuenta utilizada para ganancias de revaloración de moneda."
+    },
+    "UnEarnedRevenue_Acct": {
+      "label": "Ganancias a realizar",
+      "description": "Indica la cuenta que se usa para facturas enviadas para productos o servicios que aún no se han servido."
+    },
+    "UnrealizedGain_Acct": {
+      "label": "Cuenta de beneficios no realizados",
+      "description": "Indica la cuenta que se usa para ganancias aún no realizadas por revalorización de moneda."
+    },
+    "V_Liability_Services_Acct": {
+      "label": "Pasivo de servicio del proveedor",
+      "description": "Es la cuenta relativa al pasivo del servicio de proveedor."
+    },
     "SO_Goods_Blocking": {
       "label": "Albarán (Cliente)",
       "description": "Permite bloquear albaranes de cliente para un cliente"
@@ -13981,7 +14013,7 @@
       "label": "Producción LDM"
     },
     "Business Partner Category": {
-      "label": "Grupos de Terceros"
+      "label": "Categoría de Contacto"
     },
     "Payment Proposal": {
       "label": "Propuesta de Pago"
@@ -15197,7 +15229,7 @@
       "label": "Productos"
     },
     "Business Partner Category": {
-      "label": "Grupos de terceros"
+      "label": "Categoría de Contacto"
     },
     "Cashbook": {
       "label": "Caja"
@@ -17045,6 +17077,7 @@
     "searchReturnShipment": "Buscar albarán de devolución...",
     "noReturnShipmentsForCustomer": "No hay albaranes de devolución para este cliente.",
     "noReturnShipmentsMatchSearch": "Ningún albarán de devolución coincide con la búsqueda.",
+    "noReturnShipmentsMatchCurrency": "No hay albaranes de devolución para este cliente en la moneda de la factura.",
     "linesImportedFromReturnShipment": "Líneas importadas desde albarán de devolución",
     "addLinesManuallyOrImportFromReturn": "Añade líneas manualmente o impórtalas desde un albarán de devolución",
     "manageShipment": "¿Gestionar envío?",
@@ -17056,7 +17089,9 @@
     "linesImportedFromGoodsReceipt": "Líneas importadas desde albarán de recepción",
     "noPendingShipmentsForCustomer": "No hay albaranes pendientes para este cliente.",
     "noShipmentsMatchYourSearch": "Ningún albarán coincide con la búsqueda.",
+    "noShipmentsMatchCurrency": "No hay albaranes pendientes para este cliente en la moneda de la factura.",
     "noCompletedSalesOrdersForThisCustomer": "No hay pedidos confirmados para este cliente.",
+    "noSalesOrdersMatchCurrency": "No hay pedidos confirmados para este cliente en la moneda de la factura.",
     "importFromSalesInvoice": "Añadir desde Factura",
     "searchSalesInvoice": "Buscar factura...",
     "noCompletedSalesInvoicesForThisCustomer": "No hay facturas completadas para este cliente.",
@@ -17068,7 +17103,9 @@
     "noteSaved": "Nota guardada",
     "noPendingGoodsReceiptsForSupplier": "No hay albaranes de recepción pendientes para este proveedor.",
     "noGoodsReceiptsMatchYourSearch": "Ningún albarán de recepción coincide con la búsqueda.",
+    "noGoodsReceiptsMatchCurrency": "No hay albaranes de recepción pendientes para este proveedor en la moneda de la factura.",
     "noCompletedPurchaseOrdersForThisSupplier": "No hay pedidos de compra confirmados para este proveedor.",
+    "noPurchaseOrdersMatchCurrency": "No hay pedidos de compra confirmados para este proveedor en la moneda de la factura.",
     "noCompletedShipmentsForThisCustomer": "No se encontraron albaranes completados para este cliente.",
     "noRelatedDocuments": "Sin documentos relacionados",
     "Complete": "Completar",
@@ -17262,6 +17299,84 @@
     "searchWithVoice": "Buscar por voz",
     "helpAndSupport": "Ayuda y soporte",
     "helpComingSoon": "La ayuda y soporte estará disponible pronto.",
+    "supportTabChat": "Chat",
+    "supportTabTickets": "Mis tickets",
+    "supportNewConversation": "Nueva conversación",
+    "supportTypeMessage": "Escribe un mensaje...",
+    "supportAiGreeting": "¡Hola! ¿En qué puedo ayudarte hoy?",
+    "supportAiAgent": "Asistente Etendo",
+    "supportStatusOpen": "Abierto",
+    "supportStatusClosed": "Cerrado",
+    "supportNoConversations": "No hay conversaciones aún. Comienza una haciendo clic en el botón +.",
+    "supportLoading": "Cargando...",
+    "supportClosedConversation": "Esta conversación ha sido cerrada.",
+    "supportRateExperience": "¿Cómo fue tu experiencia?",
+    "supportAddComment": "Agregar un comentario (opcional)",
+    "supportSubmitRating": "Enviar valoración",
+    "supportRatingThanks": "¡Gracias por tu valoración!",
+    "supportReopen": "Hacer seguimiento",
+    "supportAttachFile": "Adjuntar archivo",
+    "supportSendError": "Error al enviar mensaje",
+    "supportLoadError": "Error al cargar las conversaciones",
+    "supportRating1": "Muy insatisfecho",
+    "supportRating2": "Insatisfecho",
+    "supportRating3": "Neutral",
+    "supportRating4": "Satisfecho",
+    "supportRating5": "Muy satisfecho",
+    "supportTabHome": "Inicio",
+    "supportToday": "Hoy",
+    "supportTabHelp": "Ayuda",
+    "supportTabMessages": "Mensajes",
+    "supportHomeGreeting": "¡Hola! ¿Cómo podemos ayudarte?",
+    "supportAskQuestionCta": "Hacer una pregunta",
+    "supportTeamHelpDesc": "Nuestro bot y nuestro equipo te ayudarán",
+    "supportSearchHelp": "Buscar ayuda",
+    "supportSampleSearchResult": "Importar la información de tu negocio",
+    "supportSearchArticles": "Buscar artículos…",
+    "supportCollectionsCount": "{count} colecciones",
+    "supportArticlesCount": "{count} artículos",
+    "supportResultsCount": "{count} resultados",
+    "supportDocsLoadError": "No se pudo cargar la documentación. Intentá de nuevo más tarde.",
+    "supportDocsLoading": "Cargando documentación…",
+    "supportNoArticlesFor": "No encontramos artículos para \"{query}\".",
+    "supportOpenAria": "Abrir soporte",
+    "supportNewMessageBadge": "Nuevo mensaje",
+    "supportStatusWaiting": "Esperando respuesta",
+    "supportDefaultSubject": "Conversación",
+    "supportTimeNow": "ahora",
+    "supportTimeMinutesAgo": "hace {n}m",
+    "supportTimeHoursMinutesAgo": "hace {h}h {m}m",
+    "supportTimeHoursAgo": "hace {h}h",
+    "supportTimeYesterday": "ayer",
+    "supportTimeDaysAgo": "hace {d}d",
+    "supportTimeWeeksAgo": "hace {w} sem",
+    "supportDropToAttach": "Suelta aquí para adjuntar",
+    "supportConversationClosedMeta": "Conversación cerrada",
+    "supportActiveNow": "Activo ahora",
+    "supportTeamCanHelp": "El equipo también puede ayudar",
+    "supportCloseConversation": "Cerrar conversación",
+    "supportGreetingBanner": "Estamos aquí para ayudarte con cualquier cosa que necesites.",
+    "supportWelcomeBubble1": "👋 ¡Hola{name}! Soy ValerIA, tu asistente de Etendo GO.",
+    "supportWelcomeBubble2": "Puedo ayudarte con dudas sobre facturación, contactos, configuración y más. Si no logro resolverlo, te paso con alguien del equipo.",
+    "supportWelcomeBubble3": "¿Sobre qué necesitas ayuda hoy?",
+    "supportQuickReply1": "¿Cómo creo una factura?",
+    "supportQuickReply2": "Importar contactos",
+    "supportQuickReply3": "Configurar impuestos",
+    "supportQuickReply4": "Cambiar plan",
+    "supportPlayAudio": "Reproducir",
+    "supportStopAudio": "Detener",
+    "supportNewDivider": "Nuevos",
+    "supportConversationEnded": "Tu conversación ha finalizado",
+    "supportFeedbackHelps": "Tu opinión nos ayuda a mejorar el soporte.",
+    "supportLater": "Más tarde",
+    "supportRatingAriaLabel": "Valoración {n}",
+    "supportNeedMoreHelp": "¿Necesitas algo más sobre este tema?",
+    "supportNewLinkedConversation": "Empezaremos una nueva conversación enlazada con esta.",
+    "supportStopRecording": "Detener grabación",
+    "supportStartRecording": "Grabar audio",
+    "supportAiDisclaimer": "ValerIA puede equivocarse. Si necesitas, te pasamos con un agente.",
+    "supportHandoverIntro": "Te paso con {name}, del equipo de soporte",
+    "supportHandoverStatus": "Activo · suele responder en menos de 5 min",
     "notifications": "Notificaciones",
     "aiAssistant": "Copilot",
     "yourCompany": "Tu empresa",
@@ -17788,10 +17903,34 @@
     "paymentAmount": "Importe",
     "paymentAccount": "Cuenta",
     "amountExceedsOutstanding": "El importe supera el pendiente",
-    "paymentDateRequired": "La fecha de pago es obligatoria",
     "paymentAmountInvalid": "Ingresa un importe válido",
-    "paymentAccountRequired": "Selecciona una cuenta",
-    "paymentRequestFailed": "No se pudo procesar el pago. Intenta nuevamente.",
+    "cpPisTitle": "Transferencia bancaria (PIS)",
+    "cpPisSubtitle": "Confirma los datos antes de autorizar la operación en tu banco.",
+    "cpPisTemplateLabel": "Plantilla de pago",
+    "cpPisIbanLabel": "IBAN Destino",
+    "cpPisIbanUseTyped": "Usar «{iban}»",
+    "cpPisBbanLabel": "BBAN del acreedor",
+    "cpPisBbanPlaceholder": "Número de cuenta BBAN",
+    "cpPisAccountNumberLabel": "Número de cuenta del acreedor",
+    "cpPisAccountNumberPlaceholder": "Número de cuenta",
+    "cpPisSortCodeLabel": "Sort code del acreedor",
+    "cpPisSortCodePlaceholder": "Sort code (6 dígitos)",
+    "cpPisAlertTransfer": "Se transferirán {dinero} desde {cuenta} {maskedPan} a {proveedor}.",
+    "cpPisAlertCredit": "Los {credito} restantes se aplicarán como crédito al confirmar.",
+    "cpPisAlertSca": "Tu banco solicitará autorización mediante SCA.",
+    "cpPisHint": "Tu banco puede solicitar verificación mediante app móvil, SMS o dispositivo de seguridad.",
+    "cpPisConfirmButton": "Continuar al banco",
+    "cpPisStatusRequested": "Iniciado",
+    "cpPisStatusAuthorizing": "Autorizando",
+    "cpPisStatusAuthorized": "Autorizado",
+    "cpPisStatusProcessing": "Procesando",
+    "cpPisStatusExecuted": "Ejecutado",
+    "cpPisStatusFailed": "Falló la autorización",
+    "cpPisFailedError": "No se pudo completar la transferencia bancaria. Intenta nuevamente.",
+    "cpPisWindowClosed": "Cerraste la ventana del banco antes de autorizar",
+    "cpPisReopen": "Reabrir ventana",
+    "cpPisCancelWait": "Cancelar espera",
+    "cpPisViaLabel": "Realizado vía PSD2",
     "alreadyImported": "ya importado",
     "inDraftShipment": "en albarán",
     "searchSalesOrder": "Buscar pedido...",
@@ -17985,6 +18124,7 @@
     "financeAccountsPsd2SyncDone": "Extractos sincronizados",
     "financeAccountsPsd2SyncError": "No se pudieron sincronizar los extractos",
     "financeAccountsPsd2DisconnectConfirm": "¿Desconectar esta conexión bancaria?",
+    "financeAccountsPsd2DisconnectAction": "Desconectar",
     "financeAccountsPsd2DisconnectDone": "Conexión bancaria eliminada",
     "financeAccountsPsd2DisconnectError": "No se pudo desconectar",
     "financeAccountsPsd2StatusConnected": "Conectada",
@@ -18742,6 +18882,7 @@
     "warehouseQtyOnHand": "Cantidad disponible",
     "warehouseStock": "Stock",
     "warehouseValuation": "Valoración",
+    "warehouseCost": "Coste",
     "warehouseStockDataTitle": "Datos de stock",
     "warehouseTotalValuation": "Valoración total",
     "warehouseValuationBadge": "Stock × coste actual",
@@ -21758,7 +21899,7 @@
       "label": "Producción LDM"
     },
     "Business Partner Category": {
-      "label": "Grupos de Terceros"
+      "label": "Categoría de Contacto"
     },
     "Bank Statement": {
       "label": "Extracto bancario"
