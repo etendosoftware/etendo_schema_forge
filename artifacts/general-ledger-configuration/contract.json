@@ -1,8 +1,8 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-07T11:22:38.384Z",
-  "checksum": "dd9b289180253c13",
+  "updatedAt": "2026-07-07T17:00:42.231Z",
+  "checksum": "8b94b7c0b68fcb94",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -1209,7 +1209,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "customerPrepayment",
@@ -1224,7 +1224,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "writeoff",
@@ -1240,7 +1240,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "writeoffRevenue",
@@ -1255,7 +1255,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "vendorLiability",
@@ -1271,7 +1271,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "vendorPrepayment",
@@ -1286,7 +1286,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "nonInvoicedReceipts",
@@ -1301,7 +1301,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "doubtfulDebtAccount",
@@ -1316,7 +1316,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "badDebtExpenseAccount",
@@ -1331,7 +1331,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "badDebtRevenueAccount",
@@ -1346,7 +1346,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "allowanceForDoubtfulDebtAccount",
@@ -1361,7 +1361,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "fixedAsset",
@@ -1546,7 +1546,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "warehouse"
+            "section": "project"
           },
           {
             "name": "bankAsset",
@@ -1562,7 +1562,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "bankInTransit",
@@ -1578,7 +1578,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "bankExpense",
@@ -1594,7 +1594,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "bankRevaluationGain",
@@ -1610,7 +1610,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "bankRevaluationLoss",
@@ -1626,7 +1626,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "taxDue",
@@ -1704,7 +1704,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "diario"
           },
           {
             "name": "cashBookDifferences",
@@ -1720,7 +1720,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "diario"
           },
           {
             "name": "cashTransfer",
@@ -1736,39 +1736,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
-          },
-          {
-            "name": "cashBookExpense",
-            "apiKey": "cashBookExpense",
-            "column": "CB_Expense_Acct",
-            "label": "Cash Book Expense",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "bank"
-          },
-          {
-            "name": "cashBookReceipt",
-            "apiKey": "cashBookReceipt",
-            "column": "CB_Receipt_Acct",
-            "label": "Cash Book Receipt",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "bank"
+            "section": "diario"
           },
           {
             "name": "depreciation",
@@ -1784,22 +1752,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "product"
-          },
-          {
-            "name": "paymentSelection",
-            "apiKey": "paymentSelection",
-            "column": "B_PaymentSelect_Acct",
-            "label": "Payment Selection",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "bank"
+            "section": "assets"
           },
           {
             "name": "accumulatedDepreciation",
@@ -1815,127 +1768,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "product"
-          },
-          {
-            "name": "projectAsset",
-            "apiKey": "projectAsset",
-            "column": "PJ_Asset_Acct",
-            "label": "Project Asset",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "project"
-          },
-          {
-            "name": "taxExpense",
-            "apiKey": "taxExpense",
-            "column": "T_Expense_Acct",
-            "label": "Tax Expense",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "taxes"
-          },
-          {
-            "name": "bankInterestRevenue",
-            "apiKey": "bankInterestRevenue",
-            "column": "B_InterestRev_Acct",
-            "label": "Bank Interest Revenue",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "bank"
-          },
-          {
-            "name": "bankInterestExpense",
-            "apiKey": "bankInterestExpense",
-            "column": "B_InterestExp_Acct",
-            "label": "Bank Interest Expense",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "bank"
-          },
-          {
-            "name": "bankUnidentifiedReceipts",
-            "apiKey": "bankUnidentifiedReceipts",
-            "column": "B_Unidentified_Acct",
-            "label": "Bank Unidentified Receipts",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "bank"
-          },
-          {
-            "name": "bankSettlementGain",
-            "apiKey": "bankSettlementGain",
-            "column": "B_SettlementGain_Acct",
-            "label": "Bank Settlement Gain",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "bank"
-          },
-          {
-            "name": "unallocatedCash",
-            "apiKey": "unallocatedCash",
-            "column": "B_UnallocatedCash_Acct",
-            "label": "Unallocated Cash",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "bank"
-          },
-          {
-            "name": "bankSettlementLoss",
-            "apiKey": "bankSettlementLoss",
-            "column": "B_SettlementLoss_Acct",
-            "label": "Bank Settlement Loss",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "bank"
+            "section": "assets"
           },
           {
             "name": "disposalGain",
@@ -1950,7 +1783,6 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "product",
             "displayLogic": {
               "raw": "@ADVANCED_ASSETS_MANAGEMENT@ = 'Y'",
               "evaluable": true
@@ -1969,7 +1801,6 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "product",
             "displayLogic": {
               "raw": "@ADVANCED_ASSETS_MANAGEMENT@ = 'Y'",
               "evaluable": true
@@ -3037,7 +2868,7 @@
             "apiKey": "cashBookExpense",
             "column": "CB_Expense_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -3045,7 +2876,7 @@
             "apiKey": "cashBookReceipt",
             "column": "CB_Receipt_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": true
           },
           {
@@ -3061,7 +2892,7 @@
             "apiKey": "paymentSelection",
             "column": "B_PaymentSelect_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "system",
             "required": false
           },
           {
@@ -3101,7 +2932,7 @@
             "apiKey": "projectAsset",
             "column": "PJ_Asset_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3181,7 +3012,7 @@
             "apiKey": "taxExpense",
             "column": "T_Expense_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3205,7 +3036,7 @@
             "apiKey": "bankInterestRevenue",
             "column": "B_InterestRev_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3213,7 +3044,7 @@
             "apiKey": "bankInterestExpense",
             "column": "B_InterestExp_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3221,7 +3052,7 @@
             "apiKey": "bankUnidentifiedReceipts",
             "column": "B_Unidentified_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3229,7 +3060,7 @@
             "apiKey": "bankSettlementGain",
             "column": "B_SettlementGain_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3285,7 +3116,7 @@
             "apiKey": "unallocatedCash",
             "column": "B_UnallocatedCash_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3293,7 +3124,7 @@
             "apiKey": "bankSettlementLoss",
             "column": "B_SettlementLoss_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -4028,22 +3859,6 @@
       },
       {
         "entity": "Valores por defecto",
-        "field": "cashBookExpense",
-        "column": "CB_Expense_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/cashBookExpense"
-      },
-      {
-        "entity": "Valores por defecto",
-        "field": "cashBookReceipt",
-        "column": "CB_Receipt_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/cashBookReceipt"
-      },
-      {
-        "entity": "Valores por defecto",
         "field": "depreciation",
         "column": "A_Depreciation_Acct",
         "reference": "ValidCombination",
@@ -4052,83 +3867,11 @@
       },
       {
         "entity": "Valores por defecto",
-        "field": "paymentSelection",
-        "column": "B_PaymentSelect_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/paymentSelection"
-      },
-      {
-        "entity": "Valores por defecto",
         "field": "accumulatedDepreciation",
         "column": "A_Accumdepreciation_Acct",
         "reference": "ValidCombination",
         "inputMode": "selector",
         "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/accumulatedDepreciation"
-      },
-      {
-        "entity": "Valores por defecto",
-        "field": "projectAsset",
-        "column": "PJ_Asset_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/projectAsset"
-      },
-      {
-        "entity": "Valores por defecto",
-        "field": "taxExpense",
-        "column": "T_Expense_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/taxExpense"
-      },
-      {
-        "entity": "Valores por defecto",
-        "field": "bankInterestRevenue",
-        "column": "B_InterestRev_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankInterestRevenue"
-      },
-      {
-        "entity": "Valores por defecto",
-        "field": "bankInterestExpense",
-        "column": "B_InterestExp_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankInterestExpense"
-      },
-      {
-        "entity": "Valores por defecto",
-        "field": "bankUnidentifiedReceipts",
-        "column": "B_Unidentified_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankUnidentifiedReceipts"
-      },
-      {
-        "entity": "Valores por defecto",
-        "field": "bankSettlementGain",
-        "column": "B_SettlementGain_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankSettlementGain"
-      },
-      {
-        "entity": "Valores por defecto",
-        "field": "unallocatedCash",
-        "column": "B_UnallocatedCash_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/unallocatedCash"
-      },
-      {
-        "entity": "Valores por defecto",
-        "field": "bankSettlementLoss",
-        "column": "B_SettlementLoss_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankSettlementLoss"
       },
       {
         "entity": "Valores por defecto",
@@ -4828,22 +4571,6 @@
         "description": "Field 'bankExpense' should be present in Valores por defecto"
       },
       {
-        "id": "t-field-presence-Valores-por-defecto-bankInterestExpense",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "bankInterestExpense",
-        "runner": "node",
-        "description": "Field 'bankInterestExpense' should be present in Valores por defecto"
-      },
-      {
-        "id": "t-field-presence-Valores-por-defecto-bankInterestRevenue",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "bankInterestRevenue",
-        "runner": "node",
-        "description": "Field 'bankInterestRevenue' should be present in Valores por defecto"
-      },
-      {
         "id": "t-field-presence-Valores-por-defecto-bankInTransit",
         "category": "field-presence",
         "entity": "Valores por defecto",
@@ -4868,30 +4595,6 @@
         "description": "Field 'bankRevaluationLoss' should be present in Valores por defecto"
       },
       {
-        "id": "t-field-presence-Valores-por-defecto-bankSettlementGain",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "bankSettlementGain",
-        "runner": "node",
-        "description": "Field 'bankSettlementGain' should be present in Valores por defecto"
-      },
-      {
-        "id": "t-field-presence-Valores-por-defecto-bankSettlementLoss",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "bankSettlementLoss",
-        "runner": "node",
-        "description": "Field 'bankSettlementLoss' should be present in Valores por defecto"
-      },
-      {
-        "id": "t-field-presence-Valores-por-defecto-bankUnidentifiedReceipts",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "bankUnidentifiedReceipts",
-        "runner": "node",
-        "description": "Field 'bankUnidentifiedReceipts' should be present in Valores por defecto"
-      },
-      {
         "id": "t-field-presence-Valores-por-defecto-cashBookAsset",
         "category": "field-presence",
         "entity": "Valores por defecto",
@@ -4906,22 +4609,6 @@
         "field": "cashBookDifferences",
         "runner": "node",
         "description": "Field 'cashBookDifferences' should be present in Valores por defecto"
-      },
-      {
-        "id": "t-field-presence-Valores-por-defecto-cashBookExpense",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "cashBookExpense",
-        "runner": "node",
-        "description": "Field 'cashBookExpense' should be present in Valores por defecto"
-      },
-      {
-        "id": "t-field-presence-Valores-por-defecto-cashBookReceipt",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "cashBookReceipt",
-        "runner": "node",
-        "description": "Field 'cashBookReceipt' should be present in Valores por defecto"
       },
       {
         "id": "t-field-presence-Valores-por-defecto-cashTransfer",
@@ -5012,14 +4699,6 @@
         "description": "Field 'nonInvoicedReceipts' should be present in Valores por defecto"
       },
       {
-        "id": "t-field-presence-Valores-por-defecto-paymentSelection",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "paymentSelection",
-        "runner": "node",
-        "description": "Field 'paymentSelection' should be present in Valores por defecto"
-      },
-      {
         "id": "t-field-presence-Valores-por-defecto-productCOGS",
         "category": "field-presence",
         "entity": "Valores por defecto",
@@ -5076,14 +4755,6 @@
         "description": "Field 'productRevenueReturn' should be present in Valores por defecto"
       },
       {
-        "id": "t-field-presence-Valores-por-defecto-projectAsset",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "projectAsset",
-        "runner": "node",
-        "description": "Field 'projectAsset' should be present in Valores por defecto"
-      },
-      {
         "id": "t-field-presence-Valores-por-defecto-taxCredit",
         "category": "field-presence",
         "entity": "Valores por defecto",
@@ -5100,14 +4771,6 @@
         "description": "Field 'taxDue' should be present in Valores por defecto"
       },
       {
-        "id": "t-field-presence-Valores-por-defecto-taxExpense",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "taxExpense",
-        "runner": "node",
-        "description": "Field 'taxExpense' should be present in Valores por defecto"
-      },
-      {
         "id": "t-field-presence-Valores-por-defecto-tCreditTransAcct",
         "category": "field-presence",
         "entity": "Valores por defecto",
@@ -5122,14 +4785,6 @@
         "field": "tDueTransAcct",
         "runner": "node",
         "description": "Field 'tDueTransAcct' should be present in Valores por defecto"
-      },
-      {
-        "id": "t-field-presence-Valores-por-defecto-unallocatedCash",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "unallocatedCash",
-        "runner": "node",
-        "description": "Field 'unallocatedCash' should be present in Valores por defecto"
       },
       {
         "id": "t-field-presence-Valores-por-defecto-vendorLiability",
@@ -5516,22 +5171,6 @@
         "description": "Field 'bankExpense' should have type 'string' in Valores por defecto"
       },
       {
-        "id": "t-field-type-Valores-por-defecto-bankInterestExpense",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "bankInterestExpense",
-        "runner": "node",
-        "description": "Field 'bankInterestExpense' should have type 'string' in Valores por defecto"
-      },
-      {
-        "id": "t-field-type-Valores-por-defecto-bankInterestRevenue",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "bankInterestRevenue",
-        "runner": "node",
-        "description": "Field 'bankInterestRevenue' should have type 'string' in Valores por defecto"
-      },
-      {
         "id": "t-field-type-Valores-por-defecto-bankInTransit",
         "category": "field-type",
         "entity": "Valores por defecto",
@@ -5556,30 +5195,6 @@
         "description": "Field 'bankRevaluationLoss' should have type 'string' in Valores por defecto"
       },
       {
-        "id": "t-field-type-Valores-por-defecto-bankSettlementGain",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "bankSettlementGain",
-        "runner": "node",
-        "description": "Field 'bankSettlementGain' should have type 'string' in Valores por defecto"
-      },
-      {
-        "id": "t-field-type-Valores-por-defecto-bankSettlementLoss",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "bankSettlementLoss",
-        "runner": "node",
-        "description": "Field 'bankSettlementLoss' should have type 'string' in Valores por defecto"
-      },
-      {
-        "id": "t-field-type-Valores-por-defecto-bankUnidentifiedReceipts",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "bankUnidentifiedReceipts",
-        "runner": "node",
-        "description": "Field 'bankUnidentifiedReceipts' should have type 'string' in Valores por defecto"
-      },
-      {
         "id": "t-field-type-Valores-por-defecto-cashBookAsset",
         "category": "field-type",
         "entity": "Valores por defecto",
@@ -5594,22 +5209,6 @@
         "field": "cashBookDifferences",
         "runner": "node",
         "description": "Field 'cashBookDifferences' should have type 'string' in Valores por defecto"
-      },
-      {
-        "id": "t-field-type-Valores-por-defecto-cashBookExpense",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "cashBookExpense",
-        "runner": "node",
-        "description": "Field 'cashBookExpense' should have type 'string' in Valores por defecto"
-      },
-      {
-        "id": "t-field-type-Valores-por-defecto-cashBookReceipt",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "cashBookReceipt",
-        "runner": "node",
-        "description": "Field 'cashBookReceipt' should have type 'string' in Valores por defecto"
       },
       {
         "id": "t-field-type-Valores-por-defecto-cashTransfer",
@@ -5700,14 +5299,6 @@
         "description": "Field 'nonInvoicedReceipts' should have type 'string' in Valores por defecto"
       },
       {
-        "id": "t-field-type-Valores-por-defecto-paymentSelection",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "paymentSelection",
-        "runner": "node",
-        "description": "Field 'paymentSelection' should have type 'string' in Valores por defecto"
-      },
-      {
         "id": "t-field-type-Valores-por-defecto-productCOGS",
         "category": "field-type",
         "entity": "Valores por defecto",
@@ -5764,14 +5355,6 @@
         "description": "Field 'productRevenueReturn' should have type 'string' in Valores por defecto"
       },
       {
-        "id": "t-field-type-Valores-por-defecto-projectAsset",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "projectAsset",
-        "runner": "node",
-        "description": "Field 'projectAsset' should have type 'string' in Valores por defecto"
-      },
-      {
         "id": "t-field-type-Valores-por-defecto-taxCredit",
         "category": "field-type",
         "entity": "Valores por defecto",
@@ -5788,14 +5371,6 @@
         "description": "Field 'taxDue' should have type 'string' in Valores por defecto"
       },
       {
-        "id": "t-field-type-Valores-por-defecto-taxExpense",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "taxExpense",
-        "runner": "node",
-        "description": "Field 'taxExpense' should have type 'string' in Valores por defecto"
-      },
-      {
         "id": "t-field-type-Valores-por-defecto-tCreditTransAcct",
         "category": "field-type",
         "entity": "Valores por defecto",
@@ -5810,14 +5385,6 @@
         "field": "tDueTransAcct",
         "runner": "node",
         "description": "Field 'tDueTransAcct' should have type 'string' in Valores por defecto"
-      },
-      {
-        "id": "t-field-type-Valores-por-defecto-unallocatedCash",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "unallocatedCash",
-        "runner": "node",
-        "description": "Field 'unallocatedCash' should have type 'string' in Valores por defecto"
       },
       {
         "id": "t-field-type-Valores-por-defecto-vendorLiability",
@@ -6323,22 +5890,6 @@
         "description": "Selector endpoint for 'bankExpense' in Valores por defecto should exist"
       },
       {
-        "id": "t-selector-endpoint-Valores-por-defecto-bankInterestExpense",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "bankInterestExpense",
-        "runner": "node",
-        "description": "Selector endpoint for 'bankInterestExpense' in Valores por defecto should exist"
-      },
-      {
-        "id": "t-selector-endpoint-Valores-por-defecto-bankInterestRevenue",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "bankInterestRevenue",
-        "runner": "node",
-        "description": "Selector endpoint for 'bankInterestRevenue' in Valores por defecto should exist"
-      },
-      {
         "id": "t-selector-endpoint-Valores-por-defecto-bankInTransit",
         "category": "selector-endpoint",
         "entity": "Valores por defecto",
@@ -6363,30 +5914,6 @@
         "description": "Selector endpoint for 'bankRevaluationLoss' in Valores por defecto should exist"
       },
       {
-        "id": "t-selector-endpoint-Valores-por-defecto-bankSettlementGain",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "bankSettlementGain",
-        "runner": "node",
-        "description": "Selector endpoint for 'bankSettlementGain' in Valores por defecto should exist"
-      },
-      {
-        "id": "t-selector-endpoint-Valores-por-defecto-bankSettlementLoss",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "bankSettlementLoss",
-        "runner": "node",
-        "description": "Selector endpoint for 'bankSettlementLoss' in Valores por defecto should exist"
-      },
-      {
-        "id": "t-selector-endpoint-Valores-por-defecto-bankUnidentifiedReceipts",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "bankUnidentifiedReceipts",
-        "runner": "node",
-        "description": "Selector endpoint for 'bankUnidentifiedReceipts' in Valores por defecto should exist"
-      },
-      {
         "id": "t-selector-endpoint-Valores-por-defecto-cashBookAsset",
         "category": "selector-endpoint",
         "entity": "Valores por defecto",
@@ -6401,22 +5928,6 @@
         "field": "cashBookDifferences",
         "runner": "node",
         "description": "Selector endpoint for 'cashBookDifferences' in Valores por defecto should exist"
-      },
-      {
-        "id": "t-selector-endpoint-Valores-por-defecto-cashBookExpense",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "cashBookExpense",
-        "runner": "node",
-        "description": "Selector endpoint for 'cashBookExpense' in Valores por defecto should exist"
-      },
-      {
-        "id": "t-selector-endpoint-Valores-por-defecto-cashBookReceipt",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "cashBookReceipt",
-        "runner": "node",
-        "description": "Selector endpoint for 'cashBookReceipt' in Valores por defecto should exist"
       },
       {
         "id": "t-selector-endpoint-Valores-por-defecto-cashTransfer",
@@ -6507,14 +6018,6 @@
         "description": "Selector endpoint for 'nonInvoicedReceipts' in Valores por defecto should exist"
       },
       {
-        "id": "t-selector-endpoint-Valores-por-defecto-paymentSelection",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "paymentSelection",
-        "runner": "node",
-        "description": "Selector endpoint for 'paymentSelection' in Valores por defecto should exist"
-      },
-      {
         "id": "t-selector-endpoint-Valores-por-defecto-productCOGS",
         "category": "selector-endpoint",
         "entity": "Valores por defecto",
@@ -6571,14 +6074,6 @@
         "description": "Selector endpoint for 'productRevenueReturn' in Valores por defecto should exist"
       },
       {
-        "id": "t-selector-endpoint-Valores-por-defecto-projectAsset",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "projectAsset",
-        "runner": "node",
-        "description": "Selector endpoint for 'projectAsset' in Valores por defecto should exist"
-      },
-      {
         "id": "t-selector-endpoint-Valores-por-defecto-taxCredit",
         "category": "selector-endpoint",
         "entity": "Valores por defecto",
@@ -6595,14 +6090,6 @@
         "description": "Selector endpoint for 'taxDue' in Valores por defecto should exist"
       },
       {
-        "id": "t-selector-endpoint-Valores-por-defecto-taxExpense",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "taxExpense",
-        "runner": "node",
-        "description": "Selector endpoint for 'taxExpense' in Valores por defecto should exist"
-      },
-      {
         "id": "t-selector-endpoint-Valores-por-defecto-tCreditTransAcct",
         "category": "selector-endpoint",
         "entity": "Valores por defecto",
@@ -6617,14 +6104,6 @@
         "field": "tDueTransAcct",
         "runner": "node",
         "description": "Selector endpoint for 'tDueTransAcct' in Valores por defecto should exist"
-      },
-      {
-        "id": "t-selector-endpoint-Valores-por-defecto-unallocatedCash",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "unallocatedCash",
-        "runner": "node",
-        "description": "Selector endpoint for 'unallocatedCash' in Valores por defecto should exist"
       },
       {
         "id": "t-selector-endpoint-Valores-por-defecto-vendorLiability",
@@ -7107,6 +6586,62 @@
         "description": "System field 'active' should exist in backend but not frontend for Valores por defecto"
       },
       {
+        "id": "t-system-field-Valores-por-defecto-bankInterestExpense",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "bankInterestExpense",
+        "runner": "node",
+        "description": "System field 'bankInterestExpense' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-bankInterestRevenue",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "bankInterestRevenue",
+        "runner": "node",
+        "description": "System field 'bankInterestRevenue' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-bankSettlementGain",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "bankSettlementGain",
+        "runner": "node",
+        "description": "System field 'bankSettlementGain' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-bankSettlementLoss",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "bankSettlementLoss",
+        "runner": "node",
+        "description": "System field 'bankSettlementLoss' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-bankUnidentifiedReceipts",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "bankUnidentifiedReceipts",
+        "runner": "node",
+        "description": "System field 'bankUnidentifiedReceipts' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-cashBookExpense",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "cashBookExpense",
+        "runner": "node",
+        "description": "System field 'cashBookExpense' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-cashBookReceipt",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "cashBookReceipt",
+        "runner": "node",
+        "description": "System field 'cashBookReceipt' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
         "id": "t-system-field-Valores-por-defecto-chargeExpense",
         "category": "system-field",
         "entity": "Valores por defecto",
@@ -7219,12 +6754,28 @@
         "description": "System field 'paymentDiscountRevenue' should exist in backend but not frontend for Valores por defecto"
       },
       {
+        "id": "t-system-field-Valores-por-defecto-paymentSelection",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "paymentSelection",
+        "runner": "node",
+        "description": "System field 'paymentSelection' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
         "id": "t-system-field-Valores-por-defecto-processNow",
         "category": "system-field",
         "entity": "Valores por defecto",
         "field": "processNow",
         "runner": "node",
         "description": "System field 'processNow' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-projectAsset",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "projectAsset",
+        "runner": "node",
+        "description": "System field 'projectAsset' should exist in backend but not frontend for Valores por defecto"
       },
       {
         "id": "t-system-field-Valores-por-defecto-purchasePriceVariance",
@@ -7249,6 +6800,14 @@
         "field": "realizedLossAcct",
         "runner": "node",
         "description": "System field 'realizedLossAcct' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-taxExpense",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "taxExpense",
+        "runner": "node",
+        "description": "System field 'taxExpense' should exist in backend but not frontend for Valores por defecto"
       },
       {
         "id": "t-system-field-Valores-por-defecto-taxLiability",
@@ -7281,6 +6840,14 @@
         "field": "tradeDiscountReceived",
         "runner": "node",
         "description": "System field 'tradeDiscountReceived' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
+        "id": "t-system-field-Valores-por-defecto-unallocatedCash",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "unallocatedCash",
+        "runner": "node",
+        "description": "System field 'unallocatedCash' should exist in backend but not frontend for Valores por defecto"
       },
       {
         "id": "t-system-field-Valores-por-defecto-unearnedRevenue",
@@ -7383,24 +6950,24 @@
       }
     ],
     "summary": {
-      "total": 406,
+      "total": 384,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 5,
         "default-value-type": 6,
         "displaylogic-evaluable": 14,
         "displaylogic-valid": 14,
-        "field-presence": 86,
-        "field-type": 86,
+        "field-presence": 75,
+        "field-type": 75,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 33,
-        "selector-endpoint": 68,
-        "system-field": 84,
+        "selector-endpoint": 57,
+        "system-field": 95,
         "visibility": 5
       },
       "byRunner": {
-        "node": 406,
+        "node": 384,
         "junit": 0
       }
     }

@@ -553,22 +553,6 @@ export const api = {
     },
     {
       "entity": "Valores por defecto",
-      "field": "cashBookExpense",
-      "column": "CB_Expense_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/cashBookExpense"
-    },
-    {
-      "entity": "Valores por defecto",
-      "field": "cashBookReceipt",
-      "column": "CB_Receipt_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/cashBookReceipt"
-    },
-    {
-      "entity": "Valores por defecto",
       "field": "depreciation",
       "column": "A_Depreciation_Acct",
       "reference": "ValidCombination",
@@ -577,83 +561,11 @@ export const api = {
     },
     {
       "entity": "Valores por defecto",
-      "field": "paymentSelection",
-      "column": "B_PaymentSelect_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/paymentSelection"
-    },
-    {
-      "entity": "Valores por defecto",
       "field": "accumulatedDepreciation",
       "column": "A_Accumdepreciation_Acct",
       "reference": "ValidCombination",
       "inputMode": "selector",
       "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/accumulatedDepreciation"
-    },
-    {
-      "entity": "Valores por defecto",
-      "field": "projectAsset",
-      "column": "PJ_Asset_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/projectAsset"
-    },
-    {
-      "entity": "Valores por defecto",
-      "field": "taxExpense",
-      "column": "T_Expense_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/taxExpense"
-    },
-    {
-      "entity": "Valores por defecto",
-      "field": "bankInterestRevenue",
-      "column": "B_InterestRev_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankInterestRevenue"
-    },
-    {
-      "entity": "Valores por defecto",
-      "field": "bankInterestExpense",
-      "column": "B_InterestExp_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankInterestExpense"
-    },
-    {
-      "entity": "Valores por defecto",
-      "field": "bankUnidentifiedReceipts",
-      "column": "B_Unidentified_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankUnidentifiedReceipts"
-    },
-    {
-      "entity": "Valores por defecto",
-      "field": "bankSettlementGain",
-      "column": "B_SettlementGain_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankSettlementGain"
-    },
-    {
-      "entity": "Valores por defecto",
-      "field": "unallocatedCash",
-      "column": "B_UnallocatedCash_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/unallocatedCash"
-    },
-    {
-      "entity": "Valores por defecto",
-      "field": "bankSettlementLoss",
-      "column": "B_SettlementLoss_Acct",
-      "reference": "ValidCombination",
-      "inputMode": "selector",
-      "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/bankSettlementLoss"
     },
     {
       "entity": "Valores por defecto",
