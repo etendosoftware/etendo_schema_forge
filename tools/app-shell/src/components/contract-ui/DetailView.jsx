@@ -793,6 +793,18 @@ export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPa
   const inline = linesLayout === 'inlineEditable';
   const padY = inline ? 8 : 10;
   const padX = inline ? 8 : 16;
+  // Default keeps the original symmetric padding (numeric 8 for inlineEditable,
+  // '10px 16px' otherwise) so the primary path is byte-for-byte unchanged.
+  // noTopPadding drops ONLY the top so the add-button sits snug under the child
+  // table, while horizontal padding still aligns it with table content.
+  let padding;
+  if (noTopPadding) {
+    padding = `0 ${padX}px ${padY}px`;
+  } else if (inline) {
+    padding = padY;
+  } else {
+    padding = `${padY}px ${padX}px`;
+  }
   return {
     display: 'flex',
     flexDirection: 'column',
@@ -801,13 +813,7 @@ export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPa
     // header-lines path. Secondary/child tabs already have the table's own
     // bottom border, so they pass withBorder:false to avoid a double divider.
     ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)' } : {}),
-    // Default keeps the original symmetric padding (numeric 8 for inlineEditable,
-    // '10px 16px' otherwise) so the primary path is byte-for-byte unchanged.
-    // noTopPadding drops ONLY the top so the add-button sits snug under the
-    // child table, while horizontal padding still aligns it with table content.
-    padding: noTopPadding
-      ? `0 ${padX}px ${padY}px`
-      : (inline ? padY : `${padY}px ${padX}px`)
+    padding
   };
 }
 

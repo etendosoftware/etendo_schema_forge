@@ -22,7 +22,7 @@ export function isValidEmailAddress(value) {
 // SMTP credential fields (EmailUser, EmailUserPW, Email_Password…) also contain
 // "email" but hold a username/password, not an address — they are excluded so a
 // future editable exposure of one can never block a save by mis-validating it.
-const EMAIL_CREDENTIAL_RE = /email[_]?(user(name)?|pw|password)/i;
+const EMAIL_CREDENTIAL_RE = /email_?(user(name)?|pw|password)/i;
 
 export function isEmailField(field) {
   if (!field) return false;
@@ -94,7 +94,7 @@ export function getWebsiteFieldError(field, value) {
 export function isValidPhone(value) {
   const s = String(value ?? '').trim();
   if (s === '') return false;
-  return /^[0-9+()\-.\s]+$/.test(s) && /[0-9]/.test(s);
+  return /^[\d+()\-.\s]+$/.test(s) && /\d/.test(s);
 }
 
 // A field is phone-format-validated when its key/column contains a "phone" token
