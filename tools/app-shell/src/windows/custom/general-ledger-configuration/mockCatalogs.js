@@ -10,6 +10,57 @@
  * contract.json) so swapping the data source is mechanical.
  */
 
+// Fixed display order for the Defaults tab's account-selector groups. 'other'
+// is the catch-all for any editable field with no curated `section` in
+// decisions.json (currently: disposalGain, disposalLoss — see
+// docs/superpowers/specs/2026-07-07-glc-defaults-ad-driven-grouping-design.md).
+const DEFAULTS_SECTION_ORDER = [
+  'bank', 'diario', 'contacts', 'taxes', 'product', 'assets', 'project', 'warehouse', 'other',
+];
+
+/**
+ * Derives the Defaults tab's grouped field list from the window's generated
+ * contract (`frontendContract.entities['Valores por defecto'].fields` in
+ * `artifacts/general-ledger-configuration/contract.json`). This is what
+ * makes AD_Field.IsActive/IsDisplayed/AD_FieldGroup changes take effect via
+ * `make regen` instead of a hand-edit — see the design doc referenced above.
+ *
+ * @param {Array<{apiKey: string, visibility: string, required?: boolean, label: string, section?: string}>} contractFields
+ * @returns {Array<{section: string, fields: Array<{key: string, required: boolean, fallbackLabel: string}>}>}
+ */
+export function buildDefaultsGroups(contractFields) {
+  const bySection = new Map();
+  for (const field of contractFields) {
+    if (field.visibility !== 'editable') continue;
+    const section = field.section || 'other';
+    if (!bySection.has(section)) bySection.set(section, []);
+    bySection.get(section).push({
+      key: field.apiKey,
+      required: Boolean(field.required),
+      fallbackLabel: field.label,
+    });
+  }
+  return DEFAULTS_SECTION_ORDER
+    .filter((section) => bySection.has(section))
+    .map((section) => ({ section, fields: bySection.get(section) }));
+}
+
+/**
+ * Resolves a Defaults-tab field's label: prefers the curated `glc.acct.<key>`
+ * i18n entry; falls back to the field's raw AD label (from contract.json)
+ * for a field nobody has translated yet, so a brand-new AD field renders
+ * something functional instead of a raw i18n key.
+ *
+ * @param {{genericLabels?: Record<string,string>}|null|undefined} dictionary
+ * @param {string} apiKey
+ * @param {string|undefined} fallbackLabel
+ * @returns {string}
+ */
+export function resolveFieldLabel(dictionary, apiKey, fallbackLabel) {
+  const key = `glc.acct.${apiKey}`;
+  return dictionary?.genericLabels?.[key] ?? fallbackLabel ?? key;
+}
+
 // Account combinations (C_ValidCombination) — code + name, reused by every
 // AccountBadgeSelect in the "Valores por defecto" tab.
 export const ACCOUNT_OPTIONS = [
