@@ -199,6 +199,31 @@ sobre el diseño:
     patrón que `trackSearchResultSelected` en `productUsageTelemetry.js`, invocado por ejemplo desde
     `DataTable.jsx:1326`.
 
+### Evento adicional: click en el botón de copiar
+
+Mismo mecanismo (`track()` vía wrapper de dominio, alta en `events.js`), un evento nuevo separado
+del de tab-click:
+
+- **Evento**: `mcp_connect_copy_clicked`, `properties: { client: '<Client>', block: '<bloque>' }` —
+  `client` es la tab activa al momento del click (mismo identificador de la regla de naming);
+  `block` identifica qué bloque copiable se tocó dentro de esa tab (ej. `url`, `command`, `config`,
+  `prompt` — el nombre exacto depende de qué bloques copiables termine teniendo cada tab).
+- **No se trackea el deep link** (Cursor/VS Code "1-click install") — solo tabs y copy.
+- Wrapper: `trackMcpConnectCopyClicked({ client, block })`, mismo archivo `*Telemetry.js` del evento
+  de tab-click.
+- **No existe un `CopyButton` reusable en `components/ui/`.** Cada pantalla del repo implementa su
+  propio botón inline (`OAuth2ClientDialog.jsx`, `accountColumns.jsx`, `EditAccountModal.jsx`,
+  `AccountSummaryStrip.jsx`, `OAuth2ClientsPage.jsx`) con el mismo patrón: ícono `Copy` de
+  `lucide-react` + `navigator.clipboard.writeText(...)` + `toast.success(ui('<clave-i18n>'))`.
+- **Prerequisito de esta implementación: extraer un `CopyButton` compartido en
+  `schema_forge_core` → `packages/app-shell-core/src/components/ui/`** (fuente real del UI kit —
+  confirmado que `tools/app-shell/src/components/ui/` en este repo son copias locales ya
+  divergentes, no symlinks). Este componente reemplaza el patrón inline repetido en los 5 lugares
+  de arriba y es lo que consumen los bloques copiables de esta página nueva. Se construye como parte
+  del mismo ciclo de implementación (Developer), antes de escribir los bloques copiables de las
+  tabs — no como refactor separado de los 5 usos existentes (eso queda fuera de alcance de este
+  plan, se migran oportunistamente si se tocan esos archivos por otro motivo).
+
 ## Propuesta de copy por tab (borrador — a revisar)
 
 Todas las tabs interpolan `{mcpUrl}` = `detectMcpUrl()` (URL ya resuelta según el entorno activo).
@@ -326,15 +351,27 @@ Confirmado — coincide con el formato oficial "Remote Server Connection" de Cod
 **Alternativa — pedile al agente que lo configure él mismo**: ver "Bloque de Prompt" abajo.
 
 ### Tab: OpenCode
-1. Editá (o creá) el archivo de config de OpenCode (`opencode.json` / equivalente según su doc
-   vigente) y agregá el servidor `etendo-go` apuntando a `{mcpUrl}` con transporte HTTP.
-2. Autenticá siguiendo el flujo de login que abre OpenCode en el navegador.
+Confirmado contra la doc oficial (opencode.ai/docs/mcp-servers, opencode.ai/docs/config — julio 2026):
+
+1. Editá (o creá) `~/.config/opencode/opencode.json` (config global) — o `opencode.json` en la raíz
+   del proyecto si querés que aplique solo ahí (el config de proyecto tiene precedencia sobre el
+   global) — y agregá:
+   ```json
+   {
+     "mcp": {
+       "etendo-go": {
+         "type": "remote",
+         "url": "{mcpUrl}",
+         "enabled": true
+       }
+     }
+   }
+   ```
+2. OpenCode maneja el login automáticamente vía Dynamic Client Registration: al recibir un `401`
+   del servidor dispara el flujo OAuth por su cuenta y abre el navegador.
 3. Aprobá el acceso — listo.
 
 **Alternativa — pedile al agente que lo configure él mismo**: ver "Bloque de Prompt" abajo.
-
-> Nota: el paso 1 de esta tab es el único con menor certeza sobre el nombre exacto del archivo/clave
-> de config — a confirmar contra la doc oficial de OpenCode al momento de implementar (mismo criterio
 > que con el deep link de Cursor/VS Code: no se fija en este plan un dato no verificado).
 
 ### Tab: Google Antigravity
@@ -376,6 +413,10 @@ Confirmado — coincide con el formato oficial "Remote Server Connection" de Cod
 > la app de escritorio.
 
 ### Tab: Otros (= contenido actual, sin cambios)
+> Re-confirmado (2026-07-07): aunque el heading general de la página deja de nombrar un cliente
+> específico, el título "Connect with Claude" dentro de esta tab **se mantiene tal cual** —
+> decisión explícita, no un descuido.
+
 Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-`4`) + el bloque con
 `{mcpUrl}`. Sirve como fallback para cualquier cliente no listado.
 
@@ -417,14 +458,36 @@ Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-
         propia copy explicativa, o un bloque de troubleshooting), esa pieza se nombra
         `oauthConnect<Client><Sufijo descriptivo>` (ej. `oauthConnectCodexTomlHint`) en vez de
         forzarla dentro de `StepN` — mantiene la regla extensible sin romper el patrón base.
-- [ ] Definir el componente de tabs a reusar (¿ya existe un `Tabs` en `@/components/ui/`? revisar
-      antes de crear uno nuevo).
+- [x] **Componente de tabs a reusar — confirmado.** Ya existe `tools/app-shell/src/components/ui/tabs.jsx`
+      (hand-built, Radix no instalado) y ya está en uso en producción (ej.
+      `windows/custom/financial-account/DetailTabs.jsx`). No hace falta construir uno nuevo — se
+      reusa tal cual.
 - [ ] **Testear el flujo de ChatGPT (Web/Desktop) end-to-end contra Etendo GO** antes de dar esa tab
       por definitiva — el copy está basado en doc oficial de OpenAI pero no validado con nuestro
       servidor MCP real (posible diferencia en el flujo OAuth). Marcar la tab como beta/experimental
       en la UI hasta confirmar.
-- [ ] **Confirmar el archivo/clave de config exacta de OpenCode** al momento de implementar (paso 1
-      de su tab, ver nota en esa sección) — mismo criterio: no se fija un dato no verificado.
+- [x] **Archivo/clave de config exacta de OpenCode — confirmado** (2026-07-07, contra
+      opencode.ai/docs/mcp-servers y opencode.ai/docs/config): `opencode.json` (global en
+      `~/.config/opencode/` o de proyecto), bloque `"mcp": { "etendo-go": { "type": "remote", "url":
+      "{mcpUrl}", "enabled": true } }`. Copy de la tab ya actualizado arriba.
+- [ ] **(nuevo, 2026-07-07) Evaluar agregar un evento de "conexión completada" por cliente**, no solo
+      de click en la tab. Hoy `mcp_connect_tab_selected` mide intención (qué tab elige la gente), no
+      si esa persona logró conectar de verdad. Investigación de factibilidad:
+      - El backend (`OAuth2Servlet.java:1191`) ya captura `client_name` en el registro DCR (el MCP
+        client lo manda al registrarse; fallback `"MCP Client"` si no lo manda) y lo persiste junto
+        al `client_id`. Es un dato server-side que hoy **no llega al frontend** — `AuthorizePage.jsx`
+        solo recibe `client_id` por query param en la pantalla de consentimiento, no `client_name`.
+      - Para trackear éxito por cliente haría falta exponer `client_name` al frontend (nuevo
+        endpoint o campo adicional en la respuesta que ya usa `AuthorizePage.jsx`), y disparar el
+        evento en la rama `status === 'success'` de `handleAuthorize()` (`AuthorizePage.jsx:81`) —
+        que es el único punto donde el consentimiento se confirma.
+      - Limitación: `client_name` es lo que cada software MCP decide mandar en su DCR — no
+        necesariamente calza 1:1 con los valores normalizados del enum `<Client>` que ya usa el
+        evento de tab-click (`Cursor`, `VsCode`, `ClaudeDesktopPersonal`, ...). Puede requerir un
+        mapeo o aceptarse como dimensión libre, menos prolija que la del evento de click.
+      - Es de **mayor alcance que un cambio solo de frontend** (toca `OAuth2Servlet.java` o el
+        endpoint que arma la pantalla de consentimiento) — no se resuelve en el mismo PR que las
+        tabs sin más discusión de alcance con el usuario.
 - [ ] Revisar el texto único del "Bloque de Prompt" (Codex/Claude Code/OpenCode): ¿alcanza como está
       o conviene un texto por cliente si en la práctica alguno interpreta distinto el mismo pedido?
 
@@ -435,3 +498,46 @@ Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-
       selector + tabs en `AuthorizePage.jsx` (componente `ConnectionsLanding`), dar de alta las
       claves i18n nuevas en `en_US.json` + `es_ES.json`, y seguir el pipeline normal
       (DEV → REVIEW → QA → DOCS).
+- [ ] **(OPCIONAL, etapa final) Migrar `ConnectionsLanding`/`AuthorizePage.jsx` a
+      `schema_forge_core`.** No decidido si se hace en esta tarea o en una posterior — se deja
+      documentado para no perder el análisis. Justificación: es un flujo genérico igual para todos
+      los clientes (no es "per-client config"), por lo que conceptualmente encaja mejor en el
+      charter de core ("HOW the tooling works") que en el de funcional ("WHAT to expose, per
+      client").
+
+      **Investigación previa (2026-07-07) — hallazgos a tener en cuenta antes de encararlo:**
+      - **Sin precedente de este tipo.** Las promociones a core hasta ahora (ETP-4135/ETP-4104)
+        fueron primitivos de UI genéricos (`badge`, `card`, `button`, `select`, ...), nunca una
+        página/feature completa con copy propio y lógica de negocio (OAuth). Sería el primer caso.
+      - **i18n queda partido entre repos.** Core no tiene locale JSON propio — es un resolver que
+        espera que el host (`schema_forge`) le inyecte el diccionario vía `LocaleProvider`. Las
+        claves `oauthConnect*`/`oauthAuthorize*` seguirían viviendo en
+        `schema_forge/tools/app-shell/src/locales/en_US.json` + `es_ES.json`, desacopladas del
+        componente que las consume.
+      - **Sin abstracción de observability en core.** El tracking de esta página hoy es genérico
+        vía `ObservabilityRouteTracker` en el router (no hay `track()` explícito dentro del
+        componente), así que mover el archivo no rompe nada hoy — pero el evento
+        `mcp_connect_tab_selected` que pide este mismo plan (sección "evento de métricas al hacer
+        click en una tab") si se implementa ANTES de migrar, quedaría atado a
+        `schema_forge/tools/app-shell/src/lib/observability/`, que core no puede importar (dirección
+        de dependencia invertida). Si se migra después, hay que diseñar antes un seam de
+        observability en core.
+      - **Falta el componente `Tabs` en core.** `tabs.jsx` es local a `schema_forge` (hand-built,
+        Radix no instalado) — su migración a core nunca se completó (solo quedó un test huérfano
+        `tabs.vitest.jsx` sin implementación en `schema_forge_core/packages/app-shell-core`). Si el
+        selector de esta página depende de `Tabs`, hay que migrar ese componente primero o quedaría
+        una página en core dependiendo de un componente en funcional.
+      - **Mayor latencia de iteración.** Un fix en core requiere: PR en core → release manual
+        (`publish-private-packages.yml` es `workflow_dispatch`, no automático) → PR de bump del pin
+        en `schema_forge` (auto-abierto por `bump-core-on-release.yml`, merge humano) → recién ahí
+        está live. Mitigable en desarrollo con `LOCAL_CORE=1`, no en producción.
+      - **Sin gate automático que lo bloquee o lo exija.** `domain-boundary-check.yml` está
+        deshabilitado (no-op post-split) — la frontera funcional/core es hoy puramente convención
+        (`docs/repo-topology.md`), no hay CI que valide este move.
+      - **`detectMcpUrl()`/`detectBaseUrl()` no son un obstáculo** — son autocontenidos
+        (`window.location`, `import.meta.env`), funcionan igual en cualquiera de los dos repos.
+
+      **Recomendación:** iterar el rediseño completo (copy, tabs, deep links, evento de métricas)
+      en `schema_forge` primero, donde el ciclo es rápido; recién evaluar la migración a core como
+      paso de "hardening" posterior, con `Tabs` ya migrado y un seam de observability definido en
+      core.
