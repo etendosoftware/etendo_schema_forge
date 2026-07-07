@@ -3655,7 +3655,9 @@ export function DetailView({
                               <div className="flex-1 min-w-0">
                                 {/* Bulk action bar: delete + detail processes (classic only) */}
                                 {isDetailBulkBarVisible(linesLayout, api, detailEntity, isDocumentReadOnly, selectedChildRows, detailProcesses) && (
-                                  <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted/60 border border-border/40">
+                                  <div
+                                    data-testid="detail-bulk-action-bar"
+                                    className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 mb-2 rounded-lg bg-muted border border-border/40 shadow-sm">
                                     <span className="text-sm font-medium text-foreground">
                                       {ui('selected', { count: selectedChildRows.length })}
                                     </span>

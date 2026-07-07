@@ -493,4 +493,24 @@ describe('DetailView — detailProcesses (ETP-4248)', () => {
       expect(screen.getAllByTestId('Button__detail-process')).toHaveLength(1);
     });
   });
+
+  // Regression test (ETP-4452) ————————————————————————————————————————————
+  // The bulk action bar used to scroll away with the lines list, hiding the
+  // selection count and the action button. It must stay pinned to the top of
+  // the scrollable detail-content container while the user scrolls.
+  describe('sticky bulk action bar (ETP-4452)', () => {
+    it('renders the bulk action bar with sticky positioning classes', async () => {
+      const user = userEvent.setup();
+      renderDetailView({
+        detailProcesses: [{ name: 'processA', label: 'Process A', params: [] }],
+      });
+
+      await user.click(screen.getByTestId('trigger-selection'));
+
+      const bar = screen.getByTestId('detail-bulk-action-bar');
+      expect(bar).toBeInTheDocument();
+      expect(bar.className).toContain('sticky');
+      expect(bar.className).toContain('top-0');
+    });
+  });
 });
