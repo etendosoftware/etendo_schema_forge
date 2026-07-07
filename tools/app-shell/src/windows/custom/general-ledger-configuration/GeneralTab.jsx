@@ -2,7 +2,6 @@ import { useUI } from '@/i18n';
 import { ToggleRow } from '@/components/contract-ui';
 import SectionShell from './SectionShell.jsx';
 import Field from './Field.jsx';
-import UnbackedHint from './UnbackedHint.jsx';
 import { CURRENCY_OPTIONS } from './mockCatalogs.js';
 
 /**
@@ -13,8 +12,6 @@ import { CURRENCY_OPTIONS } from './mockCatalogs.js';
  *  - automaticPeriodControl toggle bound INVERTED (toggle ON ⇒ AutoPeriodControl=N)
  *  - read-only org-scoped: fiscal calendar, organization (sourced live by the
  *    aggregate handler from the org's calendar + name; mock seed is the fallback)
- *  - 4 non-functional placeholders: conversion type, cost precision (selects) +
- *    auto-reconciliation, journal numbering (toggles)
  */
 export default function GeneralTab({ general, orgInfo, currencyOptions = CURRENCY_OPTIONS, setGeneralField, errors = {} }) {
   const ui = useUI();
@@ -73,7 +70,7 @@ export default function GeneralTab({ general, orgInfo, currencyOptions = CURRENC
       </SectionShell>
       {/* Calendario y moneda */}
       <SectionShell title={ui('glc.section.calendar.title')} data-testid="glc-section-calendar">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field
             label={ui('glc.field.calendar')}
             value={orgInfo?.fiscalCalendar}
@@ -92,18 +89,6 @@ export default function GeneralTab({ general, orgInfo, currencyOptions = CURRENC
             error={errors.currency}
             data-testid="glc-field-currency"
           />
-          <Field
-            label={ui('glc.field.conversionType')}
-            unbacked
-            placeholder={ui('glc.placeholder.conversionType')}
-            data-testid="glc-field-conversion-type"
-          />
-          <Field
-            label={ui('glc.field.costPrecision')}
-            unbacked
-            placeholder={ui('glc.placeholder.costPrecision')}
-            data-testid="glc-field-cost-precision"
-          />
         </div>
       </SectionShell>
       {/* Políticas contables */}
@@ -118,21 +103,6 @@ export default function GeneralTab({ general, orgInfo, currencyOptions = CURRENC
             checked={allowClosedPeriods}
             onCheckedChange={(checked) => setGeneralField('automaticPeriodControl', !checked)}
             data-testid="glc-toggle-closed-periods"
-          />
-          <ToggleRow
-            label={ui('glc.toggle.autoReconciliation')}
-            checked
-            disabled
-            hint={<UnbackedHint withText data-testid="UnbackedHint__b7a57d" />}
-            data-testid="glc-toggle-auto-reconciliation"
-          />
-          <ToggleRow
-            label={ui('glc.toggle.journalNumbering')}
-            caption={ui('glc.toggle.journalNumbering.caption')}
-            checked
-            disabled
-            hint={<UnbackedHint withText data-testid="UnbackedHint__b7a57d" />}
-            data-testid="glc-toggle-journal-numbering"
           />
         </div>
       </SectionShell>

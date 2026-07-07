@@ -56,15 +56,6 @@ Current delivered state:
 - both read-only values are loaded from the organization-backed aggregate endpoint
 - in the current local dataset that relation resolves from `AD_Org` / `AD_Org_AcctSchema`
 
-Unbacked placeholders, intentionally visible but non-persistent:
-
-- `Tipo de conversión`
-- `Precisión de costes`
-- `Conciliación automática`
-- `Numeración de asientos`
-
-Those controls must stay visually subtle but clearly marked as not connected to data.
-
 ### Valores por defecto
 
 Editable account selectors, **derived at module-load time from `contract.json`** (`buildDefaultsGroups()` in `mockCatalogs.js`, consuming `frontendContract.entities['Valores por defecto'].fields`) rather than hand-typed. `contract.json` is produced by the standard Schema Forge pipeline (`extract-from-db.js` → `decisions.json` → `resolve-curated.js` → `generate-contract.js`) from real AD metadata — `AD_Field.IsActive`, `IsDisplayed`, `AD_FieldGroup`, `AD_Column.IsMandatory` — so activating/deactivating a field, or changing its required-ness, now takes effect via `make regen ONLY=general-ledger-configuration` instead of a hand-edit. Full design: `docs/superpowers/specs/2026-07-07-glc-defaults-ad-driven-grouping-design.md`.
@@ -133,12 +124,11 @@ After the backend wiring lands, remember the Etendo step:
 2. Confirm the tab order and labels match the Figma: `General`, `Valores por defecto`, `Dimensiones`, `Cuentas generales`.
 3. On **General**, verify the first row renders as 4 columns on wide screens: name, organization, accounting criteria. `gAAP` (Esquema contable) is intentionally not shown — it is set at schema creation time and is not editable from this form.
 4. Confirm `Organización` and `Calendario fiscal` are read-only and show the muted `AD_OrgInfo` origin hint.
-5. Confirm the 4 unbacked controls are visibly marked but not styled like blocking errors.
-6. Edit `Nombre del esquema` and confirm `Guardar cambios` enables.
-7. Clear a required field (`Nombre del esquema` or `Moneda principal`) and confirm inline required validation appears on save.
-8. On **Valores por defecto**, confirm all 9 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`, `Otras cuentas` — 39 fields total) and required account selectors show the required marker (20 fields, up from the previous 6). Confirm `paymentSelection` no longer renders at all, `disposalGain`/`disposalLoss` render under `Otras cuentas` (not `Activos`, and with no info-icon hint — that mechanism was retired), and that none of the 10 AD-inactive fields (see list above) render at all.
-9. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear.
-10. On **Cuentas generales**, confirm the three sections render and both toggle+account pairs (suspense balancing, currency balancing) behave independently.
+5. Edit `Nombre del esquema` and confirm `Guardar cambios` enables.
+6. Clear a required field (`Nombre del esquema` or `Moneda principal`) and confirm inline required validation appears on save.
+7. On **Valores por defecto**, confirm all 9 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`, `Otras cuentas` — 39 fields total) and required account selectors show the required marker (20 fields, up from the previous 6). Confirm `paymentSelection` no longer renders at all, `disposalGain`/`disposalLoss` render under `Otras cuentas` (not `Activos`, and with no info-icon hint — that mechanism was retired), and that none of the 10 AD-inactive fields (see list above) render at all.
+8. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear.
+9. On **Cuentas generales**, confirm the three sections render and both toggle+account pairs (suspense balancing, currency balancing) behave independently.
 
 ## Test Design
 
@@ -150,8 +140,8 @@ Core acceptance coverage should include at least these scenarios:
    Confirm the route loads, the 4 tabs render in order, and the save button starts disabled.
 2. **Dirty state and validation**
    Editing a backed field enables save; missing required fields block save and focus the user back on the first failing tab.
-3. **Backed vs unbacked behavior**
-   Backed fields are interactive, `AD_OrgInfo` fields are read-only, and the 4 placeholder controls never pretend to persist.
+3. **Backed vs read-only behavior**
+   Backed fields are interactive and `AD_OrgInfo` fields are read-only.
 4. **Defaults grouping**
    All nine account groups render and the required selectors (`Cuenta a cobrar`, `Cuenta a pagar`, `IVA repercutido`, `IVA soportado`, plus the required bank accounts) validate correctly.
 5. **Dimensions toggles**

@@ -69,8 +69,8 @@ test.describe('General Ledger Configuration — visual capture (mocked)', () => 
  * General Ledger Configuration — behavioral suite (mocked).
  *
  * Builds on the capture seed: drives the real dirty-state → aggregate-save flow,
- * the inverted period toggle, dimension toggles, the unbacked placeholders, and
- * the read-only surfaces. The `Guardar cambios` button is gated on a selected
+ * the inverted period toggle, dimension toggles, and the read-only surfaces. The
+ * `Guardar cambios` button is gated on a selected
  * organization (`useGeneralLedgerConfig` only POSTs when `selectedOrg.id` is set),
  * so we seed `sf_auth_selected_org` in localStorage before React boots and install
  * a window-specific route for the aggregate endpoint after login() (LIFO wins over
@@ -168,11 +168,6 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
       dimensions: [],
       selectedOrgId: SEED_ORG.id,
     });
-    // Unbacked placeholders never leak into the payload.
-    expect(post.last.general).not.toHaveProperty('conversionType');
-    expect(post.last.general).not.toHaveProperty('costPrecision');
-    expect(post.last.general).not.toHaveProperty('autoReconciliation');
-    expect(post.last.general).not.toHaveProperty('journalNumbering');
   });
 
   test('inverted period toggle: turning "closed periods" ON maps to automaticPeriodControl=false', async ({ page }) => {
@@ -211,17 +206,6 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     const mandatory = page.getByTestId('glc-dim-dim-cc-switch');
     await expect(mandatory).toBeDisabled();
     await expect(mandatory).toBeChecked();
-  });
-
-  test('the 4 unbacked placeholders render their marker and stay non-persistent', async ({ page }) => {
-    // Two selects on the General tab.
-    await expect(page.getByTestId('glc-field-conversion-type').getByTestId('glc-unbacked-hint')).toBeVisible();
-    await expect(page.getByTestId('glc-field-cost-precision').getByTestId('glc-unbacked-hint')).toBeVisible();
-    // Two toggles in Políticas contables — disabled + marked.
-    await expect(page.getByTestId('glc-toggle-auto-reconciliation').getByTestId('glc-unbacked-hint')).toBeVisible();
-    await expect(page.getByTestId('glc-toggle-journal-numbering').getByTestId('glc-unbacked-hint')).toBeVisible();
-    await expect(page.getByTestId('glc-toggle-auto-reconciliation-switch')).toBeDisabled();
-    await expect(page.getByTestId('glc-toggle-journal-numbering-switch')).toBeDisabled();
   });
 
   test('read-only: Calendario fiscal and Organización are not editable inputs', async ({ page }) => {

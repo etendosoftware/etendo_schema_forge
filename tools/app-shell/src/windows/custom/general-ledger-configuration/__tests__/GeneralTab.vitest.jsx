@@ -67,26 +67,6 @@ describe('GeneralTab — read-only AD_OrgInfo fields', () => {
   });
 });
 
-describe('GeneralTab — unbacked placeholders', () => {
-  it('marks the conversion type and cost precision selects as unbacked', () => {
-    renderTab();
-    const conv = screen.getByTestId('glc-field-conversion-type');
-    const cost = screen.getByTestId('glc-field-cost-precision');
-    expect(within(conv).getByTestId('glc-unbacked-hint')).toBeInTheDocument();
-    expect(within(cost).getByTestId('glc-unbacked-hint')).toBeInTheDocument();
-  });
-
-  it('marks the auto-reconciliation and journal-numbering toggles as unbacked and disabled', () => {
-    renderTab();
-    const recon = screen.getByTestId('glc-toggle-auto-reconciliation');
-    const journal = screen.getByTestId('glc-toggle-journal-numbering');
-    expect(within(recon).getByTestId('glc-unbacked-hint')).toBeInTheDocument();
-    expect(within(journal).getByTestId('glc-unbacked-hint')).toBeInTheDocument();
-    expect(screen.getByTestId('glc-toggle-auto-reconciliation-switch')).toBeDisabled();
-    expect(screen.getByTestId('glc-toggle-journal-numbering-switch')).toBeDisabled();
-  });
-});
-
 describe('GeneralTab — backed editable fields', () => {
   it('edits the schema name through setGeneralField', async () => {
     const user = userEvent.setup();
