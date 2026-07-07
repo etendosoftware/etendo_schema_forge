@@ -1,8 +1,8 @@
 {
   "version": "0.9.0",
   "generatedAt": "2026-06-29T17:22:42.125Z",
-  "updatedAt": "2026-06-29T20:44:04.437Z",
-  "checksum": "256550c56ea48e6b",
+  "updatedAt": "2026-07-02T18:35:39.424Z",
+  "checksum": "6ab52b7bec26b4d4",
   "frontendContract": {
     "window": {
       "id": "252",
@@ -12,6 +12,12 @@
       "hidePrint": true,
       "hideLink": true,
       "customListIcons": true,
+      "secondaryTabs": {
+        "accounting": {
+          "tabOrder": 1,
+          "label": "Accounting"
+        }
+      },
       "detailEntity": null,
       "noHeaderBorder": true,
       "layoutType": "default",
@@ -262,6 +268,12 @@
       "hidePrint": true,
       "hideLink": true,
       "customListIcons": true,
+      "secondaryTabs": {
+        "accounting": {
+          "tabOrder": 1,
+          "label": "Accounting"
+        }
+      },
       "detailEntity": null,
       "noHeaderBorder": true,
       "linesLayout": "inlineEditable"

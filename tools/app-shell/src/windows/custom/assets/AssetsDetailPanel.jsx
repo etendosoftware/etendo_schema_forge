@@ -175,7 +175,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   ];
 
   const group2Fields = [
-    { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: ui('assetsCurrencyLabel'), section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: (record) => Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0 },
+    { key: 'currency', column: 'C_Currency_ID', type: 'selector', label: ui('assetsCurrencyLabel'), section: 'principal', reference: 'Currency', inputMode: 'selector', defaultValue: '@C_Currency_ID@', readOnlyLogic: (record) => Number(record.depreciatedPlan || 0) > 0 || Number(record.depreciatedValue || 0) > 0, requiredVisual: true },
     // The Asset amount triple (AssetValue, ResidualAssetValue, DepreciationAmt). ETP-4333:
     //  • calloutOn: 'blur' — EntityForm renders these via DeferredInput: typing only updates a
     //    local buffer; on blur a single onChange commits the value. The deferral-to-blur UX
@@ -186,17 +186,17 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
     //    no async round-trip to race. The Java remains the source of truth (see computeAssetAmounts).
     { key: 'assetValue', column: 'AssetValueAmt', type: 'number', label: ui('assetsAssetValueLabel'), section: 'principal', calloutOn: 'blur' },
     { key: 'residualAssetValue', column: 'Residualassetvalueamt', type: 'number', label: ui('assetsResidualValueLabel'), section: 'principal', calloutOn: 'blur' },
-    { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: ui('assetsDepreciationAmtLabel'), section: 'principal', calloutOn: 'blur' },
+    { key: 'depreciationAmt', column: 'Amortizationvalueamt', type: 'number', label: ui('assetsDepreciationAmtLabel'), section: 'principal', calloutOn: 'blur', requiredVisual: true },
     { key: 'previouslyDepreciatedAmt', column: 'Depreciatedpreviousamt', type: 'number', label: ui('assetsPrevDepreciatedLabel'), section: 'principal', defaultValue: '0' },
   ];
 
   const deprecFields = [
     { key: 'depreciationType', column: 'Amortizationtype', type: 'select', label: ui('assetsOptLinear'), required: true, section: 'principal', options: [{ value: 'LI', label: ui('assetsOptLinear') }] },
     { key: 'calculateType', column: 'Amortizationcalctype', type: 'select', required: true, section: 'principal', options: [{ value: 'PE', label: ui('assetsOptPercentage') }, { value: 'TI', label: ui('assetsOptTime') }] },
-    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI' },
+    { key: 'annualDepreciation', column: 'Amortizationpercentage', type: 'number', label: ui('assetsAnnualDepreciationLabel'), section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType !== 'TI', requiredVisual: true },
     { key: 'amortize', column: 'Assetschedule', type: 'select', required: true, section: 'principal', options: [{ value: 'MO', label: ui('assetsOptMonthly') }, { value: 'YE', label: ui('assetsOptYearly') }], displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' },
-    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE' },
-    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE' },
+    { key: 'usableLifeYears', column: 'UseLifeYears', type: 'number', section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize === 'YE', requiredVisual: true },
+    { key: 'usableLifeMonths', column: 'UseLifeMonths', type: 'number', section: 'principal', displayLogic: (record) => isDepreciate(record) && record.calculateType === 'TI' && record.amortize !== 'YE', requiredVisual: true },
   ];
 
   function makeDisplayLogic(fields) {
@@ -224,7 +224,7 @@ export default function AssetsDetailPanel({ data, token, apiBaseUrl, catalogs, a
   const dateFields = [
     { key: 'purchaseDate', column: 'Datepurchased', type: 'date', label: ui('assetsPurchaseDateLabel'), section: 'principal' },
     { key: 'cancellationDate', column: 'Cancellationdate', type: 'date', label: ui('assetsCancellationDateLabel'), section: 'principal' },
-    { key: 'depreciationStartDate', column: 'Amortizationstartdate', type: 'date', label: ui('assetsDepStartDateLabel'), section: 'principal' },
+    { key: 'depreciationStartDate', column: 'Amortizationstartdate', type: 'date', label: ui('assetsDepStartDateLabel'), section: 'principal', requiredVisual: true },
     { key: 'depreciationEndDate', column: 'Amortizationenddate', type: 'date', label: ui('assetsDepEndDateLabel'), section: 'principal' },
   ];
 

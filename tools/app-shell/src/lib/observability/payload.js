@@ -42,6 +42,7 @@ const SAFE_EVENT_PROPERTY_KEYS = new Set([
   'environment',
   'errorClass',
   'event',
+  'hasComment',
   'feedback',
   'flow',
   'functional_area',

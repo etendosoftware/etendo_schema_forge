@@ -1,11 +1,12 @@
 import RelatedDocumentsCard from './RelatedDocumentsCard.jsx';
 import { STATUS_BADGE, STATUS_KEYS } from '@/components/related-documents/constants.jsx';
-import { MovementSummaryCard } from './SummaryCard.jsx';
+import { MovementSummaryCard, InfoRow, PercentBar } from './SummaryCard.jsx';
 
 export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, token, apiBaseUrl, ui, specs }) {
   const docStatus = doc.documentStatus;
   const statusLabel = ui(STATUS_KEYS[docStatus]) || doc['documentStatus$_identifier'] || docStatus || '—';
   const statusBadgeClass = STATUS_BADGE[docStatus] || 'bg-gray-50 text-gray-600 border-gray-200';
+  const invoicePercent = doc.invoiceStatus != null ? Number(doc.invoiceStatus) : null;
 
   const rows = [
     { label: ui('shipmentPreviewDocNo'), value: doc.documentNo || '—' },
@@ -22,7 +23,13 @@ export default function ReturnDocStatsPanel({ doc, partnerName, movementDate, to
         statusRowLabel={ui('shipmentPreviewStatus')}
         statusLabel={statusLabel}
         statusBadgeClass={statusBadgeClass}
-        data-testid="MovementSummaryCard__2cd27e" />
+        data-testid="MovementSummaryCard__2cd27e">
+        {invoicePercent != null && (
+          <InfoRow label={ui('previewCardInvoicePercent')} data-testid="InfoRow__2cd27e">
+            <PercentBar value={invoicePercent} data-testid="PercentBar__2cd27e" />
+          </InfoRow>
+        )}
+      </MovementSummaryCard>
       <RelatedDocumentsCard
         documentId={doc.id}
         token={token}

@@ -157,7 +157,15 @@ export default function PaymentsCard({
     }
     content = (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px', gap: 8 }}>
-        <DirBadge isIn={isIn} size={36} data-testid="DirBadge__c6fe34" />
+        {/* Neutral document icon — the empty state has no direction, so no in/out arrow. */}
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#F1F2F4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#828FA3', flexShrink: 0 }}>
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="8" y1="13" x2="16" y2="13" />
+            <line x1="8" y1="17" x2="16" y2="17" />
+          </svg>
+        </div>
         <p style={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center', margin: 0 }}>
           {emptyLabel}
         </p>

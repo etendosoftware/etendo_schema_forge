@@ -120,13 +120,18 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       );
       assert.match(
         src,
-        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm;/,
+        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm[\s\S]*?;/,
       );
     });
 
     it('wires both footer buttons to the new disabled variables', () => {
-      assert.match(src, /data-testid="cp-save-draft" onClick=\{\(\) => submit\('draft'\)\} disabled=\{saveDisabled\}/);
-      assert.match(src, /data-testid="cp-confirm" onClick=\{\(\) => submit\('confirm'\)\} disabled=\{confirmDisabled \|\| loading\}/);
+      // Footer extracted into PaymentModalFooter (ETP-4406 cognitive-complexity refactor):
+      // the disabled-state wiring now lives on the extracted buttons, and the parent wires
+      // the same submit('draft') / submit('confirm') callbacks in as props.
+      assert.match(src, /data-testid="cp-save-draft" onClick=\{onSaveDraft\} disabled=\{saveDisabled\}/);
+      assert.match(src, /data-testid="cp-confirm" onClick=\{onConfirm\} disabled=\{confirmDisabled \|\| loading\}/);
+      assert.match(src, /onSaveDraft=\{\(\) => submit\('draft'\)\}/);
+      assert.match(src, /onConfirm=\{\(\) => submit\('confirm'\)\}/);
     });
   });
 
