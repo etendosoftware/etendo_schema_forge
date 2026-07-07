@@ -450,9 +450,9 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
         {/* Column headers — rendered once, not repeated per row */}
         {(sectionRows.length > 0 || adding) && (
           <div className="flex flex-row gap-5">
-            <div className="w-[300px] shrink-0"><FieldLabel>{ui('priceColName')}</FieldLabel></div>
-            <div className="w-[201px] shrink-0"><FieldLabel>{ui('priceColUnitPrice')}</FieldLabel></div>
-            <div className="w-[201px] shrink-0"><FieldLabel>{ui('priceColListPrice')}</FieldLabel></div>
+            <div className="w-[300px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColName')}</FieldLabel></div>
+            <div className="w-[201px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColUnitPrice')}</FieldLabel></div>
+            <div className="w-[201px] shrink-0"><FieldLabel data-testid="FieldLabel__d76b90">{ui('priceColListPrice')}</FieldLabel></div>
           </div>
         )}
 
@@ -526,7 +526,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
                 createLabel={ui('priceCreateTariff')}
                 onCreateRequest={handleCreateRequest}
                 preferDown
-              />
+                data-testid="CreatableSearchSelect__d76b90" />
             </div>
             {/* Unit price */}
             <div className="w-[201px] shrink-0">
@@ -569,7 +569,7 @@ export default function ProductPriceBar({ data, token, apiBaseUrl, catalogs, api
           initialName={createInitialName}
           onCancel={() => setCreateOpen(false)}
           onSubmit={submitCreateTariff}
-        />
+          data-testid="InlineCreateModal__d76b90" />
 
         {/* Add new tariff link */}
         {!adding && (
