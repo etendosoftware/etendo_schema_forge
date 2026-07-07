@@ -1,8 +1,8 @@
 {
   "version": "0.5.0",
   "generatedAt": "2026-06-25T12:12:33.694Z",
-  "updatedAt": "2026-06-29T12:09:15.647Z",
-  "checksum": "a8473151bae8abe4",
+  "updatedAt": "2026-07-07T11:25:22.483Z",
+  "checksum": "c44ee38b47bb8dda",
   "frontendContract": {
     "window": {
       "id": "E66E701CCBA14B8BA480CBDE37C50D7A",
@@ -11,9 +11,15 @@
       "category": "finance",
       "hidePrint": true,
       "hideCreate": true,
-      "hideMoreMenu": true,
       "hideDetailForm": true,
       "hideDelete": true,
+      "menuActions": [
+        {
+          "key": "goToFiscalCalendar",
+          "labelKey": "goToFiscalCalendar",
+          "component": "GoToFiscalCalendarModal"
+        }
+      ],
       "processOverrides": {
         "openClose": {
           "label": "Open Close Period",
@@ -767,9 +773,15 @@
       "category": "finance",
       "hidePrint": true,
       "hideCreate": true,
-      "hideMoreMenu": true,
       "hideDetailForm": true,
       "hideDelete": true,
+      "menuActions": [
+        {
+          "key": "goToFiscalCalendar",
+          "labelKey": "goToFiscalCalendar",
+          "component": "GoToFiscalCalendarModal"
+        }
+      ],
       "processOverrides": {
         "openClose": {
           "label": "Open Close Period",
