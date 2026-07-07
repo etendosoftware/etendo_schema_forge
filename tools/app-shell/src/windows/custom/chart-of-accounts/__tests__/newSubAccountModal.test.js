@@ -37,7 +37,7 @@ describe('ChartOfAccounts new sub-account modal source wiring', () => {
     assert.match(treeSrc, /column:\s*'accountTreeFilterActive'/);
     assert.match(treeSrc, /filterable:\s*false/);
     assert.match(treeSrc, /backendSortKey:\s*'searchKey'/);
-    assert.match(treeSrc, /enumLabels:\s*\{/);
+    assert.match(treeSrc, /enumLabels:\s*Object\.fromEntries\(/);
     assert.match(treeSrc, /badgeLabels:\s*\{/);
   });
 
