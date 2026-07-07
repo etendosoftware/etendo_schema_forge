@@ -21,6 +21,7 @@ import { SelectorInput } from './SelectorInput.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex } from '@/lib/linesColumnWidth.js';
+import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
 const TOKENS = {
@@ -487,6 +488,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       hasValidationErrorRef.current = true;
       setInvalidCell({ rowId: row.id, colKey: col.key });
       toast.error(ui('fieldMinValueError'));
+      return;
+    }
+    // Format validation (email + phone) for inline cell edits — mirrors the below-min
+    // guard: flag the cell, toast the specific error, and block the PATCH. Empty is
+    // valid (not required); a later valid re-commit clears the flag via setInvalidCell(null).
+    const formatError = getEmailFieldError(col, value) ?? getPhoneFieldError(col, value);
+    if (formatError !== null) {
+      hasValidationErrorRef.current = true;
+      setInvalidCell({ rowId: row.id, colKey: col.key });
+      toast.error(ui(formatError));
       return;
     }
     const effectiveValue = clampToMax(col, value);

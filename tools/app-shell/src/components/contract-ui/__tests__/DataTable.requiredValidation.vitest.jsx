@@ -148,3 +148,102 @@ describe('DataTable inline add-row — clearsField mutually-exclusive group', ()
     expect(onAdd).not.toHaveBeenCalled();
   });
 });
+
+describe('DataTable inline add-row — email-format validation', () => {
+  beforeEach(() => {
+    toast.error.mockClear();
+    toast.success.mockClear();
+  });
+
+  const emailFields = () => [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'email', column: 'Email', label: 'Email', type: 'string' },
+  ];
+
+  it('blocks submit and toasts for a non-empty malformed email', async () => {
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    renderAddRow(emailFields(), onAdd);
+    fireEvent.change(screen.getByTestId('inline-add-field-email'), { target: { value: 'not-an-email' } });
+    fireEvent.keyDown(screen.getByTestId('inline-add-field-email'), { key: 'Enter' });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail'));
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('does NOT block when the email is empty (optional field)', async () => {
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    renderAddRow(emailFields(), onAdd);
+    fireEvent.change(screen.getByTestId('inline-add-field-name'), { target: { value: 'Jane' } });
+    fireEvent.keyDown(screen.getByTestId('inline-add-field-name'), { key: 'Enter' });
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    expect(toast.error).not.toHaveBeenCalledWith('sendModalInvalidEmail');
+  });
+
+  it('submits a well-formed email', async () => {
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    renderAddRow(emailFields(), onAdd);
+    fireEvent.change(screen.getByTestId('inline-add-field-email'), { target: { value: 'jane@example.com' } });
+    fireEvent.keyDown(screen.getByTestId('inline-add-field-email'), { key: 'Enter' });
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    expect(onAdd.mock.calls[0][0].email).toBe('jane@example.com');
+    expect(toast.error).not.toHaveBeenCalledWith('sendModalInvalidEmail');
+  });
+
+  it('never treats a non-email column as an email (regression)', async () => {
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    // 'name' holds an email-shaped-invalid string but must NOT be email-validated.
+    renderAddRow([{ key: 'name', column: 'Name', label: 'Name', type: 'string' }], onAdd);
+    fireEvent.change(screen.getByTestId('inline-add-field-name'), { target: { value: 'not-an-email' } });
+    fireEvent.keyDown(screen.getByTestId('inline-add-field-name'), { key: 'Enter' });
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    expect(toast.error).not.toHaveBeenCalledWith('sendModalInvalidEmail');
+  });
+});
+
+describe('DataTable inline add-row — phone-format validation', () => {
+  beforeEach(() => {
+    toast.error.mockClear();
+    toast.success.mockClear();
+  });
+
+  const phoneFields = () => [
+    { key: 'name', label: 'Name', type: 'string' },
+    { key: 'phone', column: 'Phone', label: 'Phone', type: 'string' },
+  ];
+
+  it('blocks submit and toasts for an invalid phone', async () => {
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    renderAddRow(phoneFields(), onAdd);
+    fireEvent.change(screen.getByTestId('inline-add-field-phone'), { target: { value: '600abc' } });
+    fireEvent.keyDown(screen.getByTestId('inline-add-field-phone'), { key: 'Enter' });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('phoneInvalidChars'));
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('does NOT block when the phone is empty (optional field)', async () => {
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    renderAddRow(phoneFields(), onAdd);
+    fireEvent.change(screen.getByTestId('inline-add-field-name'), { target: { value: 'Jane' } });
+    fireEvent.keyDown(screen.getByTestId('inline-add-field-name'), { key: 'Enter' });
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    expect(toast.error).not.toHaveBeenCalledWith('phoneInvalidChars');
+  });
+
+  it('submits a valid phone number', async () => {
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    renderAddRow(phoneFields(), onAdd);
+    fireEvent.change(screen.getByTestId('inline-add-field-phone'), { target: { value: '+34 600 123 456' } });
+    fireEvent.keyDown(screen.getByTestId('inline-add-field-phone'), { key: 'Enter' });
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    expect(onAdd.mock.calls[0][0].phone).toBe('+34 600 123 456');
+    expect(toast.error).not.toHaveBeenCalledWith('phoneInvalidChars');
+  });
+
+  it('never treats a non-phone column as a phone (regression)', async () => {
+    const onAdd = vi.fn(() => Promise.resolve(true));
+    renderAddRow([{ key: 'name', column: 'Name', label: 'Name', type: 'string' }], onAdd);
+    fireEvent.change(screen.getByTestId('inline-add-field-name'), { target: { value: 'abc def' } });
+    fireEvent.keyDown(screen.getByTestId('inline-add-field-name'), { key: 'Enter' });
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    expect(toast.error).not.toHaveBeenCalledWith('phoneInvalidChars');
+  });
+});
