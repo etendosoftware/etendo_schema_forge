@@ -388,7 +388,7 @@ function ConnectionsLanding({ isEmbedded, ui }) {
 
               {activeClient == null ? (
                 <p className="py-6 text-center text-sm text-muted-foreground" data-testid="mcp-client-placeholder">
-                  {ui('oauthConnectChooseClient')}
+                  {ui('oauthConnectPickClient')}
                 </p>
               ) : null}
 
