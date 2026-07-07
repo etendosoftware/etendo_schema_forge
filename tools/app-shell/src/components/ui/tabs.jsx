@@ -39,9 +39,9 @@ export function TabsList({ children, className }) {
 }
 
 /**
- * @param {{ value: string; children: React.ReactNode; icon?: React.ElementType; badge?: number; className?: string }} props
+ * @param {{ value: string; children: React.ReactNode; icon?: React.ElementType; badge?: number; className?: string; 'data-testid'?: string }} props
  */
-export function TabsTrigger({ value, children, icon: Icon, badge, className }) {
+export function TabsTrigger({ value, children, icon: Icon, badge, className, 'data-testid': dataTestId }) {
   const ctx = useContext(TabsContext);
   const isActive = ctx?.value === value;
 
@@ -50,6 +50,7 @@ export function TabsTrigger({ value, children, icon: Icon, badge, className }) {
       type="button"
       role="tab"
       aria-selected={isActive}
+      data-testid={dataTestId}
       onClick={() => ctx?.onValueChange(value)}
       className={cn(
         'inline-flex items-center gap-1 px-3 py-3 text-sm transition-colors',

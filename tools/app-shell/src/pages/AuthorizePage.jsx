@@ -5,8 +5,12 @@ import { createApiFetch } from '@/auth/api.js';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Shield, CheckCircle2, XCircle, Loader2, Plug } from 'lucide-react';
-import { useMenuLabel, useUI } from '@/i18n';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { CopyBlock } from '@/components/ui/copy-button';
+import { Shield, CheckCircle2, XCircle, Loader2, Plug, Download, Sparkles } from 'lucide-react';
+import { useUI } from '@/i18n';
+import { buildMcpClients } from '@/lib/mcpClients.js';
+import { trackMcpConnectTabSelected } from '@/lib/mcpConnectTelemetry.js';
 
 function detectBaseUrl() {
   const path = window.location.pathname;
@@ -32,7 +36,6 @@ export default function AuthorizePage() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('idle'); // idle | authorizing | success | error
   const [errorMessage, setErrorMessage] = useState('');
-  const tMenu = useMenuLabel();
   const ui = useUI();
   const isEmbedded = searchParams.get('embedded') === '1';
 
@@ -103,7 +106,6 @@ export default function AuthorizePage() {
     return (
       <ConnectionsLanding
         isEmbedded={isEmbedded}
-        tMenu={tMenu}
         ui={ui}
         data-testid="ConnectionsLanding__96270f" />
     );
@@ -212,10 +214,142 @@ export default function AuthorizePage() {
   );
 }
 
-function ConnectionsLanding({ isEmbedded, tMenu, ui }) {
+function StepRow({ num, text }) {
+  return (
+    <li className="flex gap-2 text-sm text-muted-foreground">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+        {num}
+      </span>
+      <span className="leading-relaxed">{text}</span>
+    </li>
+  );
+}
+
+function InstallButton({ href, label, testId }) {
+  return (
+    <Button
+      type="button"
+      className="w-full"
+      onClick={() => { window.location.href = href; }}
+      data-testid={testId}
+    >
+      <Download className="mr-2 h-4 w-4" data-testid="InstallButton__icon" />
+      {label}
+    </Button>
+  );
+}
+
+function AgentPromptBlock({ ui, mcpUrl, clientId }) {
+  return (
+    <div className="w-full space-y-2 rounded-lg border border-dashed p-3">
+      <div className="flex items-center gap-1.5 text-sm font-medium">
+        <Sparkles className="h-4 w-4 text-primary" data-testid="AgentPromptBlock__icon" />
+        {ui('oauthConnectAgentPromptHeading')}
+      </div>
+      <CopyBlock
+        value={ui('oauthConnectAgentPrompt', { mcpUrl })}
+        data-testid={`mcp-agent-prompt-${clientId}`}
+      />
+    </div>
+  );
+}
+
+/**
+ * Renders the ordered instruction content for a single client (or sub-tab).
+ * `idForKeys` is the client/sub-tab id used to derive step i18n keys.
+ */
+function McpInstructions({ content, idForKeys, ui, mcpUrl }) {
+  const items = [];
+  let list = [];
+
+  const flushList = (key) => {
+    if (list.length) {
+      items.push(<ol key={`ol-${key}`} className="space-y-2">{list}</ol>);
+      list = [];
+    }
+  };
+
+  content.forEach((item, i) => {
+    if (item.step != null) {
+      const key = item.key || `oauthConnect${idForKeys}Step${item.step}`;
+      list.push(<StepRow key={`s-${i}`} num={item.step} text={ui(key)} />);
+      return;
+    }
+    flushList(i);
+    if (item.note) {
+      items.push(
+        <p key={`n-${i}`} className="rounded-md border border-amber-500/30 bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+          {ui(item.note)}
+        </p>,
+      );
+    } else if (item.subheading) {
+      items.push(<h3 key={`h-${i}`} className="pt-1 text-sm font-medium">{ui(item.subheading)}</h3>);
+    } else if (item.code != null) {
+      items.push(<CopyBlock key={`c-${i}`} value={item.code} data-testid={`mcp-code-${idForKeys}-${i}`} />);
+    } else if (item.install) {
+      items.push(
+        <InstallButton
+          key={`i-${i}`}
+          href={item.install.href}
+          label={ui(item.install.labelKey)}
+          testId={`mcp-install-${idForKeys}`}
+        />,
+      );
+    } else if (item.agentPrompt) {
+      items.push(<AgentPromptBlock key={`a-${i}`} ui={ui} mcpUrl={mcpUrl} clientId={idForKeys} />);
+    }
+  });
+  flushList('end');
+
+  return <div className="w-full space-y-3">{items}</div>;
+}
+
+function ClaudeDesktopContent({ client, ui, mcpUrl, onSubTabSelect }) {
+  const [sub, setSub] = useState(client.subTabs[0].id);
+
+  const handleSub = (value) => {
+    setSub(value);
+    onSubTabSelect(value);
+  };
+
+  return (
+    <Tabs value={sub} onValueChange={handleSub} className="w-full gap-4">
+      <TabsList className="border-b">
+        {client.subTabs.map((st) => (
+          <TabsTrigger
+            key={st.id}
+            value={st.id}
+            data-testid={`mcp-subtab-${st.id}`}
+          >
+            {ui(`oauthConnectTab${st.id}`)}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {client.subTabs.map((st) => (
+        <TabsContent key={st.id} value={st.id}>
+          <McpInstructions content={st.content} idForKeys={st.id} ui={ui} mcpUrl={mcpUrl} />
+        </TabsContent>
+      ))}
+    </Tabs>
+  );
+}
+
+function ConnectionsLanding({ isEmbedded, ui }) {
+  const mcpUrl = useMemo(() => detectMcpUrl(), []);
+  const clients = useMemo(() => buildMcpClients(mcpUrl), [mcpUrl]);
+  const [activeClient, setActiveClient] = useState(null);
+
+  const handleTabSelect = (id) => {
+    setActiveClient(id);
+    const client = clients.find((c) => c.id === id);
+    // Claude Desktop reports its active sub-tab (default: first) as the client id.
+    const telemetryClient = client?.subTabs ? client.subTabs[0].id : id;
+    trackMcpConnectTabSelected({ client: telemetryClient });
+  };
+
   return (
     <div className={isEmbedded ? 'flex min-h-screen items-center justify-center p-4' : 'flex min-h-[80vh] items-center justify-center p-4'}>
-      <Card className="w-full max-w-lg" data-testid="Card__96270f">
+      <Card className="w-full max-w-2xl" data-testid="Card__96270f">
         <CardContent className="pt-6" data-testid="CardContent__96270f">
           <div className="flex flex-col items-center gap-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
@@ -223,40 +357,56 @@ function ConnectionsLanding({ isEmbedded, tMenu, ui }) {
             </div>
 
             <div className="text-center">
-              <h1 className="text-xl font-semibold">{tMenu('Connect with Claude')}</h1>
+              <h1 className="text-xl font-semibold">{ui('oauthConnectHeading')}</h1>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-                {ui('oauthConnectLandingDesc')}
+                {ui('oauthConnectSubheading')}
               </p>
             </div>
 
-            <div className="w-full space-y-3">
-              <h2 className="text-sm font-medium">{ui('oauthHowItWorks')}</h2>
-              <ol className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">1</span>
-                  {ui('oauthStep1')}
-                </li>
-                <li className="flex gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">2</span>
-                  {ui('oauthStep2')}
-                </li>
-                <li className="flex gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">3</span>
-                  {ui('oauthStep3')}
-                </li>
-                <li className="flex gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">4</span>
-                  {ui('oauthStep4')}
-                </li>
-              </ol>
+            <div className="w-full rounded-lg border bg-muted/30 p-4" data-testid="mcp-server-url">
+              <div className="mb-2 text-xs font-medium text-muted-foreground">{ui('oauthMcpServerUrl')}</div>
+              <CopyBlock value={mcpUrl} data-testid="mcp-server-url-copy" />
             </div>
 
-            <div className="w-full rounded-lg border bg-muted/30 p-4">
-              <div className="mb-2 text-xs font-medium text-muted-foreground">{ui('oauthMcpServerUrl')}</div>
-              <code className="block break-all text-sm">
-                {detectMcpUrl()}
-              </code>
-            </div>
+            <Tabs
+              value={activeClient ?? ''}
+              onValueChange={handleTabSelect}
+              className="w-full gap-4"
+              data-testid="mcp-client-tabs"
+            >
+              <TabsList className="flex-wrap border-b">
+                {clients.map((client) => (
+                  <TabsTrigger
+                    key={client.id}
+                    value={client.id}
+                    data-testid={`mcp-tab-${client.id}`}
+                  >
+                    {ui(`oauthConnectTab${client.id}`)}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              {activeClient == null ? (
+                <p className="py-6 text-center text-sm text-muted-foreground" data-testid="mcp-client-placeholder">
+                  {ui('oauthConnectChooseClient')}
+                </p>
+              ) : null}
+
+              {clients.map((client) => (
+                <TabsContent key={client.id} value={client.id}>
+                  {client.subTabs ? (
+                    <ClaudeDesktopContent
+                      client={client}
+                      ui={ui}
+                      mcpUrl={mcpUrl}
+                      onSubTabSelect={(subId) => trackMcpConnectTabSelected({ client: subId })}
+                    />
+                  ) : (
+                    <McpInstructions content={client.content} idForKeys={client.id} ui={ui} mcpUrl={mcpUrl} />
+                  )}
+                </TabsContent>
+              ))}
+            </Tabs>
           </div>
         </CardContent>
       </Card>
