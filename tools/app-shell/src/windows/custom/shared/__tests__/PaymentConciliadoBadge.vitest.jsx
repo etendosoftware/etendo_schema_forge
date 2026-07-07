@@ -32,18 +32,23 @@ describe('PaymentConciliadoBadge', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it.each(['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC'])(
-    'renders the conciliado badge for deposited status %s',
+  it.each(['RPR', 'RDNC', 'PPM', 'PWNC', 'RPAE'])(
+    'renders nothing for a deposited-but-not-cleared status %s',
     (status) => {
-      render(<PaymentConciliadoBadge data={{ status }} />);
-      const badge = screen.getByText('conciliado');
-      expect(badge).toBeInTheDocument();
-      expect(badge).toHaveStyle({ background: '#ECFDF3', color: 'rgb(23, 102, 58)' });
+      const { container } = render(<PaymentConciliadoBadge data={{ status }} />);
+      expect(container).toBeEmptyDOMElement();
     },
   );
 
+  it('renders the conciliado badge for RPPC (Payment Cleared)', () => {
+    render(<PaymentConciliadoBadge data={{ status: 'RPPC' }} />);
+    const badge = screen.getByText('conciliado');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveStyle({ background: '#EEFBF4', color: 'rgb(23, 102, 58)' });
+  });
+
   it('renders the checkmark svg icon alongside the label', () => {
-    render(<PaymentConciliadoBadge data={{ status: 'RPR' }} />);
+    render(<PaymentConciliadoBadge data={{ status: 'RPPC' }} />);
     expect(document.querySelector('svg polyline')).toBeInTheDocument();
   });
 });

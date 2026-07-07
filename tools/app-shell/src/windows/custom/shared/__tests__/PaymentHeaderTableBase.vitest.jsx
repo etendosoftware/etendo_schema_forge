@@ -7,6 +7,7 @@ const rowDeleteSpy = vi.hoisted(() => ({ options: null }));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
 vi.mock('sonner', () => ({
@@ -161,13 +162,57 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     expect(sidebar.getByText(fmtAmt(30, 'EUR'))).toBeInTheDocument();
   });
 
-  it('uses the "pagado" hero label, minus sign and no method breakdown for dir="out" with no deposited rows', () => {
+  it('uses the "pagado" hero label and no method breakdown for dir="out" with no deposited rows (zero amount renders without a sign)', () => {
     const rows = [{ id: 'p1', status: 'RPAP', amount: '40' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
-    expect(sidebar.getByText(`− ${fmtAmt(0, 'EUR')}`)).toBeInTheDocument();
+    // No deposited rows this month → thisMonth is 0 → the hero renders sign-less, not "− 0,00 €".
+    expect(sidebar.getByText(fmtAmt(0, 'EUR'))).toBeInTheDocument();
+    expect(sidebar.queryByText(`− ${fmtAmt(0, 'EUR')}`)).not.toBeInTheDocument();
     // No deposited rows → no per-method breakdown section rendered.
     expect(sidebar.queryByText('porMetodo')).not.toBeInTheDocument();
+  });
+
+  it('shows the minus sign for dir="out" when this month\'s deposited total is nonzero', () => {
+    const rows = [
+      { id: 'p1', status: 'RPR', amount: '40', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
+    ];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
+    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
+    expect(sidebar.getByText(`− ${fmtAmt(40, 'EUR')}`)).toBeInTheDocument();
+  });
+
+  it('renders the hero amount with a single sign (not a doubled "− -") when this month\'s deposited total is negative (dir="out")', () => {
+    // Regression test: a negative deposited total must NOT get heroSign ("−")
+    // glued in front of fmtAmt's own leading "-" (which would render "− -40,00 €").
+    const rows = [
+      { id: 'p1', status: 'RPR', amount: '-40', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
+    ];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
+    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
+    // Both the hero amount AND the per-method breakdown (single "other" method,
+    // same -40 total) must render the sign-less single form.
+    expect(sidebar.getAllByText(fmtAmt(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
+    expect(sidebar.queryByText(`− ${fmtAmt(-40, 'EUR')}`)).not.toBeInTheDocument();
+  });
+
+  it('renders the hero amount with a single sign (not a doubled "+ -") when this month\'s deposited total is negative (dir="in")', () => {
+    const rows = [
+      { id: 'p1', status: 'RPR', amount: '-40', paymentDate: thisMonthDate('05'), 'currency$_identifier': 'EUR' },
+    ];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
+    expect(sidebar.getAllByText(fmtAmt(-40, 'EUR')).length).toBeGreaterThanOrEqual(1);
+    expect(sidebar.queryByText(`+ ${fmtAmt(-40, 'EUR')}`)).not.toBeInTheDocument();
+  });
+
+  it('renders the hero amount without a +/- sign when this month\'s total is exactly zero (dir="in")', () => {
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
+    const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
+    // Both the hero amount and the "sinDepositar" widget count render as a sign-less zero.
+    expect(sidebar.getAllByText(fmtAmt(0, 'EUR'))).toHaveLength(2);
+    expect(sidebar.queryByText(`+ ${fmtAmt(0, 'EUR')}`)).not.toBeInTheDocument();
+    expect(sidebar.queryByText(`− ${fmtAmt(0, 'EUR')}`)).not.toBeInTheDocument();
   });
 
   it('falls back to the raw currency code when Intl cannot resolve a currency symbol', () => {
@@ -182,7 +227,8 @@ describe('PaymentHeaderTableBase — sidebar', () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
     const sidebar = within(screen.getByTestId('PaymentSidebar__panel'));
     expect(sidebar.getByText('0 porVencer')).toBeInTheDocument();
-    expect(sidebar.getByText(fmtAmt(0, 'EUR'))).toBeInTheDocument();
+    // Both the sign-less hero amount and the "sinDepositar" widget count read "0,00 €".
+    expect(sidebar.getAllByText(fmtAmt(0, 'EUR')).length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -195,8 +241,20 @@ describe('PaymentHeaderTableBase — columns', () => {
     const statusCol = columns.find((c) => c.key === 'status');
     expect(statusCol.enumLabels.RPR).toBe('cobroDepositado');
     expect(statusCol.enumLabels.PWNC).toBe('cobroDepositado');
+    // RPAE (Awaiting Execution) is deposited too — the DB translation already
+    // labels it "Cobro depositado", matching DEPOSITED_STATUSES.
+    expect(statusCol.enumLabels.RPAE).toBe('cobroDepositado');
     expect(statusCol.enumLabels.RPAP).toBe('statusDraft');
     expect(statusCol.enumLabels.DR).toBe('statusDraft');
+  });
+
+  it('sets the amount column\'s labels[locale] explicitly so resolveColumnLabel picks it over the AD-dictionary fallback for "Amount" (which resolves to "Importe cobrado/pagado")', () => {
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={[]} onDataMutated={vi.fn()} />);
+    const { columns } = dataTableSpy.current;
+    const amountCol = columns.find((c) => c.key === 'amount');
+    // `labels` (priority 1 in resolveColumnLabel) must win over translate(col.column).
+    expect(amountCol.labels).toEqual({ en_US: 'amount' });
+    expect(amountCol.label).toBe('amount');
   });
 
   it('maps deposited codes to pagoDepositado for dir="out"', () => {
@@ -204,6 +262,7 @@ describe('PaymentHeaderTableBase — columns', () => {
     const { columns } = dataTableSpy.current;
     const statusCol = columns.find((c) => c.key === 'status');
     expect(statusCol.enumLabels.RPR).toBe('pagoDepositado');
+    expect(statusCol.enumLabels.RPAE).toBe('pagoDepositado');
   });
 
   it('renders the amount column with a + sign and green color for a deposited row (dir="in")', () => {
@@ -214,12 +273,49 @@ describe('PaymentHeaderTableBase — columns', () => {
     expect(cell.querySelector('span')).toHaveStyle({ color: 'rgb(23, 102, 58)' });
   });
 
+  it('renders the amount column with a + sign and green color for an RPAE (Awaiting Execution) row (dir="in")', () => {
+    // Regression test: RPAE was previously treated as NOT deposited (amber),
+    // creating an inconsistency with the "Cobro depositado" DB label. It must
+    // now render exactly like RPR — green amount, deposited status.
+    const rows = [{ id: 'p12', status: 'RPAE', amount: '50', 'currency$_identifier': 'EUR' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    const cell = screen.getByTestId('col-amount-p12');
+    expect(cell).toHaveTextContent(`+ ${fmtAmt(50, 'EUR')}`);
+    expect(cell.querySelector('span')).toHaveStyle({ color: 'rgb(23, 102, 58)' });
+  });
+
   it('renders the amount column with a − sign and dark color for a non-deposited row (dir="out")', () => {
     const rows = [{ id: 'p2', status: 'RPAP', amount: '20', 'currency$_identifier': 'EUR' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
     const cell = screen.getByTestId('col-amount-p2');
     expect(cell).toHaveTextContent(`− ${fmtAmt(20, 'EUR')}`);
     expect(cell.querySelector('span')).toHaveStyle({ color: 'rgb(18, 18, 23)' });
+  });
+
+  it('renders the amount column with a single sign (not a doubled "− -") for a negative amount (dir="out")', () => {
+    // Regression test: fmtAmt() already prepends its own "-" for negative
+    // values; buildColumns must NOT also glue the directional "− " in front
+    // of it, or the cell would read "− -50,00 €".
+    const rows = [{ id: 'p3', status: 'PPM', amount: '-50', 'currency$_identifier': 'EUR' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} specName="payment-out" dir="out" data={rows} onDataMutated={vi.fn()} />);
+    const cell = screen.getByTestId('col-amount-p3');
+    expect(cell.textContent).toBe(fmtAmt(-50, 'EUR'));
+    expect(cell.textContent).not.toContain('− -');
+  });
+
+  it('renders the amount column with a single sign (not a doubled "+ -") for a negative amount (dir="in")', () => {
+    const rows = [{ id: 'p10', status: 'RPR', amount: '-15', 'currency$_identifier': 'EUR' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    const cell = screen.getByTestId('col-amount-p10');
+    expect(cell.textContent).toBe(fmtAmt(-15, 'EUR'));
+    expect(cell.textContent).not.toContain('+ -');
+  });
+
+  it('renders the amount column with the directional sign preserved for a positive amount, guarding against future regressions in either direction', () => {
+    const rows = [{ id: 'p11', status: 'RPR', amount: '5', 'currency$_identifier': 'EUR' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    const cell = screen.getByTestId('col-amount-p11');
+    expect(cell.textContent).toBe(`+ ${fmtAmt(5, 'EUR')}`);
   });
 });
 
@@ -235,6 +331,12 @@ describe('PaymentHeaderTableBase — menu actions', () => {
     const rows = [{ id: 'p1', status: 'RDNC', amount: '10' }];
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
     expect(screen.getByTestId('menu-action-etprReactivatePayment-p1')).toBeInTheDocument();
+  });
+
+  it('offers a Reactivar action for RPAE (Awaiting Execution) rows, since RPAE now counts as deposited', () => {
+    const rows = [{ id: 'p13', status: 'RPAE', amount: '10' }];
+    render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={rows} onDataMutated={vi.fn()} />);
+    expect(screen.getByTestId('menu-action-etprReactivatePayment-p13')).toBeInTheDocument();
   });
 
   it('offers no menu action for other statuses (e.g. RPVOID)', () => {
