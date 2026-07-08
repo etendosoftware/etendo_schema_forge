@@ -158,6 +158,7 @@ export default defineConfig(({ mode }) => {
   // the default sibling ../schema_forge_core.
   const CORE_REPO = process.env.SCHEMA_FORGE_CORE || resolve(__dirname, '../../../schema_forge_core');
   const CORE_APP_SHELL_SRC = resolve(CORE_REPO, 'packages/app-shell-core/src');
+  const CORE_GO_SRC = resolve(CORE_REPO, 'packages/etendo-go-core/src');
 
   return {
   base: '/',
@@ -222,6 +223,24 @@ export default defineConfig(({ mode }) => {
       ...(LOCAL_CORE ? [
         { find: /^@etendosoftware\/app-shell-core$/, replacement: resolve(CORE_APP_SHELL_SRC, 'index.js') },
         { find: /^@etendosoftware\/app-shell-core\/(.*)$/, replacement: resolve(CORE_APP_SHELL_SRC, '$1') },
+        // Onboarding/login (LoginStep, AuthShell, AuthField, etc.) lives in
+        // etendo-go-core — mirror the app-shell-core aliasing so login UI work
+        // hot-reloads from the local core checkout too.
+        //
+        // Unlike app-shell-core's `./components/ui/*` wildcard (a true 1:1 path
+        // passthrough), etendo-go-core's package.json `exports` map renames two
+        // subpaths to camelCase filenames (`./onboarding/password-policy` ->
+        // `passwordPolicy.js`, `./onboarding/oauth-return-to` ->
+        // `oauthReturnTo.js`). A single catch-all regex can't reproduce that, so
+        // every subpath is aliased explicitly here, mirroring that exports map
+        // 1:1. Keep both in sync if the package adds/renames an export.
+        { find: /^@etendosoftware\/etendo-go-core$/, replacement: resolve(CORE_GO_SRC, 'index.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding$/, replacement: resolve(CORE_GO_SRC, 'onboarding/index.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/api$/, replacement: resolve(CORE_GO_SRC, 'onboarding/api.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/sso$/, replacement: resolve(CORE_GO_SRC, 'onboarding/sso.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/state$/, replacement: resolve(CORE_GO_SRC, 'onboarding/state.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/password-policy$/, replacement: resolve(CORE_GO_SRC, 'onboarding/passwordPolicy.js') },
+        { find: /^@etendosoftware\/etendo-go-core\/onboarding\/oauth-return-to$/, replacement: resolve(CORE_GO_SRC, 'onboarding/oauthReturnTo.js') },
         // Force a single React instance: the linked source would otherwise resolve
         // react/react-dom from schema_forge_core's own node_modules (a separate
         // install tree) → two React copies → "Invalid hook call". Pin both to this

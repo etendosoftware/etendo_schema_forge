@@ -16,6 +16,9 @@ export default {
     // Scan them too; otherwise Tailwind purges layout and auth-form utilities
     // after the core/functional package split.
     '../../node_modules/@etendosoftware/etendo-go-core/src/**/*.{js,jsx}',
+    // LOCAL_CORE dev mode only — scan the sibling core checkout too, so classes
+    // added while iterating on the login UI there aren't purged in preview.
+    '../../../schema_forge_core/packages/etendo-go-core/src/**/*.{js,jsx}',
   ],
   theme: {
   	extend: {
