@@ -329,7 +329,7 @@ describe('OnboardingPage', () => {
     expect(serializedCalls).not.toContain('platform-token');
   });
 
-  it('sends the configured default onboarding language when registering an account', async () => {
+  it('sends the active onboarding language when registering an account', async () => {
     registerAccount.mockResolvedValue({
       token: 'platform-token',
       account: { name: 'Ada Lovelace', email: 'ada@example.com' },
@@ -340,12 +340,13 @@ describe('OnboardingPage', () => {
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
-    // No language selector exists anymore (ETP-4444) — registration always
-    // sends the app's configured default (Spain-only, `es_ES`) rather than a
-    // user-picked value.
+    // No language selector exists anymore (ETP-4444) — there's no UI control
+    // to change it — but the active locale (from useLocaleSwitch, `en_US` by
+    // default in this suite) still wins over the app's Spain-only config
+    // default when composing the registration payload.
     await waitFor(() => {
       expect(registerAccount).toHaveBeenCalledWith(expect.any(Function), '', expect.objectContaining({
-        language: 'es_ES',
+        language: 'en_US',
       }));
     });
   });
