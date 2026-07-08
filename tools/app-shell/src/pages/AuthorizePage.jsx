@@ -274,31 +274,35 @@ function McpInstructions({ content, idForKeys, ui, mcpUrl }) {
   content.forEach((item, i) => {
     if (item.step != null) {
       const key = item.key || `oauthConnect${idForKeys}Step${item.step}`;
-      list.push(<StepRow key={`s-${i}`} num={item.step} text={ui(key)} />);
+      list.push(<StepRow key={`s-${item.step}`} num={item.step} text={ui(key)} />);
       return;
     }
-    flushList(i);
     if (item.note) {
+      flushList(`note-${item.note}`);
       items.push(
-        <p key={`n-${i}`} className="rounded-md border border-amber-500/30 bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+        <p key={`n-${item.note}`} className="rounded-md border border-amber-500/30 bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
           {ui(item.note)}
         </p>,
       );
     } else if (item.subheading) {
-      items.push(<h3 key={`h-${i}`} className="pt-1 text-sm font-medium">{ui(item.subheading)}</h3>);
+      flushList(`sub-${item.subheading}`);
+      items.push(<h3 key={`h-${item.subheading}`} className="pt-1 text-sm font-medium">{ui(item.subheading)}</h3>);
     } else if (item.code != null) {
-      items.push(<CopyBlock key={`c-${i}`} value={item.code} data-testid={`mcp-code-${idForKeys}-${i}`} />);
+      flushList(`code-${idForKeys}-${i}`);
+      items.push(<CopyBlock key={`c-${idForKeys}-${item.code}`} value={item.code} data-testid={`mcp-code-${idForKeys}-${i}`} />);
     } else if (item.install) {
+      flushList(`install-${item.install.href}`);
       items.push(
         <InstallButton
-          key={`i-${i}`}
+          key={`i-${item.install.href}`}
           href={item.install.href}
           label={ui(item.install.labelKey)}
           testId={`mcp-install-${idForKeys}`}
         />,
       );
     } else if (item.agentPrompt) {
-      items.push(<AgentPromptBlock key={`a-${i}`} ui={ui} mcpUrl={mcpUrl} clientId={idForKeys} />);
+      flushList(`agent-${idForKeys}`);
+      items.push(<AgentPromptBlock key={`a-${idForKeys}`} ui={ui} mcpUrl={mcpUrl} clientId={idForKeys} />);
     }
   });
   flushList('end');
