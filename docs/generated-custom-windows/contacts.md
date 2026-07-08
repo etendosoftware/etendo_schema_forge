@@ -204,4 +204,16 @@ The following issues in the **Cuenta Bancaria** inline add-row form were resolve
 - `accountingSchema` is now classified `system` (hidden, `addLineFromSibling: true`) on both entities. `CustomerAccountingHandler` (`@Named("customerAccountingHandler")`) and `VendorAccountingHandler` (`@Named("vendorAccountingHandler")`) in `com.etendoerp.go` auto-fill `C_AcctSchema_ID` on record creation, closing the gap previously flagged above — no `NeoHandler` follow-up remains outstanding for this field.
 - Both tabs are unconditionally visible; no role-flag gating (customer/vendor) exists at the tab level in the current generator.
 - `employeeAccounting` was explicitly left unwired — out of scope for this ticket.
+
+## ETP-4447 — CSV/TXT import
+
+**Import button added to the list toolbar.** `decisions.json → window.import` (`enabled: true`, `spec: "contacts"`, `entity: "businessPartner"`, `formats: ["csv", "txt"]`) renders an Import action in `ListView.jsx`'s toolbar, opening the shared `ImportDialog` (dropzone → column mapping → review queue → send).
+
+**Composite descriptor splits one CSV row into three records.** Contacts registers a custom import descriptor (`contactsImportDescriptor.js`, name `contacts`) instead of the plain single-entity default: a row builds a `businessPartner` op (with `oBTIKTaxIDKey` defaulted and `searchKey` falling back to `name`), and — only when address fields are present — a `locationAddress` op plus a `contact` (person) op, so a single "Company + contact person + address" row lands correctly across the three underlying tabs. `country`/`region` resolve through dedicated FK resolvers (`contactsFkResolvers.js`) rather than the generic per-field resolver, since they need the composite descriptor's own SimSearch calls.
+
+**Row-level dedupe by email.** `window.import.dedupe` is `{ scope: "file", key: ["etgoEmail"] }` — an in-file duplicate (same email seen twice) is flagged `skipped` rather than sent twice.
+
+**Review queue is a real per-field data grid.** Instead of collapsing a row into one cell, the queue renders one column per declared field with a frozen leading Status column (line number, status pill, inline Retry/Copy/Skip icons, and — for an already-skipped row — an "Edit again" action that brings it back for another look). A field that failed FK matching (e.g. `country`) renders as a click-to-open popover backed by the same SimSearch candidates already computed for it, with a live, debounced re-search as the user types and a "browse all" fallback when there were no close candidates at all — fixing the row is picking the right record, not retyping text and hoping "Re-validate" matches this time.
+
+**Known gap.** The country/region SimSearch matching is only as good as Etendo's own SimSearch fuzzy scoring (e.g. "España" alone can rank real matches surprisingly low); the pick-a-value/browse-all UI above exists specifically to make that recoverable without re-editing the source file.
 - Tab labels ("Customer Accounting" / "Vendor Accounting") already existed as AD-derived `tabs` dictionary entries in both `packages/app-shell-core/src/locales/en_US.json` and `es_ES.json` ("Contabilidad cliente" / "Contabilidad proveedor"), so no new i18n keys were required.
