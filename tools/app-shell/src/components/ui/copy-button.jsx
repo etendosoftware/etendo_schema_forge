@@ -72,17 +72,26 @@ export function CopyButton({
 
 /**
  * A copyable code/snippet block: monospace content in a bordered surface with a
- * CopyButton in the top-right corner. Long content scrolls horizontally inside
- * its own container (never pushes the page width).
+ * CopyButton in the top-right corner. By default long content scrolls
+ * horizontally inside its own container (never pushes the page width) — ideal
+ * for URLs and config snippets.
+ *
+ * Pass `wrap` for prose-like values (e.g. an agent prompt): the text wraps onto
+ * multiple lines and the block grows up to `maxLines` (default 4) before
+ * scrolling vertically.
  *
  * @param {{
  *   value: string,
  *   language?: string,
  *   className?: string,
+ *   wrap?: boolean,
+ *   maxLines?: number,
  *   'data-testid'?: string,
  * }} props
  */
-export function CopyBlock({ value, className, 'data-testid': dataTestId }) {
+export function CopyBlock({ value, className, wrap = false, maxLines = 4, 'data-testid': dataTestId }) {
+  // leading-relaxed = 1.625; cap the wrapped block at `maxLines` before scrolling.
+  const wrapStyle = wrap ? { maxHeight: `${(maxLines * 1.625).toFixed(3)}em` } : undefined;
   return (
     <div
       className={cn('relative rounded-lg border bg-muted/40', className)}
@@ -95,8 +104,14 @@ export function CopyBlock({ value, className, 'data-testid': dataTestId }) {
           data-testid={dataTestId ? `${dataTestId}__copy` : 'CopyBlock__copy'}
         />
       </div>
-      <pre className="overflow-x-auto p-3 pr-12 text-xs leading-relaxed">
-        <code className="whitespace-pre font-mono">{value}</code>
+      <pre
+        className={cn(
+          'p-3 pr-12 text-xs leading-relaxed',
+          wrap ? 'overflow-y-auto' : 'overflow-x-auto',
+        )}
+        style={wrapStyle}
+      >
+        <code className={cn('font-mono', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre')}>{value}</code>
       </pre>
     </div>
   );

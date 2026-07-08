@@ -248,6 +248,8 @@ function AgentPromptBlock({ ui, mcpUrl, clientId }) {
       </div>
       <CopyBlock
         value={ui('oauthConnectAgentPrompt', { mcpUrl })}
+        wrap
+        maxLines={4}
         data-testid={`mcp-agent-prompt-${clientId}`}
       />
     </div>
