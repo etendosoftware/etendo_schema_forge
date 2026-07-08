@@ -147,7 +147,7 @@ Recommendations:
 
 Observed relevant changes:
 
-- New `e2e/tests/flows/physical-inventory.spec.js`.
+- New `e2e/tests/flows/physical-inventory.mocked.spec.js`.
 - Updated E2E helpers in `auth.js` and `selectors.js`.
 - Mock mode intercepts `/sws/*` calls.
 

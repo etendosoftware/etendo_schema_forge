@@ -162,15 +162,35 @@ test.describe('Chart of Accounts — account code lock (ETP-4247)', () => {
     // Replace the suffix: "0001" → "0002"
     await suffixInput.fill('0002');
 
-    // Capture the PATCH request body at the moment save is clicked
-    const [saveReq] = await Promise.all([
-      page.waitForRequest(
-        r => (r.method() === 'PATCH' || r.method() === 'POST')
-          && r.url().includes('/elementValue')
-          && !r.url().includes('/defaults'),
-      ),
-      page.getByTestId('action-save').click(),
-    ]);
+    // Gate on OBSERVABLE state before clicking Save. The AccountCodeField
+    // customRenderer commits `editing.searchKey` via an async React onChange,
+    // and the save payload is a diff (buildPatchPayload in useEntity.js only
+    // includes a field when editing[key] !== selected[key]). Clicking Save
+    // before that commit lands would drop searchKey from the body. We wait for
+    // two DOM signals that prove the commit flushed:
+    //   1. the input reflects the typed value, and
+    //   2. the Save button becomes enabled — for an existing record it is
+    //      gated by !isDirty (hook.isDirtyHeader), so it only enables once
+    //      editing.searchKey has diverged from the loaded value.
+    const saveButton = page.getByTestId('action-save');
+    await expect(suffixInput).toHaveValue('0002');
+    await expect(saveButton).toBeEnabled();
+
+    // Now the state has settled — arm the request wait, THEN click, THEN await.
+    // Decoupled from fill() so the click never races ahead of the commit.
+    // Match ONLY the save PATCH to the record detail URL. Editing the suffix
+    // fires a debounced (300ms) callout POST to /elementValue/callout carrying
+    // a {field, value, formState} body — under load it can land after this
+    // promise is armed, so we must exclude it (and /defaults) to avoid
+    // capturing the wrong request. An existing record always saves via PATCH.
+    const savePromise = page.waitForRequest(
+      r => r.method() === 'PATCH'
+        && /\/elementValue\/[^/?]+/.test(r.url())
+        && !r.url().includes('/callout')
+        && !r.url().includes('/defaults'),
+    );
+    await saveButton.click();
+    const saveReq = await savePromise;
 
     const body = JSON.parse(saveReq.postData() ?? '{}');
     expect(body.searchKey).toBe('43000002');

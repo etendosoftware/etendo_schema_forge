@@ -41,6 +41,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
   getStatusDotColor: (raw) => `dot-${raw ?? 'none'}`,
   getStatusGridPillClass: () => '',
   getStatusPillClass: () => '',
+  getStatusTone: () => 'neutral',
   statusLabel: (raw) => `status-label-${raw}`,
 }));
 vi.mock('@/components/ui/status-tag', () => ({

@@ -17,17 +17,15 @@ describe('PaymentConciliadoBadge', () => {
 
   // ── Reconciliation status ──────────────────────────────────────────────────
 
-  it('guards on the full deposited status set, not just RPPC', () => {
-    // RPPC alone under-counts: most deposited payments in practice settle
-    // into RDNC/PWNC, not RPPC — the badge must match the same "deposited"
-    // grouping used by the list's status color/label.
-    for (const code of ['RPR', 'RPPC', 'RDNC', 'PPM', 'PWNC']) {
-      assert.match(src, new RegExp(code));
-    }
+  it('guards on RPPC only, matching Classic\'s reconciliation model', () => {
+    // Only RPPC ("Payment Cleared") means bank-reconciled in Classic — every
+    // other deposited status (RPR, RDNC, PPM, PWNC, RPAE) is money that moved
+    // but was not yet matched against a bank statement.
+    assert.match(src, /RECONCILED_STATUS\s*=\s*'RPPC'/);
     assert.match(src, /data\?\.status/);
   });
 
-  it('returns null when status is not a deposited status', () => {
+  it('returns null when status is not RPPC', () => {
     assert.match(src, /return null/);
   });
 
@@ -45,7 +43,7 @@ describe('PaymentConciliadoBadge', () => {
   // ── Color token ────────────────────────────────────────────────────────────
 
   it('uses green background color token for visual differentiation', () => {
-    assert.match(src, /#ECFDF3/);
+    assert.match(src, /#EEFBF4/);
   });
 
   it('uses green text color token #17663A', () => {

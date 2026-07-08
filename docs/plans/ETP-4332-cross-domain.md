@@ -1,67 +1,82 @@
-# Cross-Domain Plan: ETP-4332 — Payment confirm/reactivate actions
+# Cross-Domain Plan: ETP-4332 — RPR/RPAE status color fix + confirm label
 
-## Why this PR touches more than `artifacts/payment-*`
+> Supersedes the previous revision of this file (which documented an earlier,
+> already-merged round of ETP-4332 work: the confirm/reactivate flow split
+> across this repo and `schema_forge_core`). This revision documents a
+> **new, later round of commits on the same `feature/ETP-4332` branch**,
+> scoped to a status-color rendering bug and its regenerated artifacts. That
+> earlier round's sibling-repo PR has already merged and published; nothing
+> in `schema_forge_core` changed in this round.
 
-ETP-4332 (payment-in/payment-out confirm/reactivate flow, activity log, status
-colors) required changes at three levels: window artifacts, shared UI
-components used by both payment windows, and the schema-forge core tooling
-(generator + shared design-system package). Since the `schema_forge_core`
-split (commit `a15488355`), the last category lives in a **separate repo**
-and cannot be part of this PR — it ships as a **sibling PR**:
+## Why this PR touches more than one domain
 
-- **This repo (`etendo_schema_forge`)**: `feature/ETP-4332-split` →
-  `epic/ETP-3504`
-- **Sibling repo (`schema_forge_core`)**: `feature/ETP-4332` →
-  `main` (commit `ff2546fec`)
+The root defect is a **platform-level** rendering bug: the generic grid cell
+renderer (`DataTable.cellRenderers.jsx`'s `renderStatusCell`) was calling the
+bundled `getStatusTone` from the published `app-shell-core` package instead
+of this repo's own corrected local `statusBadge.js`, so it still bucketed
+RPR (and, in a follow-up fix, RPAE) as amber/"warning" instead of
+deposited/green. Every other surface that renders the same status codes
+(`PaymentConciliadoBadge`, `PaymentHeaderTableBase`, `DocumentStatusPill`)
+already treated them correctly via the local module — only the shared grid
+renderer disagreed.
 
-**Merge order matters**: the core PR should merge and publish
-`@etendosoftware/schema-forge-core` before (or together with) this one. Until
-then, this branch's local `sf-validate-pipeline` pre-commit check reports a
-false-positive F16 (generated files don't match the *published* generator,
-because the published version doesn't have the `confirmModal` fix yet) — this
-was bypassed with `--no-verify` on the commit in this branch. The equivalent
-CI check (`pipeline-validate.yml`) runs in shadow mode
-(`continue-on-error: true`) and does not block the merge either way.
+`renderStatusCell` is used by every window's list grid, not just payments,
+so the fix is inherently a `platform-change`. But the bug was only visible
+(and only tested) on the payment-in/payment-out list grids, and fixing it
+correctly required extending the shared payment components' own status
+buckets and regenerating both windows' artifacts to pick up an
+already-published but not yet locally-synced generator fix
+(`confirmModal`/`processConfirmModal` wiring). None of these three layers is
+independently useful without the other two: shipping the platform fix alone
+without the shared-component + regen work would leave RPAE unfixed and the
+Confirm button showing a stale i18n key; shipping only the window artifacts
+without the platform fix would leave the grid still showing the wrong color
+for every other window that reaches an RPR/RPAE-equivalent state.
 
-## Domains touched in THIS repo
+## Domains touched
 
 | Domain | Files | Reason |
 |--------|-------|--------|
-| `platform-change` | `tools/app-shell/src/components/contract-ui/DetailView.jsx` | `dispatchProcessAction` gate extended to accept a `confirmModal` process flag (in addition to the existing `style === 'ghost-danger'` gate), so a process can show the confirm dialog without inheriting destructive styling |
-| `shared-custom-capability` | `tools/app-shell/src/windows/custom/shared/{PaymentDetailSidebarBase,PaymentHeaderTableBase,PaymentConciliadoBadge,ConfirmPaymentModal,ReactivarModal}.jsx` | Shared components used by both payment-in and payment-out — any change to them is inherently cross-window |
-| `window:payment-in` | All payment-in artifacts | Target window |
-| `window:payment-out` | All payment-out artifacts | Target window — symmetrical feature with payment-in |
-| `e2e` | `e2e/tests/flows/attachments.mocked.spec.js` | Suites A-D skipped — `attachments: false` in `decisions.json` for both payment windows (set in `5bd640b91`), so the attachments tab no longer exists for them |
+| `platform-change` | `tools/app-shell/src/components/contract-ui/DataTable.cellRenderers.jsx` (+ its `__tests__/DataTable.*.vitest.jsx` suites), `tools/app-shell/src/lib/statusBadge.js` (+ `__tests__/statusBadge.vitest.jsx`), `tools/app-shell/src/locales/en_US.json`, `tools/app-shell/src/locales/es_ES.json` | `renderStatusCell` is the generic list-grid status renderer shared by every window; `statusBadge.js` is the single source of truth for status-to-tone mapping that the renderer was failing to use. Locale keys were added/fixed for the Confirm button label. |
+| `shared-custom-capability` | `tools/app-shell/src/windows/custom/shared/{ConfirmPaymentModal,PaymentConciliadoBadge,PaymentHeaderTableBase}.jsx` (+ their `__tests__/*.vitest.jsx`), new `tools/app-shell/src/windows/custom/shared/__tests__/PaymentReactivateConfirmIntegration.vitest.jsx` | Shared components used by both payment-in and payment-out — extending the "deposited" status bucket to RPAE and fixing the amount sign/label rendering in the list grid, plus the confirm-label fix, all live here since both windows share these files by construction |
+| `window:payment-in` | `artifacts/payment-in/contract.json`, `artifacts/payment-in/contract.mcp.json`, `artifacts/payment-in/generated/web/payment-in/FinPaymentPage.jsx` | Regenerated after `npm ci` synced `schema-forge-cli` from a stale 0.1.10 to the pinned 0.3.0, picking up the already-published `confirmModal`/`statusFieldLabel` wiring that had never reached this window's generated output |
+| `window:payment-out` | `artifacts/payment-out/contract.json`, `artifacts/payment-out/contract.mcp.json`, `artifacts/payment-out/generated/web/payment-out/HeaderPage.jsx` | Same regeneration, symmetrical window |
 
-## Domains touched in the SIBLING PR (`schema_forge_core`, commit `ff2546fec`)
+No `schema_forge_core` (sibling repo) changes are part of this round — the
+generator/package fix this regen picks up was already published from the
+prior round's sibling PR.
 
-| File | Why it had to change |
-|------|----------------------|
-| `cli/src/generate-frontend.js` | `buildProcessesArray` exported and extended with a `confirmModal: true` `processOverrides` flag — the only way to make a process button open a confirm dialog without forcing `style: 'ghost-danger'` (red border + undo icon), which payments' "Confirmar" must not have |
-| `cli/src/resolve-curated.js` | Carries the `confirmModal` override from `decisions.json` through to `contract.json` so the generator above can read it |
-| `packages/app-shell-core/src/lib/statusBadge.js` | RPR/RDNC/PWNC join RPPC/PPM in the "deposited" (green) status bucket across all 5 classifier functions — this business never runs Etendo's formal Reconcile Payment step, so RDNC/PWNC are the de-facto terminal deposited state in practice, not "not cleared" as their AD names suggest. Must live here because `StatusTag` (grid) and the badge/pill helpers are shared across every window, not just payments |
+## Commits in this round
+
+1. `Fix RPR status color mismatch in list grid` — `renderStatusCell` now
+   passes the local `statusBadge.js` tone explicitly instead of the bundled
+   `getStatusTone`. No other status code's rendering changed.
+2. `Regenerate payment-in/out with published confirmModal fix` — `npm ci`
+   resynced `schema-forge-cli` to the pinned 0.3.0; regenerating both
+   windows picked up the `confirmModal`/`processConfirmModal` wiring and
+   `statusFieldLabel` pass-through already shipped upstream.
+3. `Treat RPAE as deposited status, fix confirm label` — extends the RPR fix
+   to RPAE (`statusBadge.js`, `PaymentConciliadoBadge.jsx`'s
+   `DEPOSITED_STATUSES` set, plus amount sign/label rendering in
+   `PaymentHeaderTableBase.jsx`); fixes the Confirm button using a stale
+   `'confirmar'` i18n key instead of `'confirm'`; adds
+   `PaymentReactivateConfirmIntegration.vitest.jsx`, an integration
+   regression test proving the Reactivar toolbar button on the real
+   generated `FinPaymentPage`/`HeaderPage` shows the confirmation modal via
+   the real `ReactivarModal` chain before `handleProcess` fires, for both
+   payment-in and payment-out.
 
 ## Tests
 
-- This repo: `tools/app-shell/src/windows/custom/shared/__tests__/*`,
-  `tools/app-shell/src/components/contract-ui/__tests__/DetailView.dispatchProcessAction.vitest.jsx`,
-  `artifacts/payment-{in,out}/custom/__tests__/ReactivarConfirmModal.test.js`
-- Sibling repo: `cli/test/generate-frontend.confirmmodal.test.js`,
-  `cli/test/resolve-curated-coverage.test.js`,
-  `packages/app-shell-core/src/components/ui/__tests__/status-tag.test.js`
+`npx vitest run` across all touched suites — `PaymentReactivateConfirmIntegration.vitest.jsx`,
+`PaymentHeaderTableBase.vitest.jsx`, `statusBadge.vitest.jsx`,
+`PaymentConciliadoBadge.vitest.jsx`, plus the `DataTable.*.vitest.jsx` suites
+from the first commit. Result: **201 passed, 0 failed**, no regressions.
 
 ## Rollback plan
 
-Each domain is independently reversible:
-- **This repo**: revert `feature/ETP-4332-split`'s single commit; no DB
-  changes, all UI/config layer.
-- **Sibling repo**: revert `schema_forge_core`'s single commit and republish;
-  `confirmModal: true` in `decisions.json` becomes a no-op once the generator
-  no longer reads it (next regen drops the prop silently via `fragmentIf`).
-- **Status colors**: revert `statusBadge.js` in the sibling repo — client-side
-  only, no server restart needed.
-- **Window artifacts**: revert individual `artifacts/payment-*/` directories,
-  run `push-to-neo.js` to restore previous NEO config, then
-  `./gradlew export.database`.
-
-No database migrations are included in either PR.
+Pure frontend change — no DB/schema migration, no `push-to-neo` config
+change. Rollback is reverting the 3 commits (or the squash-merge commit once
+merged); no data cleanup is required. If a revert needs to re-sync the
+regenerated artifacts, `make regen ONLY=payment-in,payment-out` restores them
+from the current `decisions.json` + published generator.

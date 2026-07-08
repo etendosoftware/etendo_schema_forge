@@ -10,9 +10,9 @@ export function getStatusTone(status) {
     s === 'completed' || s === 'complete' || s === 'confirmed' || s === 'booked' ||
     s === 'paid' || s === 'true' || s === 'processed' || s === 'y' || s === 'yes'
   ) return 'success';
-  if (s === 'rpr') return 'success';
+  if (s === 'rpr' || s === 'rpae') return 'success';
   if (
-    s === 'ip' || s === 'ue' || s === 'rpae' || s === 'm' ||
+    s === 'ip' || s === 'ue' || s === 'm' ||
     s === 'in process' || s === 'under evaluation'
   ) return 'warning';
   if (s === 'rpap') return 'neutral';
