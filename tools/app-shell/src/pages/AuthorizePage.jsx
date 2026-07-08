@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { CopyBlock } from '@/components/ui/copy-button';
 import { Shield, CheckCircle2, XCircle, Loader2, Plug, Download, Sparkles } from 'lucide-react';
 import { useUI } from '@/i18n';
-import { buildMcpClients } from '@/lib/mcpClients.js';
+import { buildMcpClients, deriveServerName } from '@/lib/mcpClients.js';
 import { trackMcpConnectTabSelected } from '@/lib/mcpConnectTelemetry.js';
 
 function detectBaseUrl() {
@@ -239,7 +239,7 @@ function InstallButton({ href, label, testId }) {
   );
 }
 
-function AgentPromptBlock({ ui, mcpUrl, clientId }) {
+function AgentPromptBlock({ ui, mcpUrl, serverName, clientId }) {
   return (
     <div className="w-full space-y-2 rounded-lg border border-dashed p-3">
       <div className="flex items-center gap-1.5 text-sm font-medium">
@@ -247,7 +247,7 @@ function AgentPromptBlock({ ui, mcpUrl, clientId }) {
         {ui('oauthConnectAgentPromptHeading')}
       </div>
       <CopyBlock
-        value={ui('oauthConnectAgentPrompt', { mcpUrl })}
+        value={ui('oauthConnectAgentPrompt', { mcpUrl, serverName })}
         wrap
         maxLines={4}
         data-testid={`mcp-agent-prompt-${clientId}`}
@@ -260,7 +260,7 @@ function AgentPromptBlock({ ui, mcpUrl, clientId }) {
  * Renders the ordered instruction content for a single client (or sub-tab).
  * `idForKeys` is the client/sub-tab id used to derive step i18n keys.
  */
-function McpInstructions({ content, idForKeys, ui, mcpUrl }) {
+function McpInstructions({ content, idForKeys, ui, mcpUrl, serverName }) {
   const items = [];
   let list = [];
 
@@ -277,7 +277,7 @@ function McpInstructions({ content, idForKeys, ui, mcpUrl }) {
       list.push(<StepRow
         key={`s-${item.step}`}
         num={item.step}
-        text={ui(key)}
+        text={ui(key, { serverName, mcpUrl })}
         data-testid="StepRow__96270f" />);
       return;
     }
@@ -285,12 +285,12 @@ function McpInstructions({ content, idForKeys, ui, mcpUrl }) {
       flushList(`note-${item.note}`);
       items.push(
         <p key={`n-${item.note}`} className="rounded-md border border-amber-500/30 bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
-          {ui(item.note)}
+          {ui(item.note, { serverName, mcpUrl })}
         </p>,
       );
     } else if (item.subheading) {
       flushList(`sub-${item.subheading}`);
-      items.push(<h3 key={`h-${item.subheading}`} className="pt-1 text-sm font-medium">{ui(item.subheading)}</h3>);
+      items.push(<h3 key={`h-${item.subheading}`} className="pt-1 text-sm font-medium">{ui(item.subheading, { serverName, mcpUrl })}</h3>);
     } else if (item.code != null) {
       flushList(`code-${idForKeys}-${i}`);
       items.push(<CopyBlock key={`c-${idForKeys}-${item.code}`} value={item.code} data-testid={`mcp-code-${idForKeys}-${i}`} />);
@@ -310,6 +310,7 @@ function McpInstructions({ content, idForKeys, ui, mcpUrl }) {
         key={`a-${idForKeys}`}
         ui={ui}
         mcpUrl={mcpUrl}
+        serverName={serverName}
         clientId={idForKeys}
         data-testid="AgentPromptBlock__96270f" />);
     }
@@ -319,7 +320,7 @@ function McpInstructions({ content, idForKeys, ui, mcpUrl }) {
   return <div className="w-full space-y-3">{items}</div>;
 }
 
-function ClaudeDesktopContent({ client, ui, mcpUrl, onSubTabSelect }) {
+function ClaudeDesktopContent({ client, ui, mcpUrl, serverName, onSubTabSelect }) {
   const [sub, setSub] = useState(client.subTabs[0].id);
 
   const handleSub = (value) => {
@@ -351,6 +352,7 @@ function ClaudeDesktopContent({ client, ui, mcpUrl, onSubTabSelect }) {
             idForKeys={st.id}
             ui={ui}
             mcpUrl={mcpUrl}
+            serverName={serverName}
             data-testid="McpInstructions__96270f" />
         </TabsContent>
       ))}
@@ -360,6 +362,7 @@ function ClaudeDesktopContent({ client, ui, mcpUrl, onSubTabSelect }) {
 
 function ConnectionsLanding({ isEmbedded, ui }) {
   const mcpUrl = useMemo(() => detectMcpUrl(), []);
+  const serverName = useMemo(() => deriveServerName(mcpUrl), [mcpUrl]);
   const clients = useMemo(() => buildMcpClients(mcpUrl), [mcpUrl]);
   const [activeClient, setActiveClient] = useState(null);
 
@@ -423,6 +426,7 @@ function ConnectionsLanding({ isEmbedded, ui }) {
                       client={client}
                       ui={ui}
                       mcpUrl={mcpUrl}
+                      serverName={serverName}
                       onSubTabSelect={(subId) => trackMcpConnectTabSelected({ client: subId })}
                       data-testid="ClaudeDesktopContent__96270f" />
                   ) : (
@@ -431,6 +435,7 @@ function ConnectionsLanding({ isEmbedded, ui }) {
                       idForKeys={client.id}
                       ui={ui}
                       mcpUrl={mcpUrl}
+                      serverName={serverName}
                       data-testid="McpInstructions__96270f" />
                   )}
                 </TabsContent>

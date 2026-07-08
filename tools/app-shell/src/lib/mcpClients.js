@@ -20,19 +20,37 @@
  * Clients with genuinely different UI flows use `subTabs` (Claude Desktop only).
  */
 
-const SERVER_NAME = 'etendo-go';
+const BASE_SERVER_NAME = 'etendo-go';
+
+/**
+ * Derives the MCP server alias from the environment encoded in the URL, so devs
+ * can tell their connections apart at a glance and it is obvious which
+ * environment a server points to:
+ *   localhost / 127.0.0.1  -> etendo-go-local
+ *   staging                -> etendo-go-staging
+ *   experimental           -> etendo-go-experimental
+ *   anything else          -> etendo-go   (production)
+ * @param {string} mcpUrl resolved MCP server URL (from detectMcpUrl()).
+ */
+export function deriveServerName(mcpUrl) {
+  const url = String(mcpUrl || '').toLowerCase();
+  if (url.includes('localhost') || url.includes('127.0.0.1')) return `${BASE_SERVER_NAME}-local`;
+  if (url.includes('staging')) return `${BASE_SERVER_NAME}-staging`;
+  if (url.includes('experimental')) return `${BASE_SERVER_NAME}-experimental`;
+  return BASE_SERVER_NAME;
+}
 
 function json(obj) {
   return JSON.stringify(obj, null, 2);
 }
 
-function cursorInstallHref(mcpUrl) {
+function cursorInstallHref(mcpUrl, serverName) {
   const config = btoa(JSON.stringify({ url: mcpUrl }));
-  return `cursor://anysphere.cursor-deeplink/mcp/install?name=${SERVER_NAME}&config=${config}`;
+  return `cursor://anysphere.cursor-deeplink/mcp/install?name=${serverName}&config=${config}`;
 }
 
-function vscodeInstallHref(mcpUrl) {
-  const config = encodeURIComponent(JSON.stringify({ name: SERVER_NAME, type: 'http', url: mcpUrl }));
+function vscodeInstallHref(mcpUrl, serverName) {
+  const config = encodeURIComponent(JSON.stringify({ name: serverName, type: 'http', url: mcpUrl }));
   return `vscode:mcp/install?${config}`;
 }
 
@@ -41,6 +59,7 @@ function vscodeInstallHref(mcpUrl) {
  * @param {string} mcpUrl resolved MCP server URL (from detectMcpUrl()).
  */
 export function buildMcpClients(mcpUrl) {
+  const SERVER_NAME = deriveServerName(mcpUrl);
   return [
     {
       id: 'ClaudeDesktop',
@@ -91,7 +110,7 @@ export function buildMcpClients(mcpUrl) {
     {
       id: 'Cursor',
       content: [
-        { install: { labelKey: 'oauthConnectCursorInstallButton', href: cursorInstallHref(mcpUrl) } },
+        { install: { labelKey: 'oauthConnectCursorInstallButton', href: cursorInstallHref(mcpUrl, SERVER_NAME) } },
         { step: 1 },
         { code: json({ mcpServers: { [SERVER_NAME]: { url: mcpUrl } } }) },
         { step: 2 },
@@ -101,7 +120,7 @@ export function buildMcpClients(mcpUrl) {
     {
       id: 'VsCode',
       content: [
-        { install: { labelKey: 'oauthConnectVsCodeInstallButton', href: vscodeInstallHref(mcpUrl) } },
+        { install: { labelKey: 'oauthConnectVsCodeInstallButton', href: vscodeInstallHref(mcpUrl, SERVER_NAME) } },
         { step: 1 },
         { code: json({ servers: { [SERVER_NAME]: { type: 'http', url: mcpUrl } } }) },
         { step: 2 },
