@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.36.0",
   "generatedAt": "2026-05-22T16:00:10.872Z",
-  "updatedAt": "2026-06-24T20:46:46.891Z",
-  "contractChecksum": "1abcd348ef6168f7",
+  "updatedAt": "2026-07-07T14:33:11.984Z",
+  "contractChecksum": "440044344aae1179",
   "apiPrediction": {
     "specName": "amortization",
     "baseUrl": "/sws/neo/amortization",
@@ -77,51 +77,11 @@
       },
       {
         "entity": "lines",
-        "field": "stDimension",
-        "column": "User1_ID",
-        "reference": "User1",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/stDimension"
-      },
-      {
-        "entity": "lines",
-        "field": "ndDimension",
-        "column": "User2_ID",
-        "reference": "User2",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/ndDimension"
-      },
-      {
-        "entity": "lines",
-        "field": "eTADASActivity",
-        "column": "EM_Etadas_C_Activity_ID",
-        "reference": "Activity",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/eTADASActivity"
-      },
-      {
-        "entity": "lines",
         "field": "eTADASBpartner",
         "column": "EM_Etadas_C_Bpartner_ID",
         "reference": "BPartner",
         "inputMode": "selector",
         "url": "/sws/neo/amortization/lines/selectors/eTADASBpartner"
-      },
-      {
-        "entity": "lines",
-        "field": "eTADASSalesCampaign",
-        "column": "EM_Etadas_Campaign_ID",
-        "reference": "Campaign",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/eTADASSalesCampaign"
-      },
-      {
-        "entity": "lines",
-        "field": "eTADASSalesRegion",
-        "column": "EM_Etadas_Salesregion_ID",
-        "reference": "SalesRegion",
-        "inputMode": "selector",
-        "url": "/sws/neo/amortization/lines/selectors/eTADASSalesRegion"
       }
     ],
     "actions": [
@@ -252,6 +212,7 @@
       "header": {
         "fields": {
           "name": {
+            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
@@ -259,10 +220,12 @@
             "readOnlyLogic": "@Processed@='Y'"
           },
           "accountingDate": {
+            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
           "startingDate": {
+            "readOnly": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
           "totalAmortization": {
@@ -270,6 +233,7 @@
             "readOnlyLogic": "@Processed@='Y'"
           },
           "currency": {
+            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
@@ -278,16 +242,6 @@
             "defaultValue": "N"
           },
           "posted": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
-          },
-          "etblkpAccountingstatus": {
-            "readOnly": true,
-            "required": true,
-            "defaultValue": "N"
-          },
-          "etblkpBulkposting": {
             "readOnly": true,
             "required": true,
             "defaultValue": "N"
@@ -316,22 +270,7 @@
           "costcenter": {
             "readOnlyLogic": "@Posted@='Y'"
           },
-          "stDimension": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "ndDimension": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "eTADASActivity": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
           "eTADASBpartner": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "eTADASSalesCampaign": {
-            "readOnlyLogic": "@Posted@='Y'"
-          },
-          "eTADASSalesRegion": {
             "readOnlyLogic": "@Posted@='Y'"
           }
         }
@@ -349,9 +288,6 @@
     ],
     "minimumCreate": {
       "headerFields": [
-        "name",
-        "accountingDate",
-        "currency",
         "processed"
       ],
       "lineFields": [
@@ -388,9 +324,6 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
-          "name",
-          "accountingDate",
-          "currency",
           "processed"
         ]
       },
@@ -411,5 +344,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "0f8630a068d50710"
+  "checksum": "7531ad36bbfed58a"
 }

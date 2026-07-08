@@ -1690,6 +1690,7 @@ export function DataTable({
                           sendDocument={rowQuickActions.sendDocument}
                           menuActions={rowQuickActions.menuActions}
                           hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
+                          hideDeleteButton={rowQuickActions.hideDeleteButton}
                           statusField={rowQuickActions.statusField}
                           onEdit={rowQuickActions.onEdit}
                           onClone={rowQuickActions.onClone}

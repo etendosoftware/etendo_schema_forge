@@ -48,17 +48,21 @@ describe('AssetsDetailPanel — depreciation off', () => {
 });
 
 describe('AssetsDetailPanel — depreciation on', () => {
-  it('renders the accounting dimensions form with all 8 dimension fields', () => {
+  it('renders the accounting dimensions form with only the 4 kept dimension fields', () => {
     const { container } = render(
       <AssetsDetailPanel {...BASE_PROPS} data={{ id: 'a1', depreciate: 'Y' }} />,
     );
     const dimForm = formsByFields(container).find(f => f.includes('project') && f.includes('eTADASCostCenter'));
     expect(dimForm).toBeDefined();
+    // Only Proyecto, Centro de coste, Contacto, Producto remain.
+    expect(dimForm.split(',')).toEqual([
+      'project', 'eTADASCostCenter', 'businessPartner', 'product',
+    ]);
+    // The 5 out-of-scope accounting dimensions were removed from the panel.
     for (const key of [
-      'project', 'eTADASCostCenter', 'businessPartner', 'eTADASUser1',
-      'eTADASUser2', 'eTADASSalesRegion', 'eTADASActivity', 'eTADASSalesCampaign',
+      'eTADASUser1', 'eTADASUser2', 'eTADASSalesRegion', 'eTADASActivity', 'eTADASSalesCampaign',
     ]) {
-      expect(dimForm).toContain(key);
+      expect(dimForm).not.toContain(key);
     }
   });
 

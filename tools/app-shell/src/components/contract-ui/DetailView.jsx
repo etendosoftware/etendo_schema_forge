@@ -1216,7 +1216,8 @@ export function getTabsBarClassName(tabsBarPaddingX, tabsBarRightDivider) {
   return `flex items-center gap-1 ${tabsBarPaddingX} py-2 shrink-0${tabsBarRightDivider ? ' relative' : ''}`;
 }
 
-export function isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed) {
+export function isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, hideDeleteButton = false) {
+  if (hideDeleteButton) return false;
   return !isNew && recordId && isDeleteVisibleForRecord({
     record: data,
     statusField,
@@ -1574,6 +1575,13 @@ export function dispatchProcessAction(p, { processConfirmModal, setConfirmProces
   else { handleProcess?.(p); }
 }
 
+export function resolveProcessLabel(p, data) {
+  if (p.labelToggle && data?.[p.labelToggle.field] === p.labelToggle.equals) {
+    return p.labelToggle.label;
+  }
+  return p.label;
+}
+
 function renderProcessConfirmModal(process, Modal, onConfirm, onClose) {
   if (!process || !Modal) return null;
   return React.createElement(Modal, { process, onConfirm, onClose });
@@ -1623,6 +1631,7 @@ export function DetailView({
   menuActions = [],
   customMenuContent = null,
   hideDeleteWhenComplete = false,
+  hideDeleteButton = false,
   customTabsAfterBottom = false,
   hidePrint = false,
   hideSaveStatuses = [],
@@ -3081,8 +3090,8 @@ export function DetailView({
                   <Printer className="h-4 w-4" data-testid="Printer__fa3275" />
                 </button>
               )}
-              {/* Delete record — hidden when hideDeleteWhenComplete and status matches or record is processed */}
-              {isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed) && (
+              {/* Delete record — hidden unconditionally when hideDeleteButton is set, otherwise when hideDeleteWhenComplete and status matches or record is processed */}
+              {isDeleteButtonVisible(isNew, recordId, data, statusField, hideDeleteWhenComplete, isProcessed, hideDeleteButton) && (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors`}
@@ -3264,7 +3273,7 @@ export function DetailView({
                       }}
                       data-testid="Button__fa3275">
                       {p.style === 'ghost-danger' && <Undo2 size={16} className="mr-1 text-[#D50B3E]" data-testid="Undo2__fa3275" />}
-                      {tMenu(p.label)}
+                      {tMenu(resolveProcessLabel(p, data))}
                     </Button>
                   );
                 })}
