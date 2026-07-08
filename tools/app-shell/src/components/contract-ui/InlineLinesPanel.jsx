@@ -21,6 +21,7 @@ import { SelectorInput } from './SelectorInput.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex } from '@/lib/linesColumnWidth.js';
+import { getEmailFieldError, getPhoneFieldError } from './recipientEdits.js';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
 const TOKENS = {
@@ -209,7 +210,7 @@ function renderInlineSearchCell({ col, row, value, displayLabel, selectorUrl, se
 /**
  * Edit-mode cell. Returns null for non-editable types so the caller falls back to read mode.
  */
-function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid }) {
+function EditCell({ col, row, value, displayLabel, onCommit, autoFocus, entity, token, apiBaseUrl, selectorContext, isInvalid }) {
   const inputRef = useRef(null);
   useEffect(() => {
     // Only steal focus on initial mount when nothing else is focused. Cells re-mount
@@ -266,9 +267,6 @@ function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus
         <SelectTrigger
           ref={inputRef}
           data-testid={`field-${col.key}`}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') { e.preventDefault(); onCancel?.(); }
-          }}
           className="w-full h-7 text-sm bg-white focus:ring-2 focus:ring-primary"
         >
           <SelectValue data-testid="SelectValue__3b7ec2" />
@@ -312,10 +310,6 @@ function EditCell({ col, row, value, displayLabel, onCommit, onCancel, autoFocus
         if (e.key === 'Enter') {
           e.preventDefault();
           e.currentTarget.blur();
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          onCancel?.();
         }
       }}
       className={editInputClassName(isNumeric, isInvalid)}
@@ -393,13 +387,33 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       for (const sel of portalSelectors) {
         if (e.target.closest?.(sel)) return;
       }
+      // Radix's Select trigger calls preventDefault() on its own pointerdown
+      // handler to keep focus management under its own control. Per the Pointer
+      // Events spec, canceling `pointerdown` for mouse input suppresses the
+      // browser's compatibility mouse events for that interaction — including
+      // `mousedown`. A `mousedown` listener here would therefore never fire on
+      // the FIRST click on the trigger (only on a second click, once Radix's own
+      // listbox interaction takes a different event path), which is why the
+      // pending edit's onCommit (and its autosave PATCH) used to need two clicks.
+      // Listening for `pointerdown` in the CAPTURE phase sidesteps this: capture
+      // runs on the way down the tree, before Radix's bubble-phase handler on the
+      // trigger element gets a chance to call preventDefault(), and `pointerdown`
+      // itself is never suppressed (only the compat mouse events that would
+      // normally follow it are). This guarantees the handler observes
+      // `document.activeElement` in its pristine, still-focused state on every
+      // interaction, including the very first click. Mirrors the blur() the
+      // imperative flushPendingEdits() below already performs.
+      if (typeof document !== 'undefined' && document.activeElement
+          && editingRowEl.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
       setTimeout(() => {
         if (hasValidationErrorRef.current) return;
         setEditingRowId(null);
       }, 0);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('pointerdown', handler, { capture: true });
+    return () => document.removeEventListener('pointerdown', handler, { capture: true });
   }, [editingRowId]);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [pendingDelete, setPendingDelete] = useState(null);
@@ -408,6 +422,13 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   // Active in-flight edit. Holds the latest pending field commit so a global "Save"
   // can flush it via the imperative ref before the document save runs.
   const pendingEditRef = useRef(null);
+
+  // Set for one tick while an Escape-triggered cancel is in flight. Discarding
+  // the edit unmounts the focused control (React removes it from the DOM),
+  // and the browser fires a native `blur` on a focused node as it's removed —
+  // which would otherwise re-invoke commitField with the very value being
+  // discarded, silently re-saving it. commitField checks this ref and bails.
+  const cancelingEditRef = useRef(false);
 
   // Visible columns: respect col.hidden flag if set (mirrors DataTable behavior).
   const visibleColumns = useMemo(
@@ -478,6 +499,7 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
 
   const commitField = useCallback(async (row, col, value, extras = {}) => {
     if (isDocumentReadOnly) return;
+    if (cancelingEditRef.current) return;
     hasValidationErrorRef.current = false;
     setInvalidCell(null);
     const original = row[col.key];
@@ -487,6 +509,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
       hasValidationErrorRef.current = true;
       setInvalidCell({ rowId: row.id, colKey: col.key });
       toast.error(ui('fieldMinValueError'));
+      return;
+    }
+    // Format validation (email + phone) for inline cell edits — mirrors the below-min
+    // guard: flag the cell, toast the specific error, and block the PATCH. Empty is
+    // valid (not required); a later valid re-commit clears the flag via setInvalidCell(null).
+    const formatError = getEmailFieldError(col, value) ?? getPhoneFieldError(col, value);
+    if (formatError !== null) {
+      hasValidationErrorRef.current = true;
+      setInvalidCell({ rowId: row.id, colKey: col.key });
+      toast.error(ui(formatError));
       return;
     }
     const effectiveValue = clampToMax(col, value);
@@ -552,6 +584,18 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     setFocusColIdx(isCellEditable(col) ? idx : null);
     setEditingRowId(row.id);
   }, [isDocumentReadOnly, onEditRow, onRowClick, editingRowId]);
+
+  // Centralized Escape-to-cancel handler. A single row-level `onKeyDown` (see
+  // the row wrapper below) bubbles here from ANY focused descendant control —
+  // plain Input, Select, LookupTrigger's button, InlineSearchCombo — so every
+  // cell type cancels uniformly instead of each one wiring its own Escape
+  // handler. The cancelingEditRef guard tells commitField to ignore the
+  // native `blur` the DOM fires on the discarded control as it unmounts.
+  const handleCancelEdit = useCallback(() => {
+    cancelingEditRef.current = true;
+    setEditingRowId(null);
+    setTimeout(() => { cancelingEditRef.current = false; }, 0);
+  }, []);
 
   const handleDeleteClick = useCallback(async (row) => {
     if (isDocumentReadOnly) return;
@@ -648,6 +692,15 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
             style={{ borderColor: TOKENS.separator, minHeight: TOKENS.rowHeight, ...cellStyle }}
             onMouseEnter={() => setHoveredRowId(row.id)}
             onMouseLeave={() => setHoveredRowId(prev => (prev === row.id ? null : prev))}
+            onKeyDown={isEditing ? (e) => {
+              // Catch-all: bubbles here from any focused descendant control
+              // (Input, Select, LookupTrigger's button, InlineSearchCombo)
+              // so Escape cancels uniformly regardless of cell type.
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                handleCancelEdit();
+              }
+            } : undefined}
             onClick={onRowClick ? (e) => {
               // Don't fire when the click was on the checkbox / hover actions —
               // those have their own handlers and stopping propagation there
@@ -719,7 +772,6 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                       selectorContext={selectorContext}
                       isInvalid={invalidCell?.rowId === row.id && invalidCell?.colKey === col.key}
                       onCommit={(val, extras) => commitField(row, col, val, extras)}
-                      onCancel={() => setEditingRowId(null)}
                       data-testid="EditCell__3b7ec2" />
                   ) : (
                     <ReadCell

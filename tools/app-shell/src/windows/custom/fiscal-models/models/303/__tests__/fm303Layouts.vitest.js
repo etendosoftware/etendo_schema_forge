@@ -53,8 +53,15 @@ describe('getLayout303 — BASE layout (no patch)', () => {
     assertSectionContains(layout, 'iva_devengado', '150', '165', '168');
   });
 
-  it('iva_deducible contains full set of rows including regularizacion', () => {
-    assertSectionContains(layout, 'iva_deducible', 'regularizacion', 'prorrata_definitiva');
+  it('iva_deducible contains regularizacion row (non-last period hides prorrata_definitiva)', () => {
+    assertSectionContains(layout, 'iva_deducible', 'regularizacion');
+    // prorrata_definitiva is only shown in T4/M12 — period 1 should not have it
+    expect(rowIds(layout, 'iva_deducible')).not.toContain('prorrata_definitiva');
+  });
+
+  it('iva_deducible contains prorrata_definitiva for last period (T4)', () => {
+    const lastLayout = getLayout303(2026, 'T4');
+    assertSectionContains(lastLayout, 'iva_deducible', 'regularizacion', 'prorrata_definitiva');
   });
 
   it('resultado contains diferencia row', () => {

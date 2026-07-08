@@ -715,8 +715,28 @@ export function SecondaryTableTab(props) {
       {(props.st.addLineFields?.entry?.length > 0 || props.st.customAddModal) && props.hook.editing && (
           // Wrapper measured by the secondary selection bar — its
           // `position: fixed` portal overlays exactly this region.
-          (<div ref={props.secondaryAddLineWrapperRef} className="relative">
-            <span data-inline-add-portal="true">
+          // Mirrors the primary header-lines add-button wrapper (shared
+          // getAddLineWrapperClassName/Style helpers) so both paths get the
+          // same top border, vertical spacing and padding — keeps alignment
+          // consistent across primary and secondary tabs.
+          // Always `relative` (never sticky): the child-tab add-line button
+          // must stay in flow below the table. getAddLineWrapperClassName's
+          // sticky bottom-0 variant is only correct for the tall PRIMARY
+          // header-lines area — applying it here makes the button overlap the
+          // last table row when the scroll container is resized.
+          (<div
+            ref={props.secondaryAddLineWrapperRef}
+            className="relative"
+            // No borderTop: the child table already renders its own bottom
+            // border, so the primary path's top divider would double up here.
+            // noTopPadding: keep the button snug under the table (no vertical
+            // gap above it) while preserving horizontal alignment.
+            style={getAddLineWrapperStyle(props.linesLayout, { withBorder: false, noTopPadding: true })}
+          >
+            {/* alignSelf:flex-start keeps this span from being stretched by
+                the flex-column parent — otherwise data-inline-add-portal would
+                cover the whole bar and the outside-click save would never fire. */}
+            <span data-inline-add-portal="true" style={{ alignSelf: 'flex-start' }}>
               <AddLineButton
                 onClick={props.onAddLineClick}
                 label={props.addLineLabel}
@@ -769,13 +789,31 @@ export function getAddLineWrapperClassName(linesLayout) {
   return linesLayout === 'inlineEditable' ? 'sticky bottom-0 bg-white z-10' : 'relative';
 }
 
-export function getAddLineWrapperStyle(linesLayout) {
+export function getAddLineWrapperStyle(linesLayout, { withBorder = true, noTopPadding = false } = {}) {
+  const inline = linesLayout === 'inlineEditable';
+  const padY = inline ? 8 : 10;
+  const padX = inline ? 8 : 16;
+  // Default keeps the original symmetric padding (numeric 8 for inlineEditable,
+  // '10px 16px' otherwise) so the primary path is byte-for-byte unchanged.
+  // noTopPadding drops ONLY the top so the add-button sits snug under the child
+  // table, while horizontal padding still aligns it with table content.
+  let padding;
+  if (noTopPadding) {
+    padding = `0 ${padX}px ${padY}px`;
+  } else if (inline) {
+    padding = padY;
+  } else {
+    padding = `${padY}px ${padX}px`;
+  }
   return {
     display: 'flex',
     flexDirection: 'column',
     gap: 6,
-    borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)',
-    padding: linesLayout === 'inlineEditable' ? 8 : '10px 16px'
+    // The top border separates the lines from the add-button in the primary
+    // header-lines path. Secondary/child tabs already have the table's own
+    // bottom border, so they pass withBorder:false to avoid a double divider.
+    ...(withBorder ? { borderTop: '0.5px solid var(--color-border-tertiary, #e5e7eb)' } : {}),
+    padding
   };
 }
 

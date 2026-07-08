@@ -1,8 +1,8 @@
 {
-  "version": "0.9.0",
+  "version": "0.10.0",
   "generatedAt": "2026-04-28T16:08:39.756Z",
-  "updatedAt": "2026-06-25T19:58:32.797Z",
-  "contractChecksum": "85d0ee73a20ee2cd",
+  "updatedAt": "2026-07-06T18:12:04.725Z",
+  "contractChecksum": "cf1960aa75876118",
   "apiPrediction": {
     "specName": "verifactu-config",
     "baseUrl": "/sws/neo/verifactu-config",
@@ -88,9 +88,6 @@
           "isReady": {
             "required": true,
             "defaultValue": "N"
-          },
-          "inVfactuSystem": {
-            "readOnly": true
           }
         }
       }
@@ -136,5 +133,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "353e5d340c8d0664"
+  "checksum": "c73c582faf38f18f"
 }

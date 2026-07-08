@@ -21,6 +21,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
   getStatusDotColor: () => 'bg-gray-400',
   getStatusGridPillClass: () => '',
   getStatusPillClass: () => '',
+  getStatusTone: () => 'neutral',
   statusLabel: (raw) => raw,
 }));
 
@@ -376,7 +377,10 @@ describe('DataTable coverage-oriented paths', () => {
     fireEvent.keyDown(screen.getByTestId('inline-add-field-qty'), { key: 'Enter' });
     expect(onAdd).not.toHaveBeenCalled();
 
-    fireEvent.mouseDown(document.body);
+    // pointerDown only (no compat mousedown) — models a control that calls
+    // preventDefault() on pointerdown (e.g. Radix SelectTrigger), which
+    // suppresses the browser's compatibility mouse events (ETP-4422).
+    fireEvent.pointerDown(document.body);
     expect(onCancel).toHaveBeenCalled();
 
     rerender(
@@ -391,7 +395,7 @@ describe('DataTable coverage-oriented paths', () => {
       />,
     );
     fireEvent.change(screen.getByTestId('inline-add-field-qty'), { target: { value: '2' } });
-    fireEvent.mouseDown(document.body);
+    fireEvent.pointerDown(document.body);
     await waitFor(() => expect(onAdd).toHaveBeenCalled());
   });
 
