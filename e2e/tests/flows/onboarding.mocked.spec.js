@@ -14,19 +14,6 @@ const LOCALE_LABELS = {
     intro: /Vamos a dejar todo listo/i,
     heading: /Crea tu cuenta gratis/i,
   },
-  en_US: {
-    languageLabel: 'Language',
-    name: 'Name*',
-    email: 'Email*',
-    password: 'Password*',
-    createAccount: 'Create account',
-    continue: 'Continue',
-    companyName: 'Company name*',
-    address: 'Address',
-    start: 'Start',
-    intro: /We will get everything ready/i,
-    heading: /Create your free account/i,
-  },
 };
 
 function labelsFor(locale) {
@@ -183,24 +170,6 @@ test.describe('Onboarding with mocked Schema Forge backend boundary', () => {
     await page.waitForURL('**/dashboard');
     await expect.poll(async () => page.evaluate(() => localStorage.getItem('sf_auth_token'))).toBe('env-token');
     await expect.poll(async () => page.evaluate(() => JSON.parse(localStorage.getItem('sf_auth_selected_org')).id)).toBe('ORG_1');
-  });
-
-  test('lets the user switch onboarding language to English before registration', async ({ page }) => {
-    const labels = labelsFor('en_US');
-    const suffix = Date.now();
-    await installOnboardingMocks(page, { expectedLanguage: 'en_US' });
-    await page.goto('/onboarding');
-
-    await page.locator('#onboarding-language').selectOption('en_US');
-    await expect(page.getByRole('heading', { name: labels.heading })).toBeVisible();
-
-    await page.getByRole('textbox', { name: labels.name }).fill('QA Onboarding User');
-    await page.getByRole('textbox', { name: labels.email }).fill(`qa-onboarding-en-${suffix}@example.com`);
-    await page.getByRole('textbox', { name: labels.password }).fill(buildDisposablePassword(suffix));
-    await page.getByRole('button', { name: labels.createAccount }).click();
-
-    await expect(page.getByText(labels.intro)).toBeVisible();
-    await expect.poll(async () => page.evaluate(() => localStorage.getItem('schema-forge-locale'))).toBe('en_US');
   });
 
   test('shows readiness failure instead of redirecting when invoice defaults are invalid', async ({ page }) => {

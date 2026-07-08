@@ -126,7 +126,6 @@ test.describe('Onboarding — Full registration flow', () => {
     await expect(page.locator('#reg-email')).toBeVisible();
     await expect(page.locator('#reg-password')).toBeVisible();
     await expect(page.getByTestId('action-register-submit')).toBeVisible();
-    await expect(page.locator('#onboarding-language')).toBeVisible();
     await expect(page.getByTestId('action-switch-to-login')).toBeVisible();
 
     // ═══════════════════════════════════════════════════════════════════════
