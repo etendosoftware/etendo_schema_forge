@@ -17346,7 +17346,7 @@
     "oauthConnectAntigravityStep3": "Iniciá sesión en Etendo cuando se te pida y aprobá el acceso.",
     "oauthConnectAntigravityStep4": "Listo. El servidor etendo-go queda disponible para usar desde Antigravity.",
     "oauthConnectAgentPromptHeading": "¿Preferís que el agente lo haga por vos?",
-    "oauthConnectAgentPrompt": "Agregá el servidor MCP remoto de Etendo llamado etendo-go en {mcpUrl} usando transporte HTTP, y ayudame a completar el login cuando se abra el navegador.",
+    "oauthConnectAgentPrompt": "Agregá el servidor MCP remoto de Etendo llamado etendo-go en {mcpUrl} usando transporte HTTP, y explicame cómo autenticarme.",
     "oauthReadData": "Leer datos",
     "oauthReadDataDesc": "Ver registros, selectores y esquemas",
     "oauthWriteData": "Escribir datos",

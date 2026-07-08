@@ -274,7 +274,11 @@ function McpInstructions({ content, idForKeys, ui, mcpUrl }) {
   content.forEach((item, i) => {
     if (item.step != null) {
       const key = item.key || `oauthConnect${idForKeys}Step${item.step}`;
-      list.push(<StepRow key={`s-${item.step}`} num={item.step} text={ui(key)} />);
+      list.push(<StepRow
+        key={`s-${item.step}`}
+        num={item.step}
+        text={ui(key)}
+        data-testid="StepRow__96270f" />);
       return;
     }
     if (item.note) {
@@ -298,11 +302,16 @@ function McpInstructions({ content, idForKeys, ui, mcpUrl }) {
           href={item.install.href}
           label={ui(item.install.labelKey)}
           testId={`mcp-install-${idForKeys}`}
-        />,
+          data-testid="InstallButton__96270f" />,
       );
     } else if (item.agentPrompt) {
       flushList(`agent-${idForKeys}`);
-      items.push(<AgentPromptBlock key={`a-${idForKeys}`} ui={ui} mcpUrl={mcpUrl} clientId={idForKeys} />);
+      items.push(<AgentPromptBlock
+        key={`a-${idForKeys}`}
+        ui={ui}
+        mcpUrl={mcpUrl}
+        clientId={idForKeys}
+        data-testid="AgentPromptBlock__96270f" />);
     }
   });
   flushList('end');
@@ -319,8 +328,12 @@ function ClaudeDesktopContent({ client, ui, mcpUrl, onSubTabSelect }) {
   };
 
   return (
-    <Tabs value={sub} onValueChange={handleSub} className="w-full gap-4">
-      <TabsList className="border-b">
+    <Tabs
+      value={sub}
+      onValueChange={handleSub}
+      className="w-full gap-4"
+      data-testid="Tabs__96270f">
+      <TabsList className="border-b" data-testid="TabsList__96270f">
         {client.subTabs.map((st) => (
           <TabsTrigger
             key={st.id}
@@ -332,8 +345,13 @@ function ClaudeDesktopContent({ client, ui, mcpUrl, onSubTabSelect }) {
         ))}
       </TabsList>
       {client.subTabs.map((st) => (
-        <TabsContent key={st.id} value={st.id}>
-          <McpInstructions content={st.content} idForKeys={st.id} ui={ui} mcpUrl={mcpUrl} />
+        <TabsContent key={st.id} value={st.id} data-testid="TabsContent__96270f">
+          <McpInstructions
+            content={st.content}
+            idForKeys={st.id}
+            ui={ui}
+            mcpUrl={mcpUrl}
+            data-testid="McpInstructions__96270f" />
         </TabsContent>
       ))}
     </Tabs>
@@ -380,7 +398,7 @@ function ConnectionsLanding({ isEmbedded, ui }) {
               className="w-full gap-4"
               data-testid="mcp-client-tabs"
             >
-              <TabsList className="flex-wrap border-b">
+              <TabsList className="flex-wrap border-b" data-testid="TabsList__96270f">
                 {clients.map((client) => (
                   <TabsTrigger
                     key={client.id}
@@ -399,16 +417,21 @@ function ConnectionsLanding({ isEmbedded, ui }) {
               ) : null}
 
               {clients.map((client) => (
-                <TabsContent key={client.id} value={client.id}>
+                <TabsContent key={client.id} value={client.id} data-testid="TabsContent__96270f">
                   {client.subTabs ? (
                     <ClaudeDesktopContent
                       client={client}
                       ui={ui}
                       mcpUrl={mcpUrl}
                       onSubTabSelect={(subId) => trackMcpConnectTabSelected({ client: subId })}
-                    />
+                      data-testid="ClaudeDesktopContent__96270f" />
                   ) : (
-                    <McpInstructions content={client.content} idForKeys={client.id} ui={ui} mcpUrl={mcpUrl} />
+                    <McpInstructions
+                      content={client.content}
+                      idForKeys={client.id}
+                      ui={ui}
+                      mcpUrl={mcpUrl}
+                      data-testid="McpInstructions__96270f" />
                   )}
                 </TabsContent>
               ))}
