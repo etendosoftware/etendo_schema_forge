@@ -295,19 +295,6 @@ describe('OnboardingPage', () => {
     expect(consoleError).toHaveBeenCalledWith('Failed to load environments', expect.any(Error));
   });
 
-  it('updates the setup language selector', async () => {
-    localStorage.setItem('sf_platform_token', 'platform-token');
-    fetchAccount.mockResolvedValue({ name: 'Ada Lovelace' });
-    fetchEnvironments.mockResolvedValue([]);
-
-    render(<OnboardingPage />);
-
-    const languageSelect = await screen.findByLabelText('language');
-    fireEvent.change(languageSelect, { target: { value: 'es_ES' } });
-
-    expect(languageSelect).toBeInTheDocument();
-  });
-
   it('tracks registration submission and success without user-entered values', async () => {
     registerAccount.mockResolvedValue({
       token: 'platform-token',
@@ -342,7 +329,7 @@ describe('OnboardingPage', () => {
     expect(serializedCalls).not.toContain('platform-token');
   });
 
-  it('sends the selected onboarding language when registering an account', async () => {
+  it('sends the configured default onboarding language when registering an account', async () => {
     registerAccount.mockResolvedValue({
       token: 'platform-token',
       account: { name: 'Ada Lovelace', email: 'ada@example.com' },
@@ -353,9 +340,12 @@ describe('OnboardingPage', () => {
 
     fireEvent.submit(screen.getByTestId('action-register-submit').closest('form'));
 
+    // No language selector exists anymore (ETP-4444) — registration always
+    // sends the app's configured default (Spain-only, `es_ES`) rather than a
+    // user-picked value.
     await waitFor(() => {
       expect(registerAccount).toHaveBeenCalledWith(expect.any(Function), '', expect.objectContaining({
-        language: 'en_US',
+        language: 'es_ES',
       }));
     });
   });
@@ -459,9 +449,8 @@ describe('OnboardingPage', () => {
     fireEvent.change(await screen.findByLabelText(/onboardingFullNameLabel/), {
       target: { value: 'Private Setup Name' },
     });
-    fireEvent.change(screen.getByLabelText(/onboardingCountryLabel/), {
-      target: { value: 'ES' },
-    });
+    // Country is now a static, non-interactive field (Spain-only, ETP-4444)
+    // that defaults automatically from config — no user interaction needed.
     fireEvent.click(await screen.findByText('onboardingBusinessTypeFreelancer'));
     fireEvent.click(screen.getByText('onboardingContinueAction'));
     fireEvent.change(screen.getByLabelText(/onboardingAddressLabel/), {
