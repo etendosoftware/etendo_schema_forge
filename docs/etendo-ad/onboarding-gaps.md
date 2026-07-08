@@ -11,6 +11,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A2 | Accounting | "Account Not Defined" even with ledger present | *Initial Organization Setup* — auto-populate `*_acct` tables | — |
 | A3 | Accounting | Schema not predefined (Allow Negatives/Centrally Maintained=N); only 5 of 8 dimensions enabled (Cost Center/User1/User2 missing) | Onboarding sampledata XML (`C_ACCTSCHEMA.xml`, `C_ACCTSCHEMA_ELEMENT.xml`) — dataset-only, no new service | ETP-4245 |
 | A3b | Accounting | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL (doubtful debt, bad-debt expense/revenue, allowance for doubtful debt, deferred product expense/revenue) | Onboarding sampledata XML (`C_ACCTSCHEMA_DEFAULT.xml`) — dataset-only, no new service | ETP-4245 |
+| A4 | Accounting | `A_Amortization` table (`AD_Table_id 800060`) inactive on `c_acctschema_table` — amortization documents cannot post | Onboarding sampledata XML (`C_ACCTSCHEMA_TABLE.xml`) — dataset-only, no new service | ETP-4452 |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -194,7 +195,7 @@ WHERE s.ad_client_id = :client_id
 
 | TC | Result | Detail |
 |---|---|---|
-| **TC-39** (Tables tab) | ✅ Already correct | All 11 required tables (`C_Invoice`→`Invoice`, `FIN_Payment`, `FIN_BankStatement`, `FIN_Finacc_Transaction`, `FIN_Reconciliation`, `GL_Journal`→`FinancialMgmtGLJournal`, `M_InOut`→`MaterialMgmtShipmentInOut`, `M_Inventory`→`MaterialMgmtInventoryCount`, `M_MatchInv`→`ProcurementReceiptInvoiceMatch`, `M_Movement`→`MaterialMgmtInternalMovement`, `M_Production`→`MaterialMgmtProductionTransaction`) are `isactive='Y'` on `c_acctschema_table`. |
+| **TC-39** (Tables tab) | ⚠️ Gap found (A4, ETP-4452, 2026-07-08) — since fixed | All 11 previously-checked tables (`C_Invoice`→`Invoice`, `FIN_Payment`, `FIN_BankStatement`, `FIN_Finacc_Transaction`, `FIN_Reconciliation`, `GL_Journal`→`FinancialMgmtGLJournal`, `M_InOut`→`MaterialMgmtShipmentInOut`, `M_Inventory`→`MaterialMgmtInventoryCount`, `M_MatchInv`→`ProcurementReceiptInvoiceMatch`, `M_Movement`→`MaterialMgmtInternalMovement`, `M_Production`→`MaterialMgmtProductionTransaction`) are `isactive='Y'` on `c_acctschema_table`. **A 12th table, `A_Amortization`→`FinancialMgmtAmortization` (`AD_Table_id 800060`), was missed by this checklist** — GOClient's live row had been hand-patched to `'Y'` but the bundled dataset still shipped `'N'` (and 3 other PGC-chart tenants were live-`'N'` too). See gap **A4** below. Treat this as "12 required tables" going forward. |
 | **TC-41** (Defaults tab) | ⚠️ Partial — flagged, NOT changed | Customer Receivable=43000 ✓, Vendor Payable=40000 ✓, Bank Asset=57200 ✓ all match. **Tax Credit ("VAT Receivable") = 47200, Tax Due ("VAT Payable") = 47700 — NOT 47000/47500 as stated in the test plan.** These are the standard Spanish PGC codes for ongoing input/output VAT (472 = IVA soportado, 477 = IVA repercutido); 4700/4750 are the period-END settlement accounts ("Hacienda deudora/acreedora por IVA"), a different concept. TC-43's real posted invoice confirms 47700 is the live, correctly-functioning value (see below) — this reads as a test-plan documentation discrepancy, not a system bug. **Deferred — out of scope for ETP-4245** (dimensions + schema-predefinition ask only); flag for product/accounting owner (see "Jorge's list" reference in the remediation plan) before changing any account-default mapping. |
 | **TC-42** (Product category accounts, "Bebidas") | ⚠️ Partial — flagged, NOT changed | Revenue=70000 ✓, Expense=60000 ✓ match. **Asset=35000 (Finished Goods), NOT 30000 (Merchandise) as stated.** This is a per-category business classification choice (is Bebidas manufactured or purchased merchandise?), not an onboarding-provisioning gap — deferred for the same reason as TC-41. |
 | **TC-43** (Posting) | ✅ Already correct | A completed+posted sales invoice with a Bebidas product (`documentno=10000016`) posts with zero "Account Not Defined" errors: debits `43000000` (Clientes), credits `70000000` (Ventas) + `47700000` (IVA repercutido), balanced (27.83 = 23.00 + 4.83). |
@@ -302,6 +303,50 @@ notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable fact
 **Where it should be fixed:** the onboarding process — at client creation these tables should be auto-populated from the schema defaults. Note: with these populated, tax accounting is independent per client (supports the system-level taxes approach).
 
 **Cross-link:** this is exactly what the `../proposals/initial-organization-setup-accounting.md` proposal aims to automate. The proposal's wiring step (`applyAccountingPackageWiring`) and package-completeness validation (`validateAccountingPackage`) together ensure these tables are populated before `AD_Org_Ready` is called.
+
+---
+
+### A4 — `A_Amortization` table inactive on `C_AcctSchema_Table` (ETP-4452, 2026-07-08)
+
+**Symptom:** amortization documents (`A_Amortization`, `AD_Table_id 800060`, "FinancialMgmtAmortization")
+cannot post — the same "table not enabled for posting" failure any of the TC-39 tables would show if
+their `c_acctschema_table.isactive` were `'N'`.
+
+**Root cause:** same class of drift as the A3b write-off override and the R9 BP-category gap — the
+**live** GOClient `C_ACCTSCHEMA_TABLE` row for `AD_Table_id 800060` had been manually corrected to
+`isactive='Y'` at some point, but the bundled onboarding dataset
+(`referencedata/sampledata/GOClient/C_ACCTSCHEMA_TABLE.xml`, same row id
+`DAE3C688574C4919B889DA7EFAD6CC5C`) still shipped `isactive='N'`. Any environment provisioned or
+reset from that dataset (including the shared "Experimental" cloud environment) is born with
+amortization accounting inactive. TC-39 (above) never caught this because `A_Amortization` was
+simply missing from its checklist of tables to verify.
+
+**Live sweep (2026-07-08), `isactive` for `ad_table_id='800060'` per client/schema:**
+
+| Client | Schema | `isactive` (before fix) |
+|---|---|---|
+| GOClient | Esquema GO | `Y` (already hand-corrected live) |
+| F&B International Group | both schemas | `Y` (already correct) |
+| acreedortest | Esquema acreedortest | `N` |
+| acreetest2 | Esquema acreetest2 | `N` |
+| empresa | Esquema empresa | `N` |
+| QA Testing | both schemas | `N` — **not fixed, see below** |
+| TaxesOrg | Tax Org Ledger | `N` — **not fixed, see below** |
+
+**Scope decision — PGC-chart family only:** acreedortest/acreetest2/empresa are the same
+GOClient-style Spanish PGC chart family established for R9/R11/R12 (each already carries a
+postable, active `65000000` account leaf). QA Testing and TaxesOrg run unrelated US-chart schemas
+with **zero `A_Asset` records** and no `65000000` account at all — whether amortization accounting
+is meant to be enabled for them is a business decision outside the scope of this remediation, so
+they were deliberately left untouched (same reasoning R12 applied to exclude them from the
+write-off fix).
+
+**Both fronts closed (2026-07-08):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260708T100000Z__R13-amortization-table-active.sql` — a single guarded `UPDATE` on `c_acctschema_table`, scoped by `:client_id` and naturally limited to the PGC chart family via the same `65000000`-marker `EXISTS` guard R12 uses. |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_TABLE.xml` — row `DAE3C688574C4919B889DA7EFAD6CC5C`'s `ISACTIVE` flipped from `N` to `Y`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-08T10:00:00Z` in `OnboardingBaselineService.java`. |
 
 ---
 
