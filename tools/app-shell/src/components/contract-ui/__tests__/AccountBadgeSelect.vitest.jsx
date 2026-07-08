@@ -79,6 +79,30 @@ describe('AccountBadgeSelect', () => {
     expect(screen.getByText('*')).toBeInTheDocument();
   });
 
+  it('renders labelHint next to the label when provided', () => {
+    render(
+      <AccountBadgeSelect
+        label="Selección de pago"
+        labelHint={<span data-testid="my-hint">hint</span>}
+        options={OPTIONS}
+        data-testid="acct-select"
+      />,
+    );
+    expect(screen.getByText('Selección de pago')).toBeInTheDocument();
+    expect(screen.getByTestId('my-hint')).toBeInTheDocument();
+  });
+
+  it('renders no labelHint by default', () => {
+    render(
+      <AccountBadgeSelect
+        label="Selección de pago"
+        options={OPTIONS}
+        data-testid="acct-select"
+      />,
+    );
+    expect(screen.queryByTestId('my-hint')).toBeNull();
+  });
+
   it('opens the dropdown and fires onChange with the option id on selection', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
