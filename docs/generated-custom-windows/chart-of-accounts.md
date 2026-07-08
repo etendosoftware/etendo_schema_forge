@@ -18,7 +18,7 @@ Maintain the account master used by finance users and provide a quick, read-only
 - Implementation type: generated window route loaded from the app-shell window registry.
 - Window shape: single-entity window for `elementValue`, with a custom grouped tree table (`AccountTreeView.jsx`) replacing the generated list table.
 - Record detail titles use the account code (`searchKey`) rather than the internal record id.
-- The tree renders the FULL Etendo Classic account hierarchy as nested, expandable folders — matching Classic's "Combinación de cuentas" grouped view exactly. For example, account `20000000` nests 6 levels deep: `A` (Heading: ACTIVO) → `A.A` (Heading) → `A.A.I` (Heading) → `200` (Account) → `2000` (Breakdown) → `20000000` (Subaccount). Only the top-level folders are expanded by default; deeper levels are collapsed until the user expands them.
+- The tree renders the FULL Etendo Classic account hierarchy as nested, expandable folders — matching Classic's "Combinación de cuentas" grouped view exactly. For example, account `20000000` nests 6 levels deep: `A` (Heading: ACTIVO) → `A.A` (Heading) → `A.A.I` (Heading) → `200` (Account) → `2000` (Breakdown) → `20000000` (Subaccount). Every folder is collapsed by default; expand/collapse state is persisted to `localStorage` (`sf.chartOfAccounts.expandedFolderIds`) so navigating away to another window and back restores exactly what the user left open.
 
 ## Reactive behavior and dependencies
 - There is no visible parent/child interaction because the window only exposes the `account` entity.
@@ -50,6 +50,7 @@ Maintain the account master used by finance users and provide a quick, read-only
 10. Try to create a new `xxxx0000` subaccount and confirm the backend rejects it.
 11. Expand a leaf account's full folder path (e.g. `A` → `A.A` → `A.A.I` → `200` → `2000`) and confirm each level renders as its own nested, expandable folder matching Etendo Classic's "Combinación de cuentas" grouped view — not a flat 4-digit group.
 12. Confirm a real subaccount not ending in `0000` (e.g. `20000001`) shows no lock icon and remains fully editable.
+13. Confirm the tree loads fully collapsed on first visit. Expand a folder path down to a specific account, navigate to another window, then return to Chart of Accounts and confirm the same folders are still expanded (and everything else still collapsed).
 
 ## Automated evidence
 - `tools/app-shell/src/menu.json` exposes `chart-of-accounts` in the Finance menu.
@@ -60,5 +61,5 @@ Maintain the account master used by finance users and provide a quick, read-only
 - `artifacts/chart-of-accounts/contract.json` defines one `account` entity, no child entities, GET/POST/PUT/DELETE endpoints, supported filters for `code`, `name`, and `accountType`, and a test manifest covering field presence, field types, searchable filters, frontend visibility, and backend-only system fields.
 - `tools/app-shell/src/windows/custom/chart-of-accounts/AccountTreeView.jsx` — `buildGroupedTree()` builds the full N-level nested folder tree from each leaf's `ancestors` array (falling back to the legacy 2-level `parentCode4` grouping when `ancestors` is absent), and `AccountTreeRow` renders the lock icon for protected `0000`-suffixed leaves.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/ChartOfAccountsHandler.java` — `loadTreeData`/`buildAncestorChain` walk `AD_TreeNode` for the client's `"<ClientName> Element Value"` tree and inject `ancestors` + `elementLevel` per leaf in `applyHierarchyMetadata`.
-- `tools/app-shell/src/windows/custom/chart-of-accounts/__tests__/AccountTreeView.vitest.jsx` covers both the legacy 2-level grouping and the full ancestor-chain nested tree, plus the `0000`-suffix lock-icon rule (locked, not locked, and virtual-folder-never-locked cases).
+- `tools/app-shell/src/windows/custom/chart-of-accounts/__tests__/AccountTreeView.vitest.jsx` covers both the legacy 2-level grouping and the full ancestor-chain nested tree, the `0000`-suffix lock-icon rule (locked, not locked, and virtual-folder-never-locked cases), and expand/collapse persistence across unmount/remount (including a corrupt-`localStorage` fallback).
 - `modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/handlers/ChartOfAccountsHandlerTest.java` covers `buildAncestorChain` (root node, node-exclusion, six-level PGC example, circular-reference cap, and JSON-null fallback for missing values).

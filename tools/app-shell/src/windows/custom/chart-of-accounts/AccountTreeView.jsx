@@ -4,6 +4,31 @@ import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
 
+// Persists which folder rows are expanded across navigation/reloads. Folder ids are
+// `group-<ancestor-code-path>` (e.g. `group-A|A.A`), derived from stable account codes
+// rather than DB record ids, so they stay valid across sessions.
+const EXPANDED_STORAGE_KEY = 'sf.chartOfAccounts.expandedFolderIds';
+
+function loadPersistedExpanded() {
+  try {
+    const raw = localStorage.getItem(EXPANDED_STORAGE_KEY);
+    if (!raw) return new Set();
+    const ids = JSON.parse(raw);
+    return Array.isArray(ids) ? new Set(ids) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function persistExpanded(expanded) {
+  try {
+    localStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify(Array.from(expanded)));
+  } catch {
+    // Storage unavailable (private mode, quota, etc.) — expand/collapse still works
+    // in-memory for this session, it just won't persist across reloads.
+  }
+}
+
 function buildTreeColumns(ui) {
   return [
     {
@@ -80,8 +105,9 @@ function buildTreeColumns(ui) {
  *   parentCode4, parentCode4Name (legacy 4-digit grouping, kept for fallback
  *   and for NewAccountModal's parent selector)
  *
- * Defaults: only the top-level (root) folders are expanded on load; deeper
- * levels are collapsed until the user expands them.
+ * Defaults: every folder is collapsed on first-ever load. Expand/collapse state is
+ * persisted to localStorage (per browser, `EXPANDED_STORAGE_KEY`) so navigating away
+ * and back to this window restores exactly what the user left open.
  *
  * "New Sub-account" is always available. If a row is selected, NewAccountModal
  * auto-populates the parent from that row; otherwise the selector starts empty.
@@ -320,20 +346,12 @@ export default function AccountTreeView({
 
   const { tree } = useMemo(() => buildGroupedTree(data), [data]);
 
-  const [expanded, setExpanded] = useState(() => new Set());
+  const [expanded, setExpanded] = useState(loadPersistedExpanded);
 
-  // Expand all group headers whenever the tree is first populated (async data load)
+  // Persist expand/collapse state so it survives navigating away and back.
   useEffect(() => {
-    if (tree.length > 0) {
-      setExpanded((prev) => {
-        const next = new Set(prev);
-        for (const node of tree) {
-          if (node.isVirtual) next.add(node.id);
-        }
-        return next;
-      });
-    }
-  }, [tree]);
+    persistExpanded(expanded);
+  }, [expanded]);
 
   useEffect(() => {
     onColumnsReady?.(treeColumns);

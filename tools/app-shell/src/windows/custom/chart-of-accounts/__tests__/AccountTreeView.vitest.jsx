@@ -116,6 +116,7 @@ const HIERARCHY_DATA = [
 describe('AccountTreeView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it('shows the empty state when there are no accounts', () => {
@@ -125,19 +126,30 @@ describe('AccountTreeView', () => {
     expect(screen.queryByTestId('account-tree-row-group-4000')).not.toBeInTheDocument();
   });
 
-  it('groups accounts by parentCode4 and auto-expands the group headers', () => {
+  it('groups accounts by parentCode4, collapsed by default', () => {
     render(<AccountTreeView {...defaultProps} />);
     // Group headers are visible…
     expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
     expect(screen.getByTestId('account-tree-row-group-5000')).toBeInTheDocument();
-    // …and their children too, since groups auto-expand on load.
+    // …but their children are not, until the user expands a group.
+    expect(screen.queryByTestId('account-tree-row-acc-40000001')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('account-tree-row-acc-50000001')).not.toBeInTheDocument();
+  });
+
+  it('expanding a group reveals its children', () => {
+    render(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
     expect(screen.getByTestId('account-tree-row-acc-40000001')).toBeInTheDocument();
     expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
-    expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument();
+    // Sibling group stays collapsed — expanding one group doesn't affect others.
+    expect(screen.queryByTestId('account-tree-row-acc-50000001')).not.toBeInTheDocument();
   });
 
   it('sorts children within a group by searchKey', () => {
     render(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     const rows = screen.getAllByRole('row').map((r) => r.getAttribute('data-testid'));
     const idxUS = rows.indexOf('account-tree-row-acc-40000000'); // 40000001
     const idxEU = rows.indexOf('account-tree-row-acc-40000001'); // 40000002
@@ -146,6 +158,7 @@ describe('AccountTreeView', () => {
 
   it('shows only SearchKey, Name and Account Type — no Debit/Credit/Balance', () => {
     render(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     const row = screen.getByTestId('account-tree-row-acc-40000001');
     expect(row.textContent).toContain('40000002');
     expect(row.textContent).toContain('Sales EU');
@@ -157,6 +170,8 @@ describe('AccountTreeView', () => {
 
   it('renders the Account Type label for each leaf row', () => {
     render(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000'));
     const revenueRow = screen.getByTestId('account-tree-row-acc-40000000');
     expect(within(revenueRow).getByText('accountTypeRevenue')).toBeInTheDocument();
 
@@ -164,8 +179,10 @@ describe('AccountTreeView', () => {
     expect(within(expenseRow).getByText('accountTypeExpense')).toBeInTheDocument();
   });
 
-  it('collapsing a group hides its children without affecting other groups', () => {
+  it('collapsing an already-expanded group hides its children without affecting other groups', () => {
     render(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000'));
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
     expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
@@ -185,6 +202,7 @@ describe('AccountTreeView', () => {
   it('clicking a leaf row selects it and calls onNavigate with the item', () => {
     const onNavigate = vi.fn();
     render(<AccountTreeView {...defaultProps} onNavigate={onNavigate} />);
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     fireEvent.click(screen.getByTestId('account-tree-row-acc-40000000'));
 
     expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-40000000' }));
@@ -200,8 +218,15 @@ describe('AccountTreeView', () => {
     expect(screen.getByTestId('account-tree-row-group-4000')).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('is collapsed by default on first-ever load (no persisted state)', () => {
+    render(<AccountTreeView {...defaultProps} />);
+    expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('account-tree-row-acc-50000001')).not.toBeInTheDocument();
+  });
+
   it('"Contraer" (collapse all) hides every group\'s children', () => {
     render(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByText('expand'));
     fireEvent.click(screen.getByText('collapse'));
 
     expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
@@ -209,13 +234,42 @@ describe('AccountTreeView', () => {
     expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
   });
 
-  it('"Expandir" (expand all) re-reveals every group\'s children', () => {
+  it('"Expandir" (expand all) reveals every group\'s children', () => {
     render(<AccountTreeView {...defaultProps} />);
-    fireEvent.click(screen.getByText('collapse'));
     fireEvent.click(screen.getByText('expand'));
 
     expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
     expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument();
+  });
+
+  describe('expand/collapse persistence across remounts', () => {
+    it('restores previously expanded folders after unmount + remount (navigate away and back)', () => {
+      const { unmount } = render(<AccountTreeView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
+      unmount();
+
+      render(<AccountTreeView {...defaultProps} />);
+      expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
+      // The group that was never expanded stays collapsed.
+      expect(screen.queryByTestId('account-tree-row-acc-50000001')).not.toBeInTheDocument();
+    });
+
+    it('restores a fully collapsed state after unmount + remount', () => {
+      const { unmount } = render(<AccountTreeView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000')); // re-collapse
+      unmount();
+
+      render(<AccountTreeView {...defaultProps} />);
+      expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
+    });
+
+    it('ignores corrupt persisted state and falls back to collapsed', () => {
+      localStorage.setItem('sf.chartOfAccounts.expandedFolderIds', 'not valid json');
+      render(<AccountTreeView {...defaultProps} />);
+      expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
+    });
   });
 
   it('renders an unmapped or missing account type without crashing', () => {
@@ -230,6 +284,7 @@ describe('AccountTreeView', () => {
       },
     ];
     render(<AccountTreeView {...defaultProps} data={data} />);
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-9900'));
     expect(screen.getByTestId('account-tree-row-acc-x')).toBeInTheDocument();
   });
 
@@ -259,6 +314,7 @@ describe('AccountTreeView', () => {
 
   it('opens the modal with the selected row as the current record', () => {
     render(<AccountTreeView {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
     fireEvent.click(screen.getByTestId('account-tree-row-acc-40000000'));
     fireEvent.click(screen.getByText('+ newSubAccount'));
 
@@ -289,7 +345,7 @@ describe('AccountTreeView', () => {
     it('builds one nested folder per ancestor level instead of a flat 4-digit group', () => {
       render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
-      // Root folder "A" is a real group node (top-level, auto-expanded)…
+      // Root folder "A" is a real group node (top-level, visible but collapsed)…
       expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
       // …and there is NO flat 4-digit "2000" group at the root — it must be nested
       // under A > A.A > A.A.I > 200, not a top-level sibling of "A".
@@ -299,8 +355,8 @@ describe('AccountTreeView', () => {
     it('expanding the full ancestor chain reveals both leaves sharing that path', () => {
       render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
 
-      // "A" (the only top-level node) is already auto-expanded on load; walk down the
-      // remaining levels, expanding each as we go.
+      // Walk down every level, expanding each as we go — nothing is auto-expanded.
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I'));
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I|200'));
@@ -315,6 +371,7 @@ describe('AccountTreeView', () => {
 
     it('collapsing an intermediate folder hides deeper levels', () => {
       render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
 
       // A.A.I is now visible but collapsed — its descendants (200, 2000, leaves) are hidden.
@@ -325,8 +382,9 @@ describe('AccountTreeView', () => {
 
   // ── Editability: leaf codes ending in "0000" are protected placeholders ────
 
-  // "A" auto-expands on load; reveal the remaining 4 nested levels down to the leaves.
+  // Nothing auto-expands — walk down every nested level to reach the leaves.
   function expandFullAncestorChain() {
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-A'));
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I'));
     fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I|200'));
