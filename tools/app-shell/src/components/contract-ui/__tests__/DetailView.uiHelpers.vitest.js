@@ -197,6 +197,38 @@ describe('getAddLineWrapperStyle', () => {
   it('uses string padding for other layouts', () => {
     expect(getAddLineWrapperStyle('table')).toMatchObject({ padding: '10px 16px' });
   });
+
+  it('includes the top border divider by default (primary header-lines path)', () => {
+    expect(getAddLineWrapperStyle('inlineEditable').borderTop).toBe(
+      '0.5px solid var(--color-border-tertiary, #e5e7eb)'
+    );
+  });
+
+  it('omits the top border when withBorder is false (secondary/child-tab path)', () => {
+    const style = getAddLineWrapperStyle('inlineEditable', { withBorder: false });
+    expect(style.borderTop).toBeUndefined();
+    // spacing / layout must remain identical to the bordered variant
+    expect(style).toMatchObject({ display: 'flex', flexDirection: 'column', gap: 6, padding: 8 });
+  });
+
+  it('drops the top padding but keeps horizontal + bottom when noTopPadding (inlineEditable)', () => {
+    // Secondary/child-tab add-button: no vertical gap above it, but the 8px
+    // horizontal padding keeps it aligned with the table content.
+    const style = getAddLineWrapperStyle('inlineEditable', { withBorder: false, noTopPadding: true });
+    expect(style.padding).toBe('0 8px 8px');
+    expect(style.borderTop).toBeUndefined();
+  });
+
+  it('drops the top padding but keeps horizontal + bottom when noTopPadding (other layouts)', () => {
+    const style = getAddLineWrapperStyle('table', { noTopPadding: true });
+    expect(style.padding).toBe('0 16px 10px');
+  });
+
+  it('leaves the primary path padding byte-for-byte identical (default args)', () => {
+    // Guards against the noTopPadding refactor regressing the primary values.
+    expect(getAddLineWrapperStyle('inlineEditable').padding).toBe(8);
+    expect(getAddLineWrapperStyle('table').padding).toBe('10px 16px');
+  });
 });
 
 describe('resolveCanAddLines', () => {

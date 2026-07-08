@@ -121,10 +121,11 @@ test.describe('Sales Order — Happy path (integration)', () => {
 
     // Wait for warehouse callout to finish — only select manually if still empty
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    const warehouseStillEmpty = await page.locator('input[data-testid="field-warehouse"][placeholder*="Almacén"]')
-      .isVisible({ timeout: 2_000 }).catch(() => false);
-    if (warehouseStillEmpty) {
-      await page.locator('input[data-testid="field-warehouse"]').click({ timeout: 5_000 });
+    await page.waitForTimeout(2_000);
+    const warehouseInput = page.locator('input[data-testid="field-warehouse"]');
+    const warehouseEmpty = await warehouseInput.isVisible({ timeout: 3_000 }).catch(() => false);
+    if (warehouseEmpty) {
+      await warehouseInput.click({ timeout: 10_000 });
       await slow(page);
       const whOption = page.locator('[data-testid^="option-warehouse-"]').first();
       await expect(whOption).toBeVisible({ timeout: 10_000 });
@@ -175,6 +176,11 @@ test.describe('Sales Order — Happy path (integration)', () => {
 
     const searchDrawer = page.getByTestId('product-search-drawer');
     await expect(searchDrawer).toBeVisible({ timeout: 10_000 });
+
+    // Search for "Queso Sardo" explicitly
+    const searchInput = page.getByTestId('product-search-input');
+    await searchInput.fill('Queso Sardo');
+    await page.waitForTimeout(1000);
 
     const productOption = page.locator('[data-testid^="product-search-option-"]').first();
     await expect(productOption).toBeVisible({ timeout: 15_000 });

@@ -11,7 +11,7 @@ import { login } from '../helpers/auth.js';
  * amortization → delete the assets).
  *
  * Requires: Etendo up (dev proxy → ETENDO_URL), E2E_USE_MOCK=0, E2E_PASSWORD set,
- * an existing asset category named "Otros".
+ * an existing asset category named "Genérico".
  */
 
 const toastByText = (page, re) => page.locator('[data-sonner-toast]').filter({ hasText: re });
@@ -35,8 +35,8 @@ async function createNonDepreciableAsset(page, { searchKey, name }) {
   await page.getByTestId('field-searchKey').fill(searchKey);
   await page.getByTestId('field-name').fill(name);
   await page.getByTestId('field-assetCategory').click();
-  await page.getByRole('option', { name: 'Otros', exact: true }).click();
-  await expect(page.getByTestId('field-assetCategory')).toContainText('Otros');
+  await page.getByRole('option', { name: 'Genérico', exact: true }).click();
+  await expect(page.getByTestId('field-assetCategory')).toContainText('Genérico');
   await page.getByTestId('action-save').click();
   await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
   await page.waitForURL(/\/assets\/(?!new)[^/?]+/, { timeout: 10_000 });

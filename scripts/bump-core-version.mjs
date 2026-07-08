@@ -6,8 +6,9 @@
 //   e.g. node scripts/bump-core-version.mjs 0.3.1
 //
 // These packages are published in lockstep from schema_forge_core (see
-// docs/repo-topology.md). Only these names are touched — unrelated
-// @etendosoftware deps (e.g. etendo-go-core) keep their own version.
+// docs/repo-topology.md) and all move together on every core release.
+// Only these names are touched — unrelated @etendosoftware deps keep their
+// own version.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -17,8 +18,11 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Lockstep packages whose pin must move together with the core release.
 const LOCKSTEP_PACKAGES = [
   '@etendosoftware/app-shell-core',
+  '@etendosoftware/etendo-go-core',
+  '@etendosoftware/schema-forge-agent-context',
   '@etendosoftware/schema-forge-cli',
   '@etendosoftware/schema-forge-core',
+  '@etendosoftware/schema-forge-stack',
 ];
 
 // package.json files that may declare any of the lockstep packages.

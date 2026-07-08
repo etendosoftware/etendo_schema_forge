@@ -29,7 +29,7 @@ const MOCK_INV_HEADER = {
 
 async function installInventoryMocks(page) {
   await page.route(`**/sws/neo/physical-inventory/inventory/${MOCK_INV_ID}`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -37,7 +37,7 @@ async function installInventoryMocks(page) {
     });
   });
   await page.route('**/sws/neo/physical-inventory/inventoryLine*', async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
+    if (route.request().method() !== 'GET') return route.fallback();
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -226,7 +226,7 @@ test.describe('Physical Inventory', () => {
           }),
         });
       } else {
-        route.continue();
+        route.fallback();
       }
     });
 
@@ -273,7 +273,7 @@ test.describe('Physical Inventory', () => {
           }),
         });
       } else {
-        route.continue();
+        route.fallback();
       }
     });
 
@@ -307,7 +307,7 @@ test.describe('Physical Inventory', () => {
           }),
         });
       } else {
-        route.continue();
+        route.fallback();
       }
     });
 

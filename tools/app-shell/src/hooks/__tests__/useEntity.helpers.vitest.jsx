@@ -27,6 +27,12 @@ import {
   reportMissingRequiredFields,
   shouldRefetchAfterSave,
   showSaveSuccessToast,
+  isEmailField,
+  getInvalidEmailFields,
+  getInvalidWebsiteFields,
+  getInvalidPhoneFields,
+  reportInvalidEmailFields,
+  reportInvalidFormatField,
 } from '../useEntity';
 
 describe('useEntity helpers', () => {
@@ -1267,6 +1273,169 @@ describe('useEntity helpers', () => {
 
     it('returns true with non-empty id and refetchAfterSave', () => {
       expect(shouldRefetchAfterSave({ id: 'uuid-123' }, true)).toBe(true);
+    });
+  });
+
+  describe('isEmailField', () => {
+    it('detects the header etgoEmail field by key', () => {
+      expect(isEmailField({ key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'text' })).toBe(true);
+    });
+
+    it('detects a child email field by key', () => {
+      expect(isEmailField({ key: 'email', type: 'text' })).toBe(true);
+    });
+
+    it('detects by column name when the key does not match', () => {
+      expect(isEmailField({ key: 'contactEmailAddr', column: 'EM_Email', type: 'text' })).toBe(true);
+    });
+
+    it('detects an explicit type === "email"', () => {
+      expect(isEmailField({ key: 'whatever', type: 'email' })).toBe(true);
+    });
+
+    it('does NOT match non-email fields (regression)', () => {
+      expect(isEmailField({ key: 'businessPartner', column: 'C_BPartner_ID', type: 'search' })).toBe(false);
+      expect(isEmailField({ key: 'name', column: 'Name', type: 'text' })).toBe(false);
+    });
+
+    it('does NOT match a boolean/select field whose name contains "email"', () => {
+      // A "sendEmail" checkbox must never be treated as an email input.
+      expect(isEmailField({ key: 'sendEmail', column: 'Send_Email', type: 'checkbox' })).toBe(false);
+      expect(isEmailField({ key: 'emailTemplate', column: 'Email_Template_ID', type: 'select' })).toBe(false);
+    });
+
+    it('returns false for nullish input', () => {
+      expect(isEmailField(null)).toBe(false);
+      expect(isEmailField(undefined)).toBe(false);
+    });
+  });
+
+  describe('getInvalidEmailFields', () => {
+    const FIELDS = [
+      { key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'text' },
+      { key: 'name', column: 'Name', type: 'text' },
+    ];
+
+    it('flags a non-empty malformed email', () => {
+      expect(getInvalidEmailFields(FIELDS, { etgoEmail: 'not-an-email' })).toEqual(['etgoEmail']);
+    });
+
+    it('treats an empty value as valid (field is optional)', () => {
+      expect(getInvalidEmailFields(FIELDS, { etgoEmail: '' })).toEqual([]);
+      expect(getInvalidEmailFields(FIELDS, {})).toEqual([]);
+      expect(getInvalidEmailFields(FIELDS, { etgoEmail: '   ' })).toEqual([]);
+    });
+
+    it('passes a well-formed email', () => {
+      expect(getInvalidEmailFields(FIELDS, { etgoEmail: 'user@example.com' })).toEqual([]);
+    });
+
+    it('never flags non-email fields even when they hold garbage (regression)', () => {
+      expect(getInvalidEmailFields(FIELDS, { name: 'not-an-email', etgoEmail: 'user@example.com' })).toEqual([]);
+    });
+
+    it('skips readOnly email fields', () => {
+      const fields = [{ key: 'etgoEmail', column: 'EM_Etgo_Email', type: 'text', readOnly: true }];
+      expect(getInvalidEmailFields(fields, { etgoEmail: 'bad' })).toEqual([]);
+    });
+
+    it('skips hidden email fields (displayLogic false)', () => {
+      const fields = [{ key: 'etgoEmail', type: 'text', displayLogic: () => false }];
+      expect(getInvalidEmailFields(fields, { etgoEmail: 'bad' })).toEqual([]);
+    });
+  });
+
+
+  describe('reportInvalidEmailFields', () => {
+    it('toasts and blocks the save WITHOUT setting an inline field error', () => {
+      const ui = (k) => k;
+      const setSaveError = vi.fn();
+      const setIsSaving = vi.fn();
+
+      // Signature is (ui, setSaveError, setIsSaving) — no setFieldErrors: the email
+      // case is toast-only, so it must never set an inline error under the field.
+      const result = reportInvalidEmailFields(ui, setSaveError, setIsSaving);
+
+      expect(result).toBeNull();
+      expect(setSaveError).toHaveBeenCalledWith('sendModalInvalidEmail');
+      expect(setIsSaving).toHaveBeenCalledWith(false);
+      expect(toast.error).toHaveBeenCalledWith('sendModalInvalidEmail');
+    });
+  });
+
+  describe('reportInvalidFormatField', () => {
+    it('resolves the given message key, toasts, and blocks the save (toast-only)', () => {
+      const ui = (k) => k;
+      const setSaveError = vi.fn();
+      const setIsSaving = vi.fn();
+      toast.error.mockClear();
+
+      const result = reportInvalidFormatField('websiteInsecureUrl', ui, setSaveError, setIsSaving);
+
+      expect(result).toBeNull();
+      expect(setSaveError).toHaveBeenCalledWith('websiteInsecureUrl');
+      expect(setIsSaving).toHaveBeenCalledWith(false);
+      expect(toast.error).toHaveBeenCalledWith('websiteInsecureUrl');
+    });
+  });
+
+  describe('getInvalidWebsiteFields', () => {
+    const FIELDS = [
+      { key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string' },
+      { key: 'name', column: 'Name', type: 'string' },
+    ];
+
+    it('flags a non-empty insecure/malformed website', () => {
+      expect(getInvalidWebsiteFields(FIELDS, { etgoWeb: 'http://x.com' })).toEqual(['etgoWeb']);
+      expect(getInvalidWebsiteFields(FIELDS, { etgoWeb: 'example.com' })).toEqual(['etgoWeb']);
+    });
+
+    it('treats an empty value as valid (optional)', () => {
+      expect(getInvalidWebsiteFields(FIELDS, { etgoWeb: '' })).toEqual([]);
+      expect(getInvalidWebsiteFields(FIELDS, {})).toEqual([]);
+    });
+
+    it('passes a secure https URL', () => {
+      expect(getInvalidWebsiteFields(FIELDS, { etgoWeb: 'https://example.com' })).toEqual([]);
+    });
+
+    it('never flags non-website fields (regression)', () => {
+      expect(getInvalidWebsiteFields(FIELDS, { name: 'http://x.com', etgoWeb: 'https://ok.com' })).toEqual([]);
+    });
+
+    it('skips readOnly website fields', () => {
+      const fields = [{ key: 'etgoWeb', column: 'EM_Etgo_Web', type: 'string', readOnly: true }];
+      expect(getInvalidWebsiteFields(fields, { etgoWeb: 'http://x.com' })).toEqual([]);
+    });
+  });
+
+  describe('getInvalidPhoneFields', () => {
+    const FIELDS = [
+      { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string' },
+      { key: 'name', column: 'Name', type: 'string' },
+    ];
+
+    it('flags a non-empty invalid phone', () => {
+      expect(getInvalidPhoneFields(FIELDS, { etgoPhone: '600abc' })).toEqual(['etgoPhone']);
+      expect(getInvalidPhoneFields(FIELDS, { etgoPhone: '+()' })).toEqual(['etgoPhone']);
+    });
+
+    it('treats an empty value as valid (optional)', () => {
+      expect(getInvalidPhoneFields(FIELDS, { etgoPhone: '' })).toEqual([]);
+      expect(getInvalidPhoneFields(FIELDS, {})).toEqual([]);
+    });
+
+    it('passes a valid phone number', () => {
+      expect(getInvalidPhoneFields(FIELDS, { etgoPhone: '+34 (600) 12-34' })).toEqual([]);
+    });
+
+    it('never flags non-phone fields (regression)', () => {
+      expect(getInvalidPhoneFields(FIELDS, { name: '600abc', etgoPhone: '600123456' })).toEqual([]);
+    });
+
+    it('skips readOnly phone fields', () => {
+      const fields = [{ key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string', readOnly: true }];
+      expect(getInvalidPhoneFields(fields, { etgoPhone: 'abc' })).toEqual([]);
     });
   });
 });
