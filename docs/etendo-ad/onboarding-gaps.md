@@ -242,7 +242,7 @@ required**; R11 only had to wire existing `c_validcombination` FKs into `c_accts
 |---|---|---|---|---|
 | Recibos de clientes * | `c_receivable_acct` | `43000000` | Clientes (euros) a corto plazo | ✅ already correct |
 | Prepago del cliente | `c_prepayment_acct` | `43800000` | Anticipos de clientes | ✅ already correct |
-| Cancelaciones * (Write-off) | `writeoff_acct` | `69400000` | Pérdidas por deterioro de créditos por operaciones comerciales | ✅ already correct — **NOT changed to the screenshot's 65000000** (override, see below) |
+| Cancelaciones * (Write-off) | `writeoff_acct` | `65000000` (was `69400000`) | Pérdidas de créditos comerciales incobrables | ⚠️ **corrected 2026-07-08 by R12** — see override history below |
 | Pasivo del proveedor * | `v_liability_acct` | `40000000` | Proveedores (euros) a corto plazo | ✅ already correct |
 | Pagos por adelantado del proveedor | `v_prepayment_acct` | `40700000` | Anticipos a proveedores | ✅ already correct |
 | Recibos no facturados | `notinvoicedreceipts_acct` | `40090000` | Proveedores facturas pendientes de recibir o de formalizar | ✅ already correct |
@@ -258,14 +258,21 @@ required**; R11 only had to wire existing `c_validcombination` FKs into `c_accts
 
 `*` = required field on the classic UI. Source: "Jorge's list", verified 2026-07-06.
 
-**Write-off override (explicit product-owner decision — do not "re-fix"):** the screenshot shows
-Cancelaciones/Write-off = `6500000000` (65000000, "Pérdidas por créditos comerciales incobrables").
-The product owner explicitly confirmed the **DB's existing value (`69400000`) is correct** and must
-**not** be changed to `65000000`. GOClient's simplified chart reuses the same account (694, "Pérdidas
-por deterioro de créditos por operaciones comerciales") for both the write-off and the bad-debt
-expense default — this is a deliberate business decision, not a provisioning gap. Confirmed live:
-`writeoff_acct` already resolved to `c_validcombination` `997A522BF1124E029E99AB31CF2540F9` = account
-`69400000` before this fix ran, and R11's `@check`/`@apply` never reference `writeoff_acct`.
+**Write-off override history (superseded — final value is `65000000`, ETP-4452/R12, 2026-07-08):**
+on 2026-07-06 the product owner explicitly confirmed the DB's existing value (`69400000`,
+"Pérdidas por deterioro de créditos por operaciones comerciales") was correct and should NOT be
+changed to the screenshot's `65000000` ("Pérdidas de créditos comerciales incobrables"). R11's
+`@check`/`@apply` never referenced `writeoff_acct` for that reason. On 2026-07-07 the product owner
+**reconfirmed, again explicitly, that `65000000` IS the correct value** — reversing the earlier
+decision. The corrective data-fix `cli/src/data-fixes/sql/20260708T090000Z__R12-writeoff-account-override.sql`
+implements this: live-verified on GOClient, acreedortest, acreetest2 and empresa (the 4 tenants on
+the GOClient-style PGC chart) — `writeoff_acct` now resolves to `c_validcombination`
+`CB7E1B51B897403083CDCA20835F6AE9` = account `65000000` on GOClient (each tenant has its own
+combination id for the same account). F&B International Group, QA Testing and TaxesOrg run
+unrelated (US-chart) schemas with no `65000000` account at all — R12's `@check` naturally excludes
+them, no client allowlist needed. Preventive twin: `C_ACCTSCHEMA_DEFAULT.xml`'s `WRITEOFF_ACCT`
+updated to GOClient's own `65000000` combination id; `ONBOARDING_PROVISIONED_THROUGH` bumped to
+`2026-07-08T09:00:00Z`.
 
 **Both fronts closed (2026-07-06):**
 
