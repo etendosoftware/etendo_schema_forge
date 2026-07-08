@@ -23,12 +23,20 @@ import { CopyButton, CopyBlock } from '../copy-button.jsx';
 describe('CopyButton', () => {
   let writeText;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+  // userEvent.setup() replaces navigator.clipboard with its own stub, so the
+  // clipboard mock must be installed AFTER setup() to survive. This helper
+  // guarantees the component hits the test's writeText mock.
+  const installClipboard = () => {
     writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText }, configurable: true, writable: true,
     });
+    return writeText;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    installClipboard();
   });
 
   afterEach(() => {
@@ -42,7 +50,8 @@ describe('CopyButton', () => {
   });
 
   it('copies the given value to the clipboard on click', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ writeToClipboard: false });
+    writeText = installClipboard();
     render(<CopyButton value="copy-me" data-testid="my-copy" />);
     await user.click(screen.getByTestId('my-copy'));
 
@@ -63,8 +72,9 @@ describe('CopyButton', () => {
   });
 
   it('shows an error toast when the clipboard write fails', async () => {
+    const user = userEvent.setup({ writeToClipboard: false });
+    writeText = installClipboard();
     writeText.mockRejectedValueOnce(new Error('denied'));
-    const user = userEvent.setup();
     render(<CopyButton value="copy-me" data-testid="my-copy" />);
     await user.click(screen.getByTestId('my-copy'));
 
@@ -78,12 +88,17 @@ describe('CopyButton', () => {
 describe('CopyBlock', () => {
   let writeText;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+  const installClipboard = () => {
     writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       value: { writeText }, configurable: true, writable: true,
     });
+    return writeText;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    installClipboard();
   });
 
   afterEach(() => {
@@ -97,7 +112,8 @@ describe('CopyBlock', () => {
   });
 
   it('copies the block value via its embedded CopyButton', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ writeToClipboard: false });
+    writeText = installClipboard();
     render(<CopyBlock value="const x = 1;" data-testid="my-block" />);
     await user.click(screen.getByTestId('my-block__copy'));
 
