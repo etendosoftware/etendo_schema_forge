@@ -14,10 +14,8 @@ export default function OnboardingPage() {
     apiBase: '',
     brandLabel: ui('onboardingBrandName'),
     localeCodes: ['es_ES', 'en_US'],
-    // TODO(ETP-4444): confirm the final country list with Product/Design — placeholder
-    // set covering the markets already live in this monorepo (ES, AR) plus common
-    // LatAm expansion candidates. Adding a country is data-only: append the ISO code here.
-    countryCodes: ['ES', 'AR', 'MX', 'CO', 'CL'],
+    // Confirmed with Product (ETP-4444): Spain-only for now, no country selector.
+    countryCodes: ['ES'],
     sectorCodes: ['technology', 'services', 'commerce', 'manufacturing'],
     businessTypeValues: ['company', 'freelancer', 'advisory'],
     defaultForm: {
