@@ -6,14 +6,18 @@ const statusLabelMock = vi.fn((raw, _dict, _translate, enumLabels) => {
   return `status-label-${raw}`;
 });
 
-vi.mock('@/lib/statusBadge.js', () => ({
-  getStatusDotColor: (raw) => `dot-${raw ?? 'none'}`,
-  statusLabel: (...args) => statusLabelMock(...args),
-}));
+vi.mock('@/lib/statusBadge.js', async () => {
+  const actual = await vi.importActual('@/lib/statusBadge.js');
+  return {
+    getStatusDotColor: (raw) => `dot-${raw ?? 'none'}`,
+    getStatusTone: actual.getStatusTone,
+    statusLabel: (...args) => statusLabelMock(...args),
+  };
+});
 
 vi.mock('@/components/ui/status-tag', () => ({
-  StatusTag: ({ status, label }) => (
-    <span data-testid="status-tag" data-status={status}>{label || status}</span>
+  StatusTag: ({ status, label, tone }) => (
+    <span data-testid="status-tag" data-status={status} data-tone={tone}>{label || status}</span>
   ),
 }));
 
@@ -138,6 +142,17 @@ describe('renderStatusCell', () => {
     // The label returned by the mock (enum:statusProcessed) must appear in the tag
     const tag = screen.getByTestId('status-tag');
     expect(tag).toHaveTextContent('enum:statusProcessed');
+  });
+
+  it('passes the real (local) tone for RPR so StatusTag renders it as deposited (success), not the stale published-package classification', () => {
+    renderCell(renderStatusCell({
+      ...baseContext,
+      row: { id: '1', status: 'RPR' },
+      col: { key: 'status', type: 'status' },
+    }));
+
+    const tag = screen.getByTestId('status-tag');
+    expect(tag).toHaveAttribute('data-tone', 'success');
   });
 });
 

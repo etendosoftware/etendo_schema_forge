@@ -55,6 +55,10 @@ import { FIELD_HEIGHT } from '@/components/ui/formDensity';
  *                                      selecting it clears the value to null — mirroring the
  *                                      `emptyOptionLabelKey` behaviour of the plain SelectorInput.
  *                                      Only rendered when the field is not required.
+ * @param {boolean}  [preferDown]     - When true, the panel always opens downward instead of
+ *                                      auto-flipping up when space below is tight. Useful when the
+ *                                      selector is the last element on a scrollable page and an
+ *                                      upward panel would cover the fields above it.
  *
  * ## Usage example (address picker wired to LocationEditorModal)
  * ```jsx
@@ -172,6 +176,7 @@ export function CreatableSearchSelect({
   onCreateRequest,
   emptyOptionLabel,
   staticOptions,
+  preferDown = false,
 }) {
   const ui = useUI();
   const [query, setQuery] = useState(displayValue || '');
@@ -353,7 +358,7 @@ export function CreatableSearchSelect({
     const rect = rootRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
-    const shouldOpenUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+    const shouldOpenUp = !preferDown && spaceBelow < 220 && spaceAbove > spaceBelow;
     setOpenUp(shouldOpenUp);
     const maxHeight = Math.max(120, (shouldOpenUp ? spaceAbove : spaceBelow) - 12);
     // pointerEvents:'auto' is required because the panel is portaled to
@@ -379,7 +384,7 @@ export function CreatableSearchSelect({
           zIndex: 1000,
           pointerEvents: 'auto',
         });
-  }, []);
+  }, [preferDown]);
 
   // Recompute on open and keep the panel glued to the trigger on scroll/resize.
   useEffect(() => {
