@@ -372,8 +372,8 @@
       "items": [
         {
           "name": "authorize",
-          "label": "Connect with Claude",
-          "favname": "Connect with Claude"
+          "label": "Connect AI assistant",
+          "favname": "Connect AI assistant"
         }
       ]
     },
