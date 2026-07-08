@@ -34,8 +34,8 @@
         "label": "Reactivate",
         "labelKey": "reactivate",
         "visibleWhenFieldTrue": "processed",
-        "columnName": "Processed",
-        "preUnpost": true
+        "visibleWhenFieldFalse": "posted",
+        "columnName": "Processed"
       },
       {
         "key": "post",
@@ -45,6 +45,14 @@
         "visibleWhenFieldFalse": "posted",
         "successKey": "documentPosted",
         "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "action": "unpost",
+        "labelKey": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted"
       }
     ],
     "labelOverrides": {
