@@ -103,16 +103,8 @@
       "windowId": "181"
     },
     {
-      "name": "return-from-customer",
-      "windowId": "FF808081330213E60133021822E40007"
-    },
-    {
       "name": "return-material-receipt",
       "windowId": "123271B9AD60469BAE8A924841456B63"
-    },
-    {
-      "name": "return-to-vendor",
-      "windowId": "C50A8AEE6F044825B5EF54FAAE76826F"
     },
     {
       "name": "return-to-vendor-shipment",

@@ -32,7 +32,6 @@ This folder is the entry point for documentation that describes how generated an
 | [sales-order.md](sales-order.md) | Custom sales-order flow with fulfillment/invoicing actions and related documents |
 | [goods-shipment.md](goods-shipment.md) | Custom shipment flow with invoice/return actions and bulk invoicing cues |
 | [sales-invoice.md](sales-invoice.md) | Custom sales-invoice flow with payment-plan and related-document behavior |
-| [return-from-customer.md](return-from-customer.md) | Generated return-from-customer flow linked to shipment lines |
 | [return-material-receipt.md](return-material-receipt.md) | Generated return-material-receipt flow linked back to sales orders |
 
 ## Purchases
@@ -42,7 +41,6 @@ This folder is the entry point for documentation that describes how generated an
 | [purchase-order.md](purchase-order.md) | Custom purchase-order flow |
 | [goods-receipt.md](goods-receipt.md) | Custom goods-receipt flow |
 | [purchase-invoice.md](purchase-invoice.md) | Custom purchase-invoice flow |
-| [return-to-vendor.md](return-to-vendor.md) | Generated vendor-return flow |
 | [return-to-vendor-shipment.md](return-to-vendor-shipment.md) | Generated return-to-vendor-shipment flow |
 
 ## Inventory
