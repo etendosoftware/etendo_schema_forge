@@ -556,3 +556,128 @@ Título "Connect with Claude" + los 4 pasos genéricos existentes (`oauthStep1`-
       en `schema_forge` primero, donde el ciclo es rápido; recién evaluar la migración a core como
       paso de "hardening" posterior, con `Tabs` ya migrado y un seam de observability definido en
       core.
+
+## Procedimiento concreto de migración a core (paso a paso)
+
+> **Estado (2026-07-08):** el rediseño ya está implementado y estabilizado en `schema_forge`
+> (tabs por cliente, `deriveServerName()`, catálogo `mcpClients.js`, `CopyBlock`, evento
+> `mcp_connect_tab_selected`). Esta sección documenta CÓMO se haría la promoción a core cuando se
+> decida encararla — es el "paso opcional de hardening" de la recomendación de arriba, ya
+> operacionalizado. No ejecutar sin abrir su propia tarea Jira.
+
+### Actualización del análisis previo (lo que cambió respecto a la investigación de arriba)
+
+Dos supuestos de la investigación original quedaron **desactualizados** al implementar:
+
+- ✅ **Auth e i18n YA resuelven a core.** En este repo `tools/app-shell/src/auth/AuthContext.jsx`
+  y `src/i18n/index.js` son shims de una línea (`export * from '@etendosoftware/app-shell-core/auth'`
+  y `.../i18n`). O sea: `useAuth`, `createApiFetch` y `useUI` que consume `AuthorizePage.jsx` ya
+  vienen de core. **No hay seam nuevo que diseñar para auth/i18n** — solo hay que cambiar los
+  imports de `@/auth/...`/`@/i18n` a `@etendosoftware/app-shell-core/auth`/`/i18n` cuando el archivo
+  viva dentro de core (imports relativos internos).
+- ⚠️ **El JSON de locales sigue partido** (sin cambios): core es un resolver, las claves
+  `oauthConnect*` se quedan en `schema_forge/tools/app-shell/src/locales/{en_US,es_ES,es_AR}.json`.
+  Es aceptable — el resto de componentes de core ya funcionan así (el host inyecta el diccionario
+  vía `LocaleProvider`).
+
+Bloqueantes reales que quedan (confirmados contra el árbol de core, 2026-07-08):
+
+| Dependencia de la página | ¿En core hoy? | Acción |
+|---|---|---|
+| `useAuth`, `createApiFetch`, `useUI` | ✅ sí | solo reapuntar imports |
+| `Card`, `Button`, `Badge` | ✅ sí (`components/ui/`) | ninguna |
+| `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` | ❌ no (solo test huérfano `tabs.vitest.jsx`) | **migrar primero** |
+| `CopyBlock`/`CopyButton` (`components/ui/copy-button.jsx`) | ❌ no | **migrar primero** |
+| `mcpClients.js` (catálogo + `deriveServerName`) | ❌ no (lib local) | migrar como lib de core |
+| `mcpConnectTelemetry.js` → `observability.js`/`observability/events.js` | ❌ no existe observability en core | **seam de observability** (el blocker de dirección de dependencia) |
+| dir `pages/` + export en `package.json` | ❌ core no tiene `pages/` ni lo exporta | crear + agregar entrada en `exports` |
+
+### Orden de ejecución (cada paso es su propio PR en core, en este orden)
+
+**Paso 0 — Migrar `Tabs` a core** (`packages/app-shell-core/src/components/ui/tabs.jsx`).
+Es hand-built (no Radix), su única dependencia es `cn` de `@/lib/utils` → en core es `./lib/utils`
+o el `utils.js` que ya existe ahí. Ya hay un test huérfano (`tabs.vitest.jsx`) esperando la
+implementación — al migrar el componente ese test empieza a pasar. Dejar en `schema_forge` un shim
+`tools/app-shell/src/components/ui/tabs.jsx` = `export * from '@etendosoftware/app-shell-core/components/ui/tabs.jsx'`
+(mismo patrón que auth/i18n) para no tocar a los otros consumidores locales (`DetailTabs.jsx`).
+
+**Paso 1 — Migrar `CopyButton`/`CopyBlock` a core**
+(`packages/app-shell-core/src/components/ui/copy-button.jsx`). Depende de `Button`, `cn`, `toast`
+(sonner, ya en core) y `useUI`/`ui('copied')`. Mover el componente + su test
+(`copy-button.vitest.jsx`, ya escrito y verde con el fix de `userEvent.setup({ writeToClipboard:
+false })`). Shim de re-export en `schema_forge` igual que Tabs. La clave i18n `copied` ya la resuelve
+el host.
+
+**Paso 2 — Definir el seam de observability en core** (el bloqueante de fondo).
+`mcpConnectTelemetry.js` importa `@/lib/observability.js` (que expone `track`) + `observability/events.js`
+(catálogo `OBSERVABILITY_EVENTS` + `buildObservabilityEvent`), y todo eso vive en
+`schema_forge/tools/app-shell/src/lib/observability/` — que core **no puede importar** (invierte la
+dirección de dependencia funcional→core). Dos opciones:
+  - **(A) Inyección por contexto (preferida).** Core define una interfaz mínima `track(name, props)`
+    y un `ObservabilityProvider`/hook (`useObservability()`) que el host implementa contra su pipeline
+    real de Mixpanel. La página en core llama `track` del contexto; si el host no provee nada, es
+    no-op. Es el patrón menos acoplado y reutilizable por cualquier feature futura que core quiera
+    instrumentar.
+  - **(B) Prop/callback.** El host pasa `onTabSelected={client => trackMcpConnectTabSelected({client})}`
+    como prop a `<ConnectionsLanding>`. Más simple, pero traslada el catálogo de eventos y el
+    sanitizado al host y no escala si core suma más features instrumentadas.
+  - En **ambos casos** el catálogo `MCP_CONNECT_TAB_SELECTED` y el fix de allowlist (`'client'` en
+    `SAFE_EVENT_PROPERTY_KEYS`, `payload.js`) se quedan en el host, porque el pipeline Mixpanel es
+    del host. Solo migra la *invocación*, no el sink.
+
+**Paso 3 — Migrar `mcpClients.js` a core** (`packages/app-shell-core/src/lib/mcpClients.js`).
+Es JS puro sin dependencias de entorno (`deriveServerName`, `buildMcpClients`, helpers de deep link
+con `btoa`/`encodeURIComponent`). Mover el archivo + su test node (`mcpClients.test.js`, 21 casos).
+Shim de re-export en el host. `detectMcpUrl()`/`detectBaseUrl()` **no** se migran acá: son helpers de
+`AuthorizePage` (usan `window.location`), viajan con la página en el Paso 4.
+
+**Paso 4 — Migrar `AuthorizePage.jsx` (`ConnectionsLanding` + `McpInstructions`) a core.**
+  - Crear `packages/app-shell-core/src/pages/` (no existe) y mover el archivo.
+  - Reapuntar imports internos: `@/auth/...`→`../auth/...`, `@/i18n`→`../i18n`, `@/components/ui/*`→
+    `../components/ui/*`, `@/lib/mcpClients.js`→`../lib/mcpClients.js`, y la telemetría al seam del
+    Paso 2.
+  - Agregar la entrada de export en `package.json` de core:
+    `"./pages/AuthorizePage.jsx": "./src/pages/AuthorizePage.jsx"` (o un barrel `./pages`).
+  - En `schema_forge`, reemplazar `tools/app-shell/src/pages/AuthorizePage.jsx` por un shim:
+    `export { default } from '@etendosoftware/app-shell-core/pages/AuthorizePage.jsx';`
+    `runtime-routes.jsx` sigue haciendo `lazy(() => import('./pages/AuthorizePage.jsx'))` sin cambios.
+  - Mover también el test `AuthorizePage.vitest.jsx` a core (23 casos) — al vivir en core, el host
+    ya no lo corre; validar que el mock de `useUI`/observability sigue funcionando con el seam nuevo.
+  - **La mitad OAuth de la página (consentimiento, la que se ve CON params) viaja entera sin
+    bloqueantes nuevos** (verificado 2026-07-08): `useSearchParams` usa `react-router-dom ^7`, que ya
+    es peerDependency de core y core ya consume internamente (`ShellLayout`, `AppShellRuntime`);
+    `createApiFetch` viene de `@/auth/api.js` (ya re-export de core); `window.location`,
+    `import.meta.env.VITE_API_BASE` y `fetch('/oauth2/authorize')` [ruta relativa al origin] son
+    autocontenidos y funcionan igual servidos desde core. O sea la página se migra como UNA sola
+    unidad — no hay que partir landing y consentimiento.
+
+**Paso 5 — i18n.** No mover el JSON. Verificar que las claves `oauthConnect*` (incluidas las 5
+nuevas de la tab "Otros": `oauthConnectOtherAutoHeading/ManualHeading/Step1..3`) siguen en los 3
+locales del host y que el `LocaleProvider` las inyecta. Agregar una nota en
+`docs/repo-topology.md`: "las claves de una página que vive en core pueden seguir en el host".
+
+**Paso 6 — Release + bump (el "peaje" de latencia).**
+`publish-private-packages.yml` es `workflow_dispatch` (release manual de core) → `bump-core-on-release.yml`
+abre el PR de bump del pin en `schema_forge` (merge humano) → recién ahí live. Durante desarrollo,
+validar todo el encadenamiento con `LOCAL_CORE=1` / `make dev-local-core` antes de publicar, para no
+gastar ciclos de release en errores de imports.
+
+### Estrategia de shims (clave para hacerlo incremental y sin big-bang)
+
+Cada paso deja en `schema_forge` un re-export de una línea del artefacto movido, exactamente como ya
+existe para `@/auth` e `@/i18n`. Ventaja: ningún otro consumidor local se entera del move, cada PR es
+chico y revisable, y si algo falla se revierte el shim sin tocar core. Los shims se pueden limpiar
+más adelante (oportunísticamente) reapuntando los imports directos a `@etendosoftware/app-shell-core/...`.
+
+### Riesgos / checklist de verificación post-migración
+
+- [ ] `make dev-local-core` levanta y `/authorize` (sin params OAuth) renderiza la landing con tabs.
+- [ ] `/authorize?...` (con params) sigue mostrando la pantalla de consentimiento — la parte OAuth de
+      `AuthorizePage` viaja junto y no se debe romper.
+- [ ] El evento `mcp_connect_tab_selected` sigue llegando a Mixpanel con `client` (verificar que el
+      seam del Paso 2 no volvió a romper el allowlist de `payload.js`).
+- [ ] Los 3 tests (`mcpClients.test.js`, `copy-button.vitest.jsx`, `AuthorizePage.vitest.jsx`) corren
+      verdes desde core (`pnpm --filter app-shell-core test` / `test:vitest`).
+- [ ] `deriveServerName()` sigue devolviendo el alias correcto por entorno (local/staging/exp/prod).
+- [ ] `domain-boundary-check.yml` sigue no-op (no hay gate que valide el move) — la revisión de la
+      frontera es manual contra `docs/repo-topology.md`.
