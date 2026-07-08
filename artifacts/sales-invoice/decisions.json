@@ -424,6 +424,26 @@
           "visibility": "editable",
           "form": false
         },
+        "etvfacInvType": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacVerifacDesc": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacSimpinvart7273": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacInvNoIDArt61d": {
+          "visibility": "editable",
+          "form": false
+        },
+        "etvfacReverseinvtype": {
+          "visibility": "editable",
+          "form": false
+        },
         "aeatsiiEjercicio": {
           "visibility": "readOnly",
           "form": false

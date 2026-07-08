@@ -1556,8 +1556,14 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
  *   The component always mounts but receives `isActive` so it can lazy-load data
  *   the first time it becomes visible.
  *
- * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api }`
+ * In both cases the component receives `{ recordId, data, token, apiBaseUrl, api, onChange }`
  * plus any keys declared in the optional `props` object.
+ *
+ * `onChange(field, value)` is `hook.handleChange` — it writes straight into the shared
+ * `editing` state (the same state the header form uses), so any edit made by a custom
+ * tab is picked up automatically by the next header save (no per-field persistence
+ * needed, no separate save button required). This prop is additive/optional — custom
+ * tabs that don't use it are unaffected.
  */
 export function hasUnsavedEdits(editing, selected) {
   if (!editing || !selected) return false;
@@ -2919,6 +2925,7 @@ export function DetailView({
           api={api}
           isActive={isActive}
           onCountChange={updateCustomTabCount}
+          onChange={hook.handleChange}
           {...(ct.props || {})}
           data-testid="TabComponent__fa3275" />
       </div>

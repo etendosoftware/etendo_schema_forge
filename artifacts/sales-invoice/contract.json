@@ -1,8 +1,8 @@
 {
-  "version": "0.47.0",
+  "version": "0.49.0",
   "generatedAt": "2026-04-30T15:42:46.582Z",
-  "updatedAt": "2026-07-06T13:19:15.530Z",
-  "checksum": "0afb11783dd12e84",
+  "updatedAt": "2026-07-07T14:43:09.715Z",
+  "checksum": "b831fda47aeada34",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -673,6 +673,172 @@
             }
           },
           {
+            "name": "etvfacInvType",
+            "apiKey": "etvfacInvType",
+            "column": "EM_Etvfac_Inv_Type",
+            "label": "Tipo de Factura",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "derivation": {
+              "type": "computed",
+              "source": "F1"
+            },
+            "enumValues": [
+              {
+                "value": "F1",
+                "name": "F1 - Factura (art. 6, 7.2 y 7.3 del RD 1619/2012)"
+              },
+              {
+                "value": "F2",
+                "name": "F2 - Factura Simplificada/sin identificación destinatario"
+              },
+              {
+                "value": "F3",
+                "name": "F3 - Factura emitida en sustitución de simplificadas"
+              },
+              {
+                "value": "R1",
+                "name": "R1 - Factura Rectificativa (Art 80.1, 80.2 y 80.6)"
+              },
+              {
+                "value": "R2",
+                "name": "R2 - Factura Rectificativa (Art. 80.3)"
+              },
+              {
+                "value": "R3",
+                "name": "R3 - Factura Rectificativa (Art. 80.4)"
+              },
+              {
+                "value": "R4",
+                "name": "R4 - Factura Rectificativa (Resto)"
+              },
+              {
+                "value": "R5",
+                "name": "R5 - Factura Rectificativa en facturas simplificadas"
+              }
+            ],
+            "defaultValue": "F1",
+            "displayLogic": {
+              "raw": "@etvfac_has_configuration@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "etvfacVerifacDesc",
+            "apiKey": "etvfacVerifacDesc",
+            "column": "EM_Etvfac_Verifac_Desc",
+            "label": "Descripción Operación",
+            "type": "text",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "displayLogic": {
+              "raw": "@etvfac_has_configuration@='Y'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "etvfacReverseinvtype",
+            "apiKey": "etvfacReverseinvtype",
+            "column": "EM_Etvfac_Reverseinvtype",
+            "label": "Tipo de Factura Rectificativa",
+            "type": "enum",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "enumValues": [
+              {
+                "value": "I",
+                "name": "Por Diferencias"
+              },
+              {
+                "value": "S",
+                "name": "Por Sustitución"
+              }
+            ],
+            "displayLogic": {
+              "raw": "@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@='R1' | @EM_Etvfac_Inv_Type@='R2' | @EM_Etvfac_Inv_Type@='R3' | @EM_Etvfac_Inv_Type@='R4' | @EM_Etvfac_Inv_Type@='R5'",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "etvfacSimpinvart7273",
+            "apiKey": "etvfacSimpinvart7273",
+            "column": "EM_Etvfac_Simpinvart7273",
+            "label": "Factura Simplificada Art 7.2 y 7.3",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "displayLogic": {
+              "raw": "@etvfac_has_configuration@='Y' & @EM_Etvfac_Inv_Type@!'R5' & @EM_Etvfac_Inv_Type@!'F2' ",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
+            "name": "etvfacInvNoIDArt61d",
+            "apiKey": "etvfacInvNoIDArt61d",
+            "column": "EM_Etvfac_Invnoidart61d",
+            "label": "Sin ID Destinatario Art61d",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "displayLogic": {
+              "raw": "@etvfac_has_configuration@='Y' & (@EM_Etvfac_Inv_Type@='R5' | @EM_Etvfac_Inv_Type@='F2')",
+              "evaluable": true
+            },
+            "readOnlyLogic": {
+              "raw": "@processed@='Y'",
+              "evaluable": true,
+              "js": "record['processed'] === true"
+            }
+          },
+          {
             "name": "tbaiSequence",
             "apiKey": "tbaiSequence",
             "column": "EM_Tbai_Sequence",
@@ -1221,6 +1387,27 @@
             "derivation": {
               "type": "fromConfig",
               "source": "context.dateInvoiced"
+            }
+          },
+          {
+            "name": "etvfacInvType",
+            "derivation": {
+              "type": "computed",
+              "source": "F1"
+            }
+          },
+          {
+            "name": "etvfacSimpinvart7273",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            }
+          },
+          {
+            "name": "etvfacInvNoIDArt61d",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           },
           {
@@ -2440,7 +2627,7 @@
             "apiKey": "etvfacInvType",
             "column": "EM_Etvfac_Inv_Type",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -2448,7 +2635,7 @@
             "apiKey": "etvfacVerifacDesc",
             "column": "EM_Etvfac_Verifac_Desc",
             "type": "text",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -2464,7 +2651,7 @@
             "apiKey": "etvfacReverseinvtype",
             "column": "EM_Etvfac_Reverseinvtype",
             "type": "enum",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": false
           },
           {
@@ -2480,7 +2667,7 @@
             "apiKey": "etvfacSimpinvart7273",
             "column": "EM_Etvfac_Simpinvart7273",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -2488,7 +2675,7 @@
             "apiKey": "etvfacInvNoIDArt61d",
             "column": "EM_Etvfac_Invnoidart61d",
             "type": "boolean",
-            "visibility": "discarded",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -5095,6 +5282,30 @@
         "description": "Default value for 'etsgDateOperation' in header should be a string"
       },
       {
+        "id": "t-default-value-type-header-etvfacInvNoIDArt61d",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "etvfacInvNoIDArt61d",
+        "runner": "node",
+        "description": "Default value for 'etvfacInvNoIDArt61d' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-etvfacInvType",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "etvfacInvType",
+        "runner": "node",
+        "description": "Default value for 'etvfacInvType' in header should be a string"
+      },
+      {
+        "id": "t-default-value-type-header-etvfacSimpinvart7273",
+        "category": "default-value-type",
+        "entity": "header",
+        "field": "etvfacSimpinvart7273",
+        "runner": "node",
+        "description": "Default value for 'etvfacSimpinvart7273' in header should be a string"
+      },
+      {
         "id": "t-default-value-type-header-invoiceDate",
         "category": "default-value-type",
         "entity": "header",
@@ -5279,12 +5490,52 @@
         "description": "Display logic for 'etsgDateOperation' in header should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-header-etvfacInvNoIDArt61d",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacInvNoIDArt61d",
+        "runner": "node",
+        "description": "Display logic for 'etvfacInvNoIDArt61d' in header should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-header-etvfacInvoiceStatus",
         "category": "displaylogic-evaluable",
         "entity": "header",
         "field": "etvfacInvoiceStatus",
         "runner": "node",
         "description": "Display logic for 'etvfacInvoiceStatus' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-etvfacInvType",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacInvType",
+        "runner": "node",
+        "description": "Display logic for 'etvfacInvType' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-etvfacReverseinvtype",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacReverseinvtype",
+        "runner": "node",
+        "description": "Display logic for 'etvfacReverseinvtype' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-etvfacSimpinvart7273",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacSimpinvart7273",
+        "runner": "node",
+        "description": "Display logic for 'etvfacSimpinvart7273' in header should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-header-etvfacVerifacDesc",
+        "category": "displaylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacVerifacDesc",
+        "runner": "node",
+        "description": "Display logic for 'etvfacVerifacDesc' in header should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-header-outstandingAmount",
@@ -5447,12 +5698,52 @@
         "description": "Display logic for 'etsgDateOperation' in header should be valid JS"
       },
       {
+        "id": "t-displaylogic-valid-header-etvfacInvNoIDArt61d",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "etvfacInvNoIDArt61d",
+        "runner": "node",
+        "description": "Display logic for 'etvfacInvNoIDArt61d' in header should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-header-etvfacInvoiceStatus",
         "category": "displaylogic-valid",
         "entity": "header",
         "field": "etvfacInvoiceStatus",
         "runner": "node",
         "description": "Display logic for 'etvfacInvoiceStatus' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-etvfacInvType",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "etvfacInvType",
+        "runner": "node",
+        "description": "Display logic for 'etvfacInvType' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-etvfacReverseinvtype",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "etvfacReverseinvtype",
+        "runner": "node",
+        "description": "Display logic for 'etvfacReverseinvtype' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-etvfacSimpinvart7273",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "etvfacSimpinvart7273",
+        "runner": "node",
+        "description": "Display logic for 'etvfacSimpinvart7273' in header should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-header-etvfacVerifacDesc",
+        "category": "displaylogic-valid",
+        "entity": "header",
+        "field": "etvfacVerifacDesc",
+        "runner": "node",
+        "description": "Display logic for 'etvfacVerifacDesc' in header should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-header-outstandingAmount",
@@ -5719,12 +6010,52 @@
         "description": "Field 'etsgDateOperation' should be present in header"
       },
       {
+        "id": "t-field-presence-header-etvfacInvNoIDArt61d",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "etvfacInvNoIDArt61d",
+        "runner": "node",
+        "description": "Field 'etvfacInvNoIDArt61d' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-etvfacInvoiceStatus",
         "category": "field-presence",
         "entity": "header",
         "field": "etvfacInvoiceStatus",
         "runner": "node",
         "description": "Field 'etvfacInvoiceStatus' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-etvfacInvType",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "etvfacInvType",
+        "runner": "node",
+        "description": "Field 'etvfacInvType' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-etvfacReverseinvtype",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "etvfacReverseinvtype",
+        "runner": "node",
+        "description": "Field 'etvfacReverseinvtype' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-etvfacSimpinvart7273",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "etvfacSimpinvart7273",
+        "runner": "node",
+        "description": "Field 'etvfacSimpinvart7273' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-etvfacVerifacDesc",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "etvfacVerifacDesc",
+        "runner": "node",
+        "description": "Field 'etvfacVerifacDesc' should be present in header"
       },
       {
         "id": "t-field-presence-header-grandTotalAmount",
@@ -6215,12 +6546,52 @@
         "description": "Field 'etsgDateOperation' should have type 'string' in header"
       },
       {
+        "id": "t-field-type-header-etvfacInvNoIDArt61d",
+        "category": "field-type",
+        "entity": "header",
+        "field": "etvfacInvNoIDArt61d",
+        "runner": "node",
+        "description": "Field 'etvfacInvNoIDArt61d' should have type 'boolean' in header"
+      },
+      {
         "id": "t-field-type-header-etvfacInvoiceStatus",
         "category": "field-type",
         "entity": "header",
         "field": "etvfacInvoiceStatus",
         "runner": "node",
         "description": "Field 'etvfacInvoiceStatus' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-etvfacInvType",
+        "category": "field-type",
+        "entity": "header",
+        "field": "etvfacInvType",
+        "runner": "node",
+        "description": "Field 'etvfacInvType' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-etvfacReverseinvtype",
+        "category": "field-type",
+        "entity": "header",
+        "field": "etvfacReverseinvtype",
+        "runner": "node",
+        "description": "Field 'etvfacReverseinvtype' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-etvfacSimpinvart7273",
+        "category": "field-type",
+        "entity": "header",
+        "field": "etvfacSimpinvart7273",
+        "runner": "node",
+        "description": "Field 'etvfacSimpinvart7273' should have type 'boolean' in header"
+      },
+      {
+        "id": "t-field-type-header-etvfacVerifacDesc",
+        "category": "field-type",
+        "entity": "header",
+        "field": "etvfacVerifacDesc",
+        "runner": "node",
+        "description": "Field 'etvfacVerifacDesc' should have type 'string' in header"
       },
       {
         "id": "t-field-type-header-grandTotalAmount",
@@ -6647,12 +7018,52 @@
         "description": "Read-only logic for 'etsgDateOperation' in header should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-header-etvfacInvNoIDArt61d",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacInvNoIDArt61d",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacInvNoIDArt61d' in header should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-header-etvfacInvoiceStatus",
         "category": "readonlylogic-evaluable",
         "entity": "header",
         "field": "etvfacInvoiceStatus",
         "runner": "node",
         "description": "Read-only logic for 'etvfacInvoiceStatus' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-etvfacInvType",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacInvType",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacInvType' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-etvfacReverseinvtype",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacReverseinvtype",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacReverseinvtype' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-etvfacSimpinvart7273",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacSimpinvart7273",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacSimpinvart7273' in header should have evaluable flag"
+      },
+      {
+        "id": "t-readonlylogic-evaluable-header-etvfacVerifacDesc",
+        "category": "readonlylogic-evaluable",
+        "entity": "header",
+        "field": "etvfacVerifacDesc",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacVerifacDesc' in header should have evaluable flag"
       },
       {
         "id": "t-readonlylogic-evaluable-header-invoiceDate",
@@ -6887,12 +7298,52 @@
         "description": "Read-only logic for 'etsgDateOperation' in header should be valid JS"
       },
       {
+        "id": "t-readonlylogic-valid-header-etvfacInvNoIDArt61d",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "etvfacInvNoIDArt61d",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacInvNoIDArt61d' in header should be valid JS"
+      },
+      {
         "id": "t-readonlylogic-valid-header-etvfacInvoiceStatus",
         "category": "readonlylogic-valid",
         "entity": "header",
         "field": "etvfacInvoiceStatus",
         "runner": "node",
         "description": "Read-only logic for 'etvfacInvoiceStatus' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-etvfacInvType",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "etvfacInvType",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacInvType' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-etvfacReverseinvtype",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "etvfacReverseinvtype",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacReverseinvtype' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-etvfacSimpinvart7273",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "etvfacSimpinvart7273",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacSimpinvart7273' in header should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-header-etvfacVerifacDesc",
+        "category": "readonlylogic-valid",
+        "entity": "header",
+        "field": "etvfacVerifacDesc",
+        "runner": "node",
+        "description": "Read-only logic for 'etvfacVerifacDesc' in header should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-header-invoiceDate",
@@ -7839,22 +8290,6 @@
         "description": "System field 'etvfacHash' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-etvfacInvNoIDArt61d",
-        "category": "system-field",
-        "entity": "header",
-        "field": "etvfacInvNoIDArt61d",
-        "runner": "node",
-        "description": "System field 'etvfacInvNoIDArt61d' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-etvfacInvType",
-        "category": "system-field",
-        "entity": "header",
-        "field": "etvfacInvType",
-        "runner": "node",
-        "description": "System field 'etvfacInvType' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-etvfacIsGenManual",
         "category": "system-field",
         "entity": "header",
@@ -7959,36 +8394,12 @@
         "description": "System field 'etvfacRegionCopy' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-etvfacReverseinvtype",
-        "category": "system-field",
-        "entity": "header",
-        "field": "etvfacReverseinvtype",
-        "runner": "node",
-        "description": "System field 'etvfacReverseinvtype' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-etvfacSentToVerifac",
         "category": "system-field",
         "entity": "header",
         "field": "etvfacSentToVerifac",
         "runner": "node",
         "description": "System field 'etvfacSentToVerifac' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-etvfacSimpinvart7273",
-        "category": "system-field",
-        "entity": "header",
-        "field": "etvfacSimpinvart7273",
-        "runner": "node",
-        "description": "System field 'etvfacSimpinvart7273' should exist in backend but not frontend for header"
-      },
-      {
-        "id": "t-system-field-header-etvfacVerifacDesc",
-        "category": "system-field",
-        "entity": "header",
-        "field": "etvfacVerifacDesc",
-        "runner": "node",
-        "description": "System field 'etvfacVerifacDesc' should exist in backend but not frontend for header"
       },
       {
         "id": "t-system-field-header-etvfacVoid",
@@ -8892,25 +9303,25 @@
       }
     ],
     "summary": {
-      "total": 517,
+      "total": 545,
       "byCategory": {
         "action-endpoint": 26,
         "crud-flags": 4,
-        "default-value-type": 23,
-        "displaylogic-evaluable": 21,
-        "displaylogic-valid": 21,
-        "field-presence": 62,
-        "field-type": 62,
-        "readonlylogic-evaluable": 30,
-        "readonlylogic-valid": 30,
+        "default-value-type": 26,
+        "displaylogic-evaluable": 26,
+        "displaylogic-valid": 26,
+        "field-presence": 67,
+        "field-type": 67,
+        "readonlylogic-evaluable": 35,
+        "readonlylogic-valid": 35,
         "rule-declared": 8,
         "searchable-filters": 6,
         "selector-endpoint": 16,
-        "system-field": 204,
+        "system-field": 199,
         "visibility": 4
       },
       "byRunner": {
-        "node": 517,
+        "node": 545,
         "junit": 0
       }
     }
