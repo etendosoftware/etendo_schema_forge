@@ -330,23 +330,30 @@ simply missing from its checklist of tables to verify.
 | acreedortest | Esquema acreedortest | `N` |
 | acreetest2 | Esquema acreetest2 | `N` |
 | empresa | Esquema empresa | `N` |
-| QA Testing | both schemas | `N` — **not fixed, see below** |
-| TaxesOrg | Tax Org Ledger | `N` — **not fixed, see below** |
+| QA Testing | both schemas | `N` |
+| TaxesOrg | Tax Org Ledger | `N` |
 
-**Scope decision — PGC-chart family only:** acreedortest/acreetest2/empresa are the same
-GOClient-style Spanish PGC chart family established for R9/R11/R12 (each already carries a
-postable, active `65000000` account leaf). QA Testing and TaxesOrg run unrelated US-chart schemas
-with **zero `A_Asset` records** and no `65000000` account at all — whether amortization accounting
-is meant to be enabled for them is a business decision outside the scope of this remediation, so
-they were deliberately left untouched (same reasoning R12 applied to exclude them from the
-write-off fix).
+**Initial scope decision — PGC-chart family only (superseded, see below):** acreedortest/acreetest2/empresa
+are the same GOClient-style Spanish PGC chart family established for R9/R11/R12 (each already carries a
+postable, active `65000000` account leaf). QA Testing and TaxesOrg run unrelated chart-of-accounts
+setups with **zero `A_Asset` records** and no `65000000` account at all, so R13 initially left them
+untouched pending a business decision (same reasoning R12 applied to exclude non-PGC-family
+tenants from the write-off fix).
 
-**Both fronts closed (2026-07-08):**
+**Follow-up decisions (2026-07-08, same day):** the reporter subsequently confirmed amortization
+accounting should be active for every known tenant regardless of chart family or current asset
+data — for TaxesOrg, explicitly proactive ("in case that organization creates an asset in the
+future"); for QA Testing, because the exclusion was functionally moot ("QA Testing is not used").
+R13 was revised the same day to drop the marker guard entirely — one script, no client-specific
+carve-outs, since a hardcoded per-tenant scope only makes sense for genuine exclusions and none
+remain. **All 9 client/schema rows are now `isactive='Y'`, confirmed live — no exclusions remain.**
+
+**All fronts closed (2026-07-08):**
 
 | Front | Deliverable |
 |---|---|
-| **Corrective** | `cli/src/data-fixes/sql/20260708T100000Z__R13-amortization-table-active.sql` — a single guarded `UPDATE` on `c_acctschema_table`, scoped by `:client_id` and naturally limited to the PGC chart family via the same `65000000`-marker `EXISTS` guard R12 uses. |
-| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_TABLE.xml` — row `DAE3C688574C4919B889DA7EFAD6CC5C`'s `ISACTIVE` flipped from `N` to `Y`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-08T10:00:00Z` in `OnboardingBaselineService.java`. |
+| **Corrective — every tenant** | `cli/src/data-fixes/sql/20260708T100000Z__R13-amortization-table-active.sql` — single guarded `UPDATE`, scoped only by `:client_id AND ad_table_id='800060' AND isactive <> 'Y'` (no chart-family marker, no allowlist). Live-validated: acreedortest/acreetest2/empresa/QA Testing (both schemas)/TaxesOrg all `APPLIED`, GOClient/F&B International Group `SKIPPED_NOT_NEEDED` (already correct); full re-run confirms idempotency (`SKIPPED_NOT_NEEDED` across all 7 tenants). |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_TABLE.xml` — row `DAE3C688574C4919B889DA7EFAD6CC5C`'s `ISACTIVE` flipped from `N` to `Y`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-08T10:00:00Z` in `OnboardingBaselineService.java`. QA Testing and TaxesOrg have no dedicated sampledata directory (only `GOClient/` exists) — nothing further to fix preventively for either. |
 
 ---
 
