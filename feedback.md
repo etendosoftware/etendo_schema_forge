@@ -81,3 +81,30 @@ content: [
 **Prevention:** Any future move of components with Tailwind classes to a new package under `packages/` is already covered by the generic glob `../../packages/*/src/**`. A regression guard test was also added (`tools/app-shell/src/__tests__/tailwind-purge-guard.vitest.js`) that builds the real CSS and fails in CI if the semantic classes that exist only in the core (`bg-popover`, `text-popover-foreground`) get purged again — previously the build did not fail and the style silently disappeared. Verified: removing the glob makes the test fail 3/4; restoring it passes 4/4.
 
 **Status:** Fixed.
+
+## 2026-07-08 — Concurrent Contacts import: businessPartner searchKey race poisons the /batch transaction
+
+**Context:** Sending a real Contacts CSV import (`ImportDialog` → `/sws/neo/batch`, multiple rows POSTed concurrently per `config.concurrency`). Reproduced with `contacts-sample-import-100.csv`, clicking "Import 63".
+
+**Problem:** Random rows fail with a generic, unrelated-looking backend error:
+```
+{ "committed": false, "failedAt": { "index": -1 }, "error": { "status": 500, "message": "Batch failed: could not extract ResultSet" } }
+```
+No per-row detail reaches the frontend — the message gives no hint of the real cause.
+
+**Root cause (confirmed via `docker logs etendo_sf2-tomcat-1`):**
+1. `BusinessPartnerHandler.handle()` sets a temporary `searchKey = name` placeholder on POST.
+2. `BusinessPartnerHandler.afterHandle()` then reads `EM_Etgo_Identifier` — a column backed by a **transactional sequence** (`com.etendoerp.sequences` module, `SequenceUtils.isSequence()`) — and overwrites `searchKey`/`value` with it via a raw JDBC `UPDATE c_bpartner SET value = ? ...` (`updateSearchKey()`, line ~174).
+3. Under the import's concurrent /batch requests, two *unrelated* rows ("Perez S.A." and "Ortiz Group") independently read the **same** "next" sequence value ("1000013") before either committed, so the second `UPDATE` hits `duplicate key value violates unique constraint "c_bpartner_value"`.
+4. `afterHandle()`'s own try/catch swallows that exception (logs a warning, returns `null`) — but in Postgres, once a statement fails the **whole transaction is aborted** regardless of the Java-level catch. The next operation in the same batch (`location`'s call to `NeoServletSupport.findSpec()`) then fails on the poisoned connection with the unrelated, confusing "could not extract ResultSet" — which is what actually reaches the response.
+
+**Corroborating evidence:** `com.etendoerp.go`'s own `src-test/.../BusinessPartnerTransactionalSequenceIntegrationTest.java` is already `@Ignore("Temporarily disabled — flaky in CI due to sequence state dependency")` — this exact class of race was previously observed and silenced rather than fixed. Blame: commit `feeaf539c` ("Feature ETP-4356: Ignore BusinessPartnerTransactionalSequenceIntegrationTest"), Santiago Gremiger, 2026-06-29 — added only the `@Ignore` annotation, no attempt to fix the underlying race.
+
+**Files involved:** `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/BusinessPartnerHandler.java` (`afterHandle`, `queryIdentifier`, `updateSearchKey`), third-party `com.etendoerp.sequences` module (actual sequence fetch/increment — source not vendored locally).
+
+**Proposed fixes (not yet applied — pending decision):**
+1. Lower `config.concurrency` for the Contacts import to avoid the race window entirely (slower imports).
+2. Contain the blast radius: wrap `updateSearchKey()` in a savepoint so a duplicate-key hit rolls back only that statement instead of poisoning the whole batch transaction — the affected row keeps its placeholder searchKey but `location`/`contact` still succeed.
+3. Fix the transactional-sequence fetch itself to lock properly under concurrency — blocked on `com.etendoerp.sequences` being a third-party module without local source.
+
+**Status:** Diagnosed, not fixed. Reported to Sebastian 2026-07-08; decision pending on which of the above to implement.
