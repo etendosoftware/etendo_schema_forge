@@ -86,6 +86,13 @@ export default function NewAccountModal({
   const [accountsFetched, setAccountsFetched] = useState(false);
   const accountRows = allAccounts.length > 0 ? allAccounts : loadedAccounts;
 
+  // Reset the fetch latch on close so a fresh open always retries — otherwise
+  // a transient failure (or stale data) on the first open would permanently
+  // block the parent-selector fetch for the component's whole mounted life.
+  useEffect(() => {
+    if (!isOpen) setAccountsFetched(false);
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen || allAccounts.length > 0 || accountsFetched || !apiBaseUrl) return;
     fetch(`${apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`, {
