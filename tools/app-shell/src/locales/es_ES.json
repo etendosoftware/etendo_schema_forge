@@ -20957,6 +20957,8 @@
     "accountTreeBalance": "Saldo",
     "accountTreeNoAccounts": "No hay cuentas para mostrar",
     "accountTreeReadOnlyPlaceholder": "Subcuenta de relleno — no editable",
+    "accountTreeLoadingFull": "Cargando el plan contable completo…",
+    "accountTreeFetchError": "No se pudo cargar el plan contable completo — mostrando una lista parcial",
     "newSubAccount": "Nueva subcuenta",
     "parentAccount": "Cuenta padre",
     "accountCode": "Código de cuenta",

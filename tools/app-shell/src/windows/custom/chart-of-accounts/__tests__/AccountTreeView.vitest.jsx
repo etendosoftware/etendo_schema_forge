@@ -12,6 +12,8 @@ vi.mock('lucide-react', () => ({
   Lock: (props) => <span data-testid="lock-icon" {...props} />,
 }));
 
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 // Stub NewAccountModal — AccountTreeView.jsx's own tree logic is what this
 // suite targets; NewAccountModal has its own dedicated test file.
 vi.mock('../NewAccountModal', () => ({
@@ -27,8 +29,9 @@ vi.mock('../NewAccountModal', () => ({
 
 // --- Import under test ---
 
-import { render, screen, within, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { toast } from 'sonner';
 import AccountTreeView from '../AccountTreeView.jsx';
 
 // --- Fixtures ---
@@ -117,6 +120,10 @@ describe('AccountTreeView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    delete globalThis.fetch;
   });
 
   it('shows the empty state when there are no accounts', () => {
@@ -426,6 +433,93 @@ describe('AccountTreeView', () => {
       expandFullAncestorChain();
       fireEvent.click(screen.getByTestId('account-tree-row-acc-20000000'));
       expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-20000000' }));
+    });
+  });
+
+  // ── Self-fetch: full leaf dataset, bypassing ListView's paginated `data` prop ──
+
+  describe('self-fetch of the complete leaf dataset', () => {
+    // One leaf per root heading — mirrors the live GOClient regression where only
+    // 2 of 4 roots (A, P) appeared because ListView's first page never included a
+    // leaf under PYG or O.
+    const rootFixture = (rootCode, rootName, id) => ({
+      id,
+      searchKey: `${rootCode}-LEAF`,
+      name: `${rootName} leaf`,
+      accountType: 'A',
+      summaryLevel: 'N',
+      ancestors: [{ value: rootCode, name: rootName, elementLevel: 'E' }],
+      hasChildren: false,
+    });
+
+    const FULL_DATASET = [
+      rootFixture('A', 'ACTIVO', 'acc-a'),
+      rootFixture('P', 'PASIVO', 'acc-p'),
+      rootFixture('PYG', 'PÉRDIDAS Y GANANCIAS', 'acc-pyg'),
+      rootFixture('O', 'CUENTAS ESPECIALES', 'acc-o'),
+    ];
+
+    function mockFetchOnce(payload, { ok = true } = {}) {
+      globalThis.fetch = vi.fn(() =>
+        Promise.resolve({ ok, json: async () => payload }),
+      );
+    }
+
+    it('fetches the complete dataset from apiBaseUrl/token on mount', async () => {
+      mockFetchOnce({ response: { data: FULL_DATASET } });
+
+      render(<AccountTreeView {...defaultProps} data={[]} />);
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
+        `${defaultProps.apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`,
+        expect.objectContaining({ headers: { Authorization: `Bearer ${defaultProps.token}` } }),
+      ));
+    });
+
+    it('renders every root heading from the fetched full dataset, not just the ones in the paginated data prop', async () => {
+      mockFetchOnce({ response: { data: FULL_DATASET } });
+
+      // `data` (ListView's first page) only carries 2 of the 4 roots.
+      render(<AccountTreeView {...defaultProps} data={[FULL_DATASET[0], FULL_DATASET[1]]} />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
+        expect(screen.getByTestId('account-tree-row-group-P')).toBeInTheDocument();
+        expect(screen.getByTestId('account-tree-row-group-PYG')).toBeInTheDocument();
+        expect(screen.getByTestId('account-tree-row-group-O')).toBeInTheDocument();
+      });
+    });
+
+    it('does not attempt to self-fetch when apiBaseUrl is absent, and renders the data prop as-is', () => {
+      globalThis.fetch = vi.fn();
+
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} />);
+
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-5000')).toBeInTheDocument();
+    });
+
+    it('falls back to the data prop and shows an error toast when the full fetch fails', async () => {
+      globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
+
+      render(<AccountTreeView {...defaultProps} />);
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('accountTreeFetchError'));
+      // Original paginated data prop still renders — the tree didn't crash or go blank.
+      expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-5000')).toBeInTheDocument();
+    });
+
+    it('refetches the full dataset after a new sub-account is saved', async () => {
+      mockFetchOnce({ response: { data: [] } });
+      render(<AccountTreeView {...defaultProps} />);
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByText('+ newSubAccount'));
+      fireEvent.click(screen.getByTestId('modal-save'));
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
     });
   });
 });

@@ -20643,6 +20643,8 @@
     "accountTreeBalance": "Balance",
     "accountTreeNoAccounts": "No accounts to display",
     "accountTreeReadOnlyPlaceholder": "Placeholder subaccount — not editable",
+    "accountTreeLoadingFull": "Loading full chart of accounts…",
+    "accountTreeFetchError": "Could not load the full chart of accounts — showing a partial list",
     "newSubAccount": "New Sub-account",
     "parentAccount": "Parent Account",
     "accountCode": "Account Code",

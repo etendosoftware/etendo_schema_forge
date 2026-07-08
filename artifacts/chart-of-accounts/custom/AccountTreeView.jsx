@@ -1,8 +1,21 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
+
+// A tree needs its FULL leaf list upfront to know which top-level folders exist —
+// it can't discover them via ListView's incremental "scroll near bottom, load a bit
+// more" pagination (ListView only fetches one BATCH_SIZE page per `data` prop, and
+// does not forward `hasMore`/`loadMore` to the Table it renders). So this component
+// fetches its own complete dataset directly, mirroring the precedent already
+// established by NewAccountModal's parent-selector fetch (see NewAccountModal.jsx).
+// `_endRow=9999` comfortably covers realistic charts of accounts (a live GOClient
+// tenant has 659 leaf accounts across 4 root headings) with generous headroom, and
+// the backend handler (ChartOfAccountsHandler#fetchElementValuesDirectly) derives
+// its page size directly from the requested endRow with no smaller server-side cap.
+const FULL_FETCH_END_ROW = 9999;
 
 // Persists which folder rows are expanded across navigation/reloads. Folder ids are
 // `group-<ancestor-code-path>` (e.g. `group-A|A.A`), derived from stable account codes
@@ -302,11 +315,22 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
  * AccountTreeView — main component.
  *
  * Props it uses:
- *   data          — flat list of account records from NEO (with tree fields)
+ *   data          — flat list of account records from NEO (with tree fields).
+ *                   ListView.jsx only ever hands this one paginated BATCH_SIZE
+ *                   page (`hook.items`), so it is used as the initial/fallback
+ *                   dataset — see the self-fetch note below.
  *   onNavigate    — (item) => void — called when a non-virtual row is clicked (receives the full row object)
  *   onDataMutated — () => void  — called after a new sub-account is saved
- *   token         — JWT for API calls (forwarded to NewAccountModal)
- *   apiBaseUrl    — NEO base URL (forwarded to NewAccountModal)
+ *   token         — JWT for API calls (forwarded to NewAccountModal, used for self-fetch)
+ *   apiBaseUrl    — NEO base URL (forwarded to NewAccountModal, used for self-fetch)
+ *
+ * Self-fetch: when `apiBaseUrl` is provided, the component fetches its own complete
+ * leaf-account dataset (see FULL_FETCH_END_ROW above) on mount and after every save,
+ * and renders that instead of the paginated `data` prop once the fetch resolves. This
+ * is what makes every root-level heading (not just the ones with leaves in ListView's
+ * first page) show up. Until the fetch resolves (or if it fails, or if `apiBaseUrl` is
+ * absent — e.g. direct unit tests that only pass `data`), the component renders `data`
+ * as-is, so plain `data`-driven tests keep working without needing to mock `fetch`.
  *
  * The remaining props mirror what ListView passes to a headerTable component
  * (sorting, filtering, selection, etc.). They are accepted but not acted on
@@ -344,7 +368,56 @@ export default function AccountTreeView({
   const ui = useUI();
   const treeColumns = useMemo(() => buildTreeColumns(ui), [ui]);
 
-  const { tree } = useMemo(() => buildGroupedTree(data), [data]);
+  // Self-fetch: the full leaf-account list, loaded directly (bypassing ListView's
+  // one-page `data` prop) whenever `apiBaseUrl` is available. See the component
+  // docblock above for why the tree needs this instead of incremental pagination.
+  const [fetchedData, setFetchedData] = useState(null);
+  const [isFetchingFull, setIsFetchingFull] = useState(false);
+  const [fetchGeneration, setFetchGeneration] = useState(0);
+
+  useEffect(() => {
+    if (!apiBaseUrl) return undefined;
+
+    let cancelled = false;
+
+    (async () => {
+      setIsFetchingFull(true);
+      try {
+        const res = await fetch(
+          `${apiBaseUrl}/elementValue?_startRow=0&_endRow=${FULL_FETCH_END_ROW}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+        );
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const json = await res.json();
+        const rows = json?.response?.data;
+        if (!cancelled && Array.isArray(rows)) {
+          setFetchedData(rows);
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error(ui('accountTreeFetchError'));
+        }
+      } finally {
+        if (!cancelled) setIsFetchingFull(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiBaseUrl, token, fetchGeneration]);
+
+  // Refetch the complete dataset after a new sub-account is saved, in addition to
+  // whatever `onDataMutated` triggers on the caller's side (ListView's own
+  // one-page refresh).
+  const refetchFull = useCallback(() => setFetchGeneration((g) => g + 1), []);
+
+  // Until the self-fetch resolves — or when it's not applicable (`apiBaseUrl` absent,
+  // e.g. direct unit tests) — fall back to the `data` prop so behavior is unchanged.
+  const effectiveData = fetchedData ?? data;
+
+  const { tree } = useMemo(() => buildGroupedTree(effectiveData), [effectiveData]);
 
   const [expanded, setExpanded] = useState(loadPersistedExpanded);
 
@@ -398,7 +471,8 @@ export default function AccountTreeView({
   const handleSaved = useCallback(() => {
     setIsModalOpen(false);
     onDataMutated?.();
-  }, [onDataMutated]);
+    refetchFull();
+  }, [onDataMutated, refetchFull]);
 
   return (
     <div data-testid="account-tree" role="grid" {...rest}>
@@ -420,6 +494,12 @@ export default function AccountTreeView({
           >
             {ui('collapse')}
           </button>
+          {isFetchingFull && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+              {ui('accountTreeLoadingFull')}
+            </span>
+          )}
         </div>
 
         <button
@@ -431,7 +511,7 @@ export default function AccountTreeView({
         </button>
       </div>
 
-      {data.length === 0 ? (
+      {effectiveData.length === 0 ? (
         <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
           {ui('accountTreeNoAccounts')}
         </div>
@@ -479,7 +559,7 @@ export default function AccountTreeView({
         onClose={() => setIsModalOpen(false)}
         onSaved={handleSaved}
         currentRecord={selectedRecord}
-        allAccounts={data}
+        allAccounts={effectiveData}
         apiBaseUrl={apiBaseUrl}
         token={token}
         data-testid="NewAccountModal__acc34a"
