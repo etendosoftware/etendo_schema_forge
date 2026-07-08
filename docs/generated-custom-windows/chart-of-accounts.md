@@ -16,8 +16,9 @@ Maintain the account master used by finance users and provide a quick, read-only
 - Route: `/chart-of-accounts` for the list and `/chart-of-accounts/:recordId` for record detail.
 - Visibility: visible from the Finance menu as **Chart of Accounts**.
 - Implementation type: generated window route loaded from the app-shell window registry.
-- Window shape: single-entity window for `elementValue`, with a custom grouped tree table replacing the generated list table.
+- Window shape: single-entity window for `elementValue`, with a custom grouped tree table (`AccountTreeView.jsx`) replacing the generated list table.
 - Record detail titles use the account code (`searchKey`) rather than the internal record id.
+- The tree renders the FULL Etendo Classic account hierarchy as nested, expandable folders — matching Classic's "Combinación de cuentas" grouped view exactly. For example, account `20000000` nests 6 levels deep: `A` (Heading: ACTIVO) → `A.A` (Heading) → `A.A.I` (Heading) → `200` (Account) → `2000` (Breakdown) → `20000000` (Subaccount). Only the top-level folders are expanded by default; deeper levels are collapsed until the user expands them.
 
 ## Reactive behavior and dependencies
 - There is no visible parent/child interaction because the window only exposes the `account` entity.
@@ -26,7 +27,8 @@ Maintain the account master used by finance users and provide a quick, read-only
 - No dependent selectors, status-driven actions, totals, discounts, tax reactions, or line-level recalculations are visible in the current evidence.
 - New subaccount creation is handled by the custom modal. The action is always available; when a branch or account row is selected, the modal defaults the parent selector from that row, and otherwise it opens with no parent selected.
 - Account Type values are rendered from AD list translations extracted from `AD_REF_LIST_TRL`, so raw AD values (`A`, `E`, `L`, `M`, `O`, `R`) display consistently in English and Spanish.
-- Parent-like posting subaccounts with an 8-digit code ending in `0000` are protected. The form renders Code, Name, Description, and Account Type as read-only for existing protected records, and the backend rejects creating or modifying those codes.
+- Parent-like posting subaccounts with an 8-digit code ending in `0000` are protected. The form renders Code, Name, Description, and Account Type as read-only for existing protected records (`readOnlyLogic: "@ProtectedParentLikeSubaccount@='Y'"` in `decisions.json`, backed by `ChartOfAccountsHandler.isProtectedParentLikeSubaccount`), and the backend rejects creating or modifying those codes. These leaves are technically `issummary='N'` (real DB leaves) but still function as placeholders under their breakdown group — the tree view marks them with a lock icon (`account-tree-locked-<id>`) even though they remain clickable for read-only viewing. Real subaccounts (e.g. `20000001`) are unaffected and stay fully editable.
+- The tree's full hierarchy comes from a per-leaf `ancestors` array (root-to-leaf, `{value, name, elementLevel}`) injected by `ChartOfAccountsHandler`, built by walking the client's `AD_TreeNode`/`AD_Tree` ("`<ClientName> Element Value`", `ad_table_id = 188`). `elementLevel` mirrors `C_ElementValue.ElementLevel` (`E` Heading, `C` Account, `D` Breakdown, `S` Subaccount). The legacy 2-level `parentCode4`/`parentCode4Name` fields are still injected for backward compatibility with `NewAccountModal`'s parent selector and as a fallback if `ancestors` is ever absent.
 
 ## Gap assessment
 - A chart-of-accounts screen often carries stricter accounting semantics such as deleting accounts with activity or account-type-specific behavior. Those rules are not visible in the current contract or generated UI, so they remain gaps or open ambiguities.
@@ -44,8 +46,10 @@ Maintain the account master used by finance users and provide a quick, read-only
 6. Verify that debit, credit, and balance are review-only values and are not editable in the form.
 7. Check whether the UI allows changing `isActive`; based on current generated evidence it should remain read-only.
 8. If hierarchical accounting behavior is expected, try assigning a parent account and confirm whether any validation or restrictions actually exist.
-9. Open an existing `xxxx0000` subaccount such as `10000000` or `10100000` and confirm the editable setup fields render as read-only.
+9. Open an existing `xxxx0000` subaccount such as `10000000` or `10100000` and confirm the editable setup fields render as read-only, and that the tree row shows a lock icon.
 10. Try to create a new `xxxx0000` subaccount and confirm the backend rejects it.
+11. Expand a leaf account's full folder path (e.g. `A` → `A.A` → `A.A.I` → `200` → `2000`) and confirm each level renders as its own nested, expandable folder matching Etendo Classic's "Combinación de cuentas" grouped view — not a flat 4-digit group.
+12. Confirm a real subaccount not ending in `0000` (e.g. `20000001`) shows no lock icon and remains fully editable.
 
 ## Automated evidence
 - `tools/app-shell/src/menu.json` exposes `chart-of-accounts` in the Finance menu.
@@ -54,4 +58,7 @@ Maintain the account master used by finance users and provide a quick, read-only
 - `artifacts/chart-of-accounts/generated/web/chart-of-accounts/AccountForm.jsx` shows the editable setup fields and the read-only `isActive` checkbox.
 - `artifacts/chart-of-accounts/generated/web/chart-of-accounts/AccountTable.jsx` shows the list columns and supported filters, including read-only financial review columns for debit, credit, and balance.
 - `artifacts/chart-of-accounts/contract.json` defines one `account` entity, no child entities, GET/POST/PUT/DELETE endpoints, supported filters for `code`, `name`, and `accountType`, and a test manifest covering field presence, field types, searchable filters, frontend visibility, and backend-only system fields.
-- There is no dedicated frontend test file for this specific window; reusable app-shell coverage exists for generated window registration and shared entity list/default-loading behavior in `tools/app-shell/src/windows/__tests__/registry.test.js`, `tools/app-shell/src/hooks/__tests__/useEntity-pagination.test.js`, and `tools/app-shell/src/hooks/__tests__/useEntity-defaults.test.js`.
+- `tools/app-shell/src/windows/custom/chart-of-accounts/AccountTreeView.jsx` — `buildGroupedTree()` builds the full N-level nested folder tree from each leaf's `ancestors` array (falling back to the legacy 2-level `parentCode4` grouping when `ancestors` is absent), and `AccountTreeRow` renders the lock icon for protected `0000`-suffixed leaves.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/ChartOfAccountsHandler.java` — `loadTreeData`/`buildAncestorChain` walk `AD_TreeNode` for the client's `"<ClientName> Element Value"` tree and inject `ancestors` + `elementLevel` per leaf in `applyHierarchyMetadata`.
+- `tools/app-shell/src/windows/custom/chart-of-accounts/__tests__/AccountTreeView.vitest.jsx` covers both the legacy 2-level grouping and the full ancestor-chain nested tree, plus the `0000`-suffix lock-icon rule (locked, not locked, and virtual-folder-never-locked cases).
+- `modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/handlers/ChartOfAccountsHandlerTest.java` covers `buildAncestorChain` (root node, node-exclusion, six-level PGC example, circular-reference cap, and JSON-null fallback for missing values).

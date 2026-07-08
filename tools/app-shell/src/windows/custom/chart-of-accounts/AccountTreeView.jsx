@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronRight, ChevronDown, Lock } from 'lucide-react';
 import { useUI } from '@/i18n';
 import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel } from './accountTypeLabels';
@@ -75,33 +75,76 @@ function buildTreeColumns(ui) {
  * The flat list from the NEO API must include fields injected by the
  * chart-of-accounts NeoHandler:
  *   id, searchKey, name, accountType,
- *   parentId, depth, hasChildren, summaryLevel
+ *   parentId, depth, hasChildren, summaryLevel, elementLevel,
+ *   ancestors (full root-to-leaf ancestor chain — see buildGroupedTree below),
+ *   parentCode4, parentCode4Name (legacy 4-digit grouping, kept for fallback
+ *   and for NewAccountModal's parent selector)
  *
- * Defaults: levels 0 and 1 expanded, deeper nodes collapsed.
+ * Defaults: only the top-level (root) folders are expanded on load; deeper
+ * levels are collapsed until the user expands them.
  *
  * "New Sub-account" is always available. If a row is selected, NewAccountModal
  * auto-populates the parent from that row; otherwise the selector starts empty.
  */
 
 /**
- * Groups the flat list of subaccounts by parentCode4, creating virtual group header
- * nodes for each 4-digit parent. All API records are leaves (issummary='N'); the
- * hierarchy comes from parentCode4 / parentCode4Name injected by the NeoHandler.
+ * Builds a genuine N-level nested tree from the flat list of subaccounts, mirroring
+ * Etendo Classic's "Combinación de cuentas" grouped view (e.g. for account `20000000`:
+ * `A` (Heading) → `A.A` (Heading) → `A.A.I` (Heading) → `200` (Account) → `2000`
+ * (Breakdown) → `20000000` (Subaccount)).
  *
- * Returns { tree: groupNodes[], indexById: Map<id, node> } where indexById only
- * contains real account nodes (not virtual group headers).
+ * Each leaf's `ancestors` array (injected by the chart-of-accounts NeoHandler, ordered
+ * root-to-leaf) drives the folder path: one virtual folder node per ancestor, keyed by
+ * its position in the path so two leaves sharing a partial ancestor chain (e.g. the same
+ * `A.A.I` heading) reuse the same folder nodes instead of duplicating them.
+ *
+ * Legacy fallback: if a record has no `ancestors` (older API response, or partial
+ * rollout), it falls back to the previous 2-level grouping by its 4-digit `parentCode4`
+ * so the tree still renders something sensible instead of dropping the record.
+ *
+ * Returns { tree: rootNodes[], indexById: Map<id, node> } where indexById only
+ * contains real account nodes (not virtual folder headers).
  */
 function buildGroupedTree(items) {
   const indexById = new Map();
-  const groupMap = new Map(); // parentCode4 → groupNode
+  const rootChildren = [];
+  const folderIndex = new Map(); // path key → folder node (shared across leaves)
 
   for (const item of items) {
     indexById.set(item.id, item);
 
-    const code = item.parentCode4;
-    if (code) {
-      if (!groupMap.has(code)) {
-        groupMap.set(code, {
+    const ancestors = Array.isArray(item.ancestors) ? item.ancestors : null;
+
+    if (ancestors && ancestors.length > 0) {
+      let siblings = rootChildren;
+      let pathKey = '';
+      ancestors.forEach((ancestor, idx) => {
+        const segmentKey = String(ancestor?.value ?? `L${idx}`);
+        pathKey = pathKey ? `${pathKey}|${segmentKey}` : segmentKey;
+        let folder = folderIndex.get(pathKey);
+        if (!folder) {
+          folder = {
+            id: `group-${pathKey}`,
+            searchKey: segmentKey,
+            name: ancestor?.name ?? segmentKey,
+            elementLevel: ancestor?.elementLevel ?? null,
+            summaryLevel: 'Y',
+            isVirtual: true,
+            depth: idx,
+            hasChildren: true,
+            children: [],
+          };
+          folderIndex.set(pathKey, folder);
+          siblings.push(folder);
+        }
+        siblings = folder.children;
+      });
+      siblings.push({ ...item, depth: ancestors.length });
+    } else if (item.parentCode4) {
+      const code = item.parentCode4;
+      let folder = folderIndex.get(code);
+      if (!folder) {
+        folder = {
           id: `group-${code}`,
           searchKey: code,
           name: item.parentCode4Name ?? code,
@@ -110,22 +153,24 @@ function buildGroupedTree(items) {
           depth: 0,
           hasChildren: true,
           children: [],
-        });
+        };
+        folderIndex.set(code, folder);
+        rootChildren.push(folder);
       }
-      const group = groupMap.get(code);
-      group.children.push({ ...item, depth: 1 });
+      folder.children.push({ ...item, depth: 1 });
     }
   }
 
-  // Sort groups by code; sort children within each group by searchKey
-  const tree = [...groupMap.values()].sort((a, b) =>
-    a.searchKey.localeCompare(b.searchKey),
-  );
-  for (const group of tree) {
-    group.children.sort((a, b) => a.searchKey.localeCompare(b.searchKey));
-  }
+  // Sort every level by searchKey, recursively.
+  const sortRecursive = (nodes) => {
+    nodes.sort((a, b) => String(a.searchKey).localeCompare(String(b.searchKey)));
+    for (const node of nodes) {
+      if (node.children?.length) sortRecursive(node.children);
+    }
+  };
+  sortRecursive(rootChildren);
 
-  return { tree, indexById };
+  return { tree: rootChildren, indexById };
 }
 
 /**
@@ -145,9 +190,24 @@ function flattenVisible(nodes, expanded) {
   return result;
 }
 
+/**
+ * A leaf subaccount whose code ends in "0000" is a protected parent-like placeholder
+ * (e.g. `20000000` under breakdown `2000`) — it is technically `issummary='N'` in the DB
+ * but must render as non-editable, matching the backend's
+ * `ChartOfAccountsHandler.isProtectedParentLikeSubaccount` rule (enforced server-side via
+ * `readOnlyLogic: "@ProtectedParentLikeSubaccount@='Y'"` in decisions.json). Real
+ * subaccounts (e.g. `20000001`) remain fully editable.
+ */
+function isProtectedLeafCode(item) {
+  if (item.isVirtual) return false;
+  if (item.protectedParentLikeSubaccount === 'Y') return true;
+  return typeof item.searchKey === 'string' && item.searchKey.endsWith('0000');
+}
+
 function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui }) {
   const isSummary = item.summaryLevel === 'Y';
   const indent = (item.depth ?? 0) * 16;
+  const isProtected = isProtectedLeafCode(item);
 
   return (
     <div
@@ -191,7 +251,18 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
       </span>
 
       {/* Account name — fills remaining space */}
-      <span className="flex-1 min-w-0 truncate">{item.name}</span>
+      <span className="flex-1 min-w-0 truncate flex items-center gap-1.5">
+        {item.name}
+        {isProtected && (
+          <Lock
+            size={12}
+            className="shrink-0 text-[#9A9AAE]"
+            data-testid={`account-tree-locked-${item.id}`}
+            role="img"
+            aria-label={ui('accountTreeReadOnlyPlaceholder')}
+          />
+        )}
+      </span>
 
       {/* Account type */}
       <span className="shrink-0 w-40 truncate text-[#3C3C4D]">

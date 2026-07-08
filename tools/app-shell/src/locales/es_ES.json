@@ -20956,6 +20956,7 @@
     "accountTreeCredit": "Crédito",
     "accountTreeBalance": "Saldo",
     "accountTreeNoAccounts": "No hay cuentas para mostrar",
+    "accountTreeReadOnlyPlaceholder": "Subcuenta de relleno — no editable",
     "newSubAccount": "Nueva subcuenta",
     "parentAccount": "Cuenta padre",
     "accountCode": "Código de cuenta",

@@ -9,6 +9,7 @@ vi.mock('@/i18n', () => ({
 vi.mock('lucide-react', () => ({
   ChevronRight: (props) => <span data-testid="chevron-right" {...props} />,
   ChevronDown: (props) => <span data-testid="chevron-down" {...props} />,
+  Lock: (props) => <span data-testid="lock-icon" {...props} />,
 }));
 
 // Stub NewAccountModal — AccountTreeView.jsx's own tree logic is what this
@@ -73,6 +74,44 @@ const defaultProps = {
   token: 'test-token',
   apiBaseUrl: '/sws/neo/chart-of-accounts',
 };
+
+// Full 6-level PGC hierarchy, matching the live example from the CoA investigation:
+// A (Heading: ACTIVO) → A.A (Heading) → A.A.I (Heading) → 200 (Account) →
+// 2000 (Breakdown) → 20000000 (Subaccount, protected placeholder — ends in "0000").
+// A second leaf, 20000001, shares the same ancestor chain and must reuse the same
+// folder nodes instead of duplicating them. It does NOT end in "0000" and stays editable.
+const ANCESTORS_20000000 = [
+  { value: 'A', name: 'ACTIVO', elementLevel: 'E' },
+  { value: 'A.A', name: 'A) ACTIVO NO CORRIENTE', elementLevel: 'E' },
+  { value: 'A.A.I', name: 'I. Inmovilizado intangible.', elementLevel: 'E' },
+  { value: '200', name: 'Investigación.', elementLevel: 'C' },
+  { value: '2000', name: 'Investigación.', elementLevel: 'D' },
+];
+
+const HIERARCHY_DATA = [
+  {
+    id: 'acc-20000000',
+    searchKey: '20000000',
+    name: 'Investigación.',
+    accountType: 'A',
+    summaryLevel: 'N',
+    elementLevel: 'S',
+    protectedParentLikeSubaccount: 'Y',
+    ancestors: ANCESTORS_20000000,
+    hasChildren: false,
+  },
+  {
+    id: 'acc-20000001',
+    searchKey: '20000001',
+    name: 'Investigación aplicada.',
+    accountType: 'A',
+    summaryLevel: 'N',
+    elementLevel: 'S',
+    protectedParentLikeSubaccount: 'N',
+    ancestors: ANCESTORS_20000000,
+    hasChildren: false,
+  },
+];
 
 describe('AccountTreeView', () => {
   beforeEach(() => {
@@ -242,5 +281,93 @@ describe('AccountTreeView', () => {
 
     expect(screen.queryByTestId('new-account-modal-stub')).not.toBeInTheDocument();
     expect(onDataMutated).toHaveBeenCalled();
+  });
+
+  // ── Full N-level hierarchy (ancestors-driven tree) ──────────────────────────
+
+  describe('full ancestor-chain hierarchy', () => {
+    it('builds one nested folder per ancestor level instead of a flat 4-digit group', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      // Root folder "A" is a real group node (top-level, auto-expanded)…
+      expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
+      // …and there is NO flat 4-digit "2000" group at the root — it must be nested
+      // under A > A.A > A.A.I > 200, not a top-level sibling of "A".
+      expect(screen.queryByTestId('account-tree-row-group-2000')).not.toBeInTheDocument();
+    });
+
+    it('expanding the full ancestor chain reveals both leaves sharing that path', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+
+      // "A" (the only top-level node) is already auto-expanded on load; walk down the
+      // remaining levels, expanding each as we go.
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I|200'));
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I|200|2000'));
+
+      // Both leaves share the same ancestor chain and must both appear as children
+      // of the same innermost "2000" folder — not duplicated folders.
+      expect(screen.getByTestId('account-tree-row-acc-20000000')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+      expect(screen.getAllByText('2000')).toHaveLength(1);
+    });
+
+    it('collapsing an intermediate folder hides deeper levels', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
+
+      // A.A.I is now visible but collapsed — its descendants (200, 2000, leaves) are hidden.
+      expect(screen.getByTestId('account-tree-row-group-A|A.A|A.A.I')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-acc-20000000')).not.toBeInTheDocument();
+    });
+  });
+
+  // ── Editability: leaf codes ending in "0000" are protected placeholders ────
+
+  // "A" auto-expands on load; reveal the remaining 4 nested levels down to the leaves.
+  function expandFullAncestorChain() {
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A'));
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I'));
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I|200'));
+    fireEvent.click(screen.getByTestId('account-tree-toggle-group-A|A.A|A.A.I|200|2000'));
+  }
+
+  describe('protected 0000-suffixed leaves are not editable', () => {
+    it('shows a lock icon on the leaf whose code ends in 0000', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expandFullAncestorChain();
+      expect(screen.getByTestId('account-tree-locked-acc-20000000')).toBeInTheDocument();
+    });
+
+    it('does not show a lock icon on a real subaccount not ending in 0000', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expandFullAncestorChain();
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-locked-acc-20000001')).not.toBeInTheDocument();
+    });
+
+    it('never shows a lock icon on a virtual folder node', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expect(screen.queryByTestId('account-tree-locked-group-A')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the searchKey suffix when protectedParentLikeSubaccount is absent', () => {
+      // Backend field omitted — the frontend must still infer protection from the code.
+      const data = [
+        { ...HIERARCHY_DATA[0], protectedParentLikeSubaccount: undefined },
+      ];
+      render(<AccountTreeView {...defaultProps} data={data} />);
+      expandFullAncestorChain();
+      expect(screen.getByTestId('account-tree-locked-acc-20000000')).toBeInTheDocument();
+    });
+
+    it('a protected leaf remains clickable/navigable — only editing is blocked server-side', () => {
+      const onNavigate = vi.fn();
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} onNavigate={onNavigate} />);
+      expandFullAncestorChain();
+      fireEvent.click(screen.getByTestId('account-tree-row-acc-20000000'));
+      expect(onNavigate).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-20000000' }));
+    });
   });
 });

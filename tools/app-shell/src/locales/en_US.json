@@ -20642,6 +20642,7 @@
     "accountTreeCredit": "Credit",
     "accountTreeBalance": "Balance",
     "accountTreeNoAccounts": "No accounts to display",
+    "accountTreeReadOnlyPlaceholder": "Placeholder subaccount — not editable",
     "newSubAccount": "New Sub-account",
     "parentAccount": "Parent Account",
     "accountCode": "Account Code",
