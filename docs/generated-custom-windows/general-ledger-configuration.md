@@ -132,7 +132,7 @@ After the backend wiring lands, remember the Etendo step:
 
 ## Test Design
 
-The Confluence Group 11 checklist is obsolete for this story because the checklist concept was removed. QA should validate the Figma-driven 5-tab form instead.
+The Confluence Group 11 checklist is obsolete for this story because the checklist concept was removed. QA should validate the Figma-driven 4-tab form instead.
 
 Core acceptance coverage should include at least these scenarios:
 
