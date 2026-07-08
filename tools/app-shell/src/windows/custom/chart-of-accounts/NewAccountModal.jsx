@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import {
@@ -83,17 +83,19 @@ export default function NewAccountModal({
 }) {
   const ui = useUI();
   const [loadedAccounts, setLoadedAccounts] = useState([]);
+  const [accountsFetched, setAccountsFetched] = useState(false);
   const accountRows = allAccounts.length > 0 ? allAccounts : loadedAccounts;
 
   useEffect(() => {
-    if (!isOpen || allAccounts.length > 0 || loadedAccounts.length > 0 || !apiBaseUrl) return;
+    if (!isOpen || allAccounts.length > 0 || accountsFetched || !apiBaseUrl) return;
     fetch(`${apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setLoadedAccounts(data?.response?.data ?? []))
-      .catch(() => setLoadedAccounts([]));
-  }, [isOpen, allAccounts.length, loadedAccounts.length, apiBaseUrl, token]);
+      .catch(() => setLoadedAccounts([]))
+      .finally(() => setAccountsFetched(true));
+  }, [isOpen, allAccounts.length, accountsFetched, apiBaseUrl, token]);
 
   const virtualParentOptions = useMemo(() => {
     const byCode = new Map();
@@ -132,18 +134,30 @@ export default function NewAccountModal({
     return parent ? String(parent.searchKey) : '';
   }, [form.parentAccountId, parentOptions]);
 
-  // Re-initialise when modal opens or currentRecord changes.
-  // parentOptions is intentionally excluded: async loading can change it while
-  // the modal is open and would reset user-entered name/searchKey mid-edit.
+  // Re-initialise once per open/currentRecord cycle. `initDoneRef` resets on
+  // open so a fresh session always recomputes, but once initialization has
+  // run it latches — later parentOptions changes (e.g. a background refetch)
+  // must not reset user-entered name/searchKey mid-edit.
+  const initDoneRef = useRef(false);
   useEffect(() => {
-    if (!isOpen) return;
+    if (isOpen) initDoneRef.current = false;
+  }, [isOpen, currentRecord]);
+
+  useEffect(() => {
+    if (!isOpen || initDoneRef.current) return;
+    // When allAccounts wasn't provided, the self-fetch above populates
+    // parentOptions asynchronously — wait for it to settle so the default
+    // parent/prefix isn't computed against a still-empty option list.
+    const waitingForFetch = allAccounts.length === 0 && !accountsFetched && !!apiBaseUrl;
+    if (waitingForFetch) return;
+
     const defaultParentId = deriveDefaultParentId(currentRecord, parentOptions);
     const defaultParent = parentOptions.find((p) => p.id === defaultParentId);
     const prefix = defaultParent ? String(defaultParent.searchKey) : '';
     setForm({ parentAccountId: defaultParentId, name: '', searchKey: prefix, accountType: DEFAULT_ACCOUNT_TYPE });
     setErrors({});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, currentRecord]);
+    initDoneRef.current = true;
+  }, [isOpen, currentRecord, parentOptions, allAccounts.length, accountsFetched, apiBaseUrl]);
 
   // When parent changes, update the code prefix in the searchKey field
   const handleParentChange = useCallback(

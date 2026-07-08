@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
  * endpoint) — NOT `paymentStatus` (a reconciliation-related search key like
  * RPPC), which never changes when a document is posted.
  *
- * @param {{ posted: string; className?: string }} props
+ * @param {{ posted?: string; className?: string }} props
  */
 export function PostingStatusDot({ posted, className }) {
   const ui = useUI();
