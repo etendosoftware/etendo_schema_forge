@@ -39,6 +39,22 @@ vi.mock('lucide-react', () => ({
   XCircle: () => <span>XCircle</span>,
   Loader2: () => <span>Loader2</span>,
   Plug: () => <span>Plug</span>,
+  Download: () => <span>Download</span>,
+  Sparkles: () => <span>Sparkles</span>,
+  Copy: () => <span>Copy</span>,
+  Check: () => <span>Check</span>,
+}));
+
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
+const mcpTelemetryMocks = vi.hoisted(() => ({
+  trackMcpConnectTabSelected: vi.fn(),
+}));
+
+vi.mock('@/lib/mcpConnectTelemetry.js', () => ({
+  trackMcpConnectTabSelected: mcpTelemetryMocks.trackMcpConnectTabSelected,
 }));
 
 let mockSearchParams = new URLSearchParams();
@@ -53,6 +69,7 @@ import AuthorizePage from '../AuthorizePage.jsx';
 describe('AuthorizePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mcpTelemetryMocks.trackMcpConnectTabSelected.mockReset();
     mockSearchParams = new URLSearchParams();
   });
 
@@ -61,24 +78,67 @@ describe('AuthorizePage', () => {
   });
 
   describe('ConnectionsLanding (no OAuth params)', () => {
-    it('renders the connections landing when no OAuth params', () => {
+    it('renders the tabbed connections landing when no OAuth params', () => {
       render(<AuthorizePage />);
-      // Landing page shows step instructions using ui keys
-      expect(screen.getByText('oauthHowItWorks')).toBeInTheDocument();
-      expect(screen.getByText('oauthStep1')).toBeInTheDocument();
-      expect(screen.getByText('oauthStep2')).toBeInTheDocument();
-      expect(screen.getByText('oauthStep3')).toBeInTheDocument();
-      expect(screen.getByText('oauthStep4')).toBeInTheDocument();
+      expect(screen.getByText('oauthConnectHeading')).toBeInTheDocument();
+      expect(screen.getByText('oauthConnectSubheading')).toBeInTheDocument();
+      expect(screen.getByTestId('mcp-tab-ClaudeDesktop')).toBeInTheDocument();
+      expect(screen.getByTestId('mcp-tab-Cursor')).toBeInTheDocument();
     });
 
     it('renders MCP server URL on landing', () => {
       render(<AuthorizePage />);
+      expect(screen.getByTestId('mcp-server-url')).toBeInTheDocument();
       expect(screen.getByText('oauthMcpServerUrl')).toBeInTheDocument();
     });
 
-    it('renders landing page description', () => {
+    it('shows the pick-a-client placeholder with no tab selected initially', () => {
       render(<AuthorizePage />);
-      expect(screen.getByText('oauthConnectLandingDesc')).toBeInTheDocument();
+      expect(screen.getByTestId('mcp-client-placeholder')).toBeInTheDocument();
+      expect(screen.getByText('oauthConnectPickClient')).toBeInTheDocument();
+      const tabs = screen.getAllByRole('tab');
+      expect(tabs.some((tab) => tab.getAttribute('aria-selected') === 'true')).toBe(false);
+    });
+
+    it('selecting a client tab shows its content and hides the placeholder', async () => {
+      const user = userEvent.setup();
+      render(<AuthorizePage />);
+      await user.click(screen.getByTestId('mcp-tab-ClaudeCode'));
+
+      expect(screen.queryByTestId('mcp-client-placeholder')).not.toBeInTheDocument();
+      expect(screen.getByText('oauthConnectClaudeCodeStep1')).toBeInTheDocument();
+    });
+
+    it('tracks telemetry with the client id when a top-level tab is selected', async () => {
+      const user = userEvent.setup();
+      render(<AuthorizePage />);
+      await user.click(screen.getByTestId('mcp-tab-Cursor'));
+
+      expect(mcpTelemetryMocks.trackMcpConnectTabSelected).toHaveBeenCalledWith({ client: 'Cursor' });
+    });
+
+    it('tracks telemetry with the first sub-tab id when Claude Desktop is selected', async () => {
+      const user = userEvent.setup();
+      render(<AuthorizePage />);
+      await user.click(screen.getByTestId('mcp-tab-ClaudeDesktop'));
+
+      expect(mcpTelemetryMocks.trackMcpConnectTabSelected).toHaveBeenCalledWith({
+        client: 'ClaudeDesktopPersonal',
+      });
+    });
+
+    it('tracks telemetry with the sub-tab id when switching between Claude Desktop sub-tabs', async () => {
+      const user = userEvent.setup();
+      render(<AuthorizePage />);
+      await user.click(screen.getByTestId('mcp-tab-ClaudeDesktop'));
+      mcpTelemetryMocks.trackMcpConnectTabSelected.mockClear();
+
+      await user.click(screen.getByTestId('mcp-subtab-ClaudeDesktopOrg'));
+
+      expect(mcpTelemetryMocks.trackMcpConnectTabSelected).toHaveBeenCalledWith({
+        client: 'ClaudeDesktopOrg',
+      });
+      expect(screen.getByText('oauthConnectClaudeDesktopOrgOwnerNote')).toBeInTheDocument();
     });
   });
 
