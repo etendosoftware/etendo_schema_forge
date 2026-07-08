@@ -1,8 +1,8 @@
 {
   "version": "0.40.0",
   "generatedAt": "2026-07-07T21:53:25.883Z",
-  "updatedAt": "2026-07-07T22:04:13.845Z",
-  "checksum": "a8a9b4d38ac12f38",
+  "updatedAt": "2026-07-08T15:05:31.449Z",
+  "checksum": "306c342d2b869af1",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -168,7 +168,7 @@
             "aliases": [
               "nombre"
             ],
-            "label": "First Name",
+            "label": "First Name (Company)",
             "required": true,
             "type": "string"
           },
@@ -178,7 +178,7 @@
               "apellido",
               "apellidos"
             ],
-            "label": "Last Name",
+            "label": "Last Name (Company)",
             "required": true,
             "type": "string"
           },
@@ -190,7 +190,7 @@
               "e-mail"
             ],
             "isEmail": true,
-            "label": "Email",
+            "label": "Email (Company)",
             "required": false,
             "type": "string"
           },
@@ -200,7 +200,7 @@
               "telefono",
               "teléfono"
             ],
-            "label": "Phone",
+            "label": "Phone (Company)",
             "required": false,
             "type": "string"
           },
@@ -210,7 +210,7 @@
               "email de contacto"
             ],
             "isEmail": true,
-            "label": "Email",
+            "label": "Email (Contact)",
             "required": false,
             "type": "string"
           },
@@ -219,7 +219,7 @@
             "aliases": [
               "nombre de contacto"
             ],
-            "label": "First Name",
+            "label": "First Name (Contact)",
             "required": false,
             "type": "string"
           },
@@ -228,7 +228,7 @@
             "aliases": [
               "apellido de contacto"
             ],
-            "label": "Last Name",
+            "label": "Last Name (Contact)",
             "required": false,
             "type": "string"
           },
@@ -237,7 +237,7 @@
             "aliases": [
               "telefono de contacto"
             ],
-            "label": "Phone",
+            "label": "Phone (Contact)",
             "required": false,
             "type": "string"
           },
@@ -286,7 +286,7 @@
               "pais",
               "país"
             ],
-            "label": "Country of Origin",
+            "label": "Country",
             "matchEntity": "Country",
             "required": false,
             "type": "foreignKey",
@@ -4639,7 +4639,7 @@
             "aliases": [
               "nombre"
             ],
-            "label": "First Name",
+            "label": "First Name (Company)",
             "required": true,
             "type": "string"
           },
@@ -4649,7 +4649,7 @@
               "apellido",
               "apellidos"
             ],
-            "label": "Last Name",
+            "label": "Last Name (Company)",
             "required": true,
             "type": "string"
           },
@@ -4661,7 +4661,7 @@
               "e-mail"
             ],
             "isEmail": true,
-            "label": "Email",
+            "label": "Email (Company)",
             "required": false,
             "type": "string"
           },
@@ -4671,7 +4671,7 @@
               "telefono",
               "teléfono"
             ],
-            "label": "Phone",
+            "label": "Phone (Company)",
             "required": false,
             "type": "string"
           },
@@ -4681,7 +4681,7 @@
               "email de contacto"
             ],
             "isEmail": true,
-            "label": "Email",
+            "label": "Email (Contact)",
             "required": false,
             "type": "string"
           },
@@ -4690,7 +4690,7 @@
             "aliases": [
               "nombre de contacto"
             ],
-            "label": "First Name",
+            "label": "First Name (Contact)",
             "required": false,
             "type": "string"
           },
@@ -4699,7 +4699,7 @@
             "aliases": [
               "apellido de contacto"
             ],
-            "label": "Last Name",
+            "label": "Last Name (Contact)",
             "required": false,
             "type": "string"
           },
@@ -4708,7 +4708,7 @@
             "aliases": [
               "telefono de contacto"
             ],
-            "label": "Phone",
+            "label": "Phone (Contact)",
             "required": false,
             "type": "string"
           },
@@ -4757,7 +4757,7 @@
               "pais",
               "país"
             ],
-            "label": "Country of Origin",
+            "label": "Country",
             "matchEntity": "Country",
             "required": false,
             "type": "foreignKey",
