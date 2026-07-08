@@ -35,11 +35,17 @@ describe('buildMcpClients', () => {
     assert.ok(codeItem.code.includes(MCP_URL));
   });
 
-  it('marks the "Other" client as legacy and reuses the generic oauthStep keys', () => {
+  it('gives the "Other" client client-agnostic guidance with the agent prompt block', () => {
     const other = buildMcpClients(MCP_URL).find((c) => c.id === 'Other');
-    assert.equal(other.legacy, true);
+    assert.equal(other.legacy, undefined);
     const stepKeys = other.content.filter((item) => item.step != null).map((item) => item.key);
-    assert.deepEqual(stepKeys, ['oauthStep1', 'oauthStep2', 'oauthStep3', 'oauthStep4']);
+    assert.deepEqual(stepKeys, [
+      'oauthConnectOtherStep1',
+      'oauthConnectOtherStep2',
+      'oauthConnectOtherStep3',
+    ]);
+    assert.ok(other.content.some((item) => item.agentPrompt === true));
+    assert.ok(other.content.some((item) => item.code === MCP_URL));
   });
 
   describe('Cursor deep-link install href', () => {

@@ -165,15 +165,16 @@ export function buildMcpClients(mcpUrl) {
       ],
     },
     {
-      // "Otros" — keeps the legacy generic keys untouched (oauthStep1..4).
+      // "Otros" — client-agnostic guidance for any MCP-capable assistant.
       id: 'Other',
-      legacy: true,
       content: [
-        { step: 1, key: 'oauthStep1' },
-        { step: 2, key: 'oauthStep2' },
-        { step: 3, key: 'oauthStep3' },
-        { step: 4, key: 'oauthStep4' },
+        { subheading: 'oauthConnectOtherAutoHeading' },
+        { agentPrompt: true },
+        { subheading: 'oauthConnectOtherManualHeading' },
+        { step: 1, key: 'oauthConnectOtherStep1' },
+        { step: 2, key: 'oauthConnectOtherStep2' },
         { code: mcpUrl },
+        { step: 3, key: 'oauthConnectOtherStep3' },
       ],
     },
   ];
