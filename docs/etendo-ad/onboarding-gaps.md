@@ -11,6 +11,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A2 | Accounting | "Account Not Defined" even with ledger present | *Initial Organization Setup* — auto-populate `*_acct` tables | — |
 | A3 | Accounting | Schema not predefined (Allow Negatives/Centrally Maintained=N); only 5 of 8 dimensions enabled (Cost Center/User1/User2 missing) | Onboarding sampledata XML (`C_ACCTSCHEMA.xml`, `C_ACCTSCHEMA_ELEMENT.xml`) — dataset-only, no new service | ETP-4245 |
 | A3b | Accounting | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL (doubtful debt, bad-debt expense/revenue, allowance for doubtful debt, deferred product expense/revenue) | Onboarding sampledata XML (`C_ACCTSCHEMA_DEFAULT.xml`) — dataset-only, no new service | ETP-4245 |
+| A5 | Accounting | `C_Element` tree missing its root `AD_TreeNode` — new top-level posting accounts fail with an `ad_tree_id` NOT NULL violation | Corrective SQL data-fix (`R9b`) — root cause of the underlying duplicate-tree event not yet found | — |
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
@@ -295,6 +296,50 @@ notes, and `docs/etendo-ad/tenant-remediation-knowledge.md` for the durable fact
 **Where it should be fixed:** the onboarding process — at client creation these tables should be auto-populated from the schema defaults. Note: with these populated, tax accounting is independent per client (supports the system-level taxes approach).
 
 **Cross-link:** this is exactly what the `../proposals/initial-organization-setup-accounting.md` proposal aims to automate. The proposal's wiring step (`applyAccountingPackageWiring`) and package-completeness validation (`validateAccountingPackage`) together ensure these tables are populated before `AD_Org_Ready` is called.
+
+---
+
+### A5 — `C_Element` tree missing its root `AD_TreeNode` (blocks new top-level accounts, 2026-07-08)
+
+**Symptom:** discovered while running R9 (bp-category-seed) against the shared Experimental
+environment — 32 of 68 tenants halted with:
+```
+null value in column "ad_tree_id" of relation "ad_treenode" violates not-null constraint
+```
+
+**Root cause:** confirmed via `pg_get_functiondef('c_elementvalue_trg'::regproc)`. On every
+`INSERT INTO c_elementvalue`, the standard core trigger resolves the tenant's tree/root with:
+```sql
+SELECT e.AD_Tree_ID, n.Node_ID INTO v_xTree_ID, v_xParent_ID
+FROM C_Element e, AD_TreeNode n
+WHERE e.AD_Tree_ID = n.AD_Tree_ID AND n.Parent_ID IS NULL AND e.C_Element_ID = new.C_Element_ID;
+```
+When the tree that `C_Element.AD_Tree_ID` points to has no row with `Parent_ID IS NULL`, this
+`SELECT INTO` matches zero rows, `v_xTree_ID` stays `NULL`, and the trigger's own
+`INSERT INTO AD_TreeNode(...)` fails the `NOT NULL` constraint.
+
+On the 32 affected tenants, a bulk reprovisioning event on **2026-06-30** (visible as a cluster of
+R1–R8 ledger timestamps that day in `ETGO_DATA_FIX_HISTORY`) created a **second** `AD_Tree` row per
+tenant, attached the tenant's real chart of accounts to it (confirmed: 1,790 real nodes on one
+sampled tenant, `emilio22`), and repointed `C_Element.AD_Tree_ID` at the new tree — but never
+inserted its root node (`node_id='0'`, `parent_id IS NULL`, the confirmed convention from both a
+healthy tenant and the orphaned original tree). The original onboarding tree (which does have a
+proper root) was left orphaned and unused. This is a provisioning gap, not a defect in R9 itself —
+R9 is simply the first fix in the chain that happens to `INSERT` a new top-level `C_ElementValue`,
+which is what exposes it. Any future insert of a new top-level posting account (or any other
+`C_Element` hierarchy missing its root) would hit the identical wall.
+
+**Fix:** `cli/src/data-fixes/sql/20260701T115900Z__R9b-restore-element-tree-root.sql` — generic
+across every `C_Element` for the tenant (not scoped to the accounting dimension alone), inserts the
+missing root `AD_TreeNode` row, guarded by `NOT EXISTS`. Deliberately timestamped **one minute
+before R9** so it runs ahead of R9 in the chain — the runner halts a tenant's chain on the first
+`FAILED` fix, so if this sorted after R9 the 32 already-halted tenants would hit R9 again first and
+fail again before ever reaching the repair. **Applied and verified live on Experimental (2026-07-08):**
+targeted apply inserted the missing root node for all 32 affected tenants (0 failures); a full chain
+re-run afterward completed 71/71 tenants with 0 halted.
+
+**Preventive:** root cause of the 2026-06-30 duplicate-tree event itself has not been investigated
+(unclear whether it was a one-off manual/ad-hoc action or a recurring script) — open item.
 
 ---
 
