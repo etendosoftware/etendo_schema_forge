@@ -280,4 +280,57 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       assert.ok(refAssignIdx < accountPickIdx, 'ref must be set before it is read by pickDefaultAccountId');
     });
   });
+
+  // ETP-4406: the PIS "IBAN Destino" (SEPA / vendor transfer) is validated with the
+  // shared isValidIban (ISO 13616 mod-97) from lib/validateIban.js. An invalid IBAN
+  // must keep Confirmar disabled and surface an inline error under the field.
+  describe('IBAN validation on the PIS transfer (ETP-4406)', () => {
+    it('imports isValidIban and normalizeIban from the shared lib', () => {
+      assert.match(src, /import \{ isValidIban, normalizeIban \} from '@\/lib\/validateIban\.js';/);
+    });
+
+    it('pisFieldsComplete derives ibanOk from isValidIban (only when an IBAN is present)', () => {
+      assert.match(src, /const ibanOk = !f\.iban \|\| isValidIban\(f\.iban\);/);
+    });
+
+    it('SEPA (default) requires a present AND valid IBAN', () => {
+      assert.match(src, /return !!f\.iban && ibanOk;/);
+    });
+
+    it('DOMESTIC still accepts any one identifier but also gates on a valid IBAN when present', () => {
+      assert.match(
+        src,
+        /if \(template === PIS_TEMPLATE_DOMESTIC\) return !!\(f\.iban \|\| f\.bban \|\| f\.accountNumber\) && ibanOk;/,
+      );
+    });
+
+    it('FPS is unaffected — still gated purely on sort code + account number', () => {
+      assert.match(src, /if \(template === PIS_TEMPLATE_FPS\) return !!\(f\.sortCode && f\.accountNumber\);/);
+    });
+
+    it('pisReady feeds confirmDisabled through computePaymentModalState (invalid IBAN blocks Confirmar)', () => {
+      assert.match(
+        src,
+        /const pisReady = !pisEligible \|\| pisFieldsComplete\(pisTemplate, \{\s*iban: pisIban,[\s\S]*?\}\);/,
+      );
+      assert.match(src, /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm \|\| !!pisPolling \|\| !pisReady;/);
+    });
+
+    it('buildPisPaymentFields normalizes the creditor IBAN with normalizeIban before sending it', () => {
+      assert.match(
+        src,
+        /pisCreditorIban: show\.iban \? \(normalizeIban\(creditorValues\.iban\) \|\| undefined\) : undefined,/,
+      );
+    });
+
+    it('PisTransferSection flags a structurally invalid, non-empty IBAN', () => {
+      assert.match(src, /const ibanInvalid = \(iban \|\| ''\)\.trim\(\) !== '' && !isValidIban\(iban\);/);
+    });
+
+    it('renders the inline IBAN error (testid + i18n key) only while the IBAN is invalid', () => {
+      assert.match(src, /\{ibanInvalid && \(/);
+      assert.match(src, /data-testid="cp-pis-iban-error"/);
+      assert.match(src, /\{ui\('financeAccountsNewIbanInvalid'\)\}/);
+    });
+  });
 });
