@@ -303,7 +303,8 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange }) 
               ui={ui}
               getDateVal={getDateVal}
               onChange={onChange}
-              disabled={dateReadOnly} />
+              disabled={dateReadOnly}
+              data-testid="OperationDateField__b99c8b" />
             <Field
               label={ui('sifDataTabs.field.invoiceType')}
               htmlFor="sif-siiType"
@@ -416,7 +417,8 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange }) 
               ui={ui}
               getDateVal={getDateVal}
               onChange={onChange}
-              disabled={dateReadOnly} />
+              disabled={dateReadOnly}
+              data-testid="OperationDateField__b99c8b" />
             <Field
               label={ui('sifDataTabs.field.vfInvoiceType')}
               htmlFor="sif-vfInvType"
