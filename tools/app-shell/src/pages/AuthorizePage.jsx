@@ -348,8 +348,8 @@ function ConnectionsLanding({ isEmbedded, ui }) {
   };
 
   return (
-    <div className={isEmbedded ? 'flex min-h-screen items-center justify-center p-4' : 'flex min-h-[80vh] items-center justify-center p-4'}>
-      <Card className="w-full max-w-3xl" data-testid="Card__96270f">
+    <div className={isEmbedded ? 'flex min-h-screen items-center justify-center p-4' : 'flex flex-1 min-h-0 justify-center overflow-y-auto p-4'}>
+      <Card className="w-full max-w-3xl my-auto" data-testid="Card__96270f">
         <CardContent className="pt-6" data-testid="CardContent__96270f">
           <div className="flex flex-col items-center gap-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
