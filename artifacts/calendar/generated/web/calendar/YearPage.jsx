@@ -3,6 +3,8 @@ import { ListView, DetailView } from '@/components/contract-ui';
 import { toast } from 'sonner';
 import YearTable from './YearTable';
 import YearForm from './YearForm';
+import AccountingTable from './AccountingTable';
+import AccountingForm from './AccountingForm';
 import CloseYearModal from '@/windows/custom/calendar/CloseYearModal';
 import UndoCloseYearModal from '@/windows/custom/calendar/UndoCloseYearModal';
 import catalogs from './mockCatalogs';
@@ -78,6 +80,17 @@ export const api = {
       "delete": true,
       "listUrl": "/sws/neo/calendar/documents",
       "detailUrl": "/sws/neo/calendar/documents/{id}",
+      "supportedFilters": []
+    },
+    "accounting": {
+      "get": true,
+      "getById": true,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
+      "listUrl": "/sws/neo/calendar/accounting",
+      "detailUrl": "/sws/neo/calendar/accounting/{id}",
       "supportedFilters": []
     }
   },
@@ -212,6 +225,9 @@ export default function YearPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        secondaryTabs={[
+          { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm },
+        ]}
         menuActions={({ data, status }) => [
           { key: 'closeYear', label: 'undefined', labelKey: 'closeYearTitle', onClick: () => { setCloseYearMenuContext(data ?? null); setCloseYearMenuModal(true); }, },
           { key: 'undoCloseYear', label: 'undefined', labelKey: 'undoCloseYearTitle', onClick: () => { setUndoCloseYearMenuContext(data ?? null); setUndoCloseYearMenuModal(true); }, }
