@@ -16665,6 +16665,8 @@
     "closeYearBody": "Todos los períodos deben estar Cerrados o Permanentemente cerrados antes de cerrar el año. Esta acción crea los asientos contables de cierre y apertura del siguiente año fiscal.",
     "undoCloseYearTitle": "Deshacer Cierre de Año",
     "undoCloseYearBody": "Esto revertirá todos los asientos contables creados por el proceso de Cierre de Año.",
+    "calendarAccountingTab": "Contabilidad",
+    "calendarPeriodsTab": "Períodos",
     "Action": "Acción",
     "All Opened": "Todos abiertos",
     "All Never Opened": "Ninguno abierto",
