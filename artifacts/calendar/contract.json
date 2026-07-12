@@ -1,14 +1,26 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-07-12T21:19:57.559Z",
-  "updatedAt": "2026-07-12T21:27:21.215Z",
-  "checksum": "6267a75439ef0d2f",
+  "updatedAt": "2026-07-12T21:44:05.774Z",
+  "checksum": "3d82069cbf90698b",
   "frontendContract": {
     "window": {
       "id": "117",
       "name": "Calendar",
       "primaryEntity": "year",
       "category": "finance",
+      "menuActions": [
+        {
+          "key": "closeYear",
+          "labelKey": "closeYearTitle",
+          "component": "CloseYearModal"
+        },
+        {
+          "key": "undoCloseYear",
+          "labelKey": "undoCloseYearTitle",
+          "component": "UndoCloseYearModal"
+        }
+      ],
       "processOverrides": {
         "processNow": {
           "label": "Create Periods",
@@ -866,6 +878,18 @@
       "name": "Calendar",
       "primaryEntity": "year",
       "category": "finance",
+      "menuActions": [
+        {
+          "key": "closeYear",
+          "labelKey": "closeYearTitle",
+          "component": "CloseYearModal"
+        },
+        {
+          "key": "undoCloseYear",
+          "labelKey": "undoCloseYearTitle",
+          "component": "UndoCloseYearModal"
+        }
+      ],
       "processOverrides": {
         "processNow": {
           "label": "Create Periods",
