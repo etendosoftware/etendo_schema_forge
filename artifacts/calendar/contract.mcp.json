@@ -1,0 +1,359 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2026-07-12T21:19:57.559Z",
+  "contractChecksum": "956baf0dbf90cd01",
+  "apiPrediction": {
+    "specName": "calendar",
+    "baseUrl": "/sws/neo/calendar",
+    "crud": {
+      "year": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/calendar/year",
+        "detailUrl": "/sws/neo/calendar/year/{id}",
+        "supportedFilters": []
+      },
+      "period": {
+        "get": true,
+        "getById": true,
+        "post": true,
+        "put": true,
+        "patch": true,
+        "delete": true,
+        "listUrl": "/sws/neo/calendar/period",
+        "detailUrl": "/sws/neo/calendar/period/{id}",
+        "supportedFilters": []
+      }
+    },
+    "selectors": [
+      {
+        "entity": "year",
+        "field": "calendar",
+        "column": "C_Calendar_ID",
+        "reference": "Calendar",
+        "inputMode": "selector",
+        "url": "/sws/neo/calendar/year/selectors/calendar"
+      }
+    ],
+    "actions": [
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "year",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/calendar/year/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "100",
+        "processType": "classic"
+      },
+      {
+        "name": "createRegFactAcct",
+        "actionType": "createFrom",
+        "entity": "year",
+        "column": "Create_Reg_Fact_Acct",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/calendar/year/{id}/action/createRegFactAcct",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "Creates child or related records",
+          "May copy data from source document"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Source document has no valid lines to copy",
+          "Target entity already has linked records",
+          "Required reference data is missing (price list, warehouse, etc.)"
+        ],
+        "processId": "800036",
+        "processType": "classic"
+      },
+      {
+        "name": "dropRegFactAcct",
+        "actionType": "utilityAction",
+        "entity": "year",
+        "column": "Drop_Reg_Fact_Acct",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/calendar/year/{id}/action/dropRegFactAcct",
+        "parameters": [],
+        "preconditions": [],
+        "effects": [
+          "May update related records"
+        ],
+        "dryRunSupported": false,
+        "edgeCases": [
+          "Required context is missing",
+          "User lacks permission",
+          "Record is in an incompatible state"
+        ],
+        "processId": "800038",
+        "processType": "classic"
+      },
+      {
+        "name": "processNow",
+        "actionType": "documentAction",
+        "entity": "period",
+        "column": "Processing",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/calendar/period/{id}/action/processNow",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "167",
+        "processType": "classic"
+      },
+      {
+        "name": "openClose",
+        "actionType": "documentAction",
+        "entity": "period",
+        "column": "OpenClose",
+        "requiresRecord": true,
+        "method": "POST",
+        "url": "/sws/neo/calendar/period/{id}/action/openClose",
+        "parameters": [
+          {
+            "name": "docAction",
+            "type": "string",
+            "required": true,
+            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
+          }
+        ],
+        "preconditions": [
+          {
+            "field": "documentStatus",
+            "operator": "in",
+            "values": [
+              "DR",
+              "IP"
+            ],
+            "description": "Document must be in draft or in-progress state"
+          }
+        ],
+        "effects": [
+          "Updates document status",
+          "May trigger workflow transitions"
+        ],
+        "dryRunSupported": true,
+        "edgeCases": [
+          "Document is already completed or closed",
+          "Document has pending lines or missing required fields",
+          "User lacks permission to execute the action"
+        ],
+        "processId": "A832A5DA28FB4BB391BDE883E928DFC5",
+        "processType": "obuiapp"
+      }
+    ],
+    "queryParams": {
+      "pagination": {
+        "startRow": "_startRow",
+        "endRow": "_endRow",
+        "default": "0-100"
+      },
+      "sorting": {
+        "param": "_sortBy",
+        "example": "_sortBy=creationDate desc"
+      },
+      "filtering": "Use field name as query param: ?fieldName=value",
+      "parentFilter": "parentId={id} for child entities"
+    },
+    "window": {
+      "category": "finance"
+    },
+    "labelOverrides": {
+      "es_ES": {
+        "Year": "Año fiscal",
+        "PeriodNo": "N.º período",
+        "StartDate": "Fecha inicio",
+        "EndDate": "Fecha fin",
+        "PeriodType": "Tipo",
+        "Status": "Estado",
+        "DocumentCategory": "Tipo de documento",
+        "PeriodStatus": "Estado período"
+      }
+    }
+  },
+  "formState": {
+    "entities": {
+      "year": {
+        "fields": {
+          "fiscalYear": {
+            "required": true
+          },
+          "description": {},
+          "processNow": {
+            "defaultValue": "N"
+          },
+          "createRegFactAcct": {},
+          "dropRegFactAcct": {},
+          "calendar": {
+            "required": true
+          }
+        }
+      },
+      "period": {
+        "fields": {
+          "periodNo": {
+            "required": true,
+            "readOnlyLogic": "@C_Period_Not_Editable@='Y'"
+          },
+          "name": {
+            "required": true
+          },
+          "startingDate": {
+            "required": true,
+            "readOnlyLogic": "@C_Period_Not_Editable@='Y'"
+          },
+          "endingDate": {
+            "readOnlyLogic": "@C_Period_Not_Editable@='Y'"
+          },
+          "periodType": {
+            "required": true,
+            "readOnlyLogic": "@C_Period_Not_Editable@='Y'",
+            "defaultValue": "S"
+          }
+        }
+      }
+    },
+    "requiredSessionVariables": [],
+    "evaluationMode": "runtime"
+  },
+  "agentProfile": {
+    "purpose": "Manage calendar financial records.",
+    "whenToUse": [
+      "Use for calendar management."
+    ],
+    "minimumCreate": {
+      "headerFields": [
+        "fiscalYear",
+        "calendar"
+      ],
+      "lineFields": [
+        "periodNo",
+        "name",
+        "startingDate",
+        "periodType"
+      ],
+      "recommendedOrder": [
+        "createHeader",
+        "createLines"
+      ]
+    },
+    "selectorContexts": [],
+    "actions": [
+      "processNow",
+      "createRegFactAcct",
+      "processNow",
+      "openClose"
+    ],
+    "workflow": [
+      "Create draft header with required fields",
+      "Add at least one valid line",
+      "Validate form state",
+      "Complete the document"
+    ],
+    "edgeCases": [
+      "Document is already completed or closed",
+      "Document has pending lines or missing required fields",
+      "User lacks permission to execute the action",
+      "Source document has no valid lines to copy",
+      "Target entity already has linked records",
+      "Required reference data is missing (price list, warehouse, etc.)",
+      "Required context is missing",
+      "User lacks permission",
+      "Record is in an incompatible state",
+      "Required field without default value must be provided"
+    ],
+    "examples": [
+      {
+        "operation": "createHeader",
+        "description": "Create a draft header with the minimum required editable fields.",
+        "fields": [
+          "fiscalYear",
+          "calendar"
+        ]
+      },
+      {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "periodNo",
+          "name",
+          "startingDate",
+          "periodType"
+        ]
+      },
+      {
+        "operation": "completeDocument",
+        "description": "Validate form state and run the document lifecycle action when the draft is complete.",
+        "action": "processNow"
+      }
+    ],
+    "warnings": [],
+    "knownLimitations": [],
+    "dangerousOperations": []
+  },
+  "checksum": "629c67195595769a"
+}
