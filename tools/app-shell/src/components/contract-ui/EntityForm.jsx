@@ -8,6 +8,7 @@ import { FIELD_HEIGHT, ROW_GAP_Y, LABEL_GAP } from '@/components/ui/formDensity'
 import { PillToggle } from '@/components/PillToggle';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { useLabel, useLocaleSwitch, useMenuLabel, useUI } from '@/i18n';
+import { buildHeaders } from '@/auth/api.js';
 import { buildUrlWithParams } from '@/lib/buildUrlWithParams.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { getCatalogOptions } from '@/lib/selectorCatalog.js';
@@ -150,7 +151,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
     // Try server selector with ?id=
     if (!selectorUrl || !token) return;
     fetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: buildHeaders(token),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -173,7 +174,7 @@ function SearchInput({ entityName, field, value, displayValue, onChange, catalog
 
     setFetching(true);
     fetch(buildUrlWithParams(selectorUrl, params), {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: buildHeaders(token),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -399,7 +400,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
       [field.dependsOn?.filterKey]: parentValue,
     });
     fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: buildHeaders(token),
     })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
