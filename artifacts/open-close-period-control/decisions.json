@@ -9,8 +9,17 @@
     "hideDetailForm": true,
     "hideDelete": true,
     "hidePrint": true,
-    "hideMoreMenu": true,
     "listSortBy": "periodNo asc",
+    "menuActions": [
+      {
+        "key": "goToFiscalCalendar",
+        "labelKey": "goToFiscalCalendar",
+        "component": "GoToFiscalCalendarModal"
+      }
+    ],
+    "listKpiCards": {
+      "customComponent": "GoToFiscalCalendarButton"
+    },
     "statusEnumLabels": {
       "O": "All Opened",
       "N": "All Never Opened",

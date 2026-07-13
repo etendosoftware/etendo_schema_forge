@@ -181,7 +181,10 @@ export function ReconciledTxnsModal({ line, currency = 'EUR', onClose }) {
               <span className="truncate" title={t.description || ''}>{t.description || <span className="text-[#A8AAB8]">—</span>}</span>
               <span className="flex flex-col gap-0.5">
                 <span className="leading-[17px]">{trxTypeLabel(t.trxType, ui)}</span>
-                <PostingStatusDot paymentStatus={t.paymentStatus} data-testid="PostingStatusDot__2dbb84" />
+                {/* NOTE: BankStatementsSupport#buildLineTxns does not return a `posted`
+                    field yet, so this always renders "not posted" here. Tracked as a
+                    known backend gap (see ETP-4452 follow-up) — not fixed in this change. */}
+                <PostingStatusDot posted={t.posted} data-testid="PostingStatusDot__2dbb84" />
               </span>
               <MoneyAmount
                 value={t.amount}

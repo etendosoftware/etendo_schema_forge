@@ -118,7 +118,7 @@ const MOVEMENT_CELL_RENDERERS = {
       <TableCell data-testid="TableCell__ae5a16">
         <div className="flex flex-col gap-0.5">
           <span className="text-sm leading-5 text-[#121217]">{ctx.getTrxTypeLabel(m)}</span>
-          <PostingStatusDot paymentStatus={m.paymentStatus} data-testid="PostingStatusDot__ae5a16" />
+          <PostingStatusDot posted={m.posted} data-testid="PostingStatusDot__ae5a16" />
         </div>
       </TableCell>
     ),

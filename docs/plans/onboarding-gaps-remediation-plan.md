@@ -338,7 +338,7 @@ for that account, scoped to the tenant's own `c_acctschema_id`.
 |---|---|---|---|
 | `c_receivable_acct` | `43000000` | Clientes (euros) a corto plazo | already correct |
 | `c_prepayment_acct` | `43800000` | Anticipos de clientes | already correct |
-| `writeoff_acct` | `69400000` | Pérdidas por deterioro de créditos por operaciones comerciales | already correct — **override, see below** |
+| `writeoff_acct` | `65000000` (was `69400000`) | Pérdidas de créditos comerciales incobrables | ⚠️ **corrected 2026-07-08 by R12 — override reversed, see below** |
 | `v_liability_acct` | `40000000` | Proveedores (euros) a corto plazo | already correct |
 | `v_prepayment_acct` | `40700000` | Anticipos a proveedores | already correct |
 | `notinvoicedreceipts_acct` | `40090000` | Proveedores facturas pendientes de recibir o de formalizar | already correct |
@@ -356,14 +356,24 @@ for that account, scoped to the tenant's own `c_acctschema_id`.
 accounts already had a pre-existing dimensionless `C_VALIDCOMBINATION` row for GOClient's schema —
 no new `c_validcombination` rows needed to be created.
 
-### Write-off override — explicit product-owner decision (do not "re-fix")
-The screenshot shows Cancelaciones/Write-off = `6500000000` (65000000, "Pérdidas por créditos
-comerciales incobrables", Spanish PGC account 665). The product owner **explicitly overrode this**:
-the DB's existing value (`69400000`, PGC account 694, "Pérdidas por deterioro de créditos por
-operaciones comerciales") is correct and must **not** be changed. GOClient's simplified chart reuses
-account 694 for both the write-off default and the bad-debt-expense default — a deliberate
-simplification, not a provisioning gap. This fix's `@check`/`@apply` never reference `writeoff_acct`;
-verified live that it already resolved to `69400000` before and after the run.
+### Write-off override — reversed decision (ETP-4452/R12, 2026-07-08)
+At the time R11 was written (2026-07-06), the product owner had **explicitly overridden** a
+reference screenshot showing Cancelaciones/Write-off = `65000000` ("Pérdidas de créditos comerciales
+incobrables", Spanish PGC account 665): they confirmed the DB's existing value (`69400000`, PGC
+account 694, "Pérdidas por deterioro de créditos por operaciones comerciales") was correct and must
+not be changed. R11's `@check`/`@apply` therefore never referenced `writeoff_acct`.
+
+On 2026-07-07 the product owner **reconfirmed, again explicitly, that `65000000` IS the correct
+value** — reversing the 2026-07-06 decision. `cli/src/data-fixes/sql/20260708T090000Z__R12-writeoff-account-override.sql`
+implements the correction: `writeoff_acct` now resolves to `65000000` on GOClient (combination
+`CB7E1B51B897403083CDCA20835F6AE9`) and on the 3 other GOClient-style PGC tenants (acreedortest,
+acreetest2, empresa — verified live, each has its own pre-existing dimensionless combination for
+65000000, so no new `C_VALIDCOMBINATION` insert was needed anywhere). F&B International Group, QA
+Testing and TaxesOrg run unrelated US-chart schemas with no `65000000` account — R12's `@check`
+naturally excludes them, no client allowlist required. Preventive twin:
+`referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml`'s `WRITEOFF_ACCT` repointed to
+GOClient's own 65000000 combination id; `ONBOARDING_PROVISIONED_THROUGH` bumped to
+`2026-07-08T09:00:00Z`.
 
 ### Decision: dataset-only fix, no new `Onboarding*Service`
 `C_ACCTSCHEMA_DEFAULT` has been in `OnboardingDatasetDefinition.INCLUDED_TABLES` since the A1 pass,
@@ -375,8 +385,16 @@ as A3: dataset-only edit is sufficient.
 | Front | Deliverable |
 |---|---|
 | **Corrective** | `cli/src/data-fixes/sql/20260706T160000Z__R11-acctschema-default-completion.sql` — one guarded `UPDATE` per NULL column, each resolving its target through `c_validcombination` and gated by `col IS NULL AND EXISTS(resolvable combination)` (so a tenant whose chart never gets one of these 6 accounts does not loop forever). **Live-validated on GOClient**: dry-run → `WOULD_APPLY`; real run → `APPLIED (6 rows)`; re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
-| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml` gains the 6 FK values (`DOUBTFULDEBT_ACCT`, `BADDEBTEXPENSE_ACCT`, `BADDEBTREVENUE_ACCT`, `ALLOWANCEFORDOUBTFUL_ACCT`, `P_DEF_EXPENSE_ACCT`, `P_DEF_REVENUE_ACCT`); `WRITEOFF_ACCT` untouched. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T16:00:00Z` in `OnboardingBaselineService.java`. |
-| **Tests** | Corrective: live dry-run/apply/re-run cycle above (same project convention as every prior `Rn` fix). Preventive: one new JUnit test in `OnboardingDatasetNormalizerTest.java` — `testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts` (asserts all 6 new `c_validcombination_id` values appear in the normalized dataset XML, and that the write-off combination id is present unchanged as a regression guard). **Not executed in this session** — same worktree/Gradle limitation as the R10 pass (see its note above); recommend `./gradlew -p modules/com.etendoerp.go test --tests "*OnboardingDatasetNormalizerTest*"` against this branch before merge. |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml` gains the 6 FK values (`DOUBTFULDEBT_ACCT`, `BADDEBTEXPENSE_ACCT`, `BADDEBTREVENUE_ACCT`, `ALLOWANCEFORDOUBTFUL_ACCT`, `P_DEF_EXPENSE_ACCT`, `P_DEF_REVENUE_ACCT`); `WRITEOFF_ACCT` untouched at the time. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-06T16:00:00Z` in `OnboardingBaselineService.java`. **`WRITEOFF_ACCT` was later corrected by R12 (ETP-4452, 2026-07-08) — see below.** |
+| **Tests** | Corrective: live dry-run/apply/re-run cycle above (same project convention as every prior `Rn` fix). Preventive: one new JUnit test in `OnboardingDatasetNormalizerTest.java` — `testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts` (asserts all 6 new `c_validcombination_id` values appear in the normalized dataset XML). **Not executed in this session** — same worktree/Gradle limitation as the R10 pass (see its note above); recommend `./gradlew -p modules/com.etendoerp.go test --tests "*OnboardingDatasetNormalizerTest*"` against this branch before merge. |
+
+### R12 follow-up: write-off override reversed (ETP-4452, 2026-07-08)
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260708T090000Z__R12-writeoff-account-override.sql` — single guarded `UPDATE`, self-scoping via `@check` (fires only when `writeoff_acct` doesn't already resolve to 65000000 AND a resolvable dimensionless combination for 65000000 exists on the tenant's schema — naturally excludes non-PGC-chart tenants, no client allowlist needed). **Live-validated**: dry-run → `WOULD_APPLY` for GOClient/acreedortest/acreetest2/empresa, `SKIPPED_NOT_NEEDED` for F&B/QA/TaxesOrg; real run → `APPLIED (1 row)` each; re-run → `SKIPPED_NOT_NEEDED — kept prior success state`. |
+| **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_DEFAULT.xml`'s `WRITEOFF_ACCT` repointed from GOClient's 69400000 combination id to its own 65000000 combination id (`CB7E1B51B897403083CDCA20835F6AE9`). `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-08T09:00:00Z` in `OnboardingBaselineService.java`. |
+| **Tests** | Corrective: live dry-run/apply/re-run cycle above. Preventive: `OnboardingDatasetNormalizerTest.testNormalizerWriteOffAccountIsAccount65000000` added (asserts the new combination id appears in the normalized dataset XML); the old regression-guard assertion in `testNormalizerIncludesAcctSchemaDefaultDoubtfulDebtAndDeferredAccounts` (which asserted 69400000 stayed unchanged) was removed. **Not executed in this session** — same worktree/Gradle limitation noted above; recommend `./gradlew -p modules/com.etendoerp.go test --tests "*OnboardingDatasetNormalizerTest*"` before merge. |
 
 ### QA sign-off (Sentinel, 2026-07-06) — APPROVE, 6/6 test cases re-verified live
 

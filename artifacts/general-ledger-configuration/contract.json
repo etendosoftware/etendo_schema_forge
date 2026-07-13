@@ -1,8 +1,8 @@
 {
-  "version": "0.2.0",
+  "version": "0.7.0",
   "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-06-29T15:29:32.471Z",
-  "checksum": "eeb0a498dff1c9f3",
+  "updatedAt": "2026-07-07T19:23:48.530Z",
+  "checksum": "2f98160e6139a75d",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -153,6 +153,25 @@
             "section": "calendar"
           },
           {
+            "name": "allowNegative",
+            "apiKey": "allowNegative",
+            "column": "Allownegative",
+            "label": "Allow negative",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "N"
+            },
+            "defaultValue": "N",
+            "section": "policies"
+          },
+          {
             "name": "accrual",
             "apiKey": "accrual",
             "column": "IsAccrual",
@@ -169,19 +188,6 @@
             },
             "defaultValue": "Y",
             "section": "identity"
-          },
-          {
-            "name": "automaticPeriodControl",
-            "apiKey": "automaticPeriodControl",
-            "column": "AutoPeriodControl",
-            "label": "Automatic Period Control",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "section": "policies"
           }
         ],
         "searchableFields": [],
@@ -198,6 +204,13 @@
             "derivation": {
               "type": "computed",
               "source": "OT"
+            }
+          },
+          {
+            "name": "allowNegative",
+            "derivation": {
+              "type": "computed",
+              "source": "N"
             }
           },
           {
@@ -629,22 +642,148 @@
           }
         ]
       },
-      "Documentos": {
-        "tableName": "C_AcctSchema_Table_DocType",
-        "tabId": "1007400000",
-        "tabName": "Documents",
+      "Cuentas generales": {
+        "tableName": "C_AcctSchema_GL",
+        "tabId": "200",
+        "tabName": "General Accounts",
         "uiPattern": "STD",
         "fields": [
           {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
-            "label": "Active",
+            "name": "suspenseBalancingUse",
+            "apiKey": "suspenseBalancingUse",
+            "column": "UseSuspenseBalancing",
+            "label": "Suspense Balancing Use",
             "type": "boolean",
             "tsType": "boolean",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
-            "grid": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "section": "suspense"
+          },
+          {
+            "name": "suspenseBalancing",
+            "apiKey": "suspenseBalancing",
+            "column": "SuspenseBalancing_Acct",
+            "label": "Suspense Balancing",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "section": "suspense",
+            "displayLogic": {
+              "raw": "@UseSuspenseBalancing@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "retainedEarning",
+            "apiKey": "retainedEarning",
+            "column": "RetainedEarning_Acct",
+            "label": "Retained Earning",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "section": "closing"
+          },
+          {
+            "name": "suspenseErrorUse",
+            "apiKey": "suspenseErrorUse",
+            "column": "UseSuspenseError",
+            "label": "Suspense Error Use",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "section": "suspense"
+          },
+          {
+            "name": "incomeSummary",
+            "apiKey": "incomeSummary",
+            "column": "IncomeSummary_Acct",
+            "label": "Income Summary",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "section": "closing"
+          },
+          {
+            "name": "currencyBalancingUse",
+            "apiKey": "currencyBalancingUse",
+            "column": "UseCurrencyBalancing",
+            "label": "Currency Balancing Use",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": true,
+            "sourceRequired": true,
+            "section": "currencyBalancing"
+          },
+          {
+            "name": "currencyBalancingAcct",
+            "apiKey": "currencyBalancingAcct",
+            "column": "CurrencyBalancing_Acct",
+            "label": "Currency Balancing Acct.",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "section": "currencyBalancing",
+            "displayLogic": {
+              "raw": "@UseCurrencyBalancing@='Y'",
+              "evaluable": true
+            }
+          },
+          {
+            "name": "cFSOrderAccount",
+            "apiKey": "cFSOrderAccount",
+            "column": "CFS_Order_Acct",
+            "label": "CFS Order Account",
+            "type": "foreignKey",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": false,
+            "grid": false,
+            "form": true,
+            "reference": "ValidCombination",
+            "inputMode": "selector",
+            "section": "closing"
+          },
+          {
+            "name": "createClosing",
+            "apiKey": "createClosing",
+            "column": "CreateClosing",
+            "label": "Reverse Permanent Account Balances",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
             "form": true,
             "sourceRequired": true,
             "derivation": {
@@ -652,373 +791,13 @@
               "source": "Y"
             },
             "defaultValue": "Y",
-            "gridOrder": 4
-          },
-          {
-            "name": "documentCategory",
-            "apiKey": "documentCategory",
-            "column": "Docbasetype",
-            "label": "Document Category",
-            "type": "enum",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "enumValues": [
-              {
-                "value": "---",
-                "name": "** New **",
-                "labels": {
-                  "es_ES": "** Nuevo **"
-                }
-              },
-              {
-                "value": "APC",
-                "name": "AP Credit Memo",
-                "labels": {
-                  "es_ES": "AP Nota de crédito"
-                }
-              },
-              {
-                "value": "API",
-                "name": "AP Invoice",
-                "labels": {
-                  "es_ES": "AP factura"
-                }
-              },
-              {
-                "value": "APP",
-                "name": "AP Payment",
-                "labels": {
-                  "es_ES": "AP pago"
-                }
-              },
-              {
-                "value": "APPP",
-                "name": "AP Payment Proposal",
-                "labels": {
-                  "es_ES": "AP Propuesta de pago"
-                }
-              },
-              {
-                "value": "ARC",
-                "name": "AR Credit Memo",
-                "labels": {
-                  "es_ES": "AR Nota de crédito"
-                }
-              },
-              {
-                "value": "ARI",
-                "name": "AR Invoice",
-                "labels": {
-                  "es_ES": "AR factura"
-                }
-              },
-              {
-                "value": "ARF",
-                "name": "AR Pro Forma Invoice",
-                "labels": {
-                  "es_ES": "AR Pro forma factura"
-                }
-              },
-              {
-                "value": "ARR",
-                "name": "AR Receipt",
-                "labels": {
-                  "es_ES": "AR Recibo"
-                }
-              },
-              {
-                "value": "ARRP",
-                "name": "AR Receivable Proposal",
-                "labels": {
-                  "es_ES": "AR Propuesta de Cobro"
-                }
-              },
-              {
-                "value": "ARI_RM",
-                "name": "AR Return Material Invoice",
-                "labels": {
-                  "es_ES": "AR factura de devolución de material"
-                }
-              },
-              {
-                "value": "AMZ",
-                "name": "Amortization",
-                "labels": {
-                  "es_ES": "Amortización"
-                }
-              },
-              {
-                "value": "CMB",
-                "name": "Bank Statement",
-                "labels": {
-                  "es_ES": "Extracto bancario"
-                }
-              },
-              {
-                "value": "BSF",
-                "name": "Bank Statement File",
-                "labels": {
-                  "es_ES": "Fichero de extracto bancario"
-                }
-              },
-              {
-                "value": "CMC",
-                "name": "Cash Journal",
-                "labels": {
-                  "es_ES": "Diario de caja"
-                }
-              },
-              {
-                "value": "CAD",
-                "name": "Cost Adjustment",
-                "labels": {
-                  "es_ES": "Ajuste de Costes"
-                }
-              },
-              {
-                "value": "DPM",
-                "name": "Debt Payment Management",
-                "labels": {
-                  "es_ES": "Gestión de efectos"
-                }
-              },
-              {
-                "value": "DDB",
-                "name": "Doubtful Debt",
-                "labels": {
-                  "es_ES": "Dudoso cobro"
-                }
-              },
-              {
-                "value": "FAT",
-                "name": "Financial Account Transaction",
-                "labels": {
-                  "es_ES": "Transacciones de la cuenta financiera"
-                }
-              },
-              {
-                "value": "GLD",
-                "name": "GL Document",
-                "labels": {
-                  "es_ES": "Documento libro mayor"
-                }
-              },
-              {
-                "value": "GLJ",
-                "name": "GL Journal",
-                "labels": {
-                  "es_ES": "Diario"
-                }
-              },
-              {
-                "value": "IAU",
-                "name": "Inventory Amount Update",
-                "labels": {
-                  "es_ES": "Actualización Valor Inventario"
-                }
-              },
-              {
-                "value": "LDC",
-                "name": "Landed Cost",
-                "labels": {
-                  "es_ES": "Landed Cost"
-                }
-              },
-              {
-                "value": "LCC",
-                "name": "Landed Cost Cost",
-                "labels": {
-                  "es_ES": "Coste Landed Cost"
-                }
-              },
-              {
-                "value": "OBCVAT_MS",
-                "name": "Manual Cash VAT Settlement",
-                "labels": {
-                  "es_ES": "Manual Cash VAT Settlement"
-                }
-              },
-              {
-                "value": "MXI",
-                "name": "Match Invoice",
-                "labels": {
-                  "es_ES": "Factura comprobada"
-                }
-              },
-              {
-                "value": "MXP",
-                "name": "Match PO",
-                "labels": {
-                  "es_ES": "Pedido de compra comprobado"
-                }
-              },
-              {
-                "value": "MMS",
-                "name": "Material Delivery",
-                "labels": {
-                  "es_ES": "Entrega material"
-                }
-              },
-              {
-                "value": "MIC",
-                "name": "Material Internal Consumption",
-                "labels": {
-                  "es_ES": "Consumo Interno de Material"
-                }
-              },
-              {
-                "value": "MMM",
-                "name": "Material Movement",
-                "labels": {
-                  "es_ES": "Movimiento de almacén"
-                }
-              },
-              {
-                "value": "MMI",
-                "name": "Material Physical Inventory",
-                "labels": {
-                  "es_ES": "Inventario físico"
-                }
-              },
-              {
-                "value": "MMP",
-                "name": "Material Production",
-                "labels": {
-                  "es_ES": "Producción"
-                }
-              },
-              {
-                "value": "MMR",
-                "name": "Material Receipt",
-                "labels": {
-                  "es_ES": "Recibo material"
-                }
-              },
-              {
-                "value": "CMA",
-                "name": "Payment Allocation",
-                "labels": {
-                  "es_ES": "Asignación de pagos"
-                }
-              },
-              {
-                "value": "PPR",
-                "name": "Payment proposal",
-                "labels": {
-                  "es_ES": "Propuesta de pago"
-                }
-              },
-              {
-                "value": "PJI",
-                "name": "Project Issue",
-                "labels": {
-                  "es_ES": "Asunto de proyecto"
-                }
-              },
-              {
-                "value": "POO",
-                "name": "Purchase Order",
-                "labels": {
-                  "es_ES": "Pedido de compra"
-                }
-              },
-              {
-                "value": "POR",
-                "name": "Purchase Requisition",
-                "labels": {
-                  "es_ES": "Pre-pedido compra"
-                }
-              },
-              {
-                "value": "REC",
-                "name": "Reconciliation",
-                "labels": {
-                  "es_ES": "Conciliación"
-                }
-              },
-              {
-                "value": "SOO",
-                "name": "Sales Order",
-                "labels": {
-                  "es_ES": "Pedido venta"
-                }
-              },
-              {
-                "value": "STT",
-                "name": "Settlement",
-                "labels": {
-                  "es_ES": "Liquidación"
-                }
-              },
-              {
-                "value": "STM",
-                "name": "Settlement manual",
-                "labels": {
-                  "es_ES": "Liquidación manual"
-                }
-              },
-              {
-                "value": "WRE",
-                "name": "Work Requirement",
-                "labels": {
-                  "es_ES": "Orden de fabricación"
-                }
-              }
-            ],
-            "gridOrder": 1,
-            "validationRule": {
-              "code": "Value IN (SELECT DOCBASETYPE FROM C_DOCTYPE, C_ACCTSCHEMA_TABLE WHERE C_DOCTYPE.AD_TABLE_ID = C_ACCTSCHEMA_TABLE.AD_TABLE_ID AND C_ACCTSCHEMA_TABLE.C_ACCTSCHEMA_TABLE_ID = @C_Acctschema_Table_ID@)",
-              "contextParams": [],
-              "cascadeParams": [
-                "C_Acctschema_Table_ID"
-              ]
-            }
-          },
-          {
-            "name": "allowNegative",
-            "apiKey": "allowNegative",
-            "column": "AllowNegative",
-            "label": "Allow negative",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "readOnly",
-            "required": true,
-            "grid": true,
-            "form": true,
-            "sourceRequired": true,
-            "gridOrder": 3
-          },
-          {
-            "name": "aDCreatefactTemplateID",
-            "apiKey": "aDCreatefactTemplateID",
-            "column": "AD_Createfact_Template_ID",
-            "label": "Accounting Template",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": true,
-            "reference": "Createfact_Template",
-            "inputMode": "selector",
-            "gridOrder": 2,
-            "validationRule": {
-              "code": "AD_CreateFact_Template.AD_Table_ID=@AD_Table_ID@",
-              "contextParams": [],
-              "cascadeParams": [
-                "AD_Table_ID"
-              ]
-            }
+            "section": "closing"
           }
         ],
         "searchableFields": [],
         "computedFields": [
           {
-            "name": "active",
+            "name": "createClosing",
             "derivation": {
               "type": "computed",
               "source": "Y"
@@ -1046,7 +825,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "customerPrepayment",
@@ -1061,7 +840,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "writeoff",
@@ -1077,7 +856,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "writeoffRevenue",
@@ -1092,7 +871,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "vendorLiability",
@@ -1108,7 +887,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "vendorPrepayment",
@@ -1123,7 +902,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "nonInvoicedReceipts",
@@ -1138,7 +917,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "doubtfulDebtAccount",
@@ -1153,7 +932,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "badDebtExpenseAccount",
@@ -1168,7 +947,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "badDebtRevenueAccount",
@@ -1183,7 +962,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "allowanceForDoubtfulDebtAccount",
@@ -1198,7 +977,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "receivablesPayables"
+            "section": "contacts"
           },
           {
             "name": "fixedAsset",
@@ -1214,7 +993,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "product"
           },
           {
             "name": "productExpense",
@@ -1230,7 +1009,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "product"
           },
           {
             "name": "productDeferredExpense",
@@ -1245,7 +1024,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "product"
           },
           {
             "name": "productRevenue",
@@ -1261,7 +1040,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "product"
           },
           {
             "name": "productDeferredRevenue",
@@ -1276,7 +1055,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "product"
           },
           {
             "name": "productCOGS",
@@ -1292,7 +1071,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "product"
           },
           {
             "name": "invoicePriceVariance",
@@ -1307,7 +1086,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "product"
           },
           {
             "name": "productRevenueReturn",
@@ -1322,7 +1101,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "product"
           },
           {
             "name": "productCOGSReturn",
@@ -1337,7 +1116,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "product"
           },
           {
             "name": "warehouseDifferences",
@@ -1353,7 +1132,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "warehouse"
           },
           {
             "name": "inventoryRevaluation",
@@ -1368,7 +1147,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "warehouse"
           },
           {
             "name": "workInProgress",
@@ -1383,7 +1162,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "project"
           },
           {
             "name": "bankAsset",
@@ -1399,7 +1178,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "bankInTransit",
@@ -1415,7 +1194,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "bankExpense",
@@ -1431,7 +1210,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "bankRevaluationGain",
@@ -1447,7 +1226,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "bankRevaluationLoss",
@@ -1463,7 +1242,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "bank"
           },
           {
             "name": "taxDue",
@@ -1510,7 +1289,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "taxes"
           },
           {
             "name": "tCreditTransAcct",
@@ -1525,7 +1304,7 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "taxes"
           },
           {
             "name": "cashBookAsset",
@@ -1541,7 +1320,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "diario"
           },
           {
             "name": "cashBookDifferences",
@@ -1557,7 +1336,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "diario"
           },
           {
             "name": "cashTransfer",
@@ -1573,7 +1352,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "treasury"
+            "section": "diario"
           },
           {
             "name": "depreciation",
@@ -1589,7 +1368,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
+            "section": "assets"
           },
           {
             "name": "accumulatedDepreciation",
@@ -1605,22 +1384,7 @@
             "sourceRequired": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other"
-          },
-          {
-            "name": "taxExpense",
-            "apiKey": "taxExpense",
-            "column": "T_Expense_Acct",
-            "label": "Tax Expense",
-            "type": "foreignKey",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "reference": "ValidCombination",
-            "inputMode": "selector",
-            "section": "taxes"
+            "section": "assets"
           },
           {
             "name": "disposalGain",
@@ -1635,7 +1399,6 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other",
             "displayLogic": {
               "raw": "@ADVANCED_ASSETS_MANAGEMENT@ = 'Y'",
               "evaluable": true
@@ -1654,7 +1417,6 @@
             "form": true,
             "reference": "ValidCombination",
             "inputMode": "selector",
-            "section": "other",
             "displayLogic": {
               "raw": "@ADVANCED_ASSETS_MANAGEMENT@ = 'Y'",
               "evaluable": true
@@ -1749,7 +1511,7 @@
             "apiKey": "allowNegative",
             "column": "Allownegative",
             "type": "boolean",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -1773,7 +1535,7 @@
             "apiKey": "automaticPeriodControl",
             "column": "AutoPeriodControl",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2122,55 +1884,103 @@
           }
         ]
       },
-      "Documentos": {
-        "tableName": "C_AcctSchema_Table_DocType",
-        "tabId": "1007400000",
-        "tabName": "Documents",
+      "Cuentas generales": {
+        "tableName": "C_AcctSchema_GL",
+        "tabId": "200",
+        "tabName": "General Accounts",
         "fields": [
           {
-            "name": "active",
-            "apiKey": "active",
-            "column": "Isactive",
+            "name": "suspenseBalancingUse",
+            "apiKey": "suspenseBalancingUse",
+            "column": "UseSuspenseBalancing",
             "type": "boolean",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {
-            "name": "documentCategory",
-            "apiKey": "documentCategory",
-            "column": "Docbasetype",
-            "type": "enum",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "allowNegative",
-            "apiKey": "allowNegative",
-            "column": "AllowNegative",
-            "type": "boolean",
-            "visibility": "readOnly",
-            "required": true
-          },
-          {
-            "name": "aDCreatefactTemplateID",
-            "apiKey": "aDCreatefactTemplateID",
-            "column": "AD_Createfact_Template_ID",
+            "name": "suspenseBalancing",
+            "apiKey": "suspenseBalancing",
+            "column": "SuspenseBalancing_Acct",
             "type": "foreignKey",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": false
           },
           {
-            "name": "acctschemaTable",
-            "apiKey": "acctschemaTable",
-            "column": "C_Acctschema_Table_ID",
+            "name": "retainedEarning",
+            "apiKey": "retainedEarning",
+            "column": "RetainedEarning_Acct",
             "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "suspenseErrorUse",
+            "apiKey": "suspenseErrorUse",
+            "column": "UseSuspenseError",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "suspenseError",
+            "apiKey": "suspenseError",
+            "column": "SuspenseError_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "incomeSummary",
+            "apiKey": "incomeSummary",
+            "column": "IncomeSummary_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "currencyBalancingUse",
+            "apiKey": "currencyBalancingUse",
+            "column": "UseCurrencyBalancing",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "currencyBalancingAcct",
+            "apiKey": "currencyBalancingAcct",
+            "column": "CurrencyBalancing_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "cFSOrderAccount",
+            "apiKey": "cFSOrderAccount",
+            "column": "CFS_Order_Acct",
+            "type": "foreignKey",
+            "visibility": "editable",
+            "required": false
+          },
+          {
+            "name": "active",
+            "apiKey": "active",
+            "column": "IsActive",
+            "type": "boolean",
             "visibility": "system",
             "required": true
           },
           {
-            "name": "organization",
-            "apiKey": "organization",
-            "column": "AD_Org_ID",
+            "name": "createClosing",
+            "apiKey": "createClosing",
+            "column": "CreateClosing",
+            "type": "boolean",
+            "visibility": "editable",
+            "required": true
+          },
+          {
+            "name": "accountingSchema",
+            "apiKey": "accountingSchema",
+            "column": "C_AcctSchema_ID",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -2184,9 +1994,41 @@
             "required": true
           },
           {
+            "name": "dueToIntercompany",
+            "apiKey": "dueToIntercompany",
+            "column": "IntercompanyDueTo_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "dueFromIntercompany",
+            "apiKey": "dueFromIntercompany",
+            "column": "IntercompanyDueFrom_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "organization",
+            "apiKey": "organization",
+            "column": "AD_Org_ID",
+            "type": "foreignKey",
+            "visibility": "system",
+            "required": true
+          },
+          {
+            "name": "pPVOffset",
+            "apiKey": "pPVOffset",
+            "column": "PPVOffset_Acct",
+            "type": "foreignKey",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
             "name": "id",
             "apiKey": "id",
-            "column": "C_Acctschema_Table_Doctype_ID",
+            "column": "C_Acctschema_Gl_ID",
             "type": "id",
             "visibility": "system",
             "required": true
@@ -2202,7 +2044,7 @@
           {
             "name": "createdBy",
             "apiKey": "createdBy",
-            "column": "Createdby",
+            "column": "CreatedBy",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -2218,7 +2060,7 @@
           {
             "name": "updatedBy",
             "apiKey": "updatedBy",
-            "column": "Updatedby",
+            "column": "UpdatedBy",
             "type": "foreignKey",
             "visibility": "system",
             "required": true
@@ -2683,7 +2525,7 @@
             "apiKey": "taxExpense",
             "column": "T_Expense_Acct",
             "type": "foreignKey",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -2952,32 +2794,32 @@
       },
       {
         "method": "GET",
-        "path": "/Documentos",
-        "entity": "Documentos",
+        "path": "/Cuentas generales",
+        "entity": "Cuentas generales",
         "supportedFilters": []
       },
       {
         "method": "GET",
-        "path": "/Documentos/:id",
-        "entity": "Documentos",
+        "path": "/Cuentas generales/:id",
+        "entity": "Cuentas generales",
         "supportedFilters": []
       },
       {
         "method": "POST",
-        "path": "/Documentos",
-        "entity": "Documentos",
+        "path": "/Cuentas generales",
+        "entity": "Cuentas generales",
         "supportedFilters": []
       },
       {
         "method": "PUT",
-        "path": "/Documentos/:id",
-        "entity": "Documentos",
+        "path": "/Cuentas generales/:id",
+        "entity": "Cuentas generales",
         "supportedFilters": []
       },
       {
         "method": "DELETE",
-        "path": "/Documentos/:id",
-        "entity": "Documentos",
+        "path": "/Cuentas generales/:id",
+        "entity": "Cuentas generales",
         "supportedFilters": []
       },
       {
@@ -3039,15 +2881,15 @@
         "detailUrl": "/sws/neo/general-ledger-configuration/Dimensiones/{id}",
         "supportedFilters": []
       },
-      "Documentos": {
+      "Cuentas generales": {
         "get": true,
         "getById": true,
         "post": true,
         "put": true,
         "patch": true,
         "delete": true,
-        "listUrl": "/sws/neo/general-ledger-configuration/Documentos",
-        "detailUrl": "/sws/neo/general-ledger-configuration/Documentos/{id}",
+        "listUrl": "/sws/neo/general-ledger-configuration/Cuentas generales",
+        "detailUrl": "/sws/neo/general-ledger-configuration/Cuentas generales/{id}",
         "supportedFilters": []
       },
       "Valores por defecto": {
@@ -3160,12 +3002,44 @@
         "url": "/sws/neo/general-ledger-configuration/Dimensiones/selectors/activity"
       },
       {
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "column": "AD_Createfact_Template_ID",
-        "reference": "Createfact_Template",
+        "entity": "Cuentas generales",
+        "field": "suspenseBalancing",
+        "column": "SuspenseBalancing_Acct",
+        "reference": "ValidCombination",
         "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Documentos/selectors/aDCreatefactTemplateID"
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/suspenseBalancing"
+      },
+      {
+        "entity": "Cuentas generales",
+        "field": "retainedEarning",
+        "column": "RetainedEarning_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/retainedEarning"
+      },
+      {
+        "entity": "Cuentas generales",
+        "field": "incomeSummary",
+        "column": "IncomeSummary_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/incomeSummary"
+      },
+      {
+        "entity": "Cuentas generales",
+        "field": "currencyBalancingAcct",
+        "column": "CurrencyBalancing_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/currencyBalancingAcct"
+      },
+      {
+        "entity": "Cuentas generales",
+        "field": "cFSOrderAccount",
+        "column": "CFS_Order_Acct",
+        "reference": "ValidCombination",
+        "inputMode": "selector",
+        "url": "/sws/neo/general-ledger-configuration/Cuentas generales/selectors/cFSOrderAccount"
       },
       {
         "entity": "Valores por defecto",
@@ -3465,14 +3339,6 @@
       },
       {
         "entity": "Valores por defecto",
-        "field": "taxExpense",
-        "column": "T_Expense_Acct",
-        "reference": "ValidCombination",
-        "inputMode": "selector",
-        "url": "/sws/neo/general-ledger-configuration/Valores por defecto/selectors/taxExpense"
-      },
-      {
-        "entity": "Valores por defecto",
         "field": "disposalGain",
         "column": "A_Disposal_Gain",
         "reference": "ValidCombination",
@@ -3526,18 +3392,18 @@
         "description": "Action endpoint for 'processNow' in Valores por defecto should exist"
       },
       {
+        "id": "t-crud-flags-Cuentas-generales",
+        "category": "crud-flags",
+        "entity": "Cuentas generales",
+        "runner": "node",
+        "description": "CRUD flags for 'Cuentas generales' should all be booleans"
+      },
+      {
         "id": "t-crud-flags-Dimensiones",
         "category": "crud-flags",
         "entity": "Dimensiones",
         "runner": "node",
         "description": "CRUD flags for 'Dimensiones' should all be booleans"
-      },
-      {
-        "id": "t-crud-flags-Documentos",
-        "category": "crud-flags",
-        "entity": "Documentos",
-        "runner": "node",
-        "description": "CRUD flags for 'Documentos' should all be booleans"
       },
       {
         "id": "t-crud-flags-General",
@@ -3554,6 +3420,14 @@
         "description": "CRUD flags for 'Valores por defecto' should all be booleans"
       },
       {
+        "id": "t-default-value-type-Cuentas-generales-createClosing",
+        "category": "default-value-type",
+        "entity": "Cuentas generales",
+        "field": "createClosing",
+        "runner": "node",
+        "description": "Default value for 'createClosing' in Cuentas generales should be a string"
+      },
+      {
         "id": "t-default-value-type-Dimensiones-sequenceNumber",
         "category": "default-value-type",
         "entity": "Dimensiones",
@@ -3562,20 +3436,20 @@
         "description": "Default value for 'sequenceNumber' in Dimensiones should be a string"
       },
       {
-        "id": "t-default-value-type-Documentos-active",
-        "category": "default-value-type",
-        "entity": "Documentos",
-        "field": "active",
-        "runner": "node",
-        "description": "Default value for 'active' in Documentos should be a string"
-      },
-      {
         "id": "t-default-value-type-General-accrual",
         "category": "default-value-type",
         "entity": "General",
         "field": "accrual",
         "runner": "node",
         "description": "Default value for 'accrual' in General should be a string"
+      },
+      {
+        "id": "t-default-value-type-General-allowNegative",
+        "category": "default-value-type",
+        "entity": "General",
+        "field": "allowNegative",
+        "runner": "node",
+        "description": "Default value for 'allowNegative' in General should be a string"
       },
       {
         "id": "t-default-value-type-General-gAAP",
@@ -3592,6 +3466,22 @@
         "field": "organization",
         "runner": "node",
         "description": "Default value for 'organization' in General should be a string"
+      },
+      {
+        "id": "t-displaylogic-evaluable-Cuentas-generales-currencyBalancingAcct",
+        "category": "displaylogic-evaluable",
+        "entity": "Cuentas generales",
+        "field": "currencyBalancingAcct",
+        "runner": "node",
+        "description": "Display logic for 'currencyBalancingAcct' in Cuentas generales should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-evaluable-Cuentas-generales-suspenseBalancing",
+        "category": "displaylogic-evaluable",
+        "entity": "Cuentas generales",
+        "field": "suspenseBalancing",
+        "runner": "node",
+        "description": "Display logic for 'suspenseBalancing' in Cuentas generales should have evaluable flag"
       },
       {
         "id": "t-displaylogic-evaluable-Dimensiones-accountElement",
@@ -3690,6 +3580,22 @@
         "description": "Display logic for 'disposalLoss' in Valores por defecto should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-valid-Cuentas-generales-currencyBalancingAcct",
+        "category": "displaylogic-valid",
+        "entity": "Cuentas generales",
+        "field": "currencyBalancingAcct",
+        "runner": "node",
+        "description": "Display logic for 'currencyBalancingAcct' in Cuentas generales should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-Cuentas-generales-suspenseBalancing",
+        "category": "displaylogic-valid",
+        "entity": "Cuentas generales",
+        "field": "suspenseBalancing",
+        "runner": "node",
+        "description": "Display logic for 'suspenseBalancing' in Cuentas generales should be valid JS"
+      },
+      {
         "id": "t-displaylogic-valid-Dimensiones-accountElement",
         "category": "displaylogic-valid",
         "entity": "Dimensiones",
@@ -3784,6 +3690,78 @@
         "field": "disposalLoss",
         "runner": "node",
         "description": "Display logic for 'disposalLoss' in Valores por defecto should be valid JS"
+      },
+      {
+        "id": "t-field-presence-Cuentas-generales-cFSOrderAccount",
+        "category": "field-presence",
+        "entity": "Cuentas generales",
+        "field": "cFSOrderAccount",
+        "runner": "node",
+        "description": "Field 'cFSOrderAccount' should be present in Cuentas generales"
+      },
+      {
+        "id": "t-field-presence-Cuentas-generales-createClosing",
+        "category": "field-presence",
+        "entity": "Cuentas generales",
+        "field": "createClosing",
+        "runner": "node",
+        "description": "Field 'createClosing' should be present in Cuentas generales"
+      },
+      {
+        "id": "t-field-presence-Cuentas-generales-currencyBalancingAcct",
+        "category": "field-presence",
+        "entity": "Cuentas generales",
+        "field": "currencyBalancingAcct",
+        "runner": "node",
+        "description": "Field 'currencyBalancingAcct' should be present in Cuentas generales"
+      },
+      {
+        "id": "t-field-presence-Cuentas-generales-currencyBalancingUse",
+        "category": "field-presence",
+        "entity": "Cuentas generales",
+        "field": "currencyBalancingUse",
+        "runner": "node",
+        "description": "Field 'currencyBalancingUse' should be present in Cuentas generales"
+      },
+      {
+        "id": "t-field-presence-Cuentas-generales-incomeSummary",
+        "category": "field-presence",
+        "entity": "Cuentas generales",
+        "field": "incomeSummary",
+        "runner": "node",
+        "description": "Field 'incomeSummary' should be present in Cuentas generales"
+      },
+      {
+        "id": "t-field-presence-Cuentas-generales-retainedEarning",
+        "category": "field-presence",
+        "entity": "Cuentas generales",
+        "field": "retainedEarning",
+        "runner": "node",
+        "description": "Field 'retainedEarning' should be present in Cuentas generales"
+      },
+      {
+        "id": "t-field-presence-Cuentas-generales-suspenseBalancing",
+        "category": "field-presence",
+        "entity": "Cuentas generales",
+        "field": "suspenseBalancing",
+        "runner": "node",
+        "description": "Field 'suspenseBalancing' should be present in Cuentas generales"
+      },
+      {
+        "id": "t-field-presence-Cuentas-generales-suspenseBalancingUse",
+        "category": "field-presence",
+        "entity": "Cuentas generales",
+        "field": "suspenseBalancingUse",
+        "runner": "node",
+        "description": "Field 'suspenseBalancingUse' should be present in Cuentas generales"
+      },
+      {
+        "id": "t-field-presence-Cuentas-generales-suspenseErrorUse",
+        "category": "field-presence",
+        "entity": "Cuentas generales",
+        "field": "suspenseErrorUse",
+        "runner": "node",
+        "description": "Field 'suspenseErrorUse' should be present in Cuentas generales"
       },
       {
         "id": "t-field-presence-Dimensiones-accountElement",
@@ -3914,38 +3892,6 @@
         "description": "Field 'type' should be present in Dimensiones"
       },
       {
-        "id": "t-field-presence-Documentos-active",
-        "category": "field-presence",
-        "entity": "Documentos",
-        "field": "active",
-        "runner": "node",
-        "description": "Field 'active' should be present in Documentos"
-      },
-      {
-        "id": "t-field-presence-Documentos-aDCreatefactTemplateID",
-        "category": "field-presence",
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "runner": "node",
-        "description": "Field 'aDCreatefactTemplateID' should be present in Documentos"
-      },
-      {
-        "id": "t-field-presence-Documentos-allowNegative",
-        "category": "field-presence",
-        "entity": "Documentos",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Field 'allowNegative' should be present in Documentos"
-      },
-      {
-        "id": "t-field-presence-Documentos-documentCategory",
-        "category": "field-presence",
-        "entity": "Documentos",
-        "field": "documentCategory",
-        "runner": "node",
-        "description": "Field 'documentCategory' should be present in Documentos"
-      },
-      {
         "id": "t-field-presence-General-accrual",
         "category": "field-presence",
         "entity": "General",
@@ -3954,12 +3900,12 @@
         "description": "Field 'accrual' should be present in General"
       },
       {
-        "id": "t-field-presence-General-automaticPeriodControl",
+        "id": "t-field-presence-General-allowNegative",
         "category": "field-presence",
         "entity": "General",
-        "field": "automaticPeriodControl",
+        "field": "allowNegative",
         "runner": "node",
-        "description": "Field 'automaticPeriodControl' should be present in General"
+        "description": "Field 'allowNegative' should be present in General"
       },
       {
         "id": "t-field-presence-General-currency",
@@ -4250,14 +4196,6 @@
         "description": "Field 'taxDue' should be present in Valores por defecto"
       },
       {
-        "id": "t-field-presence-Valores-por-defecto-taxExpense",
-        "category": "field-presence",
-        "entity": "Valores por defecto",
-        "field": "taxExpense",
-        "runner": "node",
-        "description": "Field 'taxExpense' should be present in Valores por defecto"
-      },
-      {
         "id": "t-field-presence-Valores-por-defecto-tCreditTransAcct",
         "category": "field-presence",
         "entity": "Valores por defecto",
@@ -4320,6 +4258,78 @@
         "field": "writeoffRevenue",
         "runner": "node",
         "description": "Field 'writeoffRevenue' should be present in Valores por defecto"
+      },
+      {
+        "id": "t-field-type-Cuentas-generales-cFSOrderAccount",
+        "category": "field-type",
+        "entity": "Cuentas generales",
+        "field": "cFSOrderAccount",
+        "runner": "node",
+        "description": "Field 'cFSOrderAccount' should have type 'string' in Cuentas generales"
+      },
+      {
+        "id": "t-field-type-Cuentas-generales-createClosing",
+        "category": "field-type",
+        "entity": "Cuentas generales",
+        "field": "createClosing",
+        "runner": "node",
+        "description": "Field 'createClosing' should have type 'boolean' in Cuentas generales"
+      },
+      {
+        "id": "t-field-type-Cuentas-generales-currencyBalancingAcct",
+        "category": "field-type",
+        "entity": "Cuentas generales",
+        "field": "currencyBalancingAcct",
+        "runner": "node",
+        "description": "Field 'currencyBalancingAcct' should have type 'string' in Cuentas generales"
+      },
+      {
+        "id": "t-field-type-Cuentas-generales-currencyBalancingUse",
+        "category": "field-type",
+        "entity": "Cuentas generales",
+        "field": "currencyBalancingUse",
+        "runner": "node",
+        "description": "Field 'currencyBalancingUse' should have type 'boolean' in Cuentas generales"
+      },
+      {
+        "id": "t-field-type-Cuentas-generales-incomeSummary",
+        "category": "field-type",
+        "entity": "Cuentas generales",
+        "field": "incomeSummary",
+        "runner": "node",
+        "description": "Field 'incomeSummary' should have type 'string' in Cuentas generales"
+      },
+      {
+        "id": "t-field-type-Cuentas-generales-retainedEarning",
+        "category": "field-type",
+        "entity": "Cuentas generales",
+        "field": "retainedEarning",
+        "runner": "node",
+        "description": "Field 'retainedEarning' should have type 'string' in Cuentas generales"
+      },
+      {
+        "id": "t-field-type-Cuentas-generales-suspenseBalancing",
+        "category": "field-type",
+        "entity": "Cuentas generales",
+        "field": "suspenseBalancing",
+        "runner": "node",
+        "description": "Field 'suspenseBalancing' should have type 'string' in Cuentas generales"
+      },
+      {
+        "id": "t-field-type-Cuentas-generales-suspenseBalancingUse",
+        "category": "field-type",
+        "entity": "Cuentas generales",
+        "field": "suspenseBalancingUse",
+        "runner": "node",
+        "description": "Field 'suspenseBalancingUse' should have type 'boolean' in Cuentas generales"
+      },
+      {
+        "id": "t-field-type-Cuentas-generales-suspenseErrorUse",
+        "category": "field-type",
+        "entity": "Cuentas generales",
+        "field": "suspenseErrorUse",
+        "runner": "node",
+        "description": "Field 'suspenseErrorUse' should have type 'boolean' in Cuentas generales"
       },
       {
         "id": "t-field-type-Dimensiones-accountElement",
@@ -4450,38 +4460,6 @@
         "description": "Field 'type' should have type 'string' in Dimensiones"
       },
       {
-        "id": "t-field-type-Documentos-active",
-        "category": "field-type",
-        "entity": "Documentos",
-        "field": "active",
-        "runner": "node",
-        "description": "Field 'active' should have type 'boolean' in Documentos"
-      },
-      {
-        "id": "t-field-type-Documentos-aDCreatefactTemplateID",
-        "category": "field-type",
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "runner": "node",
-        "description": "Field 'aDCreatefactTemplateID' should have type 'string' in Documentos"
-      },
-      {
-        "id": "t-field-type-Documentos-allowNegative",
-        "category": "field-type",
-        "entity": "Documentos",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Field 'allowNegative' should have type 'boolean' in Documentos"
-      },
-      {
-        "id": "t-field-type-Documentos-documentCategory",
-        "category": "field-type",
-        "entity": "Documentos",
-        "field": "documentCategory",
-        "runner": "node",
-        "description": "Field 'documentCategory' should have type 'string' in Documentos"
-      },
-      {
         "id": "t-field-type-General-accrual",
         "category": "field-type",
         "entity": "General",
@@ -4490,12 +4468,12 @@
         "description": "Field 'accrual' should have type 'boolean' in General"
       },
       {
-        "id": "t-field-type-General-automaticPeriodControl",
+        "id": "t-field-type-General-allowNegative",
         "category": "field-type",
         "entity": "General",
-        "field": "automaticPeriodControl",
+        "field": "allowNegative",
         "runner": "node",
-        "description": "Field 'automaticPeriodControl' should have type 'boolean' in General"
+        "description": "Field 'allowNegative' should have type 'boolean' in General"
       },
       {
         "id": "t-field-type-General-currency",
@@ -4784,14 +4762,6 @@
         "field": "taxDue",
         "runner": "node",
         "description": "Field 'taxDue' should have type 'string' in Valores por defecto"
-      },
-      {
-        "id": "t-field-type-Valores-por-defecto-taxExpense",
-        "category": "field-type",
-        "entity": "Valores por defecto",
-        "field": "taxExpense",
-        "runner": "node",
-        "description": "Field 'taxExpense' should have type 'string' in Valores por defecto"
       },
       {
         "id": "t-field-type-Valores-por-defecto-tCreditTransAcct",
@@ -5121,6 +5091,46 @@
         "description": "Rule 'SE_FinancialAccount_BSAccounts_FIN_Transitory_Acct' (callout) should be declared"
       },
       {
+        "id": "t-selector-endpoint-Cuentas-generales-cFSOrderAccount",
+        "category": "selector-endpoint",
+        "entity": "Cuentas generales",
+        "field": "cFSOrderAccount",
+        "runner": "node",
+        "description": "Selector endpoint for 'cFSOrderAccount' in Cuentas generales should exist"
+      },
+      {
+        "id": "t-selector-endpoint-Cuentas-generales-currencyBalancingAcct",
+        "category": "selector-endpoint",
+        "entity": "Cuentas generales",
+        "field": "currencyBalancingAcct",
+        "runner": "node",
+        "description": "Selector endpoint for 'currencyBalancingAcct' in Cuentas generales should exist"
+      },
+      {
+        "id": "t-selector-endpoint-Cuentas-generales-incomeSummary",
+        "category": "selector-endpoint",
+        "entity": "Cuentas generales",
+        "field": "incomeSummary",
+        "runner": "node",
+        "description": "Selector endpoint for 'incomeSummary' in Cuentas generales should exist"
+      },
+      {
+        "id": "t-selector-endpoint-Cuentas-generales-retainedEarning",
+        "category": "selector-endpoint",
+        "entity": "Cuentas generales",
+        "field": "retainedEarning",
+        "runner": "node",
+        "description": "Selector endpoint for 'retainedEarning' in Cuentas generales should exist"
+      },
+      {
+        "id": "t-selector-endpoint-Cuentas-generales-suspenseBalancing",
+        "category": "selector-endpoint",
+        "entity": "Cuentas generales",
+        "field": "suspenseBalancing",
+        "runner": "node",
+        "description": "Selector endpoint for 'suspenseBalancing' in Cuentas generales should exist"
+      },
+      {
         "id": "t-selector-endpoint-Dimensiones-accountElement",
         "category": "selector-endpoint",
         "entity": "Dimensiones",
@@ -5199,14 +5209,6 @@
         "field": "trxOrganization",
         "runner": "node",
         "description": "Selector endpoint for 'trxOrganization' in Dimensiones should exist"
-      },
-      {
-        "id": "t-selector-endpoint-Documentos-aDCreatefactTemplateID",
-        "category": "selector-endpoint",
-        "entity": "Documentos",
-        "field": "aDCreatefactTemplateID",
-        "runner": "node",
-        "description": "Selector endpoint for 'aDCreatefactTemplateID' in Documentos should exist"
       },
       {
         "id": "t-selector-endpoint-General-currency",
@@ -5473,14 +5475,6 @@
         "description": "Selector endpoint for 'taxDue' in Valores por defecto should exist"
       },
       {
-        "id": "t-selector-endpoint-Valores-por-defecto-taxExpense",
-        "category": "selector-endpoint",
-        "entity": "Valores por defecto",
-        "field": "taxExpense",
-        "runner": "node",
-        "description": "Selector endpoint for 'taxExpense' in Valores por defecto should exist"
-      },
-      {
         "id": "t-selector-endpoint-Valores-por-defecto-tCreditTransAcct",
         "category": "selector-endpoint",
         "entity": "Valores por defecto",
@@ -5543,6 +5537,110 @@
         "field": "writeoffRevenue",
         "runner": "node",
         "description": "Selector endpoint for 'writeoffRevenue' in Valores por defecto should exist"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-accountingSchema",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "accountingSchema",
+        "runner": "node",
+        "description": "System field 'accountingSchema' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-active",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "active",
+        "runner": "node",
+        "description": "System field 'active' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-client",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "client",
+        "runner": "node",
+        "description": "System field 'client' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-createdBy",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "createdBy",
+        "runner": "node",
+        "description": "System field 'createdBy' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-creationDate",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "creationDate",
+        "runner": "node",
+        "description": "System field 'creationDate' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-dueFromIntercompany",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "dueFromIntercompany",
+        "runner": "node",
+        "description": "System field 'dueFromIntercompany' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-dueToIntercompany",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "dueToIntercompany",
+        "runner": "node",
+        "description": "System field 'dueToIntercompany' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-id",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "id",
+        "runner": "node",
+        "description": "System field 'id' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-organization",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "organization",
+        "runner": "node",
+        "description": "System field 'organization' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-pPVOffset",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "pPVOffset",
+        "runner": "node",
+        "description": "System field 'pPVOffset' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-suspenseError",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "suspenseError",
+        "runner": "node",
+        "description": "System field 'suspenseError' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-updated",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "updated",
+        "runner": "node",
+        "description": "System field 'updated' should exist in backend but not frontend for Cuentas generales"
+      },
+      {
+        "id": "t-system-field-Cuentas-generales-updatedBy",
+        "category": "system-field",
+        "entity": "Cuentas generales",
+        "field": "updatedBy",
+        "runner": "node",
+        "description": "System field 'updatedBy' should exist in backend but not frontend for Cuentas generales"
       },
       {
         "id": "t-system-field-Dimensiones-accountingSchema",
@@ -5609,70 +5707,6 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for Dimensiones"
       },
       {
-        "id": "t-system-field-Documentos-acctschemaTable",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "acctschemaTable",
-        "runner": "node",
-        "description": "System field 'acctschemaTable' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-client",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "client",
-        "runner": "node",
-        "description": "System field 'client' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-createdBy",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "createdBy",
-        "runner": "node",
-        "description": "System field 'createdBy' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-creationDate",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "creationDate",
-        "runner": "node",
-        "description": "System field 'creationDate' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-id",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "id",
-        "runner": "node",
-        "description": "System field 'id' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-organization",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "organization",
-        "runner": "node",
-        "description": "System field 'organization' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-updated",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "updated",
-        "runner": "node",
-        "description": "System field 'updated' should exist in backend but not frontend for Documentos"
-      },
-      {
-        "id": "t-system-field-Documentos-updatedBy",
-        "category": "system-field",
-        "entity": "Documentos",
-        "field": "updatedBy",
-        "runner": "node",
-        "description": "System field 'updatedBy' should exist in backend but not frontend for Documentos"
-      },
-      {
         "id": "t-system-field-General-active",
         "category": "system-field",
         "entity": "General",
@@ -5681,20 +5715,20 @@
         "description": "System field 'active' should exist in backend but not frontend for General"
       },
       {
-        "id": "t-system-field-General-allowNegative",
-        "category": "system-field",
-        "entity": "General",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "System field 'allowNegative' should exist in backend but not frontend for General"
-      },
-      {
         "id": "t-system-field-General-assetPositive",
         "category": "system-field",
         "entity": "General",
         "field": "assetPositive",
         "runner": "node",
         "description": "System field 'assetPositive' should exist in backend but not frontend for General"
+      },
+      {
+        "id": "t-system-field-General-automaticPeriodControl",
+        "category": "system-field",
+        "entity": "General",
+        "field": "automaticPeriodControl",
+        "runner": "node",
+        "description": "System field 'automaticPeriodControl' should exist in backend but not frontend for General"
       },
       {
         "id": "t-system-field-General-centralMaintenance",
@@ -6089,6 +6123,14 @@
         "description": "System field 'realizedLossAcct' should exist in backend but not frontend for Valores por defecto"
       },
       {
+        "id": "t-system-field-Valores-por-defecto-taxExpense",
+        "category": "system-field",
+        "entity": "Valores por defecto",
+        "field": "taxExpense",
+        "runner": "node",
+        "description": "System field 'taxExpense' should exist in backend but not frontend for Valores por defecto"
+      },
+      {
         "id": "t-system-field-Valores-por-defecto-taxLiability",
         "category": "system-field",
         "entity": "Valores por defecto",
@@ -6193,18 +6235,18 @@
         "description": "System field 'withholdingAccount' should exist in backend but not frontend for Valores por defecto"
       },
       {
+        "id": "t-visibility-Cuentas-generales",
+        "category": "visibility",
+        "entity": "Cuentas generales",
+        "runner": "node",
+        "description": "Entity 'Cuentas generales' should only expose visible fields in frontend"
+      },
+      {
         "id": "t-visibility-Dimensiones",
         "category": "visibility",
         "entity": "Dimensiones",
         "runner": "node",
         "description": "Entity 'Dimensiones' should only expose visible fields in frontend"
-      },
-      {
-        "id": "t-visibility-Documentos",
-        "category": "visibility",
-        "entity": "Documentos",
-        "runner": "node",
-        "description": "Entity 'Documentos' should only expose visible fields in frontend"
       },
       {
         "id": "t-visibility-General",
@@ -6222,24 +6264,24 @@
       }
     ],
     "summary": {
-      "total": 343,
+      "total": 365,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 4,
-        "default-value-type": 5,
-        "displaylogic-evaluable": 12,
-        "displaylogic-valid": 12,
-        "field-presence": 67,
-        "field-type": 67,
+        "default-value-type": 6,
+        "displaylogic-evaluable": 14,
+        "displaylogic-valid": 14,
+        "field-presence": 71,
+        "field-type": 71,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 33,
-        "selector-endpoint": 53,
-        "system-field": 81,
+        "selector-endpoint": 56,
+        "system-field": 87,
         "visibility": 4
       },
       "byRunner": {
-        "node": 343,
+        "node": 365,
         "junit": 0
       }
     }
